@@ -8,6 +8,7 @@ internal class PackageMapping(string PackageFilter, string source)
     public const string AllPackages = "*";
     public string PackageFilter { get; } = PackageFilter;
     public string Source { get; } = source;
+    internal string? SourceKey { get; init; }
 
     /// <summary>
     /// Whether this mapping routes Aspire.* packages to an existing local directory of

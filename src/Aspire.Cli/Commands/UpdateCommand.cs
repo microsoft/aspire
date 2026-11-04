@@ -647,7 +647,7 @@ internal sealed class UpdateCommand : BaseCommand
                 // The packages were already updated successfully; a migration failure should warn
                 // but not fail the overall update so the user keeps the successful package update.
                 _logger.LogDebug(ex, "Migration '{MigrationId}' apply failed", migration.Id);
-                InteractionService.DisplayMessage(KnownEmojis.Warning, UpdateCommandStrings.MigrationApplyFailedWarning);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, UpdateCommandStrings.MigrationApplyFailedWarning);
             }
         }
     }

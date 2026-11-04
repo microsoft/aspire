@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
+import { isCsharpInstalled } from '../capabilities';
+import { appHostLifecycleDisableLaunchProfileNotSupported, appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
 import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, formatAppHostLanguage, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
@@ -255,21 +256,31 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             const effectiveAppHostLanguage = launchTargetPath && await isDirectory(launchTargetPath)
                 ? await classifyAppHostDirectory(launchTargetPath)
                 : classifyAppHostPath(launchTargetPath);
+            // Only C# advertises the `project` capability that hands .NET AppHost launches
+            // to the debugger (see getSupportedCapabilities), even with noDebug.
+            // Let the CLI validate unknown directory targets it discovers recursively.
+            const cliOwnsDotnetAppHostLaunch = (effectiveAppHostLanguage === 'csharp' || effectiveAppHostLanguage === 'unknown')
+                && !isCsharpInstalled();
             const appHostDebuggerSettings = aspireConfig.debuggers?.['apphost'];
-            const projectDebuggerSettings = effectiveAppHostLanguage === 'csharp'
+            const projectDebuggerSettings = effectiveAppHostLanguage === 'csharp' || cliOwnsDotnetAppHostLaunch
                 ? aspireConfig.debuggers?.['project']
                 : undefined;
             const nestedLaunchProfile = appHostDebuggerSettings?.launchProfile
                 ?? projectDebuggerSettings?.launchProfile;
             const nestedDisableLaunchProfile = appHostDebuggerSettings?.disableLaunchProfile
                 ?? projectDebuggerSettings?.disableLaunchProfile;
-            const nestedDebuggerOwnsLaunchProfile = nestedDisableLaunchProfile === true
+            const hasNestedLaunchProfileOptions = nestedDisableLaunchProfile === true
                 || nestedLaunchProfile !== undefined;
-            const effectiveLaunchProfile = nestedDebuggerOwnsLaunchProfile
+            if (command === 'run' && cliOwnsDotnetAppHostLaunch && nestedDisableLaunchProfile === true) {
+                void vscode.window.showWarningMessage(appHostLifecycleDisableLaunchProfileNotSupported);
+            }
+            const canForwardNestedLaunchProfile = cliOwnsDotnetAppHostLaunch
+                && nestedDisableLaunchProfile !== true;
+            const effectiveLaunchProfile = hasNestedLaunchProfileOptions && !canForwardNestedLaunchProfile
                 ? undefined
-                : aspireConfig.launchProfile;
+                : nestedLaunchProfile ?? aspireConfig.launchProfile;
             const rootArguments = Array.isArray(config.args) ? [...config.args] : undefined;
-            const launchArguments = nestedDebuggerOwnsLaunchProfile
+            const launchArguments = hasNestedLaunchProfileOptions
                 ? removeRootLaunchProfileCliArg(rootArguments)
                 : rootArguments;
             if (launchArguments === undefined) {

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using Aspire.Npgsql.Tests;
 using Aspire.TestUtilities;
 using Microsoft.EntityFrameworkCore;
@@ -376,5 +378,22 @@ public class AspireEFPostgreSqlExtensionsTests
             public int Id { get; set; }
             public string Name { get; set; } = default!;
         }
+    }
+
+    [Fact]
+    public void ComponentDoesNotReferenceRemovedProviderInternalExecutionStrategy()
+    {
+        // Npgsql.EntityFrameworkCore.PostgreSQL 11 removed its internal NpgsqlExecutionStrategy type. Any reference to it
+        // throws TypeLoadException when a DbContext is resolved with newer provider versions.
+        // https://github.com/microsoft/aspire/issues/21152
+        using var stream = File.OpenRead(typeof(AspireEFPostgreSqlExtensions).Assembly.Location);
+        using var peReader = new PEReader(stream);
+        var metadataReader = peReader.GetMetadataReader();
+
+        var referencedTypes = metadataReader.TypeReferences
+            .Select(metadataReader.GetTypeReference)
+            .Select(typeReference => $"{metadataReader.GetString(typeReference.Namespace)}.{metadataReader.GetString(typeReference.Name)}");
+
+        Assert.DoesNotContain("Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal.NpgsqlExecutionStrategy", referencedTypes);
     }
 }

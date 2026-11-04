@@ -224,6 +224,40 @@
       },
       "additionalProperties": false
     },
+    "integrationSources": {
+      "description": "Named NuGet integration sources and allowed package patterns, merged across configuration layers.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Whether to search this source. Defaults to true. Disable default to omit built-in channel and NuGet discovery.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          },
+          "source": {
+            "description": "NuGet service index URL or local package directory. The default entry uses built-in discovery when omitted.",
+            "type": "string"
+          },
+          "patterns": {
+            "description": "Optional allowed package IDs: exact IDs, prefixes ending in *, or * for all packages. Defaults to * when omitted.",
+            "type": "array",
+            "items": {}
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "language": {
       "description": "The language identifier for this AppHost (e.g., \"typescript\", \"python\"). Used to determine which runtime to use for execution.",
       "type": "string"

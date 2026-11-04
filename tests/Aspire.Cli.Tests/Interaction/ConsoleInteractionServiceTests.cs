@@ -14,6 +14,7 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 
 using System.CommandLine;
+using System.Globalization;
 using System.Text;
 
 namespace Aspire.Cli.Tests.Interaction;
@@ -966,6 +967,52 @@ public class ConsoleInteractionServiceTests
 
         Assert.Contains("Status update", stdoutOutput.ToString());
         Assert.Empty(stderrOutput.ToString());
+    }
+
+    [Fact]
+    public async Task DisplayMessage_SkillSourcesAlignEachUrlWithHeading()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 100;
+        var interactionService = CreateInteractionService(console);
+        var message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
+            string.Join(Environment.NewLine, "https://example.com/skills-a", "https://example.com/skills-b"));
+
+        interactionService.DisplayMessage(KnownEmojis.Information, message);
+
+        var lines = output.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        await Verify(string.Join('\n', lines.Select(line => line.TrimEnd())));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DisplayMessage_SourceTrustNoticeUsesWarningFormatting(bool enableColor)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = enableColor ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = enableColor ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 200;
+        var interactionService = CreateInteractionService(console);
+
+        interactionService.DisplaySourceTrustWarning();
+
+        var expected = enableColor
+            ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"
+            : $"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}";
+        Assert.Equal(expected, output.ToString().TrimEnd());
     }
 
     [Fact]

@@ -37,9 +37,12 @@ The individual tests need to create projects from templates just like a user wou
 - At this point the SDK is usable from outside the repo by using `source /path-to-aspire-repo/dogfood.sh`
 - The nuget versions for the locally built packages are like `8.0.0-dev` or `8.0.0-ci`.
 
-The dashboard checks use the default Cards layout. They identify resources by
-each card's accessible name and check its state and source. Unexpected resources,
-failed states, and incorrect sources still fail the test.
+The dashboard checks use the shared `DashboardResourceAssertions` helper. It
+checks resource names and states in the sidebar and sources in each resource's
+details panel, independently of the overview layout and sidebar density.
+`TemplateResourceAssertionsTests` in `Aspire.Dashboard.Playwright.Tests` exercises
+the helper against the real dashboard, including incorrect project and container
+sources.
 
 ### Helix
 

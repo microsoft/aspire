@@ -617,7 +617,8 @@ internal sealed class CliServiceCollectionTestOptions
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var nuGetService = serviceProvider.GetRequiredService<BundleNuGetService>();
-        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService);
+        var logger = serviceProvider.GetRequiredService<ILogger<NuGetPackageCache>>();
+        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService, logger);
     };
 
     public Func<IServiceProvider, INuGetClient> NuGetClientFactory { get; set; } = _ => new FakeNuGetClient();

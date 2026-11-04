@@ -4,29 +4,43 @@
 
 .resource-pane-filter ::deep .resource-filter-popover::part(dialog) {
     position-anchor: var(--resource-filter-anchor);
-    /* Fluent sets the dialog insets inline; the anchor position must override them. */
-    top: anchor(bottom) !important;
-    left: anchor(left) !important;
-    right: auto !important;
-    bottom: auto !important;
-    margin-top: 6px;
-    position-try-fallbacks: flip-block, flip-inline;
+    /* Clear Fluent's inline insets without overriding the browser's fallback placement.
+       The position area also bounds the height to the space beside the anchor.
+       https://developer.mozilla.org/en-US/docs/Web/CSS/position-area */
+    inset: auto !important;
+    position-area: bottom span-right;
+    justify-self: start;
+    margin: 6px 0 12px;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    position-try-order: most-height;
     box-sizing: border-box;
     width: min(320px, calc(100vw - 24px));
     max-width: none;
-    max-height: none;
+    /* Leave room for the dialog's 6px and 12px block margins. */
+    max-height: calc(100% - 18px);
+    /* A candidate must fit the non-scrolling header and footer before it can win
+       collision placement; otherwise flex shrinking can conceal the action buttons. */
+    min-height: 112px;
     padding: 0;
     overflow: hidden;
     cursor: default;
+}
+
+/* Preserve the browser's display: none for natively dismissed popovers. */
+.resource-pane-filter ::deep .resource-filter-popover::part(dialog):popover-open {
+    display: flex;
+    flex-direction: column;
 }
 
 .resource-filter {
     display: flex;
     flex-direction: column;
     min-width: 0;
+    min-height: 0;
 }
 
 .resource-filter-header {
+    flex-shrink: 0;
     display: grid;
     grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
@@ -57,6 +71,7 @@
 /* Reset and OK are always visible below the list, so closing the popover never needs a scroll. */
 .resource-filter-footer {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: flex-end;
     gap: 8px;
@@ -65,8 +80,7 @@
 }
 /* The list scrolls inside the popover, so a long list of values never runs off the bottom of the window. */
 .resource-filter-body {
-    /* Use the height the window has below the filter button; the list scrolls only once that is used up. */
-    max-height: max(200px, calc(100dvh - 280px));
+    min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;

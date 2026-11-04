@@ -944,6 +944,10 @@ export async function executeE2eControlCommand(
       markStarted();
       return await prepareBlazorWasmDebugger();
     }
+    case 'waitForCSharpProjectInitialization': {
+      markStarted();
+      return await waitForCSharpProjectInitialization(getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs'));
+    }
     case 'proveBlazorWasmDebugging': {
       markStarted();
       return await proveBlazorWasmDebugging(command, appHostTreeProvider, context.logUri.fsPath);
@@ -3766,6 +3770,52 @@ async function prepareBlazorWasmDebugger(): Promise<BlazorWasmDebuggerStatus> {
   // https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/razor/src/blazorDebug/blazorDebugConfigurationProvider.ts
   const bridgePath = path.join(extension.extensionPath, '.vswebassemblybridge', 'Microsoft.Diagnostics.BrowserDebugHost.dll');
   return fs.existsSync(bridgePath) && fs.statSync(bridgePath).isFile() ? 'ready' : 'missing-bridge';
+}
+
+/**
+ * Waits until the C# language server has finished its initial project load.
+ *
+ * Without Dev Kit, the pinned C# extension enumerates the workspace's `*.csproj` files once, when its
+ * language server starts, and Roslyn then design-time builds each of them. On Windows the in-process
+ * MSBuild build makes the project directory the BuildHost's current directory, so a fixture created
+ * while that discovery is still pending gets loaded and cannot be deleted until the load finishes.
+ * Specs that create and delete project fixtures in the workspace wait here first so the language
+ * server's project set is fixed before their fixtures exist.
+ *
+ * initializationFinished() resolves after the server reports project initialization complete, even if
+ * that happened before this call.
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/activateRoslyn.ts
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/lsptoolshost/server/roslynLanguageServer.ts
+ */
+async function waitForCSharpProjectInitialization(timeoutMs: number): Promise<'initialized'> {
+  const extension = vscode.extensions.getExtension<{ initializationFinished?: () => Promise<void> }>(csharpExtensionId);
+  if (!extension) {
+    throw new Error(`${csharpExtensionId} is required to wait for C# project initialization.`);
+  }
+
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      (async () => {
+        const api = await extension.activate();
+        if (typeof api?.initializationFinished !== 'function') {
+          throw new Error(`${csharpExtensionId} did not export initializationFinished(), so C# project initialization cannot be observed.`);
+        }
+
+        await api.initializationFinished();
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`The C# language server did not finish its initial project load within ${timeoutMs}ms.`)), timeoutMs);
+      }),
+    ]);
+  }
+  finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+
+  return 'initialized';
 }
 
 /**

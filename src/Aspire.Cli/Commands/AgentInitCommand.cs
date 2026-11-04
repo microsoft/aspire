@@ -403,9 +403,9 @@ internal sealed class AgentInitCommand : BaseCommand
             skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
             var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
             var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
+            var sourceUrls = new List<string>();
             foreach (var skillSource in skillSources)
             {
-                var sourceUrls = new List<string>();
                 if (usesPlugins)
                 {
                     sourceUrls.Add(skillSource.GetRepositoryUrl());
@@ -414,14 +414,14 @@ internal sealed class AgentInitCommand : BaseCommand
                 {
                     sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
                 }
-                if (sourceUrls.Count == 0)
-                {
-                    continue;
-                }
+            }
 
-                InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
-                    AgentCommandStrings.InitCommand_PluginRiskWarning,
-                    string.Join(", ", sourceUrls.Distinct(StringComparer.Ordinal))));
+            if (sourceUrls.Count > 0)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture,
+                    AgentCommandStrings.InitCommand_SkillSources,
+                    string.Join(System.Environment.NewLine, sourceUrls.Distinct(StringComparer.Ordinal))));
+                InteractionService.DisplaySourceTrustWarning();
                 InteractionService.DisplayEmptyLine();
             }
         }
@@ -485,7 +485,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 }
                 if (local.Files.Count > 0)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.Warning,
+                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
                         string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
                             string.Join(System.Environment.NewLine, local.Files
                                 .Select(path => $"  {GetDisplayConfigurationPath(path, workspaceRoot)}")
@@ -578,7 +578,7 @@ internal sealed class AgentInitCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
                         break;
                     case PlaywrightInstallStatus.InstalledWithWarnings:
-                        InteractionService.DisplayMessage(KnownEmojis.Warning, message!);
+                        InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, message!);
                         break;
                     case PlaywrightInstallStatus.Failed:
                         InteractionService.DisplayError(message!);
@@ -672,7 +672,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (hasErrors)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, AgentCommandStrings.ConfigurationCompletedWithErrors);
         }
         else
         {

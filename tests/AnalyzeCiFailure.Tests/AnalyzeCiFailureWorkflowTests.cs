@@ -5307,6 +5307,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardInput = standardInput is not null;
         process.StartInfo.UseShellExecute = false;
+        // Fixture reports must not append to the hosting Actions job's real summary.
+        process.StartInfo.Environment["GITHUB_STEP_SUMMARY"] = Path.Combine(_workspace.Path, "step-summary");
         if (environment is not null)
         {
             foreach (var (name, value) in environment)

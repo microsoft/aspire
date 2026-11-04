@@ -7,7 +7,6 @@ using System.Xml;
 using Aspire.TestUtilities;
 using Microsoft.Playwright;
 using Xunit;
-using static Aspire.Templates.Tests.TestExtensions;
 
 namespace Aspire.Templates.Tests;
 
@@ -159,7 +158,7 @@ public partial class TemplateTestsBase
     {
         try
         {
-            return await CheckDashboardHasResourcesActualAsync(dashboardPageWrapper, expectedResources, testOutput, timeoutSecs);
+            return await DashboardResourceAssertions.CheckResourcesAsync(dashboardPageWrapper, expectedResources, testOutput, timeoutSecs);
         }
         catch
         {
@@ -168,89 +167,6 @@ public partial class TemplateTestsBase
             testOutput.WriteLine($"Dashboard screenshot saved to {screenshotPath}");
             throw;
         }
-    }
-
-    private static async Task<ResourceRow[]> CheckDashboardHasResourcesActualAsync(WrapperForIPage dashboardPageWrapper, IEnumerable<ResourceRow> expectedResources, ITestOutputHelper testOutput, int timeoutSecs = 120)
-    {
-        // FIXME: check the page has 'Resources' label
-        // fluent-toolbar/h1 resources
-
-        var numAttempts = 0;
-        testOutput.WriteLine($"Waiting for resources to appear on the dashboard");
-        await Task.Delay(500);
-
-        var expectedRowsTable = expectedResources.ToDictionary(r => r.Name);
-        HashSet<string> foundNames = [];
-        List<ResourceRow> foundRows = [];
-
-        var cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromSeconds(timeoutSecs));
-
-        while (foundNames.Count < expectedRowsTable.Count && !cts.IsCancellationRequested)
-        {
-            if (dashboardPageWrapper.HasErrors)
-            {
-                if (numAttempts >= 3)
-                {
-                    throw new InvalidOperationException($"Failed to load dashboard page after {numAttempts} attempts");
-                }
-
-                testOutput.WriteLine($"----- Reloading dashboard page");
-                await dashboardPageWrapper.ReloadAsync(new PageReloadOptions { WaitUntil = WaitUntilState.Load });
-                numAttempts++;
-            }
-
-            await Task.Delay(500);
-
-            // The default dashboard view renders resource cards, not grid rows.
-            var rowsLocator = dashboardPageWrapper.Page.Locator("article.resource-card");
-            var allRows = await rowsLocator.AllAsync();
-            // _testOutput.WriteLine($"found rows#: {allRows.Count}");
-            if (allRows.Count == 0)
-            {
-                // Console.WriteLine ($"** no rows found ** elapsed: {sw.Elapsed.TotalSeconds} secs");
-                continue;
-            }
-
-            foreach (var rowLoc in allRows)
-            {
-                // is the resource name expected?
-                var resourceName = await rowLoc.GetAttributeAsync("aria-label");
-                Assert.NotNull(resourceName);
-                if (!expectedRowsTable.TryGetValue(resourceName, out var expectedRow))
-                {
-                    Assert.Fail($"Row with unknown name found: '{resourceName}'. Expected values: {string.Join(", ", expectedRowsTable.Keys.Select(k => $"'{k}'"))}");
-                }
-                if (foundNames.Contains(resourceName))
-                {
-                    continue;
-                }
-
-                AssertEqual(expectedRow.Name, resourceName, $"Name for '{resourceName}'");
-
-                var stateCell = rowLoc.Locator(".state-column-cell");
-                var actualState = await stateCell.InnerTextAsync().ConfigureAwait(false);
-                actualState = actualState.Trim();
-                if (expectedRow.State != actualState && actualState != "Finished" && !actualState.Contains("failed", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-                AssertEqual(expectedRow.State, actualState, $"State for {resourceName}");
-
-                var sourceCell = rowLoc.Locator(".resource-card-source");
-                Assert.Contains(expectedRow.SourceContains, await sourceCell.InnerTextAsync());
-
-                foundRows.Add(expectedRow);
-                foundNames.Add(resourceName);
-            }
-        }
-
-        if (foundNames.Count != expectedRowsTable.Count)
-        {
-            Assert.Fail($"Expected rows not found: {string.Join(", ", expectedRowsTable.Keys.Except(foundNames))}");
-        }
-
-        return foundRows.ToArray();
     }
 
     // Don't fixup the prefix so it can have characters meant for testing, like spaces

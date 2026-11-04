@@ -265,13 +265,13 @@ public partial class NewCommandLocalTemplateTests
         Assert.Collection(interaction.DisplayedMessages,
             message =>
             {
-                Assert.Equal(KnownEmojis.Warning, message.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
                 Assert.StartsWith(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "missing", ""), message.Message);
             },
             message =>
             {
-                Assert.Equal(KnownEmojis.Warning, message.Emoji);
+                Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
                 Assert.StartsWith(string.Format(CultureInfo.CurrentCulture,
                     NewCommandStrings.TemplateSourceSearchFailed, "empty", ""), message.Message);
             });
@@ -429,7 +429,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Cancelled, exitCode);
         Assert.Equal(3, selectionCount);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
-        Assert.Equal(brokenSource ? KnownEmojis.Warning : KnownEmojis.Information, interaction.DisplayedMessages[0].Emoji);
+        Assert.Equal(brokenSource ? KnownEmojis.PoliceCarLight : KnownEmojis.Information, interaction.DisplayedMessages[0].Emoji);
         Assert.Equal(NewCommandStrings.NoMatchingConfiguredTemplates, interaction.DisplayedMessages[^1].Message);
     }
 

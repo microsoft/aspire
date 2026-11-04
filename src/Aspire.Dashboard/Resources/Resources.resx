@@ -410,6 +410,15 @@
   <data name="ResourceOverviewNoTelemetry" xml:space="preserve">
     <value>This resource hasn't sent telemetry</value>
   </data>
+  <data name="ResourceOverviewPanelsLabel" xml:space="preserve">
+    <value>Panels</value>
+  </data>
+  <data name="ResourceOverviewShowAllPanels" xml:space="preserve">
+    <value>Show all panels</value>
+  </data>
+  <data name="ResourceOverviewHideEmptyPanels" xml:space="preserve">
+    <value>Hide empty panels</value>
+  </data>
   <data name="ResourceOverviewTotal" xml:space="preserve">
     <value>Total</value>
   </data>
@@ -439,9 +448,6 @@
   </data>
   <data name="HomeSummaryLandmark" xml:space="preserve">
     <value>Summary</value>
-  </data>
-  <data name="HomeResourcesLabel" xml:space="preserve">
-    <value>Resources</value>
   </data>
   <data name="HomeResourceColumn" xml:space="preserve">
     <value>Resource</value>
@@ -525,6 +531,15 @@
   <data name="HomeHeadlineAllRunning" xml:space="preserve">
     <value>All {0} resources are running</value>
   </data>
+  <data name="HomeHeadlineSingleRunning" xml:space="preserve">
+    <value>1 resource is running</value>
+  </data>
+  <data name="HomeHeadlineSingleAttention" xml:space="preserve">
+    <value>1 resource needs attention</value>
+  </data>
+  <data name="HomeHeadlineSinglePending" xml:space="preserve">
+    <value>1 resource is pending</value>
+  </data>
   <data name="HomeHeadlineHealthy" xml:space="preserve">
     <value>No resources need attention</value>
   </data>
@@ -548,6 +563,98 @@
   </data>
   <data name="HomeResourceStatesLabel" xml:space="preserve">
     <value>Resource states</value>
+  </data>
+  <data name="HomeLiveActivity" xml:space="preserve">
+    <value>Live activity</value>
+  </data>
+  <data name="HomeActivityWindow" xml:space="preserve">
+    <value>Incoming requests · last 15 min</value>
+  </data>
+  <data name="HomeLogsLabel" xml:space="preserve">
+    <value>logs</value>
+  </data>
+  <data name="HomeTracesLabel" xml:space="preserve">
+    <value>traces</value>
+  </data>
+  <data name="HomeMetricsLabel" xml:space="preserve">
+    <value>metrics</value>
+  </data>
+  <data name="HomeRequestsPerMinute" xml:space="preserve">
+    <value>requests / min</value>
+  </data>
+  <data name="HomeErrorRate" xml:space="preserve">
+    <value>error rate</value>
+  </data>
+  <data name="HomeP95Latency" xml:space="preserve">
+    <value>p95 latency</value>
+  </data>
+  <data name="HomeActivityChartLabel" xml:space="preserve">
+    <value>Requests per 30 seconds over the last 15 minutes</value>
+  </data>
+  <data name="HomeActivityBucketTooltip" xml:space="preserve">
+    <value>{0} · {1} requests, {2} failed</value>
+    <comment>{0} is the bucket start time, {1} is the request count, and {2} is the failed request count.</comment>
+  </data>
+  <data name="HomeActivityLoading" xml:space="preserve">
+    <value>Loading activity…</value>
+  </data>
+  <data name="HomeActivityWaiting" xml:space="preserve">
+    <value>Waiting for requests. Interact with your app to see live traffic.</value>
+  </data>
+  <data name="HomeActivityWindowStart" xml:space="preserve">
+    <value>15 min ago</value>
+  </data>
+  <data name="HomeActivityWindowEnd" xml:space="preserve">
+    <value>now</value>
+  </data>
+  <data name="HomeInsightsLabel" xml:space="preserve">
+    <value>Insights</value>
+  </data>
+  <data name="HomeSlowestEndpoints" xml:space="preserve">
+    <value>Slowest endpoints</value>
+  </data>
+  <data name="HomeP95Label" xml:space="preserve">
+    <value>p95</value>
+    <comment>Abbreviation for the 95th percentile.</comment>
+  </data>
+  <data name="HomeNoRecentRequests" xml:space="preserve">
+    <value>No requests in the last 15 minutes</value>
+  </data>
+  <data name="HomeEndpointTooltip" xml:space="preserve">
+    <value>{0}: {1} ({2} requests)</value>
+    <comment>{0} is the resource name, {1} is the endpoint label, and {2} is the request count.</comment>
+  </data>
+  <data name="HomeRequestCountShort" xml:space="preserve">
+    <value>{0} req</value>
+    <comment>{0} is the request count. This label is abbreviated to fit in the endpoint list.</comment>
+  </data>
+  <data name="HomeBusiestResources" xml:space="preserve">
+    <value>Busiest resources</value>
+  </data>
+  <data name="HomeRequestCount" xml:space="preserve">
+    <value>{0} requests</value>
+    <comment>{0} is the request count.</comment>
+  </data>
+  <data name="HomeFailedCount" xml:space="preserve">
+    <value>{0} failed</value>
+    <comment>{0} is the failed request count.</comment>
+  </data>
+  <data name="HomeErrorHotspots" xml:space="preserve">
+    <value>Error hotspots</value>
+  </data>
+  <data name="HomeErrorHotspotsHint" xml:space="preserve">
+    <value>failed requests + error logs</value>
+  </data>
+  <data name="HomeNoRecentActivityErrors" xml:space="preserve">
+    <value>No errors in the last 15 minutes</value>
+  </data>
+  <data name="HomeFailedRequestCount" xml:space="preserve">
+    <value>{0} failed requests</value>
+    <comment>{0} is the failed request count.</comment>
+  </data>
+  <data name="HomeErrorLogCount" xml:space="preserve">
+    <value>{0} error logs</value>
+    <comment>{0} is the error log count.</comment>
   </data>
   <data name="ResourceTagsLabel" xml:space="preserve">
     <value>Tags</value>

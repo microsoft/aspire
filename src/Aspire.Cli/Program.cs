@@ -227,7 +227,7 @@ public class Program
                 globalSettingsFile.FullName,
                 key);
 
-            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.Warning);
+            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.PoliceCarLight);
         }
     }
 
@@ -970,7 +970,7 @@ public class Program
             // to stderr (ConsoleOutput.Error) so it never contaminates stdout for callers that
             // parse it. The surrounding blank lines stay on the same stderr stream for spacing.
             consoleEnvironment.Error.WriteLine();
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
             consoleEnvironment.Error.WriteLine();
         }
     }
