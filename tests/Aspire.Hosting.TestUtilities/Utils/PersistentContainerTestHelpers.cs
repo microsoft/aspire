@@ -49,7 +49,7 @@ public static class PersistentContainerTestHelpers
     /// <param name="randomizePorts">Whether to force DCP to randomize ports for the AppHost runs.</param>
     /// <param name="compareUrls">Whether to compare the resource URLs across runs. This also verifies stable public ports.</param>
     /// <param name="timeout">The timeout for starting, stopping, and observing the resources. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
-    public static async Task AssertResourcesReuseContainersAsync(
+    public static Task AssertResourcesReuseContainersAsync(
         ITestOutputHelper testOutputHelper,
         Action<IDistributedApplicationTestingBuilder> configureResources,
         string[] resourceNames,
@@ -57,6 +57,21 @@ public static class PersistentContainerTestHelpers
         bool randomizePorts = false,
         bool compareUrls = false,
         TimeSpan? timeout = null)
+    {
+        return AssertResourcesReuseContainersAsync(
+            testOutputHelper, configureResources, resourceNames, [],
+            useTestContainerRegistry, randomizePorts, compareUrls, timeout);
+    }
+
+    public static async Task AssertResourcesReuseContainersAsync(
+        ITestOutputHelper testOutputHelper,
+        Action<IDistributedApplicationTestingBuilder> configureResources,
+        string[] resourceNames,
+        string[] additionalHealthyResourceNames,
+        bool useTestContainerRegistry,
+        bool randomizePorts,
+        bool compareUrls,
+        TimeSpan? timeout)
     {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
@@ -113,6 +128,11 @@ public static class PersistentContainerTestHelpers
             var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
             var resourceSnapshots = await Task.WhenAll(
                 resourceNames.Select(resourceName => GetContainerIdentityAsync(resourceNotificationService, resourceName, compareUrls, cts.Token)));
+
+            // Container identity alone does not prove that child resources and their
+            // dependents became healthy after the container was adopted on the next run.
+            await Task.WhenAll(additionalHealthyResourceNames.Select(
+                resourceName => resourceNotificationService.WaitForResourceHealthyAsync(resourceName, cts.Token)));
 
             await app.StopAsync(cts.Token).WaitAsync(cts.Token);
 
