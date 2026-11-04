@@ -77,6 +77,83 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetInstrumentAsync_Rollup_LargeDeltaSumDoesNotOverflow()
+    {
+        // Together these exceed long.MaxValue, and SQLite's integer SUM throws when that happens.
+        var instrument = await GetRolledUpDeltaInstrumentAsync(4611686018427387904, 4611686018427387904);
+
+        var value = Assert.IsType<MetricValue<double>>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(9223372036854775808d, value.Value);
+    }
+
+    [Fact]
+    public async Task GetInstrumentAsync_Rollup_LargeOpposingDeltasDoNotOverflow()
+    {
+        var instrument = await GetRolledUpDeltaInstrumentAsync(long.MinValue, long.MinValue, long.MaxValue);
+
+        var value = Assert.IsType<MetricValue<double>>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(-9223372036854775808d, value.Value);
+    }
+
+    [Fact]
+    public async Task GetInstrumentAsync_Rollup_DeltaSumInRangeStaysExact()
+    {
+        // Above 2^53, where a double can't represent this sum exactly.
+        var instrument = await GetRolledUpDeltaInstrumentAsync(9007199254740993, 9007199254740993);
+
+        var value = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(18014398509481986, value.Value);
+    }
+
+    private async Task<OtlpInstrumentData> GetRolledUpDeltaInstrumentAsync(params long[] values)
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var start = s_testTime.AddMinutes(1);
+        var sum = new Sum { AggregationTemporality = AggregationTemporality.Delta, IsMonotonic = true };
+        for (var i = 0; i < values.Length; i++)
+        {
+            sum.DataPoints.Add(new NumberDataPoint
+            {
+                AsInt = values[i],
+                StartTimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i)),
+                TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i + 1))
+            });
+        }
+
+        var addContext = new AddContext();
+        await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { new Metric { Name = "test", Unit = "widget", Sum = sum } }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resource = Assert.Single(repositoryContext.Repository.GetResources());
+        var instrument = await repositoryContext.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = start,
+            EndTime = start.AddMinutes(1),
+            DataPointInterval = TimeSpan.FromMinutes(1)
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+
+        return instrument;
+    }
+
+    [Fact]
     public async Task GetInstrumentAsync_Rollup_KeepsDeltaChangeNearItsTime()
     {
         using var repositoryContext = await CreateRepositoryAsync();

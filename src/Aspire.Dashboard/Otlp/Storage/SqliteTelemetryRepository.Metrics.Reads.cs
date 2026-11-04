@@ -55,10 +55,15 @@ public sealed partial class SqliteTelemetryRepository
             WHERE point_rank = 1
         )
         """;
+    // Below long.MaxValue (about 9.22e18) by more than the rounding in a floating point total.
+    private const string MaxSafeRollupIntegerMagnitude = "9.0e18";
+
     // An aggregation identity separates cumulative resets within one rollup. Delta points each
     // have their own identity and retain their interval start, so no delta observations are discarded.
     // A rollup keeps the largest number, which is right for a level, but delta numbers are changes that the
-    // counter charts add up, so the ones in a rollup become their sum, observed once.
+    // counter charts add up, so the ones in a rollup become their sum, observed once. SUM throws when integers
+    // overflow, which would stop the instrument's charts loading, so it only runs when the magnitudes can't reach
+    // the integer range. A larger sum is returned as a double point, because integer_value can't hold it.
     // Cumulative representatives start at their earliest source interval, not the rounded bucket
     // boundary: rounding a reset at 3.5s to 3s would lower the preceding window's count.
     private static readonly string s_rolledUpMetricPointsCteSql = $"""
@@ -69,6 +74,13 @@ public sealed partial class SqliteTelemetryRepository
                 (p.start_time_unix_nano / @PointIntervalUnixNano) * @PointIntervalUnixNano AS rollup_start_time_unix_nano
             FROM effective_metric_points p
         ),
+        measured_metric_points AS (
+            SELECT
+                p.*,
+                TOTAL(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN ABS(p.integer_value * 1.0 * p.repeat_count) END) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) < {MaxSafeRollupIntegerMagnitude} AS rollup_integer_sum_is_safe
+            FROM bucketed_metric_points p
+        ),
         ranked_rollup_metric_points AS (
             SELECT
                 p.*,
@@ -78,8 +90,10 @@ public sealed partial class SqliteTelemetryRepository
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_end_time_unix_nano,
                 SUM(p.repeat_count) OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_repeat_count,
-                SUM(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.integer_value * p.repeat_count END) OVER (
+                SUM(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND p.rollup_integer_sum_is_safe THEN p.integer_value * p.repeat_count END) OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_integer_sum,
+                TOTAL(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.integer_value * 1.0 * p.repeat_count END) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_integer_total,
                 SUM(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.double_value * p.repeat_count END) OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_double_sum,
                 ROW_NUMBER() OVER (
@@ -89,13 +103,16 @@ public sealed partial class SqliteTelemetryRepository
                         p.integer_value DESC,
                         p.double_value DESC,
                         p.point_id DESC) AS rollup_rank
-            FROM bucketed_metric_points p
+            FROM measured_metric_points p
         ),
         rolled_up_metric_points AS (
             SELECT
                 p.point_id,
                 p.dimension_id,
-                p.point_type,
+                CASE
+                    WHEN p.point_type = {LongPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND NOT p.rollup_integer_sum_is_safe THEN {DoublePointType}
+                    ELSE p.point_type
+                END AS point_type,
                 CASE
                     WHEN p.point_type = {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.start_time_unix_nano
                     WHEN p.point_type = {HistogramPointType} OR p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.rollup_source_start_time_unix_nano
@@ -111,6 +128,7 @@ public sealed partial class SqliteTelemetryRepository
                     ELSE p.integer_value
                 END AS integer_value,
                 CASE
+                    WHEN p.point_type = {LongPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND NOT p.rollup_integer_sum_is_safe THEN p.rollup_integer_total
                     WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.rollup_double_sum
                     ELSE p.double_value
                 END AS double_value,
