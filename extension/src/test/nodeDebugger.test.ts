@@ -451,6 +451,86 @@ suite('Node Debugger Tests', () => {
         assert.deepStrictEqual(result, { stopped: [21], running: [], unidentified: [] });
     });
 
+    test('stops a Deno AppHost that appears while the launch finishes during a POSIX lookup', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        let listCall = 0;
+        let launchFinished = false;
+        let denoState: 'not-spawned' | 'running' | 'exited' = 'not-spawned';
+        const query = {
+            listProcesses: async (): Promise<LaunchedChildProcess[]> => [
+                { pid: 10, parentPid: 1, executable: '', command: '' },
+                ...(denoState === 'running' ? [{ pid: 21, parentPid: 10, executable: '', command: '' }] : []),
+                { pid: 1000 + listCall++, parentPid: 10, executable: '', command: '' },
+            ],
+            getProcess: async (pid: number): Promise<LaunchedChildProcess | undefined> => {
+                if (pid >= 1000) {
+                    // js-debug spawns Deno and answers the launch request while the exited ps helper is looked up.
+                    if (denoState === 'not-spawned') {
+                        denoState = 'running';
+                        launchFinished = true;
+                    }
+
+                    throw new Error('Command \'ps\' exited with code 1.');
+                }
+
+                return { pid, parentPid: 10, executable: '/usr/bin/deno', command: '', commandLineArguments: ['deno', 'run', argument, 'apphost.mts'] };
+            },
+        };
+
+        const result = await stopInspectorWaitingProcesses(argument, query, createFakeClock(), {
+            launcherPid: 10,
+            kill: pid => {
+                killed.push(pid);
+                denoState = 'exited';
+            },
+            isSpawnSettled: () => launchFinished,
+        });
+
+        assert.deepStrictEqual(killed, [21]);
+        assert.deepStrictEqual(result, { stopped: [21], running: [], unidentified: [] });
+    });
+
+    test('keeps following an unidentified POSIX runtime after its stopped wrapper reparents it', async () => {
+        const argument = '--inspect-wait=127.0.0.1:1234';
+        const killed: number[] = [];
+        let wrapperRunning = true;
+        let denoRunning = true;
+        let denoLookups = 0;
+        const query = {
+            listProcesses: async (): Promise<LaunchedChildProcess[]> => [
+                { pid: 10, parentPid: 1, executable: '', command: '' },
+                ...(wrapperRunning ? [{ pid: 20, parentPid: 10, executable: '', command: '' }] : []),
+                // Once the wrapper is stopped, init adopts Deno, so it is no longer under the extension host or the wrapper.
+                ...(denoRunning ? [{ pid: 21, parentPid: wrapperRunning ? 20 : 1, executable: '', command: '' }] : []),
+            ],
+            getProcess: async (pid: number): Promise<LaunchedChildProcess | undefined> => {
+                if (pid === 21 && denoLookups++ === 0) {
+                    throw new Error('timed out');
+                }
+
+                return { pid, parentPid: 10, executable: pid === 20 ? '/bin/sh' : '/usr/bin/deno', command: '', commandLineArguments: [pid === 20 ? 'deno-wrapper' : 'deno', 'run', argument, 'apphost.mts'] };
+            },
+        };
+
+        const result = await stopInspectorWaitingProcesses(argument, query, createFakeClock(), {
+            launcherPid: 10,
+            kill: pid => {
+                killed.push(pid);
+                if (pid === 20) {
+                    wrapperRunning = false;
+                }
+                else {
+                    denoRunning = false;
+                }
+            },
+            isSpawnSettled: () => true,
+        });
+
+        assert.deepStrictEqual(killed, [20, 21]);
+        assert.deepStrictEqual(result, { stopped: [20, 21], running: [], unidentified: [] });
+    });
+
     test('confirms a Deno AppHost exited when its POSIX process details are gone', async () => {
         const argument = '--inspect-wait=127.0.0.1:1234';
         const missing = Object.assign(new Error('ENOENT: no such file or directory, readlink \'/proc/21/exe\''), { code: 'ENOENT' });

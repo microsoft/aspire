@@ -217,8 +217,13 @@ export async function stopInspectorWaitingProcesses(
     let retryDelayMs = inspectorWaitingProcessInitialRetryDelayMs;
 
     while (true) {
+        // Sampled before listing: a runtime spawned while the lookups run is missing from this listing even if
+        // the launch has finished by the time they return, so only an earlier settle makes an empty result final.
+        const spawnSettled = options.isSpawnSettled?.() === true;
         try {
-            const found = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...knownProcessIds, ...signalled]);
+            // Unidentified processes are followed too: stopping a POSIX wrapper can reparent its runtime outside
+            // the extension host's tree. Like every known process, they are only signalled once a listing matches them.
+            const found = await findInspectorWaitingProcessIds(inspectorArgument, query, options.launcherPid ?? process.pid, [...knownProcessIds, ...signalled, ...unidentified]);
             running = [...found.matches];
             unidentified = found.unidentified;
             listed = true;
@@ -232,7 +237,7 @@ export async function stopInspectorWaitingProcesses(
             running = [...new Set([...knownProcessIds, ...signalled])];
         }
 
-        if (listed && running.length === 0 && unidentified.length === 0 && (signalled.size > 0 || options.isSpawnSettled?.() === true)) {
+        if (listed && running.length === 0 && unidentified.length === 0 && (signalled.size > 0 || spawnSettled)) {
             break;
         }
 
