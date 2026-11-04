@@ -577,7 +577,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             : PageViewModel.SelectedResource.Id?.GetResourceKey();
 
     private MetricPinResourceKey? OverviewGroupPinResourceKey =>
-        PageViewModel is { ShowPinned: false, ShowFilterResults: false, SelectedResource.Id.Type: OtlpResourceType.ResourceGrouping }
+        PageViewModel is { ShowPinned: false, SelectedResource.Id.Type: OtlpResourceType.ResourceGrouping }
             ? new MetricPinResourceKey(PageViewModel.SelectedResource.Name, ReplicaIndex: null)
             : null;
 

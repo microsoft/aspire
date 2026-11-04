@@ -1549,6 +1549,41 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ReplicaGroupFilterResult_PinUsesGroupIdentity()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first"),
+            CreateReplicaResourceMetrics("second")
+        });
+        var cut = Render<Metrics>(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, "TestApp");
+            parameters.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var filterInput = cut.FindComponents<FluentTextInput>().Single(component => component.Instance.Class == "metric-groups-search");
+
+        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync("shared"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.PageViewModel.ShowFilterResults);
+            Assert.Equal(
+                new MetricPinResourceKey("TestApp", ReplicaIndex: null),
+                cut.FindComponent<MeterOverview>().Instance.GroupPinResourceKey);
+        });
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+
+        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync(string.Empty));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(cut.Instance.PageViewModel.ShowFilterResults);
+            Assert.Equal("true", cut.FindComponent<MetricPinButton>().Find("fluent-button").GetAttribute("aria-pressed"));
+        });
+    }
+
+    [Fact]
     public async Task ReplicaGroupPinnedView_ShowsPinnedNonFirstReplica()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
