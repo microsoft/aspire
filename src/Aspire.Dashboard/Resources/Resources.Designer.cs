@@ -556,6 +556,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Panels.
+        /// </summary>
+        public static string ResourceOverviewPanelsLabel {
+            get {
+                return ResourceManager.GetString("ResourceOverviewPanelsLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Instruments.
         /// </summary>
         public static string ResourceOverviewInstruments {
@@ -789,6 +798,24 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceOverviewShowAppModelEnvironmentVariables {
             get {
                 return ResourceManager.GetString("ResourceOverviewShowAppModelEnvironmentVariables", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Show all panels.
+        /// </summary>
+        public static string ResourceOverviewShowAllPanels {
+            get {
+                return ResourceManager.GetString("ResourceOverviewShowAllPanels", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Hide empty panels.
+        /// </summary>
+        public static string ResourceOverviewHideEmptyPanels {
+            get {
+                return ResourceManager.GetString("ResourceOverviewHideEmptyPanels", resourceCulture);
             }
         }
 

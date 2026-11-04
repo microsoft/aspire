@@ -233,4 +233,7 @@
     <value>Unrecognized option '{0}'. Did you mean '{1}'?</value>
     <comment>{0} is the unrecognized option, {1} is the suggested correct option.</comment>
   </data>
+  <data name="SourceTrustWarning" xml:space="preserve">
+    <value>Only use sources you trust. Content from these sources can run code on your machine.</value>
+  </data>
 </root>

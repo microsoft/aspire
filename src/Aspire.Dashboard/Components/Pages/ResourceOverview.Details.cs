@@ -50,7 +50,7 @@ public sealed partial class ResourceOverview
     private readonly MaskState _environmentMask = new();
     private ResourceViewModel? _detailsResource;
     private Dictionary<string, ComponentMetadata>? _propertyValueComponents;
-    private bool _showAllProperties;
+    private bool _showAllProperties = true;
     private bool _showAllEnvironmentVariables;
     private string _environmentFilter = string.Empty;
     private bool _propertiesExpanded;
@@ -155,8 +155,8 @@ public sealed partial class ResourceOverview
     private static bool HasValue(ProtobufValue value) =>
         value is { HasNullValue: false } and not { KindCase: ProtobufValue.KindOneofCase.ListValue, ListValue.Values.Count: 0 };
 
-    // Unknown properties are custom properties published by integrations. They're hidden by default, like in the
-    // resource details panel, unless the integration marks them as highlighted. AppHost traits are always shown:
+    // The core-only filter excludes custom properties published by integrations unless they are highlighted.
+    // AppHost traits are always shown:
     // the app author declared them to describe the resource, unlike integration implementation details.
     private static bool IsCoreProperty(DisplayedResourcePropertyViewModel property) => property.KnownProperty is not null || property.IsHighlighted || property.IsTrait;
 

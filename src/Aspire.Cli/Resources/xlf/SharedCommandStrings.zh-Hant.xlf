@@ -172,6 +172,11 @@
         <target state="translated">選取 AppHost 以 {0}:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceTrustWarning">
+        <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
+        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">
         <source>Unrecognized option '{0}'. Did you mean '{1}'?</source>
         <target state="translated">無法辨識的選項 '{0}'。您是否指的是 '{1}'?</target>

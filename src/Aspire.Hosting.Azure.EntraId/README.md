@@ -144,6 +144,52 @@ ID-token issuance through implicit or hybrid flows is disabled by default. `With
 
 A registration doesn't protect routes or authorize requests. Configure authentication and authorization in the consuming app with Microsoft.Identity.Web or the equivalent library for its language, and validate scopes or roles in the API.
 
+### Customize the generated infrastructure
+
+`ConfigureInfrastructure` callbacks can edit the Microsoft Graph resources that Aspire generates for registrations it creates; references to existing registrations aren't provisioned. The models are public in `Aspire.Hosting.Azure.EntraId.Provisioning`. The primary declarations have the Bicep identifiers `application` and `servicePrincipal`. An API registration that uses the default application ID URI declares the application a second time, so select by identifier rather than assuming there is one `MicrosoftGraphApplication`.
+
+**C#**
+
+```csharp
+using Aspire.Hosting.Azure.EntraId.Provisioning;
+
+var entra = builder.AddEntraIdApplication("entra")
+    .ConfigureInfrastructure(infrastructure =>
+    {
+        var application = infrastructure.GetProvisionableResources()
+            .OfType<MicrosoftGraphApplication>()
+            .Single(r => r.BicepIdentifier == "application");
+        application.Tags.Add("department:engineering");
+        application.ServiceManagementReference = "your-service-management-reference";
+
+        var principal = infrastructure.GetProvisionableResources()
+            .OfType<MicrosoftGraphServicePrincipal>().Single();
+        principal.Tags.Add("department:engineering");
+    });
+```
+
+**TypeScript**
+
+TypeScript AppHosts also need the experimental `Aspire.Hosting.Azure.Provisioning.EntraId` integration, which uses the [shared Bicep expression APIs](../Aspire.Hosting.Azure.Provisioning/README.md) to keep parameters and references deferred.
+
+```typescript
+const serviceReference = await builder.addParameter("service-reference");
+const entra = await builder.addEntraIdApplication("entra");
+await entra.configureInfrastructure(async infrastructure => {
+    const application = await infrastructure.getMicrosoftGraphApplicationByIdentifier("application");
+    const tags = await application.tags.get();
+    await tags.add("department:engineering");
+    await application.serviceManagementReference.set(infrastructure.bicep().parameter(serviceReference));
+
+    const principal = await infrastructure.getMicrosoftGraphServicePrincipalByIdentifier("servicePrincipal");
+    const principalTags = await principal.tags.get();
+    await principalTags.add("department:engineering");
+});
+```
+
+* **Tags are strings.** Microsoft Graph [application](https://learn.microsoft.com/graph/templates/bicep/reference/applications) and [service principal](https://learn.microsoft.com/graph/templates/bicep/reference/serviceprincipals) tags are string arrays, not Azure key/value tags. Add the exact string you need. Applications also have a `serviceManagementReference` property for a reference to a service or asset management database.
+* **Add to the service principal's tags.** Don't replace them: Aspire sets `WindowsAzureActiveDirectoryIntegratedApp`, which keeps the service principal in the Enterprise applications list.
+
 ### Expose an API and call it
 
 A registration becomes an API by exposing scopes, which you declare explicitly: Aspire doesn't derive them from caller permissions. A client registration declares the permissions it needs, and consent is granted only if you ask for it. Declaration, consent and pre-authorization are separate, and Aspire never combines them.
@@ -319,7 +365,55 @@ Role IDs are derived from the resource name and role value (or supplied with the
 
 Whenever the application declares at least one role, Aspire sends the complete `appRoles` collection and Microsoft Graph replaces what is stored, so include every role you want to keep, including ones that were added outside the AppHost. A role that is left out fails the deployment if it is still enabled (`CannotDeleteOrUpdateEnabledEntitlement`) and is deleted if it is already disabled. When the application declares no roles, Aspire doesn't send `appRoles`, so roles that the AppHost never declared are left alone.
 
-To retire a role, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified, and role assignments are not provisioned yet.
+To retire a role, remove its `PublishWithAppRoleAssignment` calls, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified.
+
+### Assign API roles directly to managed identities
+
+`PublishWithAppRoleAssignment` grants a user-assigned managed identity (UAMI) an application role on an Aspire-created API registration. The role must be declared, enabled, and allow `Application` members. Callers authenticate directly as their managed identities; no caller registration or federated credential is needed.
+
+**C#**
+
+```csharp
+var callerIdentity = builder.AddAzureUserAssignedIdentity("caller-identity");
+var caller = builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
+    .WithAzureUserAssignedIdentity(callerIdentity);
+
+var apiRegistration = builder.AddEntraIdApplication("entra-api")
+    .WithApplicationIdUri()
+    .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
+    .PublishWithAppRoleAssignment(callerIdentity, "Orders.Read");
+
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    .WithReference(apiRegistration);
+
+// Alternatively, pass the workload instead of callerIdentity.
+apiRegistration.PublishWithAppRoleAssignment(caller, "Orders.Read");
+```
+
+**TypeScript**
+
+```typescript
+const caller = await builder.addContainer("worker", "my-worker-image");
+const apiRegistration = await builder.addEntraIdApplication("entra-api")
+    .withApplicationIdUri()
+    .withAppRole("Orders.Read", "Read orders", "Read orders.", {
+        allowedMemberTypes: ["Application"],
+    })
+    .publishWithAppRoleAssignment(caller, ["Orders.Read"]);
+
+const api = await builder.addContainer("api", "my-api-image")
+    .withReference(apiRegistration);
+```
+
+Assignments apply **only during publish/deploy**, not local run. The workload overload uses its attached UAMI or lets a supported Azure deployment environment create one.
+
+Configure the caller to use its UAMI and request a token for the API's application ID URI plus `/.default` (by default, `api://{apiClientId}/.default`). Reference `apiRegistration` from the API workload, not the caller: its settings identify the API registration. Pass the API URL and target application ID URI separately to the caller.
+
+The API must validate tokens and require the assigned role on protected routes. An unassigned identity can receive a token without roles, so authentication alone does not grant access.
+
+**Deployment privileges.** The deployer needs `AppRoleAssignment.ReadWrite.All` and `Application.Read.All` (or a higher permission covering reads). Application permissions require administrator consent; delegated deployments also require a [supported Entra directory role](https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto#permissions). Azure subscription Owner/Contributor alone is insufficient. Callers do not need these Graph permissions.
+
+**Revoking access.** Removing an assignment call, changing its target, or excluding a caller **does not revoke existing grants**. Remove them explicitly through Microsoft Graph or the Entra admin center. Disabling a role is not revocation. Existing tokens remain valid until expiration, and managed-identity token caches can delay observed changes.
 
 ### Clean up created registrations
 

@@ -305,7 +305,7 @@
     <value>Add a named template source to global configuration after confirming you trust it.</value>
   </data>
   <data name="TemplateSourceTrustPrompt" xml:space="preserve">
-    <value>Templates can run code. Do you trust template source '{0}' ({1})?</value>
+    <value>Do you trust template source '{0}' ({1})?</value>
   </data>
   <data name="TemplateSourceYesOptionDescription" xml:space="preserve">
     <value>Trust the template source and skip confirmation.</value>
