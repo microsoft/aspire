@@ -19,6 +19,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 
@@ -258,6 +259,57 @@ public class ApplicationSummaryTests : DashboardTestContext
             Assert.Single(cut.FindAll(".home-chart-bar"));
             Assert.Equal(2, cut.FindAll(".home-chart-axis span").Count);
         });
+    }
+
+    [Fact]
+    public async Task Recording_ManyErrorLogsAfterWindow_DoesNotHideErrorsInWindow()
+    {
+        var requestTime = new DateTime(2020, 1, 15, 12, 0, 10, DateTimeKind.Utc);
+        var cut = await RenderRecordingSummaryAsync(async writer =>
+        {
+            await writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = TelemetryTestHelpers.CreateResource(),
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = TelemetryTestHelpers.CreateScope(),
+                            Spans =
+                            {
+                                TelemetryTestHelpers.CreateSpan(traceId: "1", spanId: "1", startTime: requestTime, endTime: requestTime.AddSeconds(1), kind: Span.Types.SpanKind.Server)
+                            }
+                        }
+                    }
+                }
+            });
+
+            // More logs after the window than the activity summary reads, and one in the window.
+            var logTimes = Enumerable.Range(1, 501).Select(i => requestTime.AddHours(1).AddSeconds(i)).Prepend(requestTime);
+            await writer.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+            {
+                new ResourceLogs
+                {
+                    Resource = TelemetryTestHelpers.CreateResource(),
+                    ScopeLogs =
+                    {
+                        new ScopeLogs
+                        {
+                            Scope = TelemetryTestHelpers.CreateScope(),
+                            LogRecords = { logTimes.Select(time => TelemetryTestHelpers.CreateLogRecord(time: time, observedTime: time, severity: SeverityNumber.Error)) }
+                        }
+                    }
+                }
+            });
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var hotspot = cut.FindAll(".home-event-meta span").Select(span => span.TextContent);
+            Assert.Contains("1 error logs", hotspot);
+        }, DefaultWaitTimeout);
     }
 
     [Fact]

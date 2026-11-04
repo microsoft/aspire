@@ -77,6 +77,60 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetInstrumentAsync_Rollup_KeepsDeltaChangeNearItsTime()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var start = s_testTime.AddMinutes(1);
+        var sum = new Sum { AggregationTemporality = AggregationTemporality.Delta, IsMonotonic = true };
+        for (var seconds = 10; seconds <= 180; seconds += 10)
+        {
+            sum.DataPoints.Add(new NumberDataPoint
+            {
+                AsInt = seconds == 10 ? 4 : 0,
+                StartTimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(seconds - 10)),
+                TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(seconds))
+            });
+        }
+
+        var addContext = new AddContext();
+        await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { new Metric { Name = "test", Unit = "widget", Sum = sum } }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resource = Assert.Single(repositoryContext.Repository.GetResources());
+        var windowEnd = start.AddSeconds(180);
+        var instrument = await repositoryContext.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = start,
+            EndTime = windowEnd,
+            DataPointInterval = TimeSpan.FromMinutes(1)
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+
+        var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(180));
+        var increases = calculator.CalculateCounterIncreaseValues(instrument.Dimensions, new DateTimeOffset(windowEnd, TimeSpan.Zero), OtlpAggregationTemporality.Delta);
+
+        // The change is in the first minute, the rollup it belongs to, rather than moved to the end of the zeros after it.
+        Assert.Equal([null, 4, 0, 0, null], increases);
+    }
+
+    [Fact]
     public async Task GetInstrumentAsync_Rollup_SumsDeltaNumbersAndKeepsRowsBounded()
     {
         using var repositoryContext = await CreateRepositoryAsync();

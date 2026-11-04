@@ -520,32 +520,34 @@ public sealed class ParameterProcessor(
         await DeleteParameterCoreAsync(parameterResource, result.Data, cancellationToken).ConfigureAwait(false);
     }
 
-    // Gets the renameable inputs whose generated names would make the prompt's input names not unique. If renaming them
-    // to their parameter names conflicts with a name that's kept, every renameable input is renamed instead, because
-    // parameter names are unique.
-    private static List<(ParameterResource ParameterResource, InteractionInput Input, long Version)> GetInputsWithConflictingNames(
-        IEnumerable<InteractionInput> inputs,
+    // Renames the inputs whose generated names aren't unique, keeping every other input's name because a load callback
+    // can read it. An input is named after its parameter, unless a name that's kept already uses that.
+    private static void RenameInputsWithConflictingNames(
+        List<(ParameterResource ParameterResource, InteractionInput Input, long Version)> resourceInputs,
         List<(ParameterResource ParameterResource, InteractionInput Input, long Version)> inputsToRename,
         bool showSaveToSecrets)
     {
-        var usedNames = new HashSet<string>(StringComparers.InteractionInputName);
-        var conflictingNames = new HashSet<string>(StringComparers.InteractionInputName);
-        if (showSaveToSecrets)
+        var nameCounts = resourceInputs
+            .Select(i => i.Input.Name)
+            .Concat(showSaveToSecrets ? [SaveToUserSecretsName] : [])
+            .CountBy(name => name, StringComparers.InteractionInputName)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparers.InteractionInputName);
+        var conflicting = inputsToRename.Where(i => nameCounts[i.Input.Name] > 1).ToList();
+        var usedNames = resourceInputs
+            .Where(i => !conflicting.Any(c => ReferenceEquals(c.Input, i.Input)))
+            .Select(i => i.Input.Name)
+            .Concat(showSaveToSecrets ? [SaveToUserSecretsName] : [])
+            .ToHashSet(StringComparers.InteractionInputName);
+
+        foreach (var (parameter, input, _) in conflicting)
         {
-            usedNames.Add(SaveToUserSecretsName);
-        }
-        foreach (var input in inputs)
-        {
-            if (!usedNames.Add(input.Name))
+            var name = parameter.Name;
+            for (var suffix = 2; !usedNames.Add(name); suffix++)
             {
-                conflictingNames.Add(input.Name);
+                name = $"{parameter.Name}{suffix}";
             }
+            input.SetName(name);
         }
-
-        var conflicting = inputsToRename.Where(i => conflictingNames.Contains(i.Input.Name)).ToList();
-        var keptNames = usedNames.Where(name => !conflictingNames.Contains(name)).ToHashSet(StringComparers.InteractionInputName);
-
-        return conflicting.Any(i => keptNames.Contains(i.ParameterResource.Name)) ? inputsToRename : conflicting;
     }
 
     private InteractionInput CreateSaveParameterInput(bool hasExistingValue)
@@ -781,12 +783,14 @@ public sealed class ParameterProcessor(
                     .ToList();
                 if (resourceInputs.Any(i => i.Input.DynamicLoading is not null))
                 {
-                    inputsToRename = GetInputsWithConflictingNames(resourceInputs.Select(i => i.Input), inputsToRename, showSaveToSecrets);
+                    RenameInputsWithConflictingNames(resourceInputs, inputsToRename, showSaveToSecrets);
                 }
-
-                foreach (var (parameter, input, _) in inputsToRename)
+                else
                 {
-                    input.SetName(parameter.Name);
+                    foreach (var (parameter, input, _) in inputsToRename)
+                    {
+                        input.SetName(parameter.Name);
+                    }
                 }
 
                 var inputs = resourceInputs.Select(i => i.Input).ToList();

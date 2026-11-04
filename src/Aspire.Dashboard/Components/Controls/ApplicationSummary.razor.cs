@@ -467,19 +467,26 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             endpointDurations.Add(durationMs);
         }
 
-        // Error logs count toward a resource's hotspot score alongside failed requests.
-        var logCount = Math.Min(errorLogCount, MaxActivityErrorLogs);
-        if (logCount > 0)
+        // Error logs count toward a resource's hotspot score alongside failed requests. The query filters by the window
+        // before limiting the count: a recording's window can end before its last error logs, which would otherwise use
+        // up the limit and hide the ones in the window.
+        if (errorLogCount > 0)
         {
-            var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext { ResourceKeys = resourceKeys, StartIndex = errorLogCount - logCount, Count = logCount, Filters = s_errorLogFilters }, cancellationToken).ConfigureAwait(false);
+            var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext
+            {
+                ResourceKeys = resourceKeys,
+                StartIndex = 0,
+                Count = MaxActivityErrorLogs,
+                LatestItemCount = MaxActivityErrorLogs,
+                Filters =
+                [
+                    .. s_errorLogFilters,
+                    CreateLogTimeFilter(FilterCondition.GreaterThanOrEqual, windowStart),
+                    CreateLogTimeFilter(FilterCondition.LessThan, windowEnd)
+                ]
+            }, cancellationToken).ConfigureAwait(false);
             foreach (var log in errorLogs.Items)
             {
-                // A recording's window can end before its last error log, which isn't part of the window's activity.
-                if (log.TimeStamp < windowStart || log.TimeStamp >= windowEnd)
-                {
-                    continue;
-                }
-
                 if (!byResource.TryGetValue(log.Resource.ResourceKey, out var resourceActivity))
                 {
                     resourceActivity = new ResourceActivity(GetName(log.Resource));
@@ -530,6 +537,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .ToList()
         };
     }
+
+    // The value is parsed without converting between time zones, so it keeps the UTC time of the stored ticks.
+    private static FieldTelemetryFilter CreateLogTimeFilter(FilterCondition condition, DateTime time) => new()
+    {
+        Field = nameof(OtlpLogEntry.TimeStamp),
+        Condition = condition,
+        Value = time.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture)
+    };
 
     // A recording ended some time ago, so a window ending at the current time would show it as empty. Its activity window
     // ends at its last request instead, or at its last error log when it has no requests, so error hotspots still show.

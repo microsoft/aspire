@@ -1457,6 +1457,57 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithReplacementNameTaken_KeepsOtherGeneratedNamesForCallback()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        static InteractionInput CreateInput(string name) => new() { Name = name, InputType = InputType.Text, Label = name };
+
+        // "Value" isn't unique, and the first input's parameter name is the name the last input keeps.
+        var duplicate = CreateParameterWithMissingValue("Zone");
+        duplicate.Annotations.Add(new InputGeneratorAnnotation(_ => CreateInput("Value")));
+        var otherDuplicate = CreateParameterWithMissingValue("other");
+        otherDuplicate.Annotations.Add(new InputGeneratorAnnotation(_ => CreateInput("Value")));
+        var regionParameter = CreateParameterWithMissingValue("regionParam");
+        regionParameter.Annotations.Add(new InputGeneratorAnnotation(_ => CreateInput("Region")));
+        var zoneParameter = CreateParameterWithMissingValue("zoneParam");
+        zoneParameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Zone",
+            InputType = InputType.Choice,
+            Label = "Zone",
+            DynamicLoading = new InputLoadOptions
+            {
+                LoadCallback = context =>
+                {
+                    context.Input.Options = [KeyValuePair.Create($"{context.AllInputs["Region"].Value}-a", "a")];
+                    return Task.CompletedTask;
+                }
+            }
+        }));
+
+        await parameterProcessor.InitializeParametersAsync([duplicate, otherDuplicate, regionParameter, zoneParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(["Zone2", "other", "Region", "Zone", "SaveToUserSecrets"], inputsInteraction.Inputs.Select(input => input.Name));
+
+        inputsInteraction.Inputs["Region"].Value = "west";
+        var zoneInput = inputsInteraction.Inputs["Zone"];
+        await zoneInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = zoneInput,
+            AllInputs = inputsInteraction.Inputs,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            CancellationToken = CancellationToken.None
+        }).DefaultTimeout();
+
+        Assert.Equal("west-a", Assert.Single(zoneInput.Options!).Key);
+    }
+
+    [Fact]
     public async Task InitializeParametersAsync_WithCustomInputForParameterNamedLikeSaveCheckbox_KeepsGeneratedName()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };
