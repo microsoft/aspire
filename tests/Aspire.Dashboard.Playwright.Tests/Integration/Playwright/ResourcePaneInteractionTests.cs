@@ -20,9 +20,9 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
 [RequiresFeature(TestFeature.Playwright)]
-public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<DashboardServerFixture>
+public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashboardServerFixture>
 {
-    public ResourcePaneInteractionTests(DashboardServerFixture dashboardServerFixture)
+    public ResourcePaneInteractionTests(ResourcesTests.ResourcesDashboardServerFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
     }
@@ -75,7 +75,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task AllResourcesRow_ClearsSelectionAndListsResourcesInOverview()
+    public async Task AllResourcesRow_ClearsSelectionAndSummarizesAllResources()
     {
         const string resourceName = "TestResource";
 
@@ -98,8 +98,8 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(pane.Locator("a[aria-current]")).ToHaveCountAsync(0);
 
-            var overviewCards = page.Locator(".resource-card-grid");
-            await Assertions.Expect(overviewCards.GetByRole(AriaRole.Link, new LocatorGetByRoleOptions { Name = resourceName, Exact = true })).ToBeVisibleAsync();
+            var overviewHeadline = page.Locator(".home-hero-headline");
+            await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
 
             // Switching tabs keeps all resources selected, including when returning to the overview.
             await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.NavMenuConsoleLogsTab }).ClickAsync();
@@ -109,14 +109,14 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Dashboard
 
             await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
-            await Assertions.Expect(overviewCards).ToBeVisibleAsync();
+            await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
             await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
 
             // The cleared selection is remembered when entering the resources view again.
             await page.GotoAsync("/resources");
-            await Assertions.Expect(overviewCards).ToBeVisibleAsync();
+            await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
         });
     }
