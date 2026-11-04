@@ -27,6 +27,11 @@
         <target state="translated">Si vous souhaitez démarrer la barre d’état système expérimentale, vous devez avoir un exécutable natif Aspire CLI installé. Les versions de développement managées et « dotnet aspire.dll » ne sont pas pris en charge.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoTrayHost">
+        <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
+        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
         <target state="translated">Nous n’avons pas pu terminer la barre d’état système Aspire « {0} » : {1}</target>

@@ -27,6 +27,11 @@
         <target state="translated">Spuštění experimentální aplikace v oznamovací oblasti vyžaduje nainstalovaný nativní spustitelný soubor rozhraní Aspire CLI. Spravovaná vývojová sestavení ani dotnet aspire.dll nejsou podporované.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoTrayHost">
+        <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
+        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
         <target state="translated">Operaci {0} aplikace Aspire v oznamovací oblasti se nepovedlo dokončit: {1}</target>

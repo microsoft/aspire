@@ -289,8 +289,12 @@ internal sealed partial class LinuxStatusNotifierItem : IDisposable
                 {
                     // A slow/restarting watcher can reject or time out one request.
                     // Keep the item exported and retry independently of when
-                    // the desktop panel finishes starting.
-                    Console.Error.WriteLine("The desktop tray watcher could not register Aspire. Retrying.");
+                    // the desktop panel finishes starting. Retries are unbounded and the
+                    // diagnostic log has no size limit, so log once per watcher owner.
+                    if (item._retryOwner != request.Owner)
+                    {
+                        Console.Error.WriteLine("The desktop tray watcher could not register Aspire. Retrying.");
+                    }
                     item._retryOwner = request.Owner;
                     item._retryAfter = Environment.TickCount64 + 1000;
                 }

@@ -31,6 +31,12 @@ internal static class Program
             if (args is ["start", .. var start])
             {
                 LinuxTrayRuntime.StartAsync(TrayOptions.Parse(start)).GetAwaiter().GetResult();
+                // The tray keeps waiting for a host that may start later during login, so
+                // this is not a failure. The CLI turns the marker into setup guidance.
+                if (!LinuxSessionBus.IsTrayHostRegistered())
+                {
+                    Console.WriteLine(LinuxTrayPayload.NoTrayHostMarker);
+                }
                 return 0;
             }
             if (args is ["--detached", .. var detached])

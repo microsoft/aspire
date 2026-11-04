@@ -27,6 +27,11 @@
         <target state="translated">Zum Starten des experimentellen Infobereichssymbols muss eine native ausführbare Aspire-CLI-Datei installiert sein. Verwaltete Entwicklungsbuilds und „dotnet aspire.dll“ werden nicht unterstützt.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoTrayHost">
+        <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
+        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
         <target state="translated">Der Aspire-Befehl für das Symbol im Infobereich „{0}“ konnte nicht abgeschlossen werden: {1}</target>

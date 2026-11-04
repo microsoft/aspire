@@ -27,6 +27,11 @@
         <target state="translated">Para iniciar la bandeja experimental, debe tener instalado un ejecutable nativo de la CLI de Aspire. No se admiten compilaciones de desarrollo administrado ni "dotnet aspire.dll".</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoTrayHost">
+        <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
+        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
         <target state="translated">No se pudo completar el comando de la bandeja de Aspire "{0}": {1}</target>

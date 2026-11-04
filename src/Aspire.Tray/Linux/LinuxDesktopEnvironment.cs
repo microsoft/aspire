@@ -27,15 +27,26 @@ internal static partial class LinuxDesktopEnvironment
 
     internal static LinuxPanelBackend RequirePanelBackend()
     {
+        var backend = GetPanelBackend();
+        if (backend == LinuxPanelBackend.X11 && !IsX11Composited())
+        {
+            throw new InvalidOperationException("The Aspire panel requires an X11 compositing manager for transparent popup windows.");
+        }
+
+        return backend;
+    }
+
+    /// <summary>
+    /// Selects the panel backend without requiring an X11 compositor. A compositor can start
+    /// after the tray during login, so compositing is only required when the panel opens.
+    /// </summary>
+    internal static LinuxPanelBackend GetPanelBackend()
+    {
         var display = LinuxPanelNative.gdk_display_get_default();
         var type = Marshal.PtrToStringUTF8(g_type_name_from_instance(display));
         switch (type)
         {
             case "GdkX11Display":
-                if (!IsX11Composited())
-                {
-                    throw new InvalidOperationException("The Aspire panel requires an X11 compositing manager for transparent popup windows.");
-                }
                 return LinuxPanelBackend.X11;
             case "GdkWaylandDisplay":
                 if (!LinuxLayerShell.IsLoaded)

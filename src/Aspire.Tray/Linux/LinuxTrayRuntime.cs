@@ -104,6 +104,8 @@ internal static partial class LinuxTrayRuntime
         {
             throw new Win32Exception(Marshal.GetLastPInvokeError(), "Could not redirect detached tray streams.");
         }
+        // setsid() leaves the terminal session but not the launcher's cgroup.
+        LinuxSessionBus.MoveOutOfServiceUnit();
     }
 
     private static SafeFileHandle DuplicateAboveStdio(SafeFileHandle handle)
@@ -190,7 +192,7 @@ internal static partial class LinuxTrayRuntime
                     await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 }
             }
-            throw new InvalidOperationException($"The Linux tray did not become ready. A graphical session, GTK 3, AppIndicator library and StatusNotifierWatcher are required. On GNOME enable an AppIndicator extension; on Waybar enable the tray module. See {LogPath}.", ex);
+            throw new InvalidOperationException($"The Linux tray did not become ready. A graphical session, GTK 3 and an AppIndicator library are required. See {LogPath}.", ex);
         }
         finally
         {

@@ -27,6 +27,11 @@
         <target state="translated">啟動實驗性系統匣需要已安裝的原生 Aspire CLI 可執行檔。不支援受控開發組建和 'dotnet aspire.dll'。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoTrayHost">
+        <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
+        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
         <target state="translated">無法完成 Aspire 系統匣 '{0}': {1}</target>

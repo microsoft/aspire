@@ -14,6 +14,11 @@ internal static class LinuxTrayPayload
     internal const string IconName = "Aspire.png";
     internal const string ExecutablePath = "tray/aspire-tray";
 
+    /// <summary>
+    /// Written on its own stdout line by the start helper when the session has no tray host.
+    /// </summary>
+    internal const string NoTrayHostMarker = "aspire-tray:no-tray-host";
+
     internal static bool IsNativeExecutable(string path, ushort? machine)
     {
         if (File.Exists(Path.ChangeExtension(path, ".runtimeconfig.json")))

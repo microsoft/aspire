@@ -196,9 +196,15 @@ Startup is acknowledged after the GTK loop initializes and the GUI acquires its
 bundle lease, independently of desktop tray-host availability. If the watcher or
 panel host starts late during login, the tray remains running and registers when
 desktop tray support appears; there is no tray-host startup deadline. While waiting,
-it logs setup guidance to the private diagnostic log. Repeated start and stop
-remain responsive without a host. Missing GTK, display, or required native libraries
-still fail startup. Both frontends re-register after a watcher restart. Repeated
+it logs setup guidance to the private diagnostic log, and `aspire tray start` shows
+the same guidance as a warning. Repeated start and stop remain responsive without
+a host. On X11, a compositor that starts after the tray is also tolerated: activating
+the icon explains the requirement in a dialog until one is running. Missing GTK, display,
+or required native libraries still fail startup. When started from a systemd service
+unit, including the unit `systemd-xdg-autostart-generator` creates for the login entry,
+the tray moves to its own `app-dev.aspire.tray-<pid>.scope`. systemd before v250 omits
+`ExitType=cgroup` from that unit and would otherwise kill the tray when the launcher
+exits. Both frontends re-register after a watcher restart. Repeated
 start restores the existing item; stop shuts down only the tray and its discovery
 child. Missing offline pins are pruned once per second while discovery is live,
 even when discovery has not published a new snapshot. Settings/history use the

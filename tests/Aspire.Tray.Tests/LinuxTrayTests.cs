@@ -730,6 +730,20 @@ public class LinuxTrayTests
         Assert.Equal(expected, LinuxTrayRuntime.GetPrivateFileFlags(architecture, append));
     }
 
+    [Theory]
+    [InlineData("0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-aspire@autostart.service\n", true)]
+    [InlineData("0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-aspire-1234.scope\n", false)]
+    [InlineData("0::/user.slice/user-1000.slice/session-4.scope\n", false)]
+    [InlineData("0::/\n", false)]
+    [InlineData("12:cpu,cpuacct:/foo.service\n1:name=systemd:/user.slice/session-4.scope\n0::/\n", false)]
+    [InlineData("12:cpu,cpuacct:/\n1:name=systemd:/user.slice/user-1000.slice/user@1000.service/app-aspire@autostart.service\n0::/\n", true)]
+    [InlineData("", false)]
+    [SupportedOSPlatform("linux")]
+    public void OnlyTheSystemdHierarchyDecidesWhetherTheTrayIsInAServiceUnit(string cgroup, bool expected)
+    {
+        Assert.Equal(expected, LinuxSessionBus.IsInServiceUnit(cgroup));
+    }
+
     [Fact(Skip = "Uses Unix symbolic links.", SkipUnless = nameof(SupportsLinux))]
     [SupportedOSPlatform("linux")]
     public void RuntimeAllowsAliasedHomesButRejectsASymlinkedRuntimeDirectory()

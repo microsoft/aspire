@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -21,6 +22,7 @@ internal sealed class TrayLifecycleService(
     LayoutProcessRunner processRunner,
     IEnvironment environment,
     IProcessPathProvider processPathProvider,
+    IInteractionService interactionService,
     TimeProvider timeProvider,
     ILogger<TrayLifecycleService> logger)
 {
@@ -119,6 +121,16 @@ internal sealed class TrayLifecycleService(
                 if (!string.IsNullOrWhiteSpace(error))
                 {
                     logger.LogDebug("Tray helper stderr: {Error}", error.Trim());
+                }
+
+                // A successful Linux start can still have no visible icon. The helper reports
+                // that with a marker on its own stdout line, for example:
+                //   aspire-tray:no-tray-host
+                // Other stdout is diagnostic only, as logged above.
+                if (start && exitCode == CliExitCodes.Success && environment.IsLinux()
+                    && output.Split('\n').Any(line => line.Trim() == LinuxTrayPayload.NoTrayHostMarker))
+                {
+                    interactionService.DisplayMessage(KnownEmojis.Warning, TrayCommandStrings.NoTrayHost);
                 }
 
                 return exitCode == CliExitCodes.Success

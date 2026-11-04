@@ -27,6 +27,11 @@
         <target state="translated">Deneysel tepsinin başlatılması yerel bir Aspire CLI yürütülebilir dosyasının yüklü olmasını gerektirir. Yönetilen geliştirme derlemeleri ve 'dotnet aspire.dll' desteklenmiyor.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoTrayHost">
+        <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
+        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationFailed">
         <source>Could not complete Aspire tray '{0}': {1}</source>
         <target state="translated">Aspire tepsisi '{0}' tamamlanamadı: {1}</target>

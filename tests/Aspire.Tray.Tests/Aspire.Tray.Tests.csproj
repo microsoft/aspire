@@ -25,6 +25,7 @@
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/Gtk.cs" Link="Linux/Gtk.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxFolderApplication.cs" Link="Linux/LinuxFolderApplication.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxFileManager.cs" Link="Linux/LinuxFileManager.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxSessionBus.cs" Link="Linux/LinuxSessionBus.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayIcons.cs" Link="Linux/LinuxTrayIcons.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayApplication.cs" Link="Linux/LinuxTrayApplication.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayPanel.cs" Link="Linux/LinuxTrayPanel.cs" />

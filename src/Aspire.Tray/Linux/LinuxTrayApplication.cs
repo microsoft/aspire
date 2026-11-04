@@ -81,11 +81,8 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         _applications = LinuxFolderApplication.Discover(Environment.GetEnvironmentVariable("PATH") ?? "");
         if (!nativeMenu)
         {
-            _panel = new(controller, _applications, ExecutePanelAction, LinuxDesktopEnvironment.RequirePanelBackend());
-            _panelIcon = new(_watcher, icon, (x, y) => _pending.Enqueue(() =>
-            {
-                _panel.Activate(x, y);
-            }));
+            _panel = new(controller, _applications, ExecutePanelAction, LinuxDesktopEnvironment.GetPanelBackend());
+            _panelIcon = new(_watcher, icon, (x, y) => _pending.Enqueue(() => ActivatePanel(x, y)));
         }
         else
         {
@@ -109,6 +106,25 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         {
             throw new InvalidOperationException($"The Linux tray UI failed: {_failure.Message}", _failure);
         }
+    }
+
+    private void ActivatePanel(int x, int y)
+    {
+        try
+        {
+            LinuxDesktopEnvironment.RequirePanelBackend();
+        }
+        catch (InvalidOperationException ex)
+        {
+            // The panel is the only UI on these desktops, and its failure notice is drawn
+            // inside it. A plain GTK dialog does not need a compositor, so it can explain
+            // why the panel cannot open. This runs from the pending-action source, so Tick
+            // can still cancel the dialog on stop/SIGTERM.
+            Console.Error.WriteLine($"Linux flyout unavailable ({ex.GetType().Name}).");
+            ShowMessage("Aspire Tray", ex.Message);
+            return;
+        }
+        _panel!.Activate(x, y);
     }
 
     internal Task ReadyAsync(CancellationToken token) => _ready.Task.WaitAsync(token);

@@ -42,6 +42,32 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
             : ["stop"], factory.LastArguments);
     }
 
+    [Theory]
+    [InlineData(LinuxTrayPayload.NoTrayHostMarker, true)]
+    [InlineData("helper diagnostic", false)]
+    public async Task LinuxStartWarnsOnlyWhenTheHelperReportsNoTrayHost(string helperOutput, bool expectedWarning)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, interaction, _) = CreateServices(workspace);
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
+        bundle.Layout!.Components.Tray = LinuxTrayPayload.ExecutablePath;
+        LinuxTrayTestPayload.Create(Path.GetDirectoryName(bundle.Layout.GetTrayPath()!)!,
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64");
+        factory.AttemptCallback = (_, options) =>
+        {
+            options.StandardOutputCallback!(helperOutput);
+            return (CliExitCodes.Success, null);
+        };
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+
+        string[] expected = expectedWarning ? [TrayCommandStrings.NoTrayHost] : [];
+        Assert.Equal(expected, interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Equal(TrayCommandStrings.Started, Assert.Single(interaction.DisplayedSuccess));
+    }
+
     [Fact]
     public async Task LinuxRejectsWrongArchitectureBeforeLaunching()
     {
