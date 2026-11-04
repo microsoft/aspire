@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-04T06:58:01Z",
+  "number": 21750,
+  "runDate": "2026-11-04T12:05:00Z",
+  "status": "excluded",
+  "title": "Fix native AppHost server factory test in Release"
+}
