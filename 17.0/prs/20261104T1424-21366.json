@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "User-facing change",
+  "mergedAt": "2026-11-04T14:24:44Z",
+  "number": 21366,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "included",
+  "title": "Support configurable named integration sources"
+}

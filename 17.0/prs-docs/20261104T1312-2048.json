@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-site updater tooling; no matching changelog entry",
+  "mergedAt": "2026-11-04T13:12:27Z",
+  "number": 2048,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "excluded",
+  "title": "Preserve partial API updates and reliably track package failures"
+}

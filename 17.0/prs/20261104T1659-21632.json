@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only CI flake fix",
+  "mergedAt": "2026-11-04T16:59:50Z",
+  "number": 21632,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "excluded",
+  "title": "Hold storage-diagnostics test locks in-process instead of via PowerShell"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "User-facing change",
+  "mergedAt": "2026-11-04T16:46:33Z",
+  "number": 21323,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "included",
+  "title": "Fix malformed secrets diagnostics and side-effect-free path lookup"
+}

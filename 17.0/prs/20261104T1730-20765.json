@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "User-facing change",
+  "mergedAt": "2026-11-04T17:30:06Z",
+  "number": 20765,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "included",
+  "title": "Honor nested AppHost launch profiles without the C# extension"
+}

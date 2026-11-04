@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only CI flake fix",
+  "mergedAt": "2026-11-04T17:59:49Z",
+  "number": 21640,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "excluded",
+  "title": "Wait for C# project initialization before coordinated-build E2E fixtures"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Nested AppHost launch profiles in `launch.json` are now honored when the C# extension is disabled or absent and the CLI launches the AppHost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udea6",
+  "firstMergedAt": "2026-11-04T17:30:06Z",
+  "lastMergedAt": "2026-11-04T17:30:06Z",
+  "name": "Nested AppHost launch profiles without the C# extension",
+  "owner": "ellahathaway",
+  "prs": [
+    20765
+  ]
+}

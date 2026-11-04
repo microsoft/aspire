@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Configure named `integrationSources` with their own NuGet feeds and package patterns so `aspire add`, integration list/search, and MCP discovery include them. Partial feed failures now produce redacted warnings while keeping successful results, and named-source adds use the selected feed for version lookup and restore.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\uddc3\ufe0f",
+  "firstMergedAt": "2026-11-04T14:24:44Z",
+  "lastMergedAt": "2026-11-04T14:24:44Z",
+  "name": "Configurable named integration sources",
+  "owner": "JamesNK",
+  "prs": [
+    21366
+  ]
+}

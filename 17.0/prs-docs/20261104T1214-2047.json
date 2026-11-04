@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-site updater tooling; no matching changelog entry",
+  "mergedAt": "2026-11-04T12:14:22Z",
+  "number": 2047,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "excluded",
+  "title": "Make Integration Data Updater tolerate package failures and track them in one issue"
+}

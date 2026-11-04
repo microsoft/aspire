@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire init --language` now adds the language's default hosting package (JavaScript for TypeScript, Python, or Go) to the new AppHost, so resource APIs like `AddViteApp` work without a prior `aspire add`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-11-04T16:52:28Z",
+  "lastMergedAt": "2026-11-04T16:52:28Z",
+  "name": "Default hosting packages for guest AppHosts",
+  "owner": "IEvangelist",
+  "prs": [
+    21191
+  ]
+}

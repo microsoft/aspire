@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky fix",
+  "mergedAt": "2026-11-04T12:31:42Z",
+  "number": 21430,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "excluded",
+  "title": "Fix lost cancellation signal in RPC cancellation tests"
+}

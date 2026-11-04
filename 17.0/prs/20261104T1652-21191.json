@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "User-facing change",
+  "mergedAt": "2026-11-04T16:52:28Z",
+  "number": 21191,
+  "runDate": "2026-11-04T18:10:00Z",
+  "status": "included",
+  "title": "Record default hosting packages when scaffolding a guest AppHost"
+}
