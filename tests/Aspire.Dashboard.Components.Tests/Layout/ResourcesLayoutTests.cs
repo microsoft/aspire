@@ -861,8 +861,10 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
-        // Nothing is selected, which means all resources: "Select all" is pressed.
-        Assert.Equal("true", cut.Find(".resource-select-all-toggle").GetAttribute("aria-pressed"));
+        Assert.Equal("Select all", cut.Find(".resource-select-all-toggle").TextContent.Trim());
+        Assert.Null(cut.Find(".resource-select-all-toggle").GetAttribute("aria-pressed"));
+        Assert.Equal("All selected", cut.Find(".resource-select-all-toggle").GetAttribute("aria-description"));
+        Assert.Equal("All selected", cut.Find(".resource-select-all-toggle").GetAttribute("data-tooltip"));
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 
@@ -870,7 +872,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [InlineData("/resources/api")]
     [InlineData("/resources/api?terminal=true")]
     [InlineData("/terminals/resource/api")]
-    public async Task SelectAll_IsPressedOnlyWhileEverythingIsSelectedAndSelectsEverything(string initialUrl)
+    public async Task SelectAll_IsLabeledActionAndAlwaysSelectsEverything(string initialUrl)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -884,8 +886,10 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal("api", cut.Find(".resource-header-title").TextContent.Trim()));
         Assert.Equal(["api"], cut.FindAll(".resource-row.selected[data-resource-name]").Select(r => r.GetAttribute("data-resource-name")));
         var selectAll = cut.Find(".resource-select-all-toggle");
-        Assert.Equal("false", selectAll.GetAttribute("aria-pressed"));
+        Assert.Equal("Select all", selectAll.TextContent.Trim());
+        Assert.Null(selectAll.GetAttribute("aria-pressed"));
         Assert.Equal("Select all", selectAll.GetAttribute("aria-label"));
+        Assert.Null(selectAll.GetAttribute("aria-description"));
         Assert.Equal("Select all", selectAll.GetAttribute("data-tooltip"));
 
         await cut.InvokeAsync(() => selectAll.Click());
@@ -896,8 +900,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         cut.WaitForAssertion(() => Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim()));
         selectAll = cut.Find(".resource-select-all-toggle");
-        Assert.Equal("true", selectAll.GetAttribute("aria-pressed"));
+        Assert.Equal("Select all", selectAll.TextContent.Trim());
+        Assert.Null(selectAll.GetAttribute("aria-pressed"));
+        Assert.Equal("All selected", selectAll.GetAttribute("aria-description"));
         Assert.Equal("All selected", selectAll.GetAttribute("data-tooltip"));
+        await cut.InvokeAsync(() => selectAll.Click());
+        Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
 
         // Every row looks selected, since everything is. Only an explicit selection marks rows as the current ones.
         Assert.Equal(["api", "cache"], cut.FindAll(".resource-row.selected[data-resource-name]").Select(r => r.GetAttribute("data-resource-name")));

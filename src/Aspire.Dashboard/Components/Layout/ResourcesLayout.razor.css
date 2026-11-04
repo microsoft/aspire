@@ -439,6 +439,7 @@
    changes their width (which would change which labels fit), and the divider marks where the scrolling begins. */
 .resource-pane-kinds {
     display: flex;
+    flex-wrap: wrap;
     flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
@@ -498,8 +499,6 @@
     outline-offset: 1px;
 }
 
-/* Select all is an action next to the trays rather than one of them, so it looks like a plain toolbar icon button:
-   no border or tray, a hover background, and a brand-colored icon while everything is selected. */
 .resource-select-all {
     display: inline-flex;
 }
@@ -509,13 +508,16 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
+    gap: 4px;
+    min-width: 32px;
     height: 32px;
-    padding: 0;
+    padding: 0 6px;
     border: 0;
     border-radius: var(--borderRadiusMedium);
     background: transparent;
     color: var(--colorNeutralForeground2);
+    font: inherit;
+    white-space: nowrap;
     cursor: pointer;
 }
 
