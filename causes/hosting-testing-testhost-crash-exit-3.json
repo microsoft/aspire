@@ -1,0 +1,15 @@
+{
+  "id": "hosting-testing-testhost-crash-exit-3",
+  "type": "main-repository-breakage",
+  "title": "Aspire.Hosting.Testing.Tests test host crashes with exit code 3 during TestingBuilderTests",
+  "error_pattern": "Test application process didn't exit gracefully, exit code is '3'\nTest run completed with non-success exit code: 7. The test host process exited unexpectedly.",
+  "occurrences": [
+    {
+      "run_id": 41757475418,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41757475418",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (ubuntu-latest)",
+      "observed_at": "2026-11-04T02:42:11Z",
+      "pr_number": 0
+    }
+  ]
+}

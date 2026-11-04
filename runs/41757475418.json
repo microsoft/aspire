@@ -1,0 +1,33 @@
+{
+  "run_id": 41757475418,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41757475418",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-04T02:42:11Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "b19f9323737b0e6e045ab8134a15302c5f2e0fa5",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (ubuntu-latest)",
+      "id": 126337599539,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41757475418/job/126337599539",
+      "classification": "main-repository-breakage",
+      "reason": "Aspire.Hosting.Testing.Tests test host crashed (exit code 3, MTP exit 7) while CanOverrideLaunchProfileViaArgsAdHocBuilder was running; no structured failed tests and no infrastructure signature.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosting-testing-testhost-crash-exit-3"
+  ]
+}
