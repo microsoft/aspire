@@ -348,7 +348,11 @@ internal class ConsoleInteractionService : IInteractionService
         {
             var prompt = new SelectionPrompt<SelectionPromptItem>()
                 .Title(promptText)
-                .UseConverter(item => item.Label)
+                // Spectre reserves a cell for the arrow, a space, right padding, and
+                // two more cells for grouped children. Its converter also controls
+                // search, so only the visible prefix remains searchable after cropping.
+                // https://github.com/spectreconsole/spectre.console/blob/0.57.2/src/Spectre.Console/Prompts/SelectionPrompt.cs
+                .UseConverter(item => FormatSelectionLabel(item.Label, MessageConsole.Profile.Width - item.Indent - 3))
                 .PageSize(10)
                 .EnableSearch();
             prompt.Mode = SelectionMode.Leaf;
@@ -356,14 +360,15 @@ internal class ConsoleInteractionService : IInteractionService
             Dictionary<string, ISelectionItem<SelectionPromptItem>> groups = [];
             foreach (var choice in choicesList)
             {
-                var item = new SelectionPromptValue<T>(choice, groupedChoiceFormatter(choice));
+                var group = choiceGroup(choice);
+                var item = new SelectionPromptValue<T>(choice, groupedChoiceFormatter(choice), group is not null);
                 // Spectre starts value-type prompts on default(T), if present (e.g. false
                 // for a confirmation). Wrapping choices must not change that default.
                 if (prompt.DefaultValue is null && default(T) is { } typeDefaultValue && EqualityComparer<T>.Default.Equals(choice, typeDefaultValue))
                 {
                     prompt.DefaultValue = item;
                 }
-                if (choiceGroup(choice) is { } group)
+                if (group is not null)
                 {
                     if (!groups.TryGetValue(group.Id, out var header))
                     {
@@ -394,10 +399,28 @@ internal class ConsoleInteractionService : IInteractionService
         // Echo the prompt text and selected value so the user can see what was chosen.
         if (echoSelected)
         {
-            MessageConsole.MarkupLine($"{promptText} {groupedChoiceFormatter(result)}");
+            var message = $"{promptText} {groupedChoiceFormatter(result)}";
+            MessageConsole.MarkupLine(choiceGroup is null ? message : FormatSelectionLabel(message, MessageConsole.Profile.Width));
         }
 
         return result;
+    }
+
+    internal static string FormatSelectionLabel(string markup, int maxWidth)
+    {
+        if (maxWidth <= 0)
+        {
+            return string.Empty;
+        }
+
+        // Measure decoded text, not markup escapes (e.g. "[[services]]"), and
+        // normalize metadata such as "Frontend\r\n  and API" to a single line.
+        var text = string.Join(' ', Emoji.Replace(markup.RemoveMarkup()).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        text = string.Concat(text.Where(ch => !char.IsControl(ch)));
+        var segment = new Segment(text);
+        // Spectre crops by terminal cells and grapheme clusters, preserving wide
+        // characters and combining sequences instead of slicing UTF-16 code units.
+        return Segment.SplitOverflow(segment, Overflow.Ellipsis, maxWidth)[0].Text.EscapeMarkup();
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
@@ -922,7 +945,7 @@ internal class ConsoleInteractionService : IInteractionService
         return default; // unreachable
     }
 
-    private abstract record SelectionPromptItem(string Label);
-    private sealed record SelectionPromptValue<T>(T Value, string Text) : SelectionPromptItem(Text) where T : notnull;
-    private sealed record SelectionPromptGroup(string Text) : SelectionPromptItem(Text);
+    private abstract record SelectionPromptItem(string Label, int Indent);
+    private sealed record SelectionPromptValue<T>(T Value, string Text, bool Grouped) : SelectionPromptItem(Text, Grouped ? 2 : 0) where T : notnull;
+    private sealed record SelectionPromptGroup(string Text) : SelectionPromptItem(Text, 0);
 }

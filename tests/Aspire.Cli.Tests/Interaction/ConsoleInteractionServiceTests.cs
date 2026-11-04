@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using NewCommand = Aspire.Cli.Commands.NewCommand;
 using NewCommandPrompter = Aspire.Cli.Commands.NewCommandPrompter;
 
@@ -154,6 +155,85 @@ public class ConsoleInteractionServiceTests
             template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
 
         Assert.Same(templates[1], selected);
+    }
+
+    [Theory]
+    [InlineData("Name (Description)", 18, "Name (Description)")]
+    [InlineData("Name (Description)", 12, "Name (Descr…")]
+    [InlineData(" \tName\r\n (Description)\n", 30, "Name (Description)")]
+    [InlineData("Name [[services]]", 10, "Name [[ser…")]
+    [InlineData("Name [[services]]", 15, "Name [[services]]")]
+    [InlineData("界界界", 5, "界界…")]
+    [InlineData("界界界", 4, "界…")]
+    [InlineData("e\u0301e\u0301e\u0301e\u0301", 3, "e\u0301e\u0301…")]
+    [InlineData("😀😀😀", 4, "😀…")]
+    [InlineData(":rocket: launch", 3, "🚀…")]
+    [InlineData("Name\u001b[[31m", 20, "Name[[31m")]
+    [InlineData("Name", 1, "…")]
+    [InlineData("界", 1, "…")]
+    [InlineData("Name", 0, "")]
+    [InlineData("Name", -1, "")]
+    [InlineData("", 1, "")]
+    public void SelectionLabel_FitsTerminalCellsWithoutSplittingTextElements(string markup, int width, string expected)
+    {
+        var label = ConsoleInteractionService.FormatSelectionLabel(markup, width);
+
+        Assert.Equal(expected, label);
+        Assert.InRange(new Segment(label.RemoveMarkup()).CellCount(), 0, Math.Max(0, width));
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedLabelsFitWidthAndNormalizeMetadata()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = 40;
+        var interaction = CreateInteractionService(console);
+        ITemplate[] templates = [CreateSearchableTemplate("first", "Observable [services]\r\nwith 界界 and a long description")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            _ => new SelectionChoiceGroup("source", "Company [source]\r\nwith a long heading that must fit"),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(10)]
+    public async Task PromptForSelectionAsync_GroupedLabelsFitNarrowTerminals(int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = width;
+        var interaction = CreateInteractionService(console);
+        ITemplate[] templates = [CreateSearchableTemplate("first", "Wide 界 description")];
+
+        var selected = await interaction.PromptForSelectionAsync("Pick:", templates, template => template.Name,
+            _ => new SelectionChoiceGroup("source", "Company"), template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        await Verify(output.ToString()).UseParameters(width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_TruncatedDescriptionTailIsNotSearchable()
+    {
+        var keys = "ZXQ".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var console = CreateSelectionConsole(new StringBuilder(), keys);
+        console.Profile.Width = 40;
+        var interaction = CreateInteractionService(console);
+        const string Description = "A description longer than the terminal with ZXQ at the end";
+        ITemplate[] templates = [CreateSearchableTemplate("first", null), CreateSearchableTemplate("second", Description)];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            template => new SelectionChoiceGroup(template.Name, template.Name),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        Assert.Equal(Description, templates[1].SearchDescription);
     }
 
     [Theory]

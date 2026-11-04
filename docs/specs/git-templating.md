@@ -90,6 +90,9 @@ discovered source snapshot, even when display names or short names collide.
 There is no separate search action: type in the picker to move to a matching name
 or description, case-insensitively. Descriptions, when provided, are shown as
 `Template Name (Template Description)` so Spectre's existing search can match them.
+Grouped terminal labels normalize whitespace and use an ellipsis when the combined
+name and description exceed the available terminal-cell width. Search matches only
+the visible prefix of a truncated label; full template metadata is retained.
 Empty or unavailable sources report their
 existing warnings without preventing selection from other sources or built-ins.
 The terminal picker shows nonselectable headings for built-in templates and each
