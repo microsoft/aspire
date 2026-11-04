@@ -398,6 +398,16 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 Exact = true
             });
 
+            // The visible way in: the button is hidden with the rest of the graph, and comes back on exit.
+            var play = graphContainer.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGamePlay, Exact = true });
+            await play.ClickAsync();
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await Assertions.Expect(game).ToBeFocusedAsync();
+            await Assertions.Expect(play).ToBeHiddenAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+            await Assertions.Expect(play).ToBeVisibleAsync();
+
             await graphContainer.FocusAsync();
             await page.Keyboard.PressAsync("o");
             await Assertions.Expect(game).ToBeVisibleAsync();
@@ -409,9 +419,23 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             Assert.True(await page.EvaluateAsync<bool>("() => document.activeElement?.closest('.resource-graph') == null"));
             await game.FocusAsync();
 
-            // Enter starts the game from the title screen, and doesn't leave it.
             await page.WaitForTimeoutAsync(1500);
+
+            // Hard core is off until it's picked, and picking it says what it does.
+            var normal = game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameModeNormal, Exact = true });
+            var hardCore = game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameModeHardCore, Exact = true });
+            await Assertions.Expect(normal).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(game.GetByText(Dashboard.Resources.Resources.ResourceGraphGameHardCoreWarning)).ToHaveCountAsync(0);
+            await hardCore.ClickAsync();
+            await Assertions.Expect(hardCore).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(game.GetByText(Dashboard.Resources.Resources.ResourceGraphGameHardCoreWarning)).ToBeVisibleAsync();
+            await Assertions.Expect(game).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("h");
+            await Assertions.Expect(normal).ToHaveAttributeAsync("aria-pressed", "true");
+
+            // Enter starts the game from the title screen, and doesn't leave it. The modes can't be changed during play.
             await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(hardCore).ToBeHiddenAsync();
 
             var sound = game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameSoundOn, Exact = true });
             await page.Keyboard.PressAsync("Tab");

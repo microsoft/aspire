@@ -1,16 +1,18 @@
 // Aspire Outage: an arcade game played on the resource graph.
 //
-// Drawing two full circles with the mouse over empty graph space (without pressing a button, so it can't happen while
-// panning or dragging a node) morphs the graph's resources into a formation of enemies. The player's ship is the Aspire
-// logo. Escape or the Exit button morphs everything back into the graph.
+// The Play button of the graph, or the O key while the graph has focus, morphs the graph's resources into a formation of
+// enemies. The player's ship is the Aspire logo. Escape or the Exit button morphs everything back into the graph.
 //
 // The game is self-contained plain JavaScript drawn on a canvas overlay. It never changes the graph's data or d3 state:
 // while it runs it only sets inline opacity/visibility on the graph SVG and its controls, and restores the previous
-// style attributes on exit. Until the gesture is recognized there is no animation frame, no keyboard listener and no
-// audio context, only a cheap pointermove listener on the graph SVG.
+// style attributes on exit. Until the game is launched there is no animation frame, no keyboard listener and no audio
+// context, only the listeners that launch it.
 //
-// Pure logic (gesture recognition, formation, scoring, collisions, firewalls, best score storage) is exported so it can
-// be tested without a browser. See tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs.
+// Hard core is a mode picked on the start screen in which the game has real consequences: destroying an enemy stops its
+// resource, and clearing the wave starts the stopped resources again. It is off every time the game opens.
+//
+// Pure logic (formation, scoring, collisions, firewalls, best score storage, resource commands) is exported so it can be
+// tested without a browser. See tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs.
 
 const TAU = Math.PI * 2;
 
@@ -34,6 +36,9 @@ const MIN_WORLD_WIDTH = 240;
 const MIN_WORLD_HEIGHT = 250;
 const BACKGROUND_ALPHA = 0.94;
 
+const COMMAND_ATTEMPTS = 10;
+const COMMAND_RETRY_MS = 1000;
+
 // Morph timings in milliseconds. Reduced motion replaces the flight with a short cross-fade.
 const MORPH_PIXELATE = 350;
 const MORPH_FLIGHT = 800;
@@ -49,92 +54,6 @@ const SATELLITE_POINTS = [100, 200, 400];
 // ---------------------------------------------------------------------------------------------------------------------
 // Pure logic
 // ---------------------------------------------------------------------------------------------------------------------
-
-const DEFAULT_GESTURE = Object.freeze({
-    turns: 2,
-    minRadius: 25,
-    maxRadius: 500,
-    maxVariation: 0.4,
-    minPoints: 20,
-    windowMs: 3500,
-});
-
-function normalizeAngle(angle) {
-    while (angle > Math.PI) {
-        angle -= TAU;
-    }
-    while (angle < -Math.PI) {
-        angle += TAU;
-    }
-    return angle;
-}
-
-/**
- * Measures how circular a pointer trail is around its own centroid: the signed number of turns swept, the mean radius
- * and the radius' coefficient of variation (0 for a perfect circle).
- */
-function measureCircularity(points, start = 0) {
-    const count = points.length - start;
-    let cx = 0;
-    let cy = 0;
-    for (let i = start; i < points.length; i++) {
-        cx += points[i].x;
-        cy += points[i].y;
-    }
-    cx /= count;
-    cy /= count;
-
-    let radiusSum = 0;
-    let radiusSquareSum = 0;
-    let swept = 0;
-    let previousAngle = 0;
-    for (let i = start; i < points.length; i++) {
-        const dx = points[i].x - cx;
-        const dy = points[i].y - cy;
-        const radius = Math.hypot(dx, dy);
-        radiusSum += radius;
-        radiusSquareSum += radius * radius;
-        const angle = Math.atan2(dy, dx);
-        if (i > start) {
-            swept += normalizeAngle(angle - previousAngle);
-        }
-        previousAngle = angle;
-    }
-
-    const radius = radiusSum / count;
-    const variance = Math.max(0, (radiusSquareSum / count) - (radius * radius));
-    return {
-        turns: swept / TAU,
-        radius,
-        variation: radius > 0 ? Math.sqrt(variance) / radius : Infinity,
-    };
-}
-
-/**
- * Returns true when the trail ends with at least two full circles (or a loose spiral) drawn in one direction.
- * Every suffix of the trail is tried because the circles are usually preceded by unrelated movement that would move
- * the centroid off the circles' center.
- */
-export function detectCircleGesture(points, options) {
-    const o = { ...DEFAULT_GESTURE, ...options };
-    if (points.length < o.minPoints) {
-        return false;
-    }
-
-    const requiredTurns = o.turns * 0.92;
-    const step = Math.max(1, Math.floor(points.length / 24));
-    for (let start = 0; start <= points.length - o.minPoints; start += step) {
-        const m = measureCircularity(points, start);
-        if (Math.abs(m.turns) >= requiredTurns &&
-            m.radius >= o.minRadius &&
-            m.radius <= o.maxRadius &&
-            m.variation <= o.maxVariation) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 /**
  * Lays out the enemy formation. Every resource in the graph appears at least once. Tiny graphs are repeated to fill a
@@ -174,8 +93,8 @@ export function computeWorldSize(rectWidth, rectHeight) {
 }
 
 /**
- * Whether a key press on the focused graph starts the game: the keyboard counterpart of the circle gesture. Keys typed
- * in a control inside the graph, such as the zoom buttons, stay with that control.
+ * Whether a key press on the focused graph starts the game. Keys typed in a control inside the graph, such as the zoom
+ * buttons, stay with that control.
  */
 export function isLaunchKey(event) {
     return (event.key === 'o' || event.key === 'O') &&
@@ -194,6 +113,83 @@ export function isPausable(state) {
 /** Whether Enter and Space on this target should activate a focused button instead of playing the game. */
 export function isButtonTarget(target) {
     return typeof target?.closest === 'function' && target.closest('button') !== null;
+}
+
+/**
+ * Applies hard core mode to the real resources. A resource is stopped once however many of its enemies are destroyed, and
+ * only resources this class stopped are started again, so a resource that was already stopped stays as the user left it.
+ *
+ * Commands for one resource run one after the other. A command that isn't available yet is tried again, because it can
+ * take a moment for a resource to get there: start only appears once the resource has stopped, and stop only once a
+ * resource that was starting is running. execute(id, command) resolves to false when the command isn't available.
+ */
+export class ResourceOutage {
+    constructor(execute, retryDelayMs = COMMAND_RETRY_MS) {
+        this.execute = execute;
+        this.retryDelayMs = retryDelayMs;
+        // Stop was requested and the wave wasn't cleared since.
+        this.down = new Set();
+        // Stop was executed, so start applies.
+        this.stopped = new Set();
+        this.queues = new Map();
+    }
+
+    get downCount() {
+        return this.down.size;
+    }
+
+    /** Returns true when this call is the one that stops the resource. */
+    stop(id) {
+        if (this.down.has(id)) {
+            return false;
+        }
+        this.down.add(id);
+        this.enqueue(id, async () => {
+            if (await this.attempt(id, 'stop')) {
+                this.stopped.add(id);
+            } else {
+                this.down.delete(id);
+            }
+        });
+        return true;
+    }
+
+    restartAll() {
+        for (const id of this.down) {
+            this.enqueue(id, async () => {
+                if (this.stopped.delete(id)) {
+                    await this.attempt(id, 'start');
+                }
+            });
+        }
+        this.down.clear();
+    }
+
+    enqueue(id, work) {
+        const next = (this.queues.get(id) ?? Promise.resolve()).then(work);
+        this.queues.set(id, next);
+    }
+
+    async attempt(id, command) {
+        for (let i = 0; i < COMMAND_ATTEMPTS; i++) {
+            try {
+                if (await this.execute(id, command)) {
+                    return true;
+                }
+            } catch {
+                // The page can be gone by now, which ends the attempts below.
+            }
+            if (i < COMMAND_ATTEMPTS - 1) {
+                await new Promise(resolve => setTimeout(resolve, this.retryDelayMs));
+            }
+        }
+        return false;
+    }
+
+    /** Resolves when every command requested so far has finished. */
+    whenIdle() {
+        return Promise.all(this.queues.values());
+    }
 }
 
 /** The top third of the formation is worth 40 points, the middle 25 and the bottom 15. */
@@ -643,8 +639,8 @@ class SoundEffects {
         this.marchIndex = 0;
     }
 
-    // Browsers only allow audio to start from a user activation (click, key press). The recognition gesture is a
-    // pointermove, which doesn't count, so the context is created on the first click or key press in the game.
+    // Browsers only allow audio to start from a user activation (click, key press). The click or key press that launches
+    // the game counts, and later ones resume a context the browser suspended.
     unlock() {
         if (!this.context) {
             const AudioContextType = window.AudioContext ?? window.webkitAudioContext;
@@ -817,6 +813,12 @@ const STYLES = `
 .resource-graph-game-buttons { position: absolute; right: 8px; bottom: 6px; display: flex; gap: 6px; opacity: 0; }
 .resource-graph-game-button { font: 700 11px/1 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 1px; text-transform: uppercase; color: #e8e2ff; background: rgba(20, 10, 40, 0.85); border: 2px solid #7455dd; border-radius: 0; padding: 4px 8px; cursor: pointer; }
 .resource-graph-game-button:hover, .resource-graph-game-button:focus-visible { background: #512bd4; outline: none; }
+.resource-graph-game-modes { position: absolute; left: 8px; right: 8px; bottom: 32px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.resource-graph-game-modes[hidden], .resource-graph-game-note[hidden] { display: none; }
+.resource-graph-game-mode-buttons { display: flex; gap: 6px; }
+.resource-graph-game-modes .resource-graph-game-button[aria-pressed="true"] { background: #512bd4; }
+.resource-graph-game-modes .resource-graph-game-hardcore[aria-pressed="true"] { background: #a4262c; border-color: #ff5f5f; }
+.resource-graph-game-note { max-width: 420px; padding: 4px 8px; font: 700 11px/1.35 ui-monospace, Menlo, Consolas, monospace; text-align: center; color: #ffd9d9; background: rgba(20, 10, 40, 0.92); border: 2px solid #ff5f5f; }
 `;
 
 function injectStyles() {
@@ -880,6 +882,7 @@ class ResourceGraphGame {
         if (this.roster.length === 0) {
             this.roster.push({
                 id: 'aspire',
+                placeholder: true,
                 label: 'NO RESOURCES',
                 color: '#b9aaee',
                 fill: '#1b1a22',
@@ -898,7 +901,10 @@ class ResourceGraphGame {
         this.hideGraph();
 
         this.sound = new SoundEffects(readMuted(getLocalStorage));
+        this.sound.unlock();
         this.updateMuteButton();
+        this.hardcore = false;
+        this.outage = new ResourceOutage((id, command) => graph.resourcesInterop.invokeMethodAsync('ExecuteGraphGameCommand', id, command));
         this.best = readBestScore(getLocalStorage);
         this.ship = pathSprite(ASPIRE_LOGO, 17, 15, ASPIRE_LOGO_BOX);
         this.lifeIcon = pathSprite(ASPIRE_LOGO, 8, 7, ASPIRE_LOGO_BOX);
@@ -954,7 +960,29 @@ class ResourceGraphGame {
         close.setAttribute('aria-label', this.strings.exitLabel);
         buttons.append(mute, close);
 
-        root.append(canvas, crt, buttons);
+        // DOM rather than canvas text, because the canvas font can't draw every language and picking a mode that stops
+        // real resources has to be understood. Shown on the start and game over screens only.
+        const modes = document.createElement('div');
+        modes.className = 'resource-graph-game-modes';
+        modes.hidden = true;
+        const note = document.createElement('div');
+        note.className = 'resource-graph-game-note';
+        note.setAttribute('aria-live', 'polite');
+        note.hidden = true;
+        const modeButtons = document.createElement('div');
+        modeButtons.className = 'resource-graph-game-mode-buttons';
+        const normal = document.createElement('button');
+        normal.type = 'button';
+        normal.className = 'resource-graph-game-button';
+        normal.textContent = this.strings.modeNormal;
+        const hardcore = document.createElement('button');
+        hardcore.type = 'button';
+        hardcore.className = 'resource-graph-game-button resource-graph-game-hardcore';
+        hardcore.textContent = this.strings.modeHardCore;
+        modeButtons.append(normal, hardcore);
+        modes.append(note, modeButtons);
+
+        root.append(canvas, crt, modes, buttons);
         this.container.appendChild(root);
 
         this.root = root;
@@ -965,22 +993,26 @@ class ResourceGraphGame {
         this.buttons = buttons;
         this.muteButton = mute;
         this.closeButton = close;
+        this.modes = modes;
+        this.modeNote = note;
+        this.normalButton = normal;
+        this.hardcoreButton = hardcore;
     }
 
     hideGraph() {
-        this.controls = this.container.querySelector('.resource-graph-controls');
+        this.controls = [...this.container.querySelectorAll('.resource-graph-controls')];
         // The whole style attribute is saved (null when absent) so exiting leaves the elements exactly as they were.
         this.saved = {
             svgStyle: this.svg.getAttribute('style'),
-            controlsStyle: this.controls?.getAttribute('style') ?? null,
+            controlsStyles: this.controls.map(controls => controls.getAttribute('style')),
         };
         this.svg.style.transition = 'none';
         this.svg.style.opacity = '0';
         // Opacity alone would leave the resource menu cogs focusable and exposed to assistive technology behind the game.
         // Hidden elements keep their layout, which is what morphing back to the nodes needs.
         this.svg.style.visibility = 'hidden';
-        if (this.controls) {
-            this.controls.style.visibility = 'hidden';
+        for (const controls of this.controls) {
+            controls.style.visibility = 'hidden';
         }
     }
 
@@ -996,9 +1028,28 @@ class ResourceGraphGame {
         } else {
             restoreStyle(this.svg, this.saved.svgStyle);
         }
-        if (this.controls) {
-            restoreStyle(this.controls, this.saved.controlsStyle);
+        this.controls.forEach((controls, i) => restoreStyle(controls, this.saved.controlsStyles[i]));
+    }
+
+    updateModeControls() {
+        const selecting = this.state === 'title' || this.state === 'gameover';
+        this.modes.hidden = !selecting;
+        this.normalButton.setAttribute('aria-pressed', this.hardcore ? 'false' : 'true');
+        this.hardcoreButton.setAttribute('aria-pressed', this.hardcore ? 'true' : 'false');
+
+        let note = '';
+        if (this.state === 'gameover' && this.outage.downCount > 0) {
+            note = this.strings.hardCoreStopped.replace('{0}', String(this.outage.downCount));
+        } else if (selecting && this.hardcore) {
+            note = this.strings.hardCoreWarning;
         }
+        this.modeNote.textContent = note;
+        this.modeNote.hidden = note === '';
+    }
+
+    setHardcore(hardcore) {
+        this.hardcore = hardcore;
+        this.updateModeControls();
     }
 
     updateMuteButton() {
@@ -1032,6 +1083,9 @@ class ResourceGraphGame {
         this.canvas.addEventListener('contextmenu', this.onContextMenu);
         this.muteButton.addEventListener('click', this.onMuteClick);
         this.closeButton.addEventListener('click', this.onCloseClick);
+        this.normalButton.addEventListener('click', this.onModeClick);
+        this.hardcoreButton.addEventListener('click', this.onModeClick);
+        this.root.addEventListener('mousedown', this.onButtonMouseDown);
     }
 
     removeListeners() {
@@ -1046,6 +1100,9 @@ class ResourceGraphGame {
         this.canvas.removeEventListener('contextmenu', this.onContextMenu);
         this.muteButton.removeEventListener('click', this.onMuteClick);
         this.closeButton.removeEventListener('click', this.onCloseClick);
+        this.normalButton.removeEventListener('click', this.onModeClick);
+        this.hardcoreButton.removeEventListener('click', this.onModeClick);
+        this.root.removeEventListener('mousedown', this.onButtonMouseDown);
     }
 
     // Keys are only taken while the game has focus, so the rest of the dashboard (search boxes, the resource list,
@@ -1054,8 +1111,7 @@ class ResourceGraphGame {
         if (isEditable(event.target)) {
             return false;
         }
-        const active = document.activeElement;
-        return active === null || active === document.body || this.root.contains(active);
+        return this.root.contains(document.activeElement);
     }
 
     onKeyDown = (event) => {
@@ -1097,6 +1153,12 @@ class ResourceGraphGame {
             case 'M':
                 this.sound.unlock();
                 this.toggleMute();
+                break;
+            case 'h':
+            case 'H':
+                if (this.state === 'title' || this.state === 'gameover') {
+                    this.setHardcore(!this.hardcore);
+                }
                 break;
             case 'Escape':
                 this.quit();
@@ -1152,9 +1214,8 @@ class ResourceGraphGame {
     onFocusOut = (event) => {
         if (!this.root.contains(event.relatedTarget)) {
             this.keys.left = this.keys.right = this.keys.fire = false;
-            if (event.relatedTarget) {
-                this.pause();
-            }
+            // The game no longer gets the keys, so it mustn't carry on without its player. Clicking it resumes.
+            this.pause();
         }
     };
 
@@ -1192,6 +1253,18 @@ class ResourceGraphGame {
         this.quit();
     };
 
+    onModeClick = (event) => {
+        this.setHardcore(event.currentTarget === this.hardcoreButton);
+        this.root.focus({ preventScroll: true });
+    };
+
+    // Browsers that don't focus a clicked button would otherwise move focus out of the game, which pauses it.
+    onButtonMouseDown = (event) => {
+        if (isButtonTarget(event.target)) {
+            event.preventDefault();
+        }
+    };
+
     toggleMute() {
         this.sound.setMuted(!this.sound.muted);
         saveMuted(getLocalStorage, this.sound.muted);
@@ -1203,6 +1276,7 @@ class ResourceGraphGame {
     setState(state) {
         this.state = state;
         this.stateTime = 0;
+        this.updateModeControls();
     }
 
     resetGame() {
@@ -1488,6 +1562,9 @@ class ResourceGraphGame {
         this.updateSatellite(dt);
 
         if (this.alive === 0 && this.state === 'playing') {
+            if (this.hardcore) {
+                this.outage.restartAll();
+            }
             this.addScore(50 * this.wave);
             this.sound.satelliteStop();
             this.satellite = null;
@@ -1559,7 +1636,8 @@ class ResourceGraphGame {
         this.explode(enemy.resource.sprite, position.x, position.y, 1);
         this.flashes.push({ x: position.x, y: position.y, life: 0.12 });
         const name = shorten(enemy.resource.label, 12);
-        this.addText(`${name}: ${pick(DESTROYED_STATES)}`, position.x + (SPRITE / 2), position.y, enemy.resource.color);
+        const stopped = this.hardcore && !enemy.resource.placeholder && this.outage.stop(enemy.resource.id);
+        this.addText(`${name}: ${stopped ? 'STOPPED' : pick(DESTROYED_STATES)}`, position.x + (SPRITE / 2), position.y, enemy.resource.color);
         this.sound.enemyExplosion();
     }
 
@@ -1962,8 +2040,9 @@ class ResourceGraphGame {
         switch (this.state) {
             case 'title': {
                 const shown = this.roster.slice(0, 5);
-                const height = 114 + (shown.length * 14) + (this.roster.length > shown.length ? 10 : 0);
-                const top = Math.max(HUD_HEIGHT + 2, Math.round((this.height - height) / 2));
+                const height = 126 + (shown.length * 14) + (this.roster.length > shown.length ? 10 : 0);
+                // A little above the center, to leave room for the mode buttons under the panel.
+                const top = Math.max(HUD_HEIGHT + 2, Math.round((this.height - height) / 2) - 20);
                 this.renderPanel(top, height);
                 drawText(ctx, 'ASPIRE', cx, top + 8, '#dcd5f6', 2, 'center');
                 drawText(ctx, 'OUTAGE', cx, top + 26, '#9780e5', 2, 'center');
@@ -1983,11 +2062,16 @@ class ResourceGraphGame {
                 ctx.drawImage(this.satelliteSprite.canvas, left - 2, y);
                 drawText(ctx, 'TELEMETRY SATELLITE', left + 18, y, '#ff5fd2');
                 y += 16;
+                drawText(ctx, this.hardcore ? 'MODE: HARD CORE' : 'MODE: NORMAL', cx, y, this.hardcore ? '#ff5f5f' : '#ffffff', 1, 'center');
+                y += 12;
                 if (blink) {
                     drawText(ctx, 'PRESS SPACE OR CLICK TO START', cx, y, '#7dffa0', 1, 'center');
                 }
-                drawText(ctx, 'ARROWS/A-D OR MOUSE MOVE', cx, y + 14, '#8a80b0', 1, 'center');
-                drawText(ctx, 'SPACE/CLICK FIRE  P PAUSE  M MUTE  ESC EXIT', cx, y + 24, '#8a80b0', 1, 'center');
+                // The hard core warning needs this room. The keys remain in the game's accessible description.
+                if (!this.hardcore) {
+                    drawText(ctx, 'ARROWS/A-D OR MOUSE MOVE', cx, y + 14, '#8a80b0', 1, 'center');
+                    drawText(ctx, 'SPACE/CLICK FIRE  P PAUSE  M MUTE  H MODE', cx, y + 24, '#8a80b0', 1, 'center');
+                }
                 break;
             }
             case 'ready':
@@ -2001,7 +2085,7 @@ class ResourceGraphGame {
                 break;
             case 'cleared':
                 drawText(ctx, `WAVE ${this.wave} CLEARED`, cx, Math.round(this.height * 0.45), '#7dffa0', 2, 'center');
-                drawText(ctx, 'ALL RESOURCES STOPPED', cx, Math.round(this.height * 0.45) + 20, '#ffffff', 1, 'center');
+                drawText(ctx, this.hardcore ? 'RESTARTING RESOURCES...' : 'ALL RESOURCES STOPPED', cx, Math.round(this.height * 0.45) + 20, '#ffffff', 1, 'center');
                 drawText(ctx, `BONUS +${50 * this.wave}`, cx, Math.round(this.height * 0.45) + 32, '#ffd36b', 1, 'center');
                 break;
             case 'gameover': {
@@ -2162,59 +2246,23 @@ class ResourceGraphGame {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Gesture
+// Launch
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
- * Listens for the gesture on the graph. This is the only thing that runs while the game is closed: a
- * passive pointermove listener that keeps a short trail of hover positions over empty graph space.
+ * Wires up the graph's Play button and the O key on the focused graph. These listeners are all that exists until the game
+ * is launched.
  */
 export function attachResourceGraphGame(graph, strings) {
     const svg = typeof graph?.svg?.node === 'function' ? graph.svg.node() : null;
-    if (!svg || typeof svg.addEventListener !== 'function' || attachedGraphs.has(svg)) {
+    const container = svg?.closest?.('.resource-graph-container');
+    if (!container || attachedGraphs.has(svg)) {
         return;
     }
     attachedGraphs.add(svg);
 
-    // The listeners live and die with the graph's SVG element, which Blazor removes when leaving the page, so they
-    // don't need to be unregistered.
-
-    let points = [];
-    let sinceCheck = 0;
-
-    const onPointerMove = (event) => {
-        // Only hover with no button pressed counts: panning and dragging nodes always hold a button. Pointer over a
-        // node resets the trail so the circles have to be drawn over empty space.
-        if (activeGame || event.buttons !== 0 || event.pointerType === 'touch' ||
-            (event.target instanceof Element && event.target.closest('.resource-group'))) {
-            points = [];
-            return;
-        }
-
-        const now = event.timeStamp;
-        const last = points[points.length - 1];
-        if (last && now - last.t < 12) {
-            return;
-        }
-        points.push({ x: event.clientX, y: event.clientY, t: now });
-        while (points.length > 0 && now - points[0].t > DEFAULT_GESTURE.windowMs) {
-            points.shift();
-        }
-
-        if (++sinceCheck >= 3) {
-            sinceCheck = 0;
-            if (detectCircleGesture(points)) {
-                points = [];
-                launchGame(graph, svg, strings);
-            }
-        }
-    };
-    const onPointerLeave = () => {
-        points = [];
-    };
-
-    // The gesture needs a mouse, so the focused graph also takes a key. The container outlives this SVG when the graph is
-    // rendered again, hence the check. stopPropagation keeps the key from reaching the dashboard's global shortcuts.
+    // The container outlives this SVG when the graph is rendered again, hence the isConnected checks. stopPropagation
+    // keeps the key from reaching the dashboard's global shortcuts, where O opens the telemetry sources.
     const onKeyDown = (event) => {
         if (!activeGame && svg.isConnected && isLaunchKey(event)) {
             event.preventDefault();
@@ -2222,17 +2270,21 @@ export function attachResourceGraphGame(graph, strings) {
             launchGame(graph, svg, strings);
         }
     };
+    const onPlayClick = () => {
+        if (svg.isConnected) {
+            launchGame(graph, svg, strings);
+        }
+    };
 
-    svg.addEventListener('pointermove', onPointerMove, { passive: true });
-    svg.addEventListener('pointerleave', onPointerLeave, { passive: true });
-    svg.closest?.('.resource-graph-container')?.addEventListener('keydown', onKeyDown);
+    container.addEventListener('keydown', onKeyDown);
+    container.querySelector('.graph-game')?.addEventListener('click', onPlayClick);
 }
 
 function launchGame(graph, svg, strings) {
     if (activeGame) {
         return;
     }
-    const container = svg.closest('.resource-graph-container') ?? svg.parentElement;
+    const container = svg.closest('.resource-graph-container');
     if (!container || !isShown(container)) {
         return;
     }

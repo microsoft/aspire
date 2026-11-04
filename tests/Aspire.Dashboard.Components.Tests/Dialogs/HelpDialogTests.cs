@@ -80,6 +80,22 @@ public class HelpDialogTests : DashboardTestContext
         Assert.Equal($"help-tab-{HelpDialogTab.Documentation}", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Render_ShortcutsListGameKeyWhereTheGraphIsAvailable(bool graphAvailable)
+    {
+        var cut = RenderHelpDialog(subscribedShortcuts: graphAvailable ? [AspireKeyboardShortcut.GoToGraph] : []);
+
+        var shortcut = cut.FindAll(".help-shortcut").SingleOrDefault(s => s.QuerySelector("dt")!.TextContent == Resources.Dialogs.HelpDialogPlayGame);
+
+        Assert.Equal(graphAvailable, shortcut is not null);
+        if (shortcut is not null)
+        {
+            Assert.Equal("o", shortcut.QuerySelector("kbd")!.TextContent);
+        }
+    }
+
     [Fact]
     public void Render_GameAvailable_ShowsCommunityLinkInsideTheDashboard()
     {
@@ -126,7 +142,7 @@ public class HelpDialogTests : DashboardTestContext
         Assert.Equal("/resources", new Uri(Services.GetRequiredService<NavigationManager>().Uri).AbsolutePath);
     }
 
-    private IRenderedComponent<HelpDialog> RenderHelpDialog(HelpDialogTab content = HelpDialogTab.KeyboardShortcuts, bool disableAgentHelp = false, bool disableResourceGraph = false, bool isDashboardClientEnabled = true, TestSessionStorage? sessionStorage = null)
+    private IRenderedComponent<HelpDialog> RenderHelpDialog(HelpDialogTab content = HelpDialogTab.KeyboardShortcuts, bool disableAgentHelp = false, bool disableResourceGraph = false, bool isDashboardClientEnabled = true, TestSessionStorage? sessionStorage = null, AspireKeyboardShortcut[]? subscribedShortcuts = null)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentTab(this);
@@ -143,6 +159,9 @@ public class HelpDialogTests : DashboardTestContext
             options.Frontend.EndpointUrls = "http://localhost:18888";
             Assert.True(options.Frontend.TryParseOptions(out _));
         });
+
+        // The layout is what subscribes the shortcuts the help tab lists.
+        Services.GetRequiredService<ShortcutManager>().AddGlobalKeydownListener(new TestGlobalKeydownListener(subscribedShortcuts ?? []));
 
         return Render<HelpDialog>(builder => builder.Add(p => p.Content, content));
     }

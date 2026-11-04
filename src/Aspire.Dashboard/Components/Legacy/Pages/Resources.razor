@@ -1,5 +1,6 @@
 ﻿@page "/legacy"
 @page "/legacy/resources"
+@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -268,6 +269,14 @@
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
                                             <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
+                                        </FluentButton>
+                                    </div>
+                                    <div class="resource-graph-controls resource-graph-game-launch">
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                      Class="aspire-icon-button graph-game"
+                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourceGraphGamePlay)]"
+                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceGraphGamePlay)]">
+                                            <FluentIcon Value="new AspireIcons.Size24.GameBot()" Color="Color.Primary" />
                                         </FluentButton>
                                     </div>
                                 </div>

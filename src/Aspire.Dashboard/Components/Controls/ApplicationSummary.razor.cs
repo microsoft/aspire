@@ -896,6 +896,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         [JSInvokable]
         public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>
             summary.ShowContextMenuAsync(id, clientX, clientY);
+
+        [JSInvokable]
+        public Task<bool> ExecuteGraphGameCommand(string id, string commandName) =>
+            summary._resourceByName.TryGetValue(id, out var resource)
+                ? summary.DashboardCommandExecutor.ExecuteGraphGameCommandAsync(resource, commandName, summary.GetResourceName)
+                : Task.FromResult(false);
     }
 
     private async Task SelectResourceAsync(string id)

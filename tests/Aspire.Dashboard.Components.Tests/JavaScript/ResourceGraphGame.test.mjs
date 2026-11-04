@@ -11,7 +11,6 @@ import {
     firewallCollision,
     createFirewall,
     damageFirewall,
-    detectCircleGesture,
     eraseFirewall,
     extraLives,
     isButtonTarget,
@@ -21,63 +20,11 @@ import {
     MAX_ENEMIES,
     padScore,
     readBestScore,
+    ResourceOutage,
     rectsOverlap,
     saveBestScore,
     textWidth,
 } from "../../../src/Aspire.Dashboard/wwwroot/js/app-resourcegraph-game.js";
-
-// Samples a circle (or a spiral when endRadius differs) the way throttled pointermove events would arrive.
-function circle({ turns, radius = 60, endRadius = radius, cx = 400, cy = 300, pointsPerTurn = 40, clockwise = false }) {
-    const points = [];
-    const count = Math.round(turns * pointsPerTurn);
-    for (let i = 0; i <= count; i++) {
-        const t = i / pointsPerTurn;
-        const angle = (clockwise ? -1 : 1) * t * Math.PI * 2;
-        const r = radius + ((endRadius - radius) * (i / count));
-        points.push({ x: cx + (Math.cos(angle) * r), y: cy + (Math.sin(angle) * r), t: i * 16 });
-    }
-    return points;
-}
-
-function line(count, from, to) {
-    return Array.from({ length: count }, (_, i) => ({
-        x: from.x + ((to.x - from.x) * (i / (count - 1))),
-        y: from.y + ((to.y - from.y) * (i / (count - 1))),
-        t: i * 16,
-    }));
-}
-
-test("two full circles are recognized in either direction", () => {
-    assert.equal(detectCircleGesture(circle({ turns: 2 })), true);
-    assert.equal(detectCircleGesture(circle({ turns: 2.3, clockwise: true })), true);
-});
-
-test("a loose spiral counts as circles", () => {
-    assert.equal(detectCircleGesture(circle({ turns: 2.2, radius: 45, endRadius: 85 })), true);
-});
-
-test("circles preceded by unrelated movement are recognized", () => {
-    const approach = line(30, { x: 0, y: 0 }, { x: 460, y: 300 });
-    assert.equal(detectCircleGesture([...approach, ...circle({ turns: 2.1 })]), true);
-});
-
-test("ordinary pointer movement is not a gesture", () => {
-    assert.equal(detectCircleGesture(circle({ turns: 1.5 })), false, "one and a half circles");
-    assert.equal(detectCircleGesture(line(80, { x: 0, y: 0 }, { x: 600, y: 400 })), false, "straight line");
-    assert.equal(detectCircleGesture(circle({ turns: 3, radius: 6 })), false, "tiny jitter");
-
-    const zigzag = Array.from({ length: 80 }, (_, i) => ({ x: i * 8, y: (i % 2) * 40, t: i * 16 }));
-    assert.equal(detectCircleGesture(zigzag), false, "zigzag");
-
-    // Sweeping back and forth along the same arc covers a lot of angle but no net turn.
-    const backAndForth = Array.from({ length: 120 }, (_, i) => {
-        const angle = Math.abs(((i % 40) / 20) - 1) * Math.PI;
-        return { x: 400 + (Math.cos(angle) * 60), y: 300 + (Math.sin(angle) * 60), t: i * 16 };
-    });
-    assert.equal(detectCircleGesture(backAndForth), false, "back and forth");
-
-    assert.equal(detectCircleGesture([]), false, "no points");
-});
 
 test("formation repeats tiny graphs and grows with waves", () => {
     const one = buildFormation(1, 1);
@@ -186,13 +133,84 @@ test("scores are zero padded and text is measured in font pixels", () => {
 test("attaching is a no-op without a rendered graph", () => {
     attachResourceGraphGame(null);
     attachResourceGraphGame({ svg: { node: () => undefined } });
+    attachResourceGraphGame({ svg: { node: () => ({ closest: () => null }) } });
+});
 
-    const listeners = [];
-    const svg = { addEventListener: (type) => listeners.push(type) };
-    const graph = { svg: { node: () => svg } };
+test("attaching wires the play button and the launch key once", () => {
+    const containerListeners = [];
+    const buttonListeners = [];
+    const button = { addEventListener: (type) => buttonListeners.push(type) };
+    const container = {
+        addEventListener: (type) => containerListeners.push(type),
+        querySelector: (selector) => selector === ".graph-game" ? button : null,
+    };
+    const graph = { svg: { node: () => ({ closest: () => container }) } };
+    const svg = graph.svg.node();
+    graph.svg.node = () => svg;
     attachResourceGraphGame(graph);
     attachResourceGraphGame(graph);
-    assert.deepEqual(listeners, ["pointermove", "pointerleave"]);
+    assert.deepEqual(containerListeners, ["keydown"]);
+    assert.deepEqual(buttonListeners, ["click"]);
+});
+
+function outageWith(results = () => true) {
+    const calls = [];
+    const outage = new ResourceOutage(async (id, command) => {
+        calls.push(`${command} ${id}`);
+        return results(id, command, calls);
+    }, 0);
+    return { outage, calls };
+}
+
+test("hard core stops a resource once however many of its enemies are destroyed", async () => {
+    const { outage, calls } = outageWith();
+    assert.equal(outage.stop("api"), true);
+    assert.equal(outage.stop("api"), false);
+    assert.equal(outage.stop("cache"), true);
+    assert.equal(outage.downCount, 2);
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api", "stop cache"]);
+});
+
+test("hard core restarts what it stopped when the wave is cleared, after the stop has finished", async () => {
+    const { outage, calls } = outageWith();
+    outage.stop("api");
+    outage.restartAll();
+    assert.equal(outage.downCount, 0);
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api", "start api"]);
+
+    // The next wave can stop it again.
+    assert.equal(outage.stop("api"), true);
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api", "start api", "stop api"]);
+});
+
+test("hard core tries again until a command becomes available", async () => {
+    let starts = 0;
+    const { outage, calls } = outageWith((_, command) => command === "stop" || ++starts === 3);
+    outage.stop("api");
+    outage.restartAll();
+    await outage.whenIdle();
+    assert.deepEqual(calls, ["stop api", "start api", "start api", "start api"]);
+});
+
+test("hard core leaves alone a resource it couldn't stop", async () => {
+    const { outage, calls } = outageWith((_, command) => command !== "stop");
+    outage.stop("already-stopped");
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 0);
+    outage.restartAll();
+    await outage.whenIdle();
+    assert.equal(calls.filter(call => call.startsWith("start")).length, 0);
+    assert.equal(calls.length, 10);
+});
+
+test("hard core survives a page that went away", async () => {
+    const outage = new ResourceOutage(async () => { throw new Error("circuit disconnected"); }, 0);
+    outage.stop("api");
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 0);
 });
 
 test("the largest formation fits and has room to move in any graph shape", () => {

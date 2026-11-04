@@ -1207,11 +1207,56 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, Escape to return to the graph..
+        ///   Looks up a localized string similar to Resources still stopped: {0}.
+        /// </summary>
+        public static string ResourceGraphGameHardCoreStopped {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameHardCoreStopped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit..
+        /// </summary>
+        public static string ResourceGraphGameHardCoreWarning {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameHardCoreWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph..
         /// </summary>
         public static string ResourceGraphGameInstructions {
             get {
                 return ResourceManager.GetString("ResourceGraphGameInstructions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Hard core.
+        /// </summary>
+        public static string ResourceGraphGameModeHardCore {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameModeHardCore", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Normal.
+        /// </summary>
+        public static string ResourceGraphGameModeNormal {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameModeNormal", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Play Aspire Outage.
+        /// </summary>
+        public static string ResourceGraphGamePlay {
+            get {
+                return ResourceManager.GetString("ResourceGraphGamePlay", resourceCulture);
             }
         }
 

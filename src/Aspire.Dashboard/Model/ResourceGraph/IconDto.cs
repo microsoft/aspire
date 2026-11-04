@@ -16,4 +16,4 @@ internal sealed record GraphMenuIconDto(string Path, string LabelFormat);
 
 internal sealed record GraphHiddenIconDto(string Path, string Tooltip);
 
-internal sealed record GraphGameStringsDto(string Instructions, string Exit, string ExitLabel, string SoundOn, string SoundOff);
+internal sealed record GraphGameStringsDto(string Instructions, string Exit, string ExitLabel, string SoundOn, string SoundOff, string ModeNormal, string ModeHardCore, string HardCoreWarning, string HardCoreStopped);

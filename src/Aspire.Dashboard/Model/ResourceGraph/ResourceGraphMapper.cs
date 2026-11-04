@@ -18,7 +18,11 @@ public static class ResourceGraphMapper
         Exit: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameExit)].Value,
         ExitLabel: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameExitLabel)].Value,
         SoundOn: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameSoundOn)].Value,
-        SoundOff: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameSoundOff)].Value);
+        SoundOff: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameSoundOff)].Value,
+        ModeNormal: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameModeNormal)].Value,
+        ModeHardCore: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameModeHardCore)].Value,
+        HardCoreWarning: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameHardCoreWarning)].Value,
+        HardCoreStopped: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameHardCoreStopped)].Value);
 
     public static ResourceDto MapResource(ResourceViewModel r, IEnumerable<ResourceViewModel> graphResources, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
     {
