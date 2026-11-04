@@ -1,0 +1,48 @@
+{
+  "run_id": 41906696433,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41906696433",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-04T21:11:37Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d4994d7af558bd42ec3ec36e2499fb4b9ec31ce2",
+    "failed_sha": "318bf5294a3402a58de23ea0468dfc790d47f4fe",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Azure.AI.Projects.Tests, Azure.AI.Projects, Azure.AI.Projects, ... / Azure.AI.Projects (windows-latest)",
+      "id": 126844187382,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41906696433/job/126844187382",
+      "classification": "flaky-test",
+      "reason": "Remote executor hung on Azure Identity credential timeouts (CLI/PowerShell) on a Windows runner",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Azure.AI.Projects.Tests.ConformanceTests.TracingEnablesTheRightActivitySource",
+      "job": "Tests / No-package tests (regular, Aspire.Azure.AI.Projects.Tests, Azure.AI.Projects, Azure.AI.Projects, ... / Azure.AI.Projects (windows-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Half-way through waiting for remote process.\nMemory load: 21\n\nImage Name                     PID Services                                    \n========================= ======== ============================================\nsvchost.exe                    812 BrokerInfrastructure, DcomLaunch, PlugPlay, \n                                   Power, SystemEventsBroker                   \nsvchost.exe                   1080 RpcEptMapper, RpcSs                         \nsvchost.exe                   1132 LSM                                         \nsvchost.exe                   1320 HvHost                                      \nsvchost.exe                   1316 TermService                                 \nsvchost.exe                   1484 NcbService                                  \nsvchost.exe                   1536 vmicheartbeat                               \nsvchost.exe                   1544 vmickvpexchange                             ",
+      "stack_trace": "   at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose(Boolean disposing) in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 157\n   at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose() in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 58\n   at Aspire.Components.ConformanceTests.ConformanceTests`2.RemoteInvokeWithLogging(Action action, ITestOutputHelper testOutput, RemoteInvokeOptions options) in /_/tests/Aspire.Components.Common.TestUtilities/ConformanceTests.cs:line 638\n   at Aspire.Components.ConformanceTests.ConformanceTests`2.RemoteInvokeWithLogging(Action action, ITestOutputHelper testOutput, RemoteInvokeOptions options) in /_/tests/Aspire.Components.Common.TestUtilities/ConformanceTests.cs:line 635\n   at Aspire.Azure.AI.Projects.Tests.ConformanceTests.TracingEnablesTheRightActivitySource() in /_/tests/Aspire.Azure.AI.Projects.Tests/ConformanceTests.cs:line 48\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)",
+      "standard_output": "[RemoteExecutor] info: Microsoft.Hosting.Lifetime[0]\n[RemoteExecutor]       Application started. Press Ctrl+C to shut down.\n[RemoteExecutor] info: Microsoft.Hosting.Lifetime[0]\n[RemoteExecutor]       Hosting environment: Production\n[RemoteExecutor] info: Microsoft.Hosting.Lifetime[0]\n[RemoteExecutor]       Content root path: D:\\a\\aspire\\aspire\\artifacts\\bin\\Aspire.Azure.AI.Projects.Tests\\Debug\\net11.0\\\n[RemoteExecutor] info: Azure.Identity[1]\n[RemoteExecutor]       DefaultAzureCredential.GetToken invoked. Scopes: [ https://ai.azure.com/.default ] ParentRequestId: \n[RemoteExecutor] info: Azure.Identity[1]\n[RemoteExecutor]       VisualStudioCredential.GetToken invoked. Scopes: [ https://ai.azure.com/.default ] ParentRequestId: \n[RemoteExecutor] info: Azure.Identity[3]\n[RemoteExecutor]       VisualStudioCredential.GetToken was unable to retrieve an access token. Scopes: [ https://ai.azure.com/.default ] ParentRequestId:  Exception: Azure.Identity.CredentialUnavailableException (0x80131500): VisualStudioCredential authentication failed: Visual Studio Token provider can't be accessed at C:\\Users\\runneradmin\\AppData\\Local\\.IdentityService\\AzureServiceAuth\\tokenprovider.json\n[RemoteExecutor]        ---> Azure.Identity.CredentialUnavailableException (0x80131500): Visual Studio Token provider can't be accessed at C:\\Users\\runneradmin\\AppData\\Local\\.IdentityService\\AzureServiceAuth\\tokenprovider.json\n[RemoteExecutor]        ---> System.IO.DirectoryNotFoundException (0x80070003): Could not find a part of the path 'C:\\Users\\runneradmin\\AppData\\Local\\.IdentityService\\AzureServiceAuth\\tokenprovider.json'.\n[RemoteExecutor] info: Azure.Identity[1]\n[RemoteExecutor]       AzureCliCredential.GetToken invoked. Scopes: [ https://ai.azure.com/.default ] ParentRequestId: \n[RemoteExecutor] info: Azure.Identity[3]\n[RemoteExecutor]       AzureCliCredential.GetToken was unable to retrieve an access token. Scopes: [ https://ai.azure.com/.default ] ParentRequestId:  Exception: Azure.Identity.CredentialUnavailableException (0x80131500): AzureCliCredential authentication failed: Azure CLI authentication timed out.\n[RemoteExecutor]        ---> Azure.Identity.CredentialUnavailableException (0x80131500): Azure CLI authentication timed out.\n[RemoteExecutor] info: Azure.Identity[1]\n[RemoteExecutor]       AzurePowerShellCredential.GetToken invoked. Scopes: [ https://ai.azure.com/.default ] ParentRequestId: \n[RemoteExecutor] info: Azure.Identity[3]\n[RemoteExecutor]       AzurePowerShellCredential.GetToken was unable to retrieve an access token. Scopes: [ https://ai.azure.com/.default ] ParentRequestId:  Exception: Azure.Identity.CredentialUnavailableException (0x80131500): AzurePowerShellCredential authentication failed: Azure PowerShell authentication timed out.\n[RemoteExecutor]        ---> Azure.Identity.AuthenticationFailedException (0x80131500): Azure PowerShell authentication timed out.\n[RemoteExecutor] info: Azure.Identity[1]\n[RemoteExecutor]       AzureDeveloperCliCredential.GetToken invoked. Scopes: [ https://ai.azure.com/.default ] ParentRequestId: \n[RemoteExecutor] info: Azure.Identity[3]\n[RemoteExecutor]       AzureDeveloperCliCredential.GetToken was unable to retrieve an access token. Scopes: [ https://ai.azure.com/.default ] ParentRequestId:  Exception: Azure.Identity.CredentialUnavailableException (0x80131500): AzureDeveloperCliCredential authentication failed: Azure Developer CLI could not be found.\n[RemoteExecutor]        ---> Azure.Identity.CredentialUnavailableException (0x80131500): Azure Developer CLI could not be found.\n[RemoteExecutor] info: Azure.Identity[3]\n[RemoteExecutor]       DefaultAzureCredential.GetToken was unable to retrieve an access token. Scopes: [ https://ai.azure.com/.default ] ParentRequestId:  Exception: Azure.Identity.CredentialUnavailableException (0x80131500): DefaultAzureCredential failed to retrieve a token from the included credentials. See the troubleshooting guide for more information. https://aka.ms/azsdk/net/identi",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Remote process wait timed out while Azure CLI/PowerShell credential lookups timed out; environmental, intermittent",
+      "job_id": 126844187382,
+      "execution_id": "991bf03b-37d7-4f9d-90b1-472c25f55d13",
+      "result_file": "00002.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "azure-openai-conformance-tracing-remoteexecutor-timeout"
+  ]
+}
