@@ -20,6 +20,62 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RepeatedDeltaNumbers_KeepTheirTimes(bool omitStartTime)
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var start = s_testTime.AddMinutes(1);
+        var sum = new Sum { AggregationTemporality = AggregationTemporality.Delta, IsMonotonic = true };
+        for (var i = 1; i <= 100; i++)
+        {
+            sum.DataPoints.Add(new NumberDataPoint
+            {
+                AsInt = 5,
+                StartTimeUnixNano = omitStartTime ? 0 : DateTimeToUnixNanoseconds(start.AddSeconds((i - 1) * 10)),
+                TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i * 10))
+            });
+        }
+
+        var addContext = new AddContext();
+        await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { new Metric { Name = "test", Unit = "widget", Sum = sum } }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resource = Assert.Single(repositoryContext.Repository.GetResources());
+        var windowEnd = start.AddSeconds(1000);
+        var instrument = await repositoryContext.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = windowEnd.AddSeconds(-400),
+            EndTime = windowEnd,
+            DataPointInterval = TimeSpan.FromSeconds(1)
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+
+        var calculator = new ChartDataCalculator(pointCount: 10, duration: TimeSpan.FromSeconds(300));
+        var increases = calculator.CalculateCounterIncreaseValues(instrument.Dimensions, new DateTimeOffset(windowEnd, TimeSpan.Zero), OtlpAggregationTemporality.Delta);
+
+        // Each 30 second interval has three exports of 5, without dips or spikes. The last point is past the window's end.
+        Assert.Equal([.. Enumerable.Repeat<double?>(15, 11), null], increases);
+    }
+
     [Fact]
     public async Task GetInstrumentAsync_Rollup_SumsDeltaNumbersAndKeepsRowsBounded()
     {

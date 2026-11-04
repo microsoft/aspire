@@ -47,6 +47,10 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     // Replaced when the selection changes, so a canceled refresh that hasn't observed its cancellation yet can't make
     // the next resource's first refresh look like it's already pending.
     private TelemetryRefreshGeneration _telemetryRefresh = new();
+
+    // Tests replace this to hold a refresh at the point where it can be canceled, because how soon a real delay handles
+    // its cancellation depends on thread pool timing.
+    internal Func<TimeSpan, CancellationToken, Task> TelemetryRefreshDelayAsync { get; set; } = Task.Delay;
     private int _consoleRenderPending;
     private bool _hasConsoleLogs;
     private bool _consoleLogsLoaded;
@@ -278,7 +282,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         {
             try
             {
-                await Task.Delay(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
+                await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
                 Interlocked.Exchange(ref refresh.Pending, 0);
 
                 if (_telemetryKey is not { } key)

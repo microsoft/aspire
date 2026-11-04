@@ -389,12 +389,12 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
-    public void CalculateCounterIncreaseValues_RepeatedDeltaValues_CountEachExportOnce()
+    public void CalculateCounterIncreaseValues_DeltaValueWithCount_CountsEachExport()
     {
         var context = CreateContext();
         var dimension = new DimensionScope(capacity: 100, []);
 
-        // Exports with the same value are stored as one value with a count, spanning several intervals.
+        // An older dashboard stored exports with the same value as one value with a count.
         foreach (var end in new[] { -25, -15, -5 })
         {
             dimension.AddPointValue(new NumberDataPoint

@@ -224,10 +224,18 @@ internal sealed class ChartDataCalculator
             {
                 var metric = dimensionValues[i];
 
-                // Values are stored chronologically, so everything before this one was also observed before the interval.
-                if (new DateTimeOffset(metric.End, TimeSpan.Zero) <= start)
+                // An observation is at the end of its export interval, which puts it in exactly one chart interval so it
+                // can't be counted twice. Values are stored chronologically, so everything before this one was also
+                // observed before the interval.
+                var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
+                if (metricEnd <= start)
                 {
                     break;
+                }
+
+                if (metricEnd > end)
+                {
+                    continue;
                 }
 
                 var value = metric switch
@@ -237,12 +245,9 @@ internal sealed class ChartDataCalculator
                     _ => 0
                 };
 
-                var observationCount = CountObservations(metric, end) - CountObservations(metric, start);
-                if (observationCount > 0)
-                {
-                    pointValue += value * observationCount;
-                    hasValue = true;
-                }
+                // Only values stored by an older dashboard can have a count above one, without their individual times.
+                pointValue += value * metric.Count;
+                hasValue = true;
             }
         }
 
@@ -254,30 +259,6 @@ internal sealed class ChartDataCalculator
         }
 
         return hasValue;
-    }
-
-    /// <summary>
-    /// Counts the observations of a metric value made up to and including the given time. Consecutive exports with the
-    /// same value are stored as one value with a count, e.g. exports of 5 at 10s, 20s and 30s are 5 x 3 over 0s-30s.
-    /// Only the first and last times are kept, so the exports are taken to be evenly spaced. An observation is at the
-    /// end of its export interval, which puts it in exactly one chart interval so it can't be counted twice.
-    /// </summary>
-    private static long CountObservations(MetricValueBase metric, DateTimeOffset time)
-    {
-        var count = checked((long)metric.Count);
-        var ticks = time.UtcTicks;
-        if (ticks >= metric.End.Ticks)
-        {
-            return count;
-        }
-
-        var duration = (metric.End - metric.Start).Ticks;
-        if (duration <= 0 || ticks < metric.Start.Ticks)
-        {
-            return 0;
-        }
-
-        return (long)(count * ((double)(ticks - metric.Start.Ticks) / duration));
     }
 
     internal static List<double?> CalculateCounterIncreases(IReadOnlyList<double?> values, OtlpAggregationTemporality temporality)

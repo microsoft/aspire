@@ -58,8 +58,7 @@ public sealed partial class SqliteTelemetryRepository
     // An aggregation identity separates cumulative resets within one rollup. Delta points each
     // have their own identity and retain their interval start, so no delta observations are discarded.
     // A rollup keeps the largest number, which is right for a level, but delta numbers are changes that the
-    // counter charts add up, so several in one rollup become their sum, observed once. One on its own stays
-    // as it is, because its repeat count says how a run of equal exports spreads over its interval.
+    // counter charts add up, so the ones in a rollup become their sum, observed once.
     // Cumulative representatives start at their earliest source interval, not the rounded bucket
     // boundary: rounding a reset at 3.5s to 3s would lower the preceding window's count.
     private static readonly string s_rolledUpMetricPointsCteSql = $"""
@@ -79,8 +78,6 @@ public sealed partial class SqliteTelemetryRepository
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_end_time_unix_nano,
                 SUM(p.repeat_count) OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_repeat_count,
-                COUNT(*) OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_point_count,
                 SUM(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.integer_value * p.repeat_count END) OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_integer_sum,
                 SUM(CASE WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.double_value * p.repeat_count END) OVER (
@@ -106,15 +103,15 @@ public sealed partial class SqliteTelemetryRepository
                 END AS start_time_unix_nano,
                 p.rollup_end_time_unix_nano AS end_time_unix_nano,
                 CASE
-                    WHEN p.point_type <> {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND p.rollup_point_count > 1 THEN 1
+                    WHEN p.point_type <> {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN 1
                     ELSE p.rollup_repeat_count
                 END AS repeat_count,
                 CASE
-                    WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND p.rollup_point_count > 1 THEN p.rollup_integer_sum
+                    WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.rollup_integer_sum
                     ELSE p.integer_value
                 END AS integer_value,
                 CASE
-                    WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} AND p.rollup_point_count > 1 THEN p.rollup_double_sum
+                    WHEN p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.rollup_double_sum
                     ELSE p.double_value
                 END AS double_value,
                 p.histogram_sum,
