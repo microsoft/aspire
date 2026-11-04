@@ -258,6 +258,7 @@ async function dispatch(operation, payload) {
 
         case 'rerunMatchedJobs': {
             const requests = [];
+            const messages = [];
             const summary = new SummaryRecorder();
             const github = createGitHubRecorder(payload, requests);
 
@@ -265,10 +266,11 @@ async function dispatch(operation, payload) {
                 ...payload,
                 github,
                 summary,
+                log: message => messages.push(message),
                 delay: async () => {},
             });
 
-            return { requests, events: summary.events, returnValue };
+            return { requests, messages, events: summary.events, returnValue };
         }
 
         default:
@@ -319,8 +321,17 @@ function createGitHubRecorder(payload, requests) {
                 };
             }
 
+            const requestError = payload.requestErrorsByRoute?.[route];
+            if (requestError) {
+                throw Object.assign(new Error(requestError.message), { status: requestError.status });
+            }
+
             if (payload.failedRequestRoutes?.includes(route)) {
                 throw new Error(`Simulated request failure for ${route}`);
+            }
+
+            if (route === 'GET /repos/{owner}/{repo}/pulls/{pull_number}') {
+                return { data: payload.pullRequestsByNumber?.[String(requestPayload.pull_number)] ?? {} };
             }
 
             if (route === 'GET /repos/{owner}/{repo}/issues/{issue_number}') {

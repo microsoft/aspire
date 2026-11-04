@@ -1300,7 +1300,7 @@ async function analyzePullRequestFailures({
 async function rerunPullRequestFailures(options) {
     const {
         github, owner, repo, retryableJobs, pullRequestNumbers = [], summary,
-        sourceRunId, sourceRunUrl, sourceRunAttempt,
+        sourceRunId, sourceRunUrl, sourceRunAttempt, sourceHeadSha, eventName,
         testPatternMatchedTests = [], forceRerunAll = false, log = () => {},
     } = options;
 
@@ -1357,6 +1357,33 @@ async function rerunPullRequestFailures(options) {
             message: `${liveState} No jobs were rerun.`,
         });
         return;
+    }
+
+    // Retrying an obsolete PR commit can cancel its newer CI run because CI
+    // shares a concurrency group across that PR. Manual dispatch may explicitly
+    // request a historical run, so only automatic retries require the current head.
+    if (eventName !== 'workflow_dispatch') {
+        for (const pullRequestNumber of openPullRequestNumbers) {
+            const { data: pullRequest } = await github.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
+                owner,
+                repo,
+                pull_number: pullRequestNumber,
+            });
+            if (pullRequest.state !== 'open' ||
+                typeof sourceHeadSha !== 'string' ||
+                sourceHeadSha.length === 0 ||
+                pullRequest.head?.sha !== sourceHeadSha) {
+                const message = 'The associated pull request is closed or no longer points to the failed commit. No jobs were rerun.';
+                log(message);
+                await writeRerunOutcomeSummary({
+                    summary,
+                    sourceRunUrl,
+                    sourceRunAttempt,
+                    message,
+                });
+                return;
+            }
+        }
     }
 
     await requestFailedJobsRerun({ github, owner, repo, sourceRunId });

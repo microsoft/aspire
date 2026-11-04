@@ -222,7 +222,7 @@ async function rerunMainFailures(options) {
     const {
         github, owner, repo, retryableJobs, summary,
         sourceRunId, sourceRunUrl, sourceRunAttempt, sourceHeadSha,
-        maxRunAttempt, delay = defaultDelay,
+        maxRunAttempt, delay = defaultDelay, log = () => {},
     } = options;
     const state = {
         policy: 'current-main-failed-jobs-v1',
@@ -408,13 +408,17 @@ async function rerunMainFailures(options) {
     try {
         await common.requestFailedJobsRerun({ github, owner, repo, sourceRunId });
     }
-    catch {
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorDetails = error?.status ? `HTTP ${error.status}: ${errorMessage}` : errorMessage;
+        const message = `The failed-job rerun request did not complete successfully: ${errorDetails}. GitHub may still have started a rerun.`;
+        log(message);
         await writeRerunOutcomeSummary({
             summary,
             sourceRunUrl,
             sourceRunAttempt,
             heading: 'Rerun request failed',
-            message: 'The failed-job rerun request did not complete successfully. GitHub may still have started a rerun.',
+            message,
         });
         return {
             ...mainRerunState,

@@ -405,6 +405,111 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DispatcherAutomaticPullRequestRerunSkipsWhenHeadChangesBeforeExecution()
+    {
+        JsonElement result = await InvokeHarnessAsync<JsonElement>(
+            "dispatchWorkflow",
+            new
+            {
+                forceRerunAll = true,
+                execute = true,
+                workflowRun = new
+                {
+                    id = 123,
+                    name = "CI",
+                    @event = "pull_request",
+                    status = "completed",
+                    conclusion = "failure",
+                    run_attempt = 1,
+                    head_branch = "feature",
+                    head_sha = "failed-sha",
+                    html_url = "https://github.com/microsoft/aspire/actions/runs/123",
+                    pull_requests = new[] { new { number = 15110 } }
+                },
+                issueStatesByNumber = new Dictionary<string, string> { ["15110"] = "open" },
+                currentRun = new { run_attempt = 1 },
+                pullRequestsByNumber = new Dictionary<string, object>
+                {
+                    ["15110"] = new { state = "open", head = new { sha = "new-sha" } }
+                }
+            });
+
+        Assert.True(result.GetProperty("analysis").GetProperty("executionEligible").GetBoolean());
+        Assert.Collection(
+            result.GetProperty("requests").EnumerateArray(),
+            request => Assert.Equal("GET /repos/{owner}/{repo}/issues/{issue_number}", request.GetProperty("route").GetString()),
+            request => Assert.Equal("GET /repos/{owner}/{repo}/issues/{issue_number}", request.GetProperty("route").GetString()),
+            request => Assert.Equal("GET /repos/{owner}/{repo}/actions/runs/{run_id}", request.GetProperty("route").GetString()),
+            request => Assert.Equal("GET /repos/{owner}/{repo}/pulls/{pull_number}", request.GetProperty("route").GetString()));
+        Assert.Contains(
+            result.GetProperty("messages").EnumerateArray(),
+            message => message.GetString() == "The associated pull request is closed or no longer points to the failed commit. No jobs were rerun.");
+        Assert.Contains(
+            result.GetProperty("events").EnumerateArray(),
+            e => e.GetProperty("type").GetString() == "raw" &&
+                e.GetProperty("text").GetString() == "The associated pull request is closed or no longer points to the failed commit. No jobs were rerun.");
+    }
+
+    [Theory]
+    [InlineData("workflow_run", false, "failed-sha", "failed-sha", "open", true)]
+    [InlineData("workflow_run", true, "failed-sha", "failed-sha", "open", true)]
+    [InlineData("workflow_run", false, "failed-sha", "new-sha", "open", false)]
+    [InlineData("workflow_run", true, "failed-sha", "new-sha", "open", false)]
+    [InlineData("workflow_run", true, "failed-sha", null, "open", false)]
+    [InlineData("workflow_run", true, null, "failed-sha", "open", false)]
+    [InlineData("workflow_run", true, "", "", "open", false)]
+    [InlineData("workflow_run", true, "failed-sha", "failed-sha", "closed", false)]
+    [InlineData("workflow_dispatch", false, "failed-sha", "new-sha", "open", true)]
+    [InlineData("workflow_dispatch", true, "failed-sha", "new-sha", "open", true)]
+    [RequiresTools(["node"])]
+    public async Task PullRequestRerunRevalidatesHeadExceptForExplicitManualRequests(
+        string eventName, bool forceRerunAll, string? sourceHeadSha, string? currentHeadSha, string state, bool expectedRerun)
+    {
+        RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
+            "rerunMatchedJobs",
+            new
+            {
+                eventName,
+                forceRerunAll,
+                owner = "microsoft",
+                repo = "aspire",
+                sourceRunId = 123,
+                sourceRunUrl = "https://github.com/microsoft/aspire/actions/runs/123",
+                sourceRunAttempt = 1,
+                sourceHeadSha,
+                pullRequestNumbers = new[] { 15110 },
+                issueStatesByNumber = new Dictionary<string, string> { ["15110"] = "open" },
+                pullRequestsByNumber = new Dictionary<string, object>
+                {
+                    ["15110"] = new { state, head = new { sha = currentHeadSha } }
+                },
+                retryableJobs = new[] { new RetryableJobInput { Id = 11, Name = "Build packages", Reason = "Runner lost" } },
+                currentRunResponses = new[] { new { run_attempt = 1 }, new { run_attempt = 2 } }
+            });
+
+        const string rerunRoute = "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs";
+        const string pullRequestRoute = "GET /repos/{owner}/{repo}/pulls/{pull_number}";
+        Assert.Equal(expectedRerun ? 1 : 0, result.Requests.Count(request => request.Route == rerunRoute));
+        Assert.Equal(expectedRerun ? 1 : 0, result.Requests.Count(request =>
+            request.Route == "POST /repos/{owner}/{repo}/issues/{issue_number}/comments"));
+        if (eventName == "workflow_run")
+        {
+            RequestRecord headRequest = Assert.Single(result.Requests, request => request.Route == pullRequestRoute);
+            Assert.Equal(15110, headRequest.Payload.GetProperty("pull_number").GetInt32());
+            if (expectedRerun)
+            {
+                int rerunIndex = Array.FindIndex(result.Requests, request => request.Route == rerunRoute);
+                Assert.Equal(pullRequestRoute, result.Requests[rerunIndex - 1].Route);
+            }
+        }
+        else
+        {
+            Assert.Equal(0, result.Requests.Count(request => request.Route == pullRequestRoute));
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DispatcherPullRequestPolicySkipsWhenAttemptAdvancesBeforeRerunPost()
     {
         JsonElement result = await InvokeHarnessAsync<JsonElement>(
@@ -1665,6 +1770,11 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 {
                     ["15110"] = "open"
                 },
+                sourceHeadSha = "failed-sha",
+                pullRequestsByNumber = new Dictionary<string, object>
+                {
+                    ["15110"] = new { state = "open", head = new { sha = "failed-sha" } }
+                },
                 commentHtmlUrlByNumber = new Dictionary<string, string>
                 {
                     ["15110"] = "https://github.com/microsoft/aspire/pull/15110#issuecomment-123"
@@ -1815,6 +1925,11 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 {
                     ["15110"] = "open"
                 },
+                sourceHeadSha = "failed-sha",
+                pullRequestsByNumber = new Dictionary<string, object>
+                {
+                    ["15110"] = new { state = "open", head = new { sha = "failed-sha" } }
+                },
                 commentHtmlUrlByNumber = new Dictionary<string, string>
                 {
                     ["15110"] = "https://github.com/microsoft/aspire/pull/15110#issuecomment-123"
@@ -1842,6 +1957,11 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             {
                 Assert.Equal("GET /repos/{owner}/{repo}/actions/runs/{run_id}", request.Route);
                 Assert.Equal(123, request.Payload.GetProperty("run_id").GetInt32());
+            },
+            request =>
+            {
+                Assert.Equal("GET /repos/{owner}/{repo}/pulls/{pull_number}", request.Route);
+                Assert.Equal(15110, request.Payload.GetProperty("pull_number").GetInt32());
             },
             request =>
             {
@@ -2192,19 +2312,29 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         }
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(403, "Resource not accessible by integration", "HTTP 403: Resource not accessible by integration")]
+    [InlineData(429, "API rate limit exceeded", "HTTP 429: API rate limit exceeded")]
+    [InlineData(null, "Connection reset", "Connection reset")]
     [RequiresTools(["node"])]
-    public async Task CurrentMainRerunReturnsFailedOutcomeWhenRequestIsRejected()
+    public async Task CurrentMainRerunReturnsFailedOutcomeWhenRequestIsRejected(int? status, string message, string expectedError)
     {
         const string rerunRoute = "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs";
         RerunMatchedJobsResult result = await InvokeHarnessAsync<RerunMatchedJobsResult>(
             "rerunMatchedJobs",
-            CreateCurrentMainRerunInput(("failedRequestRoutes", new[] { rerunRoute })));
+            CreateCurrentMainRerunInput(("requestErrorsByRoute", new Dictionary<string, object>
+            {
+                [rerunRoute] = new { status, message }
+            })));
 
         Assert.Single(result.Requests, r => r.Route == rerunRoute);
         Assert.Equal("rerun", result.ReturnValue.GetProperty("decision").GetString());
         Assert.Equal("failed", result.ReturnValue.GetProperty("outcome").GetString());
         Assert.Equal("request-failed", result.ReturnValue.GetProperty("reason").GetString());
+        string expectedMessage = $"The failed-job rerun request did not complete successfully: {expectedError}. GitHub may still have started a rerun.";
+        Assert.Equal([expectedMessage], result.Messages);
+        SummaryEvent errorSummary = Assert.Single(result.Events, e => e.Type == "raw" && e.Text == expectedMessage);
+        Assert.Equal(expectedMessage, errorSummary.Text);
     }
 
     [Fact]
@@ -2248,6 +2378,11 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 issueStatesByNumber = new Dictionary<string, string>
                 {
                     ["15110"] = "open"
+                },
+                sourceHeadSha = "failed-sha",
+                pullRequestsByNumber = new Dictionary<string, object>
+                {
+                    ["15110"] = new { state = "open", head = new { sha = "failed-sha" } }
                 },
                 currentRunResponses = new[]
                 {
@@ -3472,6 +3607,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     private sealed class RerunMatchedJobsResult
     {
         public RequestRecord[] Requests { get; init; } = [];
+        public string[] Messages { get; init; } = [];
         public SummaryEvent[] Events { get; init; } = [];
         public JsonElement ReturnValue { get; init; }
     }

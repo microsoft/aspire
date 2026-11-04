@@ -6,7 +6,17 @@ This document explains how the automatic CI rerun system works and how to config
 
 When a `CI` pull request run fails on GitHub Actions, a companion workflow can analyze the failure, determine whether it was caused by transient infrastructure or test issues, and — if safe — request GitHub to rerun the failed jobs. That broad analysis remains available, but the pull request and manual-dispatch paths currently run in temporary force mode: they skip classification and rerun all failed jobs when an associated pull request is open and the attempt cap allows it. Immediately before the request, the workflow verifies that the selected run is still the same completed failed attempt. The workflow posts a comment on the PR explaining what it did.
 
+Automatic PR retries also re-fetch the associated PR immediately before requesting
+the rerun and require its current head SHA to match the failed commit. This avoids
+retrying an obsolete commit that could cancel newer PR CI through the shared
+concurrency group. Manual dispatch can still explicitly rerun a historical commit
+while its associated PR remains open.
+
 A failed `push` run for the current `main` SHA uses a separate, narrow infrastructure allowlist. Source attempt 1 may request one retry only when every non-aggregate failed job matches that allowlist; attempt 2 remains failed if it does not pass. Before the request, the workflow re-fetches the run, `refs/heads/main`, and the workflow's main run list. It skips the write unless the run is still the same completed failed attempt, the failed SHA is still current, no newer main CI run supersedes it, and the attempt cap is not exceeded. The GitHub API has no atomic expected-attempt precondition, so the final run revalidation minimizes but cannot eliminate the check-to-write race.
+
+If the main rerun request fails, the workflow logs the GitHub error message and HTTP
+status when available, includes them in the failure summary, and warns that GitHub
+may already have started the rerun.
 
 **Scheduled `Outerloop Tests` runs use a separate, simpler workflow.** Outerloop runs have no associated PR, so they are rerun unconditionally (no analysis, no PR comment) with the same attempt cadence. See [Auto-rerun outerloop failures](auto-rerun-outerloop-failures.md).
 
@@ -50,7 +60,7 @@ Passes 1–2 are hardcoded because they target well-known infrastructure signatu
 
 | Trigger | Behavior |
 |---------|----------|
-| **Automatic PR rerun** (`workflow_run` on `CI` completion) | Currently reruns all failed jobs without classification when the run has an open associated PR and is within the three-attempt cap. |
+| **Automatic PR rerun** (`workflow_run` on `CI` completion) | Currently reruns all failed jobs without classification when the run has an open associated PR, still matches its current head SHA, and is within the three-attempt cap. |
 | **Automatic current-main rerun** (`workflow_run` on `CI` pushes to `main`) | Selectively reruns failed jobs once from source attempt 1 when every real failed job matches the narrow current-main infrastructure allowlist and the failed run is still the latest run for the current `main` SHA. |
 | **Manual** (`workflow_dispatch`) | Enter a completed, failed PR `CI` run ID. It currently uses the same force-mode policy as automatic PR reruns; `dry_run` reports eligibility without requesting a rerun. |
 
@@ -207,6 +217,7 @@ The policies deliberately apply different rails:
 |------|-------|--------|
 | **Attempt limit** | All paths | Pull request source attempts use `defaultMaxRunAttempt` (3), defined in [`auto-rerun/common.js`](../../.github/workflows/auto-rerun/common.js). Current-`main` source attempts use `mainMaxRunAttempt` (1), defined in [`auto-rerun/rerun-main.js`](../../.github/workflows/auto-rerun/rerun-main.js), allowing exactly one retry. |
 | **Open PR** | Pull request and manual paths | At least one associated pull request must still be open during analysis, including manual dry runs and force mode. Execution rechecks that an associated PR remains open immediately before requesting a rerun. |
+| **Current PR head** | Automatic pull request execution | The associated PR must still be open and point to the failed commit immediately before the rerun request, including force mode. Missing head data prevents the retry. Explicit manual dispatch can rerun a historical commit. |
 | **Live source attempt** | Pull request and manual execution | Immediately before the write, the selected run must still be a completed failure at the source attempt analyzed earlier. |
 | **Retryable job cap** | Normal PR analysis and current-main | At least 1 but no more than 5 retryable jobs (default). Pull request attempts after the first use the existing stricter count rule. Current-main only considers source attempt 1 and requires every real failed job to match. Force mode bypasses this cap because it does not enumerate jobs. |
 | **Non-aggregator** | Normal PR analysis and current-main | Aggregator jobs (`Final Results`, `Tests / Final Test Results`) are excluded from analysis. Force mode bypasses analysis and lets GitHub rerun the failed set. |
@@ -243,6 +254,7 @@ Because the rerun uses GitHub's `rerun-failed-jobs` API — which reruns **all**
 **Force mode keeps:**
 
 - **The open-PR requirement** — a rerun only fires for a run that has a currently-open associated PR. Runs with no associated PR, or where every associated PR is closed/merged, are still skipped. There is no value in spending CI on an inactive PR, so force mode does not bypass this.
+- **The current-head requirement for automatic retries** — the PR must still point to the failed commit immediately before requesting a rerun. Force mode cannot retry an obsolete PR commit; explicit manual dispatch remains exempt.
 - **The attempt cap** — pull request reruns still stop after the `defaultMaxRunAttempt` policy is exceeded.
 - **Failed-run-only triggering** — automatic execution only fires on `workflow_run.conclusion == 'failure'`, and manual execution validates that the selected run is completed with conclusion `failure`. A `cancelled` run (which is what you get when a run is cancelled, or when fail-fast cancels siblings) has conclusion `cancelled`, not `failure`, so it never triggers a rerun.
 
@@ -287,7 +299,7 @@ the associated PRs are still open.
 
 Analysis emits a serialized decision. Execution selects the same policy from
 that decision, checks eligibility, and invokes its handler. The PR handler
-rechecks open PRs and the exact source attempt; the main handler revalidates the
+rechecks open PRs, the current head for automatic retries, and the exact source attempt; the main handler revalidates the
 live run, current `main` SHA, and run-list ordering immediately before the shared
 failed-job rerun request. GitHub's API has no atomic expected-attempt
 precondition, so these final reads minimize but cannot eliminate the

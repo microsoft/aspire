@@ -106,6 +106,7 @@ async function execute({ github, core, context, analysis }) {
 
     return pullRequest.rerunPullRequestFailures({
         ...options,
+        eventName: analysis.eventName,
         pullRequestNumbers: analysis.pullRequestNumbers,
         testPatternMatchedTests: analysis.testPatternMatchedTests,
         forceRerunAll: analysis.forceRerunAll,
