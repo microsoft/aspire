@@ -62,6 +62,11 @@ card shows are driven by its lane and its signal pills:
   into a preferred order that persists across reloads.
 - **Signal pills** — Draft, CI failing, Merge conflicts, Changes requested,
   N unresolved, Approved, Ready to merge, Needs review, Quick win, Stalled.
+  Hover or keyboard-focus explanatory pills to see their meaning and expected next
+  action; open-age and CI status tags stay plain. **Review debt** means the PR is
+  not currently approved and its relevant activity is at least 14 days old,
+  not that nobody has reviewed it. Raw GitHub
+  labels are identified separately from computed dashboard signals.
 - **Notifications** — review requested, your PR ready to merge, changes requested,
   CI failing, with per-category preferences. Live updates over SSE.
 - **Stable background refresh** — GitHub data is assembled into a complete snapshot

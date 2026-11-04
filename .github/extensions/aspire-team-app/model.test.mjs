@@ -523,3 +523,11 @@ test("createIssueSignals leads with the highest-priority action pill", () => {
   const botTyped = makeIssue({ number: 6, author: "dependa", authorType: "Bot" });
   assert.ok(createIssueSignals(botTyped).some((s) => s.label === "bot"));
 });
+
+test("issue repository labels retain their kind for tooltip explanations", () => {
+  const signals = createIssueSignals(makeIssue({ labels: ["review debt", "custom"] }));
+  assert.deepEqual(signals.filter((signal) => signal.kind === "repo-label"), [
+    { label: "review debt", tone: "accent", kind: "repo-label" },
+    { label: "custom", tone: "accent", kind: "repo-label" },
+  ]);
+});
