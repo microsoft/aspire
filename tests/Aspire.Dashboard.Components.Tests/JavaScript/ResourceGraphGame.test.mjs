@@ -216,6 +216,26 @@ test("hard core doesn't count or restart a resource whose stop failed, and doesn
     assert.deepEqual(calls, ["stop api", "stop api"]);
 });
 
+test("a new game tries a failed stop again and still restarts what the last game left down", async () => {
+    let apiStops = 0;
+    const { outage, calls } = outageWith((id, command) => id !== "api" || command !== "stop" || ++apiStops === 2);
+    outage.stop("api");
+    outage.stop("cache");
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 1);
+
+    outage.forgetAttempts();
+    assert.equal(outage.downCount, 1);
+    assert.equal(outage.stop("api"), true);
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 2);
+
+    outage.restartAll();
+    await outage.whenIdle();
+    assert.equal(outage.downCount, 0);
+    assert.deepEqual(calls.filter(call => call.startsWith("start")).sort(), ["start api", "start cache"]);
+});
+
 test("hard core reports changes when a command finishes late", async () => {
     let finishStart;
     let changes = 0;

@@ -173,6 +173,14 @@ export class ResourceOutage {
                 }
             });
         }
+        this.forgetAttempts();
+    }
+
+    /**
+     * A new game gets its own attempts. Resources left down by the last game stay tracked, so clearing a wave restarts
+     * them too, and so do commands that are still queued.
+     */
+    forgetAttempts() {
         this.attempted.clear();
     }
 
@@ -1304,6 +1312,7 @@ class ResourceGraphGame {
         this.lives = 3;
         this.wave = 1;
         this.newBest = false;
+        this.outage.forgetAttempts();
         this.buildWave();
     }
 
