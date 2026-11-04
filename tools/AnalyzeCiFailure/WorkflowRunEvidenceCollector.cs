@@ -732,7 +732,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
             }
             foreach (var selection in selectedTestArtifacts)
             {
-                if (await AcquireAsync(selection, extractedFile: null, reportFailure: true))
+                if (await DownloadAndExtractTestResultsAsync(selection, extractedFile: null, reportFailure: true))
                 {
                     acquiredArtifacts.Add(selection);
                 }
@@ -753,7 +753,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     // from historical producers whose names overlap current jobs.
                     var producers = await LoadCombinedResultProducersAsync(gitHub, runId, runAttempt, allJobs);
                     var extractedReports = new List<(string EntryPath, string ExtractedFileName)>();
-                    if (await AcquireAsync(combined, (entry, file) => extractedReports.Add((entry, file)), reportFailure: false))
+                    if (await DownloadAndExtractTestResultsAsync(combined, (entry, file) => extractedReports.Add((entry, file)), reportFailure: false))
                     {
                         var combinedReports = new CombinedTrxReports(extractedReports, producers);
                         foreach (var plan in plans.Where(plan => plan.Format == TestArtifactFormat.Trx))
@@ -806,7 +806,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                 }
             }
 
-            async Task<bool> AcquireAsync(SelectedTestArtifact selection, Action<string, string>? extractedFile, bool reportFailure)
+            async Task<bool> DownloadAndExtractTestResultsAsync(SelectedTestArtifact selection, Action<string, string>? extractedFile, bool reportFailure)
             {
                 var artifactId = GetValueText(selection.Artifact.Id);
                 var format = EnumText(selection.Format);
@@ -867,6 +867,8 @@ internal sealed partial class WorkflowRunEvidenceCollector
 
             }
 
+            // Do not accept evidence from another run or commit. Match the artifact
+            // to the trusted inventory and check its run/SHA metadata when available.
             void ValidateAssociatedRun(SelectedTestArtifact selection)
             {
                 var matchingMetadata = artifacts.Where(candidate => ReadNormalizedNumber(Field(candidate, "id")) == ReadNormalizedNumber(selection.Artifact.Id)).ToArray();
@@ -899,6 +901,9 @@ internal sealed partial class WorkflowRunEvidenceCollector
         }
     }
 
+    // Build the known-job inventory for matching reports in All-TestResults.
+    // Include passing jobs and, on reruns, historical jobs so their reports
+    // cannot be attributed to a similarly named failing job.
     private async Task<TestArtifactExpectation[]> LoadCombinedResultProducersAsync(
         AnalysisGitHubClient gitHub,
         long runId,
