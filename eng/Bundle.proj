@@ -201,7 +201,6 @@
       <_BundleSigningArgs Condition="'$(DotNetPublishUsingPipelines)' != ''">$(_BundleSigningArgs) /p:DotNetPublishUsingPipelines=$(DotNetPublishUsingPipelines)</_BundleSigningArgs>
       <_BundleSigningArgs Condition="$(TargetRid.StartsWith('win-'))">$(_BundleSigningArgs) "/p:WindowsTrayPath=$(WindowsTrayPath.TrimEnd('\').TrimEnd('/'))/"</_BundleSigningArgs>
 
-      <_ComponentSigningLog>$(_ArtifactsLogDir)SignBundleComponents.log</_ComponentSigningLog>
       <_ComponentSigningResponseFile>$(_ArtifactsLogDir)SignBundleComponents.rsp</_ComponentSigningResponseFile>
     </PropertyGroup>
     <ItemGroup>
@@ -302,7 +301,7 @@
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
           Condition="'$(SkipDashboardPublish)' != 'true'" />
     <Exec Command="pwsh -NoProfile -File &quot;$(_BundleEngineeringDir)scripts/verify-native-dashboard-warnings.ps1&quot; -BuildLog &quot;$(_DashboardPublishLogPath)&quot;"
-          Condition="'$(SkipDashboardPublish)' != 'true' and '$(BuildDistributionPackages)' == 'true'" />
+          Condition="'$(SkipDashboardPublish)' != 'true' and '$(BuildDistributionPackages)' == 'true' and '$(ContinuousIntegrationBuild)' == 'true'" />
   </Target>
 
   <Target Name="_PublishTerminalHost" Condition="'$(SkipTerminalHostPublish)' != 'true'">
@@ -411,7 +410,6 @@
       <_ComponentSigningArgument Include="@(_BundleMSBuildArgument)" />
       <_ComponentSigningArgument Include="&quot;/p:Projects=$(_ManagedProjectPath)&quot;" />
       <_ComponentSigningArgument Include="&quot;/bl:$(_ArtifactsLogDir)SignBundleComponents.binlog&quot;" />
-      <_ComponentSigningArgument Include="&quot;/flp:LogFile=$(_ComponentSigningLog)%3BVerbosity=diagnostic&quot;" />
     </ItemGroup>
     <WriteLinesToFile File="$(_ComponentSigningResponseFile)"
                       Lines="@(_ComponentSigningArgument)"
@@ -483,9 +481,9 @@
       <_DcpPackProjectPath Condition="'$(_DcpPackProjectPath)' == ''">$([MSBuild]::NormalizePath('$(_BundleEngineeringDir)', 'dcppack', 'Aspire.Hosting.Orchestration.$(TargetRid).csproj'))</_DcpPackProjectPath>
     </PropertyGroup>
 
-    <Exec Command="dotnet build &quot;$(_DashboardPackProjectPath)&quot; $(_BundleChildArgs) /p:SkipDashboardPublish=true"
+    <Exec Command="dotnet build &quot;$(_DashboardPackProjectPath)&quot; $(_BundleChildArgs) /p:SkipDashboardPublish=true &quot;-bl:$(_ArtifactsLogDir)PackDashboard.binlog&quot;"
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)" />
-    <Exec Command="dotnet build &quot;$(_DcpPackProjectPath)&quot; $(_BundleChildArgs)"
+    <Exec Command="dotnet build &quot;$(_DcpPackProjectPath)&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PackDcp.binlog&quot;"
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
           Condition="'$(PackDcpPackage)' == 'true'" />
   </Target>
