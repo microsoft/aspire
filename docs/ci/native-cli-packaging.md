@@ -39,7 +39,11 @@ Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, ex
 
 ## Native AOT Dashboard package signing
 
-All seven Dashboard SDK NuGet packages follow the CLI package-signing path: `assemble` stages them together in `Shipping` before its Windows signing pass. There is no second Dashboard staging pass after signing. This ensures Linux packages receive NuGet signatures even though Linux native jobs skip ELF signing. Assembly verifies every staged NuGet release package's signature before publishing the build artifacts, including Dashboard, CLI, and managed packages. The unsigned `*.symbols.nupkg` files also staged in `Shipping` are excluded because they are symbol-server inputs, not NuGet release packages.
+All seven Dashboard SDK NuGet packages follow the CLI package-signing path: `assemble` stages them together in `Shipping` before its Windows signing pass. There is no second Dashboard staging pass after signing. When NuGet signing is enabled, this ensures Linux packages receive NuGet signatures even though Linux native jobs skip ELF signing.
+
+NuGet signing follows `PostBuildSign` in `eng/pipelines/common-variables.yml`: release-branch and manually queued official builds set it to `false`, enabling Arcade's default package-signing inputs. Automatic main builds set it to `true`, excluding NuGet packages from in-build signing; native executable and npm signing are selected separately.
+
+Assembly verifies every staged NuGet release package's signature before publishing build artifacts only when real signing is enabled and `PostBuildSign` is not `true`. This matches package-signing selection rather than assuming that a real-signed build signs every artifact. The unsigned `*.symbols.nupkg` files also staged in `Shipping` are excluded because they are symbol-server inputs, not NuGet release packages.
 
 ## Nix flake packaging
 
