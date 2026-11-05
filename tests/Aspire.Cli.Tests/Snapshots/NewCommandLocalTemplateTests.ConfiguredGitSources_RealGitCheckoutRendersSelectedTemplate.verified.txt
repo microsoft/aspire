@@ -1,3 +1,14 @@
 ﻿{
+  aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "COMMIT_SHA",
+      "path": "templates/sample"
+    }
+  }
+}
+,
   Demo.txt: Real Git: Hello
 }

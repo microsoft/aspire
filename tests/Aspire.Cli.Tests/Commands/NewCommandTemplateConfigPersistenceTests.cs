@@ -334,6 +334,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
                 var csharpConfig = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(csharpConfig);
+                Assert.Null(csharpConfig.Provenance);
                 Assert.Equal(PrChannelName, csharpConfig.Channel);
                 Assert.Equal(s_prVersion, csharpConfig.SdkVersion);
 
@@ -345,6 +346,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 Assert.Empty(dotNetTemplateInstalls);
                 var config = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(config);
+                Assert.Null(config.Provenance);
                 Assert.Equal(PrChannelName, config.Channel);
                 Assert.Equal(s_prVersion, config.SdkVersion);
                 break;
@@ -357,6 +359,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
                 var dotNetConfig = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(dotNetConfig);
+                Assert.Null(dotNetConfig.Provenance);
                 Assert.Equal(PrChannelName, dotNetConfig.Channel);
                 Assert.Equal(s_prVersion, dotNetConfig.SdkVersion);
 

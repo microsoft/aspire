@@ -1,4 +1,17 @@
 ﻿{
-  aspire.config.json: { "sdk": { "version": "17.0.0-preview.1" } },
+  aspire.config.json:
+{
+  "sdk": {
+    "version": "17.0.0-preview.1"
+  },
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "path": "."
+    }
+  }
+}
+,
   nuget.config: <configuration><!-- Enterprise-owned routing --></configuration>
 }

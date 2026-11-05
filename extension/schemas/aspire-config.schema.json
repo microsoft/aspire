@@ -419,6 +419,32 @@
         "additionalProperties": false
       }
     },
+    "provenance": {
+      "description": "Generation-origin metadata for this app. Does not register template sources or inherit configuration.",
+      "type": "object",
+      "properties": {
+        "template": {
+          "description": "The Git-backed template used to generate this app.",
+          "type": "object",
+          "properties": {
+            "repository": {
+              "description": "Source Git repository location, without embedded credentials.",
+              "type": "string"
+            },
+            "sha": {
+              "description": "The resolved Git commit used for generation, not a mutable branch or tag.",
+              "type": "string"
+            },
+            "path": {
+              "description": "Repository-relative directory containing the selected template's .template.config, with forward-slash separators.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "sdk": {
       "description": "Aspire SDK version configuration.",
       "type": "object",

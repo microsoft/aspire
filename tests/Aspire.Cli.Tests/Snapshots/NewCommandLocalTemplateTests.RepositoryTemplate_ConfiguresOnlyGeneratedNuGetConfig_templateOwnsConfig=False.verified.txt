@@ -1,5 +1,18 @@
 ﻿{
-  aspire.config.json: { "sdk": { "version": "17.0.0-preview.1" } },
+  aspire.config.json:
+{
+  "sdk": {
+    "version": "17.0.0-preview.1"
+  },
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "path": "."
+    }
+  }
+}
+,
   nuget.config:
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
