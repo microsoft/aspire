@@ -29,7 +29,7 @@ public sealed class MacOSStaplerRetryTests(ITestOutputHelper output)
         foreach (var name in new[] { "xcrun", "sleep" })
         {
             var stub = Path.Combine(bin, name);
-            await File.WriteAllTextAsync(stub, """
+            await ExecutableFile.WriteAsync(stub, """
                 #!/usr/bin/env bash
                 set -euo pipefail
                 if [[ "${0##*/}" == sleep ]]; then
@@ -45,10 +45,6 @@ public sealed class MacOSStaplerRetryTests(ITestOutputHelper output)
                 fi
                 printf 'Ticket verified.\n'
                 """);
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(stub, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            }
         }
 
         var app = Path.Combine(workspace.Path, "Aspire.app");
