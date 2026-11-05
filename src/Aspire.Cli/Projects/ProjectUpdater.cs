@@ -72,7 +72,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 var (wasProvided, selectedDirectory, _) = PromptBinding.Resolve(context.NuGetConfigDirBinding);
                 var targetDirectory = wasProvided && selectedDirectory is not null
                     ? new DirectoryInfo(selectedDirectory)
-                    : GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
+                    : DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
                 var candidate = await new DotNetAppHostNuGetConfigMerger(nuGetService).PrepareAsync(
                     targetDirectory, configuration, channel.ShouldCreateNuGetConfig(),
                     CliPathHelper.StagingNuGetPackagesFolderName, cancellationToken);
@@ -84,7 +84,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
         if (configuration is not null && !channel.ShouldCreateNuGetConfig())
         {
-            var targetDirectory = GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
+            var targetDirectory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
             if (!targetDirectory.Exists || !DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDirectory, out _))
             {
                 // Stable must not create a local config. Discovery must therefore retain the
@@ -162,7 +162,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // Display warning if fallback parsing was used
         if (updatePlan.FallbackParsing)
         {
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{UpdateCommandStrings.FallbackParsingWarning}[/]", allowMarkup: true);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{UpdateCommandStrings.FallbackParsingWarning}[/]", allowMarkup: true);
             interactionService.DisplayEmptyLine();
         }
 
@@ -181,7 +181,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 throw new ProjectUpdaterException(UpdateCommandStrings.FailedDiscoverNuGetConfig);
             }
 
-            var recommendedNuGetConfigDirectory = GetRecommendedNuGetConfigDirectory(configPaths, projectFile.Directory!);
+            var recommendedNuGetConfigDirectory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configPaths, projectFile.Directory!);
 
             if (!channel.ShouldCreateNuGetConfig())
             {
@@ -440,24 +440,6 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         return (true, candidate);
     }
-
-    private static bool IsGlobalNuGetConfig(string path)
-    {
-        if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-        {
-            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.Ordinal);
-        }
-        else
-        {
-            var globalNuGetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget");
-            return path.StartsWith(globalNuGetFolder, StringComparison.Ordinal);
-        }
-    }
-
-    private static DirectoryInfo GetRecommendedNuGetConfigDirectory(IReadOnlyList<string> configPaths, DirectoryInfo appHostDirectory)
-        => configPaths.Count > 0 && !IsGlobalNuGetConfig(configPaths[0])
-            ? new DirectoryInfo(Path.GetDirectoryName(configPaths[0])!)
-            : appHostDirectory;
 
     private async Task<UpdateContext> GetUpdateStepsAsync(
         FileInfo projectFile,

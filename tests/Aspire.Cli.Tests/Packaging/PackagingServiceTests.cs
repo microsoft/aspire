@@ -160,10 +160,10 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             aspireMapping.Source);
 
         var packages = (await stagingChannel.GetIntegrationPackagesAsync(tempDir, CancellationToken.None).DefaultTimeout())
-            .OrderBy(package => package.Id, StringComparer.Ordinal)
+            .Packages.OrderBy(package => package.Id, StringComparer.Ordinal)
             .ToArray();
         var polyglotPackageIds = (await stagingChannel.GetPolyglotCompatiblePackageIdsAsync(tempDir, CancellationToken.None).DefaultTimeout())
-            .OrderBy(id => id, StringComparer.Ordinal)
+            .Packages.OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
 
         Assert.Collection(
@@ -1952,7 +1952,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var integrationPackages = await stagingChannel.GetIntegrationPackagesAsync(tempDir, CancellationToken.None).DefaultTimeout();
 
         // Assert - should discover both packages but with pinned version
-        var packageList = integrationPackages.ToList();
+        var packageList = integrationPackages.Packages.ToList();
         outputHelper.WriteLine($"Integration packages returned: {packageList.Count}");
         foreach (var p in packageList)
         {
@@ -2119,7 +2119,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var integrationPackages = await localChannel.GetIntegrationPackagesAsync(tempDir, CancellationToken.None).DefaultTimeout();
 
         // Assert
-        var packageList = integrationPackages.ToList();
+        var packageList = integrationPackages.Packages.ToList();
         Assert.Equal(2, packageList.Count);
         Assert.All(packageList, p => Assert.Equal(localVersion, p.Version));
         Assert.Contains(packageList, p => p.Id == "Aspire.Hosting.Redis");
@@ -2407,11 +2407,11 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(filtered.ToList());
         }
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(
+        public async Task<PackageSearchResult<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(
             NuGetPackageOperationConfiguration configuration,
             bool prerelease,
             CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
+            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false, FailedSources: []);
 
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(
             NuGetPackageOperationConfiguration configuration,
@@ -2419,14 +2419,14 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken)
             => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(
+        public async Task<PackageSearchResult<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(
             NuGetPackageOperationConfiguration configuration,
             string packageId,
             Func<string, bool>? filter,
             bool prerelease,
             bool useCache,
             CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
+            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false, FailedSources: []);
 
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(
             NuGetPackageOperationConfiguration configuration,

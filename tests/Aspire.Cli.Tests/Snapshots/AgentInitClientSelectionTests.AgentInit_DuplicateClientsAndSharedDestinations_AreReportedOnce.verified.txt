@@ -1,3 +1,0 @@
-﻿Installed Aspire agent skills:
-  Skills: aspire, aspire-deployment, aspire-init, aspire-monitoring, aspire-orchestration, aspire-project-v2-migration, aspireify
-  Locations: .agents/skills

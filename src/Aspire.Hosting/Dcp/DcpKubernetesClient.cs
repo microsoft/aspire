@@ -250,6 +250,15 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
                         cancellationToken.ThrowIfCancellationRequested();
                         throw;
                     }
+                    catch (IOException ex)
+                    {
+                        // An HTTP/2 reset or connection loss interrupts the watch body without
+                        // necessarily canceling either token. Use the existing watch retry path.
+                        _connectionToken.ThrowIfCancellationRequested();
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        throw new EndOfStreamException("DCP watch connection was interrupted.", ex);
+                    }
 
                     _connectionToken.ThrowIfCancellationRequested();
                     cancellationToken.ThrowIfCancellationRequested();

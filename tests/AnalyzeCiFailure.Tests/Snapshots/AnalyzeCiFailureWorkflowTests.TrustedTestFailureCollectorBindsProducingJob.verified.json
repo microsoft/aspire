@@ -1,0 +1,14 @@
+﻿[
+  {
+    "test": "Tests.Failed",
+    "display_test": "Tests.Failed",
+    "job": "Tests / No-package tests / Infrastructure (8-core-ubuntu-latest)",
+    "job_id": 1,
+    "result_file": "00001.trx",
+    "result_format": "trx",
+    "error": "boom",
+    "stack_trace": "frame",
+    "standard_output": "stdout",
+    "standard_error": "stderr"
+  }
+]

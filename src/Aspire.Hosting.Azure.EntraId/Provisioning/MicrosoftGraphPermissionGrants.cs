@@ -9,9 +9,11 @@ namespace Aspire.Hosting.Azure.EntraId.Provisioning;
 /// <summary>
 /// Models a delegated permission grant (<c>oauth2PermissionGrant</c>) that consents to scopes of an API on behalf of users.
 /// </summary>
-internal sealed class MicrosoftGraphOAuth2PermissionGrant(string bicepIdentifier)
+/// <param name="bicepIdentifier">The resource's identifier in the Bicep module.</param>
+public sealed class MicrosoftGraphOAuth2PermissionGrant(string bicepIdentifier)
     : ProvisionableResource(bicepIdentifier, EntraIdBicepConstants.OAuth2PermissionGrantResourceType, EntraIdBicepConstants.GraphApiVersion)
 {
+    /// <summary>Gets the permission grant's directory object ID.</summary>
     public BicepValue<string> Id
     {
         get { Initialize(); return _id!; }
@@ -50,6 +52,7 @@ internal sealed class MicrosoftGraphOAuth2PermissionGrant(string bicepIdentifier
     }
     private BicepValue<string>? _scope;
 
+    /// <inheritdoc />
     protected override void DefineProvisionableProperties()
     {
         base.DefineProvisionableProperties();
@@ -64,9 +67,11 @@ internal sealed class MicrosoftGraphOAuth2PermissionGrant(string bicepIdentifier
 /// <summary>
 /// Models an app role assignment (<c>appRoleAssignedTo</c>) that grants an application permission of an API to a client service principal.
 /// </summary>
-internal sealed class MicrosoftGraphAppRoleAssignedTo(string bicepIdentifier)
+/// <param name="bicepIdentifier">The resource's identifier in the Bicep module.</param>
+public sealed class MicrosoftGraphAppRoleAssignedTo(string bicepIdentifier)
     : ProvisionableResource(bicepIdentifier, EntraIdBicepConstants.AppRoleAssignedToResourceType, EntraIdBicepConstants.GraphApiVersion)
 {
+    /// <summary>Gets the role assignment's directory object ID.</summary>
     public BicepValue<string> Id
     {
         get { Initialize(); return _id!; }
@@ -97,6 +102,7 @@ internal sealed class MicrosoftGraphAppRoleAssignedTo(string bicepIdentifier)
     }
     private BicepValue<string>? _resourceId;
 
+    /// <inheritdoc />
     protected override void DefineProvisionableProperties()
     {
         base.DefineProvisionableProperties();

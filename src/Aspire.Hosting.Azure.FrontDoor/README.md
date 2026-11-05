@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.FrontDoor` integratio
 
 ```bash
 aspire add Aspire.Hosting.Azure.FrontDoor
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -23,7 +24,7 @@ In the AppHost, add an Azure Front Door resource and configure origins with eith
 **C#**
 
 ```csharp
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithExternalHttpEndpoints();
 
 var frontDoor = builder.AddAzureFrontDoor("frontdoor")
@@ -59,7 +60,7 @@ var environment = builder.AddAzureContainerAppEnvironment("env");
 var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithExternalHttpEndpoints();
 
 frontDoor.WithOrigin(api);
@@ -130,7 +131,7 @@ var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     });
 environment.WithAzureFrontDoorPrivateLink(frontDoor);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithExternalHttpEndpoints();
 
 frontDoor.WithOrigin(api);

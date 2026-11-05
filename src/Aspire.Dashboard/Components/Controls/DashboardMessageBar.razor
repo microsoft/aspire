@@ -13,7 +13,7 @@
         {
             <span class="dashboard-message-bar-title">@Content.Title</span>
         }
-        <span class="dashboard-message-bar-message">
+        <span class="dashboard-message-bar-message @(Content.UseMarkupString ? "markdown-container" : null)">
             @if (Content.UseMarkupString)
             {
                 @((MarkupString)Content.Message.TrimEnd())

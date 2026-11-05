@@ -202,6 +202,44 @@ public class TemplatePackageLockTests
         Assert.False(packages.TryGetProperty("node_modules/js-yaml", out _));
     }
 
+    [Theory]
+    [InlineData("src/Aspire.Cli/Templating/Templates/ts-starter")]
+    [InlineData("src/Aspire.Cli/Templating/Templates/ts-starter/frontend")]
+    [InlineData("src/Aspire.Cli/Templating/Templates/py-starter")]
+    [InlineData("src/Aspire.Cli/Templating/Templates/py-starter/frontend")]
+    [InlineData("src/Aspire.Cli/Templating/Templates/java-starter/frontend")]
+    [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend")]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/nextjs")]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/npmscript")]
+    public void PublicRegistryPackageLockDirectory_PinsPublicNpmRegistryForDependabot(string relativeDirectory)
+    {
+        // Dependabot falls back to the nearest parent .npmrc when a package directory has none, so
+        // these directories would inherit the repo-root .npmrc (internal dnceng feed) and Dependabot
+        // would write dnceng `resolved` URLs that fail anonymous `npm ci` with E401.
+        var directory = Path.Combine(GetRepoRoot(), relativeDirectory);
+        Assert.True(File.Exists(Path.Combine(directory, "package-lock.json")), $"Expected a package-lock.json in {relativeDirectory}.");
+
+        var npmrcPath = Path.Combine(directory, ".npmrc");
+        Assert.True(File.Exists(npmrcPath), $"Expected {relativeDirectory}/.npmrc to pin the public npm registry.");
+
+        var registries = File.ReadAllLines(npmrcPath)
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("registry", StringComparison.Ordinal))
+            .Select(line => line.Split('=', 2)[1].Trim())
+            .ToArray();
+
+        Assert.Equal(["https://registry.npmjs.org/"], registries);
+    }
+
+    [Fact]
+    public void CliTemplateResources_DoNotIncludeRepoOnlyNpmrc()
+    {
+        var resourceNames = typeof(Aspire.Cli.Templating.CliTemplateFactory).Assembly.GetManifestResourceNames();
+
+        Assert.Contains(resourceNames, name => name.StartsWith("ts-starter.", StringComparison.Ordinal) && name.EndsWith("package-lock.json", StringComparison.Ordinal));
+        Assert.DoesNotContain(resourceNames, name => name.EndsWith(".npmrc", StringComparison.Ordinal));
+    }
+
     private static void AssertPackageLockResolvesToPublicNpmRegistry(string filePath)
     {
         using var packageLock = JsonDocument.Parse(File.ReadAllText(filePath));

@@ -9,7 +9,8 @@
    scrolls when there is more than fits, and its sections collapse so a long list of tags doesn't push the others off
    screen. *@
 <span class="resource-pane-filter">
-    <FluentButton Id="@ButtonId"
+    <FluentButton @ref="_button"
+                  Id="@ButtonId"
                   Class="resource-pane-button"
                   Style="@($"anchor-name: --{ButtonId}")"
                   IconOnly="true"
@@ -18,6 +19,7 @@
                   aria-haspopup="dialog"
                   aria-expanded="@(_isOpen ? "true" : "false")"
                   data-tooltip="@Title"
+                  data-tooltip-positioning="above"
                   aria-label="@Title">
         <FluentIcon Value="@(new Icons.Regular.Size16.Filter())" Color="Color.Custom" CustomColor="currentColor" />
     </FluentButton>
@@ -31,7 +33,7 @@
         {
             var groups = Groups();
             var counts = GetCounts(groups);
-            <div class="resource-filter" role="group" aria-label="@Title">
+            <div class="resource-filter" role="group" aria-label="@Title" @onkeydown="OnKeyDownAsync">
                 <div class="resource-filter-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.Filter())"
                                 Width="16px"

@@ -345,7 +345,9 @@ public class KestrelConfigTests
         Action<ProjectResourceOptions>? configure = null) where TProject : IProjectMetadata, new()
     {
         var appBuilder = ProjectResourceTests.CreateBuilder(operation: operation);
+#pragma warning disable CS0618 // These tests require synthetic legacy IProjectMetadata launch and Kestrel configuration.
         var projectBuilder = appBuilder.AddProject<TProject>("projectName", configure ?? (_ => { }));
+#pragma warning restore CS0618
         if (callback != null)
         {
             callback(projectBuilder);

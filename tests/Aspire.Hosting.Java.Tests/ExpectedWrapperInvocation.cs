@@ -26,6 +26,6 @@ internal static class ExpectedWrapperInvocation
 
     public static string[] Args(string wrapperPath, string workingDirectory, params string[] toolArgs)
         => OperatingSystem.IsWindows()
-            ? ["/c", "call", Path.GetRelativePath(workingDirectory, wrapperPath), .. toolArgs]
+            ? ["/c", "call", Path.Combine(".", Path.GetRelativePath(workingDirectory, wrapperPath)), .. toolArgs]
             : [wrapperPath, .. toolArgs];
 }

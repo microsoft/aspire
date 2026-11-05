@@ -52,6 +52,7 @@ export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
 export const fieldRequired = vscode.l10n.t('This field is required.');
 export const runProject = (projectName: string) => vscode.l10n.t('Run {0}', projectName);
 export const debugProject = (projectName: string) => vscode.l10n.t('Debug {0}', projectName);
+export const dotnetDisplayName = (projectName: string) => vscode.l10n.t('.NET: {0}', projectName);
 export const watchProject = (projectName: string, projectType: string) => vscode.l10n.t('Watch {0} ({1})', projectName, projectType);
 export const noCsharpBuildTask = vscode.l10n.t('No C# Dev Kit build task found, defaulting to dotnet CLI. Maybe the workspace hasn\'t finished loading?');
 export const noWatchTask = vscode.l10n.t('No watch task found. Please ensure a watch task is defined in your workspace.');
@@ -363,6 +364,7 @@ export const appHostLifecycleLaunchProfileNotSupported = vscode.l10n.t('The sele
 export const appHostLifecycleLaunchProfileCapabilityCouldNotBeVerified = vscode.l10n.t('The selected Aspire CLI launch profile capability could not be verified.');
 export const appHostLifecycleInvalidLaunchProfile = vscode.l10n.t('an invalid launch profile');
 export const appHostLifecycleLaunchProfileRequiresRun = vscode.l10n.t('Launch profiles are only supported for the run command.');
+export const appHostLifecycleDisableLaunchProfileNotSupported = vscode.l10n.t('Without the C# extension, disableLaunchProfile has no effect: the Aspire CLI still applies the default AppHost launch profile. Install or enable the C# extension to disable launch profiles.');
 export const appHostLifecycleLaunchAlreadyClaimed = vscode.l10n.t('This Aspire AppHost is already starting or running. The new debug session was cancelled so only one AppHost runs.');
 export const resourceDebugToolConfirmationTitle = vscode.l10n.t('Attach debugger to Aspire resource');
 export const resourceDebugToolConfirmationMessage = (resourceName: string, appHostPath: string) => vscode.l10n.t('Attach the debugger to resource {0} from Aspire AppHost {1}?', resourceName, appHostPath);

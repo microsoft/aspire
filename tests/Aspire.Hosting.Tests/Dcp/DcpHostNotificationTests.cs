@@ -714,6 +714,83 @@ public sealed class DcpHostNotificationTests
         Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
     }
 
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(1, false)]
+    public async Task EnsureDcpHostRunning_TransfersSessionFolderOwnershipToDcpOnlyWhenDcpStarts(int launcherExitCode, bool sessionFolderOwnedByDcp)
+    {
+        // DCP is started with --detach and DCP_SESSION_FOLDER, so it outlives the AppHost and still reads
+        // the kubeconfig in the session folder during its own cleanup before deleting the folder itself.
+        // Disposing the managed file system service must therefore not delete the folder once DCP has been launched,
+        // but the folder must still be deleted when the DCP launcher reports that startup failed.
+        var launcherDir = Directory.CreateTempSubdirectory("aspire-dcp-launcher");
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var locations = new Locations(fileSystemService);
+        var dcpOptions = new DcpOptions { CliPath = CreateFakeDcpLauncher(launcherDir.FullName, launcherExitCode) };
+        var dcpHost = new DcpHost(
+            new NullLoggerFactory(),
+            Options.Create(dcpOptions),
+            new TestDcpDependencyCheckService(),
+            new TestInteractionService(),
+            locations,
+            new DistributedApplicationModel(new ResourceCollection()),
+            new FakeTimeProvider(),
+            new TestDeveloperCertificateService([], false, false, false),
+            new ConfigurationBuilder().Build());
+
+        var sessionDir = locations.DcpSessionDir;
+        try
+        {
+            await File.WriteAllTextAsync(locations.DcpKubeconfigPath, "kubeconfig written by DCP");
+
+            dcpHost.EnsureDcpHostRunning();
+
+            // Shut down without waiting for the launcher result, as an AppHost that stops right after starting DCP would.
+            fileSystemService.Dispose();
+
+            await dcpHost.DcpLaunchResultObserved.WaitAsync(TimeSpan.FromSeconds(60));
+
+            Assert.Equal(sessionFolderOwnedByDcp, File.Exists(locations.DcpKubeconfigPath));
+        }
+        finally
+        {
+            await dcpHost.StopAsync();
+            if (Directory.Exists(sessionDir))
+            {
+                Directory.Delete(sessionDir, recursive: true);
+            }
+            launcherDir.Delete(recursive: true);
+        }
+    }
+
+    private static string CreateFakeDcpLauncher(string directory, int exitCode)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var scriptPath = Path.Combine(directory, "dcp.cmd");
+            File.WriteAllText(scriptPath, $"@exit /b {exitCode}{Environment.NewLine}");
+            return scriptPath;
+        }
+
+        var shellScriptPath = Path.Combine(directory, "dcp");
+        File.WriteAllText(shellScriptPath, $"#!/bin/sh{Environment.NewLine}exit {exitCode}{Environment.NewLine}");
+        File.SetUnixFileMode(shellScriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return shellScriptPath;
+    }
+
+    [Fact]
+    public void DcpSessionFolder_IsDeletedOnDisposeWhenDcpWasNotStarted()
+    {
+        var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        var locations = new Locations(fileSystemService);
+        var sessionDir = locations.DcpSessionDir;
+        File.WriteAllText(locations.DcpKubeconfigPath, "kubeconfig");
+
+        fileSystemService.Dispose();
+
+        Assert.False(Directory.Exists(sessionDir));
+    }
+
     private static DcpHost CreateDcpHostForProcessSpecTests(
         IDeveloperCertificateService? developerCertificateService = null,
         IConfiguration? configuration = null,

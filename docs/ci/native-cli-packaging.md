@@ -27,6 +27,24 @@ MicroBuild treats each CLI archive as a signing container. It extracts signable 
 
 Because of that, the archive is the canonical payload after signing. Consumers that need the final native CLI binary should read it from the signed archive, not from `artifacts/obj/.../output` or another intermediate staging directory.
 
+### macOS tray notarization checks
+
+`src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj` staples and validates the restored,
+notarized tray app. `tools/CreateLayout/verify-tray-payload.sh` validates it again
+after extracting the packaged payload, between signature verification and
+Gatekeeper assessment. Both use `tools/CreateLayout/macos-stapler-with-retry.sh`.
+
+Apple's `stapler` requires internet access for both operations. The helper retries
+only failures containing `Error Domain=NSURLErrorDomain Code=-1005` (connection
+lost), with four total attempts and 5, 15, and 30 second delays. Each attempt's
+output and each retry are logged. Other failures stop immediately; exit 68 alone
+is not retryable because it can also mean missing notarization or an unexpected
+ticket-service response. Exhaustion propagates the final failing exit code.
+
+Retries repeat only the failed stapler operation, not signing, notarization
+submission, or the build. All signature, ticket, and Gatekeeper checks remain
+required; a network failure never turns verification into success.
+
 ## Dotnet-tool package signing constraints
 
 The native `aspire` binary has to be signed/notarized on the OS/arch-specific native jobs. That means the macOS native job can produce a signed/notarized `aspire` binary and archive, but it cannot produce a signed `.nupkg` because NuGet package signing only happens on Windows.
@@ -36,6 +54,14 @@ If the macOS job produced a tool `.nupkg` from an unsigned binary and the main W
 The tool packaging flow therefore extracts the signed `aspire` binary from the signed native archive and packs that into the RID-specific tool `.nupkg`. This produces an unsigned `.nupkg` that contains the signed `aspire` CLI; the `.nupkg` itself is signed later by the main Windows job.
 
 Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, extracting from the native archive gives the same unsigned ELF payload, and the resulting NuGet packages are signed later as packages by the main Windows build.
+
+## Native AOT Dashboard package signing
+
+All seven Dashboard SDK NuGet packages follow the CLI package-signing path: `assemble` stages them together in `Shipping` before its Windows signing pass. There is no second Dashboard staging pass after signing. When NuGet signing is enabled, this ensures Linux packages receive NuGet signatures even though Linux native jobs skip ELF signing.
+
+NuGet signing follows `PostBuildSign` in `eng/pipelines/common-variables.yml`: release-branch and manually queued official builds set it to `false`, enabling Arcade's default package-signing inputs. Automatic main builds set it to `true`, excluding NuGet packages from in-build signing; native executable and npm signing are selected separately.
+
+Assembly verifies every staged NuGet release package's signature before publishing build artifacts only when real signing is enabled and `PostBuildSign` is not `true`. This matches package-signing selection rather than assuming that a real-signed build signs every artifact. The unsigned `*.symbols.nupkg` files also staged in `Shipping` are excluded because they are symbol-server inputs, not NuGet release packages.
 
 ## Nix flake packaging
 

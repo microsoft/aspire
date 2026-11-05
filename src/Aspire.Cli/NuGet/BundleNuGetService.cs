@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
@@ -27,6 +28,7 @@ internal sealed record NuGetSourceInfo(
     bool HasClientCertificates)
 {
     public bool IsCliManaged { get; init; }
+    public bool IsIntegrationSource { get; init; }
 }
 
 internal sealed record NuGetPackageSourceMapping(
@@ -84,16 +86,19 @@ internal sealed class BundleNuGetService : INuGetService
 {
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly INuGetClient _nuGetClient;
+    private readonly IConfigurationService _configurationService;
 
     internal Func<byte[]> SourceIdentityKeyFactory { get; init; }
         = static () => RandomNumberGenerator.GetBytes(NuGetSourceIdentity.KeySizeInBytes);
 
     public BundleNuGetService(
         ILogger<BundleNuGetService> logger,
-        INuGetClient nuGetClient)
+        INuGetClient nuGetClient,
+        IConfigurationService configurationService)
     {
         _logger = logger;
         _nuGetClient = nuGetClient;
+        _configurationService = configurationService;
     }
 
     public async Task<string> RestorePackagesAsync(
@@ -199,6 +204,12 @@ internal sealed class BundleNuGetService : INuGetService
     internal NuGetSettingsInfo GetNuGetSettings(
         string workingDirectory,
         CancellationToken cancellationToken)
+        => GetNuGetSettings(workingDirectory, protectIntegrationSources: true, cancellationToken);
+
+    private NuGetSettingsInfo GetNuGetSettings(
+        string workingDirectory,
+        bool protectIntegrationSources,
+        CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
         cancellationToken.ThrowIfCancellationRequested();
@@ -210,7 +221,32 @@ internal sealed class BundleNuGetService : INuGetService
                 $"The NuGet source identity key must be {NuGetSourceIdentity.KeySizeInBytes} bytes.");
         }
 
-        return _nuGetClient.GetSettings(workingDirectory, sourceIdentityKey);
+        var settings = _nuGetClient.GetSettings(workingDirectory, sourceIdentityKey);
+        if (!protectIntegrationSources)
+        {
+            return settings;
+        }
+
+        var integrationSourceIdentities = IntegrationSourceConfiguration.GetConfiguredSources(
+                new DirectoryInfo(workingDirectory), new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)))
+            .Select(source => NuGetSourceIdentity.Compute(source, sourceIdentityKey))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var sources = settings.Sources.Select(source => source with
+        {
+            IsIntegrationSource = integrationSourceIdentities.Contains(source.Identity)
+        }).ToArray();
+        var protectedSourceKeys = sources.Where(static source => source.IsIntegrationSource)
+            .Select(static source => source.Name).Order(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        return settings with
+        {
+            Sources = sources,
+            // Update transactions must notice changes to retention policy as well as NuGet.config.
+            CacheIdentity = protectedSourceKeys.Length == 0 ? settings.CacheIdentity :
+                CombineCacheIdentities(settings.CacheIdentity,
+                    JsonSerializer.Serialize(protectedSourceKeys, JsonSourceGenerationContext.Default.StringArray))
+        };
     }
 
     internal NuGetConfiguration BuildConfiguration(
@@ -218,12 +254,13 @@ internal sealed class BundleNuGetService : INuGetService
         string workloadId,
         PackageMapping[]? selectedMappings,
         bool restrictToSelectedSources,
+        bool overrideIntegrationSources,
         string? packageScopedAppendSource = null,
         bool hasAuthoritativeAspirePolicy = false,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workingDirectory);
-        var settings = GetNuGetSettings(workingDirectory.FullName, cancellationToken);
+        var settings = GetNuGetSettings(workingDirectory.FullName, protectIntegrationSources: !overrideIntegrationSources, cancellationToken);
         selectedMappings = ResolvePackageMappings(workingDirectory, settings, selectedMappings);
         return NuGetConfigurationBuilder.Build(
             settings,
@@ -242,22 +279,26 @@ internal sealed class BundleNuGetService : INuGetService
                 PackageSourceIdentity.IsNamedSourceReference(mapping.Source) &&
                 settings.Sources.Any(source => string.Equals(source.Name, mapping.Source, StringComparison.OrdinalIgnoreCase))
                     ? mapping.Source
-                    : PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, workingDirectory)))
+                    : PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, workingDirectory))
+            {
+                SourceKey = mapping.SourceKey
+            })
             .ToArray();
 
     internal bool IsPackageSourceMappingEnabled(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(workingDirectory);
-        return GetNuGetSettings(workingDirectory.FullName, cancellationToken).PackageSourceMappings.Count > 0;
+        return GetNuGetSettings(workingDirectory.FullName, protectIntegrationSources: false, cancellationToken).PackageSourceMappings.Count > 0;
     }
 
     internal NuGetConfiguration BuildAppHostConfiguration(
         DirectoryInfo workingDirectory,
         string workloadId,
         PackageMapping[]? selectedMappings,
+        bool overrideIntegrationSources,
         CancellationToken cancellationToken)
     {
-        var settings = GetNuGetSettings(workingDirectory.FullName, cancellationToken);
+        var settings = GetNuGetSettings(workingDirectory.FullName, protectIntegrationSources: !overrideIntegrationSources, cancellationToken);
         return DotNetAppHostNuGetConfigBuilder.Build(
             settings, workloadId, ResolvePackageMappings(workingDirectory, settings, selectedMappings));
     }
@@ -292,6 +333,7 @@ internal sealed class BundleNuGetService : INuGetService
             workingDirectory,
             workloadId,
             mappings is { Length: > 0 } ? mappings : null,
+            overrideIntegrationSources: !string.IsNullOrWhiteSpace(packageSourceOverride),
             cancellationToken);
     }
 
@@ -334,7 +376,7 @@ internal sealed class BundleNuGetService : INuGetService
         var directory = Directory.CreateTempSubdirectory("aspire-package-acquisition-");
         try
         {
-            var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, cancellationToken);
+            var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, protectIntegrationSources: false, cancellationToken);
             await _nuGetClient.AcquirePackageAsync(
                 package, directory.FullName,
                 configuration.EffectiveWorkingDirectory.FullName, globalPackagesFolder,
@@ -425,6 +467,7 @@ internal sealed class BundleNuGetService : INuGetService
             workloadId: "package-search",
             selectedMappings.Length == 0 ? null : selectedMappings,
             restrictToSelectedSources,
+            overrideIntegrationSources: restrictToSelectedSources,
             hasAuthoritativeAspirePolicy: true,
             cancellationToken: cancellationToken);
 

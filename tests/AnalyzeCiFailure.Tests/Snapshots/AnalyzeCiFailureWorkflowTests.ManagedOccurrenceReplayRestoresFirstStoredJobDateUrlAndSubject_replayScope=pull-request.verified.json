@@ -1,0 +1,36 @@
+﻿{
+  "row": "| 2026-10-21 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Tests ` | #42 |",
+  "occurrences": [
+    {
+      "run_id": 123,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/123",
+      "job": "Tests",
+      "observed_at": "2026-10-21T01:00:00Z",
+      "pr_number": 42,
+      "tests": [
+        {
+          "name": "Tests.Method(value: 1/2)",
+          "job_id": 123,
+          "job": "Tests",
+          "error": "Trusted debugger timeout",
+          "stack_trace": "",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "results.trx",
+          "result_format": "trx"
+        },
+        {
+          "name": "Tests.Other",
+          "job_id": 123,
+          "job": "Tests",
+          "error": "Trusted debugger timeout",
+          "stack_trace": "",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "results.trx",
+          "result_format": "trx"
+        }
+      ]
+    }
+  ]
+}

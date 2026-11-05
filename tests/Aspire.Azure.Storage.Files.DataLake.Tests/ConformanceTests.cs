@@ -4,7 +4,6 @@
 using Aspire.Components.ConformanceTests;
 using Azure.Identity;
 using Azure.Storage.Files.DataLake;
-using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +14,7 @@ namespace Aspire.Azure.Storage.Files.DataLake.Tests;
 public sealed class ConformanceTests : ConformanceTests<DataLakeServiceClient, AzureDataLakeSettings>
 {
     private const string ConnectionName = "data-lake";
-    private static readonly Lazy<bool> s_canConnectToServer = new(CanConnect);
+    private static readonly Lazy<bool> s_canConnectToServer = new(() => GetCanConnectToServer(CanConnect));
     public const string ServiceUri = "https://aspirestoragetests.dfs.core.windows.net/";
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
@@ -111,6 +110,16 @@ public sealed class ConformanceTests : ConformanceTests<DataLakeServiceClient, A
     protected override void SetHealthCheck(AzureDataLakeSettings options, bool enabled)
         => options.DisableHealthChecks = !enabled;
 
+    // When the server isn't reachable, make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureDataLakeSettings options)
+    {
+        if (!CanConnectToServer)
+        {
+            options.Credential = UnavailableTokenCredential.Instance;
+        }
+    }
+
     protected override void SetTracing(AzureDataLakeSettings options, bool enabled)
         => options.DisableTracing = !enabled;
 
@@ -119,11 +128,11 @@ public sealed class ConformanceTests : ConformanceTests<DataLakeServiceClient, A
 
     [Fact]
     public void TracingEnablesTheRightActivitySource()
-        => RemoteExecutor.Invoke(() => ActivitySourceTest(key: null)).Dispose();
+        => RemoteInvokeWithLogging(() => ActivitySourceTest(key: null), Output);
 
     [Fact]
     public void TracingEnablesTheRightActivitySource_Keyed()
-        => RemoteExecutor.Invoke(() => ActivitySourceTest(key: "key")).Dispose();
+        => RemoteInvokeWithLogging(() => ActivitySourceTest(key: "key"), Output);
 
     private static bool CanConnect()
     {
