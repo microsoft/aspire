@@ -1,0 +1,45 @@
+🔐 Trusting certificates...
+🚨 Developer certificates may not be fully trusted (trust exit code was:
+   PartiallyFailedToTrustTheCertificate).
+🛠️ Building AppHost... DotnetProjectWatch.AppHost.csproj
+Connecting to AppHost...
+Starting dashboard...
+
+     AppHost:  DotnetProjectWatch.AppHost.csproj
+
+   Dashboard:  http://localhost:15850/login?t=<redacted>
+
+        Logs:  /root/.aspire/logs/cli_20261105T213415_bb77b75f.log
+
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to
+               apply changes.
+
+               Press CTRL+C to stop the AppHost and exit.
+21:34:35 👀 Watching api, worker for changes. Edits are hot reloaded; changes
+that need a restart restart only the affected service.
+21:35:26 🔥 Hot reload applied to api in 3418 ms (Program.cs).
+21:35:33 🔥 Hot reload applied to api in 145 ms (Program.cs).
+21:35:35 🔥 Hot reload applied to api in 97 ms (Program.cs).
+21:35:38 🔥 Hot reload applied to api in 28 ms (Program.cs).
+21:35:40 🔥 Hot reload applied to api, worker in 34 ms (Greeter.cs).
+21:35:49 ❌ Build error in api: Program.cs(8,43): CS0117: 'Greeter' does not
+contain a definition for 'Mesage'. The app keeps running the last good code; fix
+it and save.
+21:35:57 ✅ Fixed. 🔥 Hot reload applied to api in 28 ms (Program.cs).
+21:36:09 ⌚ Rebuilding api…
+21:36:14 🔄 Restarting api to apply changes that can't be hot reloaded.
+21:36:14 🔥 Hot reload applied to api, worker in 5201 ms.
+21:36:55 ⌚ Rebuilding api…
+21:37:00 🔄 Restarting api to apply changes that can't be hot reloaded.
+21:37:00 🔥 Hot reload applied to api, worker in 5229 ms.
+21:37:03 💥 api exited with code 3. Save a change or use Restart to relaunch it.
+21:37:06 🔥 Hot reload applied to api in 32 ms (Program.cs).
+21:37:07 ▶️ api is running again.
+21:37:58 🔥 Hot reload applied to api in 266 ms (Program.cs).
+
+🛑 Stopping Aspire.
+
+A new version of Aspire is available: 17.0.0-preview.1.26555.3
+To update, run: aspire update
+For more information, see: https://aka.ms/aspire/update
+
