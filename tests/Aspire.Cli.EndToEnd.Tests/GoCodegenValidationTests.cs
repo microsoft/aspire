@@ -28,7 +28,6 @@ public sealed class GoCodegenValidationTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireInitGoAppHostAsync(counter);
 

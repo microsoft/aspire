@@ -27,7 +27,6 @@ public sealed class GoPublishTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireInitGoAppHostAsync(counter);
         await auto.AspireAddPackageAsync("Aspire.Hosting.Docker", counter);
@@ -58,7 +57,6 @@ public sealed class GoPublishTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireInitGoAppHostAsync(counter);
         await auto.AspireAddPackageAsync("Aspire.Hosting.Docker", counter);
@@ -91,7 +89,6 @@ public sealed class GoPublishTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         const string projectName = "GoPublishApp";
         await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.GoStarter);
