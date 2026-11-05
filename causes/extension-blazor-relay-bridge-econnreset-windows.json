@@ -10,6 +10,13 @@
       "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
       "observed_at": "2026-11-05T02:51:54Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 41969207688,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41969207688",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-05T06:03:08Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21791"
