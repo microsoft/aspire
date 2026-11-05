@@ -6,12 +6,14 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Health;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Tests;
@@ -21,6 +23,132 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task LaunchGroupLateStartWaitsForNewReadinessAfterAllReplicasStop(bool replicas, bool previousReadyFailed, bool healthCheck)
+    {
+        using var builder = CreateBuilder();
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
+        builder.Configuration["Aspire:LaunchGroup"] = "selected";
+        var readyEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var rootEntered = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var readyCount = 0;
+        var dependency = builder.AddResource(new CustomResource("dependency")).WithLaunchGroup("other")
+            .OnResourceReady(async (_, _, cancellationToken) =>
+            {
+                if (Interlocked.Increment(ref readyCount) == 1)
+                {
+                    if (previousReadyFailed)
+                    {
+                        throw new InvalidOperationException("Previous readiness failed.");
+                    }
+                    return;
+                }
+
+                readyEntered.TrySetResult();
+                await releaseReady.Task.WaitAsync(cancellationToken);
+            });
+        if (replicas)
+        {
+            dependency.WithAnnotation(new DcpInstancesAnnotation([
+                new DcpInstance("dependency-first", "first", 0),
+                new DcpInstance("dependency-second", "second", 1)
+            ]));
+        }
+        if (healthCheck)
+        {
+            builder.Services.AddHealthChecks().AddCheck("dependency-check", () => HealthCheckResult.Healthy());
+            dependency.WithHealthCheck("dependency-check");
+        }
+        dependency.WithCommand(KnownResourceCommands.StartCommand, "Start", async context =>
+        {
+            await context.Services.GetRequiredService<ResourceNotificationService>().PublishUpdateAsync(
+                dependency.Resource, context.ResourceName, snapshot => snapshot with { State = KnownResourceStates.Running });
+            return CommandResults.Success();
+        });
+        var root = builder.AddResource(new CustomResource("root")).WithLaunchGroup("other").WaitFor(dependency);
+        root.WithCommand(KnownResourceCommands.StartCommand, "Start", async context =>
+        {
+            await readyEntered.Task.WaitAsync(context.CancellationToken);
+            var notifications = context.Services.GetRequiredService<ResourceNotificationService>();
+            foreach (var name in dependency.Resource.GetResolvedResourceNames())
+            {
+                // Start the dependent's wait only after the restarted monitor reports running/healthy,
+                // while its new readiness callback is still suspended, so an old task cannot hide behind a state wait.
+                await notifications.WaitForResourceAsync(dependency.Resource.Name,
+                    e => e.ResourceId == name && e.Snapshot.State?.Text == KnownResourceStates.Running &&
+                    (!healthCheck || e.Snapshot.HealthReports.Any(report => report.Name == "dependency-check" && report.Status == HealthStatus.Healthy)),
+                    context.CancellationToken);
+            }
+            var wait = notifications.WaitForDependenciesAsync(root.Resource, context.CancellationToken);
+            rootEntered.TrySetResult(wait);
+            await wait;
+            return CommandResults.Success();
+        });
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        var healthService = app.Services.GetRequiredService<ResourceHealthCheckService>();
+        await healthService.StartAsync(TestContext.Current.CancellationToken);
+        Task<ExecuteCommandResult>? start = null;
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        try
+        {
+            await app.ResourceNotifications.PublishUpdateAsync(dependency.Resource,
+                snapshot => snapshot with { State = KnownResourceStates.Running });
+            foreach (var name in dependency.Resource.GetResolvedResourceNames())
+            {
+                var initial = await app.ResourceNotifications.WaitForResourceAsync(dependency.Resource.Name,
+                    e => e.ResourceId == name && e.Snapshot.ResourceReadyEvent is not null &&
+                        (!healthCheck || e.Snapshot.HealthReports.Any(report => report.Name == "dependency-check" && report.Status == HealthStatus.Healthy)),
+                    cts.Token).DefaultTimeout();
+                Assert.Equal(previousReadyFailed, initial.Snapshot.ResourceReadyEvent!.EventTask.IsFaulted);
+            }
+
+            var previousMonitor = healthService.GetResourceMonitorState(dependency.Resource.Name)!;
+            var monitorStopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var registration = previousMonitor.CancellationToken.Register(() => monitorStopped.TrySetResult());
+            await app.ResourceNotifications.PublishUpdateAsync(dependency.Resource,
+                snapshot => snapshot with { State = KnownResourceStates.Exited, ExitCode = 0 });
+            await monitorStopped.Task.DefaultTimeout();
+            await app.ResourceNotifications.PublishUpdateAsync(root.Resource,
+                snapshot => snapshot with { State = KnownResourceStates.NotStarted });
+
+            start = app.ResourceCommands.ExecuteCommandAsync(root.Resource, KnownResourceCommands.StartCommand, cts.Token);
+            var wait = await rootEntered.Task.DefaultTimeout();
+            Assert.False(wait.IsCompleted);
+            foreach (var name in dependency.Resource.GetResolvedResourceNames())
+            {
+                Assert.True(app.ResourceNotifications.TryGetCurrentState(name, out var current));
+                Assert.Null(current.Snapshot.ResourceReadyEvent);
+            }
+            Assert.NotSame(previousMonitor, healthService.GetResourceMonitorState(dependency.Resource.Name));
+
+            releaseReady.TrySetResult();
+            var result = await start.DefaultTimeout();
+            Assert.True(result.Success, result.Message);
+            Assert.Equal(2, readyCount);
+        }
+        finally
+        {
+            releaseReady.TrySetResult();
+            await cts.CancelAsync();
+            if (start is not null)
+            {
+                await start.DefaultTimeout();
+            }
+            await healthService.StopAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        }
+    }
+
     [Theory]
     [InlineData(WaitType.WaitUntilStarted)]
     [InlineData(WaitType.WaitUntilHealthy)]
@@ -235,7 +363,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             Assert.True(app.ResourceNotifications.TryGetCurrentState(dependency.Resource.Name, out var current));
             Assert.Equal(KnownResourceStates.Starting, current.Snapshot.State?.Text);
             Assert.Null(current.Snapshot.ExitCode);
-            Assert.True(current.Snapshot.ResourceReadyEvent?.EventTask.IsCompletedSuccessfully);
+            Assert.Null(current.Snapshot.ResourceReadyEvent);
             Assert.True(app.ResourceNotifications.TryGetCurrentState(waitedResource.Resource.Name, out var waited));
             Assert.Equal(KnownResourceStates.Starting, waited.Snapshot.State?.Text);
 

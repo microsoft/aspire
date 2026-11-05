@@ -54,9 +54,13 @@ public class ResourceNotificationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task PreparedReplicaStartRetainsModelReadinessWhileSiblingRemainsRunning(bool healthCheck)
+    [InlineData("Running", false)]
+    [InlineData("Running", true)]
+    [InlineData("Starting", false)]
+    [InlineData("Starting", true)]
+    [InlineData("Stopping", false)]
+    [InlineData("Stopping", true)]
+    public async Task PreparedReplicaStartRetainsModelReadinessWhileSiblingMonitorRemainsValid(string siblingState, bool healthCheck)
     {
         var resource = new ExecutableResource("resource", "unused", ".");
         resource.Annotations.Add(new DcpInstancesAnnotation([
@@ -64,17 +68,19 @@ public class ResourceNotificationTests
             new DcpInstance("resource-second", "second", 1)
         ]));
         var notifications = ResourceNotificationServiceTestHelpers.Create();
-        var ready = new EventSnapshot(Task.CompletedTask);
+        var readyTask = Task.CompletedTask;
         foreach (var name in resource.GetResolvedResourceNames())
         {
             await notifications.PublishUpdateAsync(resource, name, snapshot => snapshot with
             {
-                State = name == "resource-first" ? KnownResourceStates.Finished : KnownResourceStates.Running,
+                State = name == "resource-first" ? KnownResourceStates.Finished : siblingState,
                 ExitCode = name == "resource-first" ? 0 : null,
-                ResourceReadyEvent = ready,
+                ResourceReadyEvent = new EventSnapshot(readyTask),
                 HealthReports = healthCheck ? [new HealthReportSnapshot("health", HealthStatus.Healthy, null, null)] : []
             });
         }
+        Assert.True(notifications.TryGetCurrentState("resource-first", out var previous));
+        var ready = previous.Snapshot.ResourceReadyEvent;
         Assert.True(notifications.TryGetCurrentState("resource-second", out var sibling));
         using var pendingStart = await notifications.BeginResourceStartAsync(resource, "resource-first");
         Assert.True(notifications.TryGetCurrentState("resource-first", out var starting));
@@ -83,6 +89,7 @@ public class ResourceNotificationTests
         Assert.True(notifications.TryGetCurrentState("resource-second", out var unchangedSibling));
         Assert.Same(sibling.Snapshot, unchangedSibling.Snapshot);
 
+        await notifications.PublishUpdateAsync(resource, "resource-second", snapshot => snapshot with { State = KnownResourceStates.Running });
         notifications.CompleteResourceStart(resource, "resource-first");
         await notifications.PublishUpdateAsync(resource, "resource-first", snapshot => snapshot with
         {

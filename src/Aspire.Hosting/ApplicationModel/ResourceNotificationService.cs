@@ -889,14 +889,21 @@ public class ResourceNotificationService : IDisposable
             await PublishUpdateAsync(resource, resourceId, snapshot =>
             {
                 notificationState.PendingStart = attempt;
+                // Readiness callbacks are model-wide. A nonterminal sibling with the same ready task
+                // keeps that monitor valid, even while starting/stopping. A freshly prepared sibling
+                // has already cleared its old task and must not preserve another replica's stale readiness.
+                var retainReadiness = resource.GetResolvedResourceNames().Any(name =>
+                    name != resourceId &&
+                    TryGetCurrentState(name, out var sibling) &&
+                    !KnownResourceStates.TerminalStates.Contains(sibling.Snapshot.State?.Text) &&
+                    ReferenceEquals(sibling.Snapshot.ResourceReadyEvent?.EventTask, snapshot.ResourceReadyEvent?.EventTask));
                 return snapshot with
                 {
                     State = KnownResourceStates.Starting,
                     ExitCode = null,
                     StartTimeStamp = null,
                     StopTimeStamp = null,
-                    // Readiness callbacks are model-wide; a sibling replica can keep that monitor alive.
-                    // Retain its event task and use the fresh state/health reports to gate this instance.
+                    ResourceReadyEvent = retainReadiness ? snapshot.ResourceReadyEvent : null,
                     HealthReports = [.. snapshot.HealthReports.Select(report => new HealthReportSnapshot(report.Name, null, null, null))]
                 };
             }).ConfigureAwait(false);
