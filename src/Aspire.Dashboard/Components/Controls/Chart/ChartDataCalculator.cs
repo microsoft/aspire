@@ -225,15 +225,10 @@ internal sealed class ChartDataCalculator
                 var metric = dimensionValues[i];
 
                 // An observation is at the end of its export interval, which puts it in exactly one chart interval so it
-                // can't be counted twice. Values are stored chronologically, so everything before this one was also
-                // observed before the interval.
+                // can't be counted twice. Values are ordered by start, and an instrument's integer and double values
+                // are rolled up separately, so their ends aren't in order. An earlier end doesn't end the search.
                 var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
-                if (metricEnd <= start)
-                {
-                    break;
-                }
-
-                if (metricEnd > end)
+                if (metricEnd <= start || metricEnd > end)
                 {
                     continue;
                 }
@@ -313,11 +308,11 @@ internal sealed class ChartDataCalculator
                 var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
                 var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
 
-                // Values are stored chronologically (oldest at index 0). We iterate newest-first,
-                // so once a metric ends before our window starts, all remaining are older — stop.
+                // Values are ordered by start, oldest first. An instrument's integer and double values are rolled up
+                // separately, so their ends aren't in order and an earlier end doesn't end the search.
                 if (metricEnd < start)
                 {
-                    break;
+                    continue;
                 }
 
                 if (metric is HistogramValue histogram)

@@ -107,18 +107,22 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
     private async Task<OtlpInstrumentData> GetRolledUpDeltaInstrumentAsync(params long[] values)
     {
-        using var repositoryContext = await CreateRepositoryAsync();
         var start = s_testTime.AddMinutes(1);
-        var sum = new Sum { AggregationTemporality = AggregationTemporality.Delta, IsMonotonic = true };
-        for (var i = 0; i < values.Length; i++)
+        var points = values.Select((value, i) => new NumberDataPoint
         {
-            sum.DataPoints.Add(new NumberDataPoint
-            {
-                AsInt = values[i],
-                StartTimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i)),
-                TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i + 1))
-            });
-        }
+            AsInt = value,
+            StartTimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i)),
+            TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i + 1))
+        });
+
+        return await GetDeltaInstrumentAsync(points, start, start.AddMinutes(1), TimeSpan.FromMinutes(1), includeExemplars: false);
+    }
+
+    private async Task<OtlpInstrumentData> GetDeltaInstrumentAsync(IEnumerable<NumberDataPoint> points, DateTime startTime, DateTime endTime, TimeSpan dataPointInterval, bool includeExemplars)
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var sum = new Sum { AggregationTemporality = AggregationTemporality.Delta, IsMonotonic = true };
+        sum.DataPoints.AddRange(points);
 
         var addContext = new AddContext();
         await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
@@ -144,13 +148,83 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             ResourceKey = resource.ResourceKey,
             MeterName = "test-meter",
             InstrumentName = "test",
-            StartTime = start,
-            EndTime = start.AddMinutes(1),
-            DataPointInterval = TimeSpan.FromMinutes(1)
+            StartTime = startTime,
+            EndTime = endTime,
+            DataPointInterval = dataPointInterval,
+            IncludeExemplars = includeExemplars
         }, CancellationToken.None);
         Assert.NotNull(instrument);
 
         return instrument;
+    }
+
+    private static NumberDataPoint CreateDeltaPoint(long value, DateTime start, DateTime end) => new()
+    {
+        AsInt = value,
+        StartTimeUnixNano = DateTimeToUnixNanoseconds(start),
+        TimeUnixNano = DateTimeToUnixNanoseconds(end)
+    };
+
+    [Fact]
+    public async Task GetInstrumentAsync_Rollup_ExcludesDeltasObservedAfterWindow()
+    {
+        var start = s_testTime.AddMinutes(1);
+        var windowEnd = start.AddMilliseconds(15_500);
+
+        // A paused chart's window ends at 15.5s. An export after it must not join the rollup of the exports in it.
+        var instrument = await GetDeltaInstrumentAsync(
+            [
+                CreateDeltaPoint(4, start.AddMilliseconds(15_000), start.AddMilliseconds(15_200)),
+                CreateDeltaPoint(6, start.AddMilliseconds(15_200), start.AddMilliseconds(15_400)),
+                CreateDeltaPoint(99, start.AddMilliseconds(15_400), start.AddMilliseconds(15_600))
+            ],
+            start, windowEnd, TimeSpan.FromSeconds(1), includeExemplars: false);
+
+        Assert.True(ChartDataCalculator.TryCalculateDeltaPoint(instrument.Dimensions, new DateTimeOffset(start, TimeSpan.Zero), new DateTimeOffset(windowEnd, TimeSpan.Zero), out var total));
+        Assert.Equal(10, total);
+    }
+
+    [Fact]
+    public async Task GetInstrumentAsync_Rollup_SparseDeltaStaysInItsInterval()
+    {
+        var start = s_testTime.AddMinutes(1);
+        var windowEnd = start.AddSeconds(180);
+
+        // The second export's stored start is the first one's end, two minutes before it was observed.
+        var instrument = await GetDeltaInstrumentAsync(
+            [
+                CreateDeltaPoint(4, start, start.AddSeconds(10)),
+                CreateDeltaPoint(6, start.AddSeconds(170), start.AddSeconds(180))
+            ],
+            start, windowEnd, TimeSpan.FromMinutes(1), includeExemplars: false);
+
+        var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(180));
+        var increases = calculator.CalculateCounterIncreaseValues(instrument.Dimensions, new DateTimeOffset(windowEnd, TimeSpan.Zero), OtlpAggregationTemporality.Delta);
+
+        Assert.Equal([null, 4, null, 6, null], increases);
+    }
+
+    [Fact]
+    public async Task GetInstrumentAsync_Rollup_PromotedIntegerSumKeepsItsExemplars()
+    {
+        var start = s_testTime.AddMinutes(1);
+        var withExemplar = CreateDeltaPoint(4611686018427387904, start, start.AddSeconds(1));
+        withExemplar.Exemplars.Add(CreateExemplar(start.AddSeconds(1), 1));
+
+        // The integer sum is too large for an integer and is returned as a double, next to the double rollup.
+        var instrument = await GetDeltaInstrumentAsync(
+            [
+                withExemplar,
+                CreateDeltaPoint(4611686018427387904, start.AddSeconds(1), start.AddSeconds(2)),
+                new NumberDataPoint { AsDouble = 1.5, StartTimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(2)), TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(3)) }
+            ],
+            start, start.AddMinutes(1), TimeSpan.FromMinutes(1), includeExemplars: true);
+
+        var values = Assert.Single(instrument.Dimensions).Values;
+        Assert.Equal(2, values.Count);
+        var promoted = Assert.Single(values, value => value is MetricValue<double> { Value: > 1e18 });
+        Assert.Single(promoted.Exemplars);
+        Assert.Empty(Assert.Single(values, value => value is MetricValue<double> { Value: 1.5 }).Exemplars);
     }
 
     [Fact]

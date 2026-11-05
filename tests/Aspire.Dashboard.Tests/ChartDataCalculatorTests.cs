@@ -424,6 +424,24 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void TryCalculatePoints_IntegerAndDoubleRollupsWithEndsOutOfOrder_FindBothRows()
+    {
+        // Values are ordered by start. An instrument's integer and double values are rolled up separately, so a later
+        // row can end before an earlier one.
+        var dimension = new DimensionScope(capacity: 100, []);
+        var start = s_startTime.UtcDateTime;
+        dimension.Values.Add(new MetricValue<long>(10, start, start.AddSeconds(11)));
+        dimension.Values.Add(new MetricValue<double>(5, start.AddSeconds(1), start.AddSeconds(9)));
+        var bucketStart = s_startTime.AddSeconds(10);
+        var bucketEnd = s_startTime.AddSeconds(20);
+
+        Assert.True(ChartDataCalculator.TryCalculateDeltaPoint([dimension], bucketStart, bucketEnd, out var delta));
+        Assert.Equal(10, delta);
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], bucketStart, bucketEnd, out var level));
+        Assert.Equal(10, level);
+    }
+
+    [Fact]
     public void TryCalculatePoint_NegativeLevel_IsPreserved()
     {
         var dimension = new DimensionScope(capacity: 100, []);

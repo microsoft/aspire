@@ -329,12 +329,23 @@ public class ApplicationSummaryTests : DashboardTestContext
     {
         var context = await RenderLiveSummaryAsync(GroupOverview.Summary);
         var cut = context.Summary;
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-chart-bar")), DefaultWaitTimeout);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".home-chart-bar"));
+            Assert.All(cut.FindAll(".home-stat-value").Skip(1), stat => Assert.NotEqual("–", stat.TextContent));
+        }, DefaultWaitTimeout);
+        var requestRate = cut.Find(".home-stat-value").TextContent;
 
         context.Clock.UtcNow += TimeSpan.FromMinutes(16);
         context.Timers.Advance(TimeSpan.FromSeconds(30));
 
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".home-chart-bar")), DefaultWaitTimeout);
+        // The request rate, error rate and latency expire with the request, not only the chart.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".home-chart-bar"));
+            Assert.Equal(["–", "–"], cut.FindAll(".home-stat-value").Skip(1).Select(stat => stat.TextContent));
+            Assert.NotEqual(requestRate, cut.Find(".home-stat-value").TextContent);
+        }, DefaultWaitTimeout);
     }
 
     [Fact]
