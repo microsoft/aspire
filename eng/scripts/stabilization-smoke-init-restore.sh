@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stabilization smoke test: aspire new aspire-empty + aspire restore against the locally-built
+# Stabilization smoke test: C#, Go, and Java starters + aspire restore against the locally-built
 # stable Aspire feed.
 #
 # Purpose
@@ -29,11 +29,12 @@
 #     Aspire.* packages.
 #   * Restore wiring — that `aspire restore` succeeds end-to-end for the generated project tree.
 #
-# Coverage NOTE: today `aspire new aspire-empty` resolves to a single-file `apphost.cs` shape
+# Coverage NOTE: `aspire new aspire-empty` resolves to a single-file `apphost.cs` shape
 # whose only NuGet dependency is `Aspire.AppHost.Sdk` (which transitively pulls
 # Aspire.Hosting.AppHost / Aspire.Hosting). So this smoke validates that the SDK reference path
-# is wired correctly through to the local stable feed — NOT that every Aspire integration
-# package restores. Per-integration NU5104 (stable depends on preview) detection comes from the
+# is wired correctly through to the local stable feed. Go and Java starters additionally validate
+# the hosting package versions emitted by guest-language templates, not every integration.
+# Per-integration NU5104 (stable depends on preview) detection comes from the
 # previous step in the stabilization_check job (the stabilized pack). The two are complementary.
 #
 # Aspire.* packages MUST come from the local stable feed (so missing/preview-only Aspire packages
@@ -121,6 +122,12 @@ WORK_DIR="$(mktemp -d -t aspire-stab-smoke-XXXXXXXX)"
 # Clean up on any exit; -f tolerates the dir being already gone if cleanup ran inside the script.
 trap 'rm -rf "$WORK_DIR"' EXIT
 echo "Work dir:      $WORK_DIR"
+
+# Do not let a previously extracted Aspire package hide a missing package in the stable feed.
+# The CLI's package override also applies to the guest AppHost server/codegen restore, whose
+# temporary project is outside WORK_DIR and therefore cannot discover its NuGet.config.
+export NUGET_PACKAGES="$WORK_DIR/.nuget/packages"
+export ASPIRE_CLI_PACKAGES="$LOCAL_FEED"
 
 # Build the CLI project up-front (under stabilization) so subsequent `dotnet run` invocations
 # from inside the temp dir don't trigger a build in the test working directory (which would
@@ -215,6 +222,31 @@ APPHOST_SDK_VERSION=$(basename "$APPHOST_SDK_NUPKG" .nupkg)
 APPHOST_SDK_VERSION="${APPHOST_SDK_VERSION#Aspire.AppHost.Sdk.}"
 echo "  ✓ Pinned Aspire.AppHost.Sdk version: $APPHOST_SDK_VERSION (from $(basename "$APPHOST_SDK_NUPKG"))"
 
+# Exercise both guest starters even if one fails, so a preview-only hosting package does not
+# hide the other language's result. Keep the template's actual pins: rewriting them to whatever
+# exists in the feed would mask the stabilization regression this smoke is intended to catch.
+GUEST_FAILURES=()
+for language in go java; do
+    guest_dir="$WORK_DIR/${language}-starter"
+    echo ""
+    echo "→ Scaffolding and restoring $language starter against the stable feed"
+    if ! (
+        cd "$WORK_DIR"
+        run_aspire new "aspire-${language}-starter" \
+            --name "Stable${language}Starter" \
+            --output "$guest_dir" \
+            --source "$LOCAL_FEED" \
+            --version "$APPHOST_SDK_VERSION" \
+            --suppress-agent-init \
+            --localhost-tld false < /dev/null &&
+        cd "$guest_dir" &&
+        run_aspire restore < /dev/null
+    ); then
+        GUEST_FAILURES+=("$language")
+        echo "❌ $language starter could not restore its emitted package pins from the stable feed."
+    fi
+done
+
 echo ""
 echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_DIR --version $APPHOST_SDK_VERSION --language csharp --suppress-agent-init --localhost-tld false"
 # Flags chosen to make the command fully non-interactive (in addition to --non-interactive
@@ -287,5 +319,10 @@ echo "→ aspire restore (against local stable feed for Aspire packages, nuget.o
 # nearest NuGet.config (the one we wrote at $WORK_DIR) is the one used.
 (cd "$PROJECT_DIR" && run_aspire restore < /dev/null)
 
+if [ ${#GUEST_FAILURES[@]} -gt 0 ]; then
+    echo "❌ Guest starter stabilization failures: ${GUEST_FAILURES[*]}"
+    exit 1
+fi
+
 echo ""
-echo "✅ Stabilization smoke passed: aspire new aspire-empty + restore both succeeded against stable packages, with Aspire.AppHost.Sdk pinned to $APPHOST_SDK_VERSION."
+echo "✅ Stabilization smoke passed: C#, Go, and Java scaffolding and restore succeeded against stable packages pinned to $APPHOST_SDK_VERSION."

@@ -251,6 +251,11 @@ $templates = @(
         TemplateId = 'aspire-starter'
         ProjectName = 'AspireCliCsStarterSmoke'
         ExpectedResources = @('apiservice')
+    },
+    @{
+        TemplateId = 'aspire-go-starter'
+        ProjectName = 'AspireCliGoStarterSmoke'
+        ExpectedResources = @('api', 'cache')
     }
 )
 
