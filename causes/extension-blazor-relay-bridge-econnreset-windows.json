@@ -1,0 +1,15 @@
+{
+  "id": "extension-blazor-relay-bridge-econnreset-windows",
+  "type": "infra-failure",
+  "title": "VS Code extension unit tests on Windows fail with transient ECONNRESET in Blazor WASM debug relay stalled bridge test",
+  "error_pattern": "1) Blazor WASM debug relay closes a stalled bridge upgrade at the default launch deadline: Error: read ECONNRESET at TCP.onStreamRead",
+  "occurrences": [
+    {
+      "run_id": 41953320272,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41953320272",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-05T02:51:54Z",
+      "pr_number": 0
+    }
+  ]
+}

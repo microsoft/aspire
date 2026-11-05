@@ -1,0 +1,395 @@
+{
+  "run_id": 41953320272,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41953320272",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T02:51:54Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21624,
+    "title": "Coordinate project builds when the IDE cannot launch projects (fix VS Code E2E tree-actions flake)",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/coordinate-build-without-ide-project-capability",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21624",
+    "merged_at": "2026-11-05T02:09:23Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "7e34f6f994c92b3996c0f0c18eaae3e70cc7a6cb",
+    "failed_sha": "1fd02a2c0dd5ac777364e7ba4d3eceb3fde0291d",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "d698a4f9cb800649791da2b3d81c5850330072c1",
+        "message": "fix(ci): Fix internal build (#21774) ## Description Automatic main builds fail in the `Assemble + Publish` stage, during the `\uD83D\uDFE3Verify NuGet package signatures` step: ```text ##[section]Starting: \uD83D\uDFE3Verify NuGet package signatures Verifying signatures for 158 NuGet release packages. Verifying Aspire.AppHost.Sdk.17.0.0-preview.1.26553.7 error: NU3004: The package is not signed. Package signature validation failed. ##[error]PowerShell exited with code '1'. ``` The NuGet verifier checks for real signi",
+        "html_url": "https://github.com/microsoft/aspire/commit/d698a4f9cb800649791da2b3d81c5850330072c1",
+        "pull_request": {
+          "number": 21774,
+          "title": "fix(ci): Fix internal build",
+          "url": "https://github.com/microsoft/aspire/pull/21774",
+          "merged_at": "2026-11-04T22:27:26Z"
+        }
+      },
+      {
+        "sha": "e47d80e8df45ceec8e638c11eb2fb77b83b09a87",
+        "message": "Order Team App Needs attention by first readiness (#21726) ## Description The Aspire Team App's Needs attention section helps the team decide whose work to unblock next. It currently puts the most recently updated PRs first, can order equal timestamps by fetch completion, and uses a column-first layout that looks different at different widths. This changes Needs attention to a numbered, row-major queue ordered by **first-ever non-draft readiness**, oldest first: creation time for PRs opened read",
+        "html_url": "https://github.com/microsoft/aspire/commit/e47d80e8df45ceec8e638c11eb2fb77b83b09a87",
+        "pull_request": {
+          "number": 21726,
+          "title": "Order Team App Needs attention by first readiness",
+          "url": "https://github.com/microsoft/aspire/pull/21726",
+          "merged_at": "2026-11-04T23:10:39Z"
+        }
+      },
+      {
+        "sha": "1823c68700b4b1f99e81c99f792ac6fc8d2857c6",
+        "message": "Explain Team App card tags with accessible tooltips (#21773) ## Description Team App card tags can be difficult to interpret or can suggest the wrong owner needs to act. Add hover and keyboard-focus tooltips explaining computed tags and their expected next action, using the existing tooltip behavior so explanations remain visible outside clipped card sections. - Explain that **review debt** means the PR is not currently approved and its relevant activity is at least 14 days old—not that nobody h",
+        "html_url": "https://github.com/microsoft/aspire/commit/1823c68700b4b1f99e81c99f792ac6fc8d2857c6",
+        "pull_request": {
+          "number": 21773,
+          "title": "Explain Team App card tags with accessible tooltips",
+          "url": "https://github.com/microsoft/aspire/pull/21773",
+          "merged_at": "2026-11-04T23:16:47Z"
+        }
+      },
+      {
+        "sha": "3ceebfa41d1913a1ce944eaaf6ff375f1a1f19e1",
+        "message": "test(templates): Keep child-project builds on the isolated SDK (#21423) Remove inherited MSBuild SDK paths before AppHost fixture and caller overrides. Retain the shared dashboard sidebar/details assertions from main. Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/3ceebfa41d1913a1ce944eaaf6ff375f1a1f19e1",
+        "pull_request": {
+          "number": 21423,
+          "title": "[automated] test(templates): Fix child-project SDK isolation and dashboard checks",
+          "url": "https://github.com/microsoft/aspire/pull/21423",
+          "merged_at": "2026-11-04T23:22:20Z"
+        }
+      },
+      {
+        "sha": "f51026c664747a176334cb75f287f8a4710eedce",
+        "message": "Retry VS Code unit-test yarn install on dnceng npm 429 (#21657) ## Description `Run VS Code extension unit tests (Windows)` intermittently fails at `Install dependencies` when the dnceng npm feed returns **429 Too Many Requests**. Yarn 1.22 retries only 408 and 5xx responses ([`request-manager.js`](https://github.com/yarnpkg/yarn/blob/v1.22.22/src/util/request-manager.js)), so a single 429 fails the job. This PR gives that step the same bounded install retry that `extension-e2e-tests.yml` alread",
+        "html_url": "https://github.com/microsoft/aspire/commit/f51026c664747a176334cb75f287f8a4710eedce",
+        "pull_request": {
+          "number": 21657,
+          "title": "Retry VS Code unit-test yarn install on dnceng npm 429",
+          "url": "https://github.com/microsoft/aspire/pull/21657",
+          "merged_at": "2026-11-04T23:24:33Z"
+        }
+      },
+      {
+        "sha": "de70fbfb30f6c98225c61bfc7aab196d7249fdab",
+        "message": "Remove hidden 5s watch budget from MAUI build-queue state waits (#21614) ## Description Fixes #21494 `MauiBuildQueueTests.SingleResource_ShowsBuildingState` failed on main on Windows ([run 41113340061](https://github.com/microsoft/aspire/actions/runs/41113340061/job/124262057505)) with: ``` System.TimeoutException : The operation at ...\\MauiBuildQueueTests.cs:177 timed out after reaching the limit of 30000ms. ``` ### Root cause (test bug) The test watched for the `Building` state from a `Task.Ru",
+        "html_url": "https://github.com/microsoft/aspire/commit/de70fbfb30f6c98225c61bfc7aab196d7249fdab",
+        "pull_request": {
+          "number": 21614,
+          "title": "Remove hidden 5s watch budget from MAUI build-queue state waits",
+          "url": "https://github.com/microsoft/aspire/pull/21614",
+          "merged_at": "2026-11-04T23:26:26Z"
+        }
+      },
+      {
+        "sha": "eef8a45871db9ad8fcbb153451001a3819a81aca",
+        "message": "Make EnvironmentChecker timeout tests deterministic with TimeProvider (#21618) ## Description Fixes #19039 `EnvironmentCheckerTests.CheckAllAsync_TimedOutCheckReportsWarningAndContinues` fails intermittently on Windows and macOS CI (2026-08-06, 08-31, 09-11, 09-14) with `Expected: Completed`, `Actual: Environment check 'test-environment' timed out`. The failure is on the **second** check, which completes instantly. **Root cause:** `EnvironmentChecker.CheckAllAsync` armed each check's budget with",
+        "html_url": "https://github.com/microsoft/aspire/commit/eef8a45871db9ad8fcbb153451001a3819a81aca",
+        "pull_request": {
+          "number": 21618,
+          "title": "Make EnvironmentChecker timeout tests deterministic with TimeProvider",
+          "url": "https://github.com/microsoft/aspire/pull/21618",
+          "merged_at": "2026-11-04T23:27:06Z"
+        }
+      },
+      {
+        "sha": "10ffcd17e1ef365792d406ead25b906dafe2e185",
+        "message": "Avoid Add-Type compile in detached Windows null-stdin CLI test (#21549) ## Description `ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin` (Cli, windows-latest) occasionally times out at its 10s child-exit budget (#20844). ### Root cause The child PowerShell script compiled a P/Invoke stub with `Add-Type` just to call `GetStdHandle(STD_INPUT_HANDLE)`. On Windows PowerShell 5.1, `Add-Type` runs `csc.exe` and then loads a freshly written assembly from `%TEMP%`, which Defend",
+        "html_url": "https://github.com/microsoft/aspire/commit/10ffcd17e1ef365792d406ead25b906dafe2e185",
+        "pull_request": {
+          "number": 21549,
+          "title": "Avoid Add-Type compile in detached Windows null-stdin CLI test",
+          "url": "https://github.com/microsoft/aspire/pull/21549",
+          "merged_at": "2026-11-04T23:42:43Z"
+        }
+      },
+      {
+        "sha": "dfe1c11602202f828bf9179f083067022ff3fe3f",
+        "message": "Re-initialize metric charts when instrument unit, type or monotonicity changes (#21143) ## Description `ChartBase` decides between a full chart initialization and a data update using the instrument key (meter and instrument names), the dimension attributes, the theme and the display options. Switching resources can show an instrument with the same key and dimensions but a different unit, type or monotonicity. The chart then called `updateChart`, which keeps the previous instrument's trace names ",
+        "html_url": "https://github.com/microsoft/aspire/commit/dfe1c11602202f828bf9179f083067022ff3fe3f",
+        "pull_request": {
+          "number": 21143,
+          "title": "Re-initialize metric charts when instrument unit, type or monotonicity changes",
+          "url": "https://github.com/microsoft/aspire/pull/21143",
+          "merged_at": "2026-11-04T23:46:18Z"
+        }
+      },
+      {
+        "sha": "7b7ad4c49bd01cfbed4447a92a939cbccdb9fd24",
+        "message": "Run ServiceBus component tests sequentially to avoid Azure.Core AzureEventSourceListener race (#21526) ## Description Fixes #18815 `AspireServiceBusExtensionsTests.NamespaceWorksInConnectionStrings` intermittently failed with: ``` System.InvalidOperationException : Collection was modified; enumeration operation may not execute.    at System.Collections.Generic.List`1.Enumerator.MoveNext()    at Azure.Core.Diagnostics.AzureEventSourceListener..ctor(Action`1 log, EventLevel level)    at Microsoft.",
+        "html_url": "https://github.com/microsoft/aspire/commit/7b7ad4c49bd01cfbed4447a92a939cbccdb9fd24",
+        "pull_request": {
+          "number": 21526,
+          "title": "Run ServiceBus component tests sequentially to avoid Azure.Core AzureEventSourceListener race",
+          "url": "https://github.com/microsoft/aspire/pull/21526",
+          "merged_at": "2026-11-04T23:47:10Z"
+        }
+      },
+      {
+        "sha": "6d7d7274fc69c5f8c05abfac5363a35abca454a9",
+        "message": "Fix flaky ComputeRunArgumentsPopulatesRunPropertiesForSdkProject (NuGet audit warning on stderr) (#21502) ## Description Fixes an intermittent `Cli (windows-latest)` failure in `DotNetCliRunnerTests.ComputeRunArgumentsPopulatesRunPropertiesForSdkProject`. The test fails with a bare `Assert.True() Failure` even though the build succeeds and all of its properties are correct. ### Failures (attempt 1, `ci.yml`) | Run | Branch | Job | Failure | | --- | --- | --- | --- | | [40984409791](https://githu",
+        "html_url": "https://github.com/microsoft/aspire/commit/6d7d7274fc69c5f8c05abfac5363a35abca454a9",
+        "pull_request": {
+          "number": 21502,
+          "title": "Fix flaky ComputeRunArgumentsPopulatesRunPropertiesForSdkProject (NuGet audit warning on stderr)",
+          "url": "https://github.com/microsoft/aspire/pull/21502",
+          "merged_at": "2026-11-04T23:54:57Z"
+        }
+      },
+      {
+        "sha": "db67a89b8bc42cfb05abe549810e4f08d58114fc",
+        "message": "Fix DcpStartupPublishesDevTunnelUrls cold-start timeout flake (#21573) ## Description `DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls` fails intermittently on Windows. The stop-during-URL-callback cases (`useConsoleOutput: True, stopDuringUrlCallback: True`) time out while waiting for the tunnel port's URL callback: ``` System.TimeoutException : The operation at ...DevTunnelResourceBuilderExtensionsTests.cs:766 timed out after reaching the limit of 30000ms. ``` ### Root",
+        "html_url": "https://github.com/microsoft/aspire/commit/db67a89b8bc42cfb05abe549810e4f08d58114fc",
+        "pull_request": {
+          "number": 21573,
+          "title": "Fix DcpStartupPublishesDevTunnelUrls cold-start timeout flake",
+          "url": "https://github.com/microsoft/aspire/pull/21573",
+          "merged_at": "2026-11-04T23:55:23Z"
+        }
+      },
+      {
+        "sha": "1aa5a1c8a401d3143e4da58db9b7130ad1b58c42",
+        "message": "Avoid timeout and retry-delay deadline tie in SignalingFakeTimeProvider test (#21426) ## Description `TimerCreatedOnlySignalsRetryDelayAfterPollyTimeoutIsArmed` sometimes fails with `Assert.Throws() Failure: No exception was thrown` while expecting `TimeoutRejectedException` ([run 39247121741](https://github.com/microsoft/aspire/actions/runs/39247121741), Windows, `reuseTimeoutTimer: True`). The test advances fake time by the full 500 ms as soon as `SignalingFakeTimeProvider.TimerCreated` comple",
+        "html_url": "https://github.com/microsoft/aspire/commit/1aa5a1c8a401d3143e4da58db9b7130ad1b58c42",
+        "pull_request": {
+          "number": 21426,
+          "title": "Avoid timeout and retry-delay deadline tie in SignalingFakeTimeProvider test",
+          "url": "https://github.com/microsoft/aspire/pull/21426",
+          "merged_at": "2026-11-04T23:56:18Z"
+        }
+      },
+      {
+        "sha": "20474065376bf8b4153208c4d01cbf2496a95132",
+        "message": "Fix flaky ResourcesLayoutTests grouping-menu clicks racing the renderer dispatcher (#21516) ## Description Fixes #21515. `ResourcesLayoutTests` opened the resource pane's grouping menu with bUnit's synchronous `Click()` and then immediately read `AspireMenuButton.Items`. bUnit implements `Click()` as `_ = TriggerEventAsync(...)`, which dispatches through `renderer.Dispatcher.InvokeAsync`. When another thread holds the renderer dispatcher, the click is queued and `Click()` returns before `AspireM",
+        "html_url": "https://github.com/microsoft/aspire/commit/20474065376bf8b4153208c4d01cbf2496a95132",
+        "pull_request": {
+          "number": 21516,
+          "title": "Fix flaky ResourcesLayoutTests grouping-menu clicks racing the renderer dispatcher",
+          "url": "https://github.com/microsoft/aspire/pull/21516",
+          "merged_at": "2026-11-04T23:57:41Z"
+        }
+      },
+      {
+        "sha": "8a9868db90ca9579545aa04746ee7310f06f769e",
+        "message": "Wait for transport readiness in Java ReferenceExpression cancellation probe (#21522) ## Description Fixes #20017 ### Root cause `GeneratedReferenceExpression_CancellationIsRequestScoped` runs a Java probe. The probe starts `expression.getValue(token)` on a pool thread and then calls `requireMessage`, which gave the generated client a **fixed 1000ms wall-clock budget** (`waitForMessage(input, 1000)`) to write its first transport message. Before writing the `invokeCapability` request, the client h",
+        "html_url": "https://github.com/microsoft/aspire/commit/8a9868db90ca9579545aa04746ee7310f06f769e",
+        "pull_request": {
+          "number": 21522,
+          "title": "Wait for transport readiness in Java ReferenceExpression cancellation probe",
+          "url": "https://github.com/microsoft/aspire/pull/21522",
+          "merged_at": "2026-11-04T23:59:35Z"
+        }
+      },
+      {
+        "sha": "3539974d274aee74424ffcda80cdefcde8dcfddc",
+        "message": "Fix flaky Hex1bNativePublishingTests: read MSBuild query results from -getResultOutputFile (#21524) ## Description `Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents` fails intermittently on `Infrastructure (ubuntu-latest)` with: ``` System.Text.Json.JsonReaderException : 'M' is invalid after a single JSON value. Expected end of data. LineNumber: 209 | BytePositionInLine: 0. ``` ### Root cause The MSBuild JSON is **not** truncated. In every failing log I checked (runs 37668103720",
+        "html_url": "https://github.com/microsoft/aspire/commit/3539974d274aee74424ffcda80cdefcde8dcfddc",
+        "pull_request": {
+          "number": 21524,
+          "title": "Fix flaky Hex1bNativePublishingTests: read MSBuild query results from -getResultOutputFile",
+          "url": "https://github.com/microsoft/aspire/pull/21524",
+          "merged_at": "2026-11-05T00:00:19Z"
+        }
+      },
+      {
+        "sha": "15ae7ebbdf62a15ac86182ab2ebce2c51692d223",
+        "message": "Preserve stdout/stderr order in Acquisition script test output (#21451) ## Description `ReleaseScriptShellTests.DryRun_ShowsDownloadAndInstallSteps` (Acquisition, macOS) fails intermittently. It asserts that the route-sidecar line appears before the `[DRY RUN] Would run:` line in `result.Output`. ### Root cause `get-aspire-cli.sh` prints these lines in a deterministic order, but on different streams: - `DRYRUN: would write route sidecar to: ...` is written to **stdout** (`printf`). - `[DRY RUN] ",
+        "html_url": "https://github.com/microsoft/aspire/commit/15ae7ebbdf62a15ac86182ab2ebce2c51692d223",
+        "pull_request": {
+          "number": 21451,
+          "title": "Preserve stdout/stderr order in Acquisition script test output",
+          "url": "https://github.com/microsoft/aspire/pull/21451",
+          "merged_at": "2026-11-05T00:01:20Z"
+        }
+      },
+      {
+        "sha": "d22882d649f0410e221148e6ce84f9440f6b19cc",
+        "message": "Fix Dashboard Playwright tab-navigation race in DesktopNavMenu and ResourcePane tests (#21480) ## Description Fixes a flaky race in two Dashboard Playwright outerloop tests added or changed by #21412: - `DesktopNavMenuTests.MainNavigation_NavigatesBetweenSectionsAndMarksActiveItem` - `ResourcePaneInteractionTests.AllResourcesRow_ClearsSelectionAndListsResourcesInOverview` ### Root cause A resource tab click changes the URL in the browser right away, before the server renders the destination. Unt",
+        "html_url": "https://github.com/microsoft/aspire/commit/d22882d649f0410e221148e6ce84f9440f6b19cc",
+        "pull_request": {
+          "number": 21480,
+          "title": "Fix Dashboard Playwright tab-navigation race in DesktopNavMenu and ResourcePane tests",
+          "url": "https://github.com/microsoft/aspire/pull/21480",
+          "merged_at": "2026-11-05T00:01:53Z"
+        }
+      },
+      {
+        "sha": "a56cea3c5003826246b35a69c2bcd5bd8d26d70f",
+        "message": "Avoid bootstrapping pip in model-only Python test venvs (fixes flaky venv timeout) (#21539) ## Description Fixes #19542 Also fixes a latent hang in the helper's timeout path. `AddPythonAppTests.PythonResourceSupportsWithReference` failed once on `windows-latest` (run [32375588350](https://github.com/microsoft/aspire/actions/runs/32375588350), job 96448944641) with `Failed to create virtual environment.` The test took 2m 06s, and the venv process wrote no stdout or stderr. ### Root cause - **Unne",
+        "html_url": "https://github.com/microsoft/aspire/commit/a56cea3c5003826246b35a69c2bcd5bd8d26d70f",
+        "pull_request": {
+          "number": 21539,
+          "title": "Avoid bootstrapping pip in model-only Python test venvs (fixes flaky venv timeout)",
+          "url": "https://github.com/microsoft/aspire/pull/21539",
+          "merged_at": "2026-11-05T00:04:07Z"
+        }
+      },
+      {
+        "sha": "a7cf861398980286b219f20933eba704c0244333",
+        "message": "Serialize Infrastructure.Tests classes that build Aspire.TestTools (#21543) Fixes #19637 ## Root cause Two Infrastructure.Tests classes build `tools/Aspire.TestTools` out of process, and they used to run in parallel: | Test class | Build it triggers | |---|---| | `GenerateTestSummaryToolTests` | Its class fixture runs `dotnet build tools/GenerateTestSummary/GenerateTestSummary.csproj --restore`, which has a ProjectReference to Aspire.TestTools. | | `DownloadFailingJobLogsToolTests` | Each test r",
+        "html_url": "https://github.com/microsoft/aspire/commit/a7cf861398980286b219f20933eba704c0244333",
+        "pull_request": {
+          "number": 21543,
+          "title": "Serialize Infrastructure.Tests classes that build Aspire.TestTools",
+          "url": "https://github.com/microsoft/aspire/pull/21543",
+          "merged_at": "2026-11-05T00:07:54Z"
+        }
+      },
+      {
+        "sha": "de0bdf1a355553603492e11f14d2b4f2b6f8b2b5",
+        "message": "Fix flaky RemoteHost StartupExit test: avoid crash dumps for expected test-server failures (#21497) ## Description Fixes the intermittent `IntegrationHostProcessTests.StartupExit_FailsPromptlyAndPreservesRuntimeDiagnostics` timeout in `Aspire.Hosting.RemoteHost.Tests`. No issue tracks it. ### Flake evidence (first attempts, ci.yml, Oct 16–30) - **PR runs:** 1,086 total, 503 of which were rerun. Attempt-1 failed-test names were parsed from 2,245 failed jobs. - This test failed attempt 1 on **4 / ",
+        "html_url": "https://github.com/microsoft/aspire/commit/de0bdf1a355553603492e11f14d2b4f2b6f8b2b5",
+        "pull_request": {
+          "number": 21497,
+          "title": "Fix flaky RemoteHost StartupExit test: avoid crash dumps for expected test-server failures",
+          "url": "https://github.com/microsoft/aspire/pull/21497",
+          "merged_at": "2026-11-05T00:11:11Z"
+        }
+      },
+      {
+        "sha": "be511438033b4618b36ce609f497afd65bf89cae",
+        "message": "Auto-rerun artifact transfer steps that fail with artifact service network errors (#21661) ## Description GitHub artifact service transport failures in `actions/upload-artifact` / `actions/download-artifact` steps fail entire CI runs, and the auto-rerun workflow never retries them. **Evidence.** The 7-day ci.yml attempt-1 census (2026-10-25 13:15Z → 2026-11-01 11:50Z) covers 840 runs: 80 main and 759 PR. In **7 of those runs**, the only failed steps were artifact transfer steps, and each failed ",
+        "html_url": "https://github.com/microsoft/aspire/commit/be511438033b4618b36ce609f497afd65bf89cae",
+        "pull_request": {
+          "number": 21661,
+          "title": "Auto-rerun artifact transfer steps that fail with artifact service network errors",
+          "url": "https://github.com/microsoft/aspire/pull/21661",
+          "merged_at": "2026-11-05T00:15:23Z"
+        }
+      },
+      {
+        "sha": "079169b8726b519085bea75d5136b9a4f8911d9e",
+        "message": "Complete IconCheckbox JS interop in ManageDataDialog tests (#21434) ## Description Fixes a timing-dependent failure in `ManageDataDialogTests.Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource` (#20759). **Root cause.** `SetupIconCheckboxJs()` registered the `IconCheckbox.razor.js` handlers with `SetupVoid(...)` but never configured a result. In bUnit 2.x, an unconfigured invocation stays pending and is faulted with `JSRuntimeInvocationNotSetException` once `BunitContext.Defa",
+        "html_url": "https://github.com/microsoft/aspire/commit/079169b8726b519085bea75d5136b9a4f8911d9e",
+        "pull_request": {
+          "number": 21434,
+          "title": "Complete IconCheckbox JS interop in ManageDataDialog tests",
+          "url": "https://github.com/microsoft/aspire/pull/21434",
+          "merged_at": "2026-11-05T00:15:59Z"
+        }
+      },
+      {
+        "sha": "fc62c0cf35702058b0754cd04f392c98d631164c",
+        "message": "Ignore just-published npm releases in polyglot TypeScript validation (#21634) ## Description Fixes the npm fresh-release E404 part of the `Polyglot SDK Validation` TypeScript flake tracked in #21600. ### Root cause TypeScript AppHost scaffolds and fixtures declare floating npm ranges. The TypeScript validation container runs `npm install` without a release-age limit. If a run installs a few minutes after an upstream publish, npm picks the new version from the packument while its tarball still re",
+        "html_url": "https://github.com/microsoft/aspire/commit/fc62c0cf35702058b0754cd04f392c98d631164c",
+        "pull_request": {
+          "number": 21634,
+          "title": "Ignore just-published npm releases in polyglot TypeScript validation",
+          "url": "https://github.com/microsoft/aspire/pull/21634",
+          "merged_at": "2026-11-05T00:19:10Z"
+        }
+      },
+      {
+        "sha": "f24ca2cceb355862f42d06dfdd379e6ce25d51de",
+        "message": "Add explicit-start shutdown regression coverage (startup-token cancellation and process exit) (#21397) ## Description > **Update after merging `main` (2026-10-30):** #21360 has since landed on `main` with its own fix that gives this test a separate `stopCts` for `StopAsync` and moves it to `LongTimeoutTimeSpan` budgets. The cancellation-ownership repair this PR originally made is therefore already on `main`. After resolving the merge conflict, this PR adds **regression coverage only** on top of ",
+        "html_url": "https://github.com/microsoft/aspire/commit/f24ca2cceb355862f42d06dfdd379e6ce25d51de",
+        "pull_request": {
+          "number": 21397,
+          "title": "Add explicit-start shutdown regression coverage (startup-token cancellation and process exit)",
+          "url": "https://github.com/microsoft/aspire/pull/21397",
+          "merged_at": "2026-11-05T00:20:49Z"
+        }
+      },
+      {
+        "sha": "6abf8abdcf6d8a53635c7ec3d4852c10e0d45ea4",
+        "message": "Show configured templates in the initial aspire new picker (#21754) ## Description Show templates from configured Git and directory sources alongside built-in templates in interactive `aspire new`, without a separate source submenu. This builds on #21329, #21388, and #21420; it does not close those already-merged issues/PRs. The terminal picker uses nonselectable source headings, retains built-in ordering and defaults, and selects the exact discovered template object even when names collide. Lea",
+        "html_url": "https://github.com/microsoft/aspire/commit/6abf8abdcf6d8a53635c7ec3d4852c10e0d45ea4",
+        "pull_request": {
+          "number": 21754,
+          "title": "Show configured templates in the initial aspire new picker",
+          "url": "https://github.com/microsoft/aspire/pull/21754",
+          "merged_at": "2026-11-05T00:28:25Z"
+        }
+      },
+      {
+        "sha": "cbe54bf39536fa577e749e2ccb6a147691ab60a9",
+        "message": "Fix AzureSql test fixture Docker port collisions and re-enable reconciliation tests (#21534) ## Description `AzureSqlPrincipalReconciliationTests` failed as a class (all 7 tests) in `Hosting.Azure (ubuntu-latest)` because `SqlServerContainerFixture.InitializeAsync` could not start SQL Server: ``` failed to set up container networking: driver failed programming external connectivity on endpoint ...: failed to bind host port for 0.0.0.0::172.17.0.3:1433/tcp: address already in use ``` The empty ho",
+        "html_url": "https://github.com/microsoft/aspire/commit/cbe54bf39536fa577e749e2ccb6a147691ab60a9",
+        "pull_request": {
+          "number": 21534,
+          "title": "Fix AzureSql test fixture Docker port collisions and re-enable reconciliation tests",
+          "url": "https://github.com/microsoft/aspire/pull/21534",
+          "merged_at": "2026-11-05T00:30:09Z"
+        }
+      },
+      {
+        "sha": "41441b815560e6e12eb39158a76cb4663c7fc646",
+        "message": "Reserve DownloadNativeArchives mock server port atomically to fix 'Address already in use' flake (#21537) ## Description Fixes #19449 ### Root cause `DownloadNativeArchivesTests.MockAzdoServer` picked its port with a probe-and-release pattern: 1. `GetFreeTcpPort()` bound `TcpListener(127.0.0.1, 0)`, read the assigned port, and **stopped the listener**, which released the port. 2. Later, `Start()` called `HttpListener.Start()` on that port number. Between steps 1 and 2 the port is free, and any o",
+        "html_url": "https://github.com/microsoft/aspire/commit/41441b815560e6e12eb39158a76cb4663c7fc646",
+        "pull_request": {
+          "number": 21537,
+          "title": "Reserve DownloadNativeArchives mock server port atomically to fix 'Address already in use' flake",
+          "url": "https://github.com/microsoft/aspire/pull/21537",
+          "merged_at": "2026-11-05T00:30:43Z"
+        }
+      },
+      {
+        "sha": "2fe8df91b463ae7a996e9ad827ff3ed74f61b2c8",
+        "message": "Fix Azure conformance tracing tests timing out in RemoteExecutor credential probing (#21538) ## Description The Azure component `TracingEnablesTheRightActivitySource` conformance tests fail intermittently on CI with `RemoteExecutionException: Half-way through waiting for remote process` (#20241 Storage Queues on windows-latest, run 35373021439; #18920 Azure OpenAI, run 30416905407). ### Root cause `ActivitySourceTest` runs in a RemoteExecutor child process, which is killed after 60s. When the te",
+        "html_url": "https://github.com/microsoft/aspire/commit/2fe8df91b463ae7a996e9ad827ff3ed74f61b2c8",
+        "pull_request": {
+          "number": 21538,
+          "title": "Fix Azure conformance tracing tests timing out in RemoteExecutor credential probing",
+          "url": "https://github.com/microsoft/aspire/pull/21538",
+          "merged_at": "2026-11-05T00:31:03Z"
+        }
+      },
+      {
+        "sha": "eecbe87c8f93cef2481b0524a918343bd2577399",
+        "message": "Ignore just-published npm releases in Docker CLI E2E shells (#21615) ## Description Fixes the npm part of the `Aspire.Cli.EndToEnd.Tests.JavaScriptPublishTests.AllPublishMethodsBuildDockerImages` flake. It is #5 under \"Top unowned flakes\" in #21600. ### Root cause TypeScript AppHost scaffolds declare floating npm ranges (`TypeScriptLanguageSupport.cs`: `typescript-eslint ^8.57.1`, `eslint ^10.0.3`, `nodemon ^3.1.14`, …). The Docker E2E shells run `npm install` with no age limit. If a run install",
+        "html_url": "https://github.com/microsoft/aspire/commit/eecbe87c8f93cef2481b0524a918343bd2577399",
+        "pull_request": {
+          "number": 21615,
+          "title": "Ignore just-published npm releases in Docker CLI E2E shells",
+          "url": "https://github.com/microsoft/aspire/pull/21615",
+          "merged_at": "2026-11-05T00:32:41Z"
+        }
+      },
+      {
+        "sha": "87ef7dfc044526f5b46b6baffcccb9a011da1f7f",
+        "message": "Fix Text file busy race for fake executables in Infrastructure.Tests (#21749) > Supersedes #21558. That PR's head is on a fork (`davidfowl/aspire`) with `maintainer_can_modify=false`, so it couldn't be brought up to date with `main`. This PR contains the same change, squashed onto current `main`. Fixes #21557 ## Failure On `main`, `Infrastructure.Tests.AnalyzeCiFailureWorkflowTests.LastSuccessfulMainRunFallsBackToOlderWindow` failed with `Expected: 0 / Actual: 126` ([run 40984409791, Infrastruct",
+        "html_url": "https://github.com/microsoft/aspire/commit/87ef7dfc044526f5b46b6baffcccb9a011da1f7f",
+        "pull_request": {
+          "number": 21749,
+          "title": "Fix Text file busy race for fake executables in Infrastructure.Tests",
+          "url": "https://github.com/microsoft/aspire/pull/21749",
+          "merged_at": "2026-11-05T00:32:56Z"
+        }
+      },
+      {
+        "sha": "1fd02a2c0dd5ac777364e7ba4d3eceb3fde0291d",
+        "message": "Coordinate project builds when the IDE cannot launch projects (fix VS Code E2E tree-actions flake) (#21624) ## Description Fixes the VS Code Linux E2E `tree-actions` flake (\"could not find a matching endpoint\" and \"Timed out waiting for resource 'e2e-terminal' state Running\"), tracked in #19282 and #21600. ### Root cause The E2E VS Code has no C# extension, so `DEBUG_SESSION_INFO` advertises an explicit capability list that contains neither `project` nor `project-with-external-build.v1`. `Suppor",
+        "html_url": "https://github.com/microsoft/aspire/commit/1fd02a2c0dd5ac777364e7ba4d3eceb3fde0291d",
+        "pull_request": {
+          "number": 21624,
+          "title": "Coordinate project builds when the IDE cannot launch projects (fix VS Code E2E tree-actions flake)",
+          "url": "https://github.com/microsoft/aspire/pull/21624",
+          "merged_at": "2026-11-05T02:09:23Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 127002905648,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41953320272/job/127002905648",
+      "classification": "transient-infra",
+      "reason": "VS Code extension unit test on Windows failed with ECONNRESET, a known transient network connection reset pattern; no structured test results.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "extension-blazor-relay-bridge-econnreset-windows"
+  ]
+}
