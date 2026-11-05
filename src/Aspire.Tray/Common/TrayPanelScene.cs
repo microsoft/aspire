@@ -102,6 +102,7 @@ internal sealed record PopClipCommand : PanelCommand;
 
 internal enum PanelTargetKind
 {
+    ToggleApplication,
     Row,
     Dashboard,
     Stop,
@@ -162,7 +163,10 @@ internal enum PanelSection
 /// <see cref="Item"/> tells apart targets of the same kind for one row, such as the
 /// "Open in" items of its action list.
 /// </summary>
-internal readonly record struct PanelTargetKey(PanelTargetKind Kind, PanelSection Section, AppHostId? Host, int Item = 0);
+internal readonly record struct PanelTargetKey(PanelTargetKind Kind, PanelSection Section, AppHostId? Host, int Item = 0)
+{
+    public TrayApplicationKey? Application { get; init; }
+}
 
 /// <summary>
 /// How a screen reader presents an element. Hosts map it to the platform role: an AXButton or
