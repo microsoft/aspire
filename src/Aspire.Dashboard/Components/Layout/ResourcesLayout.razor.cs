@@ -56,6 +56,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private Subscription? _logsSubscription;
     private Subscription? _telemetryResourcesSubscription;
     private Dictionary<ResourceKey, int>? _unviewedErrorCounts;
+    private Dictionary<string, OtlpResource> _telemetryResourcesByName = new(StringComparers.ResourceName);
     private List<TelemetryOnlyResource> _telemetryOnlyResources = [];
     private string? _collapsedResourceNamesKey;
     private bool _isLoaded;
@@ -1162,13 +1163,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private void UpdateTelemetryOnlyResources()
     {
+        // Reuse the resource subscription's snapshot for signal availability and row lookups.
+        // Looking up every row through GetResourceByCompositeName repeatedly scans all sources.
+        var allTelemetryResources = TelemetryRepository.GetResources(includeUninstrumentedPeers: true);
+        _telemetryResourcesByName = allTelemetryResources.ToDictionary(r => r.ResourceKey.GetCompositeName(), StringComparers.ResourceName);
         // Resources that send telemetry but aren't part of the app model (for example a browser app) are listed
         // in their own pane so they don't appear in Resources or Tags.
-        var telemetryResources = TelemetryRepository.GetResources();
+        var telemetryResources = allTelemetryResources.Where(r => !r.UninstrumentedPeer).ToList();
         var appModelKeys = new HashSet<ResourceKey>();
         foreach (var resource in _resourceByName.Values)
         {
-            if (TelemetryRepository.GetResourceByCompositeName(resource.Name) is { } otlpResource)
+            if (GetTelemetryResource(resource) is { } otlpResource)
             {
                 appModelKeys.Add(otlpResource.ResourceKey);
             }
@@ -1816,9 +1821,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private string GetResourceTypeLabel(ResourceViewModel resource) => resource.GetResourceTypeDisplayName(ResourcesLoc);
 
-    private string GetResourceAccessibilityDescription(ResourceViewModel resource, string stateText, int errorCount)
+    private string GetResourceAccessibilityDescription(ResourceViewModel resource, string stateText, int errorCount, string? unavailableReason)
     {
         List<string> descriptions = [stateText, GetResourceTypeLabel(resource)];
+        if (unavailableReason is not null)
+        {
+            descriptions.Add(unavailableReason);
+        }
         if (resource.HealthStatus is { } health)
         {
             descriptions.Add($"{ResourcesLoc[nameof(Resources.Resources.ResourcesDetailsHealthStateProperty)]}: {health.Humanize()}");
@@ -1850,7 +1859,47 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool HasMultipleReplicas(ResourceViewModel resource)
         => _resourceByName.Values.Count(r => string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) > 1;
 
-    private OtlpResource? GetTelemetryResource(ResourceViewModel resource) => TelemetryRepository.GetResourceByCompositeName(resource.Name);
+    private OtlpResource? GetTelemetryResource(ResourceViewModel resource) => _telemetryResourcesByName.GetValueOrDefault(resource.Name);
+
+    private string? GetResourceUnavailableReason(ResourceViewModel resource)
+    {
+        if (resource.IsParameter)
+        {
+            return CurrentTab switch
+            {
+                ResourceTab.Console => Loc[nameof(Resources.Layout.ResourcePaneParameterNoConsoleLogs)].Value,
+                ResourceTab.StructuredLogs => Loc[nameof(Resources.Layout.ResourcePaneParameterNoStructuredLogs)].Value,
+                ResourceTab.Traces => Loc[nameof(Resources.Layout.ResourcePaneParameterNoTraces)].Value,
+                ResourceTab.Metrics => Loc[nameof(Resources.Layout.ResourcePaneParameterNoMetrics)].Value,
+                ResourceTab.Terminal => Loc[nameof(Resources.Layout.ResourcePaneParameterNoTerminal)].Value,
+                _ => null
+            };
+        }
+
+        return CurrentTab switch
+        {
+            ResourceTab.Parameters => Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
+            ResourceTab.Terminal when !CanViewResourceTerminal(resource) => Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
+            _ => GetTelemetryUnavailableReason(GetTelemetryResource(resource))
+        };
+    }
+
+    private string? GetTelemetryUnavailableReason(OtlpResource? resource) => CurrentTab switch
+    {
+        ResourceTab.StructuredLogs when resource is not { HasLogs: true } => Loc[nameof(Resources.Layout.ResourcePaneNoStructuredLogs)].Value,
+        // Uninstrumented peers appear in traces through the outgoing spans that identify them.
+        ResourceTab.Traces when resource is not ({ HasTraces: true } or { UninstrumentedPeer: true }) => Loc[nameof(Resources.Layout.ResourcePaneNoTraces)].Value,
+        ResourceTab.Metrics when resource is not { HasMetrics: true } => Loc[nameof(Resources.Layout.ResourcePaneNoMetrics)].Value,
+        _ => null
+    };
+
+    private string GetResourceUnavailableLabel(bool isParameter) => CurrentTab switch
+    {
+        ResourceTab.StructuredLogs when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoStructuredLogsLabel)].Value,
+        ResourceTab.Traces when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoTracesLabel)].Value,
+        ResourceTab.Metrics when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoMetricsLabel)].Value,
+        _ => Loc[nameof(Resources.Layout.ResourcePaneNotApplicableLabel)].Value
+    };
 
     internal int GetUnviewedErrorCount(ResourceViewModel resource)
     {
@@ -1865,8 +1914,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _selectedItems is [{ TelemetryOnly: { } telemetryOnly }] ? telemetryOnly : null;
 
     /// <summary>
-    /// Gets the telemetry keys for a multi-resource selection, or all sources in the current pane when there is
-    /// no selection. A single resource is filtered by the page's resource key.
+    /// Gets the telemetry keys for the selected resources, or all sources in the current pane when there is
+    /// no selection.
     /// </summary>
     internal IReadOnlyList<ResourceKey>? GetSelectionTelemetryKeys(IReadOnlyCollection<string>? resourceNames)
     {
@@ -1880,15 +1929,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return GetPaneTelemetryKeys();
         }
 
-        if (resourceNames.Count < 2)
-        {
-            var name = resourceNames.First();
-            var hasTelemetry = IsTelemetryPane
-                ? _telemetryOnlyResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName))
-                : ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource) && GetTelemetryResource(resource) is not null;
-            return hasTelemetry ? null : [];
-        }
-
+        // Resolve even a single selection here. A page opened before the resource's first signal can
+        // still have its "all resources" key; returning null would widen the query when telemetry arrives.
         var keys = new List<ResourceKey>();
         foreach (var name in resourceNames)
         {

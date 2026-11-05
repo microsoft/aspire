@@ -347,22 +347,33 @@
                         {
                             var telemetryResourceName = telemetryResource.Name;
                             var isSelected = IsSelected(telemetryResourceName);
-                            <div class="resource-row resource-row-kind-telemetry @(isSelected || IsAllSelected ? "selected" : string.Empty)" @key="@($"otlp:{telemetryResourceName}")">
+                            var unavailableReason = CurrentTab is ResourceTab.Overview or ResourceTab.Console or ResourceTab.Terminal or ResourceTab.Parameters
+                                ? Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)].Value
+                                : GetTelemetryUnavailableReason(telemetryResource.Resource);
+                            <div class="resource-row resource-row-kind-telemetry @(isSelected ? "selected" : string.Empty) @(unavailableReason is not null ? "resource-row-unavailable" : null)" @key="@($"otlp:{telemetryResourceName}")">
                                 <a class="resource-row-link"
                                    href="@GetRowUrl(telemetryResourceName)"
                                    aria-current="@GetRowAriaCurrent(isSelected)"
                                    aria-label="@telemetryResourceName"
-                                   aria-description="@Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]"
+                                   aria-description="@($"{Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]}{(unavailableReason is not null ? $"; {unavailableReason}" : null)}")"
+                                   data-tooltip="@unavailableReason"
+                                   data-resource-unavailable-reason="@unavailableReason"
                                    @onclick="@(e => OnRowClickAsync(e, telemetryResourceName))"
                                    @onclick:preventDefault="true">
                                     <span class="resource-row-icon">
                                         <FluentIcon Width="16px"
                                                     Color="Color.Custom"
-                                                    CustomColor="var(--resource-row-kind-accent)"
+                                                    CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
                                                     Value="@(new Icons.Regular.Size16.DataUsage())" />
                                     </span>
                                     <span class="resource-row-text">
-                                        <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@telemetryResourceName" /></span>
+                                        <span class="resource-row-title">
+                                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@telemetryResourceName" /></span>
+                                            @if (unavailableReason is not null)
+                                            {
+                                                <span class="resource-row-availability" aria-hidden="true">@GetResourceUnavailableLabel(isParameter: false)</span>
+                                            }
+                                        </span>
                                         <span class="resource-row-sub resource-row-kind-label">@Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]</span>
                                     </span>
                                 </a>
@@ -889,7 +900,9 @@
         // The whole row is the drag source, so reordering doesn't need a separate grip.
         var canReorder = CanReorderResources && !resource.IsParameter;
 
-        <div class="resource-row @(resource.IsParameter ? "resource-row-kind-parameter" : "resource-row-kind-resource") @(isSelected || IsAllSelected ? "selected" : string.Empty) @(resource.IsResourceHidden(showHiddenResources: false) ? "resource-row-hidden" : null)"
+        var unavailableReason = GetResourceUnavailableReason(resource);
+
+        <div class="resource-row @(resource.IsParameter ? "resource-row-kind-parameter" : "resource-row-kind-resource") @(isSelected ? "selected" : string.Empty) @(resource.IsResourceHidden(showHiddenResources: false) ? "resource-row-hidden" : null) @(unavailableReason is not null ? "resource-row-unavailable" : null)"
              data-selection-all="@(IsAllSelected ? "true" : null)"
              data-resource-name="@resource.Name"
              data-resource-parent="@GetReorderParentName(resource)"
@@ -917,7 +930,9 @@
                data-resource-depth="@depth"
                aria-current="@GetRowAriaCurrent(isSelected)"
                aria-label="@resourceName"
-               aria-description="@GetResourceAccessibilityDescription(resource, stateViewModel.Text, errorCount)"
+               aria-description="@GetResourceAccessibilityDescription(resource, stateViewModel.Text, errorCount, unavailableReason)"
+               data-tooltip="@unavailableReason"
+               data-resource-unavailable-reason="@unavailableReason"
                draggable="@(canReorder ? "true" : null)"
                data-resource-drag-handle="@canReorder"
                aria-keyshortcuts="@($"{(canReorder ? "Alt+ArrowUp Alt+ArrowDown " : null)}{(row is not null ? "ArrowLeft ArrowRight" : null)}".Trim())"
@@ -927,7 +942,7 @@
                     <span class="resource-row-glyph">
                         <FluentIcon Width="16px"
                                     Color="Color.Custom"
-                                    CustomColor="var(--resource-row-kind-accent)"
+                                    CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
                                     Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
                     </span>
                     <PersistentContainerBadge Resource="@resource" />
@@ -935,6 +950,10 @@
                     <span class="resource-row-text">
                         <span class="resource-row-title">
                             <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
+                            @if (unavailableReason is not null)
+                            {
+                                <span class="resource-row-availability" aria-hidden="true">@GetResourceUnavailableLabel(resource.IsParameter)</span>
+                            }
                         </span>
                         <span class="resource-row-sub">
                             @if (resource.IsResourceHidden(showHiddenResources: false))

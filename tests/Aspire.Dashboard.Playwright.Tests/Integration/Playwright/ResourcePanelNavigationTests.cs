@@ -3,10 +3,18 @@
 
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.TestUtilities;
 using Aspire.Tests.Shared.DashboardModel;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.Playwright;
+using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Metrics.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
+using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
@@ -183,13 +191,351 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
         });
     }
 
+    [Theory]
+    [InlineData(AspireDataType.StructuredLogs)]
+    [InlineData(AspireDataType.Traces)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ExistingTelemetry_RemainsVisibleWhenAllResourcesViewReloads(AspireDataType signal)
+    {
+        var writer = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
+        await writer.ClearSelectedSignalsAsync(new() { ["tag-a"] = [signal] });
+        var resource = CreateResource("tag-a");
+        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        var now = DateTime.UtcNow;
+        var (path, message) = signal switch
+        {
+            AspireDataType.StructuredLogs => ("structuredlogs", "Existing sidebar log"),
+            AspireDataType.Traces => ("traces", "Test span. Id: preloaded-span"),
+            _ => throw new ArgumentOutOfRangeException(nameof(signal))
+        };
+        await (signal switch
+        {
+            AspireDataType.StructuredLogs => writer.AddLogsAsync(new(),
+            [
+                new ResourceLogs
+                {
+                    Resource = resource,
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(message: message) } } }
+                }
+            ]),
+            AspireDataType.Traces => writer.AddTracesAsync(new(),
+            [
+                new ResourceSpans
+                {
+                    Resource = resource,
+                    ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan("preloaded-trace", "preloaded-span", now, now.AddMilliseconds(10)) } } }
+                }
+            ]),
+            _ => throw new ArgumentOutOfRangeException(nameof(signal))
+        });
+        try
+        {
+            await RunTestAsync(async page =>
+            {
+                await page.GotoAsync($"/{path}");
+                await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = message })).ToBeVisibleAsync();
+                await page.ReloadAsync();
+                await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = message })).ToBeVisibleAsync();
+                await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+            });
+        }
+        finally
+        {
+            await writer.ClearSelectedSignalsAsync(new() { ["tag-a"] = [signal] });
+        }
+    }
+
+    [Theory]
+    [InlineData(390, AspireDataType.StructuredLogs)]
+    [InlineData(768, AspireDataType.StructuredLogs)]
+    [InlineData(1440, AspireDataType.StructuredLogs)]
+    [InlineData(390, AspireDataType.Traces)]
+    [InlineData(768, AspireDataType.Traces)]
+    [InlineData(1440, AspireDataType.Traces)]
+    [InlineData(390, AspireDataType.Metrics)]
+    [InlineData(768, AspireDataType.Metrics)]
+    [InlineData(1440, AspireDataType.Metrics)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task UnavailableRows_RemainInteractiveAndUpdateWhenSignalsArriveAndClear(int width, AspireDataType signal)
+    {
+        var writer = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
+        var (path, label, reason) = signal switch
+        {
+            AspireDataType.StructuredLogs => ("structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogsLabel, Resources.Layout.ResourcePaneNoStructuredLogs),
+            AspireDataType.Traces => ("traces", Resources.Layout.ResourcePaneNoTracesLabel, Resources.Layout.ResourcePaneNoTraces),
+            AspireDataType.Metrics => ("metrics", Resources.Layout.ResourcePaneNoMetricsLabel, Resources.Layout.ResourcePaneNoMetrics),
+            _ => throw new ArgumentOutOfRangeException(nameof(signal))
+        };
+        await writer.ClearSelectedSignalsAsync(new() { ["tag-a"] = [signal] });
+        if (signal == AspireDataType.StructuredLogs)
+        {
+            var otherResource = CreateResource("tag-b");
+            otherResource.Attributes.Remove(otherResource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            await writer.AddLogsAsync(new(),
+            [
+                new ResourceLogs
+                {
+                    Resource = otherResource,
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(message: "Another resource's log") } } }
+                }
+            ]);
+        }
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, 844);
+            await page.GotoAsync($"/{path}");
+            if (width <= 768)
+            {
+                await page.Locator(".resource-picker").ClickAsync();
+            }
+            var row = page.Locator("[data-resource-name='tag-a']");
+            var link = row.Locator(".resource-row-link");
+            await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
+            await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveTextAsync(label);
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", reason);
+            await Assertions.Expect(link).ToBeEnabledAsync();
+            Assert.Null(await link.GetAttributeAsync("aria-disabled"));
+
+            var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
+            await link.Locator(".resource-row-name").HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(reason);
+            await page.Mouse.MoveAsync(1, 1);
+            await page.Keyboard.PressAsync("Escape");
+            await page.Keyboard.PressAsync("Tab");
+            await link.FocusAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(reason);
+            await link.PressAsync("Enter");
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex($"/{path}/resource/tag-a$"));
+            await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".telemetry-empty-content")).ToBeVisibleAsync();
+            if (width <= 768)
+            {
+                await page.Locator(".resource-picker").ClickAsync();
+            }
+            await link.Locator(".resource-row-name").HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+
+            var resource = CreateResource("tag-a");
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            var now = DateTime.UtcNow;
+            await (signal switch
+            {
+                AspireDataType.StructuredLogs => writer.AddLogsAsync(new(),
+                [
+                    new ResourceLogs
+                    {
+                        Resource = resource,
+                        ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(message: "Sidebar availability test") } } }
+                    }
+                ]),
+                AspireDataType.Traces => writer.AddTracesAsync(new(),
+                [
+                    new ResourceSpans
+                    {
+                        Resource = resource,
+                        ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan("availability-trace", "availability-span", now, now.AddMilliseconds(10)) } } }
+                    }
+                ]),
+                AspireDataType.Metrics => writer.AddMetricsAsync(new(),
+                [
+                    new ResourceMetrics
+                    {
+                        Resource = resource,
+                        ScopeMetrics = { new ScopeMetrics { Scope = CreateScope(), Metrics = { CreateSumMetric("availability.requests", now) } } }
+                    }
+                ]),
+                _ => throw new ArgumentOutOfRangeException(nameof(signal))
+            });
+            try
+            {
+                await Assertions.Expect(row).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
+                await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveCountAsync(0);
+                await Assertions.Expect(link).Not.ToHaveAttributeAsync("data-tooltip", reason);
+                await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+                await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("selected"));
+                await Assertions.Expect(link).ToHaveAttributeAsync("aria-current", "page");
+                await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(1);
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex($"/{path}/resource/tag-a$"));
+                await Assertions.Expect(page.Locator(".telemetry-empty-content")).Not.ToBeVisibleAsync();
+                if (width > 768 && signal == AspireDataType.StructuredLogs)
+                {
+                    await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "Sidebar availability test", Exact = false })).ToBeVisibleAsync();
+                    await Assertions.Expect(page.GetByText("Another resource's log", new() { Exact = true })).ToHaveCountAsync(0);
+                }
+            }
+            finally
+            {
+                await writer.ClearSelectedSignalsAsync(new() { ["tag-a"] = [signal], ["tag-b"] = [signal] });
+            }
+            await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
+            await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveTextAsync(label);
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", reason);
+            await page.Mouse.MoveAsync(1, 1);
+            await link.Locator(".resource-row-name").HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync(reason);
+            await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("selected"));
+            await Assertions.Expect(link).ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(1);
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex($"/{path}/resource/tag-a$"));
+            if (width <= 768)
+            {
+                await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true }).ClickAsync();
+            }
+            await Assertions.Expect(page.Locator(".telemetry-empty-content")).ToBeVisibleAsync();
+            if (width <= 768)
+            {
+                await page.Locator(".resource-picker").ClickAsync();
+            }
+            await page.Locator("[data-resource-name='tag-b'] .resource-row-link").ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex($"/{path}/resource/tag-b$"));
+            await Assertions.Expect(page.Locator(".telemetry-empty-content")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        });
+    }
+
+    [Theory]
+    [InlineData(390)]
+    [InlineData(768)]
+    [InlineData(1440)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ParameterRows_ExplainEachUnavailableFeatureAndKeyboardSelectionOpensOverview(int width)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, 844);
+            foreach (var (path, reason) in new[]
+            {
+                ("consolelogs", Resources.Layout.ResourcePaneParameterNoConsoleLogs),
+                ("structuredlogs", Resources.Layout.ResourcePaneParameterNoStructuredLogs),
+                ("traces", Resources.Layout.ResourcePaneParameterNoTraces),
+                ("metrics", Resources.Layout.ResourcePaneParameterNoMetrics),
+                ("terminals", Resources.Layout.ResourcePaneParameterNoTerminal)
+            })
+            {
+                await page.GotoAsync($"/{path}");
+                await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+                if (width <= 768)
+                {
+                    await page.Locator(".resource-picker").ClickAsync();
+                }
+                var row = page.Locator(".resource-row[data-resource-name='api-key']");
+                var link = row.Locator(".resource-row-link");
+                await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveTextAsync(Resources.Layout.ResourcePaneNotApplicableLabel);
+                await Assertions.Expect(link).ToHaveAttributeAsync("href", "/resources/api-key");
+                await Assertions.Expect(link).ToHaveAttributeAsync("aria-description", new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(reason)));
+                await Assertions.Expect(link).ToBeEnabledAsync();
+                Assert.Null(await link.GetAttributeAsync("aria-disabled"));
+                await link.ScrollIntoViewIfNeededAsync();
+                await page.Mouse.MoveAsync(1, 1);
+                await page.Keyboard.PressAsync("Tab");
+                await link.FocusAsync();
+                var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
+                await Assertions.Expect(tooltip).ToBeVisibleAsync();
+                await Assertions.Expect(tooltip).ToHaveTextAsync(reason);
+                await link.PressAsync("Enter");
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources/api-key$"));
+                await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("api-key");
+                await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+                if (width <= 768)
+                {
+                    await page.Locator(".resource-picker").ClickAsync();
+                }
+                await Assertions.Expect(row).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
+                await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveCountAsync(0);
+                await Assertions.Expect(link).ToHaveAttributeAsync("aria-current", "page");
+                await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData(390)]
+    [InlineData(768)]
+    [InlineData(1440)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task AvailabilityBadges_FollowTabChangesWithoutChangingSelection(int width)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, 844);
+            await page.GotoAsync("/structuredlogs/resource/tag-a");
+            if (width <= 768)
+            {
+                await page.Locator(".resource-picker").ClickAsync();
+            }
+            var row = page.Locator("[data-resource-name='tag-a']");
+            var badge = row.Locator(".resource-row-availability");
+            await Assertions.Expect(badge).ToHaveTextAsync(Resources.Layout.ResourcePaneNoStructuredLogsLabel);
+
+            foreach (var (tabId, path, label) in new (string, string, string?)[]
+            {
+                ("Traces", "traces", Resources.Layout.ResourcePaneNoTracesLabel),
+                ("Metrics", "metrics", Resources.Layout.ResourcePaneNoMetricsLabel),
+                ("Console", "consolelogs", null),
+                ("StructuredLogs", "structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogsLabel)
+            })
+            {
+                if (width <= 768)
+                {
+                    await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true }).ClickAsync();
+                    await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+                }
+                var navigation = page.Locator(".resource-tabs-nav");
+                var tab = navigation.Locator($"#tab-{tabId}");
+                if (await tab.IsVisibleAsync())
+                {
+                    await tab.ClickAsync();
+                }
+                else
+                {
+                    var compact = navigation.Locator(".resource-tabs-compact-button");
+                    await (await compact.IsVisibleAsync() ? compact : navigation.Locator(".resource-tabs-overflow-button")).ClickAsync();
+                    await page.Locator($"#tab-{tabId}-menu-item").ClickAsync();
+                }
+                await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex($"/{path}/resource/tag-a$"));
+                if (width <= 768)
+                {
+                    await page.Locator(".resource-picker").ClickAsync();
+                }
+                if (label is not null)
+                {
+                    await Assertions.Expect(badge).ToBeVisibleAsync();
+                    await Assertions.Expect(badge).ToHaveTextAsync(label);
+                }
+                else
+                {
+                    await Assertions.Expect(badge).ToHaveCountAsync(0);
+                }
+                await Assertions.Expect(row.Locator(".resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
+            }
+        });
+    }
+
     public sealed class NavigationResourcesFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel>? Resources =>
         [
             ModelTestHelpers.CreateResource("tag-a", state: KnownResourceState.Running),
             ModelTestHelpers.CreateResource("tag-b", state: KnownResourceState.Running),
-            ModelTestHelpers.CreateResource("tag-c", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("tag-c", state: KnownResourceState.Running,
+                properties: new Dictionary<string, ResourcePropertyViewModel>
+                {
+                    [KnownProperties.Terminal.Enabled] = new(
+                        KnownProperties.Terminal.Enabled,
+                        new Value { StringValue = "true" },
+                        isValueSensitive: false,
+                        knownProperty: null,
+                        sortOrder: 0,
+                        displayName: null,
+                        isHighlighted: false)
+                }),
+            ModelTestHelpers.CreateResource("api-key", resourceType: KnownResourceTypes.Parameter),
             .. Enumerable.Range(1, 40).Select(i => ModelTestHelpers.CreateResource($"worker-{i:D2}", state: KnownResourceState.Running))
         ];
     }
