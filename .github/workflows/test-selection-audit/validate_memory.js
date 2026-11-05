@@ -69,7 +69,7 @@ function validateMemory(memoryRoot, requireProvenance = true) {
   const processedAllowed = new Set(["pr", "sha", "run", "attempt", "all", "over_paths", "miss_edges", "seen"]);
   const edgeAllowed = new Set(["path", "target"]);
   const processed = readJsonLines("processed-runs.jsonl");
-  const provenanceRoot = path.join(process.env.RUNNER_TEMP || fail("RUNNER_TEMP unavailable"), "gh-aw/test-selection-audit");
+  const provenanceRoot = path.join(process.env.RUNNER_TEMP || fail("RUNNER_TEMP unavailable"), "gh-aw/safeoutputs/test-selection-audit");
   const [evidenceFile, processedBefore, watchBefore] =
     ["evidence.json", "processed-runs-before.jsonl", "watchlist-before.jsonl"]
       .map(fileName => path.join(provenanceRoot, fileName));

@@ -27,7 +27,7 @@ public sealed class TestSelectionAuditWorkflowTests
         Directory.CreateDirectory(memoryPath);
         Directory.CreateDirectory(Path.Combine(memoryPath, ".git"));
 
-        var provenancePath = Path.Combine(workspace.Path, "gh-aw", "test-selection-audit");
+        var provenancePath = Path.Combine(workspace.Path, "gh-aw", "safeoutputs", "test-selection-audit");
         Directory.CreateDirectory(provenancePath);
         var evidencePath = Path.Combine(provenancePath, "evidence.json");
         var baselinePath = Path.Combine(provenancePath, "processed-runs-before.jsonl");
@@ -359,7 +359,7 @@ public sealed class TestSelectionAuditWorkflowTests
         var memoryPath = Path.Combine(workspace.Path, "memory");
         Directory.CreateDirectory(memoryPath);
         var scriptPath = Path.Combine(s_workflowsPath, "test-selection-audit", "compact_memory.py");
-        var auditDatePath = Path.Combine(workspace.Path, "gh-aw", "test-selection-audit", "audit-date.txt");
+        var auditDatePath = Path.Combine(workspace.Path, "gh-aw", "safeoutputs", "test-selection-audit", "audit-date.txt");
 
         var recent = DateTime.UtcNow.ToString("yyyy-MM-dd");
         var expired = DateTime.UtcNow.AddDays(-20).ToString("yyyy-MM-dd");

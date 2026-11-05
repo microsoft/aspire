@@ -108,7 +108,11 @@ evidence and baseline snapshots. The separate push runner has no such snapshots;
 it loads the validator from the source checkout's sole remote-tracking ref
 (the current branch already holds memory) and repeats schema and derived-counter
 validation before persisting memory. Partial provenance is
-rejected in either context. Keep both phases working when changing validation.
+rejected in either context. Provenance lives under
+`$RUNNER_TEMP/gh-aw/safeoutputs/test-selection-audit` so the memory-validation MCP
+tool sees the same protected snapshot as the host. Push-time Git reads use an
+external object directory: lazy fetching into `.git` would otherwise fail
+gh-aw's memory-mutation check. Keep these contexts working when changing validation.
 
 ## Auto-sec dependency reconciliation
 

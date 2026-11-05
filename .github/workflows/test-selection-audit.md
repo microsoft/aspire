@@ -69,26 +69,27 @@ pre-agent-steps:
     env:
       MEMORY_ROOT: /tmp/gh-aw/repo-memory/default
       RETENTION_DAYS: "14"
-      AUDIT_DATE_PATH: ${{ runner.temp }}/gh-aw/test-selection-audit/audit-date.txt
+      AUDIT_DATE_PATH: ${{ runner.temp }}/gh-aw/safeoutputs/test-selection-audit/audit-date.txt
     run: python3 .github/workflows/test-selection-audit/compact_memory.py
   # The workspace is agent-writable; host validation must load a pre-agent
-  # snapshot from the same read-only mount as the selection evidence.
+  # snapshot from the same read-only mount as the selection evidence. The
+  # safeoutputs subdirectory is also visible to the memory-validation MCP tool.
   - name: Protect memory validator
     run: |
       install -m 444 .github/workflows/test-selection-audit/validate_memory.js \
-        "${RUNNER_TEMP}/gh-aw/test-selection-audit/validate_memory.js"
+        "${RUNNER_TEMP}/gh-aw/safeoutputs/test-selection-audit/validate_memory.js"
   - name: Collect test-selection evidence
     env:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       LOOKBACK_DAYS: ${{ github.event.inputs.lookback_days }}
       PR_NUMBERS: ${{ github.event.inputs.pr_numbers }}
-      OUTPUT_PATH: ${{ runner.temp }}/gh-aw/test-selection-audit/evidence.json
+      OUTPUT_PATH: ${{ runner.temp }}/gh-aw/safeoutputs/test-selection-audit/evidence.json
       PROCESSED_RUNS_PATH: /tmp/gh-aw/repo-memory/default/processed-runs.jsonl
-      PROCESSED_BASELINE_PATH: ${{ runner.temp }}/gh-aw/test-selection-audit/processed-runs-before.jsonl
+      PROCESSED_BASELINE_PATH: ${{ runner.temp }}/gh-aw/safeoutputs/test-selection-audit/processed-runs-before.jsonl
       WATCHLIST_PATH: /tmp/gh-aw/repo-memory/default/watchlist.jsonl
-      WATCHLIST_BASELINE_PATH: ${{ runner.temp }}/gh-aw/test-selection-audit/watchlist-before.jsonl
-      AUDIT_DATE_PATH: ${{ runner.temp }}/gh-aw/test-selection-audit/audit-date.txt
+      WATCHLIST_BASELINE_PATH: ${{ runner.temp }}/gh-aw/safeoutputs/test-selection-audit/watchlist-before.jsonl
+      AUDIT_DATE_PATH: ${{ runner.temp }}/gh-aw/safeoutputs/test-selection-audit/audit-date.txt
     run: python3 .github/workflows/test-selection-audit/collect_evidence.py
 
   # A selection is fixed for a particular CI run/attempt, not for a PR
@@ -142,14 +143,27 @@ tools:
       timeout-minutes: 1
       # Use the same entry point for agent self-checks and host validation.
       script: |
-        const validatorPath = path.join(process.env.RUNNER_TEMP, "gh-aw/test-selection-audit/validate_memory.js");
-        const requireProvenance = fs.existsSync(validatorPath);
-        if (!requireProvenance) {
+        const validatorPath = path.join(process.env.RUNNER_TEMP, "gh-aw/safeoutputs/test-selection-audit/validate_memory.js");
+        const isPushJob = path.resolve(memoryRoot) === path.resolve(process.env.GITHUB_WORKSPACE);
+        if (!fs.existsSync(validatorPath)) {
+          if (!isPushJob) throw new Error("Protected memory validator is unavailable");
           // The push job switches HEAD to the memory branch before validation.
           // Its fresh, single-ref source checkout remains in refs/remotes/origin;
           // load that trusted code even though sparse checkout omits the file.
           const { execFileSync } = require("node:child_process");
-          const gitOptions = { cwd: process.env.GITHUB_WORKSPACE, encoding: "utf8" };
+          // Lazy blob fetches must not alter .git: the framework snapshots the
+          // entire memory workspace, including Git metadata, during validation.
+          const objects = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP, "test-selection-audit-objects-"));
+          const gitOptions = {
+            cwd: process.env.GITHUB_WORKSPACE,
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              GIT_OPTIONAL_LOCKS: "0",
+              GIT_OBJECT_DIRECTORY: objects,
+              GIT_ALTERNATE_OBJECT_DIRECTORIES: path.join(process.env.GITHUB_WORKSPACE, ".git/objects"),
+            },
+          };
           // for-each-ref emits one full commit SHA per line, e.g. "abc...123\n".
           const refs = execFileSync("git", [
             "--no-pager", "for-each-ref", "--format=%(objectname)", "refs/remotes/origin/",
@@ -162,7 +176,7 @@ tools:
           fs.mkdirSync(path.dirname(validatorPath), { recursive: true });
           fs.writeFileSync(validatorPath, source, { mode: 0o444 });
         }
-        require(validatorPath).validateMemory(memoryRoot, requireProvenance);
+        require(validatorPath).validateMemory(memoryRoot, !isPushJob);
 
 safe-outputs:
   steps:
@@ -213,7 +227,7 @@ speculative report. Do not change repository code yourself.
   Otherwise analyze the last `${{ github.event.inputs.lookback_days }}` days,
   defaulting to 14. Explicit PR scope may use older completed selections.
 - Use only the deterministic collector output at
-  `$RUNNER_TEMP/gh-aw/test-selection-audit/evidence.json`. Summarize it with
+  `$RUNNER_TEMP/gh-aw/safeoutputs/test-selection-audit/evidence.json`. Summarize it with
   `jq` before reading individual records. Do not re-enumerate Actions runs,
   jobs, artifacts, or PR comments.
 - A record is new evidence only when `selection.status` is `resolved` and
@@ -431,7 +445,7 @@ Writing memory is required even when no issue qualifies. Before calling
 `noop` or `create-issue`, run:
 
 ```shell
-node "$RUNNER_TEMP/gh-aw/test-selection-audit/validate_memory.js" /tmp/gh-aw/repo-memory/default
+node "$RUNNER_TEMP/gh-aw/safeoutputs/test-selection-audit/validate_memory.js" /tmp/gh-aw/repo-memory/default
 ```
 
 If validation fails, correct the ledgers using the protected evidence and
