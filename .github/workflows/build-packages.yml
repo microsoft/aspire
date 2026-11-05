@@ -32,7 +32,6 @@ jobs:
             -bl \
             -p:InstallBrowsersForPlaywright=false \
             -p:SkipTestProjects=true \
-            -p:SkipPlaygroundProjects=true \
             -p:SkipBundleDeps=true \
             -p:SkipNativeBuild=true \
             "${versionOverrideArgs[@]}"
