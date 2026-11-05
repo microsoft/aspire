@@ -279,7 +279,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return paramName;
     }
 
-    private static string GetConstructorParamHandler(AtsParameterInfo param, string paramName)
+    private string GetConstructorParamHandler(AtsParameterInfo param, string paramName)
     {
         if (param.IsCallback)
         {
@@ -289,8 +289,20 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             return $"client.register_cancellation_token({paramName})";
         }
+        if (RequiresConstructorCollectionNormalization(param.Type))
+        {
+            return $"_normalize_constructor_argument({paramName}, {MapParameterToPython(param)})";
+        }
         return paramName;
     }
+
+    private static bool RequiresConstructorCollectionNormalization(AtsTypeRef? type) => type?.Category switch
+    {
+        AtsTypeCategory.Array => true,
+        AtsTypeCategory.Dict => type.IsReadOnly,
+        AtsTypeCategory.Union => type.UnionTypes?.Any(RequiresConstructorCollectionNormalization) is true,
+        _ => false
+    };
 
     private static string GetCallbackRegistrationOptions(AtsParameterInfo parameter)
     {
@@ -2687,7 +2699,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return string.Equals(singleParam.Name, paramName, StringComparison.Ordinal);
     }
 
-    private static void BuildOptionConstructor(
+    private void BuildOptionConstructor(
         System.Text.StringBuilder builder,
         AtsCapabilityInfo capability,
         string optionName,

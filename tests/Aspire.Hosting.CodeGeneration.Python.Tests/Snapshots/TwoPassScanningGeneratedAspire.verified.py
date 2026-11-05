@@ -1520,6 +1520,28 @@ def _normalize_constructor_value(value: typing.Any) -> typing.Any:
     return value
 
 
+def _normalize_constructor_argument(value: typing.Any, expected_type: typing.Any) -> typing.Any:
+    # Once an overload is selected, its parameter type determines the JSON shape:
+    # {"catalog": 1} is ["catalog"] for Iterable[str], but stays an object for Mapping[str, int].
+    if value is None or isinstance(value, (str, _ReferenceHandle)) or callable(value):
+        return value
+    origin = typing.get_origin(expected_type)
+    if origin is typing.get_origin(typing.Iterable):
+        item_type = typing.get_args(expected_type)[0]
+        return [_normalize_constructor_argument(item, item_type) for item in value]
+    if origin is typing.get_origin(typing.Mapping):
+        key_type, value_type = typing.get_args(expected_type)
+        return {
+            _normalize_constructor_argument(key, key_type): _normalize_constructor_argument(item, value_type)
+            for key, item in value.items()
+        }
+    if origin in (typing.Union, types.UnionType):
+        for subtype in typing.get_args(expected_type):
+            if _validate_type(value, subtype):
+                return _normalize_constructor_argument(value, subtype)
+    return value
+
+
 def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
     if typing.get_origin(expected_type) is typing.get_origin(typing.Iterable):
         if isinstance(arg, str):
@@ -8928,7 +8950,7 @@ class _BaseResource(AbstractResource):
             _launch_groups = _normalize_constructor_value(_launch_groups)
             if _validate_type(_launch_groups, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["launchGroupNames"] = typing.cast(typing.Iterable[str], _launch_groups)
+                rpc_args["launchGroupNames"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _launch_groups), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withLaunchGroups', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'launch_groups'. Expected: Iterable[str]")
@@ -9145,7 +9167,7 @@ class _BaseResource(AbstractResource):
             if _validate_dict_types(_hidden_on_completion, HiddenOnCompletionParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["exitCode"] = typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_code")
-                rpc_args["exitCodes"] = typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_codes")
+                rpc_args["exitCodes"] = _normalize_constructor_argument(typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_codes"), typing.Iterable[int])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             elif _hidden_on_completion is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9165,7 +9187,7 @@ class _BaseResource(AbstractResource):
             _tags = _normalize_constructor_value(_tags)
             if _validate_type(_tags, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["tags"] = typing.cast(typing.Iterable[str], _tags)
+                rpc_args["tags"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _tags), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTags', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'tags'. Expected: Iterable[str]")
@@ -9199,9 +9221,9 @@ class _BaseResource(AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["stepName"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory)["step_name"]
                 rpc_args["callback"] = client.register_callback(typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory)["callback"], ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext",))
-                rpc_args["dependsOn"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("depends_on")
-                rpc_args["requiredBy"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("required_by")
-                rpc_args["tags"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("tags")
+                rpc_args["dependsOn"] = _normalize_constructor_argument(typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("depends_on"), typing.Iterable[str])
+                rpc_args["requiredBy"] = _normalize_constructor_argument(typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("required_by"), typing.Iterable[str])
+                rpc_args["tags"] = _normalize_constructor_argument(typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("tags"), typing.Iterable[str])
                 rpc_args["description"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("description")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withPipelineStepFactory', rpc_args))
             else:
@@ -9361,7 +9383,7 @@ class _BaseResource(AbstractResource):
             _endpoints = _normalize_constructor_value(_endpoints)
             if _validate_type(_endpoints, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["endpoints"] = typing.cast(typing.Iterable[str], _endpoints)
+                rpc_args["endpoints"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _endpoints), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoints'. Expected: Iterable[str]")
@@ -10357,7 +10379,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             _container_runtime_args = _normalize_constructor_value(_container_runtime_args)
             if _validate_type(_container_runtime_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["args"] = typing.cast(typing.Iterable[str], _container_runtime_args)
+                rpc_args["args"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _container_runtime_args), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerRuntimeArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_runtime_args'. Expected: Iterable[str]")
@@ -10443,8 +10465,8 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             if _validate_dict_types(_container_certificate_paths, ContainerCertificatePathsParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["customCertificatesDestination"] = typing.cast(ContainerCertificatePathsParameters, _container_certificate_paths).get("custom_certificates_destination")
-                rpc_args["defaultCertificateBundlePaths"] = typing.cast(ContainerCertificatePathsParameters, _container_certificate_paths).get("default_certificate_bundle_paths")
-                rpc_args["defaultCertificateDirectoryPaths"] = typing.cast(ContainerCertificatePathsParameters, _container_certificate_paths).get("default_certificate_dir_paths")
+                rpc_args["defaultCertificateBundlePaths"] = _normalize_constructor_argument(typing.cast(ContainerCertificatePathsParameters, _container_certificate_paths).get("default_certificate_bundle_paths"), typing.Iterable[str])
+                rpc_args["defaultCertificateDirectoryPaths"] = _normalize_constructor_argument(typing.cast(ContainerCertificatePathsParameters, _container_certificate_paths).get("default_certificate_dir_paths"), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerCertificatePaths', rpc_args))
             elif _container_certificate_paths is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10554,7 +10576,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             _args = _normalize_constructor_value(_args)
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["args"] = typing.cast(typing.Iterable[str], _args)
+                rpc_args["args"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _args), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args'. Expected: Iterable[str]")
@@ -10570,7 +10592,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             _args_replace = _normalize_constructor_value(_args_replace)
             if _validate_type(_args_replace, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                rpc_args["args"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _args_replace), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
@@ -10914,7 +10936,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             _env_vars = _normalize_constructor_value(_env_vars)
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["variables"] = typing.cast(typing.Mapping[str, str], _env_vars)
+                rpc_args["variables"] = _normalize_constructor_argument(typing.cast(typing.Mapping[str, str], _env_vars), typing.Mapping[str, str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_vars'. Expected: Mapping[str, str]")
@@ -11615,7 +11637,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             _args = _normalize_constructor_value(_args)
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["args"] = typing.cast(typing.Iterable[str], _args)
+                rpc_args["args"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _args), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args'. Expected: Iterable[str]")
@@ -11631,7 +11653,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             _args_replace = _normalize_constructor_value(_args_replace)
             if _validate_type(_args_replace, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                rpc_args["args"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _args_replace), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
@@ -11971,7 +11993,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             _endpoints_in_env = _normalize_constructor_value(_endpoints_in_env)
             if _validate_type(_endpoints_in_env, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"resource": handle}
-                rpc_args["endpointNames"] = typing.cast(typing.Iterable[str], _endpoints_in_env)
+                rpc_args["endpointNames"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _endpoints_in_env), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointsInEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoints_in_env'. Expected: Iterable[str]")
@@ -11995,7 +12017,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             _env_vars = _normalize_constructor_value(_env_vars)
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["variables"] = typing.cast(typing.Mapping[str, str], _env_vars)
+                rpc_args["variables"] = _normalize_constructor_argument(typing.cast(typing.Mapping[str, str], _env_vars), typing.Mapping[str, str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_vars'. Expected: Mapping[str, str]")
@@ -12701,7 +12723,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             _args = _normalize_constructor_value(_args)
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["args"] = typing.cast(typing.Iterable[str], _args)
+                rpc_args["args"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _args), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args'. Expected: Iterable[str]")
@@ -12717,7 +12739,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             _args_replace = _normalize_constructor_value(_args_replace)
             if _validate_type(_args_replace, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                rpc_args["args"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _args_replace), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
@@ -13080,7 +13102,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             _env_vars = _normalize_constructor_value(_env_vars)
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["variables"] = typing.cast(typing.Mapping[str, str], _env_vars)
+                rpc_args["variables"] = _normalize_constructor_argument(typing.cast(typing.Mapping[str, str], _env_vars), typing.Mapping[str, str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_vars'. Expected: Mapping[str, str]")

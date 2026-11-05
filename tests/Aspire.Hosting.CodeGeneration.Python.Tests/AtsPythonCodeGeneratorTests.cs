@@ -359,6 +359,7 @@ public class AtsPythonCodeGeneratorTests
     [InlineData("list")]
     [InlineData("tuple")]
     [InlineData("set")]
+    [InlineData("dictionary")]
     [InlineData("generator")]
     [InlineData("empty_generator")]
     [RequiresTools(["python3"])]
@@ -370,6 +371,7 @@ public class AtsPythonCodeGeneratorTests
     [InlineData("list")]
     [InlineData("tuple")]
     [InlineData("set")]
+    [InlineData("dictionary")]
     [InlineData("generator")]
     [InlineData("empty_generator")]
     [RequiresTools(["python"])]
@@ -409,6 +411,7 @@ public class AtsPythonCodeGeneratorTests
                 "list": lambda: ["catalog", "basket"],
                 "tuple": lambda: ("catalog", "basket"),
                 "set": lambda: {"catalog", "basket"},
+                "dictionary": lambda: {"catalog": 1, "basket": 2},
                 "generator": lambda: (name for name in ["catalog", "basket"]),
                 "empty_generator": lambda: (name for name in []),
             }[iterable_kind]()
@@ -424,7 +427,7 @@ public class AtsPythonCodeGeneratorTests
                 sorted(expected) if iterable_kind == "set" else expected
             )
 
-            for groups in ("catalog", ["catalog", 42], 42, (name for name in ["catalog", 42])):
+            for groups in ("catalog", ["catalog", 42], 42, (name for name in ["catalog", 42]), {"catalog": 1, 42: 2}):
                 try:
                     aspire_app.ExecutableResource(handle, client, launch_groups=groups)
                     raise AssertionError("Invalid launch_groups was accepted")
@@ -449,6 +452,24 @@ public class AtsPythonCodeGeneratorTests
             assert args["stepName"] == "deploy" and "callback" in args
             assert args["dependsOn"] == ["build"]
             assert args["tags"] == ["release"]
+
+            aspire_app.ExecutableResource(handle, client, pipeline_step_factory={
+                "step_name": "publish",
+                "callback": callback,
+                "depends_on": {"build": 1, "deploy": 2},
+                "tags": {"release": True},
+            })
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "publish" and "callback" in args
+            assert args["dependsOn"] == ["build", "deploy"]
+            assert args["tags"] == ["release"]
+
+            aspire_app.ExecutableResource(handle, client, env_vars={"MODE": "production", "REGION": "west"})
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables"
+            assert args["variables"] == {"MODE": "production", "REGION": "west"}
+            assert calls == []
 
             assert aspire_app._validate_type({"catalog": ["api", "cache"]}, typing.Mapping[str, typing.Iterable[str]])
             assert not aspire_app._validate_type({"catalog": ["api", 42]}, typing.Mapping[str, typing.Iterable[str]])
