@@ -148,7 +148,8 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
     async function createAppHostAttachConfiguration(
         name: string,
         configuredTimeout?: number,
-        debugSession: AspireDebugSession = aspireDebugSession): Promise<AspireResourceExtendedDebugConfiguration> {
+        debugSession: AspireDebugSession = aspireDebugSession,
+        configuredConsole?: string): Promise<AspireResourceExtendedDebugConfiguration> {
         const launchConfig: NodeLaunchConfiguration = { type: 'node', runtime_executable: 'deno', working_directory: tempDir };
         const debugConfig: AspireResourceExtendedDebugConfiguration = {
             runId: name,
@@ -157,6 +158,7 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
             name,
             request: 'launch',
             ...(configuredTimeout === undefined ? {} : { timeout: configuredTimeout }),
+            ...(configuredConsole === undefined ? {} : { console: configuredConsole }),
         };
 
         await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
@@ -247,6 +249,24 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
             `Expected the attach failure to name the inspector address, got: ${response.error}`);
         assert.ok(Date.now() - startedAt >= 2000, 'js-debug gave up before the configured inspector timeout');
 
+        await fixture.closed;
+        assert.ok(!fixture.lines.includes('attached'));
+        assert.strictEqual(await started, false);
+    });
+
+    test('stops a never-ready runtime when the AppHost debugger is configured to use the integrated terminal', async () => {
+        const name = 'never-ready-integrated-terminal';
+        // As with a `debuggers.apphost.console` override. In a terminal the runtime would run outside the
+        // extension host's process tree, so cleanup could not find it after the attach times out.
+        const debugConfig = await createAppHostAttachConfiguration(name, 2000, aspireDebugSession, 'integratedTerminal');
+        assert.strictEqual(debugConfig.console, 'internalConsole');
+        const fixtureStarted = waitForFixture();
+        const launchResponse = captureLaunchResponse(name);
+
+        const started = vscode.debug.startDebugging(undefined, debugConfig);
+        const fixture = await fixtureStarted;
+
+        assert.strictEqual((await launchResponse).success, false);
         await fixture.closed;
         assert.ok(!fixture.lines.includes('attached'));
         assert.strictEqual(await started, false);

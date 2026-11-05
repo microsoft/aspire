@@ -40,6 +40,21 @@ export function getAppHostInspectorAttachTimeoutMs(configuredTimeout: unknown): 
     return typeof configuredTimeout === 'number' ? configuredTimeout : denoAppHostInspectorAttachTimeoutMs;
 }
 
+/**
+ * A Deno AppHost always runs in js-debug's internal console. With `integratedTerminal` or `externalTerminal`
+ * (for example from the `debuggers.apphost.console` override), VS Code's terminal service starts the runtime
+ * outside the extension host's process tree. js-debug only owns the runtime once it attaches, so if the
+ * inspector attach times out or is cancelled, inspector cleanup could not find it and Deno would stay blocked
+ * in --inspect-wait. A terminal would also bypass `outputCapture`, which forwards the AppHost's output.
+ */
+export function getDenoAppHostDebugConsole(configuredConsole: unknown): 'internalConsole' {
+    if (configuredConsole !== undefined && configuredConsole !== 'internalConsole') {
+        extensionLogOutputChannel.warn(`Ignoring console '${configuredConsole}' for the Deno AppHost: it is always debugged in the internal console so a runtime that never attaches can be stopped.`);
+    }
+
+    return 'internalConsole';
+}
+
 // Bounds the process lookup, which runs PowerShell CIM queries on Windows.
 const inspectorWaitingProcessQueryTimeoutMs = 30_000;
 
@@ -500,6 +515,7 @@ export const nodeDebuggerExtension: ResourceDebuggerExtension = {
                 runtimeArgs.splice(runArgumentIndex + 1, 0, inspectorArgument);
                 debugConfiguration.attachSimplePort = inspectorPort;
                 debugConfiguration.timeout = getAppHostInspectorAttachTimeoutMs(debugConfiguration.timeout);
+                debugConfiguration.console = getDenoAppHostDebugConsole(debugConfiguration.console);
                 registerDenoAppHostInspectorCleanup(inspectorArgument, `127.0.0.1:${inspectorPort}`, debugConfiguration.timeout, launchOptions);
             }
 

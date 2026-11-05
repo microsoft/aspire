@@ -135,6 +135,47 @@ suite('Node Debugger Tests', () => {
         assert.strictEqual(debugConfig.timeout, 300000);
     });
 
+    for (const configuredConsole of ['integratedTerminal', 'externalTerminal', undefined]) {
+        test(`debugs the Deno AppHost in the internal console when console is ${configuredConsole ?? 'unset'}`, async () => {
+            const launchConfig: NodeLaunchConfiguration = {
+                type: 'node',
+                runtime_executable: 'deno',
+                working_directory: '/workspace/app'
+            };
+            const debugConfig: AspireResourceExtendedDebugConfiguration = { ...createDebugConfig(), console: configuredConsole };
+
+            await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
+                launchConfig,
+                ['run', '-A', '/workspace/app/apphost.mts'],
+                [],
+                { debug: true, runId: '1', debugSessionId: '1', isApphost: true, debugSession: fakeAspireDebugSession },
+                debugConfig);
+
+            // A terminal launches the runtime outside the extension host's process tree, where inspector cleanup
+            // cannot find it, and bypasses outputCapture.
+            assert.strictEqual(debugConfig.console, 'internalConsole');
+            assert.strictEqual(debugConfig.outputCapture, 'std');
+        });
+    }
+
+    test('keeps a configured console for non-AppHost Deno launches', async () => {
+        const launchConfig: NodeLaunchConfiguration = {
+            type: 'node',
+            runtime_executable: 'deno',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig: AspireResourceExtendedDebugConfiguration = { ...createDebugConfig(), console: 'integratedTerminal' };
+
+        await nodeDebuggerExtension.createDebugSessionConfigurationCallback!(
+            launchConfig,
+            ['run', '-A', '/workspace/app/main.ts'],
+            [],
+            { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
+            debugConfig);
+
+        assert.strictEqual(debugConfig.console, 'integratedTerminal');
+    });
+
     test('does not change the debugger timeout for non-Deno package manager launches', async () => {
         const launchConfig: NodeLaunchConfiguration = {
             type: 'node',
