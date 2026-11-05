@@ -77,6 +77,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
             {
                 Name = "api-service",
                 ResourceType = "Project",
+                ResourceTypeDisplayName = "ASP.NET Core",
                 State = "Running"
             }));
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
@@ -85,6 +86,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
 
         using var json = GetResourceData(result);
         var resource = json.RootElement[0];
+        Assert.Equal("ASP.NET Core", resource.GetProperty("resource_type_display_name").GetString());
         Assert.Equal("[]", resource.GetProperty("waiting_for").GetRawText());
         Assert.Equal("[]", resource.GetProperty("urls").GetRawText());
         Assert.Equal("[]", resource.GetProperty("relationships").GetRawText());
@@ -1017,7 +1019,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
         var resource = resources[0];
 
         Assert.Equal(
-            ["name", "display_name", "resource_type", "state", "waiting_for", "source", "dashboard_url", "urls", "relationships", "commands"],
+            ["name", "display_name", "resource_type", "resource_type_display_name", "state", "waiting_for", "source", "dashboard_url", "urls", "relationships", "commands"],
             resource.EnumerateObject().Select(p => p.Name));
         Assert.Equal(["Redis"], resource.GetProperty("waiting_for").EnumerateArray().Select(value => value.GetString()));
         Assert.Equal("Api.csproj", resource.GetProperty("source").GetString());
@@ -1066,8 +1068,9 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
 
         using var json = GetResourceData(result);
         Assert.Equal(
-            ["name", "resource_type", "state", "waiting_for", "dashboard_url", "urls", "relationships", "commands"],
+            ["name", "resource_type", "resource_type_display_name", "state", "waiting_for", "dashboard_url", "urls", "relationships", "commands"],
             json.RootElement[0].EnumerateObject().Select(property => property.Name));
+        Assert.Equal("Custom", json.RootElement[0].GetProperty("resource_type_display_name").GetString());
     }
 
     [Fact]

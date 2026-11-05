@@ -17,6 +17,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IAzurePrivateEndpointTarget
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Web PubSub";
+
     internal const string EmulatorAccessKey = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ABCDEFGH";
 
     internal EndpointReference EmulatorEndpoint => new(this, "emulator");

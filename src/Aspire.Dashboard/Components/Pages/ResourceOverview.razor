@@ -161,7 +161,7 @@
                         <dd>@healthStatus.Humanize()</dd>
                     }
                     <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
-                    <dd>@resource.ResourceType</dd>
+                    <dd>@resource.ResourceTypeDisplayName</dd>
                     @if (resource.IsPersistentContainer)
                     {
                         <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsContainerLifetimeProperty)]</dt>
@@ -540,7 +540,7 @@
                 }
                 else
                 {
-                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceType, Url: null))"
+                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceTypeDisplayName, Url: null))"
                                                Incoming="@GetGraphNodes(relatedResources, incoming: true)"
                                                Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
                 }

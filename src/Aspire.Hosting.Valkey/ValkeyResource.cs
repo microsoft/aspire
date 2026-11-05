@@ -10,6 +10,9 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport(ExposeProperties = true)]
 public class ValkeyResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Valkey";
+
     internal const string PrimaryEndpointName = "tcp";
 
     private EndpointReference? _primaryEndpoint;

@@ -111,7 +111,7 @@
                                             @* FluentDataGrid rows activate on Enter/NumpadEnter from Blazor keydown handlers.
                                                Stop Blazor keydown propagation from nested controls so keyboard activation doesn't
                                                also open resource details. Browser-native keyboard behavior still runs on the control. *@
-                                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceType}: {GetResourceName(c.Resource)}")" Class="expand-col">
+                                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceTypeDisplayName}: {GetResourceName(c.Resource)}")" Class="expand-col">
                                                 @{
                                                     var indent = context.Depth * 16;
                                                 }

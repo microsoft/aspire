@@ -21,12 +21,24 @@ public sealed partial class ResourceOverview
         KnownProperties.Resource.DisplayName,
         KnownProperties.Resource.State,
         KnownProperties.Resource.HealthState,
-        KnownProperties.Resource.Type,
+        KnownProperties.Resource.ResourceTypeDisplayName,
         KnownProperties.Resource.StartTime,
         KnownProperties.Resource.StopTime,
         KnownProperties.Resource.ExitCode,
         KnownProperties.Resource.Source,
     };
+
+    // The status card shows the friendly type label. The technical type is only redundant when no custom label
+    // replaces it, so keep it in the properties otherwise.
+    private static bool IsDisplayedOutsideProperties(ResourceViewModel resource, string propertyName)
+    {
+        if (string.Equals(propertyName, KnownProperties.Resource.Type, StringComparisons.ResourcePropertyName))
+        {
+            return resource.ResourceTypeDisplayName == resource.ResourceType;
+        }
+
+        return s_statusCardPropertyNames.Contains(propertyName);
+    }
 
     private readonly List<DisplayedResourcePropertyViewModel> _properties = new();
     private readonly MaskState _propertiesMask = new();
@@ -71,7 +83,7 @@ public sealed partial class ResourceOverview
 
         foreach (var property in resource.Properties.Values)
         {
-            if (s_statusCardPropertyNames.Contains(property.Name) || !HasValue(property.Value))
+            if (IsDisplayedOutsideProperties(resource, property.Name) || !HasValue(property.Value))
             {
                 continue;
             }

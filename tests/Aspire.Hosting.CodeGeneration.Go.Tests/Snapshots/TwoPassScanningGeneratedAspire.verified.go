@@ -3245,6 +3245,20 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -5282,6 +5296,18 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
@@ -6650,6 +6676,20 @@ type CSharpAppResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource
+
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) CSharpAppResource
 
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
@@ -8398,6 +8438,18 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *cSharpAppResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10610,6 +10662,20 @@ type ContainerRegistryResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerRegistryResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -11570,6 +11636,18 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *containerRegistryResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12916,6 +12994,20 @@ type ContainerResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource
+
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerResource
 
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
@@ -14948,6 +15040,18 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *containerResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18246,6 +18350,20 @@ type DotnetToolResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) DotnetToolResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -20046,6 +20164,18 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *dotnetToolResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22537,6 +22667,20 @@ type ExecutableResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -24267,6 +24411,18 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *executableResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *executableResource) WithSerializedAnnotation(annotationId string, json string) ExecutableResource {
@@ -25333,6 +25489,20 @@ type ExternalServiceResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ExternalServiceResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -26312,6 +26482,18 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *externalServiceResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -29157,6 +29339,20 @@ type ParameterResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ParameterResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -30218,6 +30414,18 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *parameterResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -32229,6 +32437,20 @@ type ProjectResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ProjectResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -33976,6 +34198,18 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *projectResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -37400,6 +37634,20 @@ type TestDatabaseResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -39434,6 +39682,18 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *testDatabaseResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *testDatabaseResource) WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource {
@@ -41171,6 +41431,20 @@ type TestRedisResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
+
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) TestRedisResource
 
 	// WithScalarField sets a scalar field value
 	//
@@ -43531,6 +43805,18 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *testRedisResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

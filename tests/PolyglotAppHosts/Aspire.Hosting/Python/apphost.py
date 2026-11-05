@@ -364,6 +364,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     container.with_child_relationship(tool)
     # withIconName
     container.with_icon_name("Cloud")
+    container.with_resource_type_display_name("Validation Service")
     # withHttpProbe
     container.with_http_probe("Liveness")
     # withRemoteImageName
