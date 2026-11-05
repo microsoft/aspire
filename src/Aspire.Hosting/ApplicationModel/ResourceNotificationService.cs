@@ -884,22 +884,31 @@ public class ResourceNotificationService : IDisposable
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
         var attempt = new PendingResourceStart(notificationState);
-        await PublishUpdateAsync(resource, resourceId, snapshot =>
+        try
         {
-            notificationState.PendingStart = attempt;
-            return snapshot with
+            await PublishUpdateAsync(resource, resourceId, snapshot =>
             {
-                State = KnownResourceStates.Starting,
-                ExitCode = null,
-                StartTimeStamp = null,
-                StopTimeStamp = null,
-                // Readiness callbacks are model-wide; a sibling replica can keep that monitor alive.
-                // Retain its event task and use the fresh state/health reports to gate this instance.
-                HealthReports = [.. snapshot.HealthReports.Select(report => new HealthReportSnapshot(report.Name, null, null, null))]
-            };
-        }).ConfigureAwait(false);
+                notificationState.PendingStart = attempt;
+                return snapshot with
+                {
+                    State = KnownResourceStates.Starting,
+                    ExitCode = null,
+                    StartTimeStamp = null,
+                    StopTimeStamp = null,
+                    // Readiness callbacks are model-wide; a sibling replica can keep that monitor alive.
+                    // Retain its event task and use the fresh state/health reports to gate this instance.
+                    HealthReports = [.. snapshot.HealthReports.Select(report => new HealthReportSnapshot(report.Name, null, null, null))]
+                };
+            }).ConfigureAwait(false);
 
-        return attempt;
+            return attempt;
+        }
+        catch
+        {
+            // Publication invokes user callbacks before the caller can take ownership of the guard.
+            attempt.Dispose();
+            throw;
+        }
     }
 
     internal void CompleteResourceStart(IResource resource, string resourceId)

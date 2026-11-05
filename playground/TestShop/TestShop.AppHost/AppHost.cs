@@ -7,8 +7,6 @@ using Microsoft.Extensions.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.DefineLaunchGroups("catalog", "basket", "frontend", "orders");
-
 // Parameters have the same two tags as the resource that uses them, so grouping the dashboard by tags shows them
 // together: Frontend/Storefront for the frontend, Backend/API for the catalog service, and Backend/Checkout for the
 // basket service.

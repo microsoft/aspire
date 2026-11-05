@@ -589,13 +589,19 @@ public class ResourceCommandService
                 var commandName = KnownResourceCommands.StartCommand;
                 if (ResolveCommandAnnotation(resource, ref commandName) is not { } startCommand)
                 {
-                    if (resource is IResourceWithParent child &&
-                        child.Parent.GetResolvedResourceNames().Any(parentName =>
-                            _resourceNotificationService.IsResourceStartPending(child.Parent, parentName)))
+                    var ancestor = resource;
+                    var visited = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
+                    while (ancestor is IResourceWithParent child && visited.Add(ancestor))
                     {
-                        // Passive children inherit their container's lifecycle but can have their own waits.
-                        // Retire their old state before those waits start, just as for the parent.
-                        using var childStart = await _resourceNotificationService.BeginResourceStartAsync(resource, name).ConfigureAwait(false);
+                        ancestor = child.Parent;
+                        if (ancestor.GetResolvedResourceNames().Any(parentName =>
+                            _resourceNotificationService.IsResourceStartPending(ancestor, parentName)))
+                        {
+                            // Passive intermediate resources release their guards after preparation.
+                            // An ancestor can still be restarting, so retire this descendant's old state too.
+                            using var childStart = await _resourceNotificationService.BeginResourceStartAsync(resource, name).ConfigureAwait(false);
+                            break;
+                        }
                     }
 
                     return CommandResults.Success();

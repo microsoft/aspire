@@ -1507,7 +1507,7 @@ class AspireDict(typing.MutableMapping[TKey, TValue]):
 
 
 def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
-    if typing.get_origin(expected_type) is typing.Iterable:
+    if typing.get_origin(expected_type) is typing.get_origin(typing.Iterable):
         if isinstance(arg, str):
             return False
         item_type = typing.get_args(expected_type)[0]
@@ -1516,7 +1516,7 @@ def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
         for item in arg:
             if not _validate_type(item, item_type):
                 return False
-    elif typing.get_origin(expected_type) is typing.Mapping:
+    elif typing.get_origin(expected_type) is typing.get_origin(typing.Mapping):
         key_type, value_type = typing.get_args(expected_type)
         if not isinstance(arg, typing.Mapping):
             return False
@@ -2554,16 +2554,6 @@ class DistributedApplicationBuilder:
             kwargs,
         )
         return typing.cast(ExternalServiceResource, result)
-
-    def define_launch_groups(self, launch_group_names: typing.Iterable[str]) -> typing.Self:
-        """Defines the valid launch group names."""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['launchGroupNames'] = launch_group_names
-        self._client.invoke_capability(
-            'Aspire.Hosting/defineLaunchGroups',
-            rpc_args
-        )
-        return self
 
     def add_parameter(self, name: str, *, value: str | None = None, publish_value_as_default: bool = False, secret: bool = False, **kwargs: typing.Unpack["ParameterResourceKwargs"]) -> ParameterResource:  # type: ignore
         """Adds a parameter resource"""

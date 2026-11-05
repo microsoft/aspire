@@ -16227,15 +16227,6 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DistributedApplication) result;
     }
 
-    /** Defines the valid launch group names. */
-    public IDistributedApplicationBuilder defineLaunchGroups(String[] launchGroupNames) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("launchGroupNames", AspireClient.serializeValue(launchGroupNames));
-        var result = getClient().invokeCapability("Aspire.Hosting/defineLaunchGroups", reqArgs);
-        return (IDistributedApplicationBuilder) result;
-    }
-
     /** Adds a parameter resource */
     public ParameterResource addParameter(String name, AddParameterOptions optionsBag) {
         var value = optionsBag == null ? null : optionsBag.getValue();

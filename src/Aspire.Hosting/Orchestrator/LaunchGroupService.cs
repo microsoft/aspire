@@ -5,16 +5,16 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Orchestrator;
 
 internal sealed class LaunchGroupService(
     IConfiguration configuration,
-    IOptions<LaunchGroupsOptions> options,
     DistributedApplicationExecutionContext executionContext,
     ILogger<LaunchGroupService> logger)
 {
+    internal const string ConfigurationSectionName = "Aspire:LaunchGroups";
+
     public bool IsActive { get; private set; }
 
     public void Configure(DistributedApplicationModel model)
@@ -24,12 +24,12 @@ internal sealed class LaunchGroupService(
             return;
         }
 
-        var declaredGroups = new HashSet<string>(options.Value.LaunchGroups, StringComparer.OrdinalIgnoreCase);
-        var configuredGroups = configuration.GetSection(LaunchGroupsOptions.ConfigurationSectionName);
+        var declaredGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var configuredGroups = configuration.GetSection(ConfigurationSectionName);
         if (configuredGroups.Value is not null)
         {
             throw new DistributedApplicationException(
-                $"{LaunchGroupsOptions.ConfigurationSectionName} must be an array of group names.");
+                $"{ConfigurationSectionName} must be an array of group names.");
         }
 
         foreach (var entry in configuredGroups.GetChildren())
@@ -37,10 +37,10 @@ internal sealed class LaunchGroupService(
             if (entry.Value is not { } name)
             {
                 throw new DistributedApplicationException(
-                    $"{LaunchGroupsOptions.ConfigurationSectionName} configuration entry '{entry.Key}' must be a group name.");
+                    $"{ConfigurationSectionName} configuration entry '{entry.Key}' must be a group name.");
             }
 
-            declaredGroups.Add(LaunchGroupAnnotation.ValidateName(name, nameof(LaunchGroupsOptions.LaunchGroups)));
+            declaredGroups.Add(LaunchGroupAnnotation.ValidateName(name, ConfigurationSectionName));
         }
 
         var memberships = model.Resources.SelectMany(resource => resource.Annotations.OfType<LaunchGroupAnnotation>()).ToArray();

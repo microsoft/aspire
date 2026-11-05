@@ -15,53 +15,6 @@ namespace Aspire.Hosting;
 public static class LaunchGroupExtensions
 {
     /// <summary>
-    /// Defines the valid launch group names.
-    /// </summary>
-    /// <param name="builder">The application builder.</param>
-    /// <param name="launchGroupNames">One or more valid group names, combined with the <c>Aspire:LaunchGroups</c> configuration array.</param>
-    /// <returns>The application builder.</returns>
-    /// <remarks>
-    /// <para>Select one group using the <c>Aspire:LaunchGroup</c> configuration setting, for example the
-    /// <c>Aspire__LaunchGroup</c> environment variable in an AppHost launch profile or
-    /// <c>dotnet run -- Aspire:LaunchGroup=catalog</c>.
-    /// Names are case-insensitive. Calling this method is optional: defining groups in <c>Aspire:LaunchGroups</c>
-    /// configuration or configuring resource membership with <c>WithLaunchGroup</c> or <c>WithLaunchGroups</c>
-    /// also enables launch group support. Without explicit definitions in code or configuration,
-    /// resource membership defines the valid names.</para>
-    /// <para>Without a selection, the full application runs normally. With a selection, ungrouped resources,
-    /// group members, and their dependencies start normally; other resources remain available for explicit
-    /// starts. Existing explicit-start settings are preserved. Launch groups do not affect publishing.</para>
-    /// </remarks>
-    /// <example>
-    /// <code lang="csharp">
-    /// builder.DefineLaunchGroups("catalog", "basket");
-    /// builder.AddContainer("catalog", "catalog-image").WithLaunchGroup("catalog");
-    /// </code>
-    /// </example>
-    /// <exception cref="ArgumentNullException">The builder, group names array, or a group name is null.</exception>
-    /// <exception cref="ArgumentException">No group names are provided, or a group name is empty, has surrounding whitespace, or contains a group separator.</exception>
-    [AspireExport]
-    public static IDistributedApplicationBuilder DefineLaunchGroups(this IDistributedApplicationBuilder builder, params string[] launchGroupNames)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(launchGroupNames);
-        if (launchGroupNames.Length == 0)
-        {
-            throw new ArgumentException("At least one launch group name must be specified.", nameof(launchGroupNames));
-        }
-
-        foreach (var name in launchGroupNames)
-        {
-            LaunchGroupAnnotation.ValidateName(name, nameof(launchGroupNames));
-        }
-
-        EnsureSupport(builder);
-        builder.Services.Configure<LaunchGroupsOptions>(options => options.LaunchGroups.UnionWith(launchGroupNames));
-
-        return builder;
-    }
-
-    /// <summary>
     /// Adds a resource to a launch group.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
@@ -72,6 +25,9 @@ public static class LaunchGroupExtensions
     /// Membership is additive. Select one group with the <c>Aspire:LaunchGroup</c> configuration setting.
     /// Dependencies of selected resources are included even if they belong to another group.
     /// Ungrouped children inherit their parent's membership.
+    /// Valid group names are inferred from membership unless explicitly defined in <c>Aspire:LaunchGroups</c>.
+    /// Use the <c>Aspire__LaunchGroup</c> environment variable or <c>dotnet run -- Aspire:LaunchGroup=catalog</c>
+    /// to select a group. No selection preserves normal startup, and publishing is unaffected.
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
@@ -141,7 +97,6 @@ public static class LaunchGroupExtensions
             return;
         }
 
-        builder.Services.AddOptions<LaunchGroupsOptions>();
         builder.Services.TryAddSingleton<LaunchGroupService>();
         builder.Pipeline.AddStep(new PipelineStep
         {
@@ -155,11 +110,4 @@ public static class LaunchGroupExtensions
             }
         });
     }
-}
-
-internal sealed class LaunchGroupsOptions
-{
-    internal const string ConfigurationSectionName = "Aspire:LaunchGroups";
-
-    public HashSet<string> LaunchGroups { get; } = new(StringComparer.OrdinalIgnoreCase);
 }

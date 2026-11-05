@@ -48,7 +48,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path, outputHelper);
-        builder.DefineLaunchGroups("api", "worker", "empty");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "api";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "worker";
+        builder.Configuration["Aspire:LaunchGroups:2"] = "empty";
         builder.Configuration["Aspire:LaunchGroup"] = group;
         var apiPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var workerPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
@@ -85,11 +87,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public async Task DeclarationOnlyLaunchGroupSelectionDefersExplicitStartProjectBuilds(bool selectGroup, bool declareInConfiguration)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeclarationOnlyLaunchGroupSelectionDefersExplicitStartProjectBuilds(bool selectGroup)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -103,14 +103,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var api = builder.AddDotnetProject("api", apiPath, options => options.ExcludeLaunchProfile = true);
         var worker = builder.AddDotnetProject("worker", workerPath, options => options.ExcludeLaunchProfile = true)
             .WithExplicitStart();
-        if (declareInConfiguration)
-        {
-            builder.Configuration["Aspire:LaunchGroups:0"] = "local";
-        }
-        else
-        {
-            builder.DefineLaunchGroups("local");
-        }
+        builder.Configuration["Aspire:LaunchGroups:0"] = "local";
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
@@ -169,7 +162,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path, outputHelper);
-        builder.DefineLaunchGroups("empty", "workers");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "empty";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "workers";
         builder.Configuration["Aspire:LaunchGroup"] = "empty";
         foreach (var name in new[] { "first", "second", "third" })
         {
@@ -240,7 +234,8 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
         else
         {
-            builder.DefineLaunchGroups("empty", "workers");
+            builder.Configuration["Aspire:LaunchGroups:0"] = "empty";
+            builder.Configuration["Aspire:LaunchGroups:1"] = "workers";
             first.WithLaunchGroup("workers");
             second.WithLaunchGroup("workers");
         }
@@ -1054,7 +1049,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         if (selectLaunchGroup)
         {
-            builder.DefineLaunchGroups("local");
+            builder.Configuration["Aspire:LaunchGroups:0"] = "local";
             builder.Configuration["Aspire:LaunchGroup"] = "local";
         }
 

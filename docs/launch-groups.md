@@ -5,8 +5,6 @@ They work with containers, executables, .NET projects, and resources that honor
 `WithExplicitStart`. They do not change publishing or deployment.
 
 ```csharp
-builder.DefineLaunchGroups("catalog", "basket", "frontend");
-
 var database = builder.AddPostgres("database").WithLaunchGroup("catalog");
 var cache = builder.AddRedis("cache").WithLaunchGroup("basket");
 var catalog = builder.AddDotnetProject("catalog", "../Catalog/Catalog.csproj")
@@ -16,11 +14,11 @@ var catalog = builder.AddDotnetProject("catalog", "../Catalog/Catalog.csproj")
 ```
 
 `WithLaunchGroup` and `WithLaunchGroups` are additive. Names are case-insensitive.
-Define valid names with `DefineLaunchGroups`, the `Aspire:LaunchGroups` configuration
-array, or both. `DefineLaunchGroups` requires at least one name. Configuration
-definitions enable launch group support automatically, without any launch group API
-calls. `WithLaunchGroup` and `WithLaunchGroups` also register the required support.
-Without explicit definitions, membership defines the valid groups.
+Valid group names are inferred from `WithLaunchGroup` and `WithLaunchGroups`
+membership. To explicitly define the valid names, including groups with no members,
+use the `Aspire:LaunchGroups` configuration array. Configuration definitions enable
+launch group support automatically, without any launch group API calls.
+`WithLaunchGroup` and `WithLaunchGroups` also register the required support.
 Undefined membership and invalid selections fail before resources start. Select
 exactly one name, not a comma- or semicolon-separated list.
 Selecting a group when no names or resource memberships are defined also fails

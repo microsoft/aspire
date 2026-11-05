@@ -2964,7 +2964,10 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -6427,7 +6430,10 @@ type CSharpAppResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -10517,7 +10523,10 @@ type ContainerRegistryResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -12783,7 +12792,10 @@ type ContainerResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -15637,28 +15649,6 @@ type DistributedApplicationBuilder interface {
 	// Defaults to the content root if there's no project.
 	AppHostDirectory() (string, error)
 
-	// DefineLaunchGroups defines the valid launch group names.
-	//
-	// Select one group using the Aspire:LaunchGroup configuration setting, for
-	// example the Aspire__LaunchGroup environment variable in an AppHost launch
-	// profile or dotnet run -- Aspire:LaunchGroup=catalog. Names are
-	// case-insensitive. Calling this method is optional: defining groups in
-	// Aspire:LaunchGroups configuration or configuring resource membership with
-	// WithLaunchGroup or WithLaunchGroups also enables launch group support.
-	// Without explicit definitions in code or configuration, resource membership
-	// defines the valid names. Without a selection, the full application runs
-	// normally. With a selection, ungrouped resources, group members, and their
-	// dependencies start normally; other resources remain available for explicit
-	// starts. Existing explicit-start settings are preserved. Launch groups do not
-	// affect publishing.
-	//
-	// Parameters:
-	//   - launchGroupNames: One or more valid group names, combined with the
-	//     Aspire:LaunchGroups configuration array.
-	//
-	// Returns: The application builder.
-	DefineLaunchGroups(launchGroupNames []string) DistributedApplicationBuilder
-
 	// Environment gets the Environment property
 	Environment() HostEnvironment
 
@@ -16287,18 +16277,6 @@ func (s *distributedApplicationBuilder) AppHostDirectory() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
-}
-
-// DefineLaunchGroups defines the valid launch group names.
-func (s *distributedApplicationBuilder) DefineLaunchGroups(launchGroupNames []string) DistributedApplicationBuilder {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/defineLaunchGroups", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // Environment gets the Environment property
@@ -18212,7 +18190,10 @@ type DotnetToolResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -22552,7 +22533,10 @@ type ExecutableResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -25470,7 +25454,10 @@ type ExternalServiceResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -29324,7 +29311,10 @@ type ParameterResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -32382,7 +32372,10 @@ type ProjectResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -37594,7 +37587,10 @@ type TestDatabaseResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -41380,7 +41376,10 @@ type TestRedisResource interface {
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
 	// configuration setting. Dependencies of selected resources are included even
 	// if they belong to another group. Ungrouped children inherit their parent's
-	// membership.
+	// membership. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.

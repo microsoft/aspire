@@ -1742,7 +1742,7 @@ internal sealed class PythonModuleBuilder
 
 
         def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
-            if typing.get_origin(expected_type) is typing.Iterable:
+            if typing.get_origin(expected_type) is typing.get_origin(typing.Iterable):
                 if isinstance(arg, str):
                     return False
                 item_type = typing.get_args(expected_type)[0]
@@ -1751,7 +1751,7 @@ internal sealed class PythonModuleBuilder
                 for item in arg:
                     if not _validate_type(item, item_type):
                         return False
-            elif typing.get_origin(expected_type) is typing.Mapping:
+            elif typing.get_origin(expected_type) is typing.get_origin(typing.Mapping):
                 key_type, value_type = typing.get_args(expected_type)
                 if not isinstance(arg, typing.Mapping):
                     return False

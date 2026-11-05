@@ -358,6 +358,55 @@ public class AtsPythonCodeGeneratorTests
     [Fact]
     [RequiresTools(["python3"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnUnix()
+        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python3");
+
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnWindows()
+        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python");
+
+    private Task GeneratedLaunchGroupsKeyword_AcceptsIterables(string pythonExecutable)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            """
+            import typing
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "resource", "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource"})
+            calls = []
+
+            def invoke_capability(capability_id, args, kwargs=None):
+                calls.append((capability_id, args))
+                return args["builder"]
+
+            client.invoke_capability = invoke_capability
+            for groups in (["catalog", "basket"], ("catalog", "basket")):
+                aspire_app.ExecutableResource(handle, client, launch_groups=groups)
+                capability_id, args = calls.pop()
+                assert capability_id == "Aspire.Hosting/withLaunchGroups"
+                assert args["builder"] == handle
+                assert list(args["launchGroupNames"]) == ["catalog", "basket"]
+
+            for groups in ("catalog", ["catalog", 42], 42):
+                try:
+                    aspire_app.ExecutableResource(handle, client, launch_groups=groups)
+                    raise AssertionError("Invalid launch_groups was accepted")
+                except TypeError as error:
+                    assert "launch_groups" in str(error)
+                assert calls == []
+
+            assert aspire_app._validate_type({"catalog": ["api", "cache"]}, typing.Mapping[str, typing.Iterable[str]])
+            assert not aspire_app._validate_type({"catalog": ["api", 42]}, typing.Mapping[str, typing.Iterable[str]])
+            """);
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
     public Task GeneratedTerminalCallback_ReturnsMutatedDtoOnUnix()
         => GeneratedTerminalCallback_ReturnsMutatedDto("python3");
 

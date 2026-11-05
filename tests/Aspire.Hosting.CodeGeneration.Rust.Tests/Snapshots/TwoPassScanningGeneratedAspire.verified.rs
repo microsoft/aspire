@@ -12183,16 +12183,6 @@ impl IDistributedApplicationBuilder {
         Ok(DistributedApplication::new(handle, self.client.clone()))
     }
 
-    /// Defines the valid launch group names.
-    pub fn define_launch_groups(&self, launch_group_names: Vec<String>) -> Result<IDistributedApplicationBuilder, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("launchGroupNames".to_string(), serde_json::to_value(&launch_group_names).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/defineLaunchGroups", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IDistributedApplicationBuilder::new(handle, self.client.clone()))
-    }
-
     /// Adds a parameter resource
     pub fn add_parameter(&self, name: &str, value: Option<&str>, publish_value_as_default: Option<bool>, secret: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();

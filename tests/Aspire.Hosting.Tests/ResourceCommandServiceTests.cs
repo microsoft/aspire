@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,20 +20,90 @@ namespace Aspire.Hosting.Tests;
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task LaunchGroupLateStartPreparesCustomDependencyWithoutInitialState(bool configurationOnly)
+    [InlineData(WaitType.WaitUntilStarted)]
+    [InlineData(WaitType.WaitUntilHealthy)]
+    public async Task LaunchGroupLateStartPreparesNestedPassiveDependencies(WaitType waitType)
     {
         using var builder = CreateBuilder();
-        if (configurationOnly)
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
+        builder.Configuration["Aspire:LaunchGroup"] = "selected";
+        var restartEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRestart = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var rootEntered = new TaskCompletionSource<Task>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var account = builder.AddResource(new CustomResource("account")).WithLaunchGroup("other");
+        var database = builder.AddResource(new TestResourceWithParent("database", account.Resource));
+        var container = builder.AddResource(new TestResourceWithParent("container", database.Resource));
+        account.WithCommand(KnownResourceCommands.StartCommand, "Start", async context =>
         {
-            builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
-            builder.Configuration["Aspire:LaunchGroups:1"] = "other";
-        }
-        else
+            restartEntered.TrySetResult();
+            await releaseRestart.Task.WaitAsync(context.CancellationToken);
+            var notifications = context.Services.GetRequiredService<ResourceNotificationService>();
+            foreach (var resource in new IResource[] { account.Resource, database.Resource, container.Resource })
+            {
+                await notifications.PublishUpdateAsync(resource, snapshot => snapshot with
+                {
+                    State = KnownResourceStates.Running,
+                    ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+                });
+            }
+            return CommandResults.Success();
+        });
+        var root = builder.AddResource(new CustomResource("root")).WithLaunchGroup("other")
+            .WithAnnotation(new WaitAnnotation(container.Resource, waitType));
+        root.WithCommand(KnownResourceCommands.StartCommand, "Start", async context =>
         {
-            builder.DefineLaunchGroups("selected", "other");
+            var wait = context.Services.GetRequiredService<ResourceNotificationService>()
+                .WaitForDependenciesAsync(root.Resource, context.CancellationToken);
+            rootEntered.TrySetResult(wait);
+            await wait;
+            return CommandResults.Success();
+        });
+        await using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+        foreach (var resource in new IResource[] { account.Resource, database.Resource, container.Resource })
+        {
+            await app.ResourceNotifications.PublishUpdateAsync(resource, snapshot => snapshot with
+            {
+                State = KnownResourceStates.Exited,
+                ExitCode = 0,
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            });
         }
+        await app.ResourceNotifications.PublishUpdateAsync(root.Resource, snapshot => snapshot with { State = KnownResourceStates.NotStarted });
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var start = app.ResourceCommands.ExecuteCommandAsync(root.Resource, KnownResourceCommands.StartCommand, cts.Token);
+        try
+        {
+            var wait = await rootEntered.Task.DefaultTimeout();
+            Assert.False(wait.IsCompleted);
+            await restartEntered.Task.DefaultTimeout();
+            foreach (var resource in new IResource[] { account.Resource, database.Resource, container.Resource })
+            {
+                Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Name, out var current));
+                Assert.Equal(KnownResourceStates.Starting, current.Snapshot.State?.Text);
+                Assert.Null(current.Snapshot.ExitCode);
+            }
+
+            releaseRestart.TrySetResult();
+            var result = await start.DefaultTimeout();
+            Assert.True(result.Success, result.Message);
+        }
+        finally
+        {
+            releaseRestart.TrySetResult();
+            await cts.CancelAsync();
+            await start.DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task LaunchGroupLateStartPreparesCustomDependencyWithoutInitialState()
+    {
+        using var builder = CreateBuilder();
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var dependencyEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseDependency = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -100,7 +171,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupLateStartWaitsForStoppedDependencyRestart(string stoppedState, WaitType waitType, bool childDependency)
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var restartEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseRestart = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -185,7 +257,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupLateStartsDoNotDeadlockMixedReferenceAndWaitGraph(bool rootSucceeds, bool throwOnFailure, string initialState)
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var started = new ConcurrentQueue<string>();
         var root = builder.AddResource(new CustomResource("root")).WithLaunchGroup("other");
@@ -255,7 +328,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupOverlappingDirectAndDependentStartsRunOnce(bool directFirst, bool publishRunning)
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -329,7 +403,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupOverlappingStartWaitsForPredecessorSnapshotPreparation()
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var preparing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var releasePreparation = new ManualResetEventSlim();
@@ -401,7 +476,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupFailedWaitingStartCanRetryItsDependency()
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var attempts = 0;
         var dependency = builder.AddResource(new CustomResource("dependency")).WithLaunchGroup("other");
@@ -449,7 +525,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupCanceledQueuedStartDoesNotReleaseFollowingDependencyStart()
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -508,7 +585,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupWaitingStartDoesNotBlockForceStartsOrUnrelatedStarts()
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var waiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -559,7 +637,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupLateStartsRestartStoppedServicesButPreserveCompletedJobs(string state, int? exitCode, bool completionDependency, bool shouldStart)
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("selected", "other");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "selected";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "other";
         builder.Configuration["Aspire:LaunchGroup"] = "selected";
         var started = new ConcurrentQueue<string>();
         var dependency = builder.AddResource(new CustomResource("dependency")).WithLaunchGroup("other")
@@ -596,7 +675,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task LaunchGroupLateStartsIncludeCustomResourceDependencies(bool dependencyRunning, bool dependencySucceeds)
     {
         using var builder = CreateBuilder();
-        builder.DefineLaunchGroups("catalog", "basket");
+        builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
+        builder.Configuration["Aspire:LaunchGroups:1"] = "basket";
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
         var started = new ConcurrentQueue<string>();
         var dependency = builder.AddResource(new CustomResource("dependency")).WithLaunchGroup("basket");

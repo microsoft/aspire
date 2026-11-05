@@ -44,12 +44,10 @@ public sealed class LaunchGroupTests(ITestOutputHelper output)
         Assert.Contains(builderDeclaration, source);
         var resources = typeScript
             ? """
-              await builder.defineLaunchGroups(["catalog", "basket"]);
               await builder.addExecutable("catalog", "sleep", ".", ["600"]).withLaunchGroup("catalog");
               await builder.addExecutable("basket", "sleep", ".", ["600"]).withLaunchGroup("basket");
               """
             : """
-              builder.DefineLaunchGroups("catalog", "basket");
               builder.AddExecutable("catalog", "sleep", ".", "600").WithLaunchGroup("catalog");
               builder.AddExecutable("basket", "sleep", ".", "600").WithLaunchGroup("basket");
               """;

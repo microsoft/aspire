@@ -20,6 +20,39 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "3")]
 public class ResourceNotificationTests
 {
+    [Fact]
+    public async Task FailedStartPreparationReleasesPendingGuard()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var exception = new InvalidOperationException("Command state update failed.");
+        var resource = builder.AddExecutable("resource", "unused", ".")
+            .WithCommand("test", "Test", _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    UpdateState = context => context.ResourceSnapshot.State?.Text == KnownResourceStates.Starting
+                        ? throw exception
+                        : ResourceCommandState.Enabled
+                });
+        await using var app = builder.Build();
+        var notifications = app.ResourceNotifications;
+        await notifications.PublishUpdateAsync(resource.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited,
+            ExitCode = 0
+        });
+
+        var actual = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => notifications.BeginResourceStartAsync(resource.Resource, resource.Resource.Name));
+
+        Assert.Same(exception, actual);
+        Assert.False(notifications.IsResourceStartPending(resource.Resource, resource.Resource.Name));
+        Assert.True(await notifications.TryPublishDcpUpdateAsync(resource.Resource, resource.Resource.Name,
+            snapshot => snapshot with { State = KnownResourceStates.Running, ExitCode = null }));
+        Assert.True(notifications.TryGetCurrentState(resource.Resource.Name, out var current));
+        Assert.Equal(KnownResourceStates.Running, current.Snapshot.State?.Text);
+        Assert.Null(current.Snapshot.ExitCode);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
