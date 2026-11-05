@@ -133,7 +133,7 @@ public static partial class RadiusExtensions
     /// instead of combining that method with <c>WithContainerImage</c>.
     /// </remarks>
     [Experimental("ASPIRERADIUS057", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport]
+    [AspireExportIgnore(Reason = "The generic WithContainerImage overload exports this operation for all .NET program resources.")]
     public static IResourceBuilder<ProjectResource> WithContainerImage(
         this IResourceBuilder<ProjectResource> builder,
         string image) =>
@@ -144,15 +144,21 @@ public static partial class RadiusExtensions
     /// </summary>
     /// <typeparam name="T">The .NET program resource type.</typeparam>
     /// <param name="builder">The .NET program resource builder.</param>
-    /// <param name="image">A fully-qualified image reference in <c>[registry/]image[:tag]</c> form.</param>
+    /// <param name="image">
+    /// A fully-qualified image reference in <c>[registry/]image[:tag]</c> form
+    /// (for example <c>localhost:5001/apiservice:latest</c>). When the tag is omitted,
+    /// <c>latest</c> is used.
+    /// </param>
     /// <returns>The same resource builder for chaining.</returns>
     /// <remarks>
+    /// <para>
     /// The attached image is treated as a final artifact and is not modified by Aspire.
     /// Include any files required by <c>PublishWithContainerFiles</c> when building the image
     /// instead of combining that method with <c>WithContainerImage</c>.
+    /// </para>
     /// </remarks>
     [Experimental("ASPIRERADIUS057", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("withDotnetProgramContainerImage", MethodName = "withContainerImage")]
+    [AspireExport]
     public static IResourceBuilder<T> WithContainerImage<T>(
         this IResourceBuilder<T> builder,
         string image)
