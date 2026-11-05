@@ -37,7 +37,7 @@ CI run fails on PR
 
 The full analysis runs in four passes:
 
-1. **Infrastructure annotation check** — Hardcoded patterns match runner failures, action download failures, and other known infrastructure errors from job annotations.
+1. **Infrastructure annotation check** — Hardcoded patterns match runner failures, action download failures, and other known infrastructure errors from job annotations. Jobs whose only failed steps are artifact `Upload*`/`Download*` steps are retried when the annotations show an artifact service transport failure (`Failed to {CreateArtifact,FinalizeArtifact,ListArtifacts,GetSignedArtifactURL}: Unable to make request: ETIMEDOUT|ENOTFOUND|ECONNRESET`).
 2. **Infrastructure log override** — For non-test-execution failures, job logs are checked against a hardcoded list of high-confidence network failure patterns (NuGet feed timeouts, GitHub API errors, etc.).
 3. **Job log pattern matching** — For test execution failures (`Run tests*` step), the job log is matched against configurable `jobFailurePatterns` from [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json).
 4. **TRX test output matching** — If any test execution failures remain unmatched, the workflow downloads the `All-TestResults` artifact, parses the `.trx` files, and matches individual failed test output against configurable `testFailurePatterns` from the same config file.

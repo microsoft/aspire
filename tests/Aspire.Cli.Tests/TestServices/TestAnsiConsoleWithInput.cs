@@ -6,10 +6,6 @@ using Spectre.Console.Rendering;
 
 namespace Aspire.Cli.Tests.TestServices;
 
-/// <summary>
-/// A test <see cref="IAnsiConsole"/> wrapper that redirects input reads to a <see cref="TextReader"/>,
-/// allowing prompts to be answered in unit tests without blocking on real console input.
-/// </summary>
 internal sealed class TestAnsiConsoleWithInput : IAnsiConsole
 {
     private readonly IAnsiConsole _inner;
@@ -19,6 +15,12 @@ internal sealed class TestAnsiConsoleWithInput : IAnsiConsole
     {
         _inner = inner;
         _testInput = new TextReaderInput(inputReader);
+    }
+
+    public TestAnsiConsoleWithInput(IAnsiConsole inner, IEnumerable<ConsoleKeyInfo> keys)
+    {
+        _inner = inner;
+        _testInput = new KeyInput(keys);
     }
 
     public Profile Profile => _inner.Profile;
@@ -31,20 +33,28 @@ internal sealed class TestAnsiConsoleWithInput : IAnsiConsole
     public void Write(IRenderable renderable) => _inner.Write(renderable);
     public void WriteAnsi(Action<AnsiWriter> action) => _inner.WriteAnsi(action);
 
-    private sealed class TextReaderInput : IAnsiConsoleInput
+    private sealed class KeyInput(IEnumerable<ConsoleKeyInfo> keys) : IAnsiConsoleInput
     {
-        private readonly TextReader _reader;
+        private readonly Queue<ConsoleKeyInfo> _keys = new(keys);
 
-        public TextReaderInput(TextReader reader) => _reader = reader;
+        public bool IsKeyAvailable() => _keys.Count > 0;
+        public ConsoleKeyInfo? ReadKey(bool intercept) => _keys.Dequeue();
+        public Task<ConsoleKeyInfo?> ReadKeyAsync(bool intercept, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(ReadKey(intercept));
+        }
+    }
 
+    private sealed class TextReaderInput(TextReader reader) : IAnsiConsoleInput
+    {
         public bool IsKeyAvailable() => true;
 
         public ConsoleKeyInfo? ReadKey(bool intercept)
         {
-            var read = _reader.Read();
+            var read = reader.Read();
             if (read == -1)
             {
-                // End of stream - return Enter as a safe fallback
                 return new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false);
             }
 
@@ -52,9 +62,9 @@ internal sealed class TestAnsiConsoleWithInput : IAnsiConsole
             var key = ch switch
             {
                 '\n' or '\r' => ConsoleKey.Enter,
-                'y' or 'Y'   => ConsoleKey.Y,
-                'n' or 'N'   => ConsoleKey.N,
-                _            => ConsoleKey.Enter,
+                'y' or 'Y' => ConsoleKey.Y,
+                'n' or 'N' => ConsoleKey.N,
+                _ => ConsoleKey.Enter,
             };
             return new ConsoleKeyInfo(ch, key, shift: char.IsUpper(ch), alt: false, control: false);
         }

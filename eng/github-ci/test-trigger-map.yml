@@ -433,9 +433,20 @@ path_rules:
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script
   - paths:
+      - src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj
+      - src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj
+      - src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj
+    targets: [test:Aspire.Cli.Tests]
+    reason: DefaultHostingPackagesTests reads these project files to guard that each default hosting package ships a stable version.
+  - paths:
       - src/Aspire.ProjectTemplates/templates/**
     targets: [test:Aspire.Cli.Tests]
     reason: CLI tests instantiate template sources and verify frontend package inputs.
+  - paths:
+      - tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/nextjs/.npmrc
+      - tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/npmscript/.npmrc
+    targets: [test:Aspire.Cli.Tests]
+    reason: Cli.Tests/Templating/TemplatePackageLockTests guards these public-registry pins used by Dependabot.
   - paths:
       - src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs
       - src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs
