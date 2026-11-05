@@ -1921,19 +1921,15 @@ public class AtsTypeScriptCodeGeneratorTests
             c => c.CapabilityId == "Aspire.Hosting.Azure.ContainerRegistry/withPurgeTask");
 
         Assert.Equal("withPurgeTask", capability.MethodName);
-        Assert.Equal(["schedule", "filter", "ago", "keep", "taskName", "untagged", "cliVersion"],
+        Assert.Equal(["schedule", "filter", "ago", "keep", "taskName"],
             capability.Parameters.Select(parameter => parameter.Name));
         Assert.False(capability.Parameters[0].IsOptional);
         Assert.All(capability.Parameters.Skip(1), parameter => Assert.True(parameter.IsOptional));
-        Assert.True(Assert.IsType<bool>(capability.Parameters[^2].DefaultValue));
-        Assert.Equal("0.21", Assert.IsType<string>(capability.Parameters[^1].DefaultValue));
 
         var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
         var purgeDeclarations = files["aspire.mts"].ReplaceLineEndings("\n").Split('\n').Where(line =>
             line.Contains("withPurgeTask", StringComparison.Ordinal) ||
-            line.Contains("WithPurgeTaskOptions", StringComparison.Ordinal) ||
-            line.Contains("untagged", StringComparison.Ordinal) ||
-            line.Contains("cliVersion", StringComparison.Ordinal));
+            line.Contains("WithPurgeTaskOptions", StringComparison.Ordinal));
 
         await Verify(string.Join('\n', purgeDeclarations), "ts");
     }

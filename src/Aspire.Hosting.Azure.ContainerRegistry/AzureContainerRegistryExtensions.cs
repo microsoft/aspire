@@ -122,7 +122,7 @@ public static class AzureContainerRegistryExtensions
     }
 
     /// <summary>
-    /// Adds a scheduled ACR purge task to remove image tags and optionally untagged manifests.
+    /// Adds a scheduled ACR purge task to remove image tags and eligible untagged manifests.
     /// </summary>
     /// <param name="builder">The resource builder for the <see cref="AzureContainerRegistryResource"/>.</param>
     /// <param name="schedule">The cron schedule for the purge task timer trigger. Must be a five-part cron expression
@@ -136,24 +136,20 @@ public static class AzureContainerRegistryExtensions
     /// <param name="taskName">An optional name for the ACR task resource. If not provided, a name is auto-generated
     /// based on existing purge tasks to avoid conflicts. If a task with the specified name already exists,
     /// an <see cref="ArgumentException"/> is thrown.</param>
-    /// <param name="untagged">Whether to also delete eligible untagged manifests. Defaults to true.</param>
-    /// <param name="cliVersion">The image tag for <c>mcr.microsoft.com/acr/acr-cli</c>. Defaults to <c>0.21</c>.
-    /// The selected image must support the count-retention flags introduced in ACR CLI 0.20.</param>
     /// <ats-param name="ago">The age threshold based on last modified time, in milliseconds. Older matching tags are
     /// eligible for removal unless protected by the keep limit. Defaults to zero.</ats-param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="schedule"/> is <see langword="null"/>, empty, or whitespace,
-    /// when <paramref name="cliVersion"/> is not a valid container image tag,
     /// or when <paramref name="taskName"/> conflicts with an existing task.</exception>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="keep"/> is less than 1,
     /// or <paramref name="ago"/> is negative or less than 1 minute (when non-zero).</exception>
     /// <remarks>
-    /// Tag removal alone does not reclaim storage. By default, <paramref name="untagged"/> also deletes eligible
+    /// Tag removal alone does not reclaim storage. The task also deletes eligible
     /// previously untagged manifests and can break digest-based pulls and rollbacks. No Premium SKU or retention
-    /// policy is required. Set <paramref name="untagged"/> to false to remove tags only.
-    /// The task uses ACR CLI 0.21 by default with a minimum tag count and a separate untagged-manifest count limit. Untagged cleanup retains no
+    /// policy is required.
+    /// The task uses ACR CLI 0.21 with a minimum tag count and a separate untagged-manifest count limit. Untagged cleanup retains no
     /// additional untagged manifests, regardless of age. Locked artifacts and dependencies of retained images are protected,
     /// so cleanup is not an unconditional guarantee of the number of remaining tags or manifests.
     /// The newest <paramref name="keep"/> matching tags are protected even when all tags are old. All tags younger than
@@ -175,22 +171,10 @@ public static class AzureContainerRegistryExtensions
         string? filter = null,
         TimeSpan? ago = null,
         int keep = 3,
-        string? taskName = null,
-        bool untagged = true,
-        string cliVersion = "0.21")
+        string? taskName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(schedule);
-        ArgumentException.ThrowIfNullOrWhiteSpace(cliVersion);
-
-        // Validate the Docker tag grammar before embedding the version in the task command.
-        // https://github.com/distribution/reference/blob/main/regexp.go
-        if (cliVersion.Length > 128 ||
-            !(char.IsAsciiLetterOrDigit(cliVersion[0]) || cliVersion[0] == '_') ||
-            cliVersion.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or '-')))
-        {
-            throw new ArgumentException("The CLI version must be a valid container image tag of at most 128 characters.", nameof(cliVersion));
-        }
 
         schedule = schedule.Trim();
 
@@ -242,7 +226,7 @@ public static class AzureContainerRegistryExtensions
 
             var purgeTaskCmdVariable = new ProvisioningVariable($"purgeTaskCmd_{taskIndex}", typeof(string))
             {
-                Value = CreatePurgeTaskContent(filter, purgeAgo, keep, untagged, cliVersion)
+                Value = CreatePurgeTaskContent(filter, purgeAgo, keep)
             };
             infra.Add(purgeTaskCmdVariable);
 
@@ -269,22 +253,6 @@ public static class AzureContainerRegistryExtensions
             };
             infra.Add(purgeTask);
         });
-    }
-
-    /// <inheritdoc cref="WithPurgeTask(IResourceBuilder{AzureContainerRegistryResource}, string, string, TimeSpan?, int, string, bool, string)"/>
-    /// <remarks>
-    /// Preserves the original CLR signature. Defaults are on the extended overload to avoid ambiguous source calls.
-    /// </remarks>
-    [AspireExportIgnore(Reason = "Retained for binary compatibility. Polyglot AppHosts use the overload with optional purge settings.")]
-    public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
-        this IResourceBuilder<AzureContainerRegistryResource> builder,
-        string schedule,
-        string? filter,
-        TimeSpan? ago,
-        int keep,
-        string? taskName)
-    {
-        return WithPurgeTask(builder, schedule, filter, ago, keep, taskName, untagged: true);
     }
 
     /// <summary>
@@ -350,7 +318,7 @@ public static class AzureContainerRegistryExtensions
         return builder.WithRoleAssignments(target, builtInRoles);
     }
 
-    private static string CreatePurgeTaskContent(string? filter, string ago, int keep, bool untagged, string cliVersion)
+    private static string CreatePurgeTaskContent(string? filter, string ago, int keep)
     {
         // A minimum protects the newest tags without deleting younger tags outside that count.
         // --max-tags would override age protection; --keep conflicts with manifest count limits.
@@ -359,7 +327,7 @@ public static class AzureContainerRegistryExtensions
         return $"""
             version: v1.1.0
             steps:
-            - cmd: mcr.microsoft.com/acr/acr-cli:{cliVersion} purge --filter '{filter ?? ".*:.*"}' --ago {ago} --min-tags {keep}{(untagged ? " --untagged --max-untagged-manifests 0" : "")}
+            - cmd: mcr.microsoft.com/acr/acr-cli:0.21 purge --filter '{filter ?? ".*:.*"}' --ago {ago} --min-tags {keep} --untagged --max-untagged-manifests 0
             """.ReplaceLineEndings("\n");
     }
 

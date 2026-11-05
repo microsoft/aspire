@@ -73,7 +73,6 @@ See the [Container Apps deployment guide](https://aspire.dev/deployment/azure/co
 matching tags per repository. All younger matching tags are also retained, so more than `keep`
 tags can remain. By default, `ago` is zero, `keep` is three, and eligible untagged manifests are
 also removed to reclaim storage.
-Set `untagged` to `false` to remove tags only, leaving the underlying manifests and image layers.
 
 **C#**
 
@@ -99,21 +98,10 @@ in matching repositories are also eligible, so deletion can break digest-based p
 rollbacks. Shared image layers remain until no retained manifests reference them, and storage
 usage reporting can lag behind deletion.
 
-The task defaults to `mcr.microsoft.com/acr/acr-cli:0.21` and generates:
+The task pins `mcr.microsoft.com/acr/acr-cli:0.21` and generates:
 
 ```text
 mcr.microsoft.com/acr/acr-cli:0.21 purge --filter 'myapp:.*' --ago 7d --min-tags 5 --untagged --max-untagged-manifests 0
-```
-
-Override the image tag with `cliVersion`. The selected image must support the count-retention
-flags introduced in ACR CLI 0.20:
-
-```csharp
-registry.WithPurgeTask("0 1 * * *", filter: "myapp:.*", cliVersion: "0.20");
-```
-
-```typescript
-await registry.withPurgeTask("0 1 * * *", { filter: "myapp:.*", cliVersion: "0.20" });
 ```
 
 `keep` sets `--min-tags`, not `--keep` or `--max-tags`. The minimum protects the newest matching
@@ -122,7 +110,7 @@ When `ago` is omitted or zero, the task emits `--ago 0d`, making all tags outsid
 eligible. The C# `ago` parameter accepts a `TimeSpan`; the TypeScript option accepts milliseconds.
 
 Untagged cleanup is independent of tag retention: `--max-untagged-manifests 0` retains no extra
-eligible untagged manifests, including ones younger than `ago`. Use `untagged: false` to disable it.
+eligible untagged manifests, including ones younger than `ago`.
 
 Locked artifacts and dependencies of retained images remain protected, so these limits do not
 guarantee that only `keep` manifests or `keep` deployable application versions remain. See
