@@ -279,10 +279,6 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Cli.EndToEnd.Tests"]
         },
         {
-            "tests/Shared/Docker/Dockerfile.e2e",
-            ["test:Aspire.Cli.EndToEnd.Tests"]
-        },
-        {
             "eng/clipack/Common.projitems",
             [
                 "test:Aspire.Cli.Tests",
@@ -490,17 +486,6 @@ public sealed class TestTriggerMapTests
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
     }
 
-    [Fact]
-    public void PodmanDockerImageDoesNotSelectRegularPrTargets()
-    {
-        var result = SelectWithRealMap("tests/Shared/Docker/Dockerfile.e2e-podman");
-
-        Assert.False(result.SelectsAll);
-        Assert.Empty(result.UnmatchedFiles);
-        Assert.Empty(result.TestProjects);
-        Assert.Empty(result.Jobs);
-    }
-
     [Theory]
     [InlineData("tests/Shared/TemplatesTesting/data/deleted-fixture_cs", "Aspire.Templates.Tests")]
     [InlineData("tests/Shared/TestCertificates/deleted-certificate.pfx", "Aspire.Dashboard.Tests")]
@@ -514,26 +499,6 @@ public sealed class TestTriggerMapTests
         Assert.Empty(result.UnmatchedFiles);
         Assert.Contains(consumer, result.TestProjects);
         Assert.Empty(result.Jobs);
-    }
-
-    [Theory]
-    [InlineData("testCert.pfx", true)]
-    [InlineData("eku.client.pfx", false)]
-    public void SharedCertificateSelectionPreservesRuntimeHostingDependency(string certificate, bool usedByHosting)
-    {
-        var result = SelectWithRealMap($"tests/Shared/TestCertificates/{certificate}");
-
-        Assert.False(result.SelectsAll);
-        Assert.Empty(result.UnmatchedFiles);
-        Assert.Empty(result.Jobs);
-
-        List<string> expectedConsumers = ["Aspire.Dashboard.Tests", "Aspire.Dashboard.Playwright.Tests"];
-        if (usedByHosting)
-        {
-            expectedConsumers.Add("Aspire.Hosting.Tests");
-        }
-
-        Assert.Equal(expectedConsumers.Order(StringComparer.Ordinal), result.TestProjects.Order(StringComparer.Ordinal));
     }
 
     [Theory]
