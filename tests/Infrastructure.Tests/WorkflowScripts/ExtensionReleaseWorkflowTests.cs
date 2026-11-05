@@ -125,6 +125,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    [Trait("ci-platform", "windows")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
     public Task DeterministicFallbackIncludesEveryAcceptedCommitOnWindows()
@@ -137,6 +138,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         => DeterministicFallbackIncludesEveryAcceptedCommit("python3");
 
     [Fact]
+    [Trait("ci-platform", "windows")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
     public Task DeterministicFallbackAllowsRenderedOutputLargerThanEightThousandBytesOnWindows()
@@ -149,6 +151,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         => DeterministicFallbackAllowsRenderedOutputLargerThanEightThousandBytes("python3");
 
     [Fact]
+    [Trait("ci-platform", "windows")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
     public Task DeterministicFallbackSanitizesSplitlinesControlCharactersWithoutSplittingCommitsOnWindows()
@@ -161,6 +164,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         => DeterministicFallbackSanitizesSplitlinesControlCharactersWithoutSplittingCommits("python3");
 
     [Fact]
+    [Trait("ci-platform", "windows")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
     public Task DeterministicFallbackStripsPrSuffixFromCrLfInputOnWindows()
@@ -173,6 +177,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         => DeterministicFallbackStripsPrSuffixFromCrLfInput("python3");
 
     [Fact]
+    [Trait("ci-platform", "windows")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
     public Task GitHubPullRequestBodyValidatorAcceptsBodiesAtLimitOnWindows()
@@ -185,6 +190,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         => GitHubPullRequestBodyValidatorAcceptsBodiesAtLimit("python3");
 
     [Fact]
+    [Trait("ci-platform", "windows")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
     public Task GitHubPullRequestBodyValidatorRejectsBodiesOverLimitOnWindows()

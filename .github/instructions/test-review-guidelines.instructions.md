@@ -29,7 +29,22 @@ When reviewing PRs that add or modify tests, check for:
 - [ ] **Timeout isolation**: Does each phase (startup, readiness, assertion) have its own timeout budget?
 - [ ] **Port randomization**: Is `randomizePorts: true` used (or is the default relied upon)?
 - [ ] **Test isolation**: Does the test clean up all shared state? No static mutations without restoration?
-- [ ] **Platform considerations**: Will this test work on Windows, Linux, and macOS? Watch for path separators, file locking, and encoding differences.
+- [ ] **Platform considerations**: Is the test limited to its supported platforms with declarative attributes, and does CI run the project on those platforms? Watch for path separators, file locking, and encoding differences.
+
+## Platform-specific tests
+
+When writing or generating tests with known operating-system requirements,
+prefer declarative `[PlatformSpecific(TestPlatforms.OSX)]` or
+`[SkipOnPlatform(...)]` attributes over runtime OS checks with
+`Assert.SkipWhen` or `Assert.SkipUnless`. Reserve dynamic skips for conditions
+that genuinely depend on runtime availability rather than a known platform
+restriction.
+
+These attributes mark unsupported-platform tests with `category=failing`;
+the repository's standard `--filter-not-trait "category=failing"` filter
+excludes them rather than reporting them as dynamically skipped. Preserve
+that filter in custom test invocations. Attributes do not schedule CI jobs:
+check that the test project's CI configuration includes a supported platform.
 
 ## Shared Test Dependencies
 

@@ -8,9 +8,14 @@
     <Nullable>enable</Nullable>
     <IsTestProject>true</IsTestProject>
 
-    <!-- Run only on Linux in Github Actions -->
-    <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
-    <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
+    <RunOnGithubActionsWindows>true</RunOnGithubActionsWindows>
+    <RunOnGithubActionsMacOS>true</RunOnGithubActionsMacOS>
+
+    <!-- Keep unmarked tests on Linux; the other regular CI lanes cover only their
+         platform-specific cases without changing local or specialized test runs. -->
+    <TestingPlatformCommandLineArguments Condition="'$(RunPlatformInfrastructureTests)' == 'true' and '$(BuildOs)' == 'linux'">$(TestingPlatformCommandLineArguments) --filter-not-trait &quot;ci-platform=*&quot;</TestingPlatformCommandLineArguments>
+    <TestingPlatformCommandLineArguments Condition="'$(RunPlatformInfrastructureTests)' == 'true' and '$(BuildOs)' == 'windows'">$(TestingPlatformCommandLineArguments) --filter-trait &quot;ci-platform=windows&quot;</TestingPlatformCommandLineArguments>
+    <TestingPlatformCommandLineArguments Condition="'$(RunPlatformInfrastructureTests)' == 'true' and '$(BuildOs)' == 'darwin'">$(TestingPlatformCommandLineArguments) --filter-trait &quot;ci-platform=macos&quot;</TestingPlatformCommandLineArguments>
 
     <!-- Run only on Linux in Azdo Helix -->
     <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>

@@ -397,6 +397,7 @@ jobs:
       testProjectPath: ${{ matrix.testProjectPath }}
       mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
+      runPlatformInfrastructureTests: ${{ matrix.projectName == 'Infrastructure.Tests' }}
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
       ignoreTestFailures: ${{ matrix.properties.nonBlockingTestFailures }}
