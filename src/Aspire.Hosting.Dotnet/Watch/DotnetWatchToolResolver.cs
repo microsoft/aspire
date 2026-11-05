@@ -3,6 +3,9 @@
 
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Net;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Watch;
@@ -16,8 +19,12 @@ namespace Aspire.Hosting.Dotnet.Watch;
 /// the package published with exactly that SDK version (e.g. <c>11.0.100-rc.2.26504.105</c>).
 /// Shortcuts that a real implementation must replace:
 /// <list type="bullet">
-/// <item>TODO(spike): the package URL is a hardcoded dotnet-public flat-container URL; honor configured/approved NuGet sources.</item>
-/// <item>TODO(spike): no signature/hash verification of the downloaded package.</item>
+/// <item>Integrity: the package comes from nuget.org and its SHA-512 is checked against a hash pinned in this file
+/// (<see cref="PinnedVersion"/>) or, for SDK-matched versions, the hash nuget.org's catalog publishes for that version.
+/// Versions that aren't on nuget.org (daily SDK builds) fall back to the dotnet-public feed without a hash check and
+/// log a warning.</item>
+/// <item>TODO(spike): honor configured/approved NuGet sources (and their credentials) instead of fixed URLs, and verify
+/// the package's repository signature rather than relying on the HTTPS source's hash.</item>
 /// <item>TODO(spike): no CLI-callable prelaunch "ensure" entry point (needed for Session 8 AppHost watch).</item>
 /// <item>TODO(spike): in-process lock only; concurrent AppHosts acquiring the same version can race.</item>
 /// </list>
@@ -34,7 +41,15 @@ internal static class DotnetWatchToolResolver
     /// <summary>Overrides the package version that is acquired.</summary>
     public const string ToolVersionConfigurationKey = "ASPIRE_DOTNET_WATCH_TOOL_VERSION";
 
-    private const string FeedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/flat2/";
+    private const string NuGetOrgFlatContainerUrl = "https://api.nuget.org/v3-flatcontainer/";
+    private const string NuGetOrgRegistrationUrl = "https://api.nuget.org/v3/registration5-gz-semver2/";
+    private const string DotnetPublicFeedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/flat2/";
+
+    /// <summary>SHA-512 (hex) of known package versions, checked without a catalog lookup.</summary>
+    internal static readonly IReadOnlyDictionary<string, string> s_pinnedSha512 = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        [PinnedVersion] = "6b6d34443b0d02cec987a197945d63b8cbed5077840a5dffbe460a2cd46e4ae531b9028ad6791f847601762698bb589ea8f19c2e8e5156d6ea3c94bb886df1df",
+    };
 
     private static readonly SemaphoreSlim s_lock = new(1, 1);
 
@@ -82,26 +97,57 @@ internal static class DotnetWatchToolResolver
             }
 
             var lower = version.ToLowerInvariant();
-            var packageUrl = $"{FeedUrl}{PackageId.ToLowerInvariant()}/{lower}/{PackageId.ToLowerInvariant()}.{lower}.nupkg";
-            logger.LogInformation("Acquiring watch tool {PackageId} {Version} from {Url}", PackageId, version, packageUrl);
+            var id = PackageId.ToLowerInvariant();
             var stopwatch = Stopwatch.StartNew();
 
             var staging = cacheRoot + ".staging-" + Guid.NewGuid().ToString("N");
             Directory.CreateDirectory(staging);
             try
             {
-                using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
+                using (var http = new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All }) { Timeout = TimeSpan.FromMinutes(5) })
                 using (var buffer = new MemoryStream())
                 {
-                    using var response = await http.GetAsync(packageUrl, cancellationToken).ConfigureAwait(false);
-                    if (!response.IsSuccessStatusCode)
+                    byte[] bytes;
+                    try
+                    {
+                        var expectedSha512 = s_pinnedSha512.GetValueOrDefault(version) ?? await GetNuGetOrgSha512Async(http, id, lower, cancellationToken).ConfigureAwait(false);
+                        var packageUrl = expectedSha512 is not null
+                            ? $"{NuGetOrgFlatContainerUrl}{id}/{lower}/{id}.{lower}.nupkg"
+                            : $"{DotnetPublicFeedUrl}{id}/{lower}/{id}.{lower}.nupkg";
+                        logger.LogInformation("Acquiring watch tool {PackageId} {Version} from {Url}", PackageId, version, packageUrl);
+
+                        using var response = await http.GetAsync(packageUrl, cancellationToken).ConfigureAwait(false);
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            throw new DistributedApplicationException(
+                                $"Couldn't download the hot reload tool {PackageId} {version} (HTTP {(int)response.StatusCode} from {packageUrl}). " +
+                                $"Set {ToolVersionConfigurationKey} to a published version or {ToolPathConfigurationKey} to a local copy, or run without --watch.");
+                        }
+
+                        bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                        if (expectedSha512 is null)
+                        {
+                            logger.LogWarning(
+                                "{PackageId} {Version} isn't on nuget.org, so its hash couldn't be verified; downloaded it from the dotnet-public feed.",
+                                PackageId, version);
+                        }
+                        else if (!string.Equals(Convert.ToHexStringLower(SHA512.HashData(bytes)), expectedSha512, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new DistributedApplicationException(
+                                $"The downloaded hot reload tool {PackageId} {version} doesn't match its published SHA-512 hash, so it wasn't used. " +
+                                "Try again; if it keeps failing, check for a proxy that rewrites downloads, or set " +
+                                $"{ToolPathConfigurationKey} to a trusted local copy.");
+                        }
+                    }
+                    catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
                     {
                         throw new DistributedApplicationException(
-                            $"Could not download {PackageId} {version} ({(int)response.StatusCode}) from {packageUrl}. " +
-                            $"Set {ToolVersionConfigurationKey} to a published version or {ToolPathConfigurationKey} to a local copy.");
+                            $"Couldn't download the hot reload tool {PackageId} {version} ({ex.Message.TrimEnd('.')}). " +
+                            "It's downloaded once per SDK version and cached under ~/.aspire/dotnet-watch. Check your network connection and " +
+                            $"try again, set {ToolPathConfigurationKey} to a local copy of the package's tools/<tfm>/any folder, or run without --watch.",
+                            ex);
                     }
 
-                    var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
                     buffer.Write(bytes);
                     buffer.Position = 0;
                     using var archive = new ZipArchive(buffer, ZipArchiveMode.Read);
@@ -156,6 +202,35 @@ internal static class DotnetWatchToolResolver
         {
             s_lock.Release();
         }
+    }
+
+    /// <summary>
+    /// Returns the SHA-512 (hex) that nuget.org's catalog publishes for the package version, or <see langword="null"/>
+    /// when the version isn't on nuget.org.
+    /// </summary>
+    private static async Task<string?> GetNuGetOrgSha512Async(HttpClient http, string id, string version, CancellationToken cancellationToken)
+    {
+        using var leafResponse = await http.GetAsync($"{NuGetOrgRegistrationUrl}{id}/{version}.json", cancellationToken).ConfigureAwait(false);
+        if (leafResponse.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        leafResponse.EnsureSuccessStatusCode();
+        using var leaf = JsonDocument.Parse(await leafResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+        var catalogUrl = leaf.RootElement.GetProperty("catalogEntry").GetString()
+            ?? throw new InvalidDataException($"nuget.org has no catalog entry for {id} {version}.");
+
+        using var catalogResponse = await http.GetAsync(catalogUrl, cancellationToken).ConfigureAwait(false);
+        catalogResponse.EnsureSuccessStatusCode();
+        using var catalog = JsonDocument.Parse(await catalogResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false));
+        var root = catalog.RootElement;
+        if (!string.Equals(root.GetProperty("packageHashAlgorithm").GetString(), "SHA512", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException($"Unexpected package hash algorithm for {id} {version}.");
+        }
+
+        return Convert.ToHexStringLower(Convert.FromBase64String(root.GetProperty("packageHash").GetString()!));
     }
 
     /// <summary>

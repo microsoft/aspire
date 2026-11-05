@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
 using Aspire.Hosting.Tests.Utils;
@@ -82,6 +84,38 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     public void ToolVersionFollowsSdk(string sdkVersion, string? overrideVersion, string expected)
     {
         Assert.Equal(expected, DotnetWatchToolResolver.SelectToolVersion(sdkVersion, overrideVersion));
+    }
+
+    [Fact]
+    public void PinnedToolVersionHasPinnedHash()
+    {
+        // Bumping PinnedVersion without its SHA-512 would silently fall back to the catalog lookup.
+        Assert.True(DotnetWatchToolResolver.s_pinnedSha512.TryGetValue(DotnetWatchToolResolver.PinnedVersion, out var hash));
+        Assert.Equal(128, hash.Length);
+    }
+
+    [Fact]
+    public void ResourcesWithCustomLaunchToolAreDetected()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire"]);
+
+        var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
+        IResourceAnnotation[] watchLaunchTool = [service.Resource.Annotations.Last(a => a.GetType().Name == "LaunchToolArgsCallbackAnnotation")];
+
+        Assert.False(DotnetWatchCoordinator.HasCustomLaunch(service.Resource, watchLaunchTool));
+
+        // A launch tool registered after the watch proxy (for example, the Blazor gateway) owns the launch.
+        service.WithLaunchToolArgs(ctx => ctx.Args.Add("gateway"));
+        Assert.True(DotnetWatchCoordinator.HasCustomLaunch(service.Resource, watchLaunchTool));
+
+        var otherPath = Path.Combine(workspace.Path, "Other", "Other.csproj");
+        CreateProjectFile(otherPath);
+        var other = builder.AddDotnetProject("other", Path.GetDirectoryName(otherPath)!);
+        IResourceAnnotation[] otherLaunchTool = [other.Resource.Annotations.Last(a => a.GetType().Name == "LaunchToolArgsCallbackAnnotation")];
+        other.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["run"]));
+        Assert.True(DotnetWatchCoordinator.HasCustomLaunch(other.Resource, otherLaunchTool));
     }
 
     private static string CreateProject(string root)
