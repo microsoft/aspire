@@ -13,6 +13,21 @@ namespace Infrastructure.Tests;
 /// <summary>Ports historical scenario data to typed inputs; all decisions remain production validation's responsibility.</summary>
 internal static class AnalyzeCiFailureFixtures
 {
+    internal static JsonObject CreatePreTestFailureJob(string failedStep = "Build test project") => new()
+    {
+        ["id"] = 77,
+        ["name"] = "Tests / No-package tests / Infrastructure (ubuntu-latest)",
+        ["status"] = "completed",
+        ["conclusion"] = "failure",
+        ["steps"] = new JsonArray(
+            new JsonObject { ["number"] = 1, ["name"] = failedStep, ["status"] = "completed", ["conclusion"] = "failure" },
+            new JsonObject { ["number"] = 2, ["name"] = "Run nuget dependent tests (Linux/macOS)", ["status"] = "completed", ["conclusion"] = "skipped" },
+            new JsonObject { ["number"] = 3, ["name"] = "Run nuget dependent tests (Windows)", ["status"] = "completed", ["conclusion"] = "skipped" },
+            new JsonObject { ["number"] = 4, ["name"] = "Run tests (Linux/macOS)", ["status"] = "completed", ["conclusion"] = "skipped" },
+            new JsonObject { ["number"] = 5, ["name"] = "Run tests (Windows)", ["status"] = "completed", ["conclusion"] = "skipped" },
+            new JsonObject { ["number"] = 6, ["name"] = "Upload logs, and test results", ["status"] = "completed", ["conclusion"] = "success" }),
+    };
+
     internal static EvidenceBundle CreateEvidence(RunScope scope) => new()
     {
         SchemaVersion = 1,

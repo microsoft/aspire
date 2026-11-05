@@ -148,6 +148,18 @@ Evidence policy is separate from the result format:
 | `OptionalDiagnostics` | Remaining capacity | Absence or acquisition failure is diagnostic-only |
 | `RequiredForInterruptedExecution` | Remaining capacity | Test evidence unavailable, including omission due to limits |
 
+For C# jobs, `AspireCiWorkflowConventions` keeps the expected logs artifact
+identity but uses `OptionalDiagnostics` only when a completed failed job
+positively confirms pre-test failure. All four execution steps from
+`.github/workflows/run-tests.yml` must be present, completed and skipped, with
+every failed step preceding them. All step statuses, conclusions and source
+numbers must be known and consistent. Unknown or absent metadata, renamed or
+missing execution steps, tests that started or completed, cancellation, timeout,
+runner interruption and mixed execution remain conservative: TRX is required.
+`artifact-plan` diagnostics expose `results_required` independently of the
+producer identity. Current-attempt filtering and run/SHA validation still apply
+to optional diagnostic archives; stale uploads cannot contribute observations.
+
 These are inherited safety limits, not financial or analysis quotas: at most
 20 selected artifacts, 100 MiB per archive, 1 GiB cumulative downloaded archives,
 10,000 ZIP entries per archive, and 1 GiB cumulative expanded result data.
@@ -188,8 +200,9 @@ attempt, workflow path, processing stage, and relevant job/artifact names.
 Parsing errors additionally identify artifact ID and result file; conflicting
 execution errors identify the job, execution and source artifacts. Text stays
 bounded, redacted and inert in workflow logs, and the same failures are captured
-in the collection problems. A setup or unexplained acquisition failure leaves evidence unavailable, never
-complete merely because no reports were read.
+in the collection problems. An artifact-acquisition setup failure or unexplained
+required-result absence leaves evidence unavailable, never complete merely
+because no reports were read.
 Result-file names in diagnostics are generated safe extraction names, not
 original ZIP-entry paths; the artifact ID identifies the archive to inspect.
 
