@@ -336,6 +336,13 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .focus-queue > li { min-width: 0; }
 .focus-queue .card { margin-bottom: 0; }
 .queue-position { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.queue-remainder { margin: 10px 0 0; padding: 0; list-style: none; }
+.queue-remainder > li { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.queue-remainder .queue-position { min-width: 3ch; flex: none; margin: 0; }
+.queue-reference { min-width: 0; overflow-wrap: anywhere; }
+.queue-reference a { color: var(--fg); text-decoration: none; }
+.queue-reference a:hover { text-decoration: underline; }
+.queue-reference .repo { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 
 /* Review board section dividers (For you / Needs attention / breakdown / Community). */
 .board-sep {
@@ -2614,6 +2621,7 @@ function seedReviewCollapse(att) {
   for (const b of att.buckets || []) collapsedLanes.add(slugId(b.label));
   collapsedLanes.add("community");
   collapsedLanes.add("attention-breakdown");
+  collapsedLanes.add("later-in-queue");
 }
 
 function developerCountsHtml(list) {
@@ -2650,14 +2658,14 @@ function collapsibleSect(opts) {
   const count = (opts.count != null)
     ? '<span class="sect-count">' + esc(String(opts.count)) + "</span>" : "";
   return '<section class="sect-group collapsible' + (collapsed ? " collapsed" : "") + '" data-sect="' + esc(id) + '">' +
-    '<button class="sect-head" data-collapse="' + esc(id) + '" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
+    '<button class="sect-head" data-collapse="' + esc(id) + '" aria-controls="' + esc(id) + '-body" aria-expanded="' + (collapsed ? "false" : "true") + '">' +
       (opts.icon ? '<span class="sect-icon t-' + (opts.iconTone || "muted") + '">' + opts.icon + "</span>" : "") +
       '<span class="sect-title">' + esc(opts.title) + "</span>" +
       (opts.note ? '<span class="sect-note">' + esc(opts.note) + "</span>" : "") +
       count +
       '<span class="sect-caret t-' + (opts.iconTone || "muted") + '">' + ICONS.chev + "</span>" +
     "</button>" +
-    '<div class="collapse-body"><div class="collapse-inner">' +
+    '<div class="collapse-body" id="' + esc(id) + '-body"' + (collapsed ? " inert" : "") + '><div class="collapse-inner">' +
       (opts.subtitle ? '<p class="sect-sub">' + esc(opts.subtitle) + "</p>" : "") +
       (opts.body || "") +
     "</div></div>" +
@@ -2669,11 +2677,7 @@ function collapsibleSect(opts) {
 function queuePanel(opts) {
   const items = opts.items || [];
   const n = items.length;
-  // exactCount: the shown items are not a prefix of the source list (e.g. the focus lane keeps
-  // review-debt cards that spill past the cap), so "top N of total" would be false — higher-ranked
-  // cards were skipped. Report the honest shown count instead; the uncapped total still shows in
-  // the header summary badge.
-  const capped = !opts.exactCount && typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
+  const capped = typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
   const metric = capped ? "top " + n + " of " + opts.cappedTotal : n + " shown";
   const cardActions = typeof opts.cardActions === "function" ? opts.cardActions : null;
   let body;
@@ -2723,11 +2727,25 @@ function reviewBoardHtml() {
   html += queuePanel({
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
     subtitle: "First readiness, oldest first. Blocked PRs keep their priority when they return.",
-    items: att.focus || [], cappedTotal: att.focusTotal, exactCount: !!att.focusMixed,
+    items: att.focus || [], cappedTotal: att.focusTotal,
     numbered: true,
     cardActions: focusCardActions,
     emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });
+
+  const remainder = att.focusRemainder || [];
+  if (remainder.length) {
+    html += collapsibleSect({
+      id: "later-in-queue", title: "Later in queue", icon: ICONS.clock,
+      count: remainder.length,
+      subtitle: "Find a PR\u2019s position here. Prioritize the first 10 in Needs attention for review.",
+      body: '<ol class="queue-remainder" start="' + remainder[0].queuePosition + '" role="list" aria-label="Later in queue, first-readiness order">' +
+        remainder.map((item) => '<li value="' + item.queuePosition + '"><span class="queue-position">' + item.queuePosition +
+          '.</span><div class="queue-reference"><a href="' + safeHref(item.pr.url) + '" target="_blank" rel="noreferrer">' +
+          esc(item.pr.title) + '</a><span class="repo">' + esc(item.pr.repository) + " #" + item.pr.number + "</span></div></li>").join("") +
+        "</ol>",
+    });
+  }
 
   // 3. Your PRs outside Needs attention — the viewer's own out-of-queue work,
   //    sat directly under the focused queue so it's easy to see what got filtered.
@@ -3194,11 +3212,10 @@ function pipelineEditorHtml() {
 
 function settingsView() {
   const n = prefs.notifications;
-  const limit = (state.reviewLimit || 10);
   return '<div class="page">' +
     '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, delivery health, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
     '<div class="section"><h3>Review queue</h3>' +
-      '<p class="hint">The shared queue is team-managed, not individually sorted. It shows at most <b>' + limit + '</b> PRs, ranked so the oldest waits surface first.</p>' +
+      '<p class="hint">The shared queue is team-managed, not individually sorted. Needs attention shows the first <b>10</b> PRs in first-readiness order, oldest first. Later in queue starts collapsed and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.eye + '<span>A PR only enters the shared queue once <b>checks are green</b> and <b>all review feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>' +
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +
@@ -3729,6 +3746,8 @@ function wire() {
       const nowCollapsed = !sec.classList.contains("collapsed");
       sec.classList.toggle("collapsed", nowCollapsed);
       b.setAttribute("aria-expanded", nowCollapsed ? "false" : "true");
+      const body = sec.querySelector(".collapse-body");
+      if (body) body.inert = nowCollapsed;
       if (nowCollapsed) collapsedLanes.add(id); else collapsedLanes.delete(id);
     }));
 

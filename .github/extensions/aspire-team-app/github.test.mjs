@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { dayMs } from "./constants.mjs";
-import { capFocusKeepingDebt, loadDashboard } from "./github.mjs";
+import { loadDashboard } from "./github.mjs";
 
 const originalFetch = globalThis.fetch;
 
@@ -10,28 +10,50 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test("capFocusKeepingDebt keeps the head cap plus review-debt cards that spill past it", () => {
-  const cards = [
-    { pr: { number: 1 }, reviewDebt: false },
-    { pr: { number: 2 }, reviewDebt: false },
-    { pr: { number: 3 }, reviewDebt: false },
-    { pr: { number: 4 }, reviewDebt: true },
-    { pr: { number: 5 }, reviewDebt: false },
-    { pr: { number: 6 }, reviewDebt: true },
-  ];
+test("Needs attention serializes a strict ten-card prefix and the complete deduplicated remainder", async () => {
+  for (const count of [0, 4, 10, 11, 25]) {
+    const createdAt = isoAgo(3 * dayMs);
+    const nodes = Array.from({ length: count }, (_, index) => {
+      const node = prNode(index + 1, isoAgo(hourMs));
+      node.createdAt = createdAt;
+      return node;
+    });
+    // Equal readiness timestamps and reversed responses exercise the ordinal PR-number tie
+    // across the split; duplicate accounts must not duplicate either side.
+    mockPullRequests(nodes.toReversed());
+    const dashboard = JSON.parse(JSON.stringify(await loadDashboard({
+      accounts: [
+        { token: "first", login: "davidfowl", repos: ["microsoft/aspire"] },
+        { token: "second", login: "joperezr", repos: ["microsoft/aspire"] },
+      ],
+      mode: "review", prefs: { reviewLimit: 50 }, dismissed: [], reviewLimit: 50,
+    })));
+    const { focus, focusRemainder, focusTotal, focusLimit } = dashboard.attention;
+    const positions = Array.from({ length: count }, (_, index) => index + 1);
+    assert.deepEqual(dashboard.errors, []);
+    assert.equal(dashboard.reviewLimit, 10);
+    assert.equal(focusLimit, 10);
+    assert.equal(focusTotal, count);
+    assert.deepEqual(focus.map((item) => item.queuePosition), positions.slice(0, 10));
+    assert.deepEqual(focusRemainder.map((item) => item.queuePosition), positions.slice(10));
+    assert.deepEqual([...focus, ...focusRemainder].map((item) => item.pr.number), positions);
+  }
+});
 
-  const kept = capFocusKeepingDebt(cards, 2);
-
-  // First 2 (the actionable headline) plus the two review-debt cards beyond the cap; the
-  // non-debt spillover (#3, #5) is dropped, and no card is duplicated.
-  assert.deepEqual(kept.map((c) => c.pr.number), [1, 2, 4, 6]);
-
-  // A debt card already inside the cap is not re-added.
-  const debtInHead = capFocusKeepingDebt([{ pr: { number: 1 }, reviewDebt: true }, { pr: { number: 2 }, reviewDebt: false }], 2);
-  assert.deepEqual(debtInHead.map((c) => c.pr.number), [1, 2]);
-
-  // No spillover at all when everything fits under the cap.
-  assert.deepEqual(capFocusKeepingDebt(cards.slice(0, 2), 5).map((c) => c.pr.number), [1, 2]);
+test("review debt stays eligible in the remainder without spilling into the top ten or losing non-debt PRs", async () => {
+  const nodes = Array.from({ length: 16 }, (_, index) => {
+    const node = prNode(index + 1, isoAgo(index < 13 ? 20 * dayMs : hourMs));
+    node.createdAt = isoAgo((index < 13 ? 40 - index : 16 - index) * dayMs);
+    return node;
+  });
+  mockPullRequests(nodes.toReversed());
+  const { attention } = await loadReview();
+  assert.deepEqual(attention.focus.map((item) => item.pr.number), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual(attention.focusRemainder.map((item) => [item.pr.number, item.queuePosition, item.reviewDebt]), [
+    [11, 11, true], [12, 12, true], [13, 13, true],
+    [14, 14, false], [15, 15, false], [16, 16, false],
+  ]);
+  assert.equal(attention.focusTotal, 16);
 });
 
 test("loadDashboard paginates open pull requests for each watched repo", async () => {
