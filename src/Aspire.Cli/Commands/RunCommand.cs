@@ -393,7 +393,12 @@ internal sealed class RunCommand : BaseCommand
             context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
                 await _aspireSecretsStoreResolver.ResolveAppHostIdAsync(effectiveAppHostFile, project, cancellationToken);
 
-            if (parseResult.GetValue(s_watchOption))
+            // TODO(spike): wire --watch through the guest AppHost server so polyglot AppHosts can hot reload C# services.
+            if (parseResult.GetValue(s_watchOption) && project.LanguageId != KnownLanguageId.CSharp)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.WatchNotSupportedForAppHostLanguage);
+            }
+            else if (parseResult.GetValue(s_watchOption))
             {
                 DotnetWatch.DotnetWatchRunEnvironment.Apply(context.EnvironmentVariables);
                 _watchRequested = true;

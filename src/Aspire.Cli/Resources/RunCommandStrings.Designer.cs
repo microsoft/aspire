@@ -518,5 +518,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("WatchArgumentDescription", resourceCulture);
             }
         }
+        
+        internal static string WatchNotSupportedForAppHostLanguage {
+            get {
+                return ResourceManager.GetString("WatchNotSupportedForAppHostLanguage", resourceCulture);
+            }
+        }
     }
 }

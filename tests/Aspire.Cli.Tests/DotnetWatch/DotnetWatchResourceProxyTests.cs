@@ -56,6 +56,32 @@ public class DotnetWatchResourceProxyTests
     }
 
     [Fact]
+    public void ForwardsCertificateSettingsAddedAfterEnvironmentCallbacks()
+    {
+        var environment = new Dictionary<string, string>
+        {
+            ["SSL_CERT_DIR"] = "/certs",
+            ["Kestrel__Certificates__Default__Path"] = "/private/a.crt",
+            ["ASPNETCORE_Kestrel__Certificates__Default__KeyPath"] = "/private/a.key",
+            ["HOME"] = "/root",
+        };
+
+        var forwarded = DotnetWatchResourceProxy.CollectForwardedEnvironment(
+            "GREETING_SOURCE", name => environment.GetValueOrDefault(name), environment.Keys);
+
+        Assert.Equal(["ASPNETCORE_Kestrel__Certificates__Default__KeyPath", "Kestrel__Certificates__Default__Path", "SSL_CERT_DIR"], forwarded.Keys.Order());
+    }
+
+    [Fact]
+    public void EmptyApplicationArgumentsStayEmpty()
+    {
+        var json = DotnetWatchResourceProxy.CreateRequestJson("/src/Api/Api.csproj", [], new Dictionary<string, string>());
+
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(0, document.RootElement.GetProperty("ApplicationArguments").GetArrayLength());
+    }
+
+    [Fact]
     public void RequestJsonMatchesTheWatcherProtocol()
     {
         var json = DotnetWatchResourceProxy.CreateRequestJson(
@@ -64,7 +90,7 @@ public class DotnetWatchResourceProxyTests
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
         Assert.Equal("/src/Api/Api.csproj", root.GetProperty("EntryPoint").GetString());
-        Assert.Equal(["--flag", "value with spaces"], root.GetProperty("ApplicationArguments").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["--", "--flag", "value with spaces"], root.GetProperty("ApplicationArguments").EnumerateArray().Select(e => e.GetString()));
         Assert.Equal("1", root.GetProperty("EnvironmentVariables").GetProperty("A").GetString());
 
         // Optional<string?> on the watcher side: the object form with HasValue=false means "no launch profile".

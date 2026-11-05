@@ -3664,6 +3664,44 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(watchModeUsed, "Expected watch mode to be disabled for single file apps even when DefaultWatchEnabled feature flag is true");
     }
 
+    [Theory]
+    [InlineData("csharp", true)]
+    [InlineData("typescript/nodejs", false)]
+    public async Task RunCommand_WatchOption_EnablesHotReloadOnlyForCSharpAppHosts(string languageId, bool expectWatch)
+    {
+        IDictionary<string, string>? runEnvironment = null;
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel { GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync };
+            options.AppHostProjectFactory = sp => new TestAppHostProjectFactory
+            {
+                LanguageId = languageId,
+                RunAsyncCallback = async (context, ct) =>
+                {
+                    runEnvironment = context.EnvironmentVariables;
+                    context.BuildCompletionSource?.TrySetResult(true);
+                    context.BackchannelCompletionSource!.SetResult(sp.GetRequiredService<IAppHostCliBackchannel>());
+                    await Task.Delay(100, ct);
+                    return 0;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run --watch");
+
+        using var cts = new CancellationTokenSource();
+        cts.CancelAfter(TimeSpan.FromSeconds(2));
+        await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.NotNull(runEnvironment);
+        Assert.Equal(expectWatch, runEnvironment.ContainsKey(Aspire.Cli.DotnetWatch.DotnetWatchRunEnvironment.WatchEnabledVariable));
+    }
+
     [Fact]
     public async Task RunCommand_WhenDefaultWatchEnabledFeatureFlagIsTrue_UsesWatchMode()
     {

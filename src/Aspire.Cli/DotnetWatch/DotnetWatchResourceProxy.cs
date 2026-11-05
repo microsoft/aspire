@@ -75,7 +75,8 @@ internal static class DotnetWatchResourceProxy
 
         var environment = CollectForwardedEnvironment(
             Environment.GetEnvironmentVariable(ForwardedEnvironmentNamesVariable),
-            Environment.GetEnvironmentVariable);
+            Environment.GetEnvironmentVariable,
+            Environment.GetEnvironmentVariables().Keys.Cast<string>());
 
         var timeout = TimeSpan.FromSeconds(
             int.TryParse(Environment.GetEnvironmentVariable(ConnectTimeoutVariable), out var seconds) && seconds > 0 ? seconds : DefaultConnectTimeoutSeconds);
@@ -186,10 +187,18 @@ internal static class DotnetWatchResourceProxy
         return true;
     }
 
-    internal static Dictionary<string, string> CollectForwardedEnvironment(string? names, Func<string, string?> lookup)
+    // Certificate trust and HTTPS settings are added by DCP after the resource's environment callbacks run, so they
+    // can't appear in the forwarded-name list; forward them whenever DCP set them on the proxy.
+    private static readonly string[] s_alwaysForwardedNames = ["SSL_CERT_DIR", "SSL_CERT_FILE"];
+    private static readonly string[] s_alwaysForwardedPrefixes = ["Kestrel__Certificates__", "ASPNETCORE_Kestrel__Certificates__"];
+
+    internal static Dictionary<string, string> CollectForwardedEnvironment(string? names, Func<string, string?> lookup, IEnumerable<string>? processVariableNames = null)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var name in (names ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries))
+        var candidates = (names ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Concat(s_alwaysForwardedNames)
+            .Concat((processVariableNames ?? []).Where(n => s_alwaysForwardedPrefixes.Any(p => n.StartsWith(p, StringComparison.OrdinalIgnoreCase))));
+        foreach (var name in candidates)
         {
             if (lookup(name) is { } value)
             {
@@ -208,7 +217,14 @@ internal static class DotnetWatchResourceProxy
             env[key] = value;
         }
 
+        // The watcher appends ApplicationArguments directly to `dotnet run`, so "--" keeps them from being parsed as
+        // SDK options (for example `--configuration`). An empty array means "no arguments".
         var argsArray = new JsonArray();
+        if (appArgs.Count > 0)
+        {
+            argsArray.Add((JsonNode?)JsonValue.Create("--"));
+        }
+
         foreach (var a in appArgs)
         {
             argsArray.Add((JsonNode?)JsonValue.Create(a));

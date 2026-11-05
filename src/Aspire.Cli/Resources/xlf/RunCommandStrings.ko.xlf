@@ -252,6 +252,11 @@
         <target state="new">Hot reload is on for C# services (preview). Save a file to apply changes.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WatchNotSupportedForAppHostLanguage">
+        <source>--watch currently needs a C# AppHost; this AppHost runs without hot reload.</source>
+        <target state="new">--watch currently needs a C# AppHost; this AppHost runs without hot reload.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WatchOptionDescription">
         <source>(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service.</source>
         <target state="new">(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service.</target>

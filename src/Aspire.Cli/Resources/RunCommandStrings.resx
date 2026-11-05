@@ -276,4 +276,7 @@
   <data name="WatchEnabledSummary" xml:space="preserve">
     <value>Hot reload is on for C# services (preview). Save a file to apply changes.</value>
   </data>
+  <data name="WatchNotSupportedForAppHostLanguage" xml:space="preserve">
+    <value>--watch currently needs a C# AppHost; this AppHost runs without hot reload.</value>
+  </data>
 </root>

@@ -97,6 +97,12 @@ Measured on Linux (2 cores) with SDK 11.0.100-rc.2 and the playground; latency i
 - **Crashed** is a custom state, so the dashboard summary counts it as "Inactive" rather than "needs attention".
 - Session 8 (AppHost watch) isn't implemented; the TMPDIR/global.json multi-root workaround is still a `HACK(spike)`.
 - Only Linux was tested; daily/preview SDK versions without a published watch package need `ASPIRE_DOTNET_WATCH_TOOL_VERSION`/`_PATH`.
+- The watcher builds and launches with its default configuration and from the project directory: `AppHost:BuildConfiguration`,
+  `WithBuildEnvironment` and `WithWorkingDirectory` aren't honored in watch mode yet (the launch protocol has no fields
+  for them).
+- With `WithReplicas`, one replica exiting marks all replicas of that project **Crashed**: watcher status events identify
+  projects, not instances.
+- Polyglot (non-C#) AppHosts: `--watch` isn't wired through the guest AppHost server yet; the CLI says so and runs without hot reload.
 
 ## Repro
 
