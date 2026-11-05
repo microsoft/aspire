@@ -269,6 +269,16 @@ panel, so it looks the same on both platforms and screen readers see its items a
 Clicking **More** again, picking an item, or acting on anything else closes it.
 Clicking a row itself does nothing, whether the AppHost runs or not; only its buttons act.
 The list scrolls when it is taller than the screen allows; the header and footer stay in place.
+
+Within each section, the same AppHost in related Git worktrees appears under one collapsed
+application row with an instance count and aggregate status. Click it, or activate it with
+Enter, Space or a screen reader, to reveal the branch/worktree labels and each instance's
+existing actions. Single instances remain directly accessible. Application identity uses
+the common Git directory and repository-relative AppHost path, keeping unrelated clones
+and different AppHosts separate. Missing Git metadata leaves entries visible individually.
+Expansion follows the application across process restarts; actions still target the exact
+selected process lifetime. Recent and Pinned expand independently of Running.
+
 The keyboard works too: Up/Down and Home/End move between rows and action list items, Tab
 and Shift-Tab also reach the row buttons, Enter or Space activates, and Escape steps back
 out of the Open in applications, then the action list, then closes the panel. Command-comma on macOS or Ctrl+comma on Windows opens Settings,
