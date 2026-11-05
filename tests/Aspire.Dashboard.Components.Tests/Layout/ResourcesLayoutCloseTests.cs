@@ -3,10 +3,13 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
+using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -40,8 +43,12 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
     [InlineData("/metrics/resource/api?duration=30", "/metrics?duration=30", true)]
     [InlineData("/metrics/resource/api/meter/Test", "/metrics/resource/api", true)]
     [InlineData("/metrics/resource/api/meter/Test/instrument/Requests?duration=30", "/metrics/resource/api/meter/Test?duration=30", true)]
-    [InlineData("/metrics/resource/api?meter=Test&instrument=Requests&duration=30", "/metrics/resource/api?duration=30", true)]
+    [InlineData("/Metrics/Resource/api/Meter/Test/Instrument/Requests?duration=30", "/Metrics/Resource/api/Meter/Test?duration=30", true)]
+    [InlineData("/Metrics/Resource/api/Meter/Test", "/metrics/resource/api", true)]
+    [InlineData("/metrics/resource/api?meter=Test&instrument=Requests&duration=30", "/metrics/resource/api?meter=Test&duration=30", true)]
+    [InlineData("/metrics/resource/api?meter=Test&duration=30", "/metrics/resource/api?duration=30", true)]
     [InlineData("/traces/detail/missing", "/traces", true)]
+    [InlineData("/Traces/Detail/missing", "/traces", true)]
     [InlineData("/traces/detail/missing?resource=api&type=server&filters=example&spanId=span", "/traces/resource/api?resource=api&type=server&filters=example", true)]
     [InlineData("/traces/detail/missing?resource=api&resource=cache&type=server", "/traces?resource=api&resource=cache&type=server", true)]
     [InlineData("/traces/detail/missing?pane=telemetry", "/traces?pane=telemetry", true)]
@@ -93,9 +100,13 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
     [Theory]
     [InlineData("/resources", true)]
     [InlineData("/consolelogs", true)]
+    [InlineData("/consolelogs?filter=example", true)]
     [InlineData("/structuredlogs", true)]
+    [InlineData("/structuredlogs?logLevel=Error", true)]
     [InlineData("/traces", true)]
+    [InlineData("/traces?type=server", true)]
     [InlineData("/metrics", true)]
+    [InlineData("/metrics?duration=30", true)]
     public async Task SelectAll_ReopensTabAfterClosingContent(string url, bool isDesktop)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -120,6 +131,110 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.Single(cut.FindComponents<Components.Controls.DetailPageCloseButton>());
+    }
+
+    [Theory]
+    [InlineData("/traces/detail/missing?resource=api&type=server")]
+    [InlineData("/metrics/resource/api/meter/Test")]
+    [InlineData("/metrics/resource/api?meter=Test&instrument=Requests&duration=30")]
+    public async Task SelectedResource_ReopensParentFromFullCanvasWithoutClearingSelection(string url)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(url);
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find(".detail-page-close").ClickAsync();
+        cut.Render();
+        var parent = navigation.Uri;
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        await cut.Find(".resource-row[data-resource-name='api'] .resource-row-link").ClickAsync();
+        cut.Render();
+
+        Assert.Equal(parent, navigation.Uri);
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+
+        await cut.Find(".resource-row[data-resource-name='api'] .resource-row-link").ClickAsync();
+        cut.Render();
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
+    public async Task CloseDetail_PreservesFullCanvasAcrossDestinationSessionStateRedirect()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services =>
+            {
+                services.AddTransient<TracesViewModel>();
+                services.AddSingleton<ISessionStorage>(new TestSessionStorage
+                {
+                    OnGetAsync = key => key == BrowserStorageKeys.TracesPageState
+                        ? (true, new Traces.TracesPageState { SelectedSpanType = "server", Filters = [] })
+                        : (false, null)
+                });
+            });
+        FluentUISetupHelpers.SetupFluentList(this);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/traces/resource/api");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find(".detail-page-close").ClickAsync();
+        cut.Render(p => p.Add(layout => layout.Body, body =>
+        {
+            body.OpenComponent<Traces>(0);
+            body.AddComponentParameter(1, nameof(Traces.ResourceName),
+                ResourcesLayout.ParseLocation(navigation.ToBaseRelativePath(navigation.Uri)).RouteResourceName);
+            body.CloseComponent();
+        }));
+        cut.WaitForAssertion(() => Assert.Equal("traces?type=server", navigation.ToBaseRelativePath(navigation.Uri)));
+        cut.Render();
+
+        Assert.Single(cut.FindComponents<Traces>());
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.True(cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+
+        await cut.Find(".resource-select-all-toggle").ClickAsync();
+        cut.Render();
+        Assert.Equal("traces?type=server", navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+    }
+
+    [Theory]
+    [InlineData("/structuredlogs")]
+    [InlineData("/traces?resource=api")]
+    [InlineData("/traces/detail/missing")]
+    public async Task CloseDetail_UnrelatedNavigationOpensContent(string nextUrl)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/traces");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.Find(".detail-page-close").ClickAsync();
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        navigation.NavigateTo(nextUrl);
+        cut.Render();
+
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
     }
 
     [Theory]

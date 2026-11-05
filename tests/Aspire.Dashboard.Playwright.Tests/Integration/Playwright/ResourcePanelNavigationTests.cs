@@ -2,15 +2,17 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
+using Aspire.Dashboard.Model;
 using Aspire.TestUtilities;
+using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.Playwright;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
 [RequiresFeature(TestFeature.Playwright)]
-public sealed class ResourcePanelNavigationTests(ResourceTagPaneTests.TaggedResourcesFixture fixture)
-    : PlaywrightTestsBase<ResourceTagPaneTests.TaggedResourcesFixture>(fixture)
+public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.NavigationResourcesFixture fixture)
+    : PlaywrightTestsBase<ResourcePanelNavigationTests.NavigationResourcesFixture>(fixture)
 {
     [Theory]
     [InlineData(320, 740)]
@@ -97,7 +99,9 @@ public sealed class ResourcePanelNavigationTests(ResourceTagPaneTests.TaggedReso
             var footer = page.Locator(".resource-pane-foot").First;
             var headerBefore = await header.EvaluateAsync<double>("header => header.getBoundingClientRect().top - header.closest('.resource-pane').getBoundingClientRect().top");
             var footerBefore = await footer.EvaluateAsync<double>("footer => footer.closest('.resource-pane').getBoundingClientRect().bottom - footer.getBoundingClientRect().bottom");
+            Assert.True(await list.EvaluateAsync<bool>("list => list.scrollHeight > list.clientHeight"));
             await list.EvaluateAsync("list => list.scrollTop = list.scrollHeight");
+            Assert.True(await list.EvaluateAsync<bool>("list => list.scrollTop > 0"));
             Assert.Equal(headerBefore, await header.EvaluateAsync<double>("header => header.getBoundingClientRect().top - header.closest('.resource-pane').getBoundingClientRect().top"));
             Assert.Equal(footerBefore, await footer.EvaluateAsync<double>("footer => footer.closest('.resource-pane').getBoundingClientRect().bottom - footer.getBoundingClientRect().bottom"));
             await Assertions.Expect(header.GetByRole(AriaRole.Searchbox)).ToBeVisibleAsync();
@@ -107,5 +111,57 @@ public sealed class ResourcePanelNavigationTests(ResourceTagPaneTests.TaggedReso
             Assert.False(overflowing);
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });
+    }
+
+    [Theory]
+    [InlineData("/traces?type=server")]
+    [InlineData("/structuredlogs?logLevel=error")]
+    [InlineData("/metrics?duration=30")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task SelectAll_ReopensFilteredContentWithoutChangingUrl(string url)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync(url);
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(url) + "$"));
+            await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        });
+    }
+
+    [Theory]
+    [InlineData("/traces/detail/missing?resource=tag-a&type=server")]
+    [InlineData("/metrics/resource/tag-a/meter/Test")]
+    [InlineData("/metrics/resource/tag-a?meter=Test&instrument=Requests&duration=30")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task RetainedResource_ReopensParentFromFullCanvas(string url)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync(url);
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            var parentUrl = page.Url;
+            await page.Locator(".resource-pane [data-resource-name='tag-a'] .resource-row-link").ClickAsync();
+            await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
+            await Assertions.Expect(page).ToHaveURLAsync(parentUrl);
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        });
+    }
+
+    public sealed class NavigationResourcesFixture : DashboardServerFixture
+    {
+        protected override IReadOnlyList<ResourceViewModel>? Resources =>
+        [
+            ModelTestHelpers.CreateResource("tag-a", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("tag-b", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("tag-c", state: KnownResourceState.Running),
+            .. Enumerable.Range(1, 40).Select(i => ModelTestHelpers.CreateResource($"worker-{i:D2}", state: KnownResourceState.Running))
+        ];
     }
 }
