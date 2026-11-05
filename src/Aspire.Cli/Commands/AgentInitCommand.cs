@@ -385,37 +385,37 @@ internal sealed class AgentInitCommand : BaseCommand
             ConsoleInteractionService.MatchChoices(requestedSkills ?? CommonAgentApplicators.AspireSkillName,
                 availableSkillChoices, static name => name)?.Contains(CommonAgentApplicators.AspireSkillName) is true;
         IReadOnlyList<SkillSource> skillSources = [];
-        string? localSkillError = null;
+        string? skillConfigurationError = null;
         if (showSkillWarnings)
         {
             configurationDirectory ??= await GetConfigurationDirectoryAsync(cancellationToken);
-            skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
-            var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
-            var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
-            var sourceUrls = new List<string>();
-            foreach (var skillSource in skillSources)
-            {
-                if (usesPlugins)
-                {
-                    sourceUrls.Add(skillSource.GetRepositoryUrl());
-                }
-                if (usesOpenCode)
-                {
-                    sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
-                }
-            }
-
-            if (sourceUrls.Count > 0)
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture,
-                    AgentCommandStrings.InitCommand_SkillSources,
-                    string.Join(System.Environment.NewLine, sourceUrls.Distinct(StringComparer.Ordinal))));
-                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
-                InteractionService.DisplayEmptyLine();
-            }
-
             try
             {
+                skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
+                var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
+                var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
+                var sourceUrls = new List<string>();
+                foreach (var skillSource in skillSources)
+                {
+                    if (usesPlugins)
+                    {
+                        sourceUrls.Add(skillSource.GetRepositoryUrl());
+                    }
+                    if (usesOpenCode)
+                    {
+                        sourceUrls.AddRange(new[] { skillSource.OpenCodeV1Catalog, skillSource.OpenCodeV2Catalog }.OfType<string>());
+                    }
+                }
+
+                if (sourceUrls.Count > 0)
+                {
+                    InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture,
+                        AgentCommandStrings.InitCommand_SkillSources,
+                        string.Join(System.Environment.NewLine, sourceUrls.Distinct(StringComparer.Ordinal))));
+                    InteractionService.DisplaySourceTrustWarning(ExecutionContext);
+                    InteractionService.DisplayEmptyLine();
+                }
+
                 var local = LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot,
                     selectedClients, cancellationToken);
                 if (local.Files.Count > 0)
@@ -427,16 +427,14 @@ internal sealed class AgentInitCommand : BaseCommand
                                 .Order(StringComparer.Ordinal))));
                     InteractionService.DisplayEmptyLine();
                 }
-                // Malformed settings are reported per target below, so other clients and
-                // independently requested MCP remain configurable.
                 if (local.HasFileErrors)
                 {
-                    localSkillError = string.Join(System.Environment.NewLine, local.Errors);
+                    skillConfigurationError = string.Join(System.Environment.NewLine, local.Errors);
                 }
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
-                localSkillError = ex.Message;
+                skillConfigurationError = ex.Message;
             }
         }
 
@@ -456,9 +454,9 @@ internal sealed class AgentInitCommand : BaseCommand
         var dotnetInspect = selectedSkillNames.Contains(SkillDefinition.DotnetInspect.Name);
         var configureAspire = selectedSkillNames.Contains(CommonAgentApplicators.AspireSkillName);
 
-        if (configureAspire && localSkillError is not null)
+        if (configureAspire && skillConfigurationError is not null)
         {
-            InteractionService.DisplayError(localSkillError);
+            InteractionService.DisplayError(skillConfigurationError);
             return new(CliExitCodes.InvalidCommand, selectedClients, []);
         }
 

@@ -432,14 +432,22 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "mcp-config.json")));
     }
 
-    [Fact]
-    public async Task AgentInit_LocalSkillScanErrors_DoNotBlockMcpOnlySelection()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AgentInit_AspireConfigurationErrors_OnlyBlockAspireSelection(bool invalidSource, bool configureAspire)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
-        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), "{}");
-        // A directory at SKILL.md makes the scan fail on every platform.
-        Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md"));
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
+            invalidSource ? """{"skillSources":{"default":{"repository":""}}}""" : "{}");
+        if (!invalidSource)
+        {
+            // A directory at SKILL.md makes the scan fail on every platform.
+            Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md"));
+        }
         var skillsPrompted = false;
         var interaction = new TestInteractionService
         {
@@ -451,7 +459,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 }
                 Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
                 skillsPrompted = true;
-                return [];
+                return configureAspire ? ["aspire"] : [];
             },
             ConfirmCallback = (prompt, _) => prompt == AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt,
             PromptForSelectionCallback = (_, _, _, _) => AgentConfigurationScope.Global
@@ -466,9 +474,18 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse("agent init");
-        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(configureAspire ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
+            await result.InvokeAsync().DefaultTimeout());
         Assert.True(skillsPrompted);
-        Assert.True(File.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "mcp-config.json")));
+        Assert.Equal(!configureAspire, File.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "mcp-config.json")));
+        if (configureAspire)
+        {
+            Assert.Single(interaction.DisplayedErrors);
+        }
+        else
+        {
+            Assert.Empty(interaction.DisplayedErrors);
+        }
     }
 
     [Fact]
