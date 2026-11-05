@@ -39,6 +39,7 @@ public class DesktopNavMenuTests : DashboardTestContext
         if (enabled)
         {
             expected.Add(DashboardUrls.ResourceOverviewUrl("shell"));
+            expected.Add(DashboardUrls.ParametersUrl());
         }
         expected.Add(DashboardUrls.TelemetrySourcesUrl());
         var links = cut.FindAll("nav.desktop-nav-menu > a");
@@ -100,6 +101,17 @@ public class DesktopNavMenuTests : DashboardTestContext
         Assert.Equal(DashboardUrls.TelemetrySourcesUrl(), telemetry.GetAttribute("href"));
         Assert.Null(telemetry.GetAttribute("aria-disabled"));
         Assert.Empty(cut.FindAll(".desktop-nav-item.disabled"));
+    }
+
+    [Fact]
+    public void Parameters_HighlightsItsOwnNavigationEntry()
+    {
+        RenderNavMenu(DashboardUrls.AddResourceSelection(DashboardUrls.ParametersUrl(), ["api-key"]));
+        var cut = Render<DesktopNavMenu>();
+
+        Assert.Equal("desktop-nav-parameters", cut.Find("a[aria-current='page']").Id);
+        Assert.Equal(DashboardUrls.ParametersUrl(), cut.Find("#desktop-nav-parameters").GetAttribute("href"));
+        Assert.Equal(DashboardUrls.ResourceListUrl(), cut.Find("#desktop-nav-resources").GetAttribute("href"));
     }
 
     private void RenderNavMenu(string url)

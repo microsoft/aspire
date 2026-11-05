@@ -1,17 +1,24 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
@@ -19,6 +26,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -28,6 +36,72 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class TracesTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task EmptyState_SelectedAppResourceWithoutTelemetry_OffersAllResources(bool isDesktop, bool hasTelemetry)
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("worker-abc", displayName: "worker")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, AspireDataType.Traces);
+        if (hasTelemetry)
+        {
+            await repository.AddMetricsAsync(new(), [new ResourceMetrics { Resource = CreateResource("worker", instanceId: "abc") }]);
+        }
+        var storage = Assert.IsType<TestSessionStorage>(Services.GetRequiredService<ISessionStorage>());
+        List<string> rememberedSelection = ["worker-abc"];
+        storage.OnSetAsync = (key, value) =>
+        {
+            if (key == BrowserStorageKeys.LastSelectedResources)
+            {
+                rememberedSelection = Assert.IsType<List<string>>(value);
+            }
+        };
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("worker-abc"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        navigation.NavigateTo(cut.Instance.GetTabUrl(ResourceTab.Traces));
+        cut.Render(builder => builder.Add(layout => layout.Body, body =>
+        {
+            body.OpenComponent<Traces>(0);
+            body.AddComponentParameter(1, nameof(Traces.ResourceName),
+                ResourcesLayout.ParseLocation(navigation.ToBaseRelativePath(navigation.Uri)).RouteResourceName);
+            body.CloseComponent();
+        }));
+
+        if (hasTelemetry)
+        {
+            cut.WaitForAssertion(() => Assert.Equal(Resources.Traces.TracesNoTraces,
+                cut.Find(".aspire-empty-message").TextContent.Trim()));
+            Assert.Empty(cut.FindAll(".aspire-empty-message a"));
+            return;
+        }
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            "No traces available for resource 'worker'. View traces for all resources",
+            string.Join(" ", cut.Find(".aspire-empty-message").TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))));
+        Assert.Equal(["test"], cut.Instance.GetAllResourceNames());
+        var link = cut.Find(".aspire-empty-message a");
+        Assert.Equal("View traces for all resources", link.TextContent);
+        Assert.Equal(DashboardUrls.TracesUrl(), link.GetAttribute("href"));
+        link.Click();
+        cut.Render();
+
+        Assert.Equal("http://localhost/traces", navigation.Uri);
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Empty(rememberedSelection);
+        var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new() { StartIndex = 0, Count = 20 }).AsTask());
+        Assert.Single(result.Items);
+        Assert.Equal(1, result.TotalItemCount);
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs)]
     [InlineData(AspireDataType.Traces)]

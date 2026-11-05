@@ -178,6 +178,99 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to {0} of {1} parameters need attention.
+        /// </summary>
+        public static string ParameterHeadlineAttention {
+            get {
+                return ResourceManager.GetString("ParameterHeadlineAttention", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to 1 parameter needs attention.
+        /// </summary>
+        /// <summary>
+        ///   Looks up a localized string similar to 1 parameter needs attention.
+        /// </summary>
+        public static string ParameterHeadlineSingleAttention {
+            get {
+                return ResourceManager.GetString("ParameterHeadlineSingleAttention", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No parameters need attention.
+        /// </summary>
+        /// <summary>
+        ///   Looks up a localized string similar to No parameters need attention.
+        /// </summary>
+        public static string ParameterHeadlineHealthy {
+            get {
+                return ResourceManager.GetString("ParameterHeadlineHealthy", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} of {1} parameters are pending.
+        /// </summary>
+        /// <summary>
+        ///   Looks up a localized string similar to {0} of {1} parameters are pending.
+        /// </summary>
+        public static string ParameterHeadlinePending {
+            get {
+                return ResourceManager.GetString("ParameterHeadlinePending", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to 1 parameter is pending.
+        /// </summary>
+        /// <summary>
+        ///   Looks up a localized string similar to 1 parameter is pending.
+        /// </summary>
+        public static string ParameterHeadlineSinglePending {
+            get {
+                return ResourceManager.GetString("ParameterHeadlineSinglePending", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameter summary.
+        /// </summary>
+        /// <summary>
+        ///   Looks up a localized string similar to Parameter summary.
+        /// </summary>
+        public static string ParameterSummaryLandmark {
+            get {
+                return ResourceManager.GetString("ParameterSummaryLandmark", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameter states.
+        /// </summary>
+        /// <summary>
+        ///   Looks up a localized string similar to Parameter states.
+        /// </summary>
+        public static string ParameterStatesLabel {
+            get {
+                return ResourceManager.GetString("ParameterStatesLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Values set.
+        /// </summary>
+        /// <summary>
+        ///   Looks up a localized string similar to Values set.
+        /// </summary>
+        public static string ParameterValuesSetLabel {
+            get {
+                return ResourceManager.GetString("ParameterValuesSetLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No resources need attention.
         /// </summary>
         public static string HomeHeadlineHealthy {

@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading.Channels;
 using System.Web;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Controls;
@@ -18,6 +19,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
+using Aspire.Tests.Shared.DashboardModel;
 using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
@@ -38,6 +40,36 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class MetricsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EmptyState_SelectedAppResourceWithoutTelemetry_PromptsForAResource(bool isDesktop)
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("worker")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        await TelemetryHelpSetupHelpers.AddSignalAsync(Services.GetRequiredService<SqliteTelemetryRepository>(), AspireDataType.Metrics);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("worker"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        navigation.NavigateTo(cut.Instance.GetTabUrl(ResourceTab.Metrics));
+        cut.Render(builder => builder.Add(layout => layout.Body, body =>
+        {
+            body.OpenComponent<Metrics>(0);
+            body.AddComponentParameter(1, nameof(Metrics.ResourceName), "worker");
+            body.CloseComponent();
+        }));
+
+        cut.WaitForAssertion(() => Assert.Equal(Resources.Metrics.MetricsSelectAResource,
+            cut.Find(".aspire-empty-message").TextContent.Trim()));
+        Assert.Equal(["test"], cut.Instance.GetAllResourceNames());
+        Assert.Equal(["worker"], cut.Instance.SelectedResourceNames);
+        Assert.Equal("http://localhost/metrics/resource/worker", navigation.Uri);
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs)]
     [InlineData(AspireDataType.Traces)]

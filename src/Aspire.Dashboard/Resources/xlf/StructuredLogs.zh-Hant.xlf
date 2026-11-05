@@ -57,6 +57,11 @@
         <target state="translated">最低記錄層級篩選</target>
         <note />
       </trans-unit>
+      <trans-unit id="StructuredLogsNoLogsForResource">
+        <source>No structured logs available for resource '{0}'.</source>
+        <target state="new">No structured logs available for resource '{0}'.</target>
+        <note>{0} is a resource name</note>
+      </trans-unit>
       <trans-unit id="StructuredLogsNoLogsFound">
         <source>No structured logs found</source>
         <target state="translated">找不到結構化記錄</target>
@@ -85,6 +90,11 @@
       <trans-unit id="StructuredLogsTraceColumnHeader">
         <source>Trace</source>
         <target state="translated">追蹤</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StructuredLogsViewAllResources">
+        <source>View structured logs for all resources</source>
+        <target state="new">View structured logs for all resources</target>
         <note />
       </trans-unit>
       <trans-unit id="TotalItemsFooterPluralText">

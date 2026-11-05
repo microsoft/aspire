@@ -144,7 +144,17 @@
                                     <EmptyContent>
                                         <TelemetryEmptyContent>
                                             <FluentIcon Icon="Icons.Regular.Size24.SlideTextSparkle" Color="Color.Primary" />
-                                            @Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsNoLogsFound)]
+                                            @if (ResourcesLayout is { SelectedResourceWithoutTelemetryName: { } resourceName } layout)
+                                            {
+                                                <span>
+                                                    @Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsNoLogsForResource), resourceName]
+                                                    <a href="@(layout.AddPaneToUrl(DashboardUrls.StructuredLogsUrl()))" @onclick="layout.ClearSelectionAsync" @onclick:preventDefault="true">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsViewAllResources)]</a>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                @Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsNoLogsFound)]
+                                            }
                                         </TelemetryEmptyContent>
                                     </EmptyContent>
                                 </AspireFluentDataGrid>

@@ -1,5 +1,6 @@
 ﻿@page "/resources"
 @page "/resources/{ResourceName}"
+@page "/parameters"
 @layout ResourcesLayout
 @using Aspire.Dashboard.Extensions
 @using Aspire.Dashboard.Components.Layout
@@ -9,22 +10,7 @@
 @using Aspire.Shared
 @using Humanizer
 
-<PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : null)" ResourceName="@nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle)" Loc="@Loc" /></PageTitle>
-
-@if (ResourceName is not null && ResourcesLayout is { IsMultiSelection: false } && Resource is { IsParameter: false })
-{
-    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.HeaderActionsSectionName">
-        <div class="overview-panel-selector">
-            <IconToggleGroup TValue="bool"
-                             Label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewPanelsLabel)]"
-                             Options="@PanelOptions"
-                             Value="@_hideEmptyPanels"
-                             ValueChanged="@SetHideEmptyPanelsAsync"
-                             ShowLabel="true"
-                             ShowCurrentLabel="false" />
-        </div>
-    </StableSectionContent>
-}
+<PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : null)" ResourceName="@(IsParametersPage ? nameof(Dashboard.Resources.Resources.ParametersPageTitle) : nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle))" Loc="@Loc" /></PageTitle>
 
 <div class="resource-overview @(IsTerminalFocused ? "terminal-focused" : null)" tabindex="-1"
      data-resource-name="@Resource?.Name" data-resource-subscription="@_subscribedResourceName">
@@ -34,21 +20,23 @@
             <FluentSpinner Size="SpinnerSize.Small" />
         </div>
     }
-    else if ((ResourcesLayout.IsMultiSelection || ResourceName is null) &&
+    else if ((!IsParametersPage || ReviewMissingParameters) && (ResourcesLayout.IsMultiSelection || ResourceName is null) &&
              ResourcesLayout.SelectedResources.ToList() is { Count: > 0 } selectedResources &&
              selectedResources.All(resource => resource.IsParameter))
     {
-        @* Parameters selected in the query string, for example /resources?resource=a&resource=b. A single parameter
-           selected this way gets the same panel as several, rather than the summary of all resources. *@
+        @* The review link keeps the editor open as values are supplied, including its completion message.
+           Ordinary parameter multi-selection continues to show the parameter summary. *@
         <MissingParametersPanel Parameters="selectedResources"
                                 OnExecuteCommandAsync="ExecuteResourceCommandAsync"
                                 OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
                                 IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
     }
-    else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
+    else if (ResourcesLayout.IsMultiSelection || (IsParametersPage ? Resource is null : ResourceName is null))
     {
-        @* All resources, or several selected resources: show their scoped Summary or Graph. *@
-        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : ResourcesLayout.GetScopeResourceNames())" />
+        @* Changing between resources and parameters recreates the summary, including its graph and telemetry subscriptions. *@
+        <ApplicationSummary @key="IsParametersPage"
+                            ParametersOnly="IsParametersPage"
+                            ResourceNames="@(ResourcesLayout.SelectedResourceNames.Count > 0 ? ResourcesLayout.SelectedResourceNames : ResourcesLayout.GetScopeResourceNames())" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {
@@ -59,10 +47,12 @@
     }
     else if (Resource is { IsParameter: true } resolvedParameter)
     {
-        @* Parameters share the tags card of every other resource, so the tag UX is identical. *@
-        <div class="overview-grid overview-parameter-tags">
-            @TagsCard(resolvedParameter)
-        </div>
+        @if (!IsParametersPage)
+        {
+            <div class="overview-grid overview-parameter-tags">
+                @TagsCard(resolvedParameter)
+            </div>
+        }
         <ParameterOverview Resource="resolvedParameter"
                            ResourceByName="ResourcesLayout.ResourceByName"
                            OnExecuteCommandAsync="ExecuteResourceCommandAsync"
@@ -118,7 +108,7 @@
             (OverviewCard.Volumes, 6, hasVolumes),
             (OverviewCard.Health, 6, showHealth)
         ];
-        var hiddenCards = cardSpans.Where(c => _hideEmptyPanels && !c.HasContent).Select(c => c.Card).ToHashSet();
+        var hiddenCards = cardSpans.Where(c => !c.HasContent).Select(c => c.Card).ToHashSet();
         // A terminal owned by the dock has no overview card, even when showing all panels.
         var cardLayout = OverviewCardLayout.Create(cardSpans
             .Where(c => !hiddenCards.Contains(c.Card) && (c.Card != OverviewCard.Console || showConsole || showOverviewTerminal))
@@ -743,7 +733,7 @@
     // Keep empty placeholders mounted so switching panel modes does not disturb neighboring component state.
     private RenderFragment EmptyCard(OverviewCard card, OverviewCardLayout cardLayout, string titleId, Icon icon, string title, string message) => __builder =>
     {
-        <section class="overview-card overview-card-empty" style="@cardLayout.Style(card)" aria-labelledby="@titleId" hidden="@_hideEmptyPanels">
+        <section class="overview-card overview-card-empty" style="@cardLayout.Style(card)" aria-labelledby="@titleId" hidden>
             <div class="overview-card-header">
                 <span class="card-header-icon" aria-hidden="true">
                     <FluentIcon Value="@icon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />

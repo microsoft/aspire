@@ -8,6 +8,41 @@ The dashboard shows:
 - Live console logs of resources.
 - Live telemetry, such as structured logs, traces and metrics.
 
+## Sidebar resources
+
+The sidebar automatically lists the resources relevant to the current page:
+
+- **Resources** and **Console logs** list AppHost resources.
+- **Structured logs**, **Traces**, and **Metrics** list resources with telemetry, including sources outside the AppHost.
+- **Terminals** lists AppHost resources with usable terminals.
+- **Parameters** lists AppHost parameters.
+
+Telemetry sources remain visible even when their corresponding AppHost resources are hidden.
+
+Use **Parameters** in the navigation to view parameter values and edit them. Search and property filters further
+narrow the sidebar without changing which resources the **All** item covers. **All** appears first and is selected
+instead of individual rows, while including every page-relevant resource in the page's filters.
+The Parameters overview shows a parameter-specific attention summary instead of a grid. It does not show the
+resource graph, live activity, endpoint insights, or other telemetry panels. Select a parameter in the sidebar
+to view and edit its value; selecting several parameters summarizes their states.
+When values are missing, the Resources and Parameters overview headers show a button with the app-wide count
+of parameters needing values. Use it to review and set the missing values together.
+Resource, parameter, and telemetry-source section headings are shown only when more than one category is present.
+The header includes **Parameters** throughout AppHost views. Visiting Parameters preserves the resource selection
+when returning to another page, unless a parameter is selected. Other incompatible selections are cleared when switching views.
+Resource terminals are opened with per-resource shortcuts, not a header navigation item.
+Use **Close** at the right of the resource overview toolbar to clear the selection and return to all resources.
+Empty detail panels are always hidden and appear automatically when data becomes available.
+
+If a selected resource hasn't sent telemetry, Structured logs and Traces name it in their empty-state message
+and offer a link to view data for all resources. Metrics prompts you to select a resource.
+
+When the resource list is collapsed, click the resource name or **All resources** in the toolbar to open
+the list below it. Selecting a resource closes the popup without expanding the sidebar.
+Shift-click and Ctrl-click (Cmd-click on macOS) keep the popup open for multi-selection, including on resource groups.
+Selecting **All** always closes the popup.
+The popup includes search; filter and grouping buttons are available only in the sidebar or mobile drawer.
+
 ## Grouping resources
 
 Use **Group resources**, between **Filters** and **Collapse resource list** in the resources pane, to group
@@ -83,12 +118,11 @@ The AppHost automatically configures the dashboard, but you can override values 
 
 ### Standalone dashboard
 
-The **Telemetry sources** navigation icon opens a dedicated sidebar for services sending OpenTelemetry data
-that aren't part of the AppHost model. This view is available in both standalone and AppHost mode; these services
-are not listed under **Resources**. AppHost resources keep their own logs, traces, and metrics tabs.
-Select one or more telemetry sources to view their logs, traces, and metrics, or select **All sources**
-for logs and traces from every telemetry-only source. AppHost-only views and actions,
-such as resource configuration, console logs, parameters, and terminals, are not shown.
+The **Telemetry sources** navigation icon opens the structured logs page. In AppHost mode, telemetry pages list
+both AppHost resources with telemetry and sources outside the AppHost model. In standalone mode, the sidebar is
+populated entirely from received OpenTelemetry data. Select one or more sources to view their logs, traces, and
+metrics, or select **All sources** to include every source. AppHost-only views and actions, such as resource
+configuration, console logs, parameters, and terminals, are not shown in standalone mode.
 
 There are many ways to provide configuration:
 

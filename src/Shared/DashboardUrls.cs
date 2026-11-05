@@ -145,6 +145,11 @@ internal static class DashboardUrls
     public const string ResourceTerminalQueryName = "terminal";
 
     /// <summary>
+    /// The query string parameter that opens the missing-parameter value editor instead of the parameter summary.
+    /// </summary>
+    public const string ReviewMissingParametersQueryName = "reviewMissing";
+
+    /// <summary>
     /// Changes terminal focus without changing the resource, resource pane, other query parameters or fragment.
     /// </summary>
     public static string SetResourceTerminalFocus(string url, bool focused)
@@ -263,6 +268,12 @@ internal static class DashboardUrls
 
         return url;
     }
+
+    /// <summary>
+    /// Gets the URL for reviewing and editing the selected missing parameter values.
+    /// </summary>
+    public static string MissingParametersUrl(IEnumerable<string> parameters) =>
+        AddResourceSelection(AddQueryString(ParametersUrl(), ReviewMissingParametersQueryName, "true"), parameters);
 
     public static string GraphUrl(string? hiddenTypes = null, string? hiddenStates = null, string? hiddenHealthStates = null)
     {

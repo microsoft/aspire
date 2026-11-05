@@ -155,7 +155,7 @@
                     </FluentMultiSplitter>
                     </div>
                 }
-                else if (PageViewModel.Instruments == null)
+                else if (PageViewModel.Instruments == null || ResourcesLayout?.SelectedResourceWithoutTelemetryName is not null)
                 {
                     <div class="aspire-empty-content metrics-empty-content">
                         <TelemetryEmptyContent>

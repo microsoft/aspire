@@ -543,6 +543,30 @@
   <data name="HomeHeadlineHealthy" xml:space="preserve">
     <value>No resources need attention</value>
   </data>
+  <data name="ParameterHeadlineAttention" xml:space="preserve">
+    <value>{0} of {1} parameters need attention</value>
+  </data>
+  <data name="ParameterHeadlineSingleAttention" xml:space="preserve">
+    <value>1 parameter needs attention</value>
+  </data>
+  <data name="ParameterHeadlineHealthy" xml:space="preserve">
+    <value>No parameters need attention</value>
+  </data>
+  <data name="ParameterHeadlinePending" xml:space="preserve">
+    <value>{0} of {1} parameters are pending</value>
+  </data>
+  <data name="ParameterHeadlineSinglePending" xml:space="preserve">
+    <value>1 parameter is pending</value>
+  </data>
+  <data name="ParameterSummaryLandmark" xml:space="preserve">
+    <value>Parameter summary</value>
+  </data>
+  <data name="ParameterStatesLabel" xml:space="preserve">
+    <value>Parameter states</value>
+  </data>
+  <data name="ParameterValuesSetLabel" xml:space="preserve">
+    <value>Values set</value>
+  </data>
   <data name="HomeStartedAt" xml:space="preserve">
     <value>Started {0}</value>
   </data>

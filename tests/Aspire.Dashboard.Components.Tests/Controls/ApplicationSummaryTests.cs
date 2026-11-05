@@ -228,8 +228,55 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal("true", outlet.Find("[aria-label='Summary']").GetAttribute("aria-pressed"));
     }
 
+    [Theory]
+    [InlineData(false, true, 0)]
+    [InlineData(false, true, 1)]
+    [InlineData(false, true, 2)]
+    [InlineData(false, false, 0)]
+    [InlineData(false, false, 1)]
+    [InlineData(false, false, 2)]
+    [InlineData(true, true, 0)]
+    [InlineData(true, true, 1)]
+    [InlineData(true, true, 2)]
+    [InlineData(true, false, 0)]
+    [InlineData(true, false, 1)]
+    [InlineData(true, false, 2)]
+    public void Render_MissingParameterLinkUsesAppWideCount(bool parametersOnly, bool isDesktop, int missingCount)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: !isDesktop);
+        var missingNames = Enumerable.Range(0, missingCount).Select(index => $"missing-{index}").ToArray();
+        var resources = missingNames
+            .Select(name => ModelTestHelpers.CreateResource(name, resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.ValueMissing))
+            .Concat(
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+                ModelTestHelpers.CreateResource("set", resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running)
+            ]).ToList();
+        var cut = RenderSummary(viewport, resources: resources, parametersOnly: parametersOnly,
+            resourceNames: [parametersOnly ? "set" : "api"]);
+        var outlet = Render<SectionOutlet>(builder => builder.Add(parameter => parameter.SectionName, ResourcesLayout.HeaderActionsSectionName));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-hero")));
+
+        if (missingCount == 0)
+        {
+            Assert.Empty(outlet.FindAll(".missing-parameters-link"));
+        }
+        else
+        {
+            var link = Assert.Single(outlet.FindAll(".missing-parameters-link"));
+            var text = missingCount == 1 ? "1 parameter needs a value" : "2 parameters need values";
+            Assert.Equal(text, link.GetAttribute("aria-label"));
+            Assert.Equal($"{text}. Review missing parameters", link.GetAttribute("data-tooltip"));
+            Assert.Equal(text, outlet.Find(".missing-parameters-label").TextContent);
+            Assert.Equal(missingCount.ToString(), outlet.Find(".missing-parameters-count").TextContent);
+            Assert.Equal(DashboardUrls.MissingParametersUrl(missingNames), link.GetAttribute("href"));
+        }
+        Assert.Equal(parametersOnly ? [] : ["Summary", "Graph"],
+            outlet.FindAll(".icon-toggle").Select(button => button.GetAttribute("aria-label")));
+    }
+
     private IRenderedComponent<ApplicationSummary> RenderSummary(ViewportInformation? viewport = null, bool missingParameters = false,
-        IList<ResourceViewModel>? resources = null)
+        IList<ResourceViewModel>? resources = null, bool parametersOnly = false, IReadOnlyList<string>? resourceNames = null)
     {
         viewport ??= new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -243,6 +290,8 @@ public class ApplicationSummaryTests : DashboardTestContext
             ],
             resourceChannelProvider: () => channel));
 
-        return Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
+        return Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport)
+            .Add(parameter => parameter.ParametersOnly, parametersOnly)
+            .Add(parameter => parameter.ResourceNames, resourceNames));
     }
 }
