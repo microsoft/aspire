@@ -179,6 +179,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
             scaffoldDirectory.FullName,
             context.ProjectName,
             cancellationToken);
+        if (language.LanguageId.Value.Equals(KnownLanguageId.Go, StringComparison.OrdinalIgnoreCase) &&
+            !StringComparers.FileSystemPath.Equals(directory.FullName, scaffoldDirectory.FullName))
+        {
+            // A nested Go module is still subject to an ancestor's go.work. Give the AppHost its own
+            // workspace so it runs without adding it to, or otherwise changing, the application's workspace.
+            scaffoldFiles["go.work"] = "go 1.26\n\nuse .\n";
+        }
+
         var appHostRelativePath = GetScaffoldedAppHostRelativePath(directory, scaffoldDirectory, language, scaffoldFiles.Keys);
 
         var conflictingFiles = GetConflictingScaffoldFiles(scaffoldDirectory.FullName, scaffoldFiles.Keys);
@@ -285,6 +293,13 @@ internal sealed class ScaffoldingService : IScaffoldingService
             // Brownfield JS/TS apps already have package-level module, script, lint, and engine semantics.
             // Keep the Aspire AppHost in its own package boundary so scaffolding cannot change how the app runs.
             return new DirectoryInfo(Path.Combine(directory.FullName, BrownfieldTypeScriptAppHostDirectoryName));
+        }
+
+        if (language.LanguageId.Value.Equals(KnownLanguageId.Go, StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(Path.Combine(directory.FullName, "go.mod")))
+        {
+            // Keep the AppHost's main package and generated-SDK dependencies out of the application's module.
+            return new DirectoryInfo(Path.Combine(directory.FullName, "aspire-apphost"));
         }
 
         return directory;
