@@ -1,0 +1,28 @@
+{
+  "id": "vscode-e2e-windows-tree-actions-worker-endpoint-missing",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows, tree-actions) expected e2e-worker to expose an endpoint URL",
+  "error_pattern": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.",
+  "occurrences": [
+    {
+      "run_id": 41967348150,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41967348150",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "observed_at": "2026-11-05T05:04:22Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+          "job_id": 127053704182,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+          "error": "Expected e2e-worker to expose an endpoint URL.",
+          "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:288:16)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}

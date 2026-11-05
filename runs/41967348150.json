@@ -1,0 +1,105 @@
+{
+  "run_id": 41967348150,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41967348150",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T05:04:22Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21440,
+    "title": "Serialize integral numbers as JSON integers in Java ATS client",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-21344-java-int-dto",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21440",
+    "merged_at": "2026-11-05T04:21:53Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "100acc9d651a854775cde61f86ee8e85373a3ffb",
+    "failed_sha": "6b484acc5cb6dd8c8af68d38df4c88bfb76f70d9",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "ace20894ceed70dd8ed4b53c9f2d5cdd30c507eb",
+        "message": "Add untagged manifest cleanup options to ACR purge tasks (#21720) ## Description Scheduled ACR purge tasks currently remove tags only, leaving manifests and image layers behind. This fixes `WithPurgeTask` to also delete eligible untagged manifests so cleanup can reclaim storage, without adding public API options or changing the existing method signature. - Pin the task image internally to `mcr.microsoft.com/acr/acr-cli:0.21`. - Use `--ago` and `--min-tags` to delete matching tags older than `ago",
+        "html_url": "https://github.com/microsoft/aspire/commit/ace20894ceed70dd8ed4b53c9f2d5cdd30c507eb",
+        "pull_request": {
+          "number": 21720,
+          "title": "Add untagged manifest cleanup options to ACR purge tasks",
+          "url": "https://github.com/microsoft/aspire/pull/21720",
+          "merged_at": "2026-11-05T03:53:36Z"
+        }
+      },
+      {
+        "sha": "6b484acc5cb6dd8c8af68d38df4c88bfb76f70d9",
+        "message": "Serialize integral numbers as JSON integers in Java ATS client (#21440) ## Description In a Java AppHost, `addParameterWithGeneratedValue` with a `GenerateParameterDefault` fails with: ``` The JSON value could not be converted to System.Int32. Path: $.minUpper ``` **Root cause:** ATS maps every numeric type to Java `double`/`Number`. The generated Java client's `AspireClient.toJson` (`Transport.java`) serialized a `Number` with `value.toString()`, so an int DTO field set to `32` went over the wi",
+        "html_url": "https://github.com/microsoft/aspire/commit/6b484acc5cb6dd8c8af68d38df4c88bfb76f70d9",
+        "pull_request": {
+          "number": 21440,
+          "title": "Serialize integral numbers as JSON integers in Java ATS client",
+          "url": "https://github.com/microsoft/aspire/pull/21440",
+          "merged_at": "2026-11-05T04:21:53Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 127048416857,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41967348150/job/127048416857",
+      "classification": "flaky-test",
+      "reason": "Single Windows CLI test failed with a timing-dependent cancellation exception type; 9953 other tests passed.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 127053704182,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41967348150/job/127053704182",
+      "classification": "flaky-test",
+      "reason": "Windows tree-actions E2E failed waiting for e2e-worker endpoint URL; same shard has prior intermittent failures.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:288:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "E2E endpoint URL not exposed in time; intermittent timing in an environment-dependent E2E shard.",
+      "job_id": 127053704182,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire.Cli.Tests.Configuration.ConfigSourceServiceGitTests.RunProcess_DescendantHoldingOutputCannotBlockShutdown(parentExits: False, captureTimeoutOutput: True)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "Assert.IsType() Failure: Value is not the exact type\nExpected: typeof(Aspire.Cli.Git.GitProcessCanceledException)\nActual:   typeof(System.OperationCanceledException)",
+      "stack_trace": "   at Aspire.Cli.Tests.Configuration.ConfigSourceServiceGitTests.RunProcess_DescendantHoldingOutputCannotBlockShutdown(Boolean parentExits, Boolean captureTimeoutOutput) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Configuration\\ConfigSourceServiceGitTests.cs:line 251\n   at Aspire.Cli.Tests.Configuration.ConfigSourceServiceGitTests.RunProcess_DescendantHoldingOutputCannotBlockShutdown(Boolean parentExits, Boolean captureTimeoutOutput) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Configuration\\ConfigSourceServiceGitTests.cs:line 281\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2dhwtedf.xwz\n[2026-11-05T04:30:46.0093936+00:00] [00:00:00.0000045] Starting captured process 'powershell.exe'; parentExits=False, captureTimeoutOutput=True.\n| [2026-11-05T04:30:46] Aspire.Cli.Git.GitCommandRunner Debug: Starting Git process.\n| [2026-11-05T04:30:46] Aspire.Cli.Git.GitCommandRunner Debug: Git process 5844 started after 00:00:00.0127153.\n[2026-11-05T04:30:46.0222547+00:00] [00:00:00.0128653] Captured process launched; task status=WaitingForActivation. Waiting for descendant PID in 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2dhwtedf.xwz\\child.pid'.\n[2026-11-05T04:30:48.7149141+00:00] [00:00:02.7055160] Descendant PID=5164; waiting for cancellation.\n[2026-11-05T04:30:48.7149494+00:00] [00:00:02.7055505] Requesting cancellation.\n| [2026-11-05T04:30:48] Aspire.Cli.Git.GitCommandRunner Debug: Git cancellation requested after 00:00:02.7055409.\n[2026-11-05T04:30:48.7150392+00:00] [00:00:02.7056402] Cancellation requested; waiting for captured process to return.\n| [2026-11-05T04:30:49] Aspire.Cli.Git.GitCommandRunner Debug: Git process completed after 00:00:03.2141239; exit code -1, failure (null), cancelled True.\n[2026-11-05T04:30:49.2237086+00:00] [00:00:03.2143085] Captured process returned OperationCanceledException; waiting for descendant 5164 to exit.\n[2026-11-05T04:30:49.2253852+00:00] [00:00:03.2159848] Starting cleanup; captured task status=Canceled.\n[2026-11-05T04:30:49.2254120+00:00] [00:00:03.2160113] Cleanup cancellation completed.\n[2026-11-05T04:30:49.2254439+00:00] [00:00:03.2160434] Cleanup finished; captured task status=Canceled, capture exception=OperationCanceledException.\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2dhwtedf.xwz\n",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Process-shutdown timing test got OperationCanceledException instead of GitProcessCanceledException after a 3s run.",
+      "job_id": 127048416857,
+      "execution_id": "74d28266-64a3-4c3a-b48a-846edbe60a85",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing",
+    "cli-configsourceservicegit-descendantholdingoutput-canceled-type"
+  ]
+}

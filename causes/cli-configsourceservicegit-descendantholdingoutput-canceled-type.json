@@ -1,0 +1,29 @@
+{
+  "id": "cli-configsourceservicegit-descendantholdingoutput-canceled-type",
+  "type": "flaky-test",
+  "title": "Flaky: ConfigSourceServiceGitTests.RunProcess_DescendantHoldingOutputCannotBlockShutdown gets OperationCanceledException instead of GitProcessCanceledException",
+  "error_pattern": "Assert.IsType() Failure: Value is not the exact type\nExpected: typeof(Aspire.Cli.Git.GitProcessCanceledException)\nActual:   typeof(System.OperationCanceledException)",
+  "occurrences": [
+    {
+      "run_id": 41967348150,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41967348150",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "observed_at": "2026-11-05T05:04:22Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Cli.Tests.Configuration.ConfigSourceServiceGitTests.RunProcess_DescendantHoldingOutputCannotBlockShutdown(parentExits: False, captureTimeoutOutput: True)",
+          "job_id": 127048416857,
+          "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+          "error": "Assert.IsType() Failure: Value is not the exact type\nExpected: typeof(Aspire.Cli.Git.GitProcessCanceledException)\nActual:   typeof(System.OperationCanceledException)",
+          "stack_trace": "   at Aspire.Cli.Tests.Configuration.ConfigSourceServiceGitTests.RunProcess_DescendantHoldingOutputCannotBlockShutdown(Boolean parentExits, Boolean captureTimeoutOutput) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Configuration\\ConfigSourceServiceGitTests.cs:line 251\n   at Aspire.Cli.Tests.Configuration.ConfigSourceServiceGitTests.RunProcess_DescendantHoldingOutputCannotBlockShutdown(Boolean parentExits, Boolean captureTimeoutOutput) in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Configuration\\ConfigSourceServiceGitTests.cs:line 281\n--- End of stack trace from previous location ---",
+          "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2dhwtedf.xwz\n[2026-11-05T04:30:46.0093936+00:00] [00:00:00.0000045] Starting captured process 'powershell.exe'; parentExits=False, captureTimeoutOutput=True.\n| [2026-11-05T04:30:46] Aspire.Cli.Git.GitCommandRunner Debug: Starting Git process.\n| [2026-11-05T04:30:46] Aspire.Cli.Git.GitCommandRunner Debug: Git process 5844 started after 00:00:00.0127153.\n[2026-11-05T04:30:46.0222547+00:00] [00:00:00.0128653] Captured process launched; task status=WaitingForActivation. Waiting for descendant PID in 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2dhwtedf.xwz\\child.pid'.\n[2026-11-05T04:30:48.7149141+00:00] [00:00:02.7055160] Descendant PID=5164; waiting for cancellation.\n[2026-11-05T04:30:48.7149494+00:00] [00:00:02.7055505] Requesting cancellation.\n| [2026-11-05T04:30:48] Aspire.Cli.Git.GitCommandRunner Debug: Git cancellation requested after 00:00:02.7055409.\n[2026-11-05T04:30:48.7150392+00:00] [00:00:02.7056402] Cancellation requested; waiting for captured process to return.\n| [2026-11-05T04:30:49] Aspire.Cli.Git.GitCommandRunner Debug: Git process completed after 00:00:03.2141239; exit code -1, failure (null), cancelled True.\n[2026-11-05T04:30:49.2237086+00:00] [00:00:03.2143085] Captured process returned OperationCanceledException; waiting for descendant 5164 to exit.\n[2026-11-05T04:30:49.2253852+00:00] [00:00:03.2159848] Starting cleanup; captured task status=Canceled.\n[2026-11-05T04:30:49.2254120+00:00] [00:00:03.2160113] Cleanup cancellation completed.\n[2026-11-05T04:30:49.2254439+00:00] [00:00:03.2160434] Cleanup finished; captured task status=Canceled, capture exception=OperationCanceledException.\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Cli.Tests\\Workspace\\2dhwtedf.xwz\n",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "74d28266-64a3-4c3a-b48a-846edbe60a85"
+        }
+      ]
+    }
+  ]
+}
