@@ -332,38 +332,11 @@ public static class GoHostingExtensions
         if (builder.ExecutionContext.IsPublishMode &&
             builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
         {
-            var validationStepName = $"validate-go-dockerfile-package-path-{resource.Name}";
-
-            // The step is added to the pipeline instead of as a PipelineStepAnnotation on the container because
-            // WithDockerfile replaces the container's step annotation, which would drop this step (or throw when
-            // more than one exists) if the Dockerfile is configured again after this point.
-            builder.Pipeline.AddStep(new PipelineStep
-            {
-                Name = validationStepName,
-                Description = $"Warns when Go app '{resource.Name}' publishes an existing Dockerfile that ignores its package path.",
-                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
-                Resource = containerBuilder.Resource,
-                Action = context =>
-                {
-                    // A resource excluded from the manifest is never published, so there is nothing to warn about.
-                    if (!containerBuilder.Resource.IsExcludedFromPublish())
-                    {
-                        WarnIfExistingDockerfileIgnoresPackagePath(resource, containerBuilder.Resource, context.Logger);
-                    }
-
-                    return Task.CompletedTask;
-                }
-            });
-
-            // Deploy environments such as Azure Container Apps run the image build step without the aggregate
-            // Build step, so the image build must wait for this step itself to surface the warning before a
-            // potentially long build instead of after it.
-            containerBuilder.WithPipelineConfiguration(context =>
-            {
-                var validationStep = context.GetSteps(containerBuilder.Resource).FirstOrDefault(step => step.Name == validationStepName);
-
-                context.GetSteps(containerBuilder.Resource, WellKnownPipelineTags.BuildCompute).DependsOn(validationStep);
-            });
+            containerBuilder.AddPublishValidation(
+                $"validate-go-dockerfile-package-path-{resource.Name}",
+                $"Warns when Go app '{resource.Name}' publishes an existing Dockerfile that ignores its package path.",
+                [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                context => WarnIfExistingDockerfileIgnoresPackagePath(resource, containerBuilder.Resource, context.Logger));
         }
 
         // Ensure source resources (that provide container files) build before this Go image.
