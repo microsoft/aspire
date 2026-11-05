@@ -1,0 +1,50 @@
+﻿{
+  "type": "project.v1",
+  "path": "Functions/Functions.csproj",
+  "deployment": {
+    "type": "azure.bicep.v0",
+    "path": "functions-containerapp.module.bicep",
+    "params": {
+      "env_outputs_azure_container_apps_environment_default_domain": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+      "env_outputs_azure_container_apps_environment_id": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+      "env_outputs_azure_container_registry_endpoint": "{env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+      "env_outputs_azure_container_registry_managed_identity_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+      "functions_containerimage": "{functions.containerImage}",
+      "functions_identity_outputs_id": "{functions-identity.outputs.id}",
+      "funcstorage634f8_outputs_blobendpoint": "{funcstorage634f8.outputs.blobEndpoint}",
+      "funcstorage634f8_outputs_queueendpoint": "{funcstorage634f8.outputs.queueEndpoint}",
+      "funcstorage634f8_outputs_tableendpoint": "{funcstorage634f8.outputs.tableEndpoint}",
+      "funcstorage634f8_outputs_datalakeendpoint": "{funcstorage634f8.outputs.dataLakeEndpoint}",
+      "functions_identity_outputs_clientid": "{functions-identity.outputs.clientId}"
+    }
+  },
+  "env": {
+    "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+    "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AzureFunctionsJobHost__telemetryMode": "OpenTelemetry",
+    "ASPNETCORE_URLS": "http://\u002B:{functions.bindings.http.targetPort}",
+    "AzureWebJobsStorage__blobServiceUri": "{funcstorage634f8.outputs.blobEndpoint}",
+    "AzureWebJobsStorage__queueServiceUri": "{funcstorage634f8.outputs.queueEndpoint}",
+    "AzureWebJobsStorage__tableServiceUri": "{funcstorage634f8.outputs.tableEndpoint}",
+    "AzureWebJobsStorage__dataLakeServiceUri": "{funcstorage634f8.outputs.dataLakeEndpoint}",
+    "Aspire__Azure__Storage__Blobs__AzureWebJobsStorage__ServiceUri": "{funcstorage634f8.outputs.blobEndpoint}",
+    "Aspire__Azure__Storage__Queues__AzureWebJobsStorage__ServiceUri": "{funcstorage634f8.outputs.queueEndpoint}",
+    "Aspire__Azure__Data__Tables__AzureWebJobsStorage__ServiceUri": "{funcstorage634f8.outputs.tableEndpoint}",
+    "Aspire__Azure__Storage__Files__DataLake__AzureWebJobsStorage__ServiceUri": "{funcstorage634f8.outputs.dataLakeEndpoint}"
+  },
+  "bindings": {
+    "http": {
+      "scheme": "http",
+      "protocol": "tcp",
+      "transport": "http",
+      "targetPort": 8080
+    },
+    "https": {
+      "scheme": "https",
+      "protocol": "tcp",
+      "transport": "http",
+      "targetPort": 8080
+    }
+  }
+}

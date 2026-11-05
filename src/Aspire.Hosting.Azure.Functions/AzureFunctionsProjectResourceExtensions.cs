@@ -3,9 +3,10 @@
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREAZUREFUNCTIONS001 // Internal implementation of the experimental directory-based Functions APIs.
+#pragma warning disable ASPIREPROJECTS001 // Reuse the shared integration-authoring endpoint policy.
+#pragma warning disable CS0618 // Preserve the independent legacy ProjectResource API and its behavior.
 
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -15,9 +16,9 @@ using Azure.Provisioning.Storage;
 namespace Aspire.Hosting;
 
 /// <summary>
-/// Extension methods for <see cref="AzureFunctionsProjectResource"/>.
+/// Extension methods for Azure Functions resources.
 /// </summary>
-public static class AzureFunctionsProjectResourceExtensions
+public static partial class AzureFunctionsProjectResourceExtensions
 {
     private const string AzureFunctionsCoreToolsHelpLink = "https://learn.microsoft.com/azure/azure-functions/functions-run-local#install-the-azure-functions-core-tools";
     private const string NodeFunctionsLaunchConfigurationType = "azure-functions-node";
@@ -100,6 +101,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "TProject : IProjectMetadata is a .NET-specific generic constraint not compatible with ATS. Use the project path overload instead.")]
+    [Obsolete("Use AddDotnetAzureFunction(name, projectPath) instead. The replacement returns an AzureFunctionsResource using coordinated .NET project builds.")]
     public static IResourceBuilder<AzureFunctionsProjectResource> AddAzureFunctionsProject<TProject>(this IDistributedApplicationBuilder builder, [ResourceName] string name)
         where TProject : IProjectMetadata, new()
     {
@@ -158,6 +160,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// </remarks>
     /// <ats-remarks />
     [AspireExport]
+    [Obsolete("Use AddDotnetAzureFunction(name, projectPath) instead. The replacement returns an AzureFunctionsResource using coordinated .NET project builds.")]
     public static IResourceBuilder<AzureFunctionsProjectResource> AddAzureFunctionsProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -257,27 +260,48 @@ public static class AzureFunctionsProjectResourceExtensions
         }
 
         return functionsBuilder
-            .WithEnvironment(context =>
-            {
-                context.EnvironmentVariables[KnownOtelConfigNames.DotnetExperimentalOtlpRetry] = "in_memory";
-                context.EnvironmentVariables["ASPNETCORE_FORWARDEDHEADERS_ENABLED"] = "true";
-                context.EnvironmentVariables["FUNCTIONS_WORKER_RUNTIME"] = "dotnet-isolated";
-                // Required to enable OpenTelemetry in the Azure Functions host.
-                context.EnvironmentVariables["AzureFunctionsJobHost__telemetryMode"] = "OpenTelemetry";
-                // Set ASPNETCORE_URLS to use the non-privileged port 8080 when running in publish mode.
-                // We can't use the newer ASPNETCORE_HTTP_PORTS environment variables here since the Azure
-                // Functions host is still initialized using the classic WebHostBuilder.
-                if (context.ExecutionContext.IsPublishMode)
-                {
-                    var endpoint = resource.GetEndpoint("http");
-                    context.EnvironmentVariables["ASPNETCORE_URLS"] = ReferenceExpression.Create($"http://+:{endpoint.Property(EndpointProperty.TargetPort)}");
-                }
-
-                // Set the storage connection string.
-                ((IResourceWithAzureFunctionsConfig)resource.HostStorage).ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, "AzureWebJobsStorage");
-            })
+            .WithFunctionsEnvironment(configureLegacyDefaults: true)
             .WithOtlpExporter()
             .WithFunctionsHttpEndpoint();
+    }
+
+    private static IResourceBuilder<TResource> WithFunctionsEnvironment<TResource>(
+        this IResourceBuilder<TResource> builder,
+        bool configureLegacyDefaults)
+        where TResource : IAzureFunctionsResource, IResourceWithEnvironment, IResourceWithEndpoints
+    {
+        return builder.WithEnvironment(context =>
+        {
+            if (configureLegacyDefaults)
+            {
+                context.EnvironmentVariables[KnownOtelConfigNames.DotnetExperimentalOtlpRetry] = "in_memory";
+            }
+
+            if (configureLegacyDefaults || context.ExecutionContext.IsRunMode || !builder.Resource.HasAnnotationOfType<DisableForwardedHeadersAnnotation>())
+            {
+                context.EnvironmentVariables["ASPNETCORE_FORWARDEDHEADERS_ENABLED"] = "true";
+            }
+
+            context.EnvironmentVariables["FUNCTIONS_WORKER_RUNTIME"] = "dotnet-isolated";
+            // Required to enable OpenTelemetry in the Azure Functions host.
+            context.EnvironmentVariables["AzureFunctionsJobHost__telemetryMode"] = "OpenTelemetry";
+            // Set ASPNETCORE_URLS to use the non-privileged port 8080 when running in publish mode.
+            // We can't use the newer ASPNETCORE_HTTP_PORTS environment variables here since the Azure
+            // Functions host is still initialized using the classic WebHostBuilder.
+            if (context.ExecutionContext.IsPublishMode)
+            {
+                var endpoint = builder.Resource.GetEndpoint("http");
+                if (configureLegacyDefaults ||
+                    (!context.EnvironmentVariables.ContainsKey("ASPNETCORE_URLS") &&
+                     builder.Resource.ShouldInjectEndpointEnvironment(endpoint)))
+                {
+                    context.EnvironmentVariables["ASPNETCORE_URLS"] = ReferenceExpression.Create($"http://+:{endpoint.Property(EndpointProperty.TargetPort)}");
+                }
+            }
+
+            // Set the storage connection string.
+            ((IResourceWithAzureFunctionsConfig)builder.Resource.HostStorage!).ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, "AzureWebJobsStorage");
+        });
     }
 
     private static IResourceBuilder<AzureFunctionsAppResource> AddAzureFunctionsAppCore(
@@ -350,7 +374,8 @@ public static class AzureFunctionsProjectResourceExtensions
     /// </remarks>
     /// <param name="builder">The resource builder for the Azure Functions project resource.</param>
     /// <returns>An <see cref="IResourceBuilder{AzureFunctionsProjectResource}"/> for the Azure Functions project resource with the endpoint configured.</returns>
-    private static IResourceBuilder<AzureFunctionsProjectResource> WithFunctionsHttpEndpoint(this IResourceBuilder<AzureFunctionsProjectResource> builder)
+    private static IResourceBuilder<TResource> WithFunctionsHttpEndpoint<TResource>(this IResourceBuilder<TResource> builder)
+        where TResource : IResourceWithEndpoints, IResourceWithArgs
     {
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
@@ -364,18 +389,16 @@ public static class AzureFunctionsProjectResourceExtensions
         var useHttps = false;
         if (launchProfile is not null)
         {
+            // Core Tools accepts forms such as:
+            //   --port 7071
+            //   -p=7071
+            //   --useHttps false
+            // Fclp keeps the first occurrence when an option is repeated, so the app
+            // model must use that same value when choosing the endpoint.
             var commandLineArgs = CommandLineArgsParser.Parse(launchProfile.LaunchProfile.CommandLineArgs ?? string.Empty);
-            if (commandLineArgs is { Count: > 0 } &&
-                commandLineArgs.IndexOf("--port") is var indexOfPort &&
-                indexOfPort > -1 &&
-                indexOfPort + 1 < commandLineArgs.Count &&
-                int.TryParse(commandLineArgs[indexOfPort + 1], CultureInfo.InvariantCulture, out var parsedPort))
-            {
-                port = parsedPort;
-            }
-
-            useHttps = commandLineArgs is { Count: > 0 } &&
-                commandLineArgs.IndexOf("--useHttps") > -1;
+            var endpointOptions = AzureFunctionsHostOptions.Parse(commandLineArgs);
+            port = endpointOptions.Port;
+            useHttps = endpointOptions.UseHttps;
         }
         // When a port is defined in the launch profile, Azure Functions will favor that port over
         // the port configured in the `WithArgs` callback when starting the project. To that end
@@ -505,6 +528,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="storage">The resource builder for the Azure Storage resource to be used as host storage.</param>
     /// <returns>The resource builder for the Azure Functions project resource, configured with the specified host storage.</returns>
     [AspireExport]
+    [Obsolete("Use WithHostStorage on the AzureFunctionsResource returned by AddDotnetAzureFunction instead.")]
     public static IResourceBuilder<AzureFunctionsProjectResource> WithHostStorage(this IResourceBuilder<AzureFunctionsProjectResource> builder, IResourceBuilder<AzureStorageResource> storage)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -550,6 +574,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="connectionName">An override of the source resource's name for the connection name. The resulting connection name will be connectionName if this is not null.</param>
     /// <remarks>This method is not available in polyglot app hosts. Use the standard <c>withReference</c> method from the base resource builder instead.</remarks>
     [AspireExportIgnore(Reason = "IResourceWithAzureFunctionsConfig is an internal interface constraint not compatible with ATS.")]
+    [Obsolete("Use WithReference on the AzureFunctionsResource returned by AddDotnetAzureFunction instead.")]
     public static IResourceBuilder<AzureFunctionsProjectResource> WithReference<TSource>(this IResourceBuilder<AzureFunctionsProjectResource> destination, IResourceBuilder<TSource> source, string? connectionName = null)
         where TSource : IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
     {
@@ -682,6 +707,14 @@ public static class AzureFunctionsProjectResourceExtensions
                 .Resource;
         }
 
+        if (storage.HasAnnotationOfType<AzureFunctionsHostStorageCleanupAnnotation>())
+        {
+            return storage;
+        }
+
+        // All Functions models share this storage resource. Register cleanup once rather than
+        // adding one identical relationship pass per app (and duplicating every relationship).
+        storage.Annotations.Add(new AzureFunctionsHostStorageCleanupAnnotation());
         builder.OnBeforeStart((data, token) =>
         {
             var removeStorage = true;
@@ -798,6 +831,10 @@ public static class AzureFunctionsProjectResourceExtensions
     private sealed class AzureFunctionsHostStorageAnnotation(AzureStorageResource hostStorage) : IResourceAnnotation
     {
         public AzureStorageResource HostStorage { get; } = hostStorage;
+    }
+
+    private sealed class AzureFunctionsHostStorageCleanupAnnotation : IResourceAnnotation
+    {
     }
 
     /// <summary>

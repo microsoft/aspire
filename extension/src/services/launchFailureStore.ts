@@ -152,6 +152,7 @@ const providerKindAliases: readonly (readonly [string, LaunchFailureProviderKind
     ['cppdbg', 'rust'],
     ['cppvsdbg', 'rust'],
     ['azure-functions', 'azureFunctions'],
+    ['azure-functions-with-external-build.v1', 'azureFunctions'],
     ['pwa-chrome', 'browser'],
     ['pwa-msedge', 'browser'],
     ['firefox', 'browser'],

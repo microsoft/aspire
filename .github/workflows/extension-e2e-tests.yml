@@ -728,13 +728,16 @@ jobs:
         run: |
           set -euo pipefail
 
-          core_tools_version='4.12.1'
+          # Use the .NET 10 host so bindings requiring Microsoft.Extensions.Options 10
+          # do not run in an older host that cannot load that dependency.
+          # https://github.com/Azure/azure-functions-core-tools/releases/tag/4.13.0
+          core_tools_version='4.13.0'
           core_tools_directory="$RUNNER_TEMP/azure-functions-core-tools"
           core_tools_archive="$RUNNER_TEMP/Azure.Functions.Cli.linux-x64.${core_tools_version}.zip"
           curl --fail --location --retry 3 --retry-all-errors \
             --output "$core_tools_archive" \
             "https://github.com/Azure/azure-functions-core-tools/releases/download/${core_tools_version}/Azure.Functions.Cli.linux-x64.${core_tools_version}.zip"
-          echo 'faf8fb8d50b5293df338bec70594b12f45730e9fe251805298859b2238cf627e  '"$core_tools_archive" | sha256sum --check -
+          echo 'f98b08d201c33fd0c939b5bed2893d73e8f4abd081155c0755a0fbd95b2db6c4  '"$core_tools_archive" | sha256sum --check -
           mkdir -p "$core_tools_directory"
           unzip -q "$core_tools_archive" -d "$core_tools_directory"
           chmod +x "$core_tools_directory/func"

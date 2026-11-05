@@ -32,6 +32,7 @@ export type Capability =
     | 'java' // Support for running Java projects
     | 'vscjava.vscode-java-debug' // Java debug adapter extension identifier
     | 'azure-functions' // Support for running Azure Functions projects
+    | 'azure-functions-with-external-build.v1' // Support for Functions projects built by Aspire
     | 'message-actions.v1' // Support structured actions on interaction-service notifications
     | 'apphost-log-output.v1'; // Support structured AppHost log correlation in the debug console
 
@@ -237,6 +238,7 @@ export function getSupportedCapabilities(platform: NodeJS.Platform = process.pla
         // process) and the Azure Functions extension (to launch func host start).
         if (isAzureFunctionsExtensionInstalled()) {
             capabilities.push("azure-functions");
+            capabilities.push("azure-functions-with-external-build.v1");
         }
     }
 

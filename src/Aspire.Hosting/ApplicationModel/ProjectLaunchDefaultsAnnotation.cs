@@ -66,28 +66,3 @@ public sealed class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
         }
     }
 }
-
-internal static class ProjectLaunchDefaultsExtensions
-{
-    /// <summary>
-    /// Determines whether endpoint environment variables should be injected for the given endpoint.
-    /// Only http/https endpoints without an explicit target-port environment variable are eligible,
-    /// and any <see cref="EndpointEnvironmentInjectionFilterAnnotation"/> may further exclude them.
-    /// </summary>
-    [AspireExportIgnore(Reason = "Endpoint environment injection filtering is internal .NET launch wiring and is not part of the ATS surface.")]
-    public static bool ShouldInjectEndpointEnvironment(this IResource resource, EndpointReference e)
-    {
-        var endpoint = e.EndpointAnnotation;
-
-        if (endpoint.UriScheme is not ("http" or "https") ||    // Only process http and https endpoints
-            endpoint.TargetPortEnvironmentVariable is not null) // Skip if target port env variable was set
-        {
-            return false;
-        }
-
-        // If any filter rejects the endpoint, skip it
-        return !resource.Annotations.OfType<EndpointEnvironmentInjectionFilterAnnotation>()
-            .Select(a => a.Filter)
-            .Any(f => !f(endpoint));
-    }
-}

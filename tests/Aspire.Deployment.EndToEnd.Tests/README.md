@@ -75,19 +75,33 @@ Common quota increase requests:
 
 ## Prerequisites
 
-### Node Azure Functions storage bindings
+### Node and .NET Azure Functions storage bindings
 
-`AzureFunctionsDeploymentTests.DeployNodeFunctionsWithStorageBindingsToAzureContainerApps`
-deploys a TypeScript Functions fixture without a Dockerfile or prebuilt JavaScript.
-It verifies the deployed Container App's `functionapp` kind and ingress port 80,
-then invokes an HTTP trigger that writes a blob and enqueues work using runtime
-output bindings. A queue trigger writes a second blob; an HTTP GET reads both
-through blob input bindings and checks the unique request payload. Storage
-connections use managed identity, including a custom queue connection name.
-This requires the current-build Aspire bundle, Docker, npm, Python 3, and Azure
-permissions to provision Container Apps, ACR, storage, and managed-identity role
-assignments. Run it on the Linux deployment test infrastructure; it creates real
-Azure resources and requests resource-group cleanup in a `finally` block.
+`AzureFunctionsDeploymentTests.DeployNodeAndDotnetFunctionsWithStorageBindingsToAzureContainerApps`
+deploys TypeScript and SDK-style .NET isolated Functions resources in one Azure
+Container Apps environment. The TypeScript fixture has no Dockerfile or prebuilt
+JavaScript. The .NET fixture is registered with `AddDotnetAzureFunction`, has no
+Dockerfile, and restores through the channel-aware `NuGet.config` and current-build
+package sources created by `aspire init`; the test does not add a repository
+dependency manifest or rewrite NuGet configuration.
+
+The test verifies that both generated images were pushed to the deployment ACR
+and back live Container Apps with `functionapp` kind. It checks Node ingress on
+port 80 and the SDK-published .NET Functions host on port 8080. For the .NET
+resource it also checks managed-identity host-storage service URIs, named blob
+and queue binding service URIs, and the managed-identity credential settings.
+The Node flow performs HTTP-to-blob and HTTP-to-queue-to-blob round trips. The
+.NET flow invokes a public HTTP trigger, writes through a queue output binding,
+processes it through a queue trigger and blob output binding, then reads the
+result through a blob input binding.
+
+This scenario requires the current-build Aspire bundle and package hive, .NET
+10 SDK, npm, Python 3, Azure CLI, and a supported local container runtime (Docker
+in CI; Podman is supported for local runs). The deployment identity needs
+permission to provision Container Apps, ACR, storage, and managed-identity role
+assignments and to read ACR repository metadata. Run it on the Linux deployment
+test infrastructure; it creates real Azure resources, reports both public URLs
+when available, and requests resource-group cleanup in a `finally` block.
 
 ### For Local Development
 

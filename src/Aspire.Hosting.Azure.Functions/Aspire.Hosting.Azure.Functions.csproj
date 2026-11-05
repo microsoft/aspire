@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure.Storage\Aspire.Hosting.Azure.Storage.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
   </ItemGroup>
@@ -18,6 +19,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)AzureRoleAssignmentUtils.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" />
+    <Compile Include="$(SharedDir)DebugSessionInfoParser.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)\LaunchProfiles\*.cs" />
   </ItemGroup>

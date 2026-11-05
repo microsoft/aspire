@@ -425,6 +425,7 @@ suite('Editor assistance AppHost services', () => {
                 ['lldb', 'rust'],
                 ['maui', 'maui'],
                 ['azure-functions', 'azureFunctions'],
+                ['azure-functions-with-external-build.v1', 'azureFunctions'],
                 ['pwa-msedge', 'browser'],
                 ['bun', 'bun'],
                 ['private-debugger', 'other'],

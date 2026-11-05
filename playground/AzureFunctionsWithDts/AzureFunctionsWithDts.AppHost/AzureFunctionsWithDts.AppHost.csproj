@@ -15,8 +15,4 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\AzureFunctionsWithDts.Functions\AzureFunctionsWithDts.Functions.csproj" />
-  </ItemGroup>
-
 </Project>
