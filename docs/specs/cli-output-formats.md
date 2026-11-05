@@ -700,8 +700,6 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
 
-The `apphost` category includes an `aspire-skill-sources` warning when local static Aspire skills are found in project or user-level locations. Its `details` contains the explanation, while `metadata.workspaceRoot` identifies the workspace and `metadata.skillFiles` lists the full paths. Human-readable output uses workspace-relative paths or `~/` paths under `Details:`, with absolute paths for files outside both roots. JSON lists the full paths only in `metadata.skillFiles`.
-
 The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
 
 ### `aspire config info`
