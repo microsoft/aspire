@@ -175,7 +175,8 @@ internal sealed class DoctorCommand : BaseCommand
         _ansiConsole.Write(new Padder(grid, new Padding(2, 0)));
 
         // Secondary grid: details, fix suggestions, and links (indented further than message)
-        var hasDetails = !string.IsNullOrEmpty(result.Details);
+        var details = result.HumanReadableDetails ?? result.Details;
+        var hasDetails = !string.IsNullOrEmpty(details);
         var hasFix = !string.IsNullOrEmpty(result.Fix);
         var hasLink = !string.IsNullOrEmpty(result.Link);
 
@@ -201,7 +202,7 @@ internal sealed class DoctorCommand : BaseCommand
             if (hasDetails)
             {
                 detailGrid.AddRow(new Markup($"[dim]Details:[/]"));
-                detailGrid.AddRow(new Markup($"[dim]{result.Details!.EscapeMarkup()}[/]"));
+                detailGrid.AddRow(new Markup($"[dim]{details!.EscapeMarkup()}[/]"));
             }
 
             _ansiConsole.Write(new Padder(detailGrid, new Padding(7, 0)));

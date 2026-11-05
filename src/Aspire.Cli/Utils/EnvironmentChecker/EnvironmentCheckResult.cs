@@ -97,6 +97,12 @@ internal sealed class EnvironmentCheckResult
     public string? Details { get; init; }
 
     /// <summary>
+    /// Gets an optional override for details rendered in human-readable output.
+    /// </summary>
+    [JsonIgnore]
+    public string? HumanReadableDetails { get; init; }
+
+    /// <summary>
     /// Gets optional structured metadata for programmatic consumption.
     /// </summary>
     /// <remarks>
