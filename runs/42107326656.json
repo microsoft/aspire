@@ -1,0 +1,98 @@
+{
+  "run_id": 42107326656,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42107326656",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T21:32:46Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21809,
+    "title": "Clarify Aspire agent integration scope during project creation",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/clarify-scope-of-agent-integrations",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21809",
+    "merged_at": "2026-11-05T20:51:54Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "e37145f3298242cec5a322ebf0cbcd081273bf3a",
+    "failed_sha": "d6743601b69f637ac1773ed0e5f485c0d1d620c8",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "message": "[automated] test(cli): Find Radius MongoDB pods in their application namespace (#21422) ## Description The Radius deployment outerloop test fails while waiting for MongoDB: ```text error: no matching resources found ``` The legacy MongoDB recipe labels its pods, not its Deployment metadata. Its workload also lives in the legacy application's namespace, which appends `-app` to the environment namespace. Wait for the MongoDB pod to become Ready in that namespace, and use the same namespace for pod",
+        "html_url": "https://github.com/microsoft/aspire/commit/a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "pull_request": {
+          "number": 21422,
+          "title": "[automated] test(cli): Find Radius MongoDB pods in their application namespace",
+          "url": "https://github.com/microsoft/aspire/pull/21422",
+          "merged_at": "2026-11-05T17:08:30Z"
+        }
+      },
+      {
+        "sha": "1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "message": "fix intermittent internal build failures (#21768) ## Description **Add bounded retries for transient connection loss during macOS tray notarization-ticket stapling and validation.** Internal builds intermittently fail when Apple's CloudKit connection drops: ```text Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\" ``` These network failures currently stop the build immediately. Retry only the failed stapler operation when its output identifies connection loss, rather th",
+        "html_url": "https://github.com/microsoft/aspire/commit/1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "pull_request": {
+          "number": 21768,
+          "title": "fix intermittent internal build failures",
+          "url": "https://github.com/microsoft/aspire/pull/21768",
+          "merged_at": "2026-11-05T17:38:09Z"
+        }
+      },
+      {
+        "sha": "9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "message": "Give the Deno AppHost inspector attach the AppHost startup budget (#21604) ## Description Fixes #21603. That issue is the Windows `launch-profiles` flake \"debugs a Deno AppHost through the built-in JavaScript debugger\", #5/#7 on the 7-day top-flakes list in #21600. **Root cause.** - To debug a Deno AppHost, the extension launches `deno run --inspect-wait=127.0.0.1:<port> ...` through js-debug (`pwa-node`) with `attachSimplePort`, but never sets `timeout`. - js-debug's default 10s budget starts b",
+        "html_url": "https://github.com/microsoft/aspire/commit/9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "pull_request": {
+          "number": 21604,
+          "title": "Give the Deno AppHost inspector attach the AppHost startup budget",
+          "url": "https://github.com/microsoft/aspire/pull/21604",
+          "merged_at": "2026-11-05T18:32:56Z"
+        }
+      },
+      {
+        "sha": "401491d6d3c71b46c8250af4eb5d3a83c60034ad",
+        "message": "Clarify dotnet-inspect requirements in agent init help (#21770) ## Description Clarify `aspire agent init --skills` help to explain that `dotnet-inspect` requires a C# AppHost. Update the existing `aspire init --help` snapshot to match. No runtime behavior changes. Fixes #16574 ### Before / after `aspire agent init --help --nologo`: ```diff - --skills <skills>  Comma-separated skill/tool IDs (aspire,playwright-cli,dotnet-inspect), 'all', or 'none' (default: aspire) + --skills <skills>  Comma-sep",
+        "html_url": "https://github.com/microsoft/aspire/commit/401491d6d3c71b46c8250af4eb5d3a83c60034ad",
+        "pull_request": {
+          "number": 21770,
+          "title": "Clarify dotnet-inspect requirements in agent init help",
+          "url": "https://github.com/microsoft/aspire/pull/21770",
+          "merged_at": "2026-11-05T18:54:18Z"
+        }
+      },
+      {
+        "sha": "d6743601b69f637ac1773ed0e5f485c0d1d620c8",
+        "message": "Clarify Aspire agent integration scope during project creation (#21809) ## Description Clarifies that the installation-scope choice applies to agent skills and tools, not Aspire itself. **Before** ```text Installation scope > Project (Install in your workspace root; committed with your project)   Global (Install in your home directory; available across all projects) ``` **After** ```text Where should skills and tools be installed? > This project (In your workspace, ready to commit with your proj",
+        "html_url": "https://github.com/microsoft/aspire/commit/d6743601b69f637ac1773ed0e5f485c0d1d620c8",
+        "pull_request": {
+          "number": 21809,
+          "title": "Clarify Aspire agent integration scope during project creation",
+          "url": "https://github.com/microsoft/aspire/pull/21809",
+          "merged_at": "2026-11-05T20:51:54Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 127526668317,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42107326656/job/127526668317",
+      "classification": "transient-infra",
+      "reason": "macOS Aspire.Cli.Tests host crashed with exit code 3 (run exit 7) with zero failed tests recorded in the TRX.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-crash-exit-3"
+  ]
+}
