@@ -124,10 +124,12 @@ await builder.build().run();
             // Phase 5: Verify the deployment
             // =====================================================================
 
-            // Verify pods are running in the namespace
-            await auto.TypeAsync($"kubectl get pods -n {k8sNamespace} --no-headers");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
+            // The frontend is bundled into app's image, not deployed as a separate workload.
+            // Waiting by app's label also fails if the chart omitted its only workload.
+            await auto.RunCommandAsync(
+                $"kubectl wait --for=condition=Ready pod -n {k8sNamespace} -l app.kubernetes.io/component=app --timeout=180s",
+                counter,
+                TimeSpan.FromMinutes(4));
 
             // =====================================================================
             // Phase 6: Cleanup

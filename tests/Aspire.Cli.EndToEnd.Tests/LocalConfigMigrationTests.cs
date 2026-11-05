@@ -58,9 +58,7 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        await auto.DownAsync();
-        await auto.WaitUntilTextAsync("> TypeScript (Node.js)", timeout: TimeSpan.FromSeconds(5));
-        await auto.EnterAsync();
+        await auto.SelectAppHostLanguageAsync("TypeScript");
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 

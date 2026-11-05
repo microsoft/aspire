@@ -25,7 +25,7 @@ internal static class KubernetesDeployTestHelpers
 
     /// <summary>
     /// Installs KinD, Helm, and kubectl binaries to ~/.local/bin and adds to PATH.
-    /// Skips downloads for tools already on PATH (e.g., pre-installed in Dockerfile.e2e).
+    /// Skips downloads for tools already on PATH.
     /// Retries downloads up to 3 times to handle transient GitHub CDN failures.
     /// </summary>
     internal static async Task InstallKindAndHelmAsync(

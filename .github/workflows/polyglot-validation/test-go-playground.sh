@@ -2,7 +2,7 @@
 # Polyglot SDK Validation - Go validation AppHosts
 # Iterates all Go validation AppHosts under tests/PolyglotAppHosts/*/Go,
 # runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
-# compile-checks each AppHost with 'go build ./...' to verify the generated API surface.
+# builds and vets each AppHost against its own generated API surface.
 set -euo pipefail
 
 echo "=== Go Validation AppHost Codegen Validation ==="
@@ -81,6 +81,14 @@ for app_dir in "${APP_DIRS[@]}"; do
     if ! go build -buildvcs=false ./... 2>&1; then
         echo "  ❌ go build failed for $integration_name"
         FAILED+=("$integration_name (go build)")
+        echo ""
+        continue
+    fi
+
+    echo "  → go vet ./..."
+    if ! go vet ./... 2>&1; then
+        echo "  ❌ go vet failed for $integration_name"
+        FAILED+=("$integration_name (go vet)")
         echo ""
         continue
     fi
