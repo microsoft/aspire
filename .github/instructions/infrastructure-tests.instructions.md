@@ -120,9 +120,18 @@ configuration.
 
 ## Reuse shared test infrastructure
 
+- Default to C# for tests and harnesses, including fixture setup, process
+  orchestration, and assertions. Use shell, PowerShell, JavaScript, or another
+  language when it is a better fit, such as exercising that language's native
+  module or script behavior, testing its format, or reusing an established
+  harness. Choose based on the behavior under test and maintainability rather
+  than adding a runtime or language hop solely to host test logic. Small
+  language-native dependency stubs are appropriate in a C#-owned test.
 - Search for existing helpers before adding new utilities. Reuse or extend
-  `RepoRoot`, `TemporaryWorkspace`, `NodeCommand`, `PowerShellCommand`, and
-  applicable shared test utilities.
+  `RepoRoot`, `TemporaryWorkspace`, `TestProcessRunner`, `NodeCommand`,
+  `PowerShellCommand`, and applicable shared test utilities. Extract repeated
+  harness logic into a shared helper when there are actual consumers; do not
+  introduce an abstraction solely for one test.
 - For test-selection scenarios, reuse the production selector and existing
   real-map helpers.
 - Put repeated repository-root, process, workspace, parsing, and harness logic
