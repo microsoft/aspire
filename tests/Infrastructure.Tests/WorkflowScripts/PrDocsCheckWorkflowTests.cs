@@ -10,6 +10,7 @@ namespace Infrastructure.Tests;
 public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 {
     [Fact]
+    [Trait("ci-platform", "windows")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
     public Task PythonTestsPassOnWindows() => PythonTestsPass("python");

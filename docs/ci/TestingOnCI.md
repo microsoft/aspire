@@ -20,6 +20,38 @@ Windows GitHub Actions jobs that restore or consume NuGet packages should use
 steps share the same cache. When a step is the only NuGet consumer, set the
 variable at step scope. Linux and macOS should retain their existing cache behavior.
 
+### Platform-specific infrastructure coverage
+
+`Infrastructure.Tests` runs unmarked regular tests on Linux, excluding
+`ci-platform=*`. Its Windows and macOS matrix entries run only tests marked
+with `[Trait("ci-platform", "windows")]` or `[Trait("ci-platform", "macos")]`,
+respectively. The regular no-package matrix opts in through the reusable
+runner's `runPlatformInfrastructureTests`
+input, which sets the `RunPlatformInfrastructureTests` MSBuild property via
+the job environment. That input defaults to false. Local, quarantine,
+outerloop, and reproduction runs do not opt in and retain their own filters.
+Runsheet-generation flags such as `RunQuarantinedTests` are not forwarded to
+the specialized runner's test command and cannot identify its execution mode.
+
+The Windows lane exercises the Python workflow helpers on Windows. The macOS
+lane exercises tray signing transport with `ditto`, using a synthetic app bundle
+and the real `PrepareTraySigning` target rather than publishing or signing a
+native app. Both lanes reuse the normal no-package matrix and project selection,
+so selecting `Infrastructure.Tests` adds two runner/build setups without
+repeating the full suite on those runners.
+
+PowerShell is required by the shared runner. Windows also needs `python`, and
+macOS needs `ditto`; the workflow checks these before running the focused cases
+because `RequiresTools` would otherwise exclude tests silently. These lanes
+also require TRX evidence of executed tests, even though the shared MTP
+arguments permit zero-test exit codes.
+
+When adding platform-only infrastructure coverage, retain the declarative
+platform restriction as well as the matching `ci-platform` trait. Verify that
+the production matrix includes the supported OS and that its TRX contains the
+intended tests; a successful Linux run or zero skipped tests cannot establish
+supported-platform execution.
+
 ## Architecture
 
 ```text

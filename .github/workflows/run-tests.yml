@@ -22,6 +22,11 @@ on:
       extraTestArgs:
         required: false
         type: string
+      runPlatformInfrastructureTests:
+        description: 'Opt in to focused platform infrastructure coverage in the regular test matrix.'
+        required: false
+        type: boolean
+        default: false
       versionOverrideArg:
         required: false
         type: string
@@ -60,6 +65,9 @@ jobs:
     name: ${{ inputs.testShortName }} (${{ inputs.os }})
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      # Only the regular matrix opts in. Specialized and reproduction runs must
+      # retain their own filters without inferring their mode from MSBuild flags.
+      RunPlatformInfrastructureTests: ${{ inputs.runPlatformInfrastructureTests }}
       # Disable MSBuild terminal logger via env var instead of -tl:false on the command line.
       # In MTP native runner mode, -tl:false is forwarded to the test host which doesn't recognize it.
       MSBUILDTERMINALLOGGER: "false"
@@ -99,6 +107,20 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # RequiresTools excludes unavailable tools instead of failing discovery.
+      # These focused lanes must not pass without exercising their platform cases.
+      - name: Verify platform infrastructure tools
+        if: inputs.runPlatformInfrastructureTests && runner.os != 'Linux'
+        shell: pwsh
+        run: |
+          if ($IsWindows) {
+            Get-Command python -ErrorAction Stop
+            python --version
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Get-Command ditto -ErrorAction Stop
+          }
 
       # Diagnostics only: samples CPU, memory, commit charge, page file, and disk pressure
       # into the uploaded logs so slow or hung Windows jobs can be correlated with machine
@@ -707,7 +729,7 @@ jobs:
           Set-Content -Path "$testResultsDir/ignore-test-failures.marker" -Value $env:TEST_SHORT_NAME
 
       - name: Verify test results exist
-        if: ${{ inputs.ignoreTestFailures }}
+        if: ${{ inputs.ignoreTestFailures || (inputs.runPlatformInfrastructureTests && runner.os != 'Linux') }}
         shell: pwsh
         env:
           ALLOW_ZERO_TESTS: ${{ inputs.allowZeroTests }}

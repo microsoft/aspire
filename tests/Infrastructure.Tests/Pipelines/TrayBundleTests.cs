@@ -175,11 +175,12 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [Trait("ci-platform", "macos")]
+    [PlatformSpecific(TestPlatforms.OSX)]
     [RequiresTools(["pwsh", "ditto"])]
     [SupportedOSPlatform("macos")]
     public async Task MacSigningTransportContainsAppDirectoryAndPreservesExecutableModes()
     {
-        Assert.SkipUnless(OperatingSystem.IsMacOS(), "macOS signing transport uses ditto.");
         using var workspace = TemporaryWorkspace.Create(output);
         var source = MacTrayTestPayload.Create(workspace.Path);
         var archivePath = Path.Combine(workspace.Path, "signing", "AspireTray.zip");
