@@ -29,7 +29,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     [InlineData(KnownResourceTypes.Container)]
     [InlineData(KnownResourceTypes.Executable)]
     [InlineData(KnownResourceTypes.Project)]
-    public async Task Panels_DefaultsToHideEmptyAndRestoresAllPanelsWithoutNavigation(string resourceType)
+    public async Task Panels_AlwaysHideEmptyPanels(string resourceType)
     {
         var console = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         await console.Writer.WriteAsync([]);
@@ -41,47 +41,16 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Contains("No console output", cut.Find("[aria-labelledby='overview-console-title']").TextContent));
         Assert.Equal(["overview-tags-title", "overview-status-title"], GetVisiblePanels(cut));
         Assert.Contains("--overview-span: 12;", cut.Find("[aria-labelledby='overview-status-title']").GetAttribute("style"));
-        var tabs = cut.FindAll("[role='tab']").Select(t => t.TextContent).ToArray();
-        var navigation = Services.GetRequiredService<NavigationManager>();
-        var initialUrl = navigation.Uri;
-        var selector = cut.Find(".resource-header-controls .overview-panel-selector [role='group']");
-        Assert.Equal("Panels", selector.GetAttribute("aria-label"));
-        Assert.Equal(["Hide empty panels", "Show all panels"], selector.QuerySelectorAll("button").Select(b => b.GetAttribute("aria-label")));
-        var all = cut.Find(".overview-panel-selector [aria-label='Show all panels']");
-        var withContent = cut.Find(".overview-panel-selector [aria-label='Hide empty panels']");
-        Assert.Equal("false", all.GetAttribute("aria-pressed"));
-        Assert.Equal("true", withContent.GetAttribute("aria-pressed"));
-
-        await SelectPanelsAsync(cut, hideEmpty: false);
-        var titles = GetVisiblePanels(cut);
-        Assert.Equal(12, titles.Length);
-        Assert.Contains("--overview-span: 3;", cut.Find("[aria-labelledby='overview-status-title']").GetAttribute("style"));
-
-        await SelectPanelsAsync(cut, hideEmpty: true);
-        await SelectPanelsAsync(cut, hideEmpty: true);
-
-        withContent = cut.Find(".overview-panel-selector [aria-label='Hide empty panels']");
-        all = cut.Find(".overview-panel-selector [aria-label='Show all panels']");
-        Assert.Equal("true", withContent.GetAttribute("aria-pressed"));
-        Assert.Equal("false", all.GetAttribute("aria-pressed"));
-        Assert.Equal(["overview-tags-title", "overview-status-title"], GetVisiblePanels(cut));
-        Assert.Equal(tabs, cut.FindAll("[role='tab']").Select(t => t.TextContent).ToArray());
-        Assert.Equal(initialUrl, navigation.Uri);
+        Assert.Equal(10, cut.FindAll(".overview-grid > .overview-card[hidden]").Count);
+        Assert.Empty(cut.FindAll(".overview-panel-selector"));
+        Assert.Single(cut.FindAll(".resource-header-controls > .resource-header-close-button"));
         Assert.Equal(["test"], cut.Instance.SelectedResourceNames);
-
-        await SelectPanelsAsync(cut, hideEmpty: false);
-
-        withContent = cut.Find(".overview-panel-selector [aria-label='Hide empty panels']");
-        all = cut.Find(".overview-panel-selector [aria-label='Show all panels']");
-        Assert.Equal("false", withContent.GetAttribute("aria-pressed"));
-        Assert.Equal("true", all.GetAttribute("aria-pressed"));
-        Assert.Equal(titles, GetVisiblePanels(cut));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Panels_IconOnlyChoicesExposeNamesTooltipsAndState(bool isDesktop)
+    public async Task Overview_CloseReplacesPanelChoices(bool isDesktop)
     {
         var viewport = s_viewport with { IsDesktop = isDesktop };
         ResourceSetupHelpers.SetupResourceOverview(this, viewport,
@@ -91,32 +60,23 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
         var cut = RenderOverview(viewport);
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        var selector = cut.Find(".resource-header-controls .overview-panel-selector [role='group']");
-        var options = cut.FindAll(".overview-panel-selector button");
-        Assert.Equal("Panels", selector.TextContent.Trim());
-        Assert.Equal(["Hide empty panels", "Show all panels"], options.Select(option => option.GetAttribute("aria-label")));
-        Assert.All(options, option =>
-        {
-            Assert.Equal(option.GetAttribute("aria-label"), option.GetAttribute("data-tooltip"));
-        });
-        Assert.Equal(["true", "false"], options.Select(option => option.GetAttribute("aria-pressed")));
+        var close = cut.Find(".resource-header-controls > .resource-header-close-button");
+        Assert.Equal("Close", close.GetAttribute("aria-label"));
+        Assert.Equal("Close", close.GetAttribute("data-tooltip"));
+        Assert.Empty(cut.FindAll(".overview-panel-selector"));
         Assert.True(cut.Find("[aria-labelledby='overview-endpoints-title']").HasAttribute("hidden"));
 
-        await SelectPanelsAsync(cut, hideEmpty: false);
+        await cut.InvokeAsync(() => close.Click());
+        cut.Render();
 
-        options = cut.FindAll(".overview-panel-selector button");
-        Assert.False(cut.Find("[aria-labelledby='overview-endpoints-title']").HasAttribute("hidden"));
-        Assert.Equal(["false", "true"], options.Select(option => option.GetAttribute("aria-pressed")));
-
-        await SelectPanelsAsync(cut, hideEmpty: true);
-
-        options = cut.FindAll(".overview-panel-selector button");
-        Assert.True(cut.Find("[aria-labelledby='overview-endpoints-title']").HasAttribute("hidden"));
-        Assert.Equal(["true", "false"], options.Select(option => option.GetAttribute("aria-pressed")));
+        Assert.Equal("http://localhost/resources", Services.GetRequiredService<NavigationManager>().Uri);
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
+        Assert.Empty(cut.FindAll(".resource-header-close-button"));
     }
 
     [Fact]
-    public async Task ConsolePreview_KeepsTenNewestLinesAcrossUpdatesAndPanelChoices()
+    public async Task ConsolePreview_KeepsTenNewestLinesAcrossUpdates()
     {
         var console = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         SetupOverview(new TestDashboardClient(isEnabled: true,
@@ -130,14 +90,12 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             Enumerable.Range(7, 10).Select(number => $"line-{number}"),
             cut.FindAll(".overview-console-line").Select(line => line.TextContent)));
 
-        await SelectPanelsAsync(cut, hideEmpty: true);
         await console.Writer.WriteAsync(Enumerable.Range(17, 4)
             .Select(number => new ResourceLogLine(number, $"line-{number}", false)).ToArray());
         cut.WaitForAssertion(() => Assert.Equal(
             Enumerable.Range(11, 10).Select(number => $"line-{number}"),
             cut.FindAll(".overview-console-line").Select(line => line.TextContent)));
 
-        await SelectPanelsAsync(cut, hideEmpty: false);
         Assert.Equal(
             Enumerable.Range(11, 10).Select(number => $"line-{number}"),
             cut.FindAll(".overview-console-line").Select(line => line.TextContent));
@@ -155,7 +113,6 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             resourceChannelProvider: () => changes,
             consoleLogsChannelProvider: _ => console));
         var cut = RenderOverview(s_viewport);
-        await SelectPanelsAsync(cut, hideEmpty: true);
         cut.WaitForAssertion(() => Assert.Equal(["overview-tags-title", "overview-status-title"], GetVisiblePanels(cut)));
 
         var populated = ModelTestHelpers.CreateResource("test",
@@ -191,7 +148,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Properties_DefaultToShowAllAndRetainExplicitCoreFilterControls()
+    public void Properties_DefaultToShowAllAndRetainExplicitCoreFilterControls()
     {
         SetupOverview(new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("test",
@@ -217,8 +174,6 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         Assert.Equal("0", properties.QuerySelector(".overview-card-count")!.TextContent);
         Assert.NotNull(properties.QuerySelector("[aria-label='Show all properties']"));
 
-        await SelectPanelsAsync(cut, hideEmpty: false);
-        await SelectPanelsAsync(cut, hideEmpty: true);
         properties = cut.Find("[aria-labelledby='overview-properties-title']");
         Assert.False(properties.HasAttribute("hidden"));
         Assert.Equal("0", properties.QuerySelector(".overview-card-count")!.TextContent);
@@ -251,14 +206,12 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             Assert.NotNull(panel.QuerySelector(".overview-console-paused"));
         });
 
-        await SelectPanelsAsync(cut, hideEmpty: false);
-        await SelectPanelsAsync(cut, hideEmpty: true);
         await cut.InvokeAsync(() => cut.Find("[aria-label='Resume incoming data']").Click());
         cut.WaitForAssertion(() => Assert.True(cut.Find("[aria-labelledby='overview-console-title']").HasAttribute("hidden")));
     }
 
     [Fact]
-    public async Task Terminal_PanelChoicesPreserveViewerAndConnection()
+    public void Terminal_RerendersPreserveViewerAndConnection()
     {
         TerminalSetupHelpers.SetupTerminalView(this);
         TerminalSetupHelpers.SetupTerminalWindows(this);
@@ -269,18 +222,15 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         var viewer = cut.FindComponent<TerminalView>().Instance;
 
-        await SelectPanelsAsync(cut, hideEmpty: false);
-        await SelectPanelsAsync(cut, hideEmpty: true);
+        cut.Render();
 
         Assert.Same(viewer, cut.FindComponent<TerminalView>().Instance);
         Assert.False(cut.Find(".overview-terminal-card").HasAttribute("hidden"));
         Assert.Single(JSInterop.Invocations, i => i.Identifier == "initTerminal");
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Terminal_DockTransitionsPackOnlyRenderedOverviewCards(bool hideEmpty)
+    [Fact]
+    public async Task Terminal_DockTransitionsPackOnlyRenderedOverviewCards()
     {
         TerminalSetupHelpers.SetupTerminalView(this);
         TerminalSetupHelpers.SetupTerminalWindows(this);
@@ -288,7 +238,6 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             initialResources: [TerminalSetupHelpers.CreateTerminalResource("test", autoFit: true)],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var cut = RenderOverview(s_viewport);
-        await SelectPanelsAsync(cut, hideEmpty);
         var dock = Services.GetRequiredService<TerminalDockState>();
 
         await cut.InvokeAsync(() => dock.Update(isVisible: true, resourceName: "test"));
@@ -298,18 +247,11 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             Assert.Empty(cut.FindAll(".overview-terminal-card"));
             Assert.Empty(cut.FindAll("[aria-labelledby='overview-console-title']"));
             Assert.Equal(
-                hideEmpty ? "--overview-span: 5; --overview-span-md: 6; --overview-card-height: 260px;"
-                    : "--overview-span: 3; --overview-span-md: 6; --overview-card-height: 260px;",
+                "--overview-span: 5; --overview-span-md: 6; --overview-card-height: 260px;",
                 cut.Find("[aria-labelledby='overview-status-title']").GetAttribute("style"));
             Assert.Equal(
-                hideEmpty ? "--overview-span: 7; --overview-span-md: 6; --overview-card-height: 340px;"
-                    : "--overview-span: 6; --overview-span-md: 6; --overview-card-height: 340px;",
+                "--overview-span: 7; --overview-span-md: 6; --overview-card-height: 340px;",
                 cut.Find("[aria-labelledby='overview-properties-title']").GetAttribute("style"));
-            if (!hideEmpty)
-            {
-                Assert.Equal("--overview-span: 6; --overview-span-md: 6; --overview-card-height: 300px;",
-                    cut.Find("[aria-labelledby='overview-logs-title']").GetAttribute("style"));
-            }
         });
 
         await cut.InvokeAsync(() => dock.Update(isVisible: false, resourceName: null));
@@ -318,8 +260,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         {
             var terminal = Assert.Single(cut.FindAll(".overview-terminal-card"));
             Assert.Equal(
-                hideEmpty ? "--overview-span: 8; --overview-span-md: 12; --overview-card-height: 300px;"
-                    : "--overview-span: 7; --overview-span-md: 12; --overview-card-height: 300px;",
+                "--overview-span: 8; --overview-span-md: 12; --overview-card-height: 300px;",
                 terminal.GetAttribute("style"));
         });
     }
@@ -367,7 +308,6 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test-TestId");
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         var cut = RenderOverview(s_viewport, "test-TestId");
-        cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").Click();
         string[] telemetryPanels = ["overview-metrics-title", "overview-logs-title", "overview-traces-title"];
         Assert.All(telemetryPanels, title => Assert.True(cut.Find($"[aria-labelledby='{title}']").HasAttribute("hidden")));
 
@@ -400,7 +340,6 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             });
             Assert.Empty(cut.FindComponent<ResourceOverview>().FindComponents<FluentSkeleton>());
         });
-        Assert.Equal("true", cut.Find(".overview-panel-selector [aria-label='Hide empty panels']").GetAttribute("aria-pressed"));
         Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
     }
 
@@ -421,7 +360,4 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     private static string[] GetVisiblePanels(IRenderedComponent<ResourcesLayout> cut) =>
         cut.FindAll(".overview-grid > .overview-card:not([hidden])").Select(c => c.GetAttribute("aria-labelledby")!).ToArray();
 
-    private static Task SelectPanelsAsync(IRenderedComponent<ResourcesLayout> cut, bool hideEmpty) =>
-        cut.InvokeAsync(() => cut.FindComponent<IconToggleGroup<bool>>()
-            .Find(hideEmpty ? "[aria-label='Hide empty panels']" : "[aria-label='Show all panels']").ClickAsync(new()));
 }

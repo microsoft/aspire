@@ -23,9 +23,9 @@
     var paneTelemetrySourceCount = telemetryRows.Count;
     var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
     var showSectionHeaders = HasMultiplePaneSections(paneResourceCount, paneParameterCount, paneTelemetrySourceCount);
-    var showResourceGroupHeaders = _grouping != ResourcePaneGrouping.ResourceType || groups.Count > 1;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed && !_isPaneFullCanvas;
+    var showOverviewClose = CurrentTab == ResourceTab.Overview && _selectedResourceNames.Count > 0;
 
     RenderFragment resourcePane = @<aside class="resource-pane @(showCollapsedPane ? "resource-pane-popup" : null)" aria-label="@Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneLandmark) : nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]" hidden="@(!isDesktop && !_isDrawerOpen && !_isPaneFullCanvas)">
             <div class="resource-pane-contents">
@@ -91,35 +91,6 @@
                 }
             </div>
 
-            @if (_isLoaded && DashboardClient.IsEnabled)
-            {
-                var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
-                var allResourceCount = allResources.Count(r => !r.IsParameter);
-                var allParameterCount = allResources.Count(r => r.IsParameter);
-
-                @* The toggles are outside the scrolling list, so a scrollbar appearing or leaving never changes their
-                   width or layout. They decide what the list shows and what "all resources" covers. *@
-                <div class="resource-pane-kinds">
-                    <div class="resource-kind-toggles" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneKindsLandmark)]">
-                        @KindToggle(ResourcePaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
-                        @KindToggle(ResourcePaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
-                        @KindToggle(ResourcePaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
-                    </div>
-                    <div class="resource-select-all">
-                        <button type="button"
-                                class="resource-select-all-toggle @(IsAllSelected ? "on" : null)"
-                                aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
-                                aria-description="@(IsAllSelected ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected)].Value : null)"
-                                data-tooltip="@Loc[IsAllSelected ? nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected) : nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
-                                data-tooltip-positioning="above"
-                                @onclick="OnAllResourcesClickAsync">
-                            <FluentIcon Value="@(new Icons.Regular.Size20.SelectAllOn())" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
-                            <span>@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]</span>
-                        </button>
-                    </div>
-                </div>
-            }
-
             <nav class="resource-pane-list @(IsCompact ? "density-compact" : IsSpacious ? "density-spacious" : null)"
                  data-reorder-enabled="@CanReorderResources.ToString().ToLowerInvariant()"
                  data-group-reorder-enabled="@CanReorderGroups.ToString().ToLowerInvariant()"
@@ -138,12 +109,12 @@
 
                 @if (_isLoaded)
                 {
-                    var isAllSelected = _selectedResourceNames.Count == 0;
+                    var isAllSelected = IsAllSelected;
                     var allResources = _resourceByName.Values.Where(r => MatchesPage(r) && !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
                     var allResourceCount = allResources.Count(r => !r.IsParameter);
                     var allParameterCount = allResources.Count(r => r.IsParameter);
                     var allTelemetrySourceCount = DashboardClient.IsEnabled ? paneTelemetrySourceCount : _telemetryOnlyResources.Count;
-                    var allResourcesText = Loc[nameof(Dashboard.Resources.Layout.ResourcePaneAll)].Value;
+                    var allResourcesText = Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneAll) : nameof(Dashboard.Resources.Layout.TelemetryHeaderAllSources)].Value;
                     var allResourcesCountText = DashboardClient.IsEnabled
                         ? GetPaneCountText(allResourceCount, allParameterCount, allTelemetrySourceCount)
                         : GetPaneCountText(resourceCount: 0, parameterCount: 0, telemetrySourceCount: allTelemetrySourceCount);
@@ -189,15 +160,6 @@
 
                     @foreach (var group in groups)
                     {
-                        if (!showResourceGroupHeaders)
-                        {
-                            foreach (var resource in group.Resources)
-                            {
-                                @((RenderFragment)(builder => RenderResourceRow(builder, resource, row: null)))
-                            }
-                            continue;
-                        }
-
                         var groupName = GetGroupName(group.Value);
                         var isGroupCollapsed = IsGroupCollapsed(group);
                         var countText = string.Format(CultureInfo.CurrentCulture, group.Resources.Count == 1 ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], group.Resources.Count);
@@ -334,7 +296,7 @@
                         {
                             var telemetryResourceName = telemetryResource.Name;
                             var isSelected = IsSelected(telemetryResourceName);
-                            <div class="resource-row resource-row-kind-telemetry @(isSelected || IsAllSelected ? "selected" : string.Empty)" @key="@($"otlp:{telemetryResourceName}")">
+                            <div class="resource-row resource-row-kind-telemetry @(isSelected ? "selected" : string.Empty)" @key="@($"otlp:{telemetryResourceName}")">
                                 <a class="resource-row-link"
                                    href="@GetRowUrl(telemetryResourceName)"
                                    aria-current="@GetRowAriaCurrent(isSelected)"
@@ -396,7 +358,7 @@
          style="@GetLayoutStyle()"
          @ref="_layoutElement">
         @* A single header keeps section subscriptions stable across viewport changes. *@
-        <header class="resource-header resource-context-header">
+        <header class="resource-header resource-context-header @(showOverviewClose ? "resource-overview-selected" : null)">
             @if (isDesktop)
             {
                 <StableSectionContent SectionName="@MainLayout.HeaderContextSectionName">
@@ -422,7 +384,7 @@
                             <SectionOutlet SectionName="@TabToolbarSectionName" />
                         </div>
                     }
-                    @if (CurrentTab == ResourceTab.Overview && _selectedResourceNames.Count > 0)
+                    @if (showOverviewClose)
                     {
                         <FluentButton Class="resource-header-close-button"
                                       Appearance="ButtonAppearance.Default"
@@ -942,8 +904,7 @@
         // The whole row is the drag source, so reordering doesn't need a separate grip.
         var canReorder = CanReorderResources && !resource.IsParameter;
 
-        <div class="resource-row @(resource.IsParameter ? "resource-row-kind-parameter" : "resource-row-kind-resource") @(isSelected || IsAllSelected ? "selected" : string.Empty) @(resource.IsResourceHidden(showHiddenResources: false) ? "resource-row-hidden" : null)"
-             data-selection-all="@(IsAllSelected ? "true" : null)"
+        <div class="resource-row @(resource.IsParameter ? "resource-row-kind-parameter" : "resource-row-kind-resource") @(isSelected ? "selected" : string.Empty) @(resource.IsResourceHidden(showHiddenResources: false) ? "resource-row-hidden" : null)"
              data-resource-name="@resource.Name"
              data-resource-parent="@GetReorderParentName(resource)"
              data-resource-tree-row="@(row is not null ? "true" : null)"

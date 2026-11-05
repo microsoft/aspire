@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -13,7 +12,6 @@ using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -54,10 +52,13 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private IDisposable? _consoleLogsFiltersChangedSubscription;
     private TerminalView? _terminalView;
     private bool? _renderedTerminalFocus;
-    private bool _hideEmptyPanels = true;
 
     [Parameter]
     public string? ResourceName { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = DashboardUrls.ReviewMissingParametersQueryName)]
+    public bool ReviewMissingParameters { get; set; }
 
     [CascadingParameter]
     public ResourcesLayout? ResourcesLayout { get; set; }
@@ -123,23 +124,13 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
+    private bool IsParametersPage => ResourcesLayout?.CurrentTab == ResourceTab.Parameters;
+
     private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
         Resource is { } resource && ResourceSelectHelpers.HasUsableTerminal(resource);
 
     private void ToggleTerminalFocus() =>
         NavigationManager.NavigateTo(DashboardUrls.SetResourceTerminalFocus(NavigationManager.Uri, !IsTerminalFocused));
-
-    private IReadOnlyList<IconToggleOption<bool>> PanelOptions =>
-    [
-        new(true, new AspireIcons.Size20.HideEmptyPanels(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewHideEmptyPanels)]),
-        new(false, new Icons.Regular.Size20.Grid(), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowAllPanels)])
-    ];
-
-    private Task SetHideEmptyPanelsAsync(bool value)
-    {
-        _hideEmptyPanels = value;
-        return InvokeAsync(StateHasChanged);
-    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -211,7 +202,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     /// </summary>
     private void EnsureSubscriptions()
     {
-        var resource = Resource;
+        var resource = Resource is { IsParameter: false } selectedResource ? selectedResource : null;
         var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : null;
 
         if (string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName) &&

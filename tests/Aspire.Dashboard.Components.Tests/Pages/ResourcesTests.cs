@@ -44,10 +44,10 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ResourcesTests : DashboardTestContext
 {
     [Fact]
-    public void ParametersPage_SidebarSelectionFiltersTheTableAndDetails()
+    public void ParametersPage_SidebarSelectionUpdatesTheOverview()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+        ResourceSetupHelpers.SetupResourceOverview(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
             [
                 ModelTestHelpers.CreateResource("api"),
@@ -60,41 +60,40 @@ public partial class ResourcesTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport)
             .Add(p => p.Body, body =>
             {
-                body.OpenComponent<Components.Pages.Resources>(0);
+                body.OpenComponent<Components.Pages.ResourceOverview>(0);
                 body.CloseComponent();
             }));
-        var page = cut.FindComponent<Components.Pages.Resources>();
+        var page = cut.FindComponent<Components.Pages.ResourceOverview>();
         cut.WaitForAssertion(() => Assert.Equal(["first", "second"],
-            page.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal)));
-        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, page.Instance.PageViewModel.SelectedViewKind);
-        Assert.Null(page.Instance.PageViewModel.SelectedResource);
+            page.FindComponent<ApplicationSummary>().Instance.ResourceNames));
+        Assert.True(page.FindComponent<ApplicationSummary>().Instance.ParametersOnly);
+        Assert.Null(cut.Instance.SelectedResource);
         Assert.Equal(["first", "second"], cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(row => row.TextContent.Trim()));
 
         cut.Find(".resource-row-link[aria-label='first']").Click();
         cut.Render();
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal(["first"], page.Instance.GetFilteredResources().Select(resource => resource.Name));
-            Assert.Equal("first", page.Instance.PageViewModel.SelectedResource?.Name);
+            Assert.Equal("first", cut.Instance.SelectedResource?.Name);
             Assert.Equal("first", page.FindComponent<ParameterOverview>().Instance.Resource.Name);
         });
-        Assert.Equal("/parameters?resource=first", page.Instance.GetUrlFromSerializableViewModel(page.Instance.ConvertViewModelToSerializable()));
+        Assert.Equal("http://localhost/parameters?resource=first", navigation.Uri);
         cut.Render();
-        Assert.Equal("first", page.Instance.PageViewModel.SelectedResource?.Name);
+        Assert.Equal("first", cut.Instance.SelectedResource?.Name);
         Assert.Equal(ResourceTab.Parameters, cut.Instance.CurrentTab);
 
         cut.Find(".resource-row-link[aria-label='second']").Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { CtrlKey = true });
         cut.Render();
-        cut.WaitForAssertion(() => Assert.Null(page.Instance.PageViewModel.SelectedResource));
-        Assert.Equal(["first", "second"], page.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal));
-        Assert.Equal("/parameters?resource=first&resource=second", page.Instance.GetUrlFromSerializableViewModel(page.Instance.ConvertViewModelToSerializable()));
+        cut.WaitForAssertion(() => Assert.Null(cut.Instance.SelectedResource));
+        Assert.Equal(["first", "second"], page.FindComponent<ApplicationSummary>().Instance.ResourceNames);
+        Assert.Equal("http://localhost/parameters?resource=first&resource=second", navigation.Uri);
 
         cut.Find(".resource-row-all a").Click();
         cut.Render();
         Assert.Equal("http://localhost/parameters", navigation.Uri);
         Assert.Empty(cut.Instance.SelectedResourceNames);
         Assert.Equal("All", Assert.Single(cut.FindAll(".resource-row.selected .resource-row-name")).TextContent.Trim());
-        Assert.Equal(["first", "second"], page.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(["first", "second"], page.FindComponent<ApplicationSummary>().Instance.ResourceNames);
     }
 
     [Theory]

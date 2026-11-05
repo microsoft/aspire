@@ -1322,7 +1322,7 @@
     margin-left: auto;
 }
 
-.resource-header-row ::deep .resource-header-close-button {
+.resource-header-controls ::deep .resource-header-close-button {
     flex: 0 0 auto;
     margin-left: auto;
 }
@@ -1668,6 +1668,14 @@
     .resource-header-controls {
         grid-column: 2;
         grid-row: 2;
+    }
+
+    .resource-overview-selected .resource-header-row {
+        grid-column: 1;
+    }
+
+    .resource-overview-selected .resource-header-controls {
+        grid-row: 1;
     }
 
     .resource-header-icon {

@@ -312,6 +312,41 @@
         <target state="new">Set parameter values</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterHeadlineAttention">
+        <source>{0} of {1} parameters need attention</source>
+        <target state="new">{0} of {1} parameters need attention</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterHeadlineHealthy">
+        <source>No parameters need attention</source>
+        <target state="new">No parameters need attention</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterHeadlinePending">
+        <source>{0} of {1} parameters are pending</source>
+        <target state="new">{0} of {1} parameters are pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterHeadlineSingleAttention">
+        <source>1 parameter needs attention</source>
+        <target state="new">1 parameter needs attention</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterHeadlineSinglePending">
+        <source>1 parameter is pending</source>
+        <target state="new">1 parameter is pending</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterStatesLabel">
+        <source>Parameter states</source>
+        <target state="new">Parameter states</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterSummaryLandmark">
+        <source>Parameter summary</source>
+        <target state="new">Parameter summary</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterValueRequired">
         <source>Value required</source>
         <target state="new">Value required</target>
@@ -320,6 +355,11 @@
       <trans-unit id="ParameterValueSet">
         <source>Value set</source>
         <target state="new">Value set</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ParameterValuesSetLabel">
+        <source>Values set</source>
+        <target state="new">Values set</target>
         <note />
       </trans-unit>
       <trans-unit id="ParametersAllValuesSet">

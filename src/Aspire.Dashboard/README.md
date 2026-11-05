@@ -22,11 +22,17 @@ Telemetry sources remain visible even when their corresponding AppHost resources
 Use **Parameters** in the navigation to view parameter values and edit them. Search and property filters further
 narrow the sidebar without changing which resources the **All** item covers. **All** appears first and is selected
 instead of individual rows, while including every page-relevant resource in the page's filters.
+The Parameters overview shows a parameter-specific attention summary instead of a grid. It does not show the
+resource graph, live activity, endpoint insights, or other telemetry panels. Select a parameter in the sidebar
+to view and edit its value; selecting several parameters summarizes their states.
+When values are missing, the Resources and Parameters overview headers show a button with the app-wide count
+of parameters needing values. Use it to review and set the missing values together.
 Resource, parameter, and telemetry-source section headings are shown only when more than one category is present.
 The header includes **Parameters** throughout AppHost views. Visiting Parameters preserves the resource selection
 when returning to another page, unless a parameter is selected. Other incompatible selections are cleared when switching views.
 Resource terminals are opened with per-resource shortcuts, not a header navigation item.
 Use **Close** at the right of the resource overview toolbar to clear the selection and return to all resources.
+Empty detail panels are always hidden and appear automatically when data becomes available.
 
 If a selected resource hasn't sent telemetry, Structured logs and Traces name it in their empty-state message
 and offer a link to view data for all resources. Metrics prompts you to select a resource.
@@ -43,7 +49,6 @@ Use **Group resources**, between **Filters** and **Collapse resource list** in t
 the list by **Tags**, **Resource type**, or **State**. **None** restores the default nested resource list.
 Groups can be collapsed or selected to view all of their resources together. Search matches group names as
 well as resources, and the grouping preference is remembered across navigation and reloads.
-Resource-type group headings are hidden when only one resource type is present.
 Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
 

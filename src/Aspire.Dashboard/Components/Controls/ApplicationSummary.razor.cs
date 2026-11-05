@@ -68,6 +68,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [Parameter]
     public IReadOnlyList<string>? ResourceNames { get; set; }
 
+    [Parameter]
+    public bool ParametersOnly { get; set; }
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -126,16 +129,15 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
         .ToList();
 
-    private int GetMissingParameterCount() =>
-        _resourceByName.Values.Count(resource => resource.HasMissingParameterValueState() && IsInScope(resource));
+    private List<ResourceViewModel> GetMissingParameters() =>
+        // Missing values can block resources outside the current summary's selection.
+        _resourceByName.Values
+            .Where(resource => resource.HasMissingParameterValueState())
+            .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
+            .ToList();
 
-    private string GetMissingParametersUrl() =>
-        DashboardUrls.AddResourceSelection(
-            DashboardUrls.ResourceListUrl(),
-            _resourceByName.Values
-                .Where(resource => resource.HasMissingParameterValueState() && IsInScope(resource))
-                .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
-                .Select(resource => resource.Name));
+    private static string GetMissingParametersUrl(IReadOnlyList<ResourceViewModel> parameters) =>
+        DashboardUrls.MissingParametersUrl(parameters.Select(parameter => parameter.Name));
 
     protected override async Task OnInitializedAsync()
     {
@@ -147,11 +149,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             return;
         }
 
-        _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
-        _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, OnTelemetryChanged);
-        _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
-        _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
-        QueueTelemetryRefresh();
+        if (!ParametersOnly)
+        {
+            _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
+            _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, OnTelemetryChanged);
+            _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
+            _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
+            QueueTelemetryRefresh();
+        }
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -187,7 +192,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_isDisposing || ViewPreferences.GroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
+        if (_isDisposing || ParametersOnly || ViewPreferences.GroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
         {
             return;
         }
@@ -232,7 +237,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             var isFirstSet = _scopedResourceNames is null && !_isLoaded;
             _scopedResourceNames = ResourceNames?.ToList();
-            if (!isFirstSet && DashboardClient.IsEnabled)
+            if (!isFirstSet && DashboardClient.IsEnabled && !ParametersOnly)
             {
                 _telemetry = null;
                 QueueTelemetryRefresh();
@@ -600,7 +605,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private List<ResourceViewModel> GetResources()
     {
         return _resourceByName.Values
-            .Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r))
+            .Where(r => r.IsParameter == ParametersOnly && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r))
             .OrderBy(r => NeedsAttention(r) ? 0 : 1)
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -609,7 +614,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private async Task UpdateResourceGraphResourcesAsync()
     {
-        if (ViewPreferences.GroupOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
+        if (ParametersOnly || ViewPreferences.GroupOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
         {
             return;
         }
@@ -711,6 +716,19 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private string GetHeadline(HealthSummary summary)
     {
+        if (ParametersOnly)
+        {
+            return summary switch
+            {
+                { Total: 0 } => Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)],
+                { Total: 1, Attention: > 0 } => Loc[nameof(Dashboard.Resources.Resources.ParameterHeadlineSingleAttention)],
+                { Attention: > 0 } => Loc[nameof(Dashboard.Resources.Resources.ParameterHeadlineAttention), summary.Attention, summary.Total],
+                { Total: 1, Pending: > 0 } => Loc[nameof(Dashboard.Resources.Resources.ParameterHeadlineSinglePending)],
+                { Pending: > 0 } => Loc[nameof(Dashboard.Resources.Resources.ParameterHeadlinePending), summary.Pending, summary.Total],
+                _ => Loc[nameof(Dashboard.Resources.Resources.ParameterHeadlineHealthy)]
+            };
+        }
+
         if (summary.Total == 0)
         {
             return Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)];

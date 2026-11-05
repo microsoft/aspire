@@ -3,37 +3,46 @@
 @using Aspire.Shared
 
 <StableSectionContent SectionName="@ResourcesLayout.HeaderActionsSectionName">
-    <div class="overview-header-actions">
-        @if (GetMissingParameterCount() is > 0 and var missingParameterCount)
-        {
-            var missingParametersText = string.Format(
-                CultureInfo.CurrentCulture,
-                Loc[missingParameterCount == 1
-                    ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
-                    : nameof(Dashboard.Resources.Resources.MissingParametersCount)],
-                missingParameterCount);
-            <a class="missing-parameters-link"
-               href="@GetMissingParametersUrl()"
-               aria-label="@missingParametersText"
-               data-tooltip="@missingParametersText. @Loc[nameof(Dashboard.Resources.Resources.MissingParametersReview)]">
-                <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Color="Color.Custom" CustomColor="currentColor" />
-                @* The full text condenses to just the count when the header row has little room. *@
-                <span class="missing-parameters-label" aria-hidden="true">@missingParametersText</span>
-                <span class="missing-parameters-count" aria-hidden="true">@missingParameterCount</span>
-            </a>
-        }
-        <IconToggleGroup TValue="GroupOverview"
-                         Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
-                         Options="@OverviewOptions"
-                         Value="@ViewPreferences.GroupOverview"
-                         ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
-                         ShowLabel="true"
-                         ShowCurrentLabel="false" />
-    </div>
+    @{
+        var missingParameters = GetMissingParameters();
+    }
+    @if (!ParametersOnly || missingParameters.Count > 0)
+    {
+        <div class="overview-header-actions">
+            @if (missingParameters.Count is > 0 and var missingParameterCount)
+            {
+                var missingParametersText = string.Format(
+                    CultureInfo.CurrentCulture,
+                    Loc[missingParameterCount == 1
+                        ? nameof(Dashboard.Resources.Resources.MissingParameterCount)
+                        : nameof(Dashboard.Resources.Resources.MissingParametersCount)],
+                    missingParameterCount);
+                <a class="missing-parameters-link"
+                   href="@GetMissingParametersUrl(missingParameters)"
+                   aria-label="@missingParametersText"
+                   data-tooltip="@missingParametersText. @Loc[nameof(Dashboard.Resources.Resources.MissingParametersReview)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Key())" Color="Color.Custom" CustomColor="currentColor" />
+                    @* The full text condenses to just the count when the header row has little room. *@
+                    <span class="missing-parameters-label" aria-hidden="true">@missingParametersText</span>
+                    <span class="missing-parameters-count" aria-hidden="true">@missingParameterCount</span>
+                </a>
+            }
+            @if (!ParametersOnly)
+            {
+                <IconToggleGroup TValue="GroupOverview"
+                                 Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
+                                 Options="@OverviewOptions"
+                                 Value="@ViewPreferences.GroupOverview"
+                                 ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
+                                 ShowLabel="true"
+                                 ShowCurrentLabel="false" />
+            }
+        </div>
+    }
 </StableSectionContent>
 
-@* The application summary shown by the resource overview when several or all resources are selected. *@
-<div class="home @(ViewPreferences.GroupOverview == GroupOverview.Graph ? "graph-view" : null)">
+@* The summary shown by the resource overview when several or all resources or parameters are selected. *@
+<div class="home @(!ParametersOnly && ViewPreferences.GroupOverview == GroupOverview.Graph ? "graph-view" : null)">
 
     @if (!_isLoaded)
     {
@@ -46,54 +55,60 @@
         var resources = GetResources();
         var summary = GetHealthSummary(resources);
 
-        @if (ViewPreferences.GroupOverview == GroupOverview.Summary)
+        @if (ParametersOnly || ViewPreferences.GroupOverview == GroupOverview.Summary)
         {
             @HeroSection(summary)
-            @ActivitySection()
-            @InsightsSection()
-            <div class="home-problems">
-                @RecentErrorsSection()
-                @RecentTracesSection()
-            </div>
+            @if (!ParametersOnly)
+            {
+                @ActivitySection()
+                @InsightsSection()
+                <div class="home-problems">
+                    @RecentErrorsSection()
+                    @RecentTracesSection()
+                </div>
+            }
         }
 
-        <div class="resources-summary-layout home-resource-graph-layout"
-             hidden="@(ViewPreferences.GroupOverview != GroupOverview.Graph)">
-            <div id="@GraphContainerId"
-                 class="resource-graph-container"
-                 tabindex="0"
-                 role="region"
-                 aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]">
-                <svg class="resource-graph"></svg>
-                <div class="resource-graph-controls">
-                    <FluentButton Appearance="ButtonAppearance.Transparent"
-                                  Class="aspire-icon-button graph-export"
-                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
-                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
-                                  OnClick="@ExportResourceGraphAsync">
-                        <FluentIcon Value="new Icons.Regular.Size24.ArrowDownload()" Color="Color.Primary" />
-                    </FluentButton>
-                    <FluentButton Appearance="ButtonAppearance.Transparent"
-                                  Class="aspire-icon-button graph-zoom-in"
-                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
-                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
-                        <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Primary" />
-                    </FluentButton>
-                    <FluentButton Appearance="ButtonAppearance.Transparent"
-                                  Class="aspire-icon-button graph-zoom-out"
-                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
-                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
-                        <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Primary" />
-                    </FluentButton>
-                    <FluentButton Appearance="ButtonAppearance.Transparent"
-                                  Class="aspire-icon-button graph-reset"
-                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
-                                  aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
-                        <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
-                    </FluentButton>
+        @if (!ParametersOnly)
+        {
+            <div class="resources-summary-layout home-resource-graph-layout"
+                 hidden="@(ViewPreferences.GroupOverview != GroupOverview.Graph)">
+                <div id="@GraphContainerId"
+                     class="resource-graph-container"
+                     tabindex="0"
+                     role="region"
+                     aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]">
+                    <svg class="resource-graph"></svg>
+                    <div class="resource-graph-controls">
+                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                      Class="aspire-icon-button graph-export"
+                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
+                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
+                                      OnClick="@ExportResourceGraphAsync">
+                            <FluentIcon Value="new Icons.Regular.Size24.ArrowDownload()" Color="Color.Primary" />
+                        </FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                      Class="aspire-icon-button graph-zoom-in"
+                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
+                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
+                            <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Primary" />
+                        </FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                      Class="aspire-icon-button graph-zoom-out"
+                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
+                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
+                            <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Primary" />
+                        </FluentButton>
+                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                      Class="aspire-icon-button graph-reset"
+                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
+                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
+                            <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
+                        </FluentButton>
+                    </div>
                 </div>
             </div>
-        </div>
+        }
     }
     <AspireMenu Open="_contextMenuOpen"
                 OpenChanged="ContextMenuOpenChangedAsync"
@@ -107,7 +122,7 @@
     private RenderFragment HeroSection(HealthSummary summary) => __builder =>
     {
         var heroState = GetHeroStateClass(summary);
-        <section class="home-hero @heroState" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeSummaryLandmark)]">
+        <section class="home-hero @heroState" aria-label="@Loc[ParametersOnly ? nameof(Dashboard.Resources.Resources.ParameterSummaryLandmark) : nameof(Dashboard.Resources.Resources.HomeSummaryLandmark)]">
             <div class="home-hero-main">
                 <span class="home-hero-icon" aria-hidden="true">
                     @switch (heroState)
@@ -128,7 +143,7 @@
                 </span>
                 <div class="home-hero-text">
                     <h2 class="home-hero-headline">@GetHeadline(summary)</h2>
-                    @if (summary.StartedAt is { } startedAt)
+                    @if (!ParametersOnly && summary.StartedAt is { } startedAt)
                     {
                         <span class="home-hero-sub">@Loc[nameof(Dashboard.Resources.Resources.HomeStartedAt), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startedAt)]</span>
                     }
@@ -136,14 +151,14 @@
             </div>
             @if (summary.Total > 0)
             {
-                <div class="home-health-bar" role="img" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeResourceStatesLabel)]">
+                <div class="home-health-bar" role="img" aria-label="@Loc[ParametersOnly ? nameof(Dashboard.Resources.Resources.ParameterStatesLabel) : nameof(Dashboard.Resources.Resources.HomeResourceStatesLabel)]">
                     @HealthBarSegment(summary.Running, summary.Total, "state-success")
                     @HealthBarSegment(summary.Pending, summary.Total, "state-pending")
                     @HealthBarSegment(summary.Attention, summary.Total, "state-error")
                     @HealthBarSegment(summary.Inactive, summary.Total, "state-neutral")
                 </div>
                 <ul class="home-legend">
-                    @HealthLegendItem(summary.Running, "state-success", Loc[nameof(Dashboard.Resources.Resources.HomeRunningLabel)])
+                    @HealthLegendItem(summary.Running, "state-success", Loc[ParametersOnly ? nameof(Dashboard.Resources.Resources.ParameterValuesSetLabel) : nameof(Dashboard.Resources.Resources.HomeRunningLabel)])
                     @HealthLegendItem(summary.Pending, "state-pending", Loc[nameof(Dashboard.Resources.Resources.HomePendingLabel)])
                     @HealthLegendItem(summary.Attention, "state-error", Loc[nameof(Dashboard.Resources.Resources.HomeNeedsAttentionLabel)])
                     @HealthLegendItem(summary.Inactive, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeInactiveLabel)])
