@@ -423,7 +423,7 @@ internal sealed class AgentInitCommand : BaseCommand
                     InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight,
                         string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
                             string.Join(System.Environment.NewLine, local.Files
-                                .Select(path => $"  {GetDisplayConfigurationPath(path, workspaceRoot)}")
+                                .Select(path => $"  {AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)}")
                                 .Order(StringComparer.Ordinal))));
                     InteractionService.DisplayEmptyLine();
                 }
@@ -552,7 +552,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
                 var installResult = await InstallSkillAsync(
                     skillDirectory,
-                    GetDisplayConfigurationPath(skillDirectory, scope, workspaceRoot),
+                    AgentPath.GetDisplayPath(skillDirectory, scope, workspaceRoot, ExecutionContext),
                     skill,
                     cancellationToken);
                 hasErrors |= !installResult.Succeeded;
@@ -893,7 +893,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 ? entries.Select(entry =>
                 {
                     var target = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
-                        entry.Client.DisplayName, GetDisplayConfigurationPath(entry.Result.TargetPath, workspaceRoot));
+                        entry.Client.DisplayName, AgentPath.GetDisplayPath(entry.Result.TargetPath, workspaceRoot, ExecutionContext));
 
                     return entry.Result.Message is null ? target : $"{target}{Environment.NewLine}  {entry.Result.Message}";
                 })
@@ -901,7 +901,7 @@ internal sealed class AgentInitCommand : BaseCommand
                     string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
                         agent.First().Client.DisplayName,
                         string.Join(", ", agent.Select(entry => entry.Result.TargetPath).Distinct(StringComparers.FileSystemPath)
-                            .Select(path => GetDisplayConfigurationPath(path, workspaceRoot)))));
+                            .Select(path => AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)))));
             var format = resultGroup.Key ? AgentCommandStrings.InitCommand_FailedTarget : AgentCommandStrings.InitCommand_ConfiguredTargets;
             var message = string.Format(CultureInfo.CurrentCulture, format, string.Join($"{Environment.NewLine}  ", targets));
             if (resultGroup.Key)
@@ -916,32 +916,6 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         return hasErrors;
-    }
-
-    private string GetDisplayConfigurationPath(string path, DirectoryInfo workspaceRoot)
-    {
-        var displayPath = GetDisplayConfigurationPath(path, AgentConfigurationScope.Project, workspaceRoot);
-
-        return Path.IsPathRooted(displayPath)
-            ? GetDisplayConfigurationPath(path, AgentConfigurationScope.Global, workspaceRoot)
-            : displayPath;
-    }
-
-    private string GetDisplayConfigurationPath(string path, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-    {
-        var root = scope is AgentConfigurationScope.Project ? workspaceRoot : ExecutionContext.HomeDirectory;
-        var relativePath = Path.GetRelativePath(root.FullName, path);
-        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
-            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-        {
-            return path;
-        }
-
-        var displayRelativePath = relativePath
-            .Replace(Path.DirectorySeparatorChar, '/')
-            .Replace(Path.AltDirectorySeparatorChar, '/');
-
-        return scope is AgentConfigurationScope.Global ? $"~/{displayRelativePath}" : displayRelativePath;
     }
 
     private void DisplayInstallationLocations(IReadOnlyList<IAgentClient> clients, AgentConfigurationScope scope, DirectoryInfo workspaceRoot, bool installSkills, bool configureMcp)
@@ -982,7 +956,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
         void AddLocation(string format, string path, IReadOnlyList<IAgentClient> sharedClients)
         {
-            var location = GetDisplayConfigurationPath(path, scope, workspaceRoot);
+            var location = AgentPath.GetDisplayPath(path, scope, workspaceRoot, ExecutionContext);
             if (sharedClients.Count > 1)
             {
                 hasSharedLocation = true;
