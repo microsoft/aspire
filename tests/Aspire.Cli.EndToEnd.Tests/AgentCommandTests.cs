@@ -197,6 +197,20 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         // Create .vscode folder so the scanner detects VS Code environment
         Directory.CreateDirectory(vscodePath);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        await File.WriteAllTextAsync(configPath, """{"skillSources":{"default":{}}}""");
+        var localSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(localSkillPath)!);
+        const string localSkillContent = "My customized Aspire instructions.";
+        await File.WriteAllTextAsync(localSkillPath, localSkillContent);
+        string[] expectedWarnings =
+        [
+            "Skill sources:",
+            "https://github.com/microsoft/aspire-skills",
+            "Only use sources you trust.",
+            "Local Aspire skill files may override plugin skills:",
+            ".agents/skills/aspire/SKILL.md"
+        ];
 
         // Accept agents before choosing independent assets and project scope.
         await auto.TypeAsync("aspire agent init");
@@ -211,10 +225,22 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which skills and tools do you want to configure?", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("aspire — Agent assets from configured skill sources", timeout: TimeSpan.FromSeconds(30));
+        var skillsScreen = auto.CreateSnapshot().GetScreenText();
+        foreach (var warning in expectedWarnings)
+        {
+            Assert.Contains(warning, skillsScreen);
+            Assert.True(skillsScreen.IndexOf(warning, StringComparison.Ordinal) <
+                skillsScreen.IndexOf("Which skills and tools do you want to configure?", StringComparison.Ordinal));
+        }
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("Configure the Aspire MCP server for selected agent environments?"),
             timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
+        var mcpScreen = auto.CreateSnapshot().GetScreenText();
+        foreach (var warning in expectedWarnings)
+        {
+            Assert.Contains(warning, mcpScreen);
+        }
         // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
@@ -229,7 +255,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.RunCommandAsync(
             """jq -e '.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.repo == "microsoft/aspire-skills"' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
             counter);
-        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
+        Assert.Equal(localSkillContent, await File.ReadAllTextAsync(localSkillPath));
+        Assert.Equal([localSkillPath], Directory.GetFiles(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills"), "*", SearchOption.AllDirectories));
 
         // Verify MCP was not configured, since it was never selected in the prompt above.
         var vscodeMcpConfigPath = Path.Combine(vscodePath, "mcp.json");
