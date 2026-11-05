@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildTemporaryDirectory, attachDebuggerConfigurationName, attachDebuggerCsharpExtensionRequired, attachDebuggerUnavailable } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, prebuiltProjectOutputMissing, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, resolvedRunCommandDisablesDebugger, failedToGetProjectRunProperties, invalidMsBuildRunCommandResponse, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath, explicitLaunchProfileNotResolved, launchProfileUnsupportedCommandName, launchProfileHasInvalidProperties, failedToCleanUpMsBuildTemporaryDirectory, attachDebuggerConfigurationName, attachDebuggerCsharpExtensionRequired, attachDebuggerUnavailable, dotnetDisplayName } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as childProcess from 'child_process';
 import * as util from 'util';
@@ -86,7 +86,7 @@ function createDotNetProcessEnvironment(
     return createResolvedAspireCliPathProcessEnvironment(resolvedCliPath, processEnvironment);
 }
 
-type DotNetLaunchCommand = 'run' | 'watch' | 'ide';
+type DotNetLaunchCommand = 'run' | 'watch' | 'ide' | 'direct';
 
 interface DotNetAttachTargetInfo {
     targetPath: string;
@@ -96,6 +96,7 @@ interface DotNetAttachTargetInfo {
 
 interface DotNetAttachDebuggerResourceInfo {
     configuration?: string;
+    directTargetInfo?: DotNetAttachTargetInfo;
     framework?: string;
     launchCommand?: DotNetLaunchCommand;
     launcherPid: number;
@@ -122,7 +123,9 @@ const executablePathPropertyName = 'executable.path';
 const projectPathPropertyName = 'project.path';
 const projectConfigurationPropertyName = 'project.configuration';
 const projectLaunchCommandPropertyName = 'project.launchCommand';
+const projectTargetPathPropertyName = 'project.targetPath';
 const projectTargetFrameworkPropertyName = 'project.targetFramework';
+const projectUseAppHostPropertyName = 'project.useAppHost';
 const resourceParentNamePropertyName = 'resource.parentName';
 const resourceLaunchConfigurationTypePropertyName = 'resource.launchConfigurationType';
 const dotNetProjectFileExtensions = new Set(['.csproj', '.fsproj', '.vbproj']);
@@ -1349,9 +1352,17 @@ function getDotNetAttachDebuggerResourceInfo(resource: ResourceDebugResourceSnap
         return undefined;
     }
 
+    const directTargetInfo = launchMetadata.launchCommand === 'direct'
+        ? getDirectDotNetAttachTargetInfo(resource)
+        : undefined;
+    if (launchMetadata.launchCommand === 'direct' && directTargetInfo === undefined) {
+        return undefined;
+    }
+
     const projectPath = resource.properties?.[projectPathPropertyName] as string;
     return {
         ...launchMetadata,
+        directTargetInfo,
         launcherPid,
         projectPath,
         resourceLabel: resource.displayName ?? resource.name,
@@ -1372,7 +1383,16 @@ function canRecognizeDotNetAttachDebuggerResource(resource: ResourceDebugResourc
         return false;
     }
 
-    if (!isDotNetExecutable(resource)) {
+    if (resource.properties?.[projectLaunchCommandPropertyName] === 'direct') {
+        // Coordinated builds can launch the SDK's native apphost rather than a dotnet run/watch
+        // parent. Require the producer's explicit PID semantics; process discovery still verifies
+        // that this PID is the coordinated build output, never just a matching executable name.
+        if (launchConfigurationType !== 'project-with-external-build.v1' ||
+            getNonEmptyStringProperty(resource, executablePathPropertyName) === undefined ||
+            getDirectDotNetAttachTargetInfo(resource) === undefined) {
+            return false;
+        }
+    } else if (!isDotNetExecutable(resource)) {
         return false;
     }
 
@@ -1406,7 +1426,7 @@ function getDotNetLaunchMetadata(
     const hasLaunchCommand = properties !== null && properties !== undefined &&
         Object.prototype.hasOwnProperty.call(properties, projectLaunchCommandPropertyName);
     const launchCommandValue = properties?.[projectLaunchCommandPropertyName];
-    if (hasLaunchCommand && launchCommandValue !== 'run' && launchCommandValue !== 'watch' && launchCommandValue !== 'ide') {
+    if (hasLaunchCommand && launchCommandValue !== 'run' && launchCommandValue !== 'watch' && launchCommandValue !== 'ide' && launchCommandValue !== 'direct') {
         return undefined;
     }
 
@@ -1424,6 +1444,26 @@ function getDotNetLaunchMetadata(
 function getNonEmptyStringProperty(resource: ResourceDebugResourceSnapshot, propertyName: string): string | undefined {
     const value: unknown = resource.properties?.[propertyName];
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function getDirectDotNetAttachTargetInfo(resource: ResourceDebugResourceSnapshot): DotNetAttachTargetInfo | undefined {
+    const targetPath = getNonEmptyStringProperty(resource, projectTargetPathPropertyName);
+    const useAppHostValue: unknown = resource.properties?.[projectUseAppHostPropertyName];
+    let useAppHost: boolean | undefined;
+    if (typeof useAppHostValue === 'boolean') {
+        useAppHost = useAppHostValue;
+    } else if (typeof useAppHostValue === 'string') {
+        const normalizedUseAppHost = useAppHostValue.trim().toLowerCase();
+        if (normalizedUseAppHost === 'true') {
+            useAppHost = true;
+        } else if (normalizedUseAppHost === 'false') {
+            useAppHost = false;
+        }
+    }
+
+    return targetPath === undefined || useAppHost === undefined
+        ? undefined
+        : { targetPath, useAppHost };
 }
 
 function getResourceParentName(resource: ResourceDebugResourceSnapshot): string | null {
@@ -1469,7 +1509,7 @@ async function createDotNetProcessIdentity(
     attachInfo: DotNetAttachDebuggerResourceInfo,
     fileSystem: DotNetAttachFileSystem,
 ): Promise<LaunchedChildProcessIdentity> {
-    const targetsLauncher = attachInfo.launchCommand === 'ide';
+    const targetsLauncher = attachInfo.launchCommand === 'ide' || attachInfo.launchCommand === 'direct';
     const requiresDirectChild = !targetsLauncher && attachInfo.launchCommand !== 'watch';
     if (attachInfo.useTargetNameFallback) {
         const targetName = targetInfo.targetName;
@@ -1701,14 +1741,16 @@ export async function createDotNetAttachDebugSessionConfiguration(
         throw new ResourceAttachConfigurationError('resourceNotAttachable', invalidLaunchConfiguration(resource.name));
     }
 
-    let targetInfo: DotNetAttachTargetInfo;
-    try {
-        targetInfo = await dotNetService.getDotNetAttachTargetInfo(attachInfo.projectPath, attachInfo.configuration, cancellationToken, attachInfo.framework);
-    }
-    catch (error) {
-        throw new ResourceAttachConfigurationError(
-            'resourceNotAttachable',
-            error instanceof Error ? error.message : String(error));
+    let targetInfo = attachInfo.directTargetInfo;
+    if (targetInfo === undefined) {
+        try {
+            targetInfo = await dotNetService.getDotNetAttachTargetInfo(attachInfo.projectPath, attachInfo.configuration, cancellationToken, attachInfo.framework);
+        }
+        catch (error) {
+            throw new ResourceAttachConfigurationError(
+                'resourceNotAttachable',
+                error instanceof Error ? error.message : String(error));
+        }
     }
 
     let applicationPid: number;
@@ -1755,8 +1797,8 @@ export function createProjectDebuggerExtension(
         resourceType,
         debugAdapter: 'coreclr',
         extensionId: csharpExtensionId,
-        getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => `C#: ${path.basename((launchConfig as ProjectLaunchConfiguration).project_path)}`,
-        getSupportedFileTypes: () => ['.cs', '.csproj'],
+        getDisplayName: (launchConfig: ExecutableLaunchConfiguration) => dotnetDisplayName(path.basename((launchConfig as ProjectLaunchConfiguration).project_path)),
+        getSupportedFileTypes: () => ['.cs', '.csproj', '.fsproj', '.vbproj'],
         getProjectFile: (launchConfig) => {
             if (isProjectLaunchConfiguration(launchConfig)) {
                 return launchConfig.project_path;
@@ -1782,6 +1824,12 @@ export function createProjectDebuggerExtension(
             // extension-owned builds for file-based resources and older CLIs.
             const shouldBuildProject = !suppressBuild &&
                 (!isFileBasedProject || !launchOptions.isApphost || launchOptions.forceBuild !== false);
+
+            // Aspire selects and applies profiles itself, including VB's My Project location.
+            // Otherwise coreclr independently reapplies the first Properties profile and can leak
+            // its environment into named or explicitly excluded profiles. null disables that pass.
+            // https://code.visualstudio.com/docs/csharp/debugger-settings
+            debugConfiguration.launchSettingsProfile = null;
 
             extensionLogOutputChannel.info(`Reading launch settings for: ${projectPath}`);
 

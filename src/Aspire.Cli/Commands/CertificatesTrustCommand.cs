@@ -34,7 +34,7 @@ internal sealed class CertificatesTrustCommand : BaseCommand
         {
             if (result.ResultCode == EnsureCertificateResult.PartiallyFailedToTrustTheCertificate)
             {
-                InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustPartialSuccess);
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, CertificatesCommandStrings.TrustPartialSuccess);
             }
             else
             {

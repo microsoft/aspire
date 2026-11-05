@@ -5,7 +5,6 @@ using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Secrets;
-using Aspire.Shared.UserSecrets;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -50,7 +49,7 @@ internal sealed class SecretDeleteCommand : BaseCommand
         var removed = result.AspireStore.Remove(key);
         if (result.LegacyUserSecretsFilePath is { } legacyUserSecretsFilePath && File.Exists(legacyUserSecretsFilePath))
         {
-            var legacyStore = new SecretsStore(legacyUserSecretsFilePath);
+            var legacyStore = AspireSecretsStoreResolver.LoadSecretsStore(legacyUserSecretsFilePath);
             if (legacyStore.Remove(key))
             {
                 legacyStore.Save();

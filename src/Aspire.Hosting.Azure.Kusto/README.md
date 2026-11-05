@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Kusto` integration wi
 
 ```bash
 aspire add Aspire.Hosting.Azure.Kusto
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -23,7 +24,7 @@ var db = builder.AddAzureKustoCluster("kusto")
                 .RunAsEmulator()
                 .AddReadWriteDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db);
 ```
 

@@ -1023,14 +1023,9 @@ Para obtener más información sobre el uso de agentes de IA con el panel, inclu
         <target state="new">Overview layout</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogGroupOverviewCards">
-        <source>Cards</source>
-        <target state="new">Cards</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
-        <source>Home</source>
-        <target state="new">Home</target>
+        <source>Summary</source>
+        <target state="new">Summary</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">

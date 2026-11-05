@@ -702,10 +702,7 @@
     <value>Overview layout</value>
   </data>
   <data name="SettingsDialogGroupOverviewSummary" xml:space="preserve">
-    <value>Home</value>
-  </data>
-  <data name="SettingsDialogGroupOverviewCards" xml:space="preserve">
-    <value>Cards</value>
+    <value>Summary</value>
   </data>
   <data name="SettingsDialogResourceListDensity" xml:space="preserve">
     <value>Resource list density</value>

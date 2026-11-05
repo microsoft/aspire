@@ -14,6 +14,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Semver;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -110,6 +111,11 @@ internal sealed class AddCommand : BaseCommand
             var version = parseResult.GetValue(s_versionOption);
             var source = parseResult.GetValue(s_sourceOption);
             var includeAllIntegrations = parseResult.GetValue(s_allOption);
+            if (integrationName is null && !_hostEnvironment.SupportsInteractiveInput)
+            {
+                return AddCommandFailure(CliExitCodes.InvalidCommand, AddCommandStrings.NonInteractiveRequiresIntegrationName);
+            }
+
             if (!string.IsNullOrWhiteSpace(source) &&
                 PackageSourceOverrideMappings.HasCredentialMaterial(source))
             {
@@ -122,6 +128,10 @@ internal sealed class AddCommand : BaseCommand
                 : PackageSourceOverrideMappings.ResolveForWorkingDirectory(
                     source,
                     ExecutionContext.WorkingDirectory);
+            if (source is not null)
+            {
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
+            }
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 
             AppHostProjectSearchResult searchResult;
@@ -191,36 +201,49 @@ internal sealed class AddCommand : BaseCommand
 
             List<(NuGetPackage Package, PackageChannel Channel)> packagesWithChannels;
             IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
+            bool searchLimitReached;
+            IReadOnlyList<string> failedSources;
             using (var searchPackagesActivity = _profilingTelemetry.StartAddSearchPackages(configuredChannel))
             {
                 if (applyPolyglotFilter)
                 {
-                    var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
+                    var result = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
                         async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(
                             effectiveAppHostProjectFile.Directory!,
                             configuredChannel,
                             source,
                             cancellationToken));
-                    packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
-                    polyglotCompatibleIds = discoveredPolyglotIds;
+                    packagesWithChannels = result.Packages.ToList();
+                    polyglotCompatibleIds = result.PolyglotCompatibleIds;
+                    searchLimitReached = result.LimitReached;
+                    failedSources = result.FailedSources;
                 }
                 else
                 {
-                    var discoveredPackages = await InteractionService.ShowStatusAsync(
+                    var result = await InteractionService.ShowStatusAsync(
                         AddCommandStrings.SearchingForAspirePackages,
                         async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(
                             effectiveAppHostProjectFile.Directory!,
                             configuredChannel,
                             source,
                             cancellationToken));
-                    packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
+                    packagesWithChannels = result.Packages.ToList();
+                    searchLimitReached = result.LimitReached;
+                    failedSources = result.FailedSources;
                 }
 
                 var packageCount = packagesWithChannels.Count;
                 searchPackagesActivity.SetAddPackageSearchResultCount(packageCount);
                 addActivity.SetAddPackageSearchResultCount(packageCount);
             }
+
+            if (searchLimitReached)
+            {
+                InteractionService.DisplayNuGetSearchLimitWarning();
+            }
+
+            InteractionService.DisplayNuGetSearchFailureWarnings(failedSources);
 
             if (packagesWithChannels.Count == 0)
             {
@@ -323,7 +346,7 @@ internal sealed class AddCommand : BaseCommand
                     configuredChannel,
                     source,
                     cancellationToken,
-                    promptForSinglePackage: integrationName is not null),
+                    promptForSinglePackage: true),
                 1 when packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindExact
                     && filteredPackagesWithShortName[0].Package.Version == version
                     => filteredPackagesWithShortName[0],
@@ -353,7 +376,10 @@ internal sealed class AddCommand : BaseCommand
             // is named stable/daily/staging but its Aspire.* packages live in a local directory, and
             // without the local source in nuget.config the C# `dotnet add package` restore of the
             // local-only version fails. See docs/specs/cli-identity-sidecar.md.
+            // Named integration feeds persist the selected package below; their discovery patterns
+            // must not become hive-wide restore mappings.
             if (project.LanguageId == KnownLanguageId.CSharp &&
+                selectedNuGetPackage.Channel.IntegrationSource is null &&
                 string.IsNullOrEmpty(source) &&
                 (VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name) || selectedNuGetPackage.Channel.IsBackedByLocalPackageDirectory))
             {
@@ -374,6 +400,31 @@ internal sealed class AddCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
                     }
                 }
+            }
+
+            DotNetAppHostNuGetConfigMergerCandidate? configurationCandidate = null;
+            if (source is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
+            {
+                // Prepare an exact package mapping so later builds can still restore the integration.
+                // Unlike --source, this keeps ambient feeds available for the SDK and dependencies.
+                var configuration = _nugetService.BuildAppHostConfiguration(
+                    effectiveAppHostProjectFile.Directory!,
+                    "integration-add",
+                    [new PackageMapping(selectedNuGetPackage.Package.Id, integrationSource)
+                    {
+                        SourceKey = selectedNuGetPackage.Channel.IntegrationSource.Name
+                    }],
+                    overrideIntegrationSources: false,
+                    cancellationToken);
+                var targetDirectory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(
+                    configuration.Settings.ConfigPaths,
+                    effectiveAppHostProjectFile.Directory!);
+                configurationCandidate = await new DotNetAppHostNuGetConfigMerger(_nugetService).PrepareAsync(
+                    targetDirectory,
+                    configuration,
+                    createIfMissing: true,
+                    globalPackagesFolder: null,
+                    cancellationToken);
             }
 
             context = new AddPackageContext
@@ -418,7 +469,7 @@ internal sealed class AddCommand : BaseCommand
             {
                 success = await InteractionService.ShowStatusAsync(
                     AddCommandStrings.AddingAspireIntegration,
-                    async () => await project.AddPackageAsync(context, cancellationToken)
+                    async () => await AddPackageWithNuGetConfigurationAsync(project, context, configurationCandidate, cancellationToken)
                 );
                 addPackageActivity.SetAddPackageSuccess(success);
                 if (!success)
@@ -474,11 +525,75 @@ internal sealed class AddCommand : BaseCommand
         }
     }
 
+    private static async Task<bool> AddPackageWithNuGetConfigurationAsync(
+        IAppHostProject project,
+        AddPackageContext context,
+        DotNetAppHostNuGetConfigMergerCandidate? candidate,
+        CancellationToken cancellationToken)
+    {
+        if (candidate is null)
+        {
+            return await project.AddPackageAsync(context, cancellationToken);
+        }
+
+        // Native package installation and polyglot preparation need the candidate in the real
+        // configuration hierarchy. Roll back that temporary write if adding the package fails.
+        await using var transaction = new DotNetAppHostUpdateTransaction(new Dictionary<string, byte[]?>
+        {
+            [PathNormalizer.ResolveToFilesystemPath(candidate.TargetFile.FullName)] = candidate.OriginalContent?.ToArray()
+        });
+        try
+        {
+            await transaction.ApplyPreparedAsync(candidate.TargetFile, candidate.ProposedContent,
+                writeStarting => DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, writeStarting, cancellationToken),
+                cancellationToken);
+            var success = await project.AddPackageAsync(context, cancellationToken);
+            if (!success)
+            {
+                try
+                {
+                    await transaction.DisposeAsync();
+                }
+                catch (Exception rollbackFailure)
+                {
+                    throw new AggregateException(
+                        new InvalidOperationException(string.Format(CultureInfo.CurrentCulture,
+                            AddCommandStrings.PackageInstallationFailed, CliExitCodes.FailedToAddPackage)),
+                        rollbackFailure);
+                }
+
+                return false;
+            }
+
+            await transaction.VerifyAsync(cancellationToken);
+            transaction.Commit();
+
+            return true;
+        }
+        catch (Exception addFailure)
+        {
+            try
+            {
+                await transaction.DisposeAsync();
+            }
+            catch (Exception rollbackFailure)
+            {
+                throw new AggregateException(addFailure, rollbackFailure);
+            }
+            throw;
+        }
+    }
+
     private static string? GetRequestedRestoreChannel(
         PackageChannel channel,
         string packageId,
         string? source)
     {
+        if (channel.IntegrationSource is not null)
+        {
+            // Named integration sources select the package feed, not the AppHost's SDK channel.
+            return null;
+        }
         if (channel.Type is PackageChannelType.Explicit)
         {
             return channel.Name;
@@ -580,9 +695,8 @@ internal sealed class AddCommand : BaseCommand
     {
         var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id).ToArray();
 
-        // Exact matches can skip the package prompt when one package remains. Fuzzy/no-match
-        // fallbacks opt into prompting so interactive users confirm the candidate first.
-        // In non-interactive mode, auto-select the first package.
+        // Only exact matches can skip the package prompt. Discovery and fuzzy/no-match
+        // fallbacks require confirmation even when other feeds failed and one package remains.
         var selectedPackage = distinctPackages.Length switch
         {
             1 when promptForSinglePackage && _hostEnvironment.SupportsInteractiveInput => await PromptForIntegrationAsync(distinctPackages, cancellationToken),

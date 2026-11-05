@@ -11,6 +11,7 @@ namespace Infrastructure.Tests;
 /// <summary>
 /// End-to-end tests for the DownloadFailingJobLogs script.
 /// </summary>
+[Collection(AspireTestToolsBuildCollection.Name)]
 public sealed class DownloadFailingJobLogsToolTests : IClassFixture<DownloadFailingJobLogsFixture>, IDisposable
 {
     private const long RunId = 123;

@@ -111,6 +111,62 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
             result.SkippedJobs[0].Reason);
     }
 
+    [Theory]
+    [InlineData("Upload RID-specific packages", "Failed to CreateArtifact: Unable to make request: ETIMEDOUT\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners#communication-between-self-hosted-runners-and-github")]
+    [InlineData("Upload starter validation diagnostics", "Failed to CreateArtifact: Unable to make request: ENOTFOUND\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints")]
+    [InlineData("Upload CLI npm packages", "Failed to FinalizeArtifact: Unable to make request: ECONNRESET\nIf you are using self-hosted runners, please make sure your runner has access to all GitHub endpoints")]
+    [InlineData("Download RID-specific NuGet packages", "Unable to download artifact(s): Failed to ListArtifacts: Unable to make request: ETIMEDOUT")]
+    [InlineData("Download VSIX", "Unable to download artifact(s): Failed to ListArtifacts: Unable to make request: ETIMEDOUT")]
+    [RequiresTools(["node"])]
+    public async Task RetriesArtifactTransferStepsWhenArtifactServiceRequestFailsWithNetworkError(string failedStep, string annotation)
+    {
+        WorkflowJob job = CreateJob(failedSteps: [failedStep]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, annotation);
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal($"Failed step '{failedStep}' matched the artifact service network failure allowlist.", result.RetryableJobs[0].Reason);
+        Assert.Empty(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetriesMultipleArtifactUploadStepsWhenArtifactServiceRequestTimesOut()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Upload RID-specific packages", "Upload logs"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Failed to CreateArtifact: Unable to make request: ETIMEDOUT");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal("Failed steps 'Upload RID-specific packages | Upload logs' matched the artifact service network failure allowlist.", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SkipsArtifactTransferStepsWhenFailureIsNotAnArtifactServiceNetworkError()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Upload RID-specific packages"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "No files were found with the provided path: artifacts/packages. No artifacts will be uploaded.");
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+        Assert.Equal("The job annotations did not show a retry-safe transient infrastructure failure.", result.SkippedJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SkipsArtifactServiceNetworkErrorWhenNonArtifactStepAlsoFailed()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Build CLI", "Upload RID-specific packages"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Failed to CreateArtifact: Unable to make request: ETIMEDOUT");
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+        Assert.Equal("Failed steps 'Build CLI | Upload RID-specific packages' are not covered by the retry-safe rerun rules.", result.SkippedJobs[0].Reason);
+    }
+
     [Fact]
     [RequiresTools(["node"])]
     public async Task AllowsNarrowOverrideForExplicitJobLevelInfrastructureAnnotationsOnIgnoredSteps()

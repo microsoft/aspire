@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Kubernetes projection alongside executable/V2 deployment coverage.
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIREPIPELINES003
@@ -1656,6 +1657,32 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_ResolvesEndpointTlsEnabledProperty()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var cache = builder.AddContainer("cache", "redis")
+            .WithEndpoint(targetPort: 6379, name: "tcp", scheme: "tcp")
+            .WithEndpoint(targetPort: 6380, name: "tls", scheme: "tcp")
+            .WithEndpoint("tls", endpoint => endpoint.TlsEnabled = true);
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment("CACHE_TLS", cache.GetEndpoint("tls").Property(EndpointProperty.TlsEnabled))
+            .WithEnvironment("CACHE_PLAIN_TLS", cache.GetEndpoint("tcp").Property(EndpointProperty.TlsEnabled));
+
+        var app = builder.Build();
+        app.Run();
+
+        var valuesContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml"));
+
+        Assert.Contains("CACHE_TLS: \"True\"", valuesContent);
+        Assert.Contains("CACHE_PLAIN_TLS: \"False\"", valuesContent);
+    }
+
+    [Fact]
     public async Task PublishAsync_ConditionalWithParameterBranch_UsesIfElseSyntax()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2626,3 +2653,4 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         };
     }
 }
+#pragma warning restore CS0618

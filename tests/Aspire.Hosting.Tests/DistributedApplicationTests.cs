@@ -32,6 +32,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit.Sdk;
 using TestConstants = Microsoft.AspNetCore.InternalTesting.TestConstants;
@@ -184,6 +185,59 @@ public class DistributedApplicationTests
         Assert.DoesNotContain(hostStartupActivity.Events, @event => @event.Name == ProfilingTelemetry.Events.AppHostHostStarted);
     }
 
+    [Theory]
+    [InlineData(nameof(DistributedApplication.StartAsync))]
+    [InlineData(nameof(DistributedApplication.RunAsync))]
+    public async Task StartupInformationIsLoggedBeforeBeforeStartEvent(string entryPoint)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
+        builder.Services.AddLogging(b => b.AddFakeLogging());
+
+        string[]? messagesAtBeforeStart = null;
+        builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
+        {
+            messagesAtBeforeStart = e.Services.GetFakeLogCollector().GetSnapshot()
+                .Where(r => r.Category == typeof(DistributedApplication).FullName)
+                .Select(r => r.Message)
+                .ToArray();
+
+            // Stop startup here: this test only cares about what was logged before the event was raised.
+            throw new InvalidOperationException("Stop after BeforeStartEvent.");
+        });
+
+        using var app = builder.Build();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => entryPoint == nameof(DistributedApplication.StartAsync)
+            ? app.StartAsync()
+            : app.RunAsync()).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        Assert.NotNull(messagesAtBeforeStart);
+        Assert.Contains(messagesAtBeforeStart, m => m.StartsWith("Aspire AppHost version: ", StringComparison.Ordinal));
+        Assert.Contains("Distributed application starting.", messagesAtBeforeStart);
+        Assert.Contains(messagesAtBeforeStart, m => m.StartsWith("Application host directory is: ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DistributedApplicationLifecycle_StartupInformationIsOnlyLoggedOnce()
+    {
+        var configuration = CreateConfiguration();
+        var logCollector = new FakeLogCollector();
+        var lifecycle = new DistributedApplicationLifecycle(
+            new FakeLogger<DistributedApplication>(logCollector),
+            configuration,
+            new ProfilingTelemetry(configuration),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            new LocaleOverrideContext());
+
+        lifecycle.LogStartupInformation();
+        await lifecycle.StartingAsync(CancellationToken.None);
+        await lifecycle.StopAsync(CancellationToken.None);
+
+        var messages = logCollector.GetSnapshot().Select(r => r.Message).ToArray();
+        Assert.Single(messages, m => m == "Distributed application starting.");
+        Assert.Single(messages, m => m.StartsWith("Aspire AppHost version: ", StringComparison.Ordinal));
+    }
+
     [Fact]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15777")]
     public async Task StartResourceForcesStart()
@@ -305,8 +359,10 @@ public class DistributedApplicationTests
         await app.StopAsync(token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
 
-    [Fact]
-    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BeforeResourceStartedEvent_NotFiredForExplicitStartOnInitialCreation(bool cancelStartupAfterStart)
     {
         const string testName = "before-start-event-explicit-start";
         using var testProgram = CreateTestProgram(testName, randomizePorts: false);
@@ -340,29 +396,47 @@ public class DistributedApplicationTests
         using var app = testProgram.Build();
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
 
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestTimeout);
-        var token = cts.Token;
+        using var startupCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var startupToken = startupCts.Token;
 
-        // Start app in background - it won't complete because of explicit start resource
-        _ = app.StartAsync(token);
+        var startTask = app.StartAsync(startupToken);
 
         var normalResourceName = $"{testName}-serviceb";
         var explicitStartResourceName = $"{testName}-servicea";
 
         // Wait for normal resource to be running
-        await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        var normalResource = await rns.WaitForResourceAsync(normalResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.Running, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Wait for explicit start resource to be NotStarted
-        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await rns.WaitForResourceAsync(explicitStartResourceName, e => e.Snapshot.State?.Text == KnownResourceStates.NotStarted, startupToken).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Wait for resource to finish being created.
-        await resourcesCreatedTcs.Task.DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await resourcesCreatedTcs.Task.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Verify BeforeResourceStartedEvent was fired for normal resource but NOT for explicit start resource
         Assert.Equal(1, normalEventCount);
         Assert.Equal(0, explicitStartEventCount);
 
-        await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+        await startTask.DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var servicePid = Assert.IsType<int>(GetResourcePropertyValue(normalResource, KnownProperties.Executable.Pid));
+        using var serviceProcess = Process.GetProcessById(servicePid);
+        Assert.False(serviceProcess.HasExited);
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        Assert.False(lifetime.ApplicationStopped.IsCancellationRequested);
+
+        if (cancelStartupAfterStart)
+        {
+            // Exercise an expired startup budget deterministically, after startup has settled.
+            startupCts.Cancel();
+        }
+
+        // A slow startup must not consume the shutdown phase's cancellation budget.
+        using var stopCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        await app.StopAsync(stopCts.Token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        await serviceProcess.WaitForExitAsync(stopCts.Token).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        Assert.True(serviceProcess.HasExited);
+        Assert.True(lifetime.ApplicationStopped.IsCancellationRequested);
     }
 
     [Fact]
@@ -1840,7 +1914,9 @@ public class DistributedApplicationTests
         {
             endpoint.IsProxied = false;
         });
+#pragma warning disable CS0618 // Retain legacy project start, stop, and lifetime compatibility.
         var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
+#pragma warning restore CS0618
             .WithReference(redis)
             .WithReference(redisNoPort);
 
@@ -1914,7 +1990,9 @@ public class DistributedApplicationTests
         // Since port is not specified, Aspire will assign the host port before the container is created.
         var redisNoPort = builder.AddRedis($"{testName}-redisNoPort").WithEndpointProxySupport(false);
 
+#pragma warning disable CS0618 // Retain legacy project start, stop, and lifetime compatibility.
         var servicea = builder.AddProject<Projects.ServiceA>($"{testName}-servicea")
+#pragma warning restore CS0618
             .WithReference(redis)
             .WithReference(redisNoPort);
 

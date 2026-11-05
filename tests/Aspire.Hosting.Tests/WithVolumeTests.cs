@@ -11,8 +11,17 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
-public class WithVolumeTests(ITestOutputHelper outputHelper)
+public class WithVolumeTests(ITestOutputHelper outputHelper) : WithVolumeTests<ProjectResource>
 {
+    protected override IResourceBuilder<ProjectResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name, string? launchProfileName)
+    {
+#pragma warning disable CS0618 // Exercise the legacy factory through the same consumer contracts as V2.
+        return builder.AddProject<TProject>(name, launchProfileName);
+#pragma warning restore CS0618
+    }
+
+#pragma warning disable CS0618 // Retain the distinct legacy polyglot volume export contract.
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
     [InlineData(DistributedApplicationOperation.Publish)]
@@ -36,59 +45,6 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
         Assert.True(mount.IsReadOnly);
     }
 
-    [Fact]
-    public async Task WithVolumeEnvironmentUsesWorkloadScopedPathsForProjectAndExecutable()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
-            .WithVolume("data", "/srv/data", env: "DATA_PATH");
-        var executable = builder.AddExecutable("executable", "test-command", ".")
-            .WithVolume("data", "/srv/data", env: "DATA_PATH");
-
-        using var app = builder.Build();
-        var store = app.Services.GetRequiredService<IAspireStore>();
-        var expectedProjectPath = VolumeMountPathResolver.GetLocalPath(store, project.Resource, "data");
-        var expectedExecutablePath = VolumeMountPathResolver.GetLocalPath(store, executable.Resource, "data");
-
-        Assert.False(Directory.Exists(expectedProjectPath));
-        Assert.False(Directory.Exists(expectedExecutablePath));
-
-        var projectEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-            project.Resource,
-            serviceProvider: app.Services);
-        var executableEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-            executable.Resource,
-            serviceProvider: app.Services);
-
-        Assert.Equal(expectedProjectPath, projectEnvironment["DATA_PATH"]);
-        Assert.Equal(expectedExecutablePath, executableEnvironment["DATA_PATH"]);
-        Assert.True(Directory.Exists(expectedProjectPath));
-        Assert.True(Directory.Exists(expectedExecutablePath));
-    }
-
-    [Fact]
-    public async Task WithVolumeEnvironmentUsesMountPathForPublishedProjectAndExecutable()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
-            .WithVolume("data", "/srv/project", env: "DATA_PATH");
-        var executable = builder.AddExecutable("executable", "test-command", ".")
-            .WithVolume("data", "/srv/executable", env: "DATA_PATH");
-
-        using var app = builder.Build();
-        var projectEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-            project.Resource,
-            DistributedApplicationOperation.Publish,
-            app.Services);
-        var executableEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-            executable.Resource,
-            DistributedApplicationOperation.Publish,
-            app.Services);
-
-        Assert.Equal("/srv/project", projectEnvironment["DATA_PATH"]);
-        Assert.Equal("/srv/executable", executableEnvironment["DATA_PATH"]);
-    }
-
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -101,19 +57,6 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
             container.WithVolume("data", "/srv/data", env!));
 
         Assert.Equal(nameof(env), exception.ParamName);
-    }
-
-    [Fact]
-    public void WithVolumeEnvironmentRequiresNameForProject()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null);
-        string name = null!;
-
-        var exception = Assert.ThrowsAny<ArgumentException>(() =>
-            VolumeResourceBuilderExtensions.WithVolume(project, name, "/srv/data", env: "DATA_PATH"));
-
-        Assert.Equal(nameof(name), exception.ParamName);
     }
 
     [Fact]
@@ -244,13 +187,88 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
         Assert.Throws<ArgumentException>(() => CoreExports.WithProjectVolumeForPolyglot(project, target, name, env));
         Assert.Throws<ArgumentException>(() => CoreExports.WithExecutableVolumeForPolyglot(executable, target, name, env));
     }
+#pragma warning restore CS0618
+}
+
+public abstract class WithVolumeTests<TResource>
+    where TResource : class, IComputeResource, IResourceWithEnvironment
+{
+    protected abstract IResourceBuilder<TResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name, string? launchProfileName)
+        where TProject : IProjectMetadata, new();
+
+    [Fact]
+    public async Task WithVolumeEnvironmentUsesWorkloadScopedPathsForProjectAndExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = AddProject<Projects.ServiceA>(builder, "project", launchProfileName: null)
+            .WithVolume("data", "/srv/data", env: "DATA_PATH");
+        var executable = builder.AddExecutable("executable", "test-command", ".")
+            .WithVolume("data", "/srv/data", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var expectedProjectPath = VolumeMountPathResolver.GetLocalPath(store, project.Resource, "data");
+        var expectedExecutablePath = VolumeMountPathResolver.GetLocalPath(store, executable.Resource, "data");
+
+        Assert.False(Directory.Exists(expectedProjectPath));
+        Assert.False(Directory.Exists(expectedExecutablePath));
+
+        var projectEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            serviceProvider: app.Services);
+        var executableEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            executable.Resource,
+            serviceProvider: app.Services);
+
+        Assert.Equal(expectedProjectPath, projectEnvironment["DATA_PATH"]);
+        Assert.Equal(expectedExecutablePath, executableEnvironment["DATA_PATH"]);
+        Assert.True(Directory.Exists(expectedProjectPath));
+        Assert.True(Directory.Exists(expectedExecutablePath));
+    }
+
+    [Fact]
+    public async Task WithVolumeEnvironmentUsesMountPathForPublishedProjectAndExecutable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = AddProject<Projects.ServiceA>(builder, "project", launchProfileName: null)
+            .WithVolume("data", "/srv/project", env: "DATA_PATH");
+        var executable = builder.AddExecutable("executable", "test-command", ".")
+            .WithVolume("data", "/srv/executable", env: "DATA_PATH");
+
+        using var app = builder.Build();
+        var projectEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource,
+            DistributedApplicationOperation.Publish,
+            app.Services);
+        var executableEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            executable.Resource,
+            DistributedApplicationOperation.Publish,
+            app.Services);
+
+        Assert.Equal("/srv/project", projectEnvironment["DATA_PATH"]);
+        Assert.Equal("/srv/executable", executableEnvironment["DATA_PATH"]);
+    }
+
+    [Fact]
+    public void WithVolumeEnvironmentRequiresNameForProject()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = AddProject<Projects.ServiceA>(builder, "project", launchProfileName: null);
+        string name = null!;
+
+        var exception = Assert.ThrowsAny<ArgumentException>(() =>
+            VolumeResourceBuilderExtensions.WithVolume(project, name, "/srv/data", env: "DATA_PATH"));
+
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
 
     [Fact]
     public async Task WithVolumeEnvironmentThrowsWhenComputeEnvironmentCannotMountVolumes()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddResource(new MountIncapableComputeEnvironmentResource("env"));
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+        var project = AddProject<Projects.ServiceA>(builder, "project", launchProfileName: null)
             .WithVolume("data", "/srv/data", env: "DATA_PATH")
             .WithComputeEnvironment(environment);
 
@@ -273,7 +291,7 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var computeEnvironment = builder.AddResource(new MountCapableComputeEnvironmentResource("env"));
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+        var project = AddProject<Projects.ServiceA>(builder, "project", launchProfileName: null)
             .WithVolume("data", "/srv/data", env: "DATA_PATH")
             .WithComputeEnvironment(computeEnvironment);
 
@@ -292,7 +310,7 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
         // No compute environment is bound, so the target is ambiguous rather than known-unsupported.
         // Publishing must not be blocked on a guess.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var project = builder.AddProject<Projects.ServiceA>("project", launchProfileName: null)
+        var project = AddProject<Projects.ServiceA>(builder, "project", launchProfileName: null)
             .WithVolume("data", "/srv/data", env: "DATA_PATH");
 
         using var app = builder.Build();
@@ -304,16 +322,16 @@ public class WithVolumeTests(ITestOutputHelper outputHelper)
         Assert.Equal("/srv/data", environment["DATA_PATH"]);
     }
 
-    private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEnvironment
+    protected sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEnvironment
     {
     }
 
-    private sealed class MountCapableComputeEnvironmentResource(string name)
+    protected sealed class MountCapableComputeEnvironmentResource(string name)
         : Resource(name), IComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts
     {
     }
 
-    private sealed class MountIncapableComputeEnvironmentResource(string name)
+    protected sealed class MountIncapableComputeEnvironmentResource(string name)
         : Resource(name), IComputeEnvironmentResource
     {
     }

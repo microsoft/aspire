@@ -74,7 +74,10 @@ internal static class EntraIdApiProvisioning
             // The default URI contains the client ID, which exists only after the application is created, and Graph
             // cannot read a property of the resource that is being created. Declaring the application a second time under the same
             // unique name updates the created application in place (PATCH semantics) with a value that refers to the first
-            // declaration's appId, so no tenant policy needs to allow a name-based URI.
+            // declaration's appId, so no tenant policy needs to allow a name-based URI. The Graph reference describes a default
+            // api://<appId> URI, but it isn't applied; this second declaration is the workaround reported in
+            // https://github.com/microsoftgraph/msgraph-bicep-types/issues/239. Updates by unique name are documented at
+            // https://learn.microsoft.com/graph/templates/bicep/concept-uniquely-named-resources.
             target = new MicrosoftGraphApplication(symbolNames.ApplicationIdentity(resource))
             {
                 DisplayName = registrationName,
@@ -173,6 +176,41 @@ internal static class EntraIdApiProvisioning
                     ResourceId = apiServicePrincipalId
                 });
             }
+        }
+    }
+
+    internal static void ConfigureManagedIdentityRoleAssignments(
+        EntraIdApplicationResource resource,
+        AzureResourceInfrastructure infrastructure,
+        EntraIdSymbolNames symbolNames,
+        MicrosoftGraphServicePrincipal servicePrincipal)
+    {
+        // AsProvisioningParameter writes into resource.Parameters, which survives template regeneration even though
+        // each generation builds fresh infrastructure. If a caller changes identity or is excluded, stale bindings
+        // would still be emitted as parameters and retain dependencies on the old identity. Remove the previous
+        // generation's bindings, then clear and rebuild their ownership tracking alongside the new template.
+        // Reference equality leaves bindings that the AppHost has since replaced untouched.
+        foreach (var (name, output) in resource.AppRoleAssignmentParameters)
+        {
+            if (resource.Parameters.TryGetValue(name, out var value) && ReferenceEquals(value, output))
+            {
+                resource.Parameters.Remove(name);
+            }
+        }
+        resource.AppRoleAssignmentParameters.Clear();
+
+        foreach (var (identity, role) in resource.GetManagedIdentityRoleAssignments(requireIdentity: false))
+        {
+            var roleId = role.GetStableId(resource.Name);
+            var principalId = identity.PrincipalId;
+            var parameterName = symbolNames.ManagedIdentityPrincipalId(identity);
+            infrastructure.Add(new MicrosoftGraphAppRoleAssignedTo(symbolNames.ManagedIdentityRoleAssignment(identity, role, roleId))
+            {
+                AppRoleId = roleId.ToString("D"),
+                PrincipalId = principalId.AsProvisioningParameter(infrastructure, parameterName),
+                ResourceId = servicePrincipal.Id
+            });
+            resource.AppRoleAssignmentParameters[parameterName] = principalId;
         }
     }
 

@@ -16,7 +16,6 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
-using Aspire.Shared;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -446,7 +445,7 @@ public class DotNetTemplateFactoryTests
         public Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProjectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -482,9 +481,6 @@ public class DotNetTemplateFactoryTests
 
     private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter
     {
-        public Task<TemplateSelection> PromptForTemplateOrSearchAsync(ITemplate[] templates, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
-
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 

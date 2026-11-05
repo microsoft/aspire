@@ -144,6 +144,7 @@ internal sealed partial class TemplateEngineFactory(
         var pathRoot = Path.Combine(cacheRoot, "repository");
         var relativePath = TemplateSource.GetRepositoryRelativePath(templatePath, pathRoot);
 
+        interactionService.DisplaySourceTrustWarning(executionContext);
         try
         {
             var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,

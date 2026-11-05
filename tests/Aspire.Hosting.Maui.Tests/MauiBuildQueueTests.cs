@@ -1129,13 +1129,10 @@ public class MauiBuildQueueTests
         };
     }
 
-    // Starts watching immediately, so a state published before the returned task is awaited is still observed.
-    // The wait shares the test's default timeout rather than starting its own shorter deadline, which a slow
-    // runner could exhaust before the state is published.
-    private static Task WaitForStateAsync(BuildQueueTestEnvironment env, IResource resource, string state)
-    {
-        return env.NotificationService.WaitForResourceAsync(resource.Name, state).DefaultTimeout();
-    }
+    // Bound only by DefaultTimeout (30s on CI). A separate wall-clock budget for the watch would
+    // expire before the state is published when a CI runner is starved.
+    private static Task WaitForStateAsync(BuildQueueTestEnvironment env, IResource resource, string state) =>
+        env.NotificationService.WaitForResourceAsync(resource.Name, evt => evt.Snapshot.State?.Text == state).DefaultTimeout();
 
     private static FakeTimeProvider ConfigureLaunchHandoffTimeout(MauiBuildQueueEventSubscriber subscriber)
     {

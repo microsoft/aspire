@@ -187,6 +187,11 @@
         <target state="new">The Git operation timed out after two minutes.</target>
         <note />
       </trans-unit>
+      <trans-unit id="GitUnattendedSshUnsupported">
+        <source>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</source>
+        <target state="new">Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="GitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
         <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
@@ -217,6 +222,11 @@
         <target state="translated">Nous n’avons pas pu générer le projet d’intégration, car un projet référencé nécessite une version d’Aspire.Hosting plus récente que celle fournie par cette Aspire CLI ({0}). Le serveur AppHost constitue l’interface CLI elle-même. Les références de projet dans aspire.config.json doivent donc cibler la même version que celle livrée avec l’interface CLI. Utilisez une version d’Aspire CLI correspondant aux projets référencés ou faites référence à des packages publiés au lieu de projets locaux.</target>
         <note>{0} is the version of the running Aspire CLI, for example "13.5.0".</note>
       </trans-unit>
+      <trans-unit id="InvalidIntegrationSource">
+        <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
+        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <note>{0} is the configuration key. Do not translate NuGet or *.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="translated">Le fichier de configuration « {0} » contient du JSON invalide : {1}</target>
@@ -231,6 +241,11 @@
         <source>The provided extension socket path needs two valid parts.</source>
         <target state="translated">Le chemin d’accès de socket d’extension fourni nécessite deux parties valides.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InvalidSourceName">
+        <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <note>{0} is the configuration key. Do not translate ASCII.</note>
       </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
         <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
@@ -261,6 +276,11 @@
         <source>Input was required for prompt '{0}' but not provided.</source>
         <target state="translated">Une entrée était requise pour l’invite '{0}', mais elle n’a pas été fournie.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NuGetSourceKeyAlreadyInUse">
+        <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
+        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
         <source>The project could not be analyzed due to a build error. See logs at {0}</source>

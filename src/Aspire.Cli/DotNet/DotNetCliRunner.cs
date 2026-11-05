@@ -41,12 +41,17 @@ internal interface IDotNetCliRunner
     Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
-    Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProject, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
 }
+
+internal sealed record DotNetPackageSearchResult(
+    int ExitCode,
+    NuGetPackage[]? Packages,
+    IReadOnlyList<string> FailedSources);
 
 internal sealed class ProcessInvocationOptions
 {
@@ -1447,7 +1452,7 @@ internal sealed class DotNetCliRunner(
         return result;
     }
 
-    public async Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public async Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -1480,8 +1485,11 @@ internal sealed class DotNetCliRunner(
                 {
                     try
                     {
-                        var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(cached);
-                        return (0, foundPackages.ToArray());
+                        var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(cached, out var failedSources, packageId: null);
+                        return new(
+                            0,
+                            foundPackages.ToArray(),
+                            failedSources.Select(PackageSourceRedactor.RedactForDisplay).ToArray());
                     }
                     catch (JsonException ex)
                     {
@@ -1597,19 +1605,19 @@ internal sealed class DotNetCliRunner(
                 stderr,
                 stdout);
 
-            return (result, null);
+            return new(result, null, []);
         }
         else
         {
             if (stdout is null)
             {
                 logger.LogError("Failed to read stdout from the process. This should never happen.");
-                return (CliExitCodes.FailedToAddPackage, null);
+                return new(CliExitCodes.FailedToAddPackage, null, []);
             }
 
             try
             {
-                var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(stdout);
+                var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(stdout, out var failedSources, packageId: null);
 
                 // Attempt to persist the raw stdout JSON for future lookups when cache enabled
                 if (cacheEnabled && rawKey is not null)
@@ -1617,12 +1625,15 @@ internal sealed class DotNetCliRunner(
                     await _diskCache.SetAsync(rawKey, stdout, cancellationToken).ConfigureAwait(false);
                 }
 
-                return (result, foundPackages.ToArray());
+                return new(
+                    result,
+                    foundPackages.ToArray(),
+                    failedSources.Select(PackageSourceRedactor.RedactForDisplay).ToArray());
             }
             catch (JsonException ex)
             {
                 logger.LogError($"Failed to read JSON returned by the package search. {ex.Message}");
-                return (CliExitCodes.FailedToAddPackage, null);
+                return new(CliExitCodes.FailedToAddPackage, null, []);
             }
 
         }
