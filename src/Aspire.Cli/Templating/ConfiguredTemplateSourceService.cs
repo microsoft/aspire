@@ -91,7 +91,7 @@ internal sealed class ConfiguredTemplateSourceService(
                     .Where(template => template.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.SearchDescription?.Contains(query, StringComparison.OrdinalIgnoreCase) is true)
-                    .Select(template => new ConfiguredTemplate(name, template, configuredSource.DisplayName)));
+                    .Select(template => new ConfiguredTemplate(name, template, configuredSource.DisplayName, source)));
             }
             catch (Exception ex) when (ex is TemplateDiscoveryException or IOException or UnauthorizedAccessException or ArgumentException)
             {
@@ -110,4 +110,4 @@ internal sealed class ConfiguredTemplateSourceService(
             CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, source, message));
 }
 
-internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template, string? SourceDisplayName);
+internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template, string? SourceDisplayName, TemplateSource Source);

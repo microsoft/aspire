@@ -1,0 +1,7 @@
+﻿[?25lSelect:
+
+[1m  Team [templates] (https://example.test/organization/[templates]/long-location @ release/[blue])[0m
+  > Same
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect: Same

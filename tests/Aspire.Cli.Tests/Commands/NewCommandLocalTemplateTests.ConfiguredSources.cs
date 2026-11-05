@@ -107,6 +107,7 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "repository": "http://example.test/templates" }""")]
     [InlineData("""{ "repository": "git@example.test:templates" }""")]
     [InlineData("""{ "repository": "https://token@example.test/templates" }""")]
+    [InlineData("""{ "repository": "ssh://git:password@example.test/templates" }""")]
     [InlineData("""{ "repository": "https://example.test/templates?q=search" }""")]
     [InlineData("""{ "repository": "https://example.test/templates#main" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": 42 }""")]
@@ -335,8 +336,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, selectionCount);
         var groupedChoices = Assert.Single(interaction.GroupedSelectionPromptCalls);
         Assert.Equal(
-            [new SelectionChoiceGroup("source:first-source", "Company [templates]"),
-                new SelectionChoiceGroup("source:second-source", "Company [templates]")],
+            [new SelectionChoiceGroup("source:first-source", $"Company [templates] ({Path.Combine(workspace.Path, "first")})"),
+                new SelectionChoiceGroup("source:second-source", $"Company [templates] ({Path.Combine(workspace.Path, "second")})")],
             groupedChoices.TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(["Same template", "Same template"], groupedChoices.TakeLast(2).Select(choice => choice.DisplayLabel));
         Assert.All(groupedChoices.SkipLast(2), choice =>
@@ -371,6 +372,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, selectionCount);
         Assert.Equal("Sample (Observable services)", Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].DisplayLabel);
+        Assert.Equal(new SelectionChoiceGroup("source:company", $"company ({Path.Combine(workspace.Path, "template")})"),
+            Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].Group);
         Assert.Empty(interaction.DisplayedMessages);
         Assert.Equal(["Greeting text"], interaction.StringPromptCalls.Select(call => call.PromptText));
         Assert.Equal([true], interaction.StringPromptLogResponses);

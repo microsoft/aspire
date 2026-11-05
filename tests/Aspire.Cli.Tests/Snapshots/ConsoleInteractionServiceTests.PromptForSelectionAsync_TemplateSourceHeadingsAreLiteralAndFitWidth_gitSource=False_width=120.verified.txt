@@ -1,0 +1,7 @@
+﻿[?25lSelect:
+
+[1m  Team [templates] (/work/[templates]/long-directory-location)[0m
+  > Same
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect: Same
