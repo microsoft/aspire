@@ -74,6 +74,25 @@ jobs:
         run: |
           node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
       - name: Install dependencies
-        run: corepack yarn install --frozen-lockfile --non-interactive
+        # The dnceng npm feed intermittently returns 429 Too Many Requests, and
+        # Yarn 1 only retries 408/5xx responses. Mirror the bounded install
+        # retry used by extension-e2e-tests.yml. Tests themselves are not retried.
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            corepack yarn install --frozen-lockfile --non-interactive
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            $exitCode = $LASTEXITCODE
+            if ($attempt -eq 3) {
+              Write-Error "corepack yarn install failed after $attempt attempts."
+              exit $exitCode
+            }
+
+            $delay = $attempt * 30
+            Write-Host "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $($attempt + 1) of 3)."
+            Start-Sleep -Seconds $delay
+          }
       - name: Run tests
         run: corepack yarn test

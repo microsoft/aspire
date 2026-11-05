@@ -15,8 +15,15 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static class ConsoleHelpers
 {
-    public static void DisplaySourceTrustWarning(this IInteractionService interactionService)
+    public static void DisplaySourceTrustWarning(this IInteractionService interactionService, CliExecutionContext executionContext)
     {
+        // An init source can lead straight into Git template discovery in "aspire new".
+        // Share the warning across both paths for this invocation, without skipping either consent prompt.
+        if (!executionContext.TryMarkSourceTrustWarningDisplayed())
+        {
+            return;
+        }
+
         interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{SharedCommandStrings.SourceTrustWarning.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
     }
 

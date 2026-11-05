@@ -42,7 +42,6 @@ internal sealed class ConfigSourceService(
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
-    private bool _sourceTrustWarningDisplayed;
     private bool _sourceDeclined;
 
     internal static readonly Option<bool?> s_useSourceOption = new("--use-config-source")
@@ -179,7 +178,7 @@ internal sealed class ConfigSourceService(
         interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
             source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
             explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
-        DisplaySourceTrustWarning();
+        interaction.DisplaySourceTrustWarning(executionContext);
 
         // Machine-configured or detected sources suggest useful defaults for new apps;
         // they do not enforce organizational policy or establish a security boundary.
@@ -543,20 +542,6 @@ internal sealed class ConfigSourceService(
     internal Task<ConfigSourceSnapshot> AcquireAsync(ConfigSource source, bool force, CancellationToken cancellationToken) =>
         AcquireAsync(source, force, allowInteractiveInput: true, cancellationToken);
 
-    private void DisplaySourceTrustWarning()
-    {
-        lock (_checksLock)
-        {
-            if (_sourceTrustWarningDisplayed)
-            {
-                return;
-            }
-            _sourceTrustWarningDisplayed = true;
-        }
-
-        interaction.DisplaySourceTrustWarning();
-    }
-
     private async Task<ConfigSourceSnapshot> AcquireAsync(
         ConfigSource source, bool force, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
@@ -570,7 +555,7 @@ internal sealed class ConfigSourceService(
             }
         }
 
-        DisplaySourceTrustWarning();
+        interaction.DisplaySourceTrustWarning(executionContext);
         var cacheDirectory = GetCacheDirectory(source);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(cacheDirectory)!);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheDirectory);

@@ -37,12 +37,23 @@ internal static class TemplateSourceConfiguration
         string? path = null;
         string? repository = null;
         string? reference = null;
+        string? displayName = null;
         foreach (var property in value.EnumerateObject())
         {
             var field = property.Name.ToLowerInvariant();
-            if (field is not ("repository" or "ref" or "path"))
+            if (field is not ("repository" or "ref" or "path" or "displayname"))
             {
                 // Ignore fields from newer CLIs, matching typed configuration deserialization.
+                continue;
+            }
+            if (field == "displayname")
+            {
+                displayName = property.Value.ValueKind switch
+                {
+                    JsonValueKind.Null => null,
+                    JsonValueKind.String => property.Value.GetString(),
+                    _ => throw new TemplateSourceConfigurationException($"{settingPath}.{property.Name}", NewCommandStrings.TemplateSourceDisplayNameInvalid)
+                };
                 continue;
             }
             var text = property.Value.ValueKind is JsonValueKind.Null
@@ -62,12 +73,17 @@ internal static class TemplateSourceConfiguration
             }
         }
 
-        return Parse(path, repository, reference, settingPath, requireComplete);
+        return Parse(path, repository, reference, displayName, settingPath, requireComplete);
     }
 
     public static ConfiguredTemplateSource Parse(
-        string? path, string? repository, string? reference, string settingPath, bool requireComplete)
+        string? path, string? repository, string? reference, string? displayName, string settingPath, bool requireComplete)
     {
+        if (displayName?.Any(char.IsControl) is true)
+        {
+            throw new TemplateSourceConfigurationException($"{settingPath}.displayName", NewCommandStrings.TemplateSourceDisplayNameInvalid);
+        }
+        displayName = string.IsNullOrWhiteSpace(displayName) ? null : displayName;
         foreach (var (field, value) in new[] { ("path", path), ("repository", repository), ("ref", reference) })
         {
             if (value is not null)
@@ -82,7 +98,7 @@ internal static class TemplateSourceConfiguration
             {
                 if (reference is null && Path.IsPathFullyQualified(path))
                 {
-                    return new(new TemplateSource(path, null, null));
+                    return new(new TemplateSource(path, null, null), displayName);
                 }
                 ValidateRepositoryPath(path, $"{settingPath}.path");
             }
@@ -90,13 +106,13 @@ internal static class TemplateSourceConfiguration
             {
                 throw new TemplateSourceConfigurationException(settingPath, NewCommandStrings.TemplateSourceMissingLocation);
             }
-            return new(null);
+            return new(null, displayName);
         }
 
         ValidateRepository(repository, $"{settingPath}.repository");
         path ??= ".";
         ValidateRepositoryPath(path, $"{settingPath}.path");
-        return new(new TemplateSource(path, repository, reference));
+        return new(new TemplateSource(path, repository, reference), displayName);
     }
 
     public static string ReadString(JsonElement value, string settingPath)
@@ -182,7 +198,7 @@ internal static class TemplateSourceConfiguration
             throw new TemplateSourceConfigurationException(AspireConfigFile.TemplateSourcesSectionName, NewCommandStrings.TemplateSourcesMustBeObject);
         }
         ValidateName(parts[1]);
-        if (parts.Length > 3 || (parts.Length == 3 && parts[2].ToLowerInvariant() is not ("repository" or "ref" or "path")))
+        if (parts.Length > 3 || (parts.Length == 3 && parts[2].ToLowerInvariant() is not ("repository" or "ref" or "path" or "displayname")))
         {
             throw new TemplateSourceConfigurationException(key.Replace(':', '.'), NewCommandStrings.TemplateSourceUnknownField);
         }
@@ -212,7 +228,7 @@ internal static class TemplateSourceConfiguration
     }
 }
 
-internal sealed record ConfiguredTemplateSource(TemplateSource? Template);
+internal sealed record ConfiguredTemplateSource(TemplateSource? Template, string? DisplayName);
 
 internal sealed class TemplateSourceConfigurationException(string settingPath, string reason)
     : Exception(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSettingInvalid, settingPath, reason));

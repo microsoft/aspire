@@ -540,7 +540,7 @@ function oldFirstSignal(pullRequest) {
   // Route through isReviewDebt so the emitted signal and the focus-retention predicate share one
   // definition (notably its approved-PR exclusion) and cannot drift.
   if (isReviewDebt(pullRequest)) {
-    return { label: reviewDebtSignalLabel, tone: "danger" };
+    return { label: reviewDebtSignalLabel, tone: "accent" };
   }
   if (activityAge >= 7 * dayMs) {
     return { label: "old first", tone: "warning" };
@@ -764,6 +764,15 @@ function prKey(pr) {
   return `${prHost(pr)}\n${pr.repository.toLowerCase()}#${pr.number}`;
 }
 
+function compareFirstReadiness(a, b) {
+  const timeOrder = Date.parse(a.firstReadyForReviewAt) - Date.parse(b.firstReadyForReviewAt);
+  if (timeOrder) return timeOrder;
+  // Ordinal host/repository order is independent of locale and fetch completion.
+  const aRepo = `${prHost(a)}\n${a.repository.toLowerCase()}`;
+  const bRepo = `${prHost(b)}\n${b.repository.toLowerCase()}`;
+  return (aRepo < bRepo ? -1 : aRepo > bRepo ? 1 : 0) || a.number - b.number;
+}
+
 export function computeFocusItems(buckets) {
   const blocked = new Set(
     buckets.filter((b) => disqualifyingFocusBucketLabels.has(b.label))
@@ -806,7 +815,8 @@ export function computeFocusItems(buckets) {
     .filter((i) => isWithinFocusAgeLimit(i.pullRequest, i.bucketLabel) || isReviewDebt(i.pullRequest))
     .filter((i) => !isCommunityPullRequest(i.pullRequest))
     .filter((i) => !isChecksFailing(i.pullRequest))
-    .sort((a, b) => new Date(b.pullRequest.updatedAt) - new Date(a.pullRequest.updatedAt));
+    .filter((i) => i.pullRequest.firstReadyForReviewAt !== null)
+    .sort((a, b) => compareFirstReadiness(a.pullRequest, b.pullRequest));
 }
 
 export function computeCommunityItems(prs) {
@@ -841,13 +851,14 @@ function focusExclusionReason(pr, bucketLabels) {
   if (isCommunityPullRequest(pr) && !isAgedOutCommunityPullRequest(pr)) return { kind: "community-list", label: "Community list", detail: "Active external-contributor PRs show in the Community list.", tone: "accent" };
   const specialized = bucketLabels.find((l) => specializedFocusBucketLabels.has(l));
   if (specialized) return { kind: "specialized-lane", label: `${specialized} lane`, detail: `Routed to the ${specialized} lane instead of Needs attention.`, tone: "accent" };
+  if (pr.firstReadyForReviewAt === null) return { kind: "readiness-unavailable", label: "Readiness unavailable", detail: "First-readiness history could not be loaded. Refresh to retry.", tone: "warning" };
   const candidate = [...bucketLabels].filter((l) => !excludedFocusBucketLabels.has(l)).sort((a, b) => focusBucketRank(a) - focusBucketRank(b))[0] ?? null;
   if (candidate && !isWithinFocusAgeLimit(pr, candidate)) return { kind: "stale-activity", label: "Stale activity", detail: "Its actionable lane has not had fresh activity in 14 days.", tone: "warning" };
   if (bucketLabels.includes("Stalled")) return { kind: "stalled-only", label: "Stalled only", detail: "It has gone quiet with no fresher actionable lane.", tone: "warning" };
   return { kind: "outside-queue", label: "Outside queue", detail: "It does not currently match a focused, actionable lane.", tone: "muted" };
 }
 function exReasonRank(kind) {
-  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
+  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "readiness-unavailable", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
 }
 
 // A PR with requested changes is waiting on its author, not the focused queue. Once the
@@ -1090,7 +1101,7 @@ export function createIssueSignals(issue) {
   }
 
   for (const label of (issue.labels || []).slice(0, 2)) {
-    signals.push({ label, tone: "accent" });
+    signals.push({ label, tone: "accent", kind: "repo-label" });
   }
 
   if (isBotAuthor(issue.author, issue.authorType)) {
