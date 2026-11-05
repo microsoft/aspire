@@ -479,7 +479,7 @@ public sealed class AnalyzeCiFailureRuleTests
             analysis,
             [Cause("cause", type, "", ["1"])]));
 
-        Assert.Equal("Every transient, flaky, and main-breakage failed job must be covered by a matching cause", error.Message);
+        Assert.Equal("Every transient, flaky, main-breakage and unresolved failed job must be covered by a matching cause", error.Message);
     }
 
     [Fact]

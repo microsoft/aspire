@@ -87,8 +87,9 @@ internal sealed partial class AnalysisPublisher
                 previous is null ? null : GetValueText(previous["id"]),
                 OverflowIssueRenderer.Merge(Text(previous?["body"]), pageMarker, content)));
         }
+        var records = analysis.Report.Verdict == AnalysisVerdict.Unresolved ? "failure records" : "independent causes";
         return new(existing, body, continuations,
-            $"[CI Failure] {causes.Count.ToString(CultureInfo.InvariantCulture)} independent causes in run {runId}");
+            $"[CI Failure] {causes.Count.ToString(CultureInfo.InvariantCulture)} {records} in run {runId}");
 
         IEnumerable<string> Rows()
         {
@@ -99,6 +100,18 @@ internal sealed partial class AnalysisPublisher
                 yield return $"### {id}: {title}\n\n- Type: {EnumText(item.Cause.Type)}\n";
                 var diagnostic = DiagnosticTextSanitizer.Sanitize(Text(item.History["error_pattern"]) ?? "", limit: 500);
                 yield return "- Diagnostic: " + MarkdownFormatting.CodeSpan(diagnostic) + "\n";
+                if (item.Cause.Type == CauseType.Unresolved)
+                {
+                    yield return "- Unresolved: recurring symptoms, not an established mechanism or causal test.\n";
+                    var occurrence = ((JsonArray)item.History["occurrences"]!).First(value =>
+                        ReadNormalizedNumber(Field(value, "run_id")) == NormalizedJsonNumber.Parse(runId));
+                    foreach (var test in (Field(occurrence, "tests") as JsonArray ?? []).OfType<JsonObject>())
+                    {
+                        yield return "- Observed failed test (not causal attribution): " +
+                            MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(Text(test["name"]) ?? "", limit: 500)) +
+                            "; error: " + MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(Text(test["error"]) ?? "", limit: 1000)) + "\n";
+                    }
+                }
                 var issueUrl = Text(item.History["issue_url"]);
                 if (issueUrl is not null && System.Text.RegularExpressions.Regex.IsMatch(
                     issueUrl, "^" + System.Text.RegularExpressions.Regex.Escape($"https://github.com/{_repository}/issues/") + @"[1-9][0-9]*\z"))

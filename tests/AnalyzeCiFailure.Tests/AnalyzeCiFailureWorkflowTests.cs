@@ -2103,7 +2103,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
-            "::error::Every transient, flaky, and main-breakage failed job must be covered by a matching cause",
+            "::error::Every transient, flaky, main-breakage and unresolved failed job must be covered by a matching cause",
             result.Output,
             StringComparison.Ordinal);
     }
@@ -2263,7 +2263,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
         var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
         await File.WriteAllTextAsync(
             causePath,
-            """{"id":"main-build-break","type":"main-repository-breakage","title":"PR #19999 broke main","error_pattern":"Introduced by PR #19999; revert it"}""");
+            """{"id":"main-build-break","type":"main-repository-breakage","title":"Test host crash while starting resources","error_pattern":"Test host exited with exit code 3; token=private-value"}""");
         await File.WriteAllTextAsync(runContextPath, """{"head_sha":"trusted-failure"}""");
         await File.WriteAllTextAsync(lastSuccessfulRunPath, """{"head_sha":"trusted-success"}""");
         await File.WriteAllTextAsync(
@@ -2308,11 +2308,11 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
+                Test host exited with exit code 3; token=[REDACTED]
 
             ## Description
 
-            ` Main branch CI failure at trusted-failure `
+            ` Test host crash while starting resources `
 
             **Type**: main-repository-breakage
 
@@ -2344,7 +2344,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
         var metadataPath = Path.Combine(_workspace.Path, "issue-metadata.json");
         await File.WriteAllTextAsync(
             causePath,
-            """{"id":"main-build-break","type":"main-repository-breakage","title":"PR #19999 broke main","error_pattern":"Introduced by PR #19999; revert it"}""");
+            """{"id":"main-build-break","type":"main-repository-breakage","title":"Test host crash while starting resources","error_pattern":"Test host exited with exit code 3; token=private-value"}""");
         await File.WriteAllTextAsync(runContextPath, """{"head_sha":"trusted-failure"}""");
         await File.WriteAllTextAsync(lastSuccessfulRunPath, """{"head_sha":"trusted-success"}""");
         await File.WriteAllTextAsync(
@@ -2388,11 +2388,11 @@ public sealed partial class AnalyzeCiFailureWorkflowTests(ITestOutputHelper outp
 
             ## Error Message
 
-                The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics.
+                Test host exited with exit code 3; token=[REDACTED]
 
             ## Description
 
-            ` Main branch CI failure at trusted-failure `
+            ` Test host crash while starting resources `
 
             **Type**: main-repository-breakage
 

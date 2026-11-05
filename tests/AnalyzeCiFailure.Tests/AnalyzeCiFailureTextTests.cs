@@ -63,6 +63,20 @@ public sealed class AnalyzeCiFailureTextTests
         Assert.True(focused.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length <= 150);
     }
 
+    [Fact]
+    public async Task FocusedLogsRetainAbortedSessionCompletenessWarningBeyondGenericNoise()
+    {
+        const string warning = "Test session was aborted; recovered 8928 test result(s) from the TRX streaming sidecar (additional results that were in flight at termination time may be missing).";
+        var noise = string.Join('\n', Enumerable.Range(1, 200).Select(index => $"ordinary failed operation {index}"));
+        var log = $"{noise}\n{warning}\nTest host exited with exit code 3.\n##[error]Process completed with exit code 1.\n";
+
+        var focused = AnalyzeCiFailure.WorkflowRunEvidenceCollector.FocusLogs(log);
+
+        Assert.Contains(warning, focused, StringComparison.Ordinal);
+        Assert.True(focused.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length <= 150);
+        await VerifyXunit.Verifier.Verify(focused, "log").UseDirectory("Snapshots");
+    }
+
     [Theory]
     [InlineData("AssertionError [ERR_ASSERTION]: web entered FailedToStart")]
     [InlineData("AssertionError: web entered FailedToStart")]

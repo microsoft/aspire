@@ -278,8 +278,11 @@ safe-outputs:
       name: "Rerun failed CI jobs"
       description: |
         Reruns failed CI jobs only for pure transient infrastructure failures.
-        Emit exactly one rerun_failed_jobs item with run_id and reason. Include
-        pr_numbers only when present in trusted context.
+        Call rerun_failed_jobs at most once, only when ENABLE_RERUN is 'true',
+        every failed job is positively diagnosed as transient infrastructure,
+        and there are no structured failed-test observations. Otherwise do not
+        call this tool, including when ENABLE_RERUN is 'false' or unset.
+        Supply run_id and reason; include pr_numbers only from trusted context.
       runs-on: ubuntu-latest
       needs: [safe_outputs]
       if: needs.detection.result == 'success' && needs.detection.outputs.detection_success == 'true' && needs.safe_outputs.result == 'success'
@@ -376,24 +379,25 @@ The summary groups exact diagnostic records and lists every member ref to make s
 
 ## Classification rules
 
-- **`transient-infra`**: infrastructure outside the author's control. Examples include network/DNS/SSL failures, HTTP 5xx prerequisite downloads, registry rate limits, runner failures, NuGet feed failures, Git transport errors, and Windows process initialization errors (`0xC0000142`, `-1073741502`). Consult `eng/test-retry-patterns.json` through the prepared evidence.
+- **`transient-infra`**: a positively identified infrastructure mechanism outside the author's control. Examples include concrete network/DNS/SSL errors, HTTP 5xx prerequisite downloads, registry/feed HTTP 429 responses, confirmed runner loss, Git transport errors, and Windows process initialization errors (`0xC0000142`, `-1073741502`). Cite the current diagnostic establishing the mechanism; merely observing no failed tests or no deterministic failure is not positive infrastructure evidence. Consult `eng/test-retry-patterns.json` through the prepared evidence.
 - **`flaky-test`**: a test actually ran and failed, with independent transient/timing/environmental evidence in current trusted structured diagnostics. For PR scope, unchanged files are an indicator, not proof. Main scope also requires independent transient evidence. Missing logs, skipped tests, a matching job name, or an exit code do not establish flakiness.
 - **`code-issue`**: deterministic PR-caused compilation, test, API compatibility, lint, or formatting failure. This classification is valid only for pull-request scope. Link the diagnostic to changed code.
 - **`main-repository-breakage`**: deterministic compilation, test, API compatibility, lint, formatting, or semantic merge failure on main. It is not infrastructure merely because it is unrelated to the triggering merge.
+- **`unresolved`**: the available evidence establishes a failure but not its mechanism. An unexplained test-host exit 3, an aborted session with incomplete in-flight results, or the absence of observed failed tests does not establish infrastructure, flakiness, or deterministic breakage. Preserve those symptoms and uncertainty. A still-running test is not a failed or causal test. Do not select a known cause merely to fill the classification.
 
 For main, investigate every candidate merge since the last successful main run. Name a causal PR only when current diagnostics and changed code provide direct evidence and candidate history is a complete `ahead` comparison. Identical, behind, diverged, malformed, or incomplete comparisons are non-attributable: do not name any PR as causal, including the triggering merge.
 
-Use overall verdict `transient-infra` when every job and test observation is infrastructure-caused; `flaky-test` when failures are all transient and at least one is flaky; `code-issue` when all failures are PR-caused; `main-repository-breakage` when all are deterministic main failures; otherwise `mixed`. Reruns additionally require zero structured failed-test observations.
+Validation derives verdict `unresolved` whenever any job or test is unresolved, including alongside diagnosed failures. Otherwise use `transient-infra` when every job and test observation is infrastructure-caused; `flaky-test` when failures are all transient and at least one is flaky; `code-issue` when all failures are PR-caused; `main-repository-breakage` when all are deterministic main failures; otherwise `mixed`. Unresolved failures never authorize reruns.
 
 A single job can contain a deterministic failure and a flaky test. Classify the job by the deterministic failure, include the flaky observation and cause, and use `mixed` so neither is omitted.
 
 ## Match prior causes by mechanism
 
-For tracked failures (`flaky-test`, `infra-failure`, `main-repository-breakage`), inspect relevant full prior records. Retrieval hints do not establish identity or exclude other records.
+For tracked failures (`flaky-test`, `infra-failure`, `main-repository-breakage`, `unresolved`), inspect relevant full prior records. Retrieval hints do not establish identity or exclude other records.
 
 Reuse an existing cause ID only when category, failing phase, and current diagnostic agree. A shared method, job, or shard name does not establish a shared mechanism. One mechanism can cover several tests; one method can have different causes. A skipped test cannot match an earlier test assertion.
 
-When a mechanism matches a stored cause, use the `existing` cause variant with its `id`. Its type and stored descriptive fields are publisher-owned. Scalar `test_name` in history is opaque legacy descriptive metadata. Do not track PR code issues as recurring causes.
+When a mechanism matches a stored cause, use the `existing` cause variant with its `id`. An unresolved record groups observed symptoms, not an established mechanism; reuse it only for matching failing phase and symptoms, never as proof of infrastructure or test causality. Its type and stored descriptive fields are publisher-owned. Do not relabel old records or reuse an infrastructure ID for a newly unresolved failure. Scalar `test_name` in history is opaque legacy descriptive metadata. Do not track PR code issues as recurring causes.
 
 ## Write the decision-only proposal
 
@@ -427,7 +431,7 @@ Always write only `/tmp/gh-aw/agent/proposal.json`:
 
 - Copy only the repository/run/attempt identity, job IDs and test refs from the bundle. Attempts are positive integers; IDs are canonical decimal strings.
 - Include every trusted job and structured test ref exactly once, with no omissions, additions or duplicates. Multiple executions stay separate even when names and diagnostics agree.
-- Test classifications are `flaky`, `code-issue` or `transient-infra`; job classifications follow the rules above. Preserve infrastructure-caused fixture failures as test observations rather than omitting them or labelling them flaky. Each infrastructure test must belong to an infrastructure job covered by an infrastructure cause; that job-level cause covers its observations without test refs. Reasons are single-line, at most 500 characters.
+- Test classifications are `flaky`, `code-issue`, `transient-infra` or `unresolved`; job classifications follow the rules above. Preserve every observed failure. Each infrastructure or unresolved test must belong to a job of the same classification covered by a matching job-level cause, without test refs. Reasons are single-line, at most 500 characters.
 - Do not repeat names, diagnostics, PR/scope/URL metadata, timestamps, overall verdict or redundant cause IDs. Validation derives the verdict and binds all collected facts without changing the proposal.
 - Include every distinct supported mechanism in `causes`, even above ten. The publisher uses individual cause issues through ten mechanisms and one aggregate run-level issue above ten. Use `[]` for PR deterministic-only failures. Cover every tracked job and flaky ref with compatible causes; overlapping compatible coverage is allowed.
 
@@ -451,19 +455,20 @@ Use this alternative inline in the proposal `causes` array (not a separate file)
 ```
 
 - `id` is a lowercase hyphenated slug absent from the collected catalogue. Existing and new are distinct variants; never mix their fields.
-- `type` is `flaky-test`, `infra-failure`, or `main-repository-breakage`. Never create a PR code-issue cause.
+- `type` is `flaky-test`, `infra-failure`, `main-repository-breakage`, or `unresolved`. Never create a PR code-issue cause.
 - `title` is a single-line description of at most 238 characters.
-- Flaky causes reference the exact bundle-local `test_refs` classified flaky, sharing the same mechanism. Each referenced test belongs to a claimed job, and every claimed job contains a referenced observation. Infrastructure/main causes use an empty `test_refs` array.
+- Flaky causes reference the exact bundle-local `test_refs` classified flaky, sharing the same mechanism. Each referenced test belongs to a claimed job, and every claimed job contains a referenced observation. Infrastructure/main/unresolved causes use an empty `test_refs` array.
 - `error_pattern` is the actual diagnostic, up to 500 characters, optionally LF-delimited. Do not include styling/unsafe controls.
-- `job_ids` is a nonempty array of unique trusted string IDs, never names. Infrastructure/main causes require compatible classifications.
+- `job_ids` is a nonempty array of unique trusted string IDs, never names. Infrastructure/main/unresolved causes require compatible classifications.
+- Describe observable symptoms/errors in the title and error pattern, not an unproved causal PR, causal test, or instruction to revert. Unresolved records must explicitly preserve uncertainty.
 - Do not include `occurrences`, issue links or other publisher-owned fields. No transient refs, all-source lists or artifact IDs enter durable history.
 
 Do not merge distinct mechanisms or omit observations to reduce issue count. A single compatible cause may cover several tests.
 
 ## Request effects
 
-Always emit exactly one `publish-data` safe output with `run_id`, including code-issue verdicts and closed/locked PRs. Include `pr_numbers` only when trusted context contains a subject PR; omit it for main runs rather than sending an empty string. Code issues produce a PR report but no recurring history. Main reports use cause issues, not PR comments. Main issue titles and public diagnostics derive from trusted context, not agent attribution.
+Always call `publish_data` exactly once with `run_id`, including unresolved/code-issue verdicts and closed/locked PRs. Include `pr_numbers` only when trusted context contains a subject PR; omit it for main runs rather than sending an empty string. Code issues produce a PR report but no recurring history. Main reports use cause issues, not PR comments. Main issue titles and commit context derive from trusted context; quoted sanitized symptoms and error patterns remain visible without causal attribution.
 
-Only emit `rerun-failed-jobs` for pure `transient-infra`, with no failed tests, and only when `ENABLE_RERUN` is `'true'`. Otherwise do not request a rerun. Publication and rerun authorization recheck open/unlocked PR state immediately before PR-directed effects.
+Only call `rerun_failed_jobs` for pure `transient-infra`, with no failed tests, and only when `ENABLE_RERUN` is `'true'`. Otherwise do not call it, including for unresolved failures and disabled reruns. Publication and rerun authorization recheck open/unlocked PR state immediately before PR-directed effects.
 
 Do not call GitHub MCP/API tools or post comments directly. All needed evidence is already prepared; deterministic validation, history, issue updates, and PR comments belong to the application.

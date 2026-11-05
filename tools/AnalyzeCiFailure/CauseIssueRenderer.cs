@@ -41,15 +41,12 @@ internal static partial class CauseIssueRenderer
         var id = Text(cause["id"])!;
         var type = Text(cause["type"])!;
         var main = type == "main-repository-breakage";
+        var mainContext = main || type == "unresolved" && scope == "main";
         var title = DiagnosticTextSanitizer.Sanitize(Text(cause["title"]) ?? "", limit: 238);
         var test = DiagnosticTextSanitizer.Sanitize(Text(cause["test_name"]) ?? "", limit: 500);
         if (string.IsNullOrWhiteSpace(title))
         {
             title = id;
-        }
-        if (main)
-        {
-            title = "Main branch CI failure at " + (AsString(context?.HeadSha) ?? "unknown");
         }
         var total = cause.ContainsKey("occurrences") ? (cause["occurrences"] as JsonArray)?.Count ?? 0 : 1;
         if (!(total > 0))
@@ -57,7 +54,7 @@ internal static partial class CauseIssueRenderer
             throw new ValidationException("invalid stored occurrence history");
         }
         var buildContext = new StringBuilder();
-        if (main)
+        if (mainContext)
         {
             buildContext.Append("Affected branch: `main`\n")
                 .Append("Last successful main SHA: `").Append(AsString(evidence.LastSuccess?.HeadSha) ?? "unknown").Append("`\n")
@@ -77,14 +74,16 @@ internal static partial class CauseIssueRenderer
         {
             buildContext.Append("Pull request: #").Append(pr).Append('\n');
         }
+        if (type == "unresolved")
+        {
+            buildContext.Append("Diagnosis status: unresolved. This record tracks recurring symptoms, not an established mechanism or causal test.\n");
+        }
         var error = Text(cause["error_pattern"]) ?? "";
         if (string.IsNullOrWhiteSpace(error))
         {
             error = "No diagnostic pattern recorded.";
         }
-        error = main
-            ? "The main branch CI run failed. See the linked workflow run and trusted commit context above for diagnostics."
-            : DiagnosticTextSanitizer.Sanitize(error, limit: 500, multiline: true);
+        error = DiagnosticTextSanitizer.Sanitize(error, limit: 500, multiline: true);
         var body = MarkdownTemplate.Render(
             "CauseIssue",
             ("CAUSE_ID", id),
@@ -94,7 +93,10 @@ internal static partial class CauseIssueRenderer
             ("ERROR", MarkdownFormatting.Indent(error)),
             ("DESCRIPTION", MarkdownFormatting.CodeSpan(title)),
             ("OCCURRENCES", OccurrenceSection([row], total).TrimEnd('\n')));
-        var issueTitle = (main ? "[Main CI Failure] " : "[CI Failure] ") + title;
+        // Commit identity stays trusted; the quoted diagnosis is not PR attribution.
+        var issueTitle = main ? "[Main CI Failure] Main branch CI failure at " + (AsString(context?.HeadSha) ?? "unknown")
+            : mainContext ? "[CI Failure] Unresolved main CI failure at " + (AsString(context?.HeadSha) ?? "unknown")
+            : "[CI Failure] " + title;
         if (!(issueTitle.EnumerateRunes().Count() <= 256))
         {
             throw new ValidationException("IssueDraft title exceeds GitHub's 256-character limit");
@@ -158,12 +160,15 @@ internal static partial class CauseIssueRenderer
     {
         // All issue-body byte fitting happens here. Only publisher-owned tests and
         // earlier occurrence rows can be omitted; operator notes and the latest row stay.
+        var unresolved = Markers(body, "<!-- ci-failure-cause-type:unresolved -->").Count == 1;
         var rows = observations.Select(t =>
         {
             var row = $"- {MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(Text(t["name"])!, limit: 500))} — job {GetValueText(t["job_id"])} ({MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(Text(t["job"])!, limit: 500))})";
-            if (Text(t["observation_id"]) is { } observation)
+            var observation = Text(t["observation_id"]);
+            if (observation is not null || unresolved)
             {
-                row += $" — {MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(observation, limit: 100))}, result {MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(Text(t["result_file"]) ?? "", limit: 500))}";
+                row += " — " + (observation is not null ? MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(observation, limit: 100)) + ", " : "") +
+                    $"result {MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(Text(t["result_file"]) ?? "", limit: 500))}";
                 if (Text(t["execution_id"]) is { } execution)
                 {
                     row += $", execution {MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(execution, limit: 500))}";

@@ -70,7 +70,7 @@ internal sealed partial class AnalysisValidator
             var test = collectedTests[index];
             if (!Enum.IsDefined(decision.Classification))
             {
-                throw new ValidationException("Test classification must be 'flaky', 'code-issue' or 'transient-infra'.");
+                throw new ValidationException("Test classification must be 'flaky', 'code-issue', 'transient-infra' or 'unresolved'.");
             }
 
             return new AnalysisTest
@@ -231,7 +231,7 @@ internal sealed partial class AnalysisValidator
         }
         if (type != CauseType.FlakyTest && proposal.TestRefs.Length > 0)
         {
-            throw new ValidationException("Infrastructure and main-breakage causes must not reference tests.");
+            throw new ValidationException("Infrastructure, main-breakage and unresolved causes must not reference tests.");
         }
         var references = proposal.TestRefs.Select(reference =>
         {
