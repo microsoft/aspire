@@ -17,6 +17,64 @@ namespace Aspire.Cli.Tests.Interaction;
 
 public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PromptForStringAsync_Secret_UsesMaskedPrompt(bool hasSecretPromptsCapability, bool required)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = new TestAnsiConsoleWithInput(
+            AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.No,
+                ColorSystem = ColorSystemSupport.NoColors,
+                Interactive = InteractionSupport.Yes,
+                Out = new AnsiConsoleOutput(new StringWriter(output))
+            }),
+            new StringReader("y\n"));
+        var consoleInteractionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console, TextReader.Null),
+            workspace.CreateExecutionContext(),
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
+        var secretPromptCalls = 0;
+        var regularPromptCalls = 0;
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) =>
+            {
+                Assert.Equal(KnownCapabilities.SecretPrompts, capability);
+                return Task.FromResult(hasSecretPromptsCapability);
+            },
+            PromptForSecretStringAsyncCallback = (_, _, promptRequired) =>
+            {
+                secretPromptCalls++;
+                Assert.Equal(required, promptRequired);
+                return Task.FromResult("y");
+            },
+            PromptForStringAsyncCallback = (_, _, _, _) =>
+            {
+                regularPromptCalls++;
+                return Task.FromResult("unmasked");
+            }
+        };
+        using var interactionService = new ExtensionInteractionService(
+            consoleInteractionService, backchannel, extensionPromptEnabled: true,
+            NullLogger<ExtensionInteractionService>.Instance);
+
+        var result = await interactionService.PromptForStringAsync("Secret:", isSecret: true, required: required).DefaultTimeout();
+
+        Assert.Equal("y", result);
+        Assert.Equal(0, regularPromptCalls);
+        Assert.Equal(hasSecretPromptsCapability ? 1 : 0, secretPromptCalls);
+        Assert.Equal(hasSecretPromptsCapability ? "" : $"Secret: *{Environment.NewLine}", output.ToString());
+    }
+
     [Fact]
     public async Task DisplaySourceTrustWarning_NotifiesExtensionOnlyOnce()
     {
