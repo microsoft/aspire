@@ -2323,7 +2323,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task OnAllResourcesClickAsync()
     {
-        var reopenCurrentContent = IsAllSelected;
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var path = NavigationManager.ToBaseRelativePath(uri.GetLeftPart(UriPartial.Path));
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        // A direct detail link can also have no resource selection. Preserve the URL only
+        // for top-level tab content, not a trace detail or a meter/instrument view.
+        var reopenCurrentContent = IsAllSelected &&
+            string.Equals(path.TrimEnd('/'), GetTabUrl(CurrentTab, []).TrimStart('/'), StringComparisons.UrlPath) &&
+            (CurrentTab != ResourceTab.Metrics || query["meter"] is null && query["instrument"] is null);
         _selectionAnchor = null;
 
         // Remember the cleared selection so entering the overview later doesn't select a resource again.

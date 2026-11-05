@@ -154,6 +154,35 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
         });
     }
 
+    [Theory]
+    [InlineData("/traces/detail/missing", "/traces", 390)]
+    [InlineData("/traces/detail/missing", "/traces", 1440)]
+    [InlineData("/metrics?meter=Test&duration=30", "/metrics", 390)]
+    [InlineData("/metrics?meter=Test&duration=30", "/metrics", 1440)]
+    [InlineData("/metrics?meter=Test&instrument=Requests&duration=30", "/metrics", 390)]
+    [InlineData("/metrics?meter=Test&instrument=Requests&duration=30", "/metrics", 1440)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task SelectAll_FromUnscopedDetailNavigatesToTab(string url, string expectedDestination, int width)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, 844);
+            await page.GotoAsync(url);
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+            if (width <= 768)
+            {
+                await page.Locator(".resource-picker").ClickAsync();
+            }
+
+            await page.Locator(".resource-select-all-toggle").ClickAsync();
+
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(expectedDestination) + "$"));
+            await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".pane-full-canvas,.drawer-open")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        });
+    }
+
     public sealed class NavigationResourcesFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel>? Resources =>

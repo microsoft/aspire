@@ -238,14 +238,22 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("/resources")]
-    [InlineData("/resources/api")]
-    [InlineData("/consolelogs")]
-    [InlineData("/structuredlogs")]
-    [InlineData("/traces")]
-    [InlineData("/traces/detail/missing")]
-    [InlineData("/metrics")]
-    public async Task ResourceDropdown_OpensAndClosesDrawerWithoutPageCloseButton(string url)
+    [InlineData("/resources", "/resources")]
+    [InlineData("/resources/api", "/resources")]
+    [InlineData("/consolelogs", "/consolelogs")]
+    [InlineData("/structuredlogs", "/structuredlogs")]
+    [InlineData("/traces", "/traces")]
+    [InlineData("/traces/detail/missing", "/traces")]
+    [InlineData("/Traces/Detail/missing", "/traces")]
+    [InlineData("/metrics", "/metrics")]
+    [InlineData("/metrics?meter=Test&duration=30", "/metrics")]
+    [InlineData("/metrics?meter=Test&instrument=Requests&duration=30", "/metrics")]
+    [InlineData("/metrics/resource/api/meter/Test", "/metrics")]
+    [InlineData("/metrics/resource/api/meter/Test/instrument/Requests", "/metrics")]
+    [InlineData("/traces?type=server", "/traces?type=server")]
+    [InlineData("/structuredlogs?logLevel=Error", "/structuredlogs?logLevel=Error")]
+    [InlineData("/metrics?duration=30", "/metrics?duration=30")]
+    public async Task ResourceDropdown_OpensAndClosesDrawerWithoutPageCloseButton(string url, string expectedDestination)
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
@@ -271,6 +279,7 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         await cut.Find(".resource-picker").ClickAsync();
         await cut.Find(".resource-select-all-toggle").ClickAsync();
         cut.Render();
+        Assert.Equal(expectedDestination.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Empty(cut.Instance.SelectedResourceNames);
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
