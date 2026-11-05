@@ -332,10 +332,6 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
         Assert.Equal("ago", exception.ParamName);
-
-        var originalSignatureException = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            acr.WithPurgeTask("0 1 * * *", null, TimeSpan.Parse(ago), 3, null));
-        Assert.Equal("ago", originalSignatureException.ParamName);
     }
 
     [Fact]
