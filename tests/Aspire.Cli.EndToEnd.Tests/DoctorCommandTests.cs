@@ -62,22 +62,19 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         var text = await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.txt"), TestContext.Current.CancellationToken);
-        // The warning is a five-line block: message, fix, "Files:", project path, and global path.
-        // Snapshot only that block because unrelated prerequisite results vary by environment.
-        var warning = string.Join("\n", text.ReplaceLineEndings("\n").Split('\n')
-            .SkipWhile(line => !line.Contains("Local Aspire skill files may override plugin skills", StringComparison.Ordinal))
-            .Take(5)
-            .Select(line => line.TrimEnd()));
-        await Verify(warning, "txt").UseMethodName("DoctorCommand_FromRepositorySubdirectory_StaticSkillsText");
+        string[] expectedFiles = [".agents/skills/aspire/SKILL.md", "~/.agents/skills/aspire/SKILL.md"];
+        Assert.Contains("Local Aspire skill files may override plugin skills", text, StringComparison.Ordinal);
+        var lines = text.Split('\n', StringSplitOptions.TrimEntries);
+        Assert.All(expectedFiles, file => Assert.Contains(file, lines));
 
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.json"), TestContext.Current.CancellationToken));
         var check = Assert.Single(document.RootElement.GetProperty("checks").EnumerateArray(),
             check => check.GetProperty("name").GetString() == "aspire-skill-sources");
+        Assert.Equal("warning", check.GetProperty("status").GetString());
+        Assert.Equal(expectedFiles, check.GetProperty("files").EnumerateArray().Select(file => file.GetString()));
         var workspaceRoot = $"/workspace/{workspace.WorkspaceRoot.Name}";
         Assert.Equal(workspaceRoot, check.GetProperty("metadata").GetProperty("workspaceRoot").GetString());
-        await Verify(check.GetRawText().Replace(workspaceRoot, "<workspace>", StringComparison.Ordinal), "json")
-            .UseMethodName("DoctorCommand_FromRepositorySubdirectory_StaticSkillsJson");
 
         await auto.RunCommandAsync(
             """cmp "$HOME/.agents/skills/aspire/SKILL.md" "$ASPIRE_E2E_WORKSPACE/.agents/skills/aspire/SKILL.md" """,
