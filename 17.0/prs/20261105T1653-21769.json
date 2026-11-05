@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Agent init warnings shown before skills picker",
+  "mergedAt": "2026-11-05T16:53:44Z",
+  "number": 21769,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "included",
+  "title": "Show agent init warnings during skills selection"
+}

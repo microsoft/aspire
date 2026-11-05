@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CLI secret set supports env var and interactive input",
+  "mergedAt": "2026-11-05T16:21:01Z",
+  "number": 20984,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "included",
+  "title": "Support environment and interactive input for CLI secrets"
+}

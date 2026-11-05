@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only flaky fix",
+  "mergedAt": "2026-11-05T16:15:40Z",
+  "number": 21450,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "excluded",
+  "title": "Build the CLI before MCP initialization in McpDocsE2ETests"
+}

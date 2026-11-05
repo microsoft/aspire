@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard feedback banner now shows a concise welcome to the new Aspire dashboard, with feedback actions and dismissal unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc4b",
+  "firstMergedAt": "2026-11-05T15:54:25Z",
+  "lastMergedAt": "2026-11-05T15:54:25Z",
+  "name": "Simpler dashboard welcome message",
+  "owner": "IEvangelist",
+  "prs": [
+    21767
+  ]
+}

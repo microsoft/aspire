@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-05T17:08:30Z",
+  "number": 21422,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "excluded",
+  "title": "[automated] test(cli): Find Radius MongoDB pods in their application namespace"
+}

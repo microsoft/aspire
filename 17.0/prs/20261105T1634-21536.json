@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Azure prepare ordering fix",
+  "mergedAt": "2026-11-05T16:34:19Z",
+  "number": 21536,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "included",
+  "title": "Order Azure resource preparation after compute environment validation"
+}

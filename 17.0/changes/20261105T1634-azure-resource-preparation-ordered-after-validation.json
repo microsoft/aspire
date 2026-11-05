@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Azure resource preparation now runs after compute environment validation, fixing intermittent \"Collection was modified\" failures during deployment and making invalid models fail fast.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf5",
+  "firstMergedAt": "2026-11-05T16:34:19Z",
+  "lastMergedAt": "2026-11-05T16:34:19Z",
+  "name": "Azure preparation ordered after compute validation",
+  "owner": "davidfowl",
+  "prs": [
+    21536
+  ]
+}

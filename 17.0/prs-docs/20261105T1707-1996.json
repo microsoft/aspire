@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-05T17:07:21Z",
+  "number": 1996,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document Kubernetes CPU and memory requests and limits"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal build pipeline retry",
+  "mergedAt": "2026-11-05T17:38:09Z",
+  "number": 21768,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "excluded",
+  "title": "fix intermittent internal build failures"
+}

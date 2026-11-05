@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI-only change",
+  "mergedAt": "2026-11-05T16:28:02Z",
+  "number": 21790,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "excluded",
+  "title": "ci: catch playground compile failures in the package build"
+}

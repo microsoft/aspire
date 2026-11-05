@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Blazor gateway browser origin fix (grouped)",
+  "mergedAt": "2026-11-05T15:58:50Z",
+  "number": 21802,
+  "runDate": "2026-11-05T18:10:00Z",
+  "status": "included",
+  "title": "Resolve Blazor gateway browser origin on the local container network"
+}
