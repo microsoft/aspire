@@ -187,6 +187,27 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('shows Go builder and resource lenses and running gutter state', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.go');
+        const harness = createHarness({
+            appHosts: [{ ...makeAppHost(appHostPath), resources: [makeResource('cache')] }],
+        });
+        const doc = createMockDocument('func main() {\n builder, err := aspire.CreateBuilder()\n cache := builder.AddRedis("cache")\n}', appHostPath);
+        const gutter = new AspireGutterDecorationProvider(harness.treeProvider);
+        try {
+            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensOpenDashboard'));
+            assert.ok(lenses.some(lens => lens.range.start.line === 2));
+            const editor = createMockEditor(doc);
+            await applyGutterDecorations(gutter, editor.editor);
+            assert.deepStrictEqual(getCurrentDecoratedLines(editor.decorationState), [2]);
+        }
+        finally {
+            gutter.dispose();
+            harness.dispose();
+        }
+    });
+
     test('emits builder lenses when .mts document matches a running global AppHost', async () => {
         const appHostPath = p('repo', 'AppHost', 'apphost.mts');
         const harness = createHarness({ appHosts: [makeAppHost(appHostPath)] });

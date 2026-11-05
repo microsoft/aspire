@@ -20,6 +20,7 @@ import * as cliPathModule from '../utils/cliPath';
 import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { __resetAppHostIdentityRegistryForTests } from '../utils/appHostIdentity';
+import { appHostDebuggerSetupRequired, debuggerSetupAction } from '../loc/strings';
 
 import { removeDirectorySafely } from './testHelpers';
 /** Captures the AppHost paths the provider claims for `launch.json`/F5 launches. */
@@ -178,6 +179,7 @@ suite('AspireDebugConfigurationProvider', () => {
         });
         tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
         isCsharpInstalledStub = sandbox.stub(capabilitiesModule, 'isCsharpInstalled').returns(true);
+        sandbox.stub(vscode.extensions, 'getExtension').returns({} as vscode.Extension<unknown>);
     });
 
     teardown(() => {
@@ -185,6 +187,48 @@ suite('AspireDebugConfigurationProvider', () => {
         __resetAppHostIdentityRegistryForTests();
         sandbox.restore();
         removeDirectorySafely(tempDir);
+    });
+
+    for (const [fileName, language, extensionIds] of [
+        ['apphost.go', 'Go', ['golang.go']],
+        ['apphost.rs', 'Rust', ['vadimcn.vscode-lldb']],
+        ['AppHost.java', 'Java', ['redhat.java', 'vscjava.vscode-java-debug']],
+    ] as const) {
+        test(`offers debugger setup instead of silently running ${fileName}`, async () => {
+            const appHostPath = path.join(tempDir, fileName);
+            fs.writeFileSync(appHostPath, '');
+            const getExtension = vscode.extensions.getExtension as sinon.SinonStub;
+            getExtension.returns(undefined);
+            const warning = sandbox.stub(vscode.window, 'showWarningMessage').resolves(debuggerSetupAction as never);
+            const execute = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+            const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+            const result = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                name: 'Debug AppHost', type: 'aspire', request: 'launch', program: appHostPath,
+            });
+
+            assert.strictEqual(result, undefined);
+            assert.deepStrictEqual(warning.firstCall.args, [appHostDebuggerSetupRequired(language), debuggerSetupAction]);
+            sinon.assert.calledWith(execute, 'aspire-vscode.installDebuggerExtension', {
+                debuggerName: language, debuggerType: language.toLowerCase(), extensionIds: [...extensionIds],
+            });
+            assert.deepStrictEqual(launchReservation.reserved, []);
+        });
+    }
+
+    test('preserves Run Without Debugging when Go debugger support is absent', async () => {
+        const appHostPath = path.join(tempDir, 'apphost.go');
+        fs.writeFileSync(appHostPath, '');
+        (vscode.extensions.getExtension as sinon.SinonStub).returns(undefined);
+        const warning = sandbox.stub(vscode.window, 'showWarningMessage').resolves();
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        const result = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Run AppHost', type: 'aspire', request: 'launch', program: appHostPath, noDebug: true,
+        });
+
+        assert.strictEqual(result?.program, appHostPath);
+        sinon.assert.notCalled(warning);
     });
 
     test('resolves launch config SDK-style AppHost Program.cs to containing project file', async () => {
