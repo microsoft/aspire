@@ -3,10 +3,9 @@ Aspire Environment Check
 ========================
 
 AppHost
-  🚨 Aspire skills: local static copies found
+  🚨 Local Aspire skill files may override plugin skills:
        Delete these files, then run 'aspire agent init --skills aspire'.
-       Details:
-       Local Aspire skill files may override plugin skills:
+       Files:
          .agents/skills/aspire/SKILL.md
          ~/.agents/skills/aspire/SKILL.md
 

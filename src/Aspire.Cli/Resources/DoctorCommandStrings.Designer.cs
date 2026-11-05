@@ -124,15 +124,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire skills: local static copies found.
-        /// </summary>
-        internal static string AspireSkillsMessage {
-            get {
-                return ResourceManager.GetString("AspireSkillsMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to  (channel: {0}).
         /// </summary>
         internal static string ChannelSuffixFormat {
@@ -1029,6 +1020,15 @@ namespace Aspire.Cli.Resources {
         internal static string EnvironmentCheckTimedOutMessageFormat {
             get {
                 return ResourceManager.GetString("EnvironmentCheckTimedOutMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Files:.
+        /// </summary>
+        internal static string FilesHeader {
+            get {
+                return ResourceManager.GetString("FilesHeader", resourceCulture);
             }
         }
 

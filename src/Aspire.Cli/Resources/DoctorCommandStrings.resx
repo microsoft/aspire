@@ -67,6 +67,9 @@
   <data name="EnvironmentCheckHeader" xml:space="preserve">
     <value>Aspire Environment Check</value>
   </data>
+  <data name="FilesHeader" xml:space="preserve">
+    <value>Files:</value>
+  </data>
   <data name="AspireCategoryHeader" xml:space="preserve">
     <value>Aspire</value>
   </data>
@@ -383,9 +386,6 @@ The legacy file continues to work — this is a non-blocking warning.</value>
   </data>
   <data name="PendingMigrationFix" xml:space="preserve">
     <value>Run 'aspire update --migrate' to apply the recommended migration.</value>
-  </data>
-  <data name="AspireSkillsMessage" xml:space="preserve">
-    <value>Aspire skills: local static copies found</value>
   </data>
   <data name="AspireSkillsFix" xml:space="preserve">
     <value>Delete these files, then run 'aspire agent init --skills aspire'.</value>

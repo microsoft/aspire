@@ -44,22 +44,20 @@ internal sealed class AspireSkillsCheck(
         if (local.Files.Count > 0)
         {
             var displayPaths = local.Files
-                .Select(path => $"  {AgentPath.GetDisplayPath(path, workspaceRoot, executionContext)}")
-                .Order(StringComparer.Ordinal);
+                .Select(path => AgentPath.GetDisplayPath(path, workspaceRoot, executionContext))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
             results.Add(new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.AppHost,
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
-                Message = DoctorCommandStrings.AspireSkillsMessage,
+                Message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict, string.Empty).TrimEnd(),
                 Fix = DoctorCommandStrings.AspireSkillsFix,
-                Details = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict, string.Empty).TrimEnd(),
-                HumanReadableDetails = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                    string.Join(Environment.NewLine, displayPaths)),
+                Files = displayPaths,
                 Metadata = new JsonObject
                 {
-                    ["workspaceRoot"] = workspaceRoot.FullName,
-                    ["skillFiles"] = new JsonArray(local.Files.Select(file => (JsonNode?)JsonValue.Create(file)).ToArray())
+                    ["workspaceRoot"] = workspaceRoot.FullName
                 }
             });
         }

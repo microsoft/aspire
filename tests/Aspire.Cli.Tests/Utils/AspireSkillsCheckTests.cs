@@ -31,7 +31,7 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
         var result = Assert.Single(await CreateCheck().CheckAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(EnvironmentCheckStatus.Warning, result.Status);
-        Assert.Equal(skill, Assert.Single(result.Metadata!["skillFiles"]!.AsArray())!.GetValue<string>());
+        Assert.Equal(["~/.agents/skills/aspire/SKILL.md"], result.Files);
         Assert.True(_context.Copilot.HasIntegrationRegistration(_context.Project, AgentConfigurationScope.Global, _context.Sources));
         Assert.Equal("user guidance", await File.ReadAllTextAsync(skill));
     }
@@ -46,9 +46,7 @@ public class AspireSkillsCheckTests(ITestOutputHelper outputHelper) : IDisposabl
 
         var result = Assert.Single(await CreateCheck().CheckAsync(TestContext.Current.CancellationToken));
 
-        Assert.Equal("Local Aspire skill files may override plugin skills:", result.Details);
-        Assert.Equal($"{result.Details}{Environment.NewLine}  {skill}", result.HumanReadableDetails);
-        Assert.Equal(skill, Assert.Single(result.Metadata!["skillFiles"]!.AsArray())!.GetValue<string>());
+        Assert.Equal([skill], result.Files);
     }
 
     [Theory]

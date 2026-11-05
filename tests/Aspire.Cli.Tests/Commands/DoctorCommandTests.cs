@@ -5,7 +5,6 @@ using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -61,14 +60,10 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             });
 
         var check = GetCheckByName(doc, AspireSkillsCheck.CheckName);
-        Assert.Equal("warning", check.GetProperty("status").GetString());
-        Assert.Equal(DoctorCommandStrings.AspireSkillsMessage, check.GetProperty("message").GetString());
-        Assert.Equal(DoctorCommandStrings.AspireSkillsFix, check.GetProperty("fix").GetString());
-        Assert.Equal("Local Aspire skill files may override plugin skills:", check.GetProperty("details").GetString());
-        Assert.Equal(context.Project.FullName, check.GetProperty("metadata").GetProperty("workspaceRoot").GetString());
-        Assert.Equal(skills, check.GetProperty("metadata").GetProperty("skillFiles").EnumerateArray().Select(file => file.GetString()));
-        Assert.Equal(["category", "name", "status", "message", "fix", "details", "metadata"],
-            check.EnumerateObject().Select(property => property.Name));
+        var workspacePath = JsonEncodedText.Encode(
+            context.Project.FullName, JsonSourceGenerationContext.RelaxedEscaping.Options.Encoder).ToString();
+        await Verify(check.GetRawText().Replace(workspacePath, "<workspace>", StringComparison.Ordinal), "json");
+
         foreach (var skill in skills)
         {
             Assert.Equal("static guidance", await File.ReadAllTextAsync(skill));

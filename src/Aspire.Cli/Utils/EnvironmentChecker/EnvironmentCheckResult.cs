@@ -97,10 +97,11 @@ internal sealed class EnvironmentCheckResult
     public string? Details { get; init; }
 
     /// <summary>
-    /// Gets an optional override for details rendered in human-readable output.
+    /// Gets optional file paths associated with the check.
     /// </summary>
-    [JsonIgnore]
-    public string? HumanReadableDetails { get; init; }
+    [JsonPropertyName("files")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Files { get; init; }
 
     /// <summary>
     /// Gets optional structured metadata for programmatic consumption.
