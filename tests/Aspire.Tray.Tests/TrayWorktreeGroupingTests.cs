@@ -2,12 +2,177 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Tray.Tests.Helpers;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Tray.Tests;
 
 public class TrayWorktreeGroupingTests
 {
     private static AppHostMenuItem Host(string path, int pid) => TrayPanelSamples.Running(path, pid) with { Checkout = TrayGitCheckout.Read(path) };
+
+    [Fact]
+    public void GitCanReplaceHeadWhileTheTrayReadsIt()
+    {
+        using var repo = new TrayWorktreeRepository();
+        repo.CreateHost("main", "main");
+        var head = Path.Combine(repo.CommonDirectory, "HEAD");
+        using var read = TrayGitCheckout.OpenMetadata(head);
+        File.WriteAllText(head + ".lock", "ref: refs/heads/feature/cart");
+        File.Replace(head + ".lock", head, null);
+        Assert.Equal("ref: refs/heads/feature/cart", File.ReadAllText(head));
+        using var reader = new StreamReader(read);
+        Assert.Equal("ref: refs/heads/main", reader.ReadToEnd());
+    }
+
+    [Fact]
+    public async Task SlowGitStorageDoesNotBlockUiPublicationOrShutdown()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var path = repo.CreateHost("main", "main");
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = new TestAppHostClient();
+        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, TimeProvider.System, hostPath =>
+        {
+            started.TrySetResult();
+            try
+            {
+                release.Task.GetAwaiter().GetResult();
+                return TrayGitCheckout.Read(hostPath);
+            }
+            finally
+            {
+                finished.TrySetResult();
+            }
+        });
+        Assert.False(started.Task.IsCompleted);
+        controller.Start();
+        var host = new AppHostInfo(path, 1, "https://localhost:1234/") { ProcessStartTimeUnixMilliseconds = 1001 };
+        client.Publish(new([host], DiscoveryState.Live));
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await Task.Run(() =>
+            {
+                Assert.Equal(host.DashboardUri, controller.GetDashboardUri(host.Id));
+                controller.RequestStop(host.Id);
+            }).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(host.Id, await client.NextStopAsync());
+            await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            release.TrySetResult();
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
+    public async Task GitCacheRefreshesBranchesWithoutRereadingOnUiActions()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var path = repo.CreateHost("main", "main");
+        var time = new FakeTimeProvider();
+        var reads = 0;
+        var client = new TestAppHostClient();
+        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time, hostPath =>
+        {
+            Interlocked.Increment(ref reads);
+            return TrayGitCheckout.Read(hostPath);
+        });
+        controller.Start();
+        var host = new AppHostInfo(path, 1, "https://localhost:1234/") { ProcessStartTimeUnixMilliseconds = 1001 };
+        client.Publish(new([host], DiscoveryState.Live));
+        await TestAppHostClient.WaitForStateAsync(controller, state => state.AppHosts.SingleOrDefault()?.Checkout?.Label == "main");
+        var initialReads = Volatile.Read(ref reads);
+        File.WriteAllText(Path.Combine(repo.CommonDirectory, "HEAD"), "ref: refs/heads/feature/cart");
+        controller.GetDashboardUri(host.Id);
+        controller.SetPinned(path, true);
+        Assert.Equal(initialReads, Volatile.Read(ref reads));
+        Assert.Equal("main", Assert.Single(controller.State.AppHosts).Checkout!.Label);
+        time.Advance(TrayController.CheckoutRefreshInterval);
+        await TestAppHostClient.WaitForStateAsync(controller, state => state.AppHosts.SingleOrDefault()?.Checkout?.Label == "feature/cart");
+        Assert.True(Volatile.Read(ref reads) > initialReads);
+    }
+
+    [Fact]
+    public async Task OfflineGitBranchesRefreshWithoutDiscoveryUpdates()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var path = repo.CreateHost("main", "main");
+        var time = new FakeTimeProvider();
+        var store = new TestTraySavedStateStore(new([new(path, false, true)]));
+        await using var controller = new TrayController(new TestAppHostClient(), store, 10, time);
+        controller.Start();
+        await TestAppHostClient.WaitForStateAsync(controller, state => state.RecentAppHosts.SingleOrDefault()?.Checkout?.Label == "main");
+        File.WriteAllText(Path.Combine(repo.CommonDirectory, "HEAD"), "ref: refs/heads/feature/cart");
+        time.Advance(TrayController.CheckoutRefreshInterval);
+        await TestAppHostClient.WaitForStateAsync(controller, state => state.RecentAppHosts.SingleOrDefault()?.Checkout?.Label == "feature/cart");
+    }
+
+    [Fact]
+    public void DiscoveryDoesNotUndoScrollingAwayFromAnOpenCard()
+    {
+        var state = TrayPanelSamples.Many();
+        var panel = new TrayPanel(state, TrayPanelPalette.Light) { MaxHeight = 250 };
+        var host = state.AppHosts[0];
+        panel.Invoke(new(PanelTargetKind.More, PanelSection.Running, host.Id));
+        var pin = new PanelTargetKey(PanelTargetKind.TogglePin, PanelSection.Running, host.Id);
+        panel.Focus(pin);
+        panel.Scroll(-10000);
+        var scroll = panel.ScrollOffset;
+        Assert.True(panel.Scene.Targets.Single(target => target.Key == pin).HitBounds.IsEmpty);
+        panel.Update(state with { Status = "Updated" });
+        Assert.Equal(scroll, panel.ScrollOffset);
+        Assert.True(panel.Scene.Targets.Single(target => target.Key == pin).HitBounds.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void RegroupingRevealsFocusedCardControlsInAConstrainedViewport(bool confirmation, bool deferred)
+    {
+        using var repo = new TrayWorktreeRepository();
+        var first = Host(repo.CreateHost("main", "main"), confirmation ? 0 : 1) with { IsRunning = !confirmation };
+        var second = Host(repo.CreateHost("cart", "cart"), confirmation ? 0 : 2) with { IsRunning = !confirmation };
+        TrayViewState State(params AppHostMenuItem[] hosts) => confirmation
+            ? new(DiscoveryState.Live, [], "") { RecentAppHosts = hosts }
+            : new(DiscoveryState.Live, hosts, "");
+        var panel = new TrayPanel(State(first), TrayPanelPalette.Light) { MaxHeight = 250 };
+        var section = confirmation ? PanelSection.Recent : PanelSection.Running;
+        if (confirmation)
+        {
+            panel.ConfirmRemoveMissing(first);
+        }
+        else
+        {
+            panel.Invoke(new(PanelTargetKind.More, section, first.Id));
+            panel.Focus(new(PanelTargetKind.TogglePin, section, first.Id));
+        }
+        var focused = panel.FocusedTarget!.Value;
+        var before = panel.Scene.Targets.Single(target => target.Key == focused);
+        Assert.True(panel.Viewport.Contains(before.Bounds));
+        if (deferred)
+        {
+            // Hold a non-acting row press while discovery inserts the application header.
+            var row = panel.Scene.Targets.FirstOrDefault(target => target.Kind == PanelTargetKind.Row && !target.HitBounds.IsEmpty)
+                ?? panel.Scene.Targets.Single(target => target.Key == focused);
+            panel.PointerDown(row.HitBounds.CenterX, row.HitBounds.CenterY);
+            Assert.False(panel.Update(State(first, second)));
+            panel.PointerUp(-1, -1);
+        }
+        else
+        {
+            Assert.True(panel.Update(State(first, second)));
+        }
+        var after = panel.Scene.Targets.Single(target => target.Key == focused);
+        Assert.Equal(focused, panel.FocusedTarget);
+        Assert.True(panel.Viewport.Contains(after.Bounds));
+        Assert.False(after.HitBounds.IsEmpty);
+    }
 
     [Theory]
     [InlineData("apphost.cs", "main")]
@@ -296,7 +461,8 @@ public class TrayWorktreeGroupingTests
         await using var controller = new TrayController(client, store);
         controller.Start();
         client.Publish(new([new(first, 1, null) { ProcessStartTimeUnixMilliseconds = 1001 }], DiscoveryState.Live));
-        await TestAppHostClient.WaitForStateAsync(controller, state => state.AppHosts.Count == 2);
+        await TestAppHostClient.WaitForStateAsync(controller, state => state.AppHosts.Count == 2
+            && state.AppHosts.All(host => host.Checkout is not null) && state.RecentAppHosts.All(host => host.Checkout is not null));
         Assert.Equal(["main", "feature/cart"], controller.State.AppHosts.Select(host => host.Checkout!.Label));
         Assert.Equal("experiment", Assert.Single(controller.State.RecentAppHosts).Checkout!.Label);
     }
