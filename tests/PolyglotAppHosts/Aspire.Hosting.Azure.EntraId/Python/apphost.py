@@ -20,6 +20,7 @@ with create_builder() as builder:
     executable = builder.add_executable("worker", "dotnet", ".", ["--info"])
     endpoint = container.get_endpoint("http")
     identity = builder.add_azure_user_assigned_identity("identity")
+    vault = builder.add_azure_key_vault("vault")
 
     # Existing registrations: configuration only, with literal or parameter IDs in any combination.
     existing_entra = builder.add_existing_entra_app("existing-entra", tenant_id, EXAMPLE_CLIENT)
@@ -37,6 +38,7 @@ with create_builder() as builder:
         },
     )
     existing_entra.with_certificate_from_key_vault("https://vault.vault.azure.net", "certificate")
+    existing_entra.with_certificate_from_key_vault(vault, "vault-certificate")
     existing_entra.with_certificate_thumbprint("CurrentUser/My", "thumbprint")
     existing_entra.with_certificate_distinguished_name("CurrentUser/My", "CN=certificate")
     existing_entra.with_certificate_from_file("/certs/client.pfx", password=certificate_password)
@@ -78,6 +80,7 @@ with create_builder() as builder:
     created_entra.with_redirect_uris(redirect_host, callback_paths=["/signin", "/signout"])
     created_entra.with_redirect_uris(endpoint, callback_paths=["/signin"])
     container.with_reference(created_entra)
+    created_entra.run_with_local_developer_certificate_credential()
     created_entra.publish_with_federated_managed_identity_credential()
     created_entra.publish_with_federated_managed_identity_credential(identity=container)
     created_entra.publish_with_federated_managed_identity_credential(identity=identity)

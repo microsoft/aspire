@@ -70,7 +70,7 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             : GlobalCatalogSettings();
         foreach (var path in settingsPaths)
         {
-            var config = AgentConfiguration.ReadObject(path, CancellationToken.None);
+            var config = AgentConfiguration.ReadObject(path);
             if (config is null)
             {
                 continue;
@@ -233,18 +233,18 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             : OpenCodePaths.GetGlobalMcpConfigPath(context, environment);
 
     public bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
     {
         // Inline settings can activate skills, but are not a writable registration target.
         if (environment.GetEnvironmentVariable(OpenCodePaths.ConfigContentEnvironmentVariable) is { Length: > 0 } inline &&
-            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(inline)))
+            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(inline), sources))
         {
             return true;
         }
 
         foreach (var path in scope is AgentConfigurationScope.Project ? CatalogSettings(workspaceRoot) : GlobalCatalogSettings())
         {
-            if (AgentConfiguration.ReadObject(path, cancellationToken) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config))
+            if (AgentConfiguration.ReadObject(path) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config, sources))
             {
                 return true;
             }
@@ -255,8 +255,12 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
 
     public async Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
     {
+        if (sources.Count == 0)
+        {
+            return;
+        }
         var configs = await AspireSkillsRemoteConfiguration.ReadSettingsAsync(
             scope is AgentConfigurationScope.Project ? CatalogSettings(workspaceRoot) : GlobalCatalogSettings(),
             GetIntegrationConfigPath(scope, workspaceRoot), edit, cancellationToken);
@@ -269,7 +273,7 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             }
         }
 
-        AspireSkillsRemoteConfiguration.ApplyOpenCodeCatalog(config, configs.Append(config));
+        AspireSkillsRemoteConfiguration.ApplyOpenCodeCatalog(config, configs.Append(config), sources);
     }
 
     private IEnumerable<string> CatalogSettings(DirectoryInfo workspaceRoot)

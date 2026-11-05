@@ -378,7 +378,9 @@ public class DotnetProgramArchiveTests(ITestOutputHelper output)
     {
         var assets = builder.AddContainer("assets", "assets-image")
             .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+#pragma warning disable CS0618 // Retain the legacy archive contract alongside shared .NET-program publishing coverage.
         return builder.AddProject("program", Path.Combine(workspacePath, "program.csproj"), static options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithAnnotation(new ContainerFilesDestinationAnnotation
             {
                 Source = assets.Resource,

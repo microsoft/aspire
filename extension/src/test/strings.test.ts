@@ -6,6 +6,14 @@ import { defaultConfigurationNameForWorkspaceFolder, launchingWithAppHost, launc
 import { collapseWhitespace, equalsOrdinalIgnoreCase, escapeCodicons, formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
+    test('uses a localized language-neutral .NET debugger display name', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        assert.strictEqual(locStrings.dotnetDisplayName('Worker.fsproj'), '.NET: Worker.fsproj');
+        assert.strictEqual(packageNls['aspire-vscode.strings.dotnetDisplayName'], '.NET: {0}');
+    });
+
     test('Node Functions inspector failure is present in runtime exports and localization catalogs', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;

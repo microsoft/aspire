@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -1867,8 +1868,12 @@ public class AtsJavaCodeGeneratorTests
         Assert.Equal("OK", run.StdOut.Trim());
     }
 
-    [Fact]
-    public async Task GeneratedReferenceExpression_CancellationIsRequestScoped()
+    [Theory]
+    [InlineData(250)]
+    // Client work before the first transport message exceeds the probe's former fixed 1-second wait, as a cold JVM
+    // on a busy CI agent can (https://github.com/microsoft/aspire/issues/20017).
+    [InlineData(1100)]
+    public async Task GeneratedReferenceExpression_CancellationIsRequestScoped(int onCancelDelayMs)
     {
         using var workspace = await CreateJavaProbeWorkspaceAsync();
         workspace.WriteSource(
@@ -1899,7 +1904,7 @@ public class AtsJavaCodeGeneratorTests
                     setField(client, "inputStream", clientInput);
                     setField(client, "outputStream", clientOutput);
                     var expression = new ReferenceExpression(new Handle("expr", "ReferenceExpression"), client);
-                    var token = new SlowPreCancelledToken();
+                    var token = new SlowPreCancelledToken(Long.parseLong(args[0]));
                     token.cancel();
 
                     invokeAndComplete(expression, token, client, serverInput, serverOutput, "first");
@@ -1917,13 +1922,13 @@ public class AtsJavaCodeGeneratorTests
                     PipedOutputStream serverOutput,
                     String expectedResult) throws Exception {
                     var invocation = CompletableFuture.supplyAsync(() -> expression.getValue(token));
-                    String invokeRequest = requireMessage(serverInput);
+                    String invokeRequest = requireMessage(serverInput, invocation);
                     if (!invokeRequest.contains("\"method\":\"invokeCapability\"")
                         || !invokeRequest.contains("\"capabilityId\":\"Aspire.Hosting.ApplicationModel/getValue\"")) {
                         throw new IllegalStateException("cancellation preceded ReferenceExpression request: " + invokeRequest);
                     }
 
-                    String cancellationRequest = requireMessage(serverInput);
+                    String cancellationRequest = requireMessage(serverInput, invocation);
                     String cancellationId = extractCancellationId(cancellationRequest);
                     if (!invokeRequest.contains("\"cancellationToken\":\"" + cancellationId + "\"")) {
                         throw new IllegalStateException(
@@ -1940,7 +1945,7 @@ public class AtsJavaCodeGeneratorTests
                         serverOutput,
                         "{\"jsonrpc\":\"2.0\",\"id\":" + invokeRequestId + ",\"result\":\"" + expectedResult + "\"}");
 
-                    String result = invocation.get(1, TimeUnit.SECONDS);
+                    String result = invocation.get();
                     if (!expectedResult.equals(result)) {
                         throw new IllegalStateException("unexpected ReferenceExpression result: " + result);
                     }
@@ -2018,12 +2023,20 @@ public class AtsJavaCodeGeneratorTests
                     return null;
                 }
 
-                private static String requireMessage(InputStream input) throws Exception {
-                    String message = waitForMessage(input, 1000);
-                    if (message == null) {
-                        throw new IllegalStateException("Timed out waiting for transport message");
+                // The client writes each expected message from a pool thread after cold-start work (class loading,
+                // token registration, first serialization) whose duration is not part of the contract under test.
+                // Wait until the message is readable instead of for a fixed wall-clock budget, and fail fast if the
+                // invocation finishes without writing it. The probe's process timeout still bounds a hang.
+                private static String requireMessage(InputStream input, CompletableFuture<?> invocation) throws Exception {
+                    while (input.available() == 0) {
+                        if (invocation.isDone() && input.available() == 0) {
+                            throw new IllegalStateException(
+                                "invocation completed before writing the expected transport message",
+                                invocation.handle((result, error) -> error).join());
+                        }
+                        TimeUnit.MILLISECONDS.sleep(5);
                     }
-                    return message;
+                    return readMessage(input);
                 }
 
                 private static String readMessage(InputStream input) throws Exception {
@@ -2061,11 +2074,17 @@ public class AtsJavaCodeGeneratorTests
                 }
 
                 private static final class SlowPreCancelledToken extends CancellationToken {
+                    private final long onCancelDelayMs;
+
+                    SlowPreCancelledToken(long onCancelDelayMs) {
+                        this.onCancelDelayMs = onCancelDelayMs;
+                    }
+
                     @Override
                     public void onCancel(Runnable listener) {
                         super.onCancel(listener);
                         try {
-                            TimeUnit.MILLISECONDS.sleep(250);
+                            TimeUnit.MILLISECONDS.sleep(onCancelDelayMs);
                         } catch (InterruptedException exception) {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(exception);
@@ -2083,7 +2102,10 @@ public class AtsJavaCodeGeneratorTests
             """);
 
         await workspace.CompileAsync();
-        var run = await workspace.RunClassAsync("aspire.ReferenceExpressionCancellationProbe", TimeSpan.FromSeconds(8));
+        var run = await workspace.RunClassAsync(
+            "aspire.ReferenceExpressionCancellationProbe",
+            TimeSpan.FromSeconds(8),
+            onCancelDelayMs.ToString(CultureInfo.InvariantCulture));
 
         Assert.True(run.TimedOut is false, $"Probe timed out. stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
         Assert.True(
@@ -4041,8 +4063,8 @@ public class AtsJavaCodeGeneratorTests
                 $"javac failed with exit code {compile.ExitCode}.{Environment.NewLine}stdout:{Environment.NewLine}{compile.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{compile.StdErr}");
         }
 
-        public Task<ProcessResult> RunClassAsync(string className, TimeSpan timeout)
-            => RunProcessAsync("java", ["-cp", _classes.FullName, className], timeout);
+        public Task<ProcessResult> RunClassAsync(string className, TimeSpan timeout, params string[] args)
+            => RunProcessAsync("java", ["-cp", _classes.FullName, className, .. args], timeout);
 
         public void Dispose()
         {

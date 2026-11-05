@@ -40,13 +40,13 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         string projectName, string configuration, bool publishing, bool native, bool optimized)
     {
         var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
-        var result = await RunDotNetAsync(
+        var result = await RunMSBuildQueryAsync(
             ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
              $"-p:_IsPublishing={publishing}", $"-p:PublishAot={native}",
              "-getProperty:Optimize,ServerGarbageCollection"]);
         Assert.True(result.ExitCode == 0, result.Output);
 
-        using var document = JsonDocument.Parse(result.StandardOutput);
+        using var document = JsonDocument.Parse(result.QueryResult);
         var properties = document.RootElement.GetProperty("Properties");
         Assert.Equal(optimized ? "true" : "false", properties.GetProperty("Optimize").GetString());
         Assert.Equal(projectName == "Aspire.Dashboard" ? "true" : string.Empty, properties.GetProperty("ServerGarbageCollection").GetString());
@@ -66,20 +66,20 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var configuration = configurationInput.Children[new YamlScalarNode("default")].ToString();
         Assert.Equal("Release", configuration);
 
-        var bundle = await RunDotNetAsync(
+        var bundle = await RunMSBuildQueryAsync(
             ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-getProperty:Configuration"]);
         Assert.True(bundle.ExitCode == 0, bundle.Output);
-        Assert.Equal("Debug", bundle.StandardOutput.Trim());
+        Assert.Equal("Debug", bundle.QueryResult.Trim());
 
         foreach (var projectName in new[] { "Aspire.Cli", "Aspire.Dashboard", "Aspire.TerminalHost" })
         {
             var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
-            var result = await RunDotNetAsync(
+            var result = await RunMSBuildQueryAsync(
                 ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
                  "-p:_IsPublishing=true", "-p:RuntimeIdentifier=osx-arm64", "-getProperty:Optimize,PublishAot"]);
             Assert.True(result.ExitCode == 0, result.Output);
 
-            using var document = JsonDocument.Parse(result.StandardOutput);
+            using var document = JsonDocument.Parse(result.QueryResult);
             var properties = document.RootElement.GetProperty("Properties");
             Assert.Equal("true", properties.GetProperty("PublishAot").GetString());
             Assert.Equal("true", properties.GetProperty("Optimize").GetString());
@@ -108,12 +108,12 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [Fact]
     public async Task RepositoryTerminalHostMetadataMatchesItsTargetFramework()
     {
-        var result = await RunDotNetAsync(
+        var result = await RunMSBuildQueryAsync(
             ["msbuild", Path.Combine(RepoRoot.Path, "src", "Aspire.TerminalHost", "Aspire.TerminalHost.csproj"),
              "-nologo", "-p:Configuration=Debug", "-getProperty:TargetFramework,AspireTerminalHostDir"]);
         Assert.True(result.ExitCode == 0, result.Output);
 
-        using var document = JsonDocument.Parse(result.StandardOutput);
+        using var document = JsonDocument.Parse(result.QueryResult);
         var properties = document.RootElement.GetProperty("Properties");
         var framework = properties.GetProperty("TargetFramework").GetString();
         Assert.Equal("net11.0", framework);
@@ -129,13 +129,33 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [InlineData("win-arm64", true)]
     [InlineData("", false)]
     [InlineData("linux-x64", true)]
-    public async Task NativeAssetsKeepTheirLayoutAndContents(string rid, bool singleFile)
+    public Task NativeAssetsKeepTheirLayoutAndContents(string rid, bool singleFile)
+        => VerifyNativeAssetsAsync(rid, singleFile);
+
+    [Fact]
+    public async Task NativeAssetsIgnoreMSBuildServerFallbackDiagnostics()
+    {
+        // Under CI load the dotnet CLI can fail to reach the MSBuild server and prints a fallback
+        // diagnostic to standard output after the -getItem JSON. Inject that exact line so the
+        // item query is verified independently of whatever else the CLI writes to its streams.
+        var dotnet = CreateDotNetWithStandardOutputDiagnostic(MSBuildServerFallbackDiagnostic);
+
+        var result = await VerifyNativeAssetsAsync("win-x64", singleFile: false, dotnet);
+
+        Assert.Contains(MSBuildServerFallbackDiagnostic, result.StandardOutput);
+    }
+
+    private const string MSBuildServerFallbackDiagnostic =
+        "MSBuild server unavailable: could not connect to the server within the timeout window; the server may have failed to start. Falling back to an in-process build.";
+
+    private async Task<(int ExitCode, string StandardOutput, string Output, string QueryResult)> VerifyNativeAssetsAsync(
+        string rid, bool singleFile, string? dotnet = null)
     {
         var project = CreatePublishProject(rid, singleFile, duplicateUnrelatedAsset: false);
-        var result = await RunDotNetAsync(["msbuild", project, "-nologo", "-t:CopyTestFiles", "-getItem:NativeCopyLocalItems,ResolvedFileToPublish"]);
+        var result = await RunMSBuildQueryAsync(["msbuild", project, "-nologo", "-t:CopyTestFiles", "-getItem:NativeCopyLocalItems,ResolvedFileToPublish"], dotnet);
         Assert.True(result.ExitCode == 0, result.Output);
 
-        using var document = JsonDocument.Parse(result.StandardOutput);
+        using var document = JsonDocument.Parse(result.QueryResult);
         var items = document.RootElement.GetProperty("Items");
         var published = items.GetProperty("ResolvedFileToPublish").EnumerateArray().ToArray();
         var expected = GetNativePaths(rid).Append("other/OpenConsole.exe").Order(StringComparer.Ordinal).ToArray();
@@ -156,6 +176,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var built = items.GetProperty("NativeCopyLocalItems").EnumerateArray()
             .Select(item => item.GetProperty("DestinationSubPath").GetString()).Order(StringComparer.Ordinal);
         Assert.Equal(rid.Length == 0 ? [] : GetNativePaths(rid).Order(StringComparer.Ordinal), built);
+        return result;
     }
 
     [Fact]
@@ -440,20 +461,59 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         File.WriteAllText(path, contents);
     }
 
-    private async Task<(int ExitCode, string StandardOutput, string StandardError, string Output)> RunDotNetAsync(
-        string[] arguments, string? packages = null)
+    private string CreateDotNetWithStandardOutputDiagnostic(string diagnostic)
     {
-        var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+        var dotnet = GetDotNetPath();
+        if (OperatingSystem.IsWindows())
+        {
+            var wrapper = Path.Combine(_workspace.Path, "dotnet-with-diagnostic.cmd");
+            File.WriteAllText(wrapper, $"""
+                @echo off
+                "{dotnet}" %*
+                set exitCode=%ERRORLEVEL%
+                echo {diagnostic}
+                exit /b %exitCode%
+                """);
+            return wrapper;
+        }
+
+        var script = Path.Combine(_workspace.Path, "dotnet-with-diagnostic.sh");
+        File.WriteAllText(script, $"""
+            #!/bin/sh
+            "{dotnet}" "$@"
+            exitCode=$?
+            echo '{diagnostic}'
+            exit $exitCode
+            """);
+        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return script;
+    }
+
+    // MSBuild writes -getProperty/-getItem results to this file, separate from diagnostics such as the
+    // CLI's "MSBuild server unavailable" fallback message that can appear on standard output.
+    private async Task<(int ExitCode, string StandardOutput, string Output, string QueryResult)> RunMSBuildQueryAsync(
+        string[] arguments, string? dotnet = null)
+    {
+        var resultPath = Path.Combine(_workspace.Path, $"msbuild-result-{Guid.NewGuid():N}.json");
+        var result = await RunDotNetAsync([.. arguments, $"-getResultOutputFile:{resultPath}"], dotnet: dotnet);
+        var queryResult = result.ExitCode == 0 ? await File.ReadAllTextAsync(resultPath) : string.Empty;
+        return (result.ExitCode, result.StandardOutput, result.Output, queryResult);
+    }
+
+    private static string GetDotNetPath() => Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
+
+    private async Task<(int ExitCode, string StandardOutput, string StandardError, string Output)> RunDotNetAsync(
+        string[] arguments, string? packages = null, string? dotnet = null)
+    {
+        var startInfo = new ProcessStartInfo
         {
             WorkingDirectory = _workspace.Path,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
         };
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
+        // The regression test's Windows wrapper is a .cmd file, which must run through cmd.exe.
+        ProcessStartInfoHelper.SetCommand(startInfo, dotnet ?? GetDotNetPath(), arguments, OperatingSystem.IsWindows());
         if (packages is not null)
         {
             startInfo.Environment["NUGET_PACKAGES"] = packages;

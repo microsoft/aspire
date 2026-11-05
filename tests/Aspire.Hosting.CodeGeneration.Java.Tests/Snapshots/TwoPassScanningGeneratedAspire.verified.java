@@ -16283,6 +16283,35 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (CSharpAppResource) result;
     }
 
+    /** Adds an opt-in target that checks for stale generated pipeline output. */
+    public IDistributedApplicationBuilder withOutputDiffing(WithOutputDiffingOptions optionsBag) {
+        var targetStep = optionsBag == null ? null : optionsBag.getTargetStep();
+        var diffStepName = optionsBag == null ? null : optionsBag.getDiffStepName();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
+        return withOutputDiffingImpl(targetStep, diffStepName, description);
+    }
+
+    public IDistributedApplicationBuilder withOutputDiffing() {
+        return withOutputDiffing(null);
+    }
+
+    /** Adds an opt-in target that checks for stale generated pipeline output. */
+    private IDistributedApplicationBuilder withOutputDiffingImpl(String targetStep, String diffStepName, String description) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (targetStep != null) {
+            reqArgs.put("targetStep", AspireClient.serializeValue(targetStep));
+        }
+        if (diffStepName != null) {
+            reqArgs.put("diffStepName", AspireClient.serializeValue(diffStepName));
+        }
+        if (description != null) {
+            reqArgs.put("description", AspireClient.serializeValue(description));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/withOutputDiffing", reqArgs);
+        return (IDistributedApplicationBuilder) result;
+    }
+
     /** Gets the application configuration. */
     public IConfiguration getConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -31652,6 +31681,38 @@ public final class WithOptionalStringOptions {
 
 }
 
+// ===== aspire/WithOutputDiffingOptions.java =====
+// WithOutputDiffingOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for WithOutputDiffing. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class WithOutputDiffingOptions {
+    private String targetStep;
+    private String diffStepName;
+    private String description;
+
+    public String getTargetStep() { return targetStep; }
+    public WithOutputDiffingOptions targetStep(String value) {
+        this.targetStep = value;
+        return this;
+    }
+
+    public String getDiffStepName() { return diffStepName; }
+    public WithOutputDiffingOptions diffStepName(String value) {
+        this.diffStepName = value;
+        return this;
+    }
+
+    public String getDescription() { return description; }
+    public WithOutputDiffingOptions description(String value) {
+        this.description = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/WithPipelineStepFactoryOptions.java =====
 // WithPipelineStepFactoryOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -31997,6 +32058,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/WithMergeLoggingOptions.java
 .aspire/modules/aspire/WithMergeLoggingPathOptions.java
 .aspire/modules/aspire/WithOptionalStringOptions.java
+.aspire/modules/aspire/WithOutputDiffingOptions.java
 .aspire/modules/aspire/WithPipelineStepFactoryOptions.java
 .aspire/modules/aspire/WithReferenceOptions.java
 .aspire/modules/aspire/WithVolumeOptions.java

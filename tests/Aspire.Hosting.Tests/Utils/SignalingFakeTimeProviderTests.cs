@@ -43,10 +43,17 @@ public class SignalingFakeTimeProviderTests
             Assert.False(timeProvider.TimerCreated.IsCompleted);
             Assert.False(executionTask.IsCompleted);
 
+            // Task.Delay registers for cancellation only after CreateTimer returns, so TimerCreated can be
+            // observed before the delay is cancellable. Schedule the delay after the timeout is armed so
+            // advancing to the timeout cannot also complete the delay before it observes cancellation.
+            var delayScheduleOffset = TimeSpan.FromMilliseconds(1);
+            timeProvider.Advance(delayScheduleOffset);
+            Assert.False(executionTask.IsCompleted);
+
             startRetryDelay.TrySetResult();
             await timeProvider.TimerCreated.DefaultTimeout();
             Assert.False(executionTask.IsCompleted);
-            timeProvider.Advance(recoveryTimeout);
+            timeProvider.Advance(recoveryTimeout - delayScheduleOffset);
 
             var exception = await Assert.ThrowsAsync<TimeoutRejectedException>(() => executionTask).DefaultTimeout();
             Assert.Equal(recoveryTimeout, exception.Timeout);

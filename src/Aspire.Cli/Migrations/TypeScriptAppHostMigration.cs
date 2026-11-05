@@ -354,7 +354,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
             if (!success)
             {
                 _interactionService.DisplayMessage(
-                    KnownEmojis.Warning,
+                    KnownEmojis.PoliceCarLight,
                     $"[yellow]{Markup.Escape(MigrationStrings.RegenerateFailedWarning)}[/]",
                     allowMarkup: true);
             }
@@ -367,7 +367,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
         {
             _logger.LogDebug(ex, "SDK regeneration after migration failed");
             _interactionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 $"[yellow]{Markup.Escape(MigrationStrings.RegenerateFailedWarning)}[/]",
                 allowMarkup: true);
         }

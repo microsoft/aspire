@@ -9,6 +9,7 @@ const certificatePassword = await builder.addParameter("certificate-password", {
 const redirectUris = await builder.addParameter("redirect-uris");
 const redirectHost = await builder.addParameter("redirect-host");
 const ownerId = await builder.addParameter("entra-owner");
+const serviceReference = await builder.addParameter("service-reference");
 const exampleTenant = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
 const exampleClient = "00001111-aaaa-2222-bbbb-3333cccc4444";
 
@@ -17,6 +18,7 @@ const container = await builder.addContainer("api", "mcr.microsoft.com/dotnet/sa
 const executable = await builder.addExecutable("worker", "dotnet", ".", ["--info"]);
 const endpoint = await container.getEndpoint("http");
 const identity = await builder.addAzureUserAssignedIdentity("identity");
+const vault = await builder.addAzureKeyVault("vault");
 
 // Existing registrations: configuration only, with literal or parameter IDs in any combination.
 const existingEntra = await builder.addExistingEntraApplication("existing-entra", tenantId, exampleClient);
@@ -31,6 +33,7 @@ await existingEntra.withFederatedManagedIdentityCredential(exampleClient, {
     tokenExchangeAuthority: "https://login.microsoftonline.com/",
 });
 await existingEntra.withCertificateFromKeyVault("https://vault.vault.azure.net", "certificate");
+await existingEntra.withCertificateFromKeyVault(vault, "vault-certificate");
 await existingEntra.withCertificateThumbprint("CurrentUser/My", "thumbprint");
 await existingEntra.withCertificateDistinguishedName("CurrentUser/My", "CN=certificate");
 await existingEntra.withCertificateFromFile("/certs/client.pfx", { password: certificatePassword });
@@ -58,6 +61,16 @@ await createdEntra.withOwners(ownerId);
 await createdEntra.withApplicationOwners(ownerId);
 await createdEntra.withServicePrincipalOwners(exampleClient);
 await createdEntra.withIdTokenIssuance();
+await createdEntra.configureInfrastructure(async infrastructure => {
+    const application = await infrastructure.getMicrosoftGraphApplicationByIdentifier("application");
+    const tags = await application.tags.get();
+    await tags.add("department:engineering");
+    const bicep = infrastructure.bicep();
+    await application.serviceManagementReference.set(bicep.parameter(serviceReference));
+    const principal = await infrastructure.getMicrosoftGraphServicePrincipalByIdentifier("servicePrincipal");
+    const principalTags = await principal.tags.get();
+    await principalTags.add("department:engineering");
+});
 await createdEntra.withAppRole("User", "User", "Can use the API.");
 await createdEntra.withAppRole("Admin", "Administrator", "Can administer the API.", {
     allowedMemberTypes: ["User", "Application"],
@@ -69,6 +82,7 @@ await createdEntra.withRedirectUris(redirectUris);
 await createdEntra.withRedirectUris(redirectHost, { callbackPaths: ["/signin", "/signout"] });
 await createdEntra.withRedirectUris(endpoint, { callbackPaths: ["/signin"] });
 await container.withReference(createdEntra);
+await createdEntra.runWithLocalDeveloperCertificateCredential();
 await createdEntra.publishWithFederatedManagedIdentityCredential();
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity: container });
 await createdEntra.publishWithFederatedManagedIdentityCredential({ identity });

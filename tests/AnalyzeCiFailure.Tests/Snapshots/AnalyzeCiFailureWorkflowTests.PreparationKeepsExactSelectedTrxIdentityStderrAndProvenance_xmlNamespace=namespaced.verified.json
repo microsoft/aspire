@@ -1,0 +1,14 @@
+﻿[
+  {
+    "test": "Tests.Method(value: \u0022one/two\u0022)",
+    "display_test": "Tests.Method(value: \u0022one/two\u0022)",
+    "job": "Tests",
+    "job_id": 123,
+    "result_file": "00001.trx",
+    "result_format": "trx",
+    "error": "Connection timed out",
+    "stack_trace": "frame",
+    "standard_output": "stdout",
+    "standard_error": "stderr"
+  }
+]

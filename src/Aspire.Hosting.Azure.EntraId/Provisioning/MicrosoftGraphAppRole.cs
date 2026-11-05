@@ -9,8 +9,9 @@ namespace Aspire.Hosting.Azure.EntraId.Provisioning;
 /// <summary>
 /// Models an application role declared on a Microsoft Graph application.
 /// </summary>
-internal sealed class MicrosoftGraphAppRole : ProvisionableConstruct
+public sealed class MicrosoftGraphAppRole : ProvisionableConstruct
 {
+    /// <summary>Gets or sets the stable ID of the application role.</summary>
     public BicepValue<string> Id
     {
         get { Initialize(); return _id!; }
@@ -18,6 +19,7 @@ internal sealed class MicrosoftGraphAppRole : ProvisionableConstruct
     }
     private BicepValue<string>? _id;
 
+    /// <summary>Gets or sets the role's display name.</summary>
     public BicepValue<string> DisplayName
     {
         get { Initialize(); return _displayName!; }
@@ -25,6 +27,7 @@ internal sealed class MicrosoftGraphAppRole : ProvisionableConstruct
     }
     private BicepValue<string>? _displayName;
 
+    /// <summary>Gets or sets the role's description.</summary>
     public BicepValue<string> Description
     {
         get { Initialize(); return _description!; }
@@ -32,6 +35,7 @@ internal sealed class MicrosoftGraphAppRole : ProvisionableConstruct
     }
     private BicepValue<string>? _description;
 
+    /// <summary>Gets or sets the role value included in access tokens.</summary>
     public BicepValue<string> Value
     {
         get { Initialize(); return _value!; }
@@ -39,6 +43,7 @@ internal sealed class MicrosoftGraphAppRole : ProvisionableConstruct
     }
     private BicepValue<string>? _value;
 
+    /// <summary>Gets or sets whether the role is available for assignment.</summary>
     public BicepValue<bool> IsEnabled
     {
         get { Initialize(); return _isEnabled!; }
@@ -46,6 +51,7 @@ internal sealed class MicrosoftGraphAppRole : ProvisionableConstruct
     }
     private BicepValue<bool>? _isEnabled;
 
+    /// <summary>Gets or sets who can receive the role: <c>User</c>, <c>Application</c>, or both.</summary>
     public BicepList<string> AllowedMemberTypes
     {
         get { Initialize(); return _allowedMemberTypes!; }
@@ -53,6 +59,7 @@ internal sealed class MicrosoftGraphAppRole : ProvisionableConstruct
     }
     private BicepList<string>? _allowedMemberTypes;
 
+    /// <inheritdoc />
     protected override void DefineProvisionableProperties()
     {
         base.DefineProvisionableProperties();

@@ -10,7 +10,7 @@ import * as vscode from 'vscode';
 import { createProjectDebuggerExtension, createProjectResourceAttachProvider, DotNetService, externalBuildProjectDebuggerExtension, projectDebuggerExtension, quoteCommandLineArgument } from '../debugger/languages/dotnet';
 import { AspireExtendedDebugConfiguration, AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, ProjectLaunchConfiguration } from '../dcp/types';
 import * as io from '../utils/io';
-import { createDebugSessionConfiguration, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
+import { createDebugSessionConfiguration, getResourceDebuggerExtensions, ResourceDebuggerExtension } from '../debugger/debuggerExtensions';
 import type { ResourceAttachProvider } from '../debugger/resourceDebugContracts';
 import { AppHostParentOutputFilter, AspireDebugSession } from '../debugger/AspireDebugSession';
 import { csharpExtensionId, getSupportedCapabilities } from '../capabilities';
@@ -330,6 +330,121 @@ suite('Dotnet Debugger Extension Tests', () => {
             'project.path': '/repo/Api.csproj',
             'project.launchCommand': 'ide',
         })), { errorKind: 'resourceNotAttachable' });
+    });
+
+    test('direct coordinated attach verifies the reported application PID for apphost and DLL launches', async () => {
+        for (const candidate of [
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                useAppHost: true,
+                executable: '/repo/bin/Release/net10.0/Api',
+                command: '/repo/bin/Release/net10.0/Api',
+            },
+            {
+                targetPath: 'C:\\repo\\bin\\Release\\net10.0\\Api.dll',
+                useAppHost: true,
+                executable: 'C:\\repo\\bin\\Release\\net10.0\\Api.exe',
+                command: '"C:\\repo\\bin\\Release\\net10.0\\Api.exe"',
+            },
+            {
+                targetPath: '/repo/bin/Release/net10.0/Api.dll',
+                useAppHost: false,
+                executable: '/usr/share/dotnet/dotnet',
+                command: '"/usr/share/dotnet/dotnet" exec "/repo/bin/Release/net10.0/Api.dll"',
+            },
+        ]) {
+            const dotNetService = new TestDotNetService(candidate.targetPath, null, false);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves(candidate);
+            const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+                { pid: 1234, parentPid: 10, ...candidate },
+                createLaunchedProcess(4321, 1234, candidate.executable, candidate.command),
+            ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': candidate.executable,
+                'executable.args': null,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.configuration': 'Release',
+                'project.targetPath': candidate.targetPath,
+                'project.useAppHost': candidate.useAppHost,
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            });
+
+            assert.strictEqual(provider.canRecognizeResource(resource), true, candidate.executable);
+            assert.strictEqual(provider.canAttachToResource(resource), true, candidate.executable);
+            const configuration = await provider.createDebugConfiguration(resource);
+
+            assert.strictEqual(configuration.processId, 1234, candidate.executable);
+            assert.strictEqual(configuration.request, 'attach');
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
+        }
+    });
+
+    test('direct coordinated attach rejects another program even when its child matches the project output', async () => {
+        const targetPath = '/repo/bin/Release/net10.0/Api.dll';
+        for (const candidate of [
+            { executable: '/other/Api', command: '/other/Api', useAppHost: true },
+            { executable: '/usr/share/dotnet/dotnet', command: 'dotnet exec /other/Api.dll', useAppHost: false },
+            { executable: '/usr/share/dotnet/dotnet', command: `dotnet run --project /repo/Api.csproj -- "${targetPath}"`, useAppHost: false },
+        ]) {
+            const dotNetService = new TestDotNetService(targetPath, null, false);
+            dotNetService.getDotNetAttachTargetInfoStub.resolves({ targetPath, useAppHost: candidate.useAppHost });
+            const resolver = new LaunchedChildProcessResolver(new StaticLaunchedChildProcessQuery([
+                { pid: 1234, parentPid: 10, ...candidate },
+                createLaunchedProcess(4321, 1234, '/usr/share/dotnet/dotnet', `dotnet exec "${targetPath}"`),
+            ]), immediateProcessClock, { timeoutMs: 10, retryDelayMs: 10 });
+            const provider = createAttachProvider(dotNetService, resolver, { realpath: async value => value });
+
+            await assert.rejects(provider.createDebugConfiguration(createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': candidate.executable,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.targetPath': targetPath,
+                'project.useAppHost': candidate.useAppHost,
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            })), { errorKind: 'resourceNotAttachable' });
+            assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
+        }
+    });
+
+    test('native executables require explicit coordinated direct-launch metadata', () => {
+        const dotNetService = new TestDotNetService('/repo/bin/Release/net10.0/Api.dll', null, false);
+        const provider = createAttachProvider(dotNetService, { resolveProcessId: sinon.stub().resolves(1234) });
+        for (const metadata of [
+            {},
+            { 'resource.launchConfigurationType': 'project-with-external-build.v1' },
+            { 'project.launchCommand': 'direct' },
+            { 'project.launchCommand': 'direct', 'resource.launchConfigurationType': 'project' },
+            { 'project.launchCommand': 'direct', 'resource.launchConfigurationType': 'unknown' },
+            { 'project.launchCommand': 'run', 'resource.launchConfigurationType': 'project-with-external-build.v1' },
+        ]) {
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': '/repo/bin/Release/net10.0/Api',
+                'project.path': '/repo/Api.csproj',
+                ...metadata,
+            });
+            assert.strictEqual(provider.canRecognizeResource(resource), false);
+            assert.strictEqual(provider.canAttachToResource(resource), false);
+        }
+
+        for (const executablePath of [undefined, '', '   ']) {
+            const resource = createProjectResource({
+                'executable.pid': 1234,
+                'executable.path': executablePath,
+                'project.path': '/repo/Api.csproj',
+                'project.launchCommand': 'direct',
+                'project.targetPath': '/repo/bin/Release/net10.0/Api.dll',
+                'project.useAppHost': 'true',
+                'resource.launchConfigurationType': 'project-with-external-build.v1',
+            });
+            assert.strictEqual(provider.canRecognizeResource(resource), false);
+            assert.strictEqual(provider.canAttachToResource(resource), false);
+        }
+        assert.strictEqual(dotNetService.getDotNetAttachTargetInfoStub.called, false);
     });
 
     test('attach configuration resolves the evaluated framework-dependent TargetPath child PID', async () => {
@@ -3762,7 +3877,40 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
-    test('advertises the coreclr project debugger and extracts project_path for .csproj and file-based .cs', () => {
+    for (const debug of [false, true]) {
+        test(`disables coreclr's implicit profile when launching a resource in ${debug ? 'Debug' : 'Run'} mode`, async () => {
+            const fixture = createRunnableProjectOutput(`resource-excluded-profile-${debug}`);
+            try {
+                const { extension } = createDebuggerExtension(fixture.outputPath, null, true, true);
+                const parentConfiguration: AspireExtendedDebugConfiguration = {
+                    type: 'aspire',
+                    request: 'launch',
+                    name: 'Aspire',
+                    program: fixture.projectPath,
+                };
+                const launchConfig: ProjectLaunchConfiguration = {
+                    type: 'project',
+                    project_path: fixture.projectPath,
+                    suppress_build: true,
+                    disable_launch_profile: true,
+                };
+                const debugConfiguration = await createDebugSessionConfiguration(
+                    parentConfiguration,
+                    launchConfig,
+                    undefined,
+                    [],
+                    { debug, runId: '1', debugSessionId: '1', isApphost: false, debugSession: { configuration: parentConfiguration } as AspireDebugSession },
+                    extension);
+
+                assert.strictEqual(debugConfiguration.launchSettingsProfile, null);
+                assert.strictEqual(debugConfiguration.noDebug, !debug);
+            } finally {
+                removeDirectorySafely(fixture.tempRoot);
+            }
+        });
+    }
+
+    test('advertises the coreclr debugger for SDK-style C#, F# and VB projects and file-based C# apps', () => {
         sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
             extensionId === csharpExtensionId ? { id: extensionId } as vscode.Extension<unknown> : undefined);
 
@@ -3770,12 +3918,29 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(externalBuildProjectDebuggerExtension.resourceType, 'project-with-external-build.v1');
         assert.ok(getSupportedCapabilities().includes('project-with-external-build.v1'));
         assert.strictEqual(projectDebuggerExtension.debugAdapter, 'coreclr');
-        assert.deepStrictEqual(projectDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj']);
+        assert.deepStrictEqual(projectDebuggerExtension.getSupportedFileTypes(), ['.cs', '.csproj', '.fsproj', '.vbproj']);
+        assert.deepStrictEqual(externalBuildProjectDebuggerExtension.getSupportedFileTypes(), projectDebuggerExtension.getSupportedFileTypes());
 
-        const csprojConfig: ProjectLaunchConfiguration = { type: 'project', project_path: '/tmp/Worker.csproj' };
-        const fileBasedConfig: ProjectLaunchConfiguration = { type: 'project', project_path: '/tmp/app.cs' };
-        assert.strictEqual(projectDebuggerExtension.getProjectFile(csprojConfig), '/tmp/Worker.csproj');
-        assert.strictEqual(projectDebuggerExtension.getProjectFile(fileBasedConfig), '/tmp/app.cs');
+        for (const projectPath of ['Worker.csproj', 'Worker.fsproj', 'Worker.vbproj', 'app.cs']) {
+            for (const extension of [projectDebuggerExtension, externalBuildProjectDebuggerExtension]) {
+                const config: ProjectLaunchConfiguration = { type: extension.resourceType as ProjectLaunchConfiguration['type'], project_path: projectPath };
+                assert.strictEqual(extension.getProjectFile(config), projectPath);
+                assert.strictEqual(extension.getDisplayName(config), `.NET: ${projectPath}`);
+            }
+        }
+    });
+
+    test('does not advertise a .NET project debugger when only the F# language extension is installed', () => {
+        sinon.stub(vscode.extensions, 'getExtension').callsFake(extensionId =>
+            extensionId === 'Ionide.Ionide-fsharp' ? { id: extensionId } as vscode.Extension<unknown> : undefined);
+
+        const projectCapabilities = getSupportedCapabilities().filter(capability =>
+            capability === 'project' || capability === 'project-with-external-build.v1' || capability === csharpExtensionId);
+        const projectDebuggers = getResourceDebuggerExtensions().filter(extension =>
+            extension.resourceType === 'project' || extension.resourceType === 'project-with-external-build.v1');
+
+        assert.deepStrictEqual(projectCapabilities, []);
+        assert.deepStrictEqual(projectDebuggers, []);
     });
 
     test('invalid project launch configurations do not expose arbitrary properties', async () => {

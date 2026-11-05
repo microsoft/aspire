@@ -53,6 +53,43 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("tools/AnalyzeCiFailure/Program.cs")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.props")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Build.targets")]
+    [InlineData("tools/AnalyzeCiFailure/Directory.Packages.props")]
+    [InlineData("tools/AnalyzeCiFailure/GitHubWorkflowCommands.cs")]
+    [InlineData("tools/AnalyzeCiFailure/WorkflowRunEvidenceCollector.cs")]
+    [InlineData("tools/AnalyzeCiFailure/IssueRendering.cs")]
+    [InlineData("tools/AnalyzeCiFailure/Templates/CommentCodeIssue.md.tmpl")]
+    public void AnalysisValidatorInputsSelectDedicatedTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["AnalyzeCiFailure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
+    [InlineData(".github/workflows/analyze-ci-failure.md")]
+    [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
+    [InlineData(".github/workflows/analyze-ci-failure/prepare-report-templates.js")]
+    public void AnalyzerReportingInputsSelectScriptBehaviorTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        if (path.EndsWith(".md", StringComparison.Ordinal) || path.EndsWith(".yml", StringComparison.Ordinal))
+        {
+            Assert.Contains("AnalyzeCiFailure.Tests", result.TestProjects);
+        }
+        Assert.Empty(result.Jobs);
+    }
+
+    [Theory]
     [InlineData("eng/scripts/generate-template-cgmanifest.ps1")]
     public void TemplateManifestInputsSelectInfrastructureCoverage(string path)
     {
@@ -179,11 +216,7 @@ public sealed class TestTriggerMapTests
         },
         {
             "eng/test-retry-patterns.json",
-            ["test:Infrastructure.Tests"]
-        },
-        {
-            "eng/scripts/aspire-skills-bundle.common.ps1",
-            ["test:Infrastructure.Tests"]
+            ["test:AnalyzeCiFailure.Tests", "test:Infrastructure.Tests"]
         },
         {
             "eng/scripts/smoke-installed-cli.ps1",
@@ -513,6 +546,7 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/scripts/gha-testreport.ps1")]
     [InlineData("eng/scripts/split-test-projects-for-ci.ps1")]
     [InlineData("tools/ExtractTestPartitions/Program.cs")]
+    [InlineData("NuGet.config")]
     public void BroadCiInputHasAnExplicitRunAllRule(string path)
     {
         var result = SelectWithRealMap(path);
@@ -575,8 +609,6 @@ public sealed class TestTriggerMapTests
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
     [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
-    [InlineData("eng/scripts/update-aspire-skills-bundle.ps1")]
-    [InlineData("eng/scripts/verify-aspire-skills-bundle.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
         var result = SelectWithRealMap(path);
@@ -731,6 +763,7 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
         Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.EndToEnd.Tests", result.TestProjects);
         Assert.Contains("job:extension-e2e", result.Jobs);
         Assert.Contains("job:cli-starter-validation", result.Jobs);
     }
@@ -791,6 +824,21 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj", "Aspire.Hosting.Go")]
+    [InlineData("src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj", "Aspire.Hosting.JavaScript")]
+    [InlineData("src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj", "Aspire.Hosting.Python")]
+    public void DefaultHostingPackageProjectsSelectCliStablePackageGuard(string path, string affectedProject)
+    {
+        var result = SelectWithRealMap(path, affectedProject);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+    }
+
+    [Theory]
     [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package.json")]
     [InlineData("src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json")]
     public void ProjectTemplateFrontendDependencyInputsRunCliSecurityGuards(string path)
@@ -804,6 +852,20 @@ public sealed class TestTriggerMapTests
         Assert.Equal(
             ["job:deployment-e2e", "job:homebrew-installer", "job:winget-installer"],
             result.Jobs.Order(StringComparer.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/nextjs/.npmrc")]
+    [InlineData("tests/Aspire.Cli.EndToEnd.Tests/Fixtures/JsPublish/npmscript/.npmrc")]
+    public void JsPublishFixtureNpmrcRunsCliPublicRegistryGuard(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Cli.EndToEnd.Tests");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
     }
 
     [Theory]

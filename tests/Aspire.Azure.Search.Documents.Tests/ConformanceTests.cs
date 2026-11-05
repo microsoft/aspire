@@ -96,6 +96,16 @@ public class ConformanceTests : ConformanceTests<SearchIndexClient, AzureSearchS
     protected override void SetMetrics(AzureSearchSettings options, bool enabled)
         => throw new NotImplementedException();
 
+    // When the server isn't reachable, make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureSearchSettings options)
+    {
+        if (!CanConnectToServer)
+        {
+            options.Credential = UnavailableTokenCredential.Instance;
+        }
+    }
+
     protected override void SetTracing(AzureSearchSettings options, bool enabled)
         => options.DisableTracing = !enabled;
 

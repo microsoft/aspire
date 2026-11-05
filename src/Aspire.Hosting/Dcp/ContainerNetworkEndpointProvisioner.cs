@@ -496,7 +496,7 @@ internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
         var dcpInfo = await _dcpDependencyCheckService
             .GetDcpInfoAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        return dcpInfo?.Containers?.HostName ?? KnownHostNames.DockerDesktopHostBridge;
+        return dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
     }
 
     private string GetTunnelProxyResourceName()

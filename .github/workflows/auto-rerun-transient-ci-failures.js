@@ -53,6 +53,17 @@ const ignoredFailureStepPatterns = [
     /^Install dependencies$/i,
 ];
 
+// actions/upload-artifact and actions/download-artifact surface transport errors from the
+// artifact service client as 'Failed to <RPC>: Unable to make request: <code>'.
+const artifactTransferStepPatterns = [
+    /^Upload\b/i,
+    /^Download\b/i,
+];
+
+const artifactServiceNetworkFailurePatterns = [
+    /Failed to (?:CreateArtifact|FinalizeArtifact|GetSignedArtifactURL|ListArtifacts): Unable to make request: (?:ETIMEDOUT|ENOTFOUND|ECONNRESET)\b/i,
+];
+
 const testExecutionFailureStepPatterns = [
     /^Run tests\b/i,
     /^Run nuget dependent tests\b/i,
@@ -272,11 +283,14 @@ function toAnnotationText(annotationsOrText) {
 function getFailureStepSignals(failedSteps) {
     const hasRetryableStep = failedSteps.some(step => matchesAny(step, retryableWithAnnotationStepPatterns));
     const hasIgnoredFailureStep = failedSteps.some(step => matchesAny(step, ignoredFailureStepPatterns));
+    const hasOnlyArtifactTransferFailures = failedSteps.length > 0
+        && failedSteps.every(step => matchesAny(step, artifactTransferStepPatterns));
 
     return {
         hasRetryableStep,
         hasIgnoredFailureStep,
-        shouldInspectAnnotations: failedSteps.length === 0 || hasRetryableStep || hasIgnoredFailureStep,
+        hasOnlyArtifactTransferFailures,
+        shouldInspectAnnotations: failedSteps.length === 0 || hasRetryableStep || hasIgnoredFailureStep || hasOnlyArtifactTransferFailures,
     };
 }
 
@@ -365,7 +379,7 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
     } = options;
     const failedSteps = getFailedSteps(job);
     const failedStepText = failedSteps.join(' | ');
-    const { hasRetryableStep, hasIgnoredFailureStep, shouldInspectAnnotations } = getFailureStepSignals(failedSteps);
+    const { hasRetryableStep, hasIgnoredFailureStep, hasOnlyArtifactTransferFailures, shouldInspectAnnotations } = getFailureStepSignals(failedSteps);
     const hasTestExecutionFailureStep = failedSteps.some(step => matchesAny(step, testExecutionFailureStepPatterns));
     const matchedInfrastructureNetworkLogOverridePattern =
         !hasTestExecutionFailureStep
@@ -403,6 +417,14 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
             retryable: true,
             failedSteps,
             reason: 'Job-level runner or infrastructure failure matched the transient allowlist.',
+        };
+    }
+
+    if (hasOnlyArtifactTransferFailures && matchesAny(annotationsText, artifactServiceNetworkFailurePatterns)) {
+        return {
+            retryable: true,
+            failedSteps,
+            reason: `${formatFailedStepLabel(failedSteps, failedStepText)} matched the artifact service network failure allowlist.`,
         };
     }
 

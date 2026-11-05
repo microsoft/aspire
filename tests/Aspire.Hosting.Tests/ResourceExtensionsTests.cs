@@ -433,7 +433,9 @@ public class ResourceExtensionsTests
             .WithImagePushOptions(callback);
         Assert.Single(containerResource.Resource.Annotations.OfType<ContainerImagePushOptionsCallbackAnnotation>());
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource extension binding and metadata behavior.
         var projectResource = builder.AddProject<Projects.ServiceA>("ServiceA")
+#pragma warning restore CS0618
             .WithImagePushOptions(callback);
         Assert.Single(projectResource.Resource.Annotations.OfType<ContainerImagePushOptionsCallbackAnnotation>());
 
