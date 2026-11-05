@@ -147,7 +147,7 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
-        <source>All projects (installed components and configuration apply across all projects)</source>
+        <source>Global (In your home directory, available across all projects)</source>
         <target state="needs-review-translation">グローバル (ホーム ディレクトリにインストールし、すべてのプロジェクトで使用可能)</target>
         <note />
       </trans-unit>
@@ -224,7 +224,7 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
-        <source>This project (installed components and configuration apply only to this project)</source>
+        <source>This project (In your workspace, ready to commit with your project)</source>
         <target state="needs-review-translation">プロジェクト (ワークスペースのルートにインストールし、プロジェクトとともにコミット)</target>
         <note />
       </trans-unit>
@@ -239,7 +239,7 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
-        <source>Where should Aspire agent integrations apply?</source>
+        <source>Where should skills and tools be installed?</source>
         <target state="needs-review-translation">インストールのスコープ</target>
         <note />
       </trans-unit>

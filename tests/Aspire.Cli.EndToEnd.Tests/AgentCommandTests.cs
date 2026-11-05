@@ -244,7 +244,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Where should Aspire agent integrations apply?", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -347,7 +347,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30), description: "agent selection prompt");
         await auto.EnterAsync();
 
-        await auto.WaitUntilTextAsync("Where should Aspire agent integrations apply?", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
         Assert.Contains("Only use sources you trust.", scopeScreen);
         Assert.Contains("https://github.com/microsoft/aspire-skills", scopeScreen);
@@ -401,12 +401,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             extraArguments: "--agents claude --skills aspire",
             beforeAcceptingAgentInit: () => File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig));
 
-        await auto.WaitUntilTextAsync("Where should Aspire agent integrations apply?", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("This project", scopeScreen);
-        Assert.Contains("All projects", scopeScreen);
-        Assert.Contains("installed components", scopeScreen);
-        Assert.Contains("configuration", scopeScreen);
+        Assert.Contains("This project (In your workspace, ready to commit with your project)", scopeScreen);
+        Assert.Contains("Global (In your home directory, available across all projects)", scopeScreen);
         await auto.EnterAsync();
 
         // aspire new never registers --mcp, so it goes straight to configuration after

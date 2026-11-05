@@ -402,12 +402,12 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             PromptForSelectionCallback = (prompt, choices, formatter, _) =>
             {
                 prompts.Add(prompt);
-                Assert.Equal("Where should Aspire agent integrations apply?", prompt);
+                Assert.Equal("Where should skills and tools be installed?", prompt);
                 Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.Global], choices.Cast<AgentConfigurationScope>());
                 Assert.Equal(
                     [
-                        "This project (installed components and configuration apply only to this project)",
-                        "All projects (installed components and configuration apply across all projects)"
+                        "This project (In your workspace, ready to commit with your project)",
+                        "Global (In your home directory, available across all projects)"
                     ],
                     choices.Cast<object>().Select(formatter));
                 Assert.Equal(expectedWarnings, warnings);
