@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Java ATS client serialization bug fix",
+  "mergedAt": "2026-11-05T04:21:53Z",
+  "number": 21440,
+  "runDate": "2026-11-05T12:05:00Z",
+  "status": "included",
+  "title": "Serialize integral numbers as JSON integers in Java ATS client"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Internal CI script fix",
+  "mergedAt": "2026-11-05T04:39:56Z",
+  "number": 21541,
+  "runDate": "2026-11-05T12:05:00Z",
+  "status": "excluded",
+  "title": "Avoid SIGPIPE false failures in the extension changelog finalized gate"
+}

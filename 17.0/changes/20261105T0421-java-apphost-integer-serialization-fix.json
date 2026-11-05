@@ -1,0 +1,17 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Java AppHosts now send integral numbers as JSON integers, fixing failures such as addParameterWithGeneratedValue rejecting values like minUpper.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "☕",
+  "firstMergedAt": "2026-11-05T04:21:53Z",
+  "lastMergedAt": "2026-11-05T04:21:53Z",
+  "name": "Java AppHost integer serialization fix",
+  "owner": "davidfowl",
+  "prs": [21440]
+}
