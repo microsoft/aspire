@@ -70,6 +70,7 @@ internal sealed class TrayPanel
 
     private TrayViewState _state;
     private TrayViewState? _pendingState;
+    private bool _revealInteractionAfterUpdate;
     private TrayPanelPalette _palette;
     private TrayPanelScene? _scene;
     private double _maxHeight = DefaultMaxHeight;
@@ -274,6 +275,7 @@ internal sealed class TrayPanel
             _pendingState = state;
             return false;
         }
+        _revealInteractionAfterUpdate = ShouldRevealInteractionAfterUpdate();
         _state = state;
         _scene = null;
         return true;
@@ -298,6 +300,7 @@ internal sealed class TrayPanel
         _actions = null;
         _openInExpanded = false;
         _settings = null;
+        _revealInteractionAfterUpdate = false;
         _scene = null;
     }
 
@@ -316,6 +319,7 @@ internal sealed class TrayPanel
         var action = Activate(target);
         if (_pendingState is not null)
         {
+            _revealInteractionAfterUpdate = ShouldRevealInteractionAfterUpdate();
             _state = _pendingState;
             _pendingState = null;
         }
@@ -379,6 +383,7 @@ internal sealed class TrayPanel
         _pressed = null;
         if (_pendingState is not null)
         {
+            _revealInteractionAfterUpdate = ShouldRevealInteractionAfterUpdate();
             _state = _pendingState;
             _pendingState = null;
         }
@@ -748,6 +753,20 @@ internal sealed class TrayPanel
         }
     }
 
+    private bool ShouldRevealInteractionAfterUpdate()
+    {
+        if (_actions is null && _confirm is null)
+        {
+            return false;
+        }
+        // Preserve visible interactions, but do not undo an intentional scroll away from
+        // the card every time a discovery heartbeat updates health.
+        var target = Scene.Targets.FirstOrDefault(target => target.Key == _focus);
+        return target is not null && _viewport.Contains(target.Bounds)
+            || _focus is null && Scene.Targets.Any(target => (IsConfirmTarget(target.Kind) || IsActionItem(target.Kind))
+                && _viewport.Contains(target.Bounds));
+    }
+
     private TrayPanelScene Build()
     {
         var palette = _palette;
@@ -956,6 +975,35 @@ internal sealed class TrayPanel
 
         AddFooter(commands, targets, footer, palette);
         commands.Add(new StrokePathCommand(PanelPath.RoundedRect(panel.Inset(0.5, 0.5), CornerRadius - 0.5), palette.Border, 1));
+
+        if (_revealInteractionAfterUpdate)
+        {
+            _revealInteractionAfterUpdate = false;
+            var controls = targets.Where(target => _confirm is not null ? IsConfirmTarget(target.Kind)
+                : _actions is { } actions && target.Key.Section == actions.Section && target.Key.Host == actions.Host
+                    && (IsActionItem(target.Kind) || target.Kind == PanelTargetKind.More)).ToArray();
+            if (controls.Length > 0)
+            {
+                // Inserting a group header can move a focused card below the fold. Prefer
+                // the whole card's controls, or the focused control if the card cannot fit.
+                var top = controls.Min(target => target.Bounds.Y) - 4;
+                var bottom = controls.Max(target => target.Bounds.Bottom) + 4;
+                if (bottom - top > _viewport.Height)
+                {
+                    var control = controls.FirstOrDefault(target => target.Key == _focus) ?? controls[0];
+                    top = control.Bounds.Y - 4;
+                    bottom = control.Bounds.Bottom + 4;
+                }
+                var scroll = _scroll + (bottom > _viewport.Bottom ? bottom - _viewport.Bottom
+                    : top < _viewport.Y ? top - _viewport.Y : 0);
+                scroll = Math.Clamp(scroll, 0, Math.Max(0, _contentHeight - _viewport.Height));
+                if (scroll != _scroll)
+                {
+                    _scroll = scroll;
+                    return Build();
+                }
+            }
+        }
 
         // Forget hover and focus on targets that disappeared, such as a row that was removed.
         if (_focus is { } focus && !targets.Any(target => target.Key == focus))

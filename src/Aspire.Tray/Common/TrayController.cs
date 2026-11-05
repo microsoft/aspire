@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Threading.Channels;
 
 namespace Aspire.Tray;
 
@@ -11,6 +12,15 @@ internal sealed class TrayController : IAsyncDisposable
     private readonly ITraySavedStateStore _savedStateStore;
     private readonly int _recentAppHostLimit;
     private readonly TimeProvider _timeProvider;
+    private readonly Func<string, TrayGitCheckout?> _readCheckout;
+    private readonly Dictionary<string, TrayGitCheckout?> _checkouts = new(TrayAppHostPath.Comparer);
+    private HashSet<string> _checkoutPaths = new(TrayAppHostPath.Comparer);
+    private readonly Channel<byte> _checkoutRefresh = Channel.CreateBounded<byte>(new BoundedChannelOptions(1)
+    {
+        FullMode = BoundedChannelFullMode.DropWrite,
+        SingleReader = true
+    });
+    internal static TimeSpan CheckoutRefreshInterval => TimeSpan.FromSeconds(2);
     internal static TimeSpan StartReconciliationTimeout => TimeSpan.FromSeconds(60);
     private readonly object _gate = new();
     private readonly CancellationTokenSource _shutdown = new();
@@ -21,6 +31,8 @@ internal sealed class TrayController : IAsyncDisposable
     private AppHostSnapshot _snapshot = new([], DiscoveryState.Connecting);
     private TrayViewState _state = new(DiscoveryState.Connecting, [], "Connecting to Aspire...");
     private Task? _watcher;
+    private Task? _checkoutWatcher;
+    private Task? _checkoutInvalidator;
     private Task? _disposeTask;
     private string? _actionError;
     private string? _savedStateError;
@@ -43,6 +55,12 @@ internal sealed class TrayController : IAsyncDisposable
     }
 
     internal TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore, int recentAppHostLimit, TimeProvider timeProvider)
+        : this(client, savedStateStore, recentAppHostLimit, timeProvider, TrayGitCheckout.Read)
+    {
+    }
+
+    internal TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore, int recentAppHostLimit,
+        TimeProvider timeProvider, Func<string, TrayGitCheckout?> readCheckout)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(recentAppHostLimit);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(recentAppHostLimit, TraySavedState.MaximumRecentAppHosts);
@@ -50,6 +68,7 @@ internal sealed class TrayController : IAsyncDisposable
         _savedStateStore = savedStateStore;
         _recentAppHostLimit = recentAppHostLimit;
         _timeProvider = timeProvider;
+        _readCheckout = readCheckout;
         try
         {
             _savedState = savedStateStore.Load();
@@ -85,6 +104,8 @@ internal sealed class TrayController : IAsyncDisposable
                 throw new InvalidOperationException("The tray controller is already started.");
             }
             _watcher = Task.Run(WatchAsync);
+            _checkoutWatcher = Task.Run(RefreshCheckoutsAsync);
+            _checkoutInvalidator = InvalidateCheckoutsAsync();
         }
     }
 
@@ -566,6 +587,13 @@ internal sealed class TrayController : IAsyncDisposable
 
     private void PublishLocked()
     {
+        var paths = _snapshot.AppHosts.Select(host => TrayAppHostPath.Normalize(host.AppHostPath))
+            .Concat(_savedState.AppHosts.Select(host => host.AppHostPath)).ToHashSet(TrayAppHostPath.Comparer);
+        if (!_checkoutPaths.SetEquals(paths))
+        {
+            _checkoutPaths = paths;
+            _checkoutRefresh.Writer.TryWrite(0);
+        }
         var live = _snapshot.Discovery == DiscoveryState.Live;
         var pins = _savedState.AppHosts.Where(host => host.IsPinned)
             .Select(host => host.AppHostPath).ToHashSet(TrayAppHostPath.Comparer);
@@ -585,7 +613,7 @@ internal sealed class TrayController : IAsyncDisposable
                 live && !stopped && !stopping && host.ProcessStartTimeUnixMilliseconds is > 0,
                 stopping, error)
             {
-                Checkout = TrayGitCheckout.Read(host.AppHostPath),
+                Checkout = _checkouts.GetValueOrDefault(TrayAppHostPath.Normalize(host.AppHostPath)),
                 IsPinned = pins.Contains(TrayAppHostPath.Normalize(host.AppHostPath)),
                 IsRunning = !stopped,
                 Health = live && !stopped ? host.Health : AppHostHealth.Unknown
@@ -644,7 +672,7 @@ internal sealed class TrayController : IAsyncDisposable
         return new(host.Id, AppHostPresentation.GetTitle(host), subtitle, AppHostPresentation.GetDisplayName(host),
             false, false, false, error)
         {
-            Checkout = TrayGitCheckout.Read(host.AppHostPath),
+            Checkout = _checkouts.GetValueOrDefault(saved.AppHostPath),
             IsPinned = saved.IsPinned,
             CanStart = live && start?.BlocksStart != true,
             IsStarting = starting,
@@ -691,6 +719,94 @@ internal sealed class TrayController : IAsyncDisposable
         _ => $"Unable to stop AppHost{(result.ExitCode is int code ? $" (CLI exit {code})" : "")}."
     };
 
+    private async Task InvalidateCheckoutsAsync()
+    {
+        // Ref changes need not produce a discovery snapshot (especially for offline entries).
+        // Bound refresh frequency rather than re-reading Git files on every health/UI update.
+        using var timer = new PeriodicTimer(CheckoutRefreshInterval, _timeProvider);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_shutdown.Token).ConfigureAwait(false))
+            {
+                _checkoutRefresh.Writer.TryWrite(0);
+            }
+        }
+        catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task RefreshCheckoutsAsync()
+    {
+        var cancellationToken = _shutdown.Token;
+        try
+        {
+            while (await _checkoutRefresh.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (_checkoutRefresh.Reader.TryRead(out _))
+                {
+                }
+                string[] paths;
+                lock (_gate)
+                {
+                    paths = _checkoutPaths.ToArray();
+                }
+                var refreshed = new Dictionary<string, TrayGitCheckout?>(TrayAppHostPath.Comparer);
+                foreach (var path in paths)
+                {
+                    // Filesystem metadata is optional. A stalled share must neither hold the
+                    // controller gate nor prevent shutdown; abandon only the in-flight read.
+                    try
+                    {
+                        refreshed[path] = await Task.Run(() => _readCheckout(path), cancellationToken)
+                            .WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Optional enrichment must not terminate discovery or expose local paths.
+                        Console.Error.WriteLine($"Git metadata refresh failed ({ex.GetType().Name}).");
+                        refreshed[path] = null;
+                    }
+                }
+                var changed = false;
+                lock (_gate)
+                {
+                    if (_disposed)
+                    {
+                        return;
+                    }
+                    foreach (var path in _checkouts.Keys.Where(path => !_checkoutPaths.Contains(path)).ToArray())
+                    {
+                        _checkouts.Remove(path);
+                    }
+                    foreach (var (path, checkout) in refreshed)
+                    {
+                        if (_checkoutPaths.Contains(path) && _checkouts.GetValueOrDefault(path) != checkout)
+                        {
+                            _checkouts[path] = checkout;
+                            changed = true;
+                        }
+                    }
+                    if (changed)
+                    {
+                        PublishLocked();
+                    }
+                }
+                if (changed)
+                {
+                    Changed?.Invoke();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
         lock (_gate)
@@ -707,6 +823,14 @@ internal sealed class TrayController : IAsyncDisposable
         if (_watcher is not null)
         {
             tasks.Add(_watcher);
+        }
+        if (_checkoutWatcher is not null)
+        {
+            tasks.Add(_checkoutWatcher);
+        }
+        if (_checkoutInvalidator is not null)
+        {
+            tasks.Add(_checkoutInvalidator);
         }
         try
         {
