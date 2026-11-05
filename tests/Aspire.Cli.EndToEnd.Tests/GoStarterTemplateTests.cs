@@ -32,7 +32,8 @@ public sealed class GoStarterTemplateTests(ITestOutputHelper output)
         {
             Assert.SkipUnless(strategy.Mode == CliInstallMode.LocalHive,
                 "Stable Go starter coverage requires a localhive --version X.Y.Z --archive build.");
-            stableVersion = CliE2ETestHelpers.TryGetLocalStableAspireVersion(repoRoot);
+            Assert.NotNull(strategy.ArchivePath);
+            stableVersion = CliE2ETestHelpers.TryGetStableAspireVersionFromArchive(strategy.ArchivePath);
             Assert.SkipWhen(stableVersion is null,
                 "Build a stable-shaped local hive and set ASPIRE_E2E_ARCHIVE to its archive.");
         }
@@ -111,9 +112,10 @@ public sealed class GoStarterTemplateTests(ITestOutputHelper output)
             {
                 var metadata = $"../.stable-nuget-packages/{packageId}/{stableVersion}/.nupkg.metadata";
                 await auto.RunCommandAsync(
-                    $"python3 -c 'import json,os; metadata=json.load(open(\"{metadata}\")); " +
-                    "expected=os.path.realpath(os.path.expandvars(\"$HOME/.aspire/hives/local/packages\")); " +
-                    "assert os.path.realpath(metadata[\"source\"]) == expected, metadata'",
+                    $"node -e 'const fs = require(\"node:fs\"), assert = require(\"node:assert/strict\"); " +
+                    $"const metadata = JSON.parse(fs.readFileSync(\"{metadata}\", \"utf8\")); " +
+                    "const expected = fs.realpathSync(process.env.HOME + \"/.aspire/hives/local/packages\"); " +
+                    "assert.equal(fs.realpathSync(metadata.source), expected);'",
                     counter);
             }
         }

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Formats.Tar;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -1155,6 +1157,35 @@ internal static class CliE2ETestHelpers
         }
 
         return bestRaw;
+    }
+
+    internal static string? TryGetStableAspireVersionFromArchive(string archivePath)
+    {
+        using var archive = File.OpenRead(archivePath);
+        using var gzip = new GZipStream(archive, CompressionMode.Decompress);
+        using var tar = new TarReader(gzip);
+
+        // Local-hive entries look like "hives/local/packages/Aspire.Hosting.17.0.99.nupkg".
+        // Some tar writers prefix entries with "./"; prerelease packages must not enable this lane.
+        var stablePackageRegex = new Regex(@"^(?:\./)?hives/local/packages/Aspire\.Hosting\.(?<version>\d+\.\d+\.\d+)\.nupkg$", RegexOptions.IgnoreCase);
+        Version? bestVersion = null;
+        while (tar.GetNextEntry() is { } entry)
+        {
+            if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+            {
+                continue;
+            }
+
+            var match = stablePackageRegex.Match(entry.Name);
+            if (match.Success &&
+                Version.TryParse(match.Groups["version"].Value, out var version) &&
+                (bestVersion is null || version > bestVersion))
+            {
+                bestVersion = version;
+            }
+        }
+
+        return bestVersion?.ToString();
     }
 
     internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
