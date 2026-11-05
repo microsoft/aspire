@@ -45,8 +45,10 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         var skillPath = Path.Combine(skillDirectory.FullName, "SKILL.md");
         const string skillContent = "My customized Aspire instructions.";
         await File.WriteAllTextAsync(skillPath, skillContent, TestContext.Current.CancellationToken);
+        // The bind-mounted workspace can belong to a different user than the container's Git
+        // process. Trust only this repository so doctor can discover its root from a subdirectory.
         await auto.RunCommandAsync(
-            """git init --quiet && mkdir -p "$HOME/.agents/skills/aspire" apps/nested && cp .agents/skills/aspire/SKILL.md "$HOME/.agents/skills/aspire/SKILL.md" && cd apps/nested""",
+            """git init --quiet && git config --global --add safe.directory "$ASPIRE_E2E_WORKSPACE" && mkdir -p "$HOME/.agents/skills/aspire" apps/nested && cp .agents/skills/aspire/SKILL.md "$HOME/.agents/skills/aspire/SKILL.md" && cd apps/nested && test "$(git rev-parse --show-toplevel)" = "$ASPIRE_E2E_WORKSPACE" """,
             counter);
 
         // Other environment checks can independently fail, so accept doctor's documented 0/1
