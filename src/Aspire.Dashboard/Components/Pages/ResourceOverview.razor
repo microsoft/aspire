@@ -953,7 +953,8 @@
                         @SelectionAction(DashboardUrls.ConsoleLogsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)], new Icons.Regular.Size16.SlideText(), 0)
                         @if (isInstrumented)
                         {
-                            @SelectionAction(DashboardUrls.StructuredLogsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], new Icons.Regular.Size16.SlideTextSparkle(), errorCount)
+                            @* With unviewed errors, the action shows their count, so open the logs filtered to them. *@
+                            @SelectionAction(DashboardUrls.StructuredLogsUrl(resourceName, logLevel: errorCount > 0 ? "error" : null), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], new Icons.Regular.Size16.SlideTextSparkle(), errorCount)
                         }
                         @if (otlpResource is not null)
                         {

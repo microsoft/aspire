@@ -973,9 +973,19 @@
                     </span>
                     @if (errorCount > 0)
                     {
-                        <span class="error-badge" data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)">@errorCount</span>
+                        @* Reserves the badge's width in the wide grid, where the real badge overlays the end of this link. *@
+                        <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
                     }
             </a>
+            @if (errorCount > 0)
+            {
+                var errorsLabel = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount);
+                @* A sibling link, not nested in the row link: opening the error logs must not change the row selection. *@
+                <a class="error-badge resource-row-error-link"
+                   href="@DashboardUrls.StructuredLogsUrl(resourceName, logLevel: "error")"
+                   aria-label="@errorsLabel"
+                   data-tooltip="@errorsLabel">@errorCount</a>
+            }
             @if (_isPaneFullCanvas && !resource.IsParameter)
             {
                 @* Sibling links, not nested anchors: opening an endpoint must not change the row selection. *@
