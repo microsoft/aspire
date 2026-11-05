@@ -1,0 +1,28 @@
+{
+  "id": "vscode-e2e-resource-debug-random-name-matches-sensitive-regex",
+  "type": "flaky-test",
+  "title": "VS Code resource-debug E2E safety regex matches randomly generated resource name containing 'env'",
+  "error_pattern": "The input was expected to not match the regular expression /(?:pid|process|configuration|arguments?|args|environment|env|secret|token|executable)|https?:\\/\\/|\\/(?:Users|private|var|tmp)\\b/i.",
+  "occurrences": [
+    {
+      "run_id": 41964395194,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41964395194",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+      "observed_at": "2026-11-05T04:28:58Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire resource debug language model tool E2E attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches",
+          "job_id": 127042825598,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+          "error": "The input was expected to not match the regular expression /(?:pid|process|configuration|arguments?|args|environment|env|secret|token|executable)|https?:\\/\\/|\\/(?:Users|private|var|tmp)\\b/i. Input:\n\n'{\"tool\":\"aspire_resource_debug\",\"appHost\":\"AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\"resourceName\":\"e2e-go-knenvskt\",\"requestedStrategy\":\"attach\",\"success\":true,\"outcome\":\"started\",\"effectiveStrategy\":\"attach\",\"controller\":\"editor\",\"provider\":\"go\"}'\n",
+          "stack_trace": "AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /(?:pid|process|configuration|arguments?|args|environment|env|secret|token|executable)|https?:\\/\\/|\\/(?:Users|private|var|tmp)\\b/i. Input:\n\n'{\"tool\":\"aspire_resource_debug\",\"appHost\":\"AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\"resourceName\":\"e2e-go-knenvskt\",\"requestedStrategy\":\"attach\",\"success\":true,\"outcome\":\"started\",\"effectiveStrategy\":\"attach\",\"controller\":\"editor\",\"provider\":\"go\"}'\n\n    at assertSafeResourceDebugResult (out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js:383:12)\n    at Context.<anonymous> (out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js:357:9)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}

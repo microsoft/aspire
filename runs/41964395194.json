@@ -1,0 +1,80 @@
+{
+  "run_id": 41964395194,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41964395194",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T04:28:58Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21720,
+    "title": "Add untagged manifest cleanup options to ACR purge tasks",
+    "author": "codebytes",
+    "state": "closed",
+    "head_branch": "codebytes-acr-purge-behavior",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21720",
+    "merged_at": "2026-11-05T03:53:36Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "100acc9d651a854775cde61f86ee8e85373a3ffb",
+    "failed_sha": "ace20894ceed70dd8ed4b53c9f2d5cdd30c507eb",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "ace20894ceed70dd8ed4b53c9f2d5cdd30c507eb",
+        "message": "Add untagged manifest cleanup options to ACR purge tasks (#21720) ## Description Scheduled ACR purge tasks currently remove tags only, leaving manifests and image layers behind. This fixes `WithPurgeTask` to also delete eligible untagged manifests so cleanup can reclaim storage, without adding public API options or changing the existing method signature. - Pin the task image internally to `mcr.microsoft.com/acr/acr-cli:0.21`. - Use `--ago` and `--min-tags` to delete matching tags older than `ago",
+        "html_url": "https://github.com/microsoft/aspire/commit/ace20894ceed70dd8ed4b53c9f2d5cdd30c507eb",
+        "pull_request": {
+          "number": 21720,
+          "title": "Add untagged manifest cleanup options to ACR purge tasks",
+          "url": "https://github.com/microsoft/aspire/pull/21720",
+          "merged_at": "2026-11-05T03:53:36Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 127038659000,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41964395194/job/127038659000",
+      "classification": "transient-infra",
+      "reason": "Aspire.Cli.Tests macOS test host crashed with exit code 3 with no failed tests; matches recorded mechanism.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+      "id": 127042825598,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41964395194/job/127042825598",
+      "classification": "flaky-test",
+      "reason": "E2E assertion rejected output only because randomly generated resource name e2e-go-knenvskt contains the substring 'env'.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire resource debug language model tool E2E attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+      "error": "The input was expected to not match the regular expression /(?:pid|process|configuration|arguments?|args|environment|env|secret|token|executable)|https?:\\/\\/|\\/(?:Users|private|var|tmp)\\b/i. Input:\n\n'{\"tool\":\"aspire_resource_debug\",\"appHost\":\"AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\"resourceName\":\"e2e-go-knenvskt\",\"requestedStrategy\":\"attach\",\"success\":true,\"outcome\":\"started\",\"effectiveStrategy\":\"attach\",\"controller\":\"editor\",\"provider\":\"go\"}'\n",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /(?:pid|process|configuration|arguments?|args|environment|env|secret|token|executable)|https?:\\/\\/|\\/(?:Users|private|var|tmp)\\b/i. Input:\n\n'{\"tool\":\"aspire_resource_debug\",\"appHost\":\"AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\"resourceName\":\"e2e-go-knenvskt\",\"requestedStrategy\":\"attach\",\"success\":true,\"outcome\":\"started\",\"effectiveStrategy\":\"attach\",\"controller\":\"editor\",\"provider\":\"go\"}'\n\n    at assertSafeResourceDebugResult (out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js:383:12)\n    at Context.<anonymous> (out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js:357:9)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Safety regex /env/i matched the random resource name suffix; failure depends on random name generation, not on the behavior under test.",
+      "job_id": 127042825598,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-crash-exit-3",
+    "vscode-e2e-resource-debug-random-name-matches-sensitive-regex"
+  ]
+}
