@@ -1,0 +1,136 @@
+{
+  "run_id": 42076556098,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42076556098",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T18:25:00Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21768,
+    "title": "fix intermittent internal build failures",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "cloudkit-stapler-retries",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21768",
+    "merged_at": "2026-11-05T17:38:09Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "e37145f3298242cec5a322ebf0cbcd081273bf3a",
+    "failed_sha": "1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "message": "[automated] test(cli): Find Radius MongoDB pods in their application namespace (#21422) ## Description The Radius deployment outerloop test fails while waiting for MongoDB: ```text error: no matching resources found ``` The legacy MongoDB recipe labels its pods, not its Deployment metadata. Its workload also lives in the legacy application's namespace, which appends `-app` to the environment namespace. Wait for the MongoDB pod to become Ready in that namespace, and use the same namespace for pod",
+        "html_url": "https://github.com/microsoft/aspire/commit/a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "pull_request": {
+          "number": 21422,
+          "title": "[automated] test(cli): Find Radius MongoDB pods in their application namespace",
+          "url": "https://github.com/microsoft/aspire/pull/21422",
+          "merged_at": "2026-11-05T17:08:30Z"
+        }
+      },
+      {
+        "sha": "1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "message": "fix intermittent internal build failures (#21768) ## Description **Add bounded retries for transient connection loss during macOS tray notarization-ticket stapling and validation.** Internal builds intermittently fail when Apple's CloudKit connection drops: ```text Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\" ``` These network failures currently stop the build immediately. Retry only the failed stapler operation when its output identifies connection loss, rather th",
+        "html_url": "https://github.com/microsoft/aspire/commit/1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "pull_request": {
+          "number": 21768,
+          "title": "fix intermittent internal build failures",
+          "url": "https://github.com/microsoft/aspire/pull/21768",
+          "merged_at": "2026-11-05T17:38:09Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "id": 127422597215,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42076556098/job/127422597215",
+      "classification": "transient-infra",
+      "reason": "Fixtures failed because DCP docker --version dependency check timed out on the Windows runner.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.DenoFunctionalTests.VerifyDenoAppDirectExecutionWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.DenoAppFixture' threw in InitializeAsync\n---- Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-05T17:49:48.778Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 7008, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "\n----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.JavaScript.Tests.DenoAppFixtureBase.InitializeAsync() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.JavaScript.Tests\\DenoAppFixture.cs:line 80",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Fixture init failed on docker --version dependency-check timeout.",
+      "job_id": 127422597215,
+      "execution_id": "c2e5bd0c-5eb1-44b8-bd2f-e9aad491e15e",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.DenoFunctionalTests.VerifyDenoAppTaskScriptWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.DenoAppFixture' threw in InitializeAsync\n---- Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-05T17:49:48.778Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 7008, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "\n----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.JavaScript.Tests.DenoAppFixtureBase.InitializeAsync() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.JavaScript.Tests\\DenoAppFixture.cs:line 80",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Fixture init failed on docker --version dependency-check timeout.",
+      "job_id": 127422597215,
+      "execution_id": "76fbc3a5-a7cb-4aa2-a44a-589a85f10bf4",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.DenoTelemetryFunctionalTests.VerifyDenoAppExportsNativeTelemetryToDashboard",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.DenoTelemetryFixture' threw in InitializeAsync\n---- Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-05T17:49:48.780Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 5976, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "\n----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.JavaScript.Tests.DenoAppFixtureBase.InitializeAsync() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.JavaScript.Tests\\DenoAppFixture.cs:line 80",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Fixture init failed on docker --version dependency-check timeout.",
+      "job_id": 127422597215,
+      "execution_id": "74f6e369-d4eb-49b9-851e-4140ca7e8f60",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNodeAppWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' threw in InitializeAsync\n---- Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-05T17:49:55.014Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 8876, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "\n----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.JavaScript.Tests.NodeAppFixture.InitializeAsync() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.JavaScript.Tests\\NodeAppFixture.cs:line 43",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Fixture init failed on docker --version dependency-check timeout.",
+      "job_id": 127422597215,
+      "execution_id": "8c12d172-fa83-441a-b0fd-e3f9601048c8",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.JavaScript.Tests.NodeFunctionalTests.VerifyNpmAppWorks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "error": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.NodeAppFixture' threw in InitializeAsync\n---- Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-05T17:49:55.014Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 8876, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "\n----- Inner Stack Trace -----\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.JavaScript.Tests.NodeAppFixture.InitializeAsync() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.JavaScript.Tests\\NodeAppFixture.cs:line 43",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Fixture init failed on docker --version dependency-check timeout.",
+      "job_id": 127422597215,
+      "execution_id": "b472d513-fc1b-41b6-b7fc-88515b0a2921",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dcp-docker-version-dependency-check-timeout-windows"
+  ]
+}
