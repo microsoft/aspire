@@ -41,3 +41,10 @@ Then, while it is running:
 - Add a new `app.MapGet(...)` route (a rude edit): the watcher restarts only the api, with the same Aspire env/endpoint.
 - Introduce a compile error: the error shows in the `dotnet-watch` resource log and the old code keeps running; fixing it reloads.
 - `aspire resource api restart` gives a fresh process with the latest code.
+
+## Evidence (from the spike run)
+
+- [Resources](docs/01-resources.png): api, worker and dotnet-watch all Running/Healthy
+- [api console](docs/02-api-console.png)
+- [worker console](docs/03-worker-console.png): `[dotnet-watch] 🔥 Hot reload applied` and the updated output
+- [dotnet-watch console](docs/04-dotnet-watch-console.png): status events and the rude-edit restart
