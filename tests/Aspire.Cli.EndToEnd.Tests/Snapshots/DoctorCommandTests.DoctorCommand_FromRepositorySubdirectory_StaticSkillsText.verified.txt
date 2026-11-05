@@ -1,0 +1,5 @@
+﻿  🚨 Local Aspire skill files may override plugin skills
+       Delete these files, then run 'aspire agent init --skills aspire'.
+       Files:
+         .agents/skills/aspire/SKILL.md
+         ~/.agents/skills/aspire/SKILL.md

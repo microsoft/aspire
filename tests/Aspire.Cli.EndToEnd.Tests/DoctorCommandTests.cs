@@ -26,6 +26,65 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         "deno"
     };
 
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DoctorCommand_FromRepositorySubdirectory_ReportsStaticSkillsWithoutChangingFiles()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        var skillDirectory = workspace.CreateDirectory(Path.Combine(".agents", "skills", "aspire"));
+        var skillPath = Path.Combine(skillDirectory.FullName, "SKILL.md");
+        const string skillContent = "My customized Aspire instructions.";
+        await File.WriteAllTextAsync(skillPath, skillContent, TestContext.Current.CancellationToken);
+        await auto.RunCommandAsync(
+            """git init --quiet && mkdir -p "$HOME/.agents/skills/aspire" apps/nested && cp .agents/skills/aspire/SKILL.md "$HOME/.agents/skills/aspire/SKILL.md" && cd apps/nested""",
+            counter);
+
+        // Other environment checks can independently fail, so accept doctor's documented 0/1
+        // exit codes while checking the skill warning itself in both output formats.
+        await auto.RunCommandAsync(
+            """env -u ASPIRE_ANSI_PASS_THRU NO_COLOR=1 aspire doctor --non-interactive --nologo > "$ASPIRE_E2E_WORKSPACE/doctor-skills.txt"; result=$?; test "$result" -le 1""",
+            counter,
+            TimeSpan.FromMinutes(2));
+        await auto.RunCommandAsync(
+            """aspire doctor --format json --non-interactive --nologo > "$ASPIRE_E2E_WORKSPACE/doctor-skills.json"; result=$?; test "$result" -le 1""",
+            counter,
+            TimeSpan.FromMinutes(2));
+
+        var text = await File.ReadAllTextAsync(
+            Path.Combine(workspace.Path, "doctor-skills.txt"), TestContext.Current.CancellationToken);
+        // The warning is a five-line block: message, fix, "Files:", project path, and global path.
+        // Snapshot only that block because unrelated prerequisite results vary by environment.
+        var warning = string.Join("\n", text.ReplaceLineEndings("\n").Split('\n')
+            .SkipWhile(line => !line.Contains("Local Aspire skill files may override plugin skills", StringComparison.Ordinal))
+            .Take(5)
+            .Select(line => line.TrimEnd()));
+        await Verify(warning, "txt").UseMethodName("DoctorCommand_FromRepositorySubdirectory_StaticSkillsText");
+
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(
+            Path.Combine(workspace.Path, "doctor-skills.json"), TestContext.Current.CancellationToken));
+        var check = Assert.Single(document.RootElement.GetProperty("checks").EnumerateArray(),
+            check => check.GetProperty("name").GetString() == "aspire-skill-sources");
+        var workspaceRoot = $"/workspace/{workspace.WorkspaceRoot.Name}";
+        Assert.Equal(workspaceRoot, check.GetProperty("metadata").GetProperty("workspaceRoot").GetString());
+        await Verify(check.GetRawText().Replace(workspaceRoot, "<workspace>", StringComparison.Ordinal), "json")
+            .UseMethodName("DoctorCommand_FromRepositorySubdirectory_StaticSkillsJson");
+
+        await auto.RunCommandAsync(
+            """cmp "$HOME/.agents/skills/aspire/SKILL.md" "$ASPIRE_E2E_WORKSPACE/.agents/skills/aspire/SKILL.md" """,
+            counter);
+        Assert.Equal(skillContent, await File.ReadAllTextAsync(skillPath, TestContext.Current.CancellationToken));
+    }
+
     [Theory]
     [InlineData(null, null, true, "linux")]
     [InlineData(null, null, false, "linux")]
