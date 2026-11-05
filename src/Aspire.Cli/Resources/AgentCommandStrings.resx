@@ -118,7 +118,7 @@
     <value>MCP: {0}</value>
   </data>
   <data name="InitCommand_SelectScopePrompt" xml:space="preserve">
-    <value>Installation scope</value>
+    <value>Where should Aspire agent integrations apply?</value>
   </data>
   <data name="InitCommand_NoConfigurationSelected" xml:space="preserve">
     <value>No agent configuration selected. Existing configuration was left unchanged.</value>
@@ -127,10 +127,10 @@
     <value>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</value>
   </data>
   <data name="InitCommand_ProjectScope" xml:space="preserve">
-    <value>Project (Install in your workspace root; committed with your project)</value>
+    <value>This project (installed components and configuration apply only to this project)</value>
   </data>
   <data name="InitCommand_GlobalScope" xml:space="preserve">
-    <value>Global (Install in your home directory; available across all projects)</value>
+    <value>All projects (installed components and configuration apply across all projects)</value>
   </data>
   <data name="InitCommand_EnvironmentLocationDescription" xml:space="preserve">
     <value>{0}: {1}</value>

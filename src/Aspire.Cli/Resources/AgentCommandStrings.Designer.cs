@@ -323,7 +323,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Global (Install in your home directory; available across all projects).
+        ///   Looks up a localized string similar to All projects (installed components and configuration apply across all projects).
         /// </summary>
         internal static string InitCommand_GlobalScope {
             get {
@@ -468,7 +468,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Project (Install in your workspace root; committed with your project).
+        ///   Looks up a localized string similar to This project (installed components and configuration apply only to this project).
         /// </summary>
         internal static string InitCommand_ProjectScope {
             get {
@@ -495,7 +495,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installation scope.
+        ///   Looks up a localized string similar to Where should Aspire agent integrations apply?.
         /// </summary>
         internal static string InitCommand_SelectScopePrompt {
             get {
