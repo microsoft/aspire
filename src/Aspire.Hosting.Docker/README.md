@@ -2,6 +2,20 @@
 
 Provides publishing extensions to Aspire for Docker Compose.
 
+## Brownfield Compose import (proof of concept)
+
+`AddDockerComposeFileAsync` imports a bounded development stack into native Aspire
+containers, endpoints, environment references and dependency relationships. Docker
+Compose normalizes the input; Aspire/DCP, not `compose up`, owns the resulting
+processes and containers. A service can be replaced by a local project without
+changing whole-URL environment references in its callers.
+
+See [the runnable adoption sample](../../playground/ComposeAdoption/README.md) for
+the supported subset, fail-fast diagnostics, replacement API, design tradeoffs,
+and a script that verifies a real gateway-to-local-source-to-Redis request path.
+This C#-only experiment is run-mode only, not a general Compose engine or migration
+code generator, and does not adopt existing running containers or named volumes.
+
 ## Getting started
 
 ### Add the integration

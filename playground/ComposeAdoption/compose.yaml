@@ -1,0 +1,24 @@
+name: compose-adoption
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    expose: ["6379"]
+  api:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    command: ["dotnet", "/app/ComposeAdoption.Api.dll", "--IMPLEMENTATION", "compose-dotnet"]
+    environment:
+      REDIS_URL: redis://redis:6379
+    expose: ["8080"]
+    volumes:
+      - ../../artifacts/compose-adoption/api:/app:ro
+    depends_on: [redis]
+  gateway:
+    image: mcr.microsoft.com/dotnet/aspnet:10.0
+    command: ["dotnet", "/app/ComposeAdoption.Gateway.dll"]
+    environment:
+      API_URL: http://api:8080
+    ports: ["18080:8080"]
+    volumes:
+      - ../../artifacts/compose-adoption/gateway:/app:ro
+    depends_on: [api]
