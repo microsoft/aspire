@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T18:35:32Z",
+  "number": 21643,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "Wait for resource lifecycle command outcomes instead of the 10s E2E control apply timeout"
+}

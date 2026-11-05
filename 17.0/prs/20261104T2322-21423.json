@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T23:22:20Z",
+  "number": 21423,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "[automated] test(templates): Fix child-project SDK isolation and dashboard checks"
+}

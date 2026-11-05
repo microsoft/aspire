@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T23:57:41Z",
+  "number": 21516,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix flaky ResourcesLayoutTests grouping-menu clicks racing the renderer dispatcher"
+}

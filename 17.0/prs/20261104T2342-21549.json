@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T23:42:43Z",
+  "number": 21549,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "Avoid Add-Type compile in detached Windows null-stdin CLI test"
+}

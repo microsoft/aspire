@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Metric charts now re-initialize when an instrument's unit, type or monotonicity changes, fixing incorrect legend labels when switching resources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udcc8",
+  "firstMergedAt": "2026-11-04T23:46:18Z",
+  "lastMergedAt": "2026-11-04T23:46:18Z",
+  "name": "Fix stale metric chart legends",
+  "owner": "sebastienros",
+  "prs": [
+    21143
+  ]
+}

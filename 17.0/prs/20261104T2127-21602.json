@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "User-facing CLI fix",
+  "mergedAt": "2026-11-04T21:27:22Z",
+  "number": 21602,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "included",
+  "title": "Treat backchannel close during RequestStopAsync as a completed stop"
+}

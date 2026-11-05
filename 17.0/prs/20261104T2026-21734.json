@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T20:26:52Z",
+  "number": 21734,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "[automated] test: keep simulated CI analysis out of Actions summaries"
+}

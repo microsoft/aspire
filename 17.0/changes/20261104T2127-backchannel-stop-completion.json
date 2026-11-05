@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a spurious \"connection to the AppHost was lost\" failure (exit code 6) when the AppHost closes the backchannel while stopping, which could break commands such as `aspire do --list-steps`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0c",
+  "firstMergedAt": "2026-11-04T21:27:22Z",
+  "lastMergedAt": "2026-11-04T21:27:22Z",
+  "name": "Fix false failure when AppHost stops after pipeline step listing",
+  "owner": "davidfowl",
+  "prs": [
+    21602
+  ]
+}

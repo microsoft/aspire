@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T21:19:56Z",
+  "number": 21660,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "Pin public npm registry for Dependabot in template and JsPublish lockfile directories"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T23:47:10Z",
+  "number": 21526,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "Run ServiceBus component tests sequentially to avoid Azure.Core AzureEventSourceListener race"
+}

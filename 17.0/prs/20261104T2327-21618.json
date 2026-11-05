@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T23:27:06Z",
+  "number": 21618,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "Make EnvironmentChecker timeout tests deterministic with TimeProvider"
+}

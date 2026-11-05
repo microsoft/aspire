@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Test, CI, or repository-maintenance change with no user-facing impact",
+  "mergedAt": "2026-11-04T23:16:47Z",
+  "number": 21773,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "excluded",
+  "title": "Explain Team App card tags with accessible tooltips"
+}

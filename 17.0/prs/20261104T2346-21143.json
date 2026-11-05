@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Dashboard chart fix",
+  "mergedAt": "2026-11-04T23:46:18Z",
+  "number": 21143,
+  "runDate": "2026-11-05T00:10:00Z",
+  "status": "included",
+  "title": "Re-initialize metric charts when instrument unit, type or monotonicity changes"
+}
