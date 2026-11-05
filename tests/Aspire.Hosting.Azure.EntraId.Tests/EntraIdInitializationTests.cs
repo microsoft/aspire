@@ -51,7 +51,7 @@ public class EntraIdInitializationTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
             .WithClientSecret(builder.AddParameter("EntraClientSecret", "super-secret", secret: true))
-            .WithFicMsi(ClientId);
+            .WithFederatedManagedIdentityCredential(ClientId);
 
         using var app = builder.Build();
         var snapshot = await InitializeAsync(app, entra.Resource);

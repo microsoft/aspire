@@ -80,9 +80,11 @@ internal static class DotnetFileAppProcess
 
     public static string[] CreateArguments(string appPath, IReadOnlyList<string>? arguments = null)
     {
+        // These fixtures run under the JIT; avoid restoring an unused AOT toolchain
+        // whose build diagnostics would contaminate the captured process output.
         return arguments is null or { Count: 0 }
-            ? ["run", "--file", appPath]
-            : ["run", "--file", appPath, "--", .. arguments];
+            ? ["run", "--file", appPath, "-p:PublishAot=false"]
+            : ["run", "--file", appPath, "-p:PublishAot=false", "--", .. arguments];
     }
 }
 

@@ -1329,7 +1329,10 @@ public class AspireClient {
         if (value instanceof String) {
             return "\"" + escapeJson((String) value) + "\"";
         }
-        if (value instanceof Number || value instanceof Boolean) {
+        if (value instanceof Number number) {
+            return toJsonNumber(number);
+        }
+        if (value instanceof Boolean) {
             return value.toString();
         }
         if (value instanceof Map) {
@@ -1372,6 +1375,32 @@ public class AspireClient {
             return sb.toString();
         }
         return "\"" + escapeJson(value.toString()) + "\"";
+    }
+
+    // 2^53 (JavaScript's Number.MAX_SAFE_INTEGER + 1). Every integer with magnitude up to this bound is exactly
+    // representable as a double; above it, doubles are spaced more than 1 apart, so a parsed value may already have
+    // been rounded to a different integer. Only normalize integral doubles within this range.
+    private static final double MAX_EXACT_DOUBLE_INTEGER = 9007199254740992d;
+
+    // ATS maps every numeric type to Java double, so integral values must be written without a fractional
+    // part ("32" rather than "32.0"); otherwise the AppHost can't deserialize them into int or long members.
+    private static String toJsonNumber(Number number) {
+        if (number instanceof BigDecimal decimal) {
+            // Compare exactly: BigDecimal values parsed from JSON may not be representable as a double.
+            try {
+                return Long.toString(decimal.longValueExact());
+            } catch (ArithmeticException ignored) {
+                // Fractional or out of long range; keep the original text.
+                return decimal.toString();
+            }
+        }
+        String text = number.toString();
+        boolean hasFractionOrExponent = text.indexOf('.') >= 0 || text.indexOf('e') >= 0 || text.indexOf('E') >= 0;
+        double value = number.doubleValue();
+        if (hasFractionOrExponent && value == Math.rint(value) && Math.abs(value) <= MAX_EXACT_DOUBLE_INTEGER) {
+            return Long.toString((long) value);
+        }
+        return text;
     }
 
     private String escapeJson(String s) {
@@ -3465,10 +3494,52 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public CSharpAppResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public CSharpAppResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public CSharpAppResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public CSharpAppResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public CSharpAppResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -5860,10 +5931,52 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public ContainerRegistryResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ContainerRegistryResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ContainerRegistryResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ContainerRegistryResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public ContainerRegistryResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ContainerRegistryResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -7820,10 +7933,52 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public ContainerResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ContainerResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ContainerResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ContainerResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ContainerResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -10609,10 +10764,52 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public DotnetToolResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public DotnetToolResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public DotnetToolResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public DotnetToolResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public DotnetToolResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -13081,10 +13278,52 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public ExecutableResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ExecutableResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ExecutableResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ExecutableResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ExecutableResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -14216,10 +14455,52 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public ExternalServiceResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ExternalServiceResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ExternalServiceResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ExternalServiceResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public ExternalServiceResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ExternalServiceResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -16005,6 +16286,35 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         }
         var result = getClient().invokeCapability("Aspire.Hosting/addCSharpApp", reqArgs);
         return (CSharpAppResource) result;
+    }
+
+    /** Adds an opt-in target that checks for stale generated pipeline output. */
+    public IDistributedApplicationBuilder withOutputDiffing(WithOutputDiffingOptions optionsBag) {
+        var targetStep = optionsBag == null ? null : optionsBag.getTargetStep();
+        var diffStepName = optionsBag == null ? null : optionsBag.getDiffStepName();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
+        return withOutputDiffingImpl(targetStep, diffStepName, description);
+    }
+
+    public IDistributedApplicationBuilder withOutputDiffing() {
+        return withOutputDiffing(null);
+    }
+
+    /** Adds an opt-in target that checks for stale generated pipeline output. */
+    private IDistributedApplicationBuilder withOutputDiffingImpl(String targetStep, String diffStepName, String description) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (targetStep != null) {
+            reqArgs.put("targetStep", AspireClient.serializeValue(targetStep));
+        }
+        if (diffStepName != null) {
+            reqArgs.put("diffStepName", AspireClient.serializeValue(diffStepName));
+        }
+        if (description != null) {
+            reqArgs.put("description", AspireClient.serializeValue(description));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/withOutputDiffing", reqArgs);
+        return (IDistributedApplicationBuilder) result;
     }
 
     /** Gets the application configuration. */
@@ -19075,10 +19385,52 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public ParameterResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ParameterResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ParameterResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ParameterResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public ParameterResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ParameterResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -21470,10 +21822,52 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public ProjectResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ProjectResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ProjectResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ProjectResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public ProjectResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -23346,6 +23740,43 @@ public final class SetValueAsyncOptions {
 
 }
 
+// ===== aspire/TerminalOptions.java =====
+// TerminalOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** TerminalOptions DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TerminalOptions implements JsonSerializable {
+    private double columns;
+    private double rows;
+
+    public double getColumns() { return columns; }
+    public void setColumns(double value) { this.columns = value; }
+    public double getRows() { return rows; }
+    public void setRows(double value) { this.rows = value; }
+
+    @SuppressWarnings("unchecked")
+    public static TerminalOptions fromMap(Map<String, Object> map) {
+        var value = new TerminalOptions();
+        var columnsValue = map.get("columns");
+        value.setColumns(((Number) columnsValue).doubleValue());
+        var rowsValue = map.get("rows");
+        value.setRows(((Number) rowsValue).doubleValue());
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("columns", AspireClient.serializeValue(columns));
+        map.put("rows", AspireClient.serializeValue(rows));
+        return map;
+    }
+}
+
 // ===== aspire/TestCallbackContext.java =====
 // TestCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -24997,10 +25428,52 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public TestDatabaseResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public TestDatabaseResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public TestDatabaseResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public TestDatabaseResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public TestDatabaseResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -27292,10 +27765,52 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public TestRedisResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public TestRedisResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public TestRedisResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public TestRedisResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public TestRedisResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -29771,10 +30286,52 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    /** Adds an interactive terminal session to a resource using the default terminal options. */
-    public TestVaultResource withTerminal() {
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public TestVaultResource withTrait(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public TestVaultResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public TestVaultResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withTerminal() {
+        return withTerminal(null);
+    }
+
+    /** Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions. */
+    public TestVaultResource withTerminal(AspireAction1<TerminalOptions> configure) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configureId = configure == null ? null : getClient().registerCallback(args -> {
+            var obj = TerminalOptions.fromMap((Map<String, Object>) args[0]);
+            configure.invoke(obj);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", obj);
+            return __aspireCallbackArguments;
+        });
+        if (configureId != null) {
+            reqArgs.put("configure", configureId);
+        }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
@@ -31129,6 +31686,38 @@ public final class WithOptionalStringOptions {
 
 }
 
+// ===== aspire/WithOutputDiffingOptions.java =====
+// WithOutputDiffingOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for WithOutputDiffing. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class WithOutputDiffingOptions {
+    private String targetStep;
+    private String diffStepName;
+    private String description;
+
+    public String getTargetStep() { return targetStep; }
+    public WithOutputDiffingOptions targetStep(String value) {
+        this.targetStep = value;
+        return this;
+    }
+
+    public String getDiffStepName() { return diffStepName; }
+    public WithOutputDiffingOptions diffStepName(String value) {
+        this.diffStepName = value;
+        return this;
+    }
+
+    public String getDescription() { return description; }
+    public WithOutputDiffingOptions description(String value) {
+        this.description = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/WithPipelineStepFactoryOptions.java =====
 // WithPipelineStepFactoryOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -31434,6 +32023,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/ResourceUrlsEditor.java
 .aspire/modules/aspire/RunConfiguration.java
 .aspire/modules/aspire/SetValueAsyncOptions.java
+.aspire/modules/aspire/TerminalOptions.java
 .aspire/modules/aspire/TestCallbackContext.java
 .aspire/modules/aspire/TestCollectionContext.java
 .aspire/modules/aspire/TestConfigDto.java
@@ -31473,6 +32063,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/WithMergeLoggingOptions.java
 .aspire/modules/aspire/WithMergeLoggingPathOptions.java
 .aspire/modules/aspire/WithOptionalStringOptions.java
+.aspire/modules/aspire/WithOutputDiffingOptions.java
 .aspire/modules/aspire/WithPipelineStepFactoryOptions.java
 .aspire/modules/aspire/WithReferenceOptions.java
 .aspire/modules/aspire/WithVolumeOptions.java

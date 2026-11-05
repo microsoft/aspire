@@ -106,7 +106,11 @@ internal sealed class TemplateManifestTestEnvironment
             .WithEnvironmentVariable("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false")
             .WithEnvironmentVariable("DOTNET_CLI_TELEMETRY_OPTOUT", "1")
             .WithEnvironmentVariable("DOTNET_NOLOGO", "1")
-            .WithEnvironmentVariable("MSBUILDTERMINALLOGGER", "false");
+            .WithEnvironmentVariable("MSBUILDTERMINALLOGGER", "false")
+            // When the MSBuild server fails to start in time, the dotnet CLI writes "MSBuild server unavailable: ..."
+            // to the output before falling back to an in-process build. Tests that parse `msbuild -getItem` JSON
+            // from the captured output then fail with "'M' is an invalid start of a value".
+            .WithEnvironmentVariable("DOTNET_CLI_USE_MSBUILD_SERVER", "0");
     }
 
     internal static string CreatePackage(string feed, string name, string version, params (string Name, string Version)[] dependencies)

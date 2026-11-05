@@ -519,6 +519,29 @@ internal static class KubernetesDeployTestHelpers
     }
 
     /// <summary>
+    /// Deletes a StatefulSet pod and waits until the controller has recreated it and it is Ready.
+    /// </summary>
+    internal static async Task RestartStatefulSetPodAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string @namespace,
+        string podName)
+    {
+        await auto.RunCommandAsync(GetDeletePodCommand(@namespace, podName), counter, TimeSpan.FromSeconds(60));
+        await auto.RunCommandAsync(GetWaitForRecreatedPodReadyCommand(@namespace, podName), counter, TimeSpan.FromMinutes(7));
+    }
+
+    // `kubectl delete` waits for the old pod to be removed, so any pod with this name afterwards is
+    // the replacement. The StatefulSet controller creates it asynchronously; waiting for Ready
+    // before it exists fails immediately with NotFound, so wait for creation first.
+    internal static string GetDeletePodCommand(string @namespace, string podName) =>
+        $"kubectl delete pod {podName} -n {@namespace} --wait=true";
+
+    internal static string GetWaitForRecreatedPodReadyCommand(string @namespace, string podName) =>
+        $"kubectl wait --for=create pod/{podName} -n {@namespace} --timeout=180s && " +
+        $"kubectl wait --for=condition=Ready pod/{podName} -n {@namespace} --timeout=180s";
+
+    /// <summary>
     /// Cleans up a KinD cluster and its owned registry (best-effort, in-terminal).
     /// </summary>
     internal static async Task CleanupKubernetesDeploymentAsync(

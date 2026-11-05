@@ -37,7 +37,7 @@ internal sealed class AgentMcpCommand : BaseCommand
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<AgentMcpCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IPackagingService _packagingService;
+    private readonly IntegrationPackageSearchService _integrationPackageSearchService;
     private readonly IProjectLocator _projectLocator;
     private readonly IEnvironmentChecker _environmentChecker;
     private readonly IDocsSearchService _docsSearchService;
@@ -60,7 +60,7 @@ internal sealed class AgentMcpCommand : BaseCommand
         IMcpTransportFactory transportFactory,
         ILoggerFactory loggerFactory,
         ILogger<AgentMcpCommand> logger,
-        IPackagingService packagingService,
+        IntegrationPackageSearchService integrationPackageSearchService,
         IProjectLocator projectLocator,
         IEnvironmentChecker environmentChecker,
         IDocsSearchService docsSearchService,
@@ -76,7 +76,7 @@ internal sealed class AgentMcpCommand : BaseCommand
         _logger = logger;
         _httpClientFactory = httpClientFactory;
         _resourceWaitService = resourceWaitService;
-        _packagingService = packagingService;
+        _integrationPackageSearchService = integrationPackageSearchService;
         _projectLocator = projectLocator;
         _environmentChecker = environmentChecker;
         _docsSearchService = docsSearchService;
@@ -208,7 +208,7 @@ internal sealed class AgentMcpCommand : BaseCommand
                 _knownTools[KnownMcpTools.ListAppHosts] = new ListAppHostsTool(_auxiliaryBackchannelMonitor, _executionContext);
             }
 
-            _knownTools[KnownMcpTools.ListIntegrations] = new ListIntegrationsTool(_packagingService, _executionContext, _auxiliaryBackchannelMonitor);
+            _knownTools[KnownMcpTools.ListIntegrations] = new ListIntegrationsTool(_integrationPackageSearchService, _executionContext, _auxiliaryBackchannelMonitor);
             _knownTools[KnownMcpTools.Doctor] = new DoctorTool(_environmentChecker);
             _knownTools[KnownMcpTools.RefreshTools] = new RefreshToolsTool(_resourceToolRefreshService, () => KnownTools.Count);
             _knownTools[KnownMcpTools.ListDocs] = new ListDocsTool(_docsIndexService);

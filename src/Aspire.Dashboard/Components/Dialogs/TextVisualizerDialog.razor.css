@@ -18,11 +18,6 @@
     margin-left: auto;
 }
 
-.copy-button-icon {
-    margin-right: 11px;
-    display: flex;
-}
-
 .text-visualizer-container {
     display: flex;
     flex-direction: column;
@@ -47,4 +42,10 @@
 .markdown-content {
     overflow-y: auto;
     overflow-wrap: anywhere;
+}
+
+.markdown-content-no-wrap {
+    overflow-x: auto;
+    white-space: nowrap;
+    overflow-wrap: normal;
 }

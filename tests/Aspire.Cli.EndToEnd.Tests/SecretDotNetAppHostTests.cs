@@ -13,6 +13,27 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class SecretDotNetAppHostTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task SecretInputSourcesOnDotNetAppHost()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewAsync("TestSecretInputs", counter, template: AspireTemplate.EmptyAppHost);
+        await auto.RunCommandAsync("cd TestSecretInputs", counter);
+
+        await SecretInputTestHelpers.VerifyInputSourcesAsync(auto, counter, workspace, appHostOptions: "");
+    }
+
+    [Fact]
     public async Task SecretCrudOnDotNetAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

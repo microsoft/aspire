@@ -62,6 +62,11 @@ card shows are driven by its lane and its signal pills:
   into a preferred order that persists across reloads.
 - **Signal pills** — Draft, CI failing, Merge conflicts, Changes requested,
   N unresolved, Approved, Ready to merge, Needs review, Quick win, Stalled.
+  Hover or keyboard-focus explanatory pills to see their meaning and expected next
+  action; open-age and CI status tags stay plain. **Review debt** means the PR is
+  not currently approved and its relevant activity is at least 14 days old,
+  not that nobody has reviewed it. Raw GitHub
+  labels are identified separately from computed dashboard signals.
 - **Notifications** — review requested, your PR ready to merge, changes requested,
   CI failing, with per-category preferences. Live updates over SSE.
 - **Stable background refresh** — GitHub data is assembled into a complete snapshot
@@ -79,6 +84,40 @@ card shows are driven by its lane and its signal pills:
   except the `msft.ghe.com` enterprise account, which defaults to the Proxima
   `coreai/aspire-1p` and `coreai/sisyphus` repos. Defaults only fill in accounts
   you haven't configured — they never overwrite an explicit repo list.
+
+## Needs attention order
+
+Needs attention is numbered, left-to-right across each row, in ascending order of
+**first-ever non-draft readiness**. A PR opened ready uses its creation time; a PR
+opened as a draft uses its earliest ready-for-review event. Complete, paginated
+draft/ready transition history distinguishes these cases, including PRs opened
+ready that later returned to draft. Equal timestamps use ordinal host/repository
+order, then PR number, independent of fetch completion and user locale.
+
+Later draft cycles, comments, label changes, commits, and human or Copilot reviews
+do not reset this priority. Existing eligibility rules still hide blocked PRs;
+when eligible again, they return at their original first-readiness priority.
+This is an approximation of reviewability: a PR marked ready on Monday but
+conflicted until Thursday still precedes one first marked ready on Tuesday.
+The canvas only reads GitHub; it does not persist queue state or write metadata.
+If transition history is missing, inconsistent, or exceeds the pagination safety
+limit, the PR is omitted from Needs attention with a visible error, not assigned
+a guessed timestamp. A later refresh retries.
+
+The main queue shows the first **10** eligible PRs (or all of them when fewer than
+10 qualify), with no review-debt spillover or per-user limit override.
+**Later in queue** shows the remaining count and starts collapsed. Expand it to
+look up a PR's position, not to pick an alternative review pool: prioritize the
+first 10 in Needs attention. This compact reference list has PR links but no
+review-action buttons. Positions continue at 11 without gaps or duplicates and
+keep their order at every window width. Expansion follows your choice during
+refreshes, but starts collapsed when the canvas reloads.
+
+The loader preserves the full eligible queue as `attention.focus` (positions
+1–10), `attention.focusRemainder` (11 onward), and `attention.focusTotal`.
+Other lanes, personal watched repositories, eligibility, and refresh preferences are unchanged.
+Shared PRs have the same relative order for the same GitHub snapshot, but different
+repository access, scopes, and refresh times can still produce different lists.
 
 ## Health mode
 
@@ -109,6 +148,9 @@ Authenticate with an existing `az` session or `AZURE_DEVOPS_EXT_PAT`. The app st
 only normalized pipeline coordinates and branch preferences; it never stores tokens
 or other credentials. GitHub and Azure DevOps sources are loaded independently, so
 an unavailable provider does not hide results from the other provider.
+GitHub CLI discovery failures appear in Health's error bar without blocking
+configured Azure pipelines. GitHub-only modes show an unauthenticated dashboard
+with the discovery diagnostic while keeping Health and Settings accessible.
 
 When a configured Azure pipeline builds a watched GitHub repository directly, provider
 metadata links both sources into one repository group. Azure Repos mirrors do not expose
@@ -153,6 +195,7 @@ without refetching provider data.
 | `extension.mjs` | Wiring: `joinSession` + `createCanvas`, agent-facing actions. |
 | `server.mjs` | Per-instance loopback HTTP server, atomic complete-snapshot cache, background polling, SSE refresh, multi-account interleave, and health orchestration. |
 | `accounts.mjs` | Credential discovery, per-account repo-access probing, host/enterprise detection. |
+| `cli.mjs` | Shared CLI execution with login-shell executable discovery for restricted desktop environments. |
 | `github.mjs` | GraphQL queries, lane bucketing, signals, avatars, cross-account merge. |
 | `health.mjs` | GitHub default-branch health and provider-neutral health aggregation. |
 | `azure-devops.mjs` | Pipeline URL validation, read-only Azure CLI queries, build timelines, Azure health inference. |
@@ -168,7 +211,31 @@ per-account Copilot credentials, or `gh auth token`, and queries the matching
 GitHub GraphQL API. Azure DevOps queries use the existing Azure CLI authentication.
 No credential is written to the extension preferences.
 
+On macOS and Linux, a standalone canvas launched with a restricted `PATH` falls
+back to the user's login shell to locate `gh` and `az`, then uses their absolute
+executables for GitHub account/token reads and Azure DevOps queries. Shell selection
+uses `SHELL`, then the OS account's configured shell, then a platform default.
+POSIX-style shells and Fish use their respective argument syntax. This reuses
+existing CLI logins without relying on Copilot-injected credentials. Only executable
+paths are discovered; the shell's environment is not imported. If discovery fails,
+the canvas reports a CLI or shell configuration error rather than asking an
+already-authenticated user to log in again. Copilot-only accounts still require
+credentials supplied by the app.
+
 ## Agent actions
+
+In **Settings → Agentic actions**, **Create detached sessions** is off by default.
+Enable it to launch all new-session PR and Health actions as top-level sessions
+instead of children of the canvas's session. Actions targeting the current
+conversation (including GHES fallbacks) are unchanged.
+
+Detached PR sessions use `create_session` and check out the live PR using `gh`,
+instead of `open_pr_session`. They have no automatic report-back relationship
+with the dashboard conversation, and automatic PR/issue association is not
+guaranteed. Read results and answer questions in the launched session.
+The preference follows the existing machine-local settings in
+`$COPILOT_HOME/extensions/aspire-team-app/artifacts/preferences.json`
+(`COPILOT_HOME` defaults to `~/.copilot`); it is not committed to the repository.
 
 - `refresh` — reload the queue and push to the open dashboard.
 - `set_mode` — switch to `review` / `issues` / `ship` / `health`.
@@ -197,6 +264,44 @@ install_extension url: https://github.com/IEvangelist/canvas-marketplace/tree/ma
 ```
 
 Once loaded, open it from chat, or via `open_canvas` with `canvasId: "aspire-team-app"`.
+
+The standalone canvas can also run from the top-level sidebar without an Aspire
+repository session. It discovers stored `gh` accounts independently of tokens
+injected by the Copilot app, and an expired account on another host does not hide
+healthy accounts. The `gh` executable must be on the app's `PATH`; sign in with
+`gh auth login` only if no usable credentials are available.
+PR and Health agent-action buttons are disabled when the host does not provide an
+active session working directory, including sidebar-only canvases. Hover or focus
+the disabled action group to see why and how to enable it: open the canvas from a
+session in the relevant repository. This applies to **new session** actions too:
+the extension requests those through the owning conversation's agent, not a
+direct project/session-creation API. Browsing, refresh, and settings remain available.
+
+To preview this behavior from a normal repository session, open a fresh canvas
+instance with the following input:
+
+```json
+{
+  "previewSidebar": true
+}
+```
+
+The override disables agent actions only for that instance, including server-side
+dispatch. It is preserved when the canvas is rehydrated, does not change saved
+preferences, and cannot enable actions in a sidebar-only canvas.
+
+Older GitHub CLI versions without JSON authentication status use a text-status
+fallback that retains accounts reported on either output stream.
+
+On Windows, sidebar providers can omit `APPDATA`, causing `gh` to miss its saved
+logins. If discovery finds no accounts and no explicit configuration location is
+set, the canvas resolves the Windows application-data known folder and retries
+using that location for both account discovery and token retrieval. Existing
+`APPDATA`, `GH_CONFIG_DIR`, and `XDG_CONFIG_HOME` settings are preserved.
+If that lookup fails, environment and Copilot credentials are still tried; the
+lookup error is surfaced if none authenticate. Windows token variable names are
+handled case-insensitively. `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN`
+are also supported when `GH_HOST` names an enterprise host.
 
 ## Notes
 

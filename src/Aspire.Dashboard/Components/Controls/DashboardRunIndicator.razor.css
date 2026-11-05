@@ -1,0 +1,15 @@
+.dashboard-run-indicator {
+    --dashboard-run-indicator-color: var(--aspire-status-success);
+    display: inline-block;
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dashboard-run-indicator-color);
+    /* A soft halo makes the state noticeable at a glance without adding size. */
+    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--dashboard-run-indicator-color) 70%, transparent);
+}
+
+.dashboard-run-indicator.recording {
+    --dashboard-run-indicator-color: var(--aspire-status-warning);
+}

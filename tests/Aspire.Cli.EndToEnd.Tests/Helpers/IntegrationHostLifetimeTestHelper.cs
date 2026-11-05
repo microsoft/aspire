@@ -13,12 +13,14 @@ internal static class IntegrationHostLifetimeTestHelper
         var evidence = Directory.CreateDirectory(Path.Combine(Path.GetDirectoryName(recording)!, testName));
         foreach (var file in new[]
         {
-            "session.log", "run.log", "probe-before.log", "probe-after.log",
+            "run.log", "probe-before.log", "probe-after.log",
             "recovered-resource.json", "stop.log", "before.json", "stop-guest.json"
         })
         {
             File.Copy(Path.Combine(directory, file), Path.Combine(evidence.FullName, file), overwrite: true);
         }
+        File.Copy(Path.Combine(directory, "exported-logs", "session.log"),
+            Path.Combine(evidence.FullName, "session.log"), overwrite: true);
         File.Copy(
             Path.Combine(directory, "integration", "processes.jsonl"),
             Path.Combine(evidence.FullName, "processes.jsonl"),
@@ -33,10 +35,9 @@ internal static class IntegrationHostLifetimeTestHelper
         }
         if (target == "install")
         {
-            foreach (var file in new[] { "install-session.log", "install.log" })
-            {
-                File.Copy(Path.Combine(directory, file), Path.Combine(evidence.FullName, file), overwrite: true);
-            }
+            File.Copy(Path.Combine(directory, "exported-logs", "install-session.log"),
+                Path.Combine(evidence.FullName, "install-session.log"), overwrite: true);
+            File.Copy(Path.Combine(directory, "install.log"), Path.Combine(evidence.FullName, "install.log"), overwrite: true);
             File.Copy(Path.Combine(directory, "integration", "install-processes.json"),
                 Path.Combine(evidence.FullName, "install-processes.json"), overwrite: true);
         }

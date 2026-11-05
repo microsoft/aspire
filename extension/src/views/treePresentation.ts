@@ -149,7 +149,7 @@ export function getResourceSourcePaths(resource: ResourceJson, appHostPath?: str
     });
 }
 
-export function getResourceContextValue(resource: ResourceJson, appHostPath?: string): string {
+export function getResourceContextValue(resource: ResourceJson, canAttachDebugger: boolean = false, appHostPath?: string): string {
     const commands = resource.commands;
     const parts = ['resource'];
     // Render from metadata, like AppHost source; disk availability is checked only on invocation.
@@ -167,6 +167,9 @@ export function getResourceContextValue(resource: ResourceJson, appHostPath?: st
     }
     if (isTerminalEnabled(resource)) {
         parts.push('canOpenTerminal');
+    }
+    if (canAttachDebugger) {
+        parts.push('canAttachDebugger');
     }
     return parts.join(':');
 }

@@ -61,6 +61,8 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 - Open the extension folder in Visual Studio Code.
 - Launch either the `Run Extension` or `Run Extension (cli stop on entry)` launch configuration. The latter will set an environment variable that causes the CLI to wait until a debugger is attached to execute its logic.
 
+See [AppHost launch profiles in the README](./README.md#apphost-launch-profiles) for `launch.json` configuration and C# extension requirements.
+
 ### Optional: set the CLI path
 
 To debug the Aspire CLI together with the extension, set `Aspire Cli Executable Path` to the CLI output path. You can use an absolute path or a workspace token. If you opened the `extension` folder, the local build is:
@@ -166,6 +168,8 @@ corepack yarn test:e2e
 
 Linux exercises Chrome, while Windows exercises Edge. The shard generates standalone, hosted-global, and hosted-per-page `net11.0` fixtures. Both VSIX files must match the current platform, and C# must be 2.145.15-prerelease or newer.
 
+Missing and outdated C# checks send their expected localized diagnostic to the test bridge. The bridge compares it to the thrown message inside the extension host and fails if the message differs or configuration unexpectedly succeeds; raw errors and stacks remain out of exported test state.
+
 Before starting the AppHost, the shard awaits C# activation, which installs its runtime dependencies, and checks that `VSWebAssemblyBridge` is present. It does not wait for language-server project import to check this runtime component. If the component is missing, setup reloads the isolated extension host to let C# reacquire and validate it, with at most three activation attempts. Other activation errors fail immediately, and a component that remains missing fails setup explicitly instead of falling back to the legacy proxy. The managed-breakpoint scenarios themselves are never retried.
 
 Each managed proof uses a separate browser profile under the test run's temporary root. A browser lock left by another scenario therefore cannot block its launch. Profiles are removed by the runner after VS Code exits and are not included in uploaded diagnostics; the breakpoint, debug-session shutdown, and command-reset assertions still have to pass.
@@ -189,6 +193,8 @@ corepack yarn test:e2e
 ```
 
 CI runs both shards on Linux with pinned, checksum-verified copies of Core Tools 4.12.1, .NET Install Tool 3.1.0, and C# 2.148.23 for Linux x64. Only the .NET Functions shard also installs Azure Resource Groups 0.12.7 and Azure Functions 1.22.0.
+
+The offline E2E settings disable Go's language server. The pinned Go extension otherwise [awaits installation of `gopls` during activation](https://github.com/golang/vscode-go/blob/v0.56.0/extension/src/goMain.ts#L138) before registering its debug adapter, which can block resource startup and shutdown. The resource-debug scenarios exercise real .NET and Go debuggers without requiring language-server features.
 
 The `winui-debug` shard is Windows-only. It installs pinned .NET Install Tool and C# VSIX files into the offline VS Code instance, generates a self-contained unpackaged WinUI project, and debugs it as an Aspire project resource. The fixture puts design-time intermediate outputs under `obj\design-time\` while keeping normal build outputs and NuGet restore assets at their standard paths. This separates the XAML compiler's JSON inputs, generated code, and saved state even when the C# language server reloads the project during Aspire's build. Waiting for initial project-load completion alone cannot prevent those later reloads from racing the real build. Before starting Aspire, the shard verifies that the C# definition provider resolves the XAML-generated `InitializeComponent` method from the isolated design-time directory. The app then writes a readiness marker from `Application.OnLaunched`; reaching that marker proves WinUI passed the `Application.Start` failure point covered by the regression. Dependabot does not update the raw Marketplace VSIX URLs or checksums. Treat them as regression inputs rather than current-version dependencies: rebaseline them manually only when VS Code compatibility requires it or the fixture is deliberately moved, and before changing the C# version verify that the old `TargetPath` launch still reproduces [the original crash](https://github.com/microsoft/aspire/issues/19091) while the `RunCommand` launch passes.
 

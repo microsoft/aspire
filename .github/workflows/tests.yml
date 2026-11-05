@@ -628,14 +628,9 @@ jobs:
     name: Run VS Code extension unit tests (Windows)
     uses: ./.github/workflows/extension-unit-tests.yml
     needs: [setup_for_tests]
-    # Also gated on run_extension_e2e (not just run_extension_unit): this job packages and uploads
-    # the aspire-extension VSIX that extension_e2e_tests installs. The focused workflow preserves
-    # packaging after unit-test failures so E2E
-    # still receives its VSIX and provides an independent signal.
+    # Keep the unit tests selected alongside E2E, but do not make E2E depend on
+    # their result. The E2E workflow owns the VSIX that its matrix installs.
     if: ${{ needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
-    with:
-      packageVsix: true
-      extensionVersionOverride: ${{ inputs.extensionVersionOverride }}
 
   extension_bootstrap_linux:
     name: Validate VS Code extension bootstrap (Linux)
@@ -696,13 +691,9 @@ jobs:
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
     uses: ./.github/workflows/extension-e2e-tests.yml
-    # extension_tests_win stays in `needs` because it uploads the aspire-extension VSIX these shards
-    # install, but E2E is deliberately not gated on its unit-test *result*: !cancelled() keeps the
-    # shards running when those tests fail, and the VSIX packaging steps in that job carry the same
-    # condition so the artifact is published either way. Before this, one unit failure - or an npm
-    # blip on that single Windows runner - skipped all 30 shards and erased the E2E signal entirely.
-    # The remaining producers are still required by result, since a missing CLI archive or package
-    # feed makes every shard fail on a download rather than tell us anything.
+    # The reusable workflow packages and uploads its own VSIX before matrix
+    # fan-out. Unit-test failures therefore remain an independent signal, while
+    # every artifact-producing prerequisite is required to succeed.
     if: >-
       ${{ !cancelled() &&
           needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
@@ -710,7 +701,9 @@ jobs:
           needs.build_cli_archive_linux.result == 'success' &&
           needs.build_cli_archive_windows.result == 'success' &&
           needs.extension_bootstrap_linux.result == 'success' }}
-    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_bootstrap_linux]
+    with:
+      extensionVersionOverride: ${{ inputs.extensionVersionOverride }}
 
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests

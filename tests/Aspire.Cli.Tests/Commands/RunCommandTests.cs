@@ -912,7 +912,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         // A real, short-lived process stands in for the foreground launcher that spawned this detached
         // child. The child watches it via ASPIRE_LAUNCHER_PID/STARTED and must react to its death.
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting foreground launcher stand-in.");
         using var launcher = TestProcesses.StartLongRunning();
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Foreground launcher PID={launcher.Id}.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -931,16 +933,22 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
 
         var pendingRun = result.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Detached run invoked; waiting for build completion.");
 
         // Once build completes the child is in the startup window with the launcher watchdog armed.
         // Killing the launcher now must cancel the run rather than leak the AppHost.
         await buildCompleted.Task.DefaultTimeout();
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Build completed; killing foreground launcher tree {launcher.Id}.");
         launcher.Kill(entireProcessTree: true);
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Launcher Kill returned; waiting for PID {launcher.Id} to exit.");
         launcher.WaitForExit();
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Launcher exited; waiting for run cancellation.");
 
         // The monitor polls roughly once a second; allow generous margin for CI contention.
         await runCancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Run cancellation observed; waiting for command completion.");
         var exitCode = await pendingRun.DefaultTimeout();
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Detached run completed with exit code {exitCode}.");
 
         Assert.True(runCancellationObserved.Task.IsCompletedSuccessfully);
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
@@ -1425,7 +1433,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
+        var stopwatch = Stopwatch.StartNew();
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting ambient project discovery for '{workspace.Path}'.");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Ambient project discovery returned {exitCode} after {stopwatch.Elapsed}.");
 
         Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
         Assert.Contains(InteractionServiceStrings.UnbuildableAppHostsDetected, interactionService.DisplayedErrors);
@@ -1710,7 +1721,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool skipValidation = false)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("Project file does not exist.", Aspire.Cli.Projects.ProjectLocatorFailureReason.ProjectFileDoesntExist);
         }
@@ -2526,7 +2537,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool skipValidation = false)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("No project file found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.NoProjectFileFound);
         }
@@ -2551,7 +2562,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool skipValidation = false)
         {
             throw new Aspire.Cli.Projects.ProjectLocatorException("Multiple project files found.", Aspire.Cli.Projects.ProjectLocatorFailureReason.MultipleProjectFilesFound);
         }
@@ -3223,7 +3234,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         // Verify a warning was displayed (not an error)
         var m = Assert.Single(testInteractionService.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, m.Emoji);
+        Assert.Equal(KnownEmojis.PoliceCarLight, m.Emoji);
         Assert.Equal(RunCommandStrings.DashboardFailedToStart, m.Message);
         Assert.Empty(testInteractionService.DisplayedErrors);
     }
@@ -4207,7 +4218,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult<List<AppHostProjectCandidate>>([new(appHostFile, "test")]);
         }
 
-        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool skipValidation = false)
         {
             return Task.FromResult<List<FileInfo>>([new FileInfo("/tmp/apphost.cs")]);
         }

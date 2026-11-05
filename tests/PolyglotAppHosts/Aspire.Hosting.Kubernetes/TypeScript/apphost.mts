@@ -61,11 +61,33 @@ await ingress.withTls('ingress-tls');
 const persistentVolume = await kubernetes.addPersistentVolume('data');
 await persistentVolume.withStorageClass('fast-storage');
 await persistentVolume.withCapacity('5Gi');
+await persistentVolume.withConfiguration(async (claim) => {
+    const metadata = await claim.metadata.get();
+    await metadata.labels.set('example.com/retention', 'retain');
+    const annotations = await metadata.annotations();
+    await annotations.set('example.com/source', 'typescript');
+
+    const spec = await claim.spec.get();
+    await spec.volumeMode.set('Filesystem');
+    await spec.volumeName.set('existing-volume');
+    await spec.storageClassName.set('');
+    const _storageClassName: string | null = await spec.storageClassName.get();
+    const accessModes = await spec.accessModes();
+    await accessModes.clear();
+    await accessModes.add('ReadWriteOnce');
+    const resources = await spec.resources.get();
+    const requests = await resources.requests();
+    await requests.set('storage', '10Gi');
+});
 const _persistentVolumeResourceName: string = await persistentVolume.getResourceName();
 
 const parameterizedPersistentVolume = await kubernetes.addPersistentVolume('parameterized-data');
 await parameterizedPersistentVolume.withStorageClassParam(persistentVolumeStorageClass);
 await parameterizedPersistentVolume.withCapacityParam(persistentVolumeCapacity);
+await parameterizedPersistentVolume.withConfiguration(async (claim) => {
+    const spec = await claim.spec.get();
+    await spec.storageClassName.set(null);
+});
 
 // === cert-manager ===
 // Validates the typed cert-manager API surface generated for TypeScript:

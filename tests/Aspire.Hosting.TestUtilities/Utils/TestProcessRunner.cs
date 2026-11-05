@@ -67,6 +67,15 @@ internal sealed class TestProcessRunner : IProcessRunner
         }
     }
 
+    public Task<ProcessCaptureResult> RunAndCaptureTextAsync(
+        string executablePath,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        IReadOnlyDictionary<string, string>? environmentVariables = null,
+        ReadOnlyMemory<byte> standardInput = default,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("This test runner supports only line execution.");
+
     public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
     {
         TestProcessRun run;
@@ -155,10 +164,12 @@ internal sealed class TestProcessDisposable : IAsyncDisposable
 {
     public int DisposeCallCount { get; private set; }
 
+    public Func<ValueTask>? OnDisposeAsync { get; set; }
+
     public ValueTask DisposeAsync()
     {
         DisposeCallCount++;
 
-        return ValueTask.CompletedTask;
+        return OnDisposeAsync?.Invoke() ?? ValueTask.CompletedTask;
     }
 }

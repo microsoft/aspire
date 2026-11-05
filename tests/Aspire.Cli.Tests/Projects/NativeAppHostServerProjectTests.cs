@@ -29,12 +29,21 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
         var disabled = Directory.CreateDirectory(Path.Combine(workspace.Path, "disabled"));
         var executable = Path.Combine(workspace.Path, "server");
         await File.WriteAllTextAsync(executable, "server");
+        // Debug can auto-detect the checkout; Release needs a bundle when no repo root is configured.
+        var managedDirectory = workspace.CreateDirectory("managed");
+        var managedExecutable = Path.Combine(managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        await File.WriteAllTextAsync(managedExecutable, "managed");
+        var bundle = new TestBundleService(true)
+        {
+            Layout = new LayoutConfiguration { LayoutPath = workspace.Path }
+        };
         new AspireConfigFile { Features = new() { [KnownFeatures.AppHostServerV2] = true } }.Save(enabled.FullName);
         new AspireConfigFile { Features = new() { [KnownFeatures.AppHostServerV2] = false } }.Save(disabled.FullName);
         var factory = CreateFactory(new TestEnvironment(new Dictionary<string, string?>
         {
             [NativeAppHostServerProject.ExecutableEnvironmentVariable] = executable
-        }), new NullBundleService(), new TestProcessExecutionFactory());
+        }), bundle, new TestProcessExecutionFactory());
 
         using var project = Assert.IsType<NativeAppHostServerProject>(await factory.CreateAsync(nested.FullName));
         Assert.Equal(nested.FullName, project.AppDirectoryPath);
@@ -523,7 +532,8 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
     private static AppHostServerProjectFactory CreateFactory(TestEnvironment environment, IBundleService bundle,
         TestProcessExecutionFactory processes)
         => new(new TestDotNetCliRunner(), MockPackagingServiceFactory.Create(), bundle,
-            new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, new FakeNuGetClient()),
+            new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, new FakeNuGetClient(),
+                new TestConfigurationService()),
             new TestDotNetSdkInstaller(), TestExecutionContextFactory.CreateTestContext(), environment,
             processes, NullLoggerFactory.Instance);
 }

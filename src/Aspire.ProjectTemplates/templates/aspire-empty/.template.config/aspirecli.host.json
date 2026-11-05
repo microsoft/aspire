@@ -1,0 +1,16 @@
+{
+  "createNuGetConfig": true,
+  "symbolInfo": {
+    "Framework": { "isHidden": true },
+    "AspireVersion": { "isHidden": true },
+    "appHostHttpPort": { "isHidden": true },
+    "appHostHttpsPort": { "isHidden": true },
+    "appHostOtlpHttpPort": { "isHidden": true },
+    "appHostOtlpHttpsPort": { "isHidden": true },
+    "appHostResourceHttpPort": { "isHidden": true },
+    "appHostResourceHttpsPort": { "isHidden": true },
+    "skipRestore": { "isHidden": true },
+    "NoHttps": { "isHidden": true },
+    "LocalhostTld": { "isHidden": true }
+  }
+}

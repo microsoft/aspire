@@ -1,0 +1,7 @@
+﻿[
+  Skill sources:
+https://github.com/microsoft/aspire-skills
+https://github.com/example/plugins
+https://github.com/example/team,
+  [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+]

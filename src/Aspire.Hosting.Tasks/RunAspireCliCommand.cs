@@ -57,6 +57,12 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     public string? FailureMessage { get; set; }
 
     /// <summary>
+    /// Gets the captured standard output and standard error for inclusion in setup failure diagnostics.
+    /// </summary>
+    [Output]
+    public string ConsoleOutput { get; set; } = string.Empty;
+
+    /// <summary>
     /// Overrides process termination for tests that must keep a process alive after termination is requested.
     /// </summary>
     internal Func<Process, bool>? TestTerminateProcess { get; set; }
@@ -260,6 +266,7 @@ public sealed class RunAspireCliCommand : Microsoft.Build.Utilities.Task
     {
         if (!string.IsNullOrEmpty(output))
         {
+            ConsoleOutput += output + (output.EndsWith("\n", StringComparison.Ordinal) ? string.Empty : Environment.NewLine);
             // Setup output is diagnostic only. Logging it as a message prevents a recovered attempt
             // from becoming a warning-as-error failure because the tool wrote warning-like text.
             Log.LogMessage(MessageImportance.Low, "{0}", output);

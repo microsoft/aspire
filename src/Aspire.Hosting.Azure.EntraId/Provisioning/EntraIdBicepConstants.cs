@@ -23,11 +23,23 @@ internal static class EntraIdBicepConstants
     /// <summary>The application unique name output name.</summary>
     internal const string UniqueNameOutputName = "uniqueName";
 
+    /// <summary>The application ID URI output name.</summary>
+    internal const string ApplicationIdUriOutputName = "applicationIdUri";
+
+    /// <summary>The Microsoft Graph delegated permission grant resource type.</summary>
+    internal const string OAuth2PermissionGrantResourceType = "Microsoft.Graph/oauth2PermissionGrants";
+
+    /// <summary>The Microsoft Graph app role assignment resource type. The resource is the API's service principal.</summary>
+    internal const string AppRoleAssignedToResourceType = "Microsoft.Graph/appRoleAssignedTo";
+
     /// <summary>The Microsoft Graph application resource type.</summary>
     internal const string ApplicationResourceType = "Microsoft.Graph/applications";
 
     /// <summary>The Microsoft Graph service principal resource type.</summary>
     internal const string ServicePrincipalResourceType = "Microsoft.Graph/servicePrincipals";
+
+    /// <summary>The Microsoft Graph federated identity credential resource type.</summary>
+    internal const string FederatedIdentityCredentialResourceType = "Microsoft.Graph/applications/federatedIdentityCredentials";
 
     /// <summary>
     /// The service principal tag that marks it as an integrated enterprise application. The Entra portal sets it when it

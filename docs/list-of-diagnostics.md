@@ -18,12 +18,15 @@
 
 The CLI bundle is required by default for C# AppHosts and cannot be disabled. `AspireCliInvocationMode=Path` uses `aspire` from `PATH`, falling back to the `Aspire.Cli` version paired with the AppHost package through DNX when a compatible command is unavailable. `AspireCliInvocationMode=Dnx` invokes the unversioned `Aspire.Cli` package through DNX so an in-scope tool manifest is honored, or the latest package is used when no manifest applies. `AspireCliInvocationMode=DnxPinned` invokes the exact `Aspire.Cli` version paired with `Aspire.Hosting.AppHost`.
 
+When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's captured standard output and standard error, including DNX package acquisition errors. If a PATH CLI setup attempt falls back to DNX and neither produces a usable bundle, output from both attempts is included with the corresponding command. Successful or recovered setup attempts keep this output at diagnostic verbosity.
+
 ## Experimental API Warnings
 
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
+| `ASPIREPIPELINES005` | Warning | Pipeline output diffing APIs are experimental and may change or be removed in future releases. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/Pipelines/PipelineOutputDiffingExtensions.cs](../src/Aspire.Hosting/Pipelines/PipelineOutputDiffingExtensions.cs) |
 
 ## Analyzer Warnings
 

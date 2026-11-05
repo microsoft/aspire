@@ -4,17 +4,17 @@
     <body>
       <trans-unit id="Description">
         <source>List running AppHosts</source>
-        <target state="needs-review-translation">Çalışan bir Aspire uygulama ana işlemlerini listeleyin.</target>
+        <target state="translated">Çalışan AppHost’ları listele</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</source>
-        <target state="new">Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</target>
+        <target state="translated">Çalışan AppHost’lar değiştikçe çalışmaya devam edin ve güncelleştirmeleri yayımlayın. JSON çıktısı varsayılan değer olarak yeni satırla ayrılmış değişen AppHost kayıtlarını kullanır veya --output snapshot ile tam anlık görüntüler kullanır.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowRequiresJson">
         <source>The --follow option only supports JSON output. Use --format json.</source>
-        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
+        <target state="translated">--follow seçeneği yalnızca JSON çıktısını destekler. --format json kullanın.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -39,27 +39,27 @@
       </trans-unit>
       <trans-unit id="HeaderSdk">
         <source>SDK</source>
-        <target state="new">SDK</target>
+        <target state="translated">SDK</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidOutputMode">
         <source>The --output option must be default or snapshot.</source>
-        <target state="new">The --output option must be default or snapshot.</target>
+        <target state="translated">--output seçeneği varsayılan veya anlık görüntü olmalıdır.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Çıkışı JSON biçiminde oluşturun.</target>
+        <target state="translated">Çıktı biçimi (Tablo veya Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputOptionDescription">
         <source>Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</source>
-        <target state="new">Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</target>
+        <target state="translated">Çıktı modu: varsayılan, standart AppHost çıktısını korur; anlık görüntü ise kaynak durumu, kalp atışları ve hatalarla birlikte tam AppHost anlık görüntülerini yayınlar. Anlık görüntü için --follow --format json gerekir.</target>
         <note />
       </trans-unit>
       <trans-unit id="SnapshotRequiresFollowJson">
         <source>The --output snapshot option requires --follow --format json.</source>
-        <target state="new">The --output snapshot option requires --follow --format json.</target>
+        <target state="translated">--output snapshot seçeneği için --follow --format json gerekir.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

@@ -824,6 +824,58 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
 
     // --- H. Real-map invariant smoke (computed from the filesystem; no hardcoded names) ------
 
+    [Fact]
+    public void RealMapSkillAndThirdPartyNoticeChangesSelectNoTests()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var map = TriggerMap.Load(mapPath);
+        var filter = ChangedFileFilter.Create(RepoRoot.Path, map.Prefilter);
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
+        string[] changedFiles =
+        [
+            ".agents/skills/create-video/SKILL.md",
+            ".agents/skills/create-video/scripts/recorder/Scene.cs",
+            ".agents/skills/create-video/scripts/Directory.Packages.props",
+            ".agents/skills/create-video/scripts/tts/package-lock.json",
+            ".agents/skills/create-video/cgmanifest.json",
+            ".github/dependabot.yml",
+            "AGENTS.md",
+            "THIRD-PARTY-NOTICES.TXT",
+        ];
+
+        var filtered = changedFiles.Where(path => !filter.IsExcluded(path)).ToArray();
+        Assert.Empty(filtered);
+
+        var result = selector.Select(filtered, [], new SelectorOptions());
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.Redis/RedisResource.cs", "Aspire.Hosting.Redis")]
+    [InlineData("global.json", null)]
+    public void RealMapThirdPartyNoticeDoesNotChangeSelectionForOtherInputs(string path, string? affectedProject)
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var map = TriggerMap.Load(mapPath);
+        var filter = ChangedFileFilter.Create(RepoRoot.Path, map.Prefilter);
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
+        string[] affectedProjects = affectedProject is null ? [] : [affectedProject];
+        var expected = selector.Select([path], affectedProjects, new SelectorOptions());
+        var filtered = new[] { "THIRD-PARTY-NOTICES.TXT", path }.Where(file => !filter.IsExcluded(file)).ToArray();
+
+        Assert.Equal([path], filtered);
+
+        var actual = selector.Select(filtered, affectedProjects, new SelectorOptions());
+        Assert.NotEmpty(expected.TestProjects);
+        Assert.Equal(expected.SelectsAll, actual.SelectsAll);
+        Assert.Equal(expected.TestProjects.Order(), actual.TestProjects.Order());
+        Assert.Equal(expected.Jobs.Order(), actual.Jobs.Order());
+        Assert.Empty(actual.UnmatchedFiles);
+    }
+
     // The prefilter reads eng/github-ci/ci-skip-entirely-patterns.txt at runtime and matches it with the
     // SAME glob->regex the check-changed-files action uses (ported in ChangedFileFilter). This pins that
     // port (docs/.slnf/scripts get dropped) and the keep_routed carve-outs (selector-routed files are NOT
@@ -977,6 +1029,19 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Fact]
+    public void RealMapApiManagementProjectChangeRunsPolyglotValidation()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
+
+        var result = selector.Select([], ["Aspire.Hosting.Azure.ApiManagement"], new SelectorOptions());
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("job:polyglot", result.Jobs);
+        Assert.Contains("job:typescript-api-compat", result.Jobs);
+    }
+
+    [Fact]
     public void RealMapRepresentativeExtensionRuntimeConsumerSelectsExtensionE2e()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
@@ -1010,6 +1075,10 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     [Theory]
     [InlineData("Aspire.Hosting.Redis")]
     [InlineData("Aspire.StackExchange.Redis")]
+    [InlineData("Aspire.Hosting.Go")]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("Aspire.Hosting.Azure.Storage")]
+    [InlineData("Aspire.Azure.Storage.Blobs")]
     public void RealMapRepresentativeCliE2eRuntimeConsumerSelectsCliE2e(string project)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
@@ -1024,9 +1093,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     {
         // The regular PR test selects the published Azure Redis package rather than this repo-built package.
         "Aspire.Hosting.Azure.Redis",
-        // These Hosting/client pairs are consumed only by quarantined tests.
-        "Aspire.Hosting.Azure.Storage",
-        "Aspire.Azure.Storage.Blobs",
+        // This Hosting/client pair is consumed only by quarantined tests.
         "Aspire.Hosting.Nats",
         "Aspire.NATS.Net",
         // This package is consumed only by a LocalHive-only test that regular PR CI skips.

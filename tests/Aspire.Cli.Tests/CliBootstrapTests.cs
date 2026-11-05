@@ -7,7 +7,6 @@ using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
@@ -20,6 +19,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -110,7 +110,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildApplication_SharesSigstoreVerifierAcrossAttestationClientsAndScopes()
+    public async Task BuildApplication_SharesSigstoreVerifierAcrossScopes()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var aspireHome = workspace.CreateDirectory("aspire-home");
@@ -126,16 +126,13 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
             Assert.Same(trustRootProvider, scope.ServiceProvider.GetRequiredService<ITrustRootProvider>());
             var npmChecker = Assert.IsType<SigstoreNpmProvenanceChecker>(
                 scope.ServiceProvider.GetRequiredService<INpmProvenanceChecker>());
-            var gitHubVerifier = Assert.IsType<GitHubArtifactAttestationVerifier>(
-                scope.ServiceProvider.GetRequiredService<IGitHubArtifactAttestationVerifier>());
 
-            // Inspect the dependencies actually retained by the clients, rather than only
+            // Inspect the dependency actually retained by the client, rather than only
             // resolving the singleton twice. Match field types, not compiler-generated
             // closure/primary-constructor field names, without adding test-only accessors.
             var verifyBundle = GetInstanceField<SigstoreBundleVerificationHandler>(npmChecker);
             Assert.NotNull(verifyBundle.Target);
             Assert.Same(verifier, GetInstanceField<SigstoreVerifier>(verifyBundle.Target));
-            Assert.Same(verifier, GetInstanceField<SigstoreVerifier>(gitHubVerifier));
         }
     }
 
@@ -216,8 +213,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var aspireHome = workspace.CreateDirectory("aspire-home");
         using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
         using var host = await BuildHostAsync();
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 120_000);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
         var cancellationToken = timeout.Token;
         using var httpClient = new HttpClient();
 

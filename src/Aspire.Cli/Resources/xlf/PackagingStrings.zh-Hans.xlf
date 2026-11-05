@@ -9,17 +9,17 @@
       </trans-unit>
       <trans-unit id="PackagesOverrideDirectoryHasDuplicateVersions">
         <source>The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</source>
-        <target state="new">The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</target>
+        <target state="translated">Aspire CLI 包替代目录 '{0}' 中包含同一 Aspire 包的多个版本，这会造成歧义，因为系统会静默选择最高版本。请清理该目录，确保每个 Aspire* 包仅出现一次。冲突: {1}。</target>
         <note>{0} is the packages override directory path. {1} is a semicolon-separated list of conflicting package ids with their versions, for example "Aspire.Hosting (13.4.1, 13.4.2)".</note>
       </trans-unit>
       <trans-unit id="PackagesOverrideDirectoryNotFound">
         <source>The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</source>
-        <target state="new">The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</target>
+        <target state="translated">Aspire CLI 包替代目录 '{0}' 不存在。请将 ASPIRE_CLI_PACKAGES (或安装 sidecar 'packages' 字段)设置为包含 .nupkg 文件的目录，以便从中解析 Aspire* 包。</target>
         <note>{0} is the configured packages override directory path. Shown when ASPIRE_CLI_PACKAGES or the sidecar 'packages' field points at a directory that is missing.</note>
       </trans-unit>
       <trans-unit id="StagingChannelUnavailableOnDailyCli">
         <source>The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</source>
-        <target state="new">The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</target>
+        <target state="translated">无法从具有标识 '{0}' 的 CLI 解析“暂存”通道。每日、本地和每 PR CLI 生成没有确定性的暂存源。安装暂存或稳定 Aspire CLI，或设置 “overrideStagingFeed” (例如： aspire config set -g overrideStagingFeed &lt;feed-url&gt;) 指向要使用的暂存源。</target>
         <note>{0} is the running CLI's baked identity channel (one of daily, local, or pr-N). Shown when --channel staging is requested on a CLI that cannot produce a real staging feed. Tracks https://github.com/microsoft/aspire/issues/16652.</note>
       </trans-unit>
     </body>

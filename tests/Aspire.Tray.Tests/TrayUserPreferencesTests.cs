@@ -13,9 +13,10 @@ public class TrayUserPreferencesTests
     {
         using var directory = new TestTrayStateDirectory();
         var store = FileTraySavedStateStore.CreateWithLegacyMigration(directory.UserStatePath, directory.LegacyDirectory);
-        store.Save(TraySavedState.Empty with { ConfirmStop = false });
+        var host = directory.CreateAppHost("shop/apphost.cs");
+        store.Save(TraySavedState.Empty.Remember(host).SetPinned(host, true));
 
-        Assert.False(new FileTraySavedStateStore(directory.UserStatePath).Load().ConfirmStop);
+        Assert.Equal([new SavedAppHost(host, true, true)], new FileTraySavedStateStore(directory.UserStatePath).Load().AppHosts);
     }
 
     [Fact]
@@ -24,14 +25,13 @@ public class TrayUserPreferencesTests
         using var directory = new TestTrayStateDirectory();
         var legacyPath = Path.Combine(directory.LegacyDirectory, "apphosts.json");
         var host = directory.CreateAppHost("shop/apphost.cs");
-        var saved = new TraySavedState([new(host, true, true)]) { ConfirmStop = false };
+        var saved = new TraySavedState([new(host, true, true)]);
         new FileTraySavedStateStore(legacyPath).Save(saved);
         var original = File.ReadAllBytes(legacyPath);
 
         var loaded = FileTraySavedStateStore.CreateWithLegacyMigration(directory.UserStatePath, directory.LegacyDirectory).Load();
 
         Assert.Equal(saved.AppHosts, loaded.AppHosts);
-        Assert.False(loaded.ConfirmStop);
         Assert.Equal(original, File.ReadAllBytes(legacyPath));
         Assert.Equal(saved.AppHosts, new FileTraySavedStateStore(directory.UserStatePath).Load().AppHosts);
     }
@@ -40,13 +40,13 @@ public class TrayUserPreferencesTests
     public void ExistingUserFileTakesPrecedenceOverLegacyPreferences()
     {
         using var directory = new TestTrayStateDirectory();
+        var legacyHost = directory.CreateAppHost("legacy/apphost.cs");
         new FileTraySavedStateStore(Path.Combine(directory.LegacyDirectory, "apphosts.json"))
-            .Save(TraySavedState.Empty with { ConfirmStop = false });
+            .Save(TraySavedState.Empty.Remember(legacyHost));
         new FileTraySavedStateStore(directory.UserStatePath).Save(TraySavedState.Empty);
 
         var loaded = FileTraySavedStateStore.CreateWithLegacyMigration(directory.UserStatePath, directory.LegacyDirectory).Load();
 
-        Assert.True(loaded.ConfirmStop);
         Assert.Empty(loaded.AppHosts);
     }
 

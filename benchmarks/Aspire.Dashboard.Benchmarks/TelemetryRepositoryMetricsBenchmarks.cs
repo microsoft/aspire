@@ -239,7 +239,7 @@ public class TelemetryRepositoryMetricsBenchmarks
         }, cancellationToken: CancellationToken.None) ?? throw new InvalidOperationException($"Unable to find the benchmark metric '{instrumentName}'.");
     }
 
-    private static SqliteTelemetryRepository CreateRepository(DashboardSqliteDatabase database)
+    internal static SqliteTelemetryRepository CreateRepository(DashboardSqliteDatabase database)
     {
         return new SqliteTelemetryRepository(
             database,
@@ -250,7 +250,7 @@ public class TelemetryRepositoryMetricsBenchmarks
             []);
     }
 
-    private static IEnumerable<RepeatedField<ResourceMetrics>> CreateLongDurationMetricBatches(int dimensionCount, bool isHistogram, int totalSampleCount)
+    internal static IEnumerable<RepeatedField<ResourceMetrics>> CreateLongDurationMetricBatches(int dimensionCount, bool isHistogram, int totalSampleCount)
     {
         var startTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var observations = s_histogramObservations;

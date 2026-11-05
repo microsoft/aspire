@@ -113,13 +113,11 @@ public sealed class TemplateManifestGenerationTests(ITestOutputHelper output)
         }
         else
         {
-            var path = Path.Combine(root, "dotnet.sh");
-            File.WriteAllText(path, """
+            ExecutableFile.Write(Path.Combine(root, "dotnet.sh"), """
                 #!/bin/sh
                 printf '%s\n' "$*" >> "$TEMPLATE_CG_REPORT"
                 exit "$TEMPLATE_CG_EXIT_CODE"
                 """);
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
     }
 }

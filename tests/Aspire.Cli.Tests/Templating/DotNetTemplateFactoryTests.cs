@@ -16,7 +16,6 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
-using Aspire.Shared;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -260,7 +259,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -279,7 +278,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -298,7 +297,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -333,7 +332,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features, sdkInstaller: sdkInstaller);
 
         // Act
-        var templates = await factory.GetTemplatesAsync();
+        var templates = await factory.GetTemplatesAsync(null);
 
         // Assert
         Assert.Empty(templates);
@@ -378,7 +377,7 @@ public class DotNetTemplateFactoryTests
         public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
@@ -446,7 +445,7 @@ public class DotNetTemplateFactoryTests
         public Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProjectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)

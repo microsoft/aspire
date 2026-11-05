@@ -4,7 +4,7 @@
   "description": "NodeJS TypeScript service for PostgresEndToEnd playground",
   "main": "app.ts",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "ts-node app.ts",
@@ -13,7 +13,7 @@
   "dependencies": {
     "express": "^5.2.1",
     "pg": "^8.23.0",
-    "@azure/identity": "4.13.1",
+    "@azure/identity": "4.14.1",
     "@azure/core-auth": "~1.10.1",
     "uuid": "^14.0.2",
     "jws": "^4.0.1"
@@ -28,7 +28,7 @@
   "overrides": {
     "@azure/core-auth": "$@azure/core-auth",
     "uuid": "$uuid",
-    "body-parser@<2": "1.20.6",
+    "body-parser@<2": "1.20.9",
     "qs": "6.16.0"
   }
 }
