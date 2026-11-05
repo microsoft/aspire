@@ -399,10 +399,17 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 prompts.Add(prompt);
                 return prompt == AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt;
             },
-            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            PromptForSelectionCallback = (prompt, choices, formatter, _) =>
             {
                 prompts.Add(prompt);
+                Assert.Equal("Where should Aspire agent integrations apply?", prompt);
                 Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.Global], choices.Cast<AgentConfigurationScope>());
+                Assert.Equal(
+                    [
+                        "This project (installed components and configuration apply only to this project)",
+                        "All projects (installed components and configuration apply across all projects)"
+                    ],
+                    choices.Cast<object>().Select(formatter));
                 Assert.Equal(expectedWarnings, warnings);
                 Assert.Empty(homeDirectory.GetFileSystemInfos());
                 return AgentConfigurationScope.Global;

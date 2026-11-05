@@ -245,11 +245,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Where should Aspire agent integrations apply?", timeout: TimeSpan.FromSeconds(30));
-        var scopeScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("This project", scopeScreen);
-        Assert.Contains("All projects", scopeScreen);
-        Assert.Contains("installed components", scopeScreen);
-        Assert.Contains("configuration", scopeScreen);
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -400,11 +395,19 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var mcpConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp", ".mcp.json");
         const string originalMcpConfig = """{"mcpServers":{"custom":{"command":"custom"}}}""";
 
-        // Explicit client, skill, and scope choices leave no additional asset-selection prompt.
+        // Explicit client and skill choices leave only the scope prompt.
         await auto.AspireNewAcceptingAgentInitAsync(
             "StarterApp",
-            extraArguments: "--agents claude --scope project --skills aspire",
+            extraArguments: "--agents claude --skills aspire",
             beforeAcceptingAgentInit: () => File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig));
+
+        await auto.WaitUntilTextAsync("Where should Aspire agent integrations apply?", timeout: TimeSpan.FromSeconds(30));
+        var scopeScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("This project", scopeScreen);
+        Assert.Contains("All projects", scopeScreen);
+        Assert.Contains("installed components", scopeScreen);
+        Assert.Contains("configuration", scopeScreen);
+        await auto.EnterAsync();
 
         // aspire new never registers --mcp, so it goes straight to configuration after
         // registration — no MCP prompt is shown, and Claude's project MCP file is untouched.

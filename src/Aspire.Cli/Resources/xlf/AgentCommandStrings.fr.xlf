@@ -147,8 +147,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
-        <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="translated">Global (installer dans votre répertoire de base ; disponible pour tous les projets)</target>
+        <source>All projects (installed components and configuration apply across all projects)</source>
+        <target state="needs-review-translation">Global (installer dans votre répertoire de base ; disponible pour tous les projets)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
@@ -224,8 +224,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
-        <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="translated">Projet (À installer à la racine de votre espace de travail et à valider avec votre projet)</target>
+        <source>This project (installed components and configuration apply only to this project)</source>
+        <target state="needs-review-translation">Projet (À installer à la racine de votre espace de travail et à valider avec votre projet)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -239,8 +239,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
-        <source>Installation scope</source>
-        <target state="translated">Étendue de l’installation</target>
+        <source>Where should Aspire agent integrations apply?</source>
+        <target state="needs-review-translation">Étendue de l’installation</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
