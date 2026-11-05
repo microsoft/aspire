@@ -99,6 +99,31 @@ internal static class DotnetWatchCoordinator
         return true;
     }
 
+    /// <summary>Per-resource variant of <see cref="ShouldWatch(IDistributedApplicationBuilder)"/>.</summary>
+    internal static bool ShouldWatch(IDistributedApplicationBuilder builder, string resourceName, IProjectMetadata metadata)
+    {
+        if (!ShouldWatch(builder))
+        {
+            return false;
+        }
+
+        if (metadata.IsFileBasedApp)
+        {
+            // TODO(spike): the watch server (11.0.100-rc.2) launches `dotnet run` from the file's directory without
+            // `--file`, so a file-based app exits with "Couldn't find a project to run". Run it normally until it can.
+            builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
+            {
+                e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogWarning(
+                    "'{Resource}' is a file-based C# app ({File}); hot reload doesn't support those yet, so it runs without watch. Restart it to pick up changes.",
+                    resourceName, Path.GetFileName(metadata.ProjectPath));
+                return Task.CompletedTask;
+            });
+            return false;
+        }
+
+        return true;
+    }
+
     private static void WarnOnce(IDistributedApplicationBuilder builder, string message)
     {
         if (s_warned.TryGetValue(builder, out _))

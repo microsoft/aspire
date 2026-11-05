@@ -53,6 +53,24 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void FileBasedAppsRunWithoutWatch()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path);
+        var scriptPath = Path.Combine(workspace.Path, "ticker.cs");
+        File.WriteAllText(scriptPath, "Console.WriteLine(1);");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll"]);
+
+        var service = builder.AddDotnetProject("service", Path.GetDirectoryName(projectPath)!);
+        var script = builder.AddDotnetProject("ticker", scriptPath);
+
+        var server = Assert.Single(builder.Resources.OfType<DotnetWatchServerResource>());
+        Assert.Contains(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
+        Assert.DoesNotContain(script.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
+    }
+
+    [Fact]
     public void WatchWithoutProxyFallsBackToNormalRun()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
