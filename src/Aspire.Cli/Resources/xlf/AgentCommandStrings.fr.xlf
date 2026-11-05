@@ -192,9 +192,9 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Local Aspire skill files may override plugin skills:
+        <source>Local Aspire skill files may override plugin skills
 {0}</source>
-        <target state="new">Local Aspire skill files may override plugin skills:
+        <target state="new">Local Aspire skill files may override plugin skills
 {0}</target>
         <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
