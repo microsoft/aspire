@@ -1377,6 +1377,11 @@ public class AspireClient {
         return "\"" + escapeJson(value.toString()) + "\"";
     }
 
+    // 2^53 (JavaScript's Number.MAX_SAFE_INTEGER + 1). Every integer with magnitude up to this bound is exactly
+    // representable as a double; above it, doubles are spaced more than 1 apart, so a parsed value may already have
+    // been rounded to a different integer. Only normalize integral doubles within this range.
+    private static final double MAX_EXACT_DOUBLE_INTEGER = 9007199254740992d;
+
     // ATS maps every numeric type to Java double, so integral values must be written without a fractional
     // part ("32" rather than "32.0"); otherwise the AppHost can't deserialize them into int or long members.
     private static String toJsonNumber(Number number) {
@@ -1392,7 +1397,7 @@ public class AspireClient {
         String text = number.toString();
         boolean hasFractionOrExponent = text.indexOf('.') >= 0 || text.indexOf('e') >= 0 || text.indexOf('E') >= 0;
         double value = number.doubleValue();
-        if (hasFractionOrExponent && value == Math.rint(value) && Math.abs(value) <= 9007199254740992d) {
+        if (hasFractionOrExponent && value == Math.rint(value) && Math.abs(value) <= MAX_EXACT_DOUBLE_INTEGER) {
             return Long.toString((long) value);
         }
         return text;
