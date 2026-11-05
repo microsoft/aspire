@@ -51,13 +51,37 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WatchWithoutProxyFailsWithGuidance()
+    public void WatchWithoutProxyFallsBackToNormalRun()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(["AppHost:Run:WatchEnabled=true"]);
 
-        var ex = Assert.Throws<DistributedApplicationException>(() => builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!));
-        Assert.Contains("aspire run --watch", ex.Message);
+        var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
+
+        Assert.DoesNotContain(builder.Resources, r => r.Name == DotnetWatchCoordinator.ServerResourceName);
+        Assert.DoesNotContain(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetWatchServerResource);
+    }
+
+    [Fact]
+    public void WatchUnderIdeDebugSessionFallsBackToNormalRun()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire", "DEBUG_SESSION_PORT=12345"]);
+
+        builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
+
+        Assert.DoesNotContain(builder.Resources, r => r.Name == DotnetWatchCoordinator.ServerResourceName);
+    }
+
+    [Theory]
+    [InlineData("10.0.100", null, DotnetWatchToolResolver.PinnedVersion)]
+    [InlineData("10.0.403", null, DotnetWatchToolResolver.PinnedVersion)]
+    [InlineData("11.0.100-rc.2.26504.105", null, "11.0.100-rc.2.26504.105")]
+    [InlineData("11.0.100-rc.2.26504.105", "11.0.100-rc.3.26522.148", "11.0.100-rc.3.26522.148")]
+    public void ToolVersionFollowsSdk(string sdkVersion, string? overrideVersion, string expected)
+    {
+        Assert.Equal(expected, DotnetWatchToolResolver.SelectToolVersion(sdkVersion, overrideVersion));
     }
 
     private static string CreateProject(string root)

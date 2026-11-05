@@ -8,15 +8,18 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.Dotnet.Watch;
 
 /// <summary>
-/// SPIKE: runtime-only acquisition of the pinned <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> tool (plan Session 4).
+/// SPIKE: runtime-only acquisition of the <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> tool (plan Session 4).
 /// </summary>
 /// <remarks>
-/// Only reached from an effective watch run. Shortcuts that a real implementation must replace:
+/// The watcher loads MSBuild from the selected SDK, so its target runtime must be able to load that SDK. The spike
+/// therefore selects the tool version from the resolved SDK: SDK 10.x uses the plan's pinned 10.0.403, newer SDKs use
+/// the package published with exactly that SDK version (e.g. <c>11.0.100-rc.2.26504.105</c>).
+/// Shortcuts that a real implementation must replace:
 /// <list type="bullet">
 /// <item>TODO(spike): the package URL is a hardcoded dotnet-public flat-container URL; honor configured/approved NuGet sources.</item>
 /// <item>TODO(spike): no signature/hash verification of the downloaded package.</item>
 /// <item>TODO(spike): no CLI-callable prelaunch "ensure" entry point (needed for Session 8 AppHost watch).</item>
-/// <item>TODO(spike): runtime prerequisite (Microsoft.NETCore.App + Microsoft.AspNetCore.App 10.0.14) is not validated up front.</item>
+/// <item>TODO(spike): in-process lock only; concurrent AppHosts acquiring the same version can race.</item>
 /// </list>
 /// </remarks>
 internal static class DotnetWatchToolResolver
@@ -28,14 +31,29 @@ internal static class DotnetWatchToolResolver
     /// <summary>Overrides acquisition with an existing tool payload directory or DLL path.</summary>
     public const string ToolPathConfigurationKey = "ASPIRE_DOTNET_WATCH_TOOL_PATH";
 
-    private const string PackageUrl =
-        "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/flat2/" +
-        "microsoft.dotnet.hotreload.watch.aspire/" + PinnedVersion + "/microsoft.dotnet.hotreload.watch.aspire." + PinnedVersion + ".nupkg";
+    /// <summary>Overrides the package version that is acquired.</summary>
+    public const string ToolVersionConfigurationKey = "ASPIRE_DOTNET_WATCH_TOOL_VERSION";
 
-    private const string PayloadPrefix = "tools/net10.0/any/";
+    private const string FeedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/flat2/";
+
     private static readonly SemaphoreSlim s_lock = new(1, 1);
 
-    public static async Task<string> EnsureToolAsync(string? overridePath, ILogger logger, CancellationToken cancellationToken)
+    /// <summary>Selects the watcher package version that can load <paramref name="sdkVersion"/>.</summary>
+    public static string SelectToolVersion(string sdkVersion, string? overrideVersion)
+    {
+        if (!string.IsNullOrEmpty(overrideVersion))
+        {
+            return overrideVersion;
+        }
+
+        var dash = sdkVersion.IndexOf('-');
+        var numeric = Version.Parse(dash < 0 ? sdkVersion : sdkVersion[..dash]);
+
+        // The watcher package ships with every SDK build under the SDK's own version. 10.x keeps the plan's pin.
+        return numeric.Major <= 10 ? PinnedVersion : sdkVersion;
+    }
+
+    public static async Task<string> EnsureToolAsync(string? overridePath, string version, ILogger logger, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrEmpty(overridePath))
         {
@@ -50,7 +68,7 @@ internal static class DotnetWatchToolResolver
         }
 
         var cacheRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dotnet-watch", PinnedVersion);
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dotnet-watch", version);
         var toolDll = Path.Combine(cacheRoot, ToolDllName);
         var marker = Path.Combine(cacheRoot, ".complete");
 
@@ -59,12 +77,13 @@ internal static class DotnetWatchToolResolver
         {
             if (File.Exists(marker) && File.Exists(toolDll))
             {
-                logger.LogInformation("Using cached watch tool {PackageId} {Version} from {Path}", PackageId, PinnedVersion, cacheRoot);
+                logger.LogInformation("Using cached watch tool {PackageId} {Version} from {Path}", PackageId, version, cacheRoot);
                 return toolDll;
             }
 
-            // TODO(spike): in-process lock only; concurrent AppHosts can race. A real implementation needs a file lock.
-            logger.LogInformation("Acquiring watch tool {PackageId} {Version} from {Url}", PackageId, PinnedVersion, PackageUrl);
+            var lower = version.ToLowerInvariant();
+            var packageUrl = $"{FeedUrl}{PackageId.ToLowerInvariant()}/{lower}/{PackageId.ToLowerInvariant()}.{lower}.nupkg";
+            logger.LogInformation("Acquiring watch tool {PackageId} {Version} from {Url}", PackageId, version, packageUrl);
             var stopwatch = Stopwatch.StartNew();
 
             var staging = cacheRoot + ".staging-" + Guid.NewGuid().ToString("N");
@@ -74,18 +93,34 @@ internal static class DotnetWatchToolResolver
                 using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
                 using (var buffer = new MemoryStream())
                 {
-                    var bytes = await http.GetByteArrayAsync(PackageUrl, cancellationToken).ConfigureAwait(false);
+                    using var response = await http.GetAsync(packageUrl, cancellationToken).ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw new DistributedApplicationException(
+                            $"Could not download {PackageId} {version} ({(int)response.StatusCode}) from {packageUrl}. " +
+                            $"Set {ToolVersionConfigurationKey} to a published version or {ToolPathConfigurationKey} to a local copy.");
+                    }
+
+                    var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
                     buffer.Write(bytes);
                     buffer.Position = 0;
                     using var archive = new ZipArchive(buffer, ZipArchiveMode.Read);
+
+                    // The payload lives under tools/<tfm>/any/ (net10.0 for 10.x, net11.0 for 11.x).
+                    var payloadPrefix = archive.Entries
+                        .Select(e => e.FullName)
+                        .FirstOrDefault(n => n.StartsWith("tools/", StringComparison.Ordinal) && n.EndsWith("/any/" + ToolDllName, StringComparison.Ordinal))
+                        ?[..^ToolDllName.Length]
+                        ?? throw new DistributedApplicationException($"Package {PackageId} {version} does not contain tools/<tfm>/any/{ToolDllName}.");
+
                     foreach (var entry in archive.Entries)
                     {
-                        if (!entry.FullName.StartsWith(PayloadPrefix, StringComparison.Ordinal) || entry.FullName.EndsWith('/'))
+                        if (!entry.FullName.StartsWith(payloadPrefix, StringComparison.Ordinal) || entry.FullName.EndsWith('/'))
                         {
                             continue;
                         }
 
-                        var relative = entry.FullName[PayloadPrefix.Length..];
+                        var relative = entry.FullName[payloadPrefix.Length..];
                         var destination = Path.GetFullPath(Path.Combine(staging, relative));
                         if (!destination.StartsWith(Path.GetFullPath(staging) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
                         {
@@ -97,12 +132,7 @@ internal static class DotnetWatchToolResolver
                     }
                 }
 
-                if (!File.Exists(Path.Combine(staging, ToolDllName)))
-                {
-                    throw new DistributedApplicationException($"Package {PackageId} {PinnedVersion} did not contain {PayloadPrefix}{ToolDllName}.");
-                }
-
-                File.WriteAllText(Path.Combine(staging, ".complete"), PinnedVersion);
+                File.WriteAllText(Path.Combine(staging, ".complete"), version);
                 if (Directory.Exists(cacheRoot))
                 {
                     Directory.Delete(cacheRoot, recursive: true);
@@ -131,7 +161,7 @@ internal static class DotnetWatchToolResolver
     /// <summary>
     /// Resolves the SDK directory selected by <c>global.json</c> for <paramref name="projectDirectory"/>.
     /// </summary>
-    public static async Task<(string SdkDirectory, string Muxer, Version SdkVersion, bool IsPrerelease)> ResolveSdkAsync(
+    public static async Task<(string SdkDirectory, string Muxer, string SdkVersion)> ResolveSdkAsync(
         string projectDirectory,
         CancellationToken cancellationToken)
     {
@@ -148,9 +178,7 @@ internal static class DotnetWatchToolResolver
                 var sdkDirectory = Path.Combine(basePath, version);
                 var dotnetRoot = Path.GetDirectoryName(basePath)!;
                 var muxer = Path.Combine(dotnetRoot, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
-                var dash = version.IndexOf('-');
-                var numeric = Version.Parse(dash < 0 ? version : version[..dash]);
-                return (sdkDirectory, muxer, numeric, dash >= 0);
+                return (sdkDirectory, muxer, version);
             }
         }
 

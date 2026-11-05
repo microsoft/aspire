@@ -35,6 +35,9 @@ internal static class DotnetWatchResourceProxy
     public const string ForwardedEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_FORWARD_ENV";
     public const string ConnectTimeoutVariable = "ASPIRE_DOTNET_WATCH_PROXY_CONNECT_TIMEOUT_SECONDS";
 
+    // The proxy only starts after the server is healthy (WaitFor), so the pipe normally exists immediately.
+    internal const int DefaultConnectTimeoutSeconds = 30;
+
     private const byte ProtocolVersion = 1;
     private const byte OutputTypeStdout = 1;
     private const byte OutputTypeStderr = 2;
@@ -75,7 +78,7 @@ internal static class DotnetWatchResourceProxy
             Environment.GetEnvironmentVariable);
 
         var timeout = TimeSpan.FromSeconds(
-            int.TryParse(Environment.GetEnvironmentVariable(ConnectTimeoutVariable), out var seconds) && seconds > 0 ? seconds : 300);
+            int.TryParse(Environment.GetEnvironmentVariable(ConnectTimeoutVariable), out var seconds) && seconds > 0 ? seconds : DefaultConnectTimeoutSeconds);
 
         await using var pipe = new NamedPipeClientStream(".", server, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         try
@@ -116,7 +119,10 @@ internal static class DotnetWatchResourceProxy
                 var type = await ReadByteOrEofAsync(pipe, shutdown.Token).ConfigureAwait(false);
                 if (type < 0)
                 {
-                    // The server owns the process; its exit code is not represented on this pipe.
+                    // The server owns the process and its exit code is not represented on this pipe. While the server
+                    // is alive it keeps this pipe open across app exits so it can relaunch on the next change; app exit
+                    // codes reach the resource through the status pipe instead (hosting sets the "Crashed" state and
+                    // ExitCode). Reaching EOF means the server itself went away.
                     Console.Error.WriteLine($"{CommandName}: watch server disconnected; the application's exit status is unknown.");
                     return ExitServerDisconnected;
                 }

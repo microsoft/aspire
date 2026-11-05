@@ -355,7 +355,9 @@ public static class DotnetProjectHostingExtensions
         // so process and IDE launchers resolve the output produced by the coordinated build.
         var configuration = builder.Configuration["AppHost:BuildConfiguration"];
         var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
-        var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
+        // SPIKE: in `aspire run --watch` the watcher performs the (only) initial build, so the coordinated build is skipped.
+        var watch = Dotnet.Watch.DotnetWatchCoordinator.ShouldWatch(builder);
+        var buildCoordinator = watch ? null : DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
         // launches from the same place a ProjectResource would (DCP used Path.GetDirectoryName(ProjectPath)).
@@ -503,7 +505,7 @@ public static class DotnetProjectHostingExtensions
         });
 
         // SPIKE: `aspire run --watch` routes the launch through the package-owned watch server.
-        if (Dotnet.Watch.DotnetWatchCoordinator.IsWatchRun(builder))
+        if (watch)
         {
             Dotnet.Watch.DotnetWatchCoordinator.Configure(builder, resource, projectMetadata);
         }
