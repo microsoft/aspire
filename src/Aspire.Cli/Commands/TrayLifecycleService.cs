@@ -55,13 +55,13 @@ internal sealed class TrayLifecycleService(
         var action = start ? "start" : "stop";
         try
         {
-            // Extraction and lease acquisition are atomic with respect to version cleanup.
-            // Keep this lease until the short-lived helper has acknowledged UI readiness and
-            // the GUI's own lease (start), or graceful GUI shutdown (stop), and has exited.
+            // Mutable bundles keep their lease through helper acknowledgement and GUI handoff.
+            // Package-owned layouts use the same discovery path without a cleanup lease.
             using var lease = await bundleService.EnsureExtractedAndAcquireLayoutAsync(
                 "cli", $"tray {action}", cancellationToken).ConfigureAwait(false);
             var layout = lease?.Layout;
-            if (lease is null || !lease.HasLease || layout?.LayoutPath is not { } bundleRoot ||
+            // The helper needs the payload root, which can be beneath the installation's bundle/ link.
+            if (lease is null || layout?.GetDcpPath() is not { } dcpPath || Path.GetDirectoryName(dcpPath) is not { } bundleRoot ||
                 !Path.IsPathFullyQualified(bundleRoot))
             {
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.BundleRequired);

@@ -55,8 +55,7 @@ internal static class Program
                 return 0;
             }
 
-            using var lease = options.BundleRoot is null
-                ? null : BundleVersionLease.Acquire(options.BundleRoot, "tray", "tray");
+            using var lease = BundleVersionLease.TryAcquireFromEnvironment("tray", "tray");
             var controller = new TrayController(new CliAppHostClient(options.CliPath),
                 FileTraySavedStateStore.CreateWithLegacyMigration(
                     TrayConfiguration.GetSavedStatePath(options.CliPath), SingleInstance.LegacyStateDirectoryPath),

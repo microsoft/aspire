@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion..
+        ///   Looks up a localized string similar to The experimental Aspire tray requires a CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion..
         /// </summary>
         internal static string BundleRequired {
             get {

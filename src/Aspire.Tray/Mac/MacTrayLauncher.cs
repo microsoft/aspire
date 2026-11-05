@@ -22,7 +22,7 @@ internal static class MacTrayLauncher
         // Our own lease also protects the GUI while a terminating caller is unwinding.
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, context => context.Cancel = true);
         using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => context.Cancel = true);
-        using var lease = BundleVersionLease.Acquire(options.BundleRoot, "tray-launcher", "tray start");
+        using var lease = BundleVersionLease.TryAcquireFromEnvironment("tray-launcher", "tray start");
 
         bool running;
         using (var probe = SingleInstance.TryAcquire())
@@ -42,7 +42,7 @@ internal static class MacTrayLauncher
         var process = MacDetachedProcess.Start(TrayLaunchCommand.CreateStartInfo(options), log);
         try
         {
-            // The GUI acquires its own bundle lease before exposing this endpoint.
+            // The GUI acquires any handed-off bundle lease before exposing this endpoint.
             await process.CompleteStartupAsync(
                 () => TrayActivation.WaitUntilReadyAsync(SingleInstance.ActivationPipeName, CancellationToken.None)).ConfigureAwait(false);
         }

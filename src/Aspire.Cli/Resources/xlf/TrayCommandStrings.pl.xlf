@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="pl" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
-        <target state="translated">Eksperymentalny zasobnik Aspire wymaga dzierżawionego, wersjonowanego pakietu interfejsu wiersza polecenia. Nie znaleziono użytecznego pakietu. Zainstaluj pakiet Aspire dla systemu Windows lub macOS, który zawiera składnik pomocniczy zasobnika.</target>
+        <source>The experimental Aspire tray requires a CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
+        <target state="needs-review-translation">Eksperymentalny zasobnik Aspire wymaga dzierżawionego, wersjonowanego pakietu interfejsu wiersza polecenia. Nie znaleziono użytecznego pakietu. Zainstaluj pakiet Aspire dla systemu Windows lub macOS, który zawiera składnik pomocniczy zasobnika.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">

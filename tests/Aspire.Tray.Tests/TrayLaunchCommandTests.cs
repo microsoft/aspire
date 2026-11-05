@@ -1,12 +1,58 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared;
 using Aspire.Tray.Tests.Helpers;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Tray.Tests;
 
 public class TrayLaunchCommandTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void DetachedLaunchPreservesOptionalBundleLeaseHandoff(bool windows, bool leased)
+    {
+        using var bundle = new TestTrayBundle();
+        File.WriteAllText(Path.Combine(bundle.Root, "tray", "aspire-tray.exe"), "");
+        var remoteOptions = new RemoteInvokeOptions();
+        if (leased)
+        {
+            remoteOptions.StartInfo.Environment[BundleDiscovery.BundleVersionDirectoryEnvVar] = bundle.Root;
+        }
+        else
+        {
+            remoteOptions.StartInfo.Environment.Remove(BundleDiscovery.BundleVersionDirectoryEnvVar);
+        }
+
+        using (var remote = RemoteExecutor.Invoke(static (cliPath, root, windowsValue, leasedValue) =>
+        {
+            var windows = bool.Parse(windowsValue);
+            var leased = bool.Parse(leasedValue);
+            var options = TrayOptions.Parse(["--cli", cliPath, "--bundle-root", root]);
+            var start = windows ? TrayLaunchCommand.CreateWindowsStartInfo(options) : TrayLaunchCommand.CreateStartInfo(options);
+
+            start.Environment.TryGetValue(BundleDiscovery.BundleVersionDirectoryEnvVar, out var inheritedVersionDirectory);
+            Assert.Equal(leased ? root : null, inheritedVersionDirectory);
+            using var guiLease = BundleVersionLease.TryAcquireFromEnvironment("tray", "tray");
+            using (var helperLease = BundleVersionLease.TryAcquireFromEnvironment("tray-launcher", "tray start"))
+            {
+                Assert.Equal(leased, helperLease is not null);
+                Assert.Equal(leased, guiLease is not null);
+                Assert.Equal(leased, BundleVersionLease.HasActiveLease(root));
+            }
+            Assert.Equal(leased, BundleVersionLease.HasActiveLease(root));
+        }, bundle.CliPath, bundle.Root, windows.ToString(), leased.ToString(), remoteOptions))
+        {
+        }
+
+        Assert.False(BundleVersionLease.HasActiveLease(bundle.Root));
+        Assert.False(Directory.Exists(Path.Combine(bundle.Root, BundleVersionLease.LeasesDirectoryName)));
+    }
+
     [Fact]
     public void DetachedLaunchGetsExactBundleAndCliPathsWithoutShellQuoting()
     {

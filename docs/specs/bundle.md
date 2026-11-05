@@ -334,10 +334,10 @@ The [installation-route specification](install-routes.md) documents script, PR, 
 |---------------|-----------------|
 | Script, PR, or localhive sidecar | Parent of the CLI binary's directory, normally the install prefix above `bin/` |
 | Package-manager sidecar (`winget`, `brew`, `dotnet-tool`) | Directory containing the resolved CLI binary |
-| Nix sidecar | `ASPIRE_HOME`, or `~/.aspire` by default, outside the read-only Nix store |
+| Nix sidecar | No runtime extraction; the package expands and patches the bundle beside the CLI during installation |
 | No recognized install-route sidecar | `ASPIRE_HOME`, or `~/.aspire` by default |
 
-Installers can explicitly prepare the payload using `aspire setup`; otherwise, the CLI extracts it lazily when needed. Setup's route-independent default is distinct from the automatic extraction roots above. Self-update behavior depends on the installation route; package-manager ownership must be respected. See `aspire update --help` and the installation-route specification rather than assuming every installation is replaced in place by the CLI.
+Installers can explicitly prepare the payload using `aspire setup`; otherwise, the CLI extracts it lazily when needed, except for Nix. Nix uses the same flat installation root as the other package-manager routes, but its store-owned bundle is immutable and needs no runtime extraction locks or cleanup leases. Setup's route-independent default is distinct from the automatic extraction roots above. Self-update behavior depends on the installation route; package-manager ownership must be respected. See `aspire update --help` and the installation-route specification rather than assuming every installation is replaced in place by the CLI.
 
 PR acquisition scripts also populate channel-specific NuGet hives. Hives, integration caches, and user settings are distinct from the versioned runtime payload and are not replaced when the active `bundle/` link changes.
 
@@ -409,7 +409,9 @@ For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/READ
 
 ### Experimental Native Tray Companion
 
-`aspire tray start` starts or restores the native companion from the invoking CLI's leased bundle; `aspire tray stop` shuts down the companion without stopping AppHosts. The companion uses the CLI's versioned discovery and exact-instance stop contracts. Linux and standalone CLI binaries without a bundled payload are unsupported.
+`aspire tray start` starts or restores the native companion from the invoking CLI's resolved bundle; `aspire tray stop` shuts down the companion without stopping AppHosts. The companion uses the CLI's bundle discovery and exact-instance stop contracts. Linux and layouts without a native tray payload are unsupported.
+
+The tray launcher and GUI use the shared `BundleVersionLease.TryAcquireFromEnvironment` flow. The CLI passes `ASPIRE_BUNDLE_VERSION_DIR` for mutable versioned bundles, and each process retains its own lease through the readiness handoff. Package-owned immutable layouts do not pass a lease. `--bundle-root` identifies the tray payload location independently of cleanup protection.
 
 macOS bundles contain the complete `Aspire Tray.app`, including its executable, plist, artwork, and signature. Windows x64 and ARM64 bundles contain `tray/aspire-tray.exe` and the shared `tray/Aspire.ico`. `CreateLayout` copies the already-published payload and rejects missing or incompatible files. The native archive verification targets check the actual packaged payload before it is embedded in the CLI.
 
