@@ -145,12 +145,20 @@ tools:
         const validatorPath = path.join(process.env.RUNNER_TEMP, "gh-aw/test-selection-audit/validate_memory.js");
         const requireProvenance = fs.existsSync(validatorPath);
         if (!requireProvenance) {
-          // The push job has a fresh runner and a root-only sparse checkout.
-          // Load trusted code from its checked-out commit, not agent memory.
+          // The push job switches HEAD to the memory branch before validation.
+          // Its fresh, single-ref source checkout remains in refs/remotes/origin;
+          // load that trusted code even though sparse checkout omits the file.
           const { execFileSync } = require("node:child_process");
-          const source = execFileSync("git", ["--no-pager", "show", "HEAD:.github/workflows/test-selection-audit/validate_memory.js"], {
-            cwd: process.env.GITHUB_WORKSPACE,
-          });
+          const gitOptions = { cwd: process.env.GITHUB_WORKSPACE, encoding: "utf8" };
+          // for-each-ref emits one full commit SHA per line, e.g. "abc...123\n".
+          const refs = execFileSync("git", [
+            "--no-pager", "for-each-ref", "--format=%(objectname)", "refs/remotes/origin/",
+          ], gitOptions).trim().split(/\r?\n/);
+          if (refs.length !== 1 || !/^[0-9a-f]{40}$/.test(refs[0]))
+            throw new Error("Expected one trusted workflow checkout ref for memory validation");
+          const source = execFileSync("git", [
+            "--no-pager", "show", `${refs[0]}:.github/workflows/test-selection-audit/validate_memory.js`,
+          ], gitOptions);
           fs.mkdirSync(path.dirname(validatorPath), { recursive: true });
           fs.writeFileSync(validatorPath, source, { mode: 0o444 });
         }

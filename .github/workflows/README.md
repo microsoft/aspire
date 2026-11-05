@@ -105,8 +105,9 @@ even when it finds nothing actionable. Its shell allowlist includes `jq`,
 gh-aw validates memory twice. On the agent runner, the host uses a protected
 copy of `test-selection-audit/validate_memory.js` and requires all collector
 evidence and baseline snapshots. The separate push runner has no such snapshots;
-it loads the validator from its trusted checkout's Git object and repeats schema
-and derived-counter validation before persisting memory. Partial provenance is
+it loads the validator from the source checkout's sole remote-tracking ref
+(the current branch already holds memory) and repeats schema and derived-counter
+validation before persisting memory. Partial provenance is
 rejected in either context. Keep both phases working when changing validation.
 
 ## Auto-sec dependency reconciliation
