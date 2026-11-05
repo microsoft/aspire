@@ -224,8 +224,8 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptMessage">
-        <source>Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</source>
-        <target state="new">Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</target>
+        <source>We'd love your feedback on the new experience.</source>
+        <target state="new">We'd love your feedback on the new experience.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptShare">
@@ -234,8 +234,8 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptTitle">
-        <source>Help shape the new dashboard</source>
-        <target state="new">Help shape the new dashboard</target>
+        <source>Welcome to the new Aspire dashboard!</source>
+        <target state="new">Welcome to the new Aspire dashboard!</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
