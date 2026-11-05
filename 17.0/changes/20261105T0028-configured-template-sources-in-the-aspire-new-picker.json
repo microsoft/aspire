@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Interactive `aspire new` now lists templates from configured Git and directory sources under headed groups alongside built-in templates, and template sources support an optional `displayName`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-11-05T00:28:25Z",
+  "lastMergedAt": "2026-11-05T00:28:25Z",
+  "name": "Configured template sources in the aspire new picker",
+  "owner": "mitchdenny",
+  "prs": [
+    21754
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-04T23:59:35Z",
+  "number": 21522,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Wait for transport readiness in Java ReferenceExpression cancellation probe"
+}

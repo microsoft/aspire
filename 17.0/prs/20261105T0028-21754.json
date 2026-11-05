@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Configured template sources in the aspire new picker",
+  "mergedAt": "2026-11-05T00:28:25Z",
+  "number": 21754,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "included",
+  "title": "Show configured templates in the initial aspire new picker"
+}

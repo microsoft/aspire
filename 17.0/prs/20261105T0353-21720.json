@@ -1,0 +1,9 @@
+{
+  "author": "codebytes",
+  "comment": "Azure Container Registry purge tasks remove untagged manifests",
+  "mergedAt": "2026-11-05T03:53:36Z",
+  "number": 21720,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "included",
+  "title": "Add untagged manifest cleanup options to ACR purge tasks"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:00:19Z",
+  "number": 21524,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Fix flaky Hex1bNativePublishingTests: read MSBuild query results from -getResultOutputFile"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:04:07Z",
+  "number": 21539,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Avoid bootstrapping pip in model-only Python test venvs (fixes flaky venv timeout)"
+}

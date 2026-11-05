@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:15:59Z",
+  "number": 21434,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Complete IconCheckbox JS interop in ManageDataDialog tests"
+}

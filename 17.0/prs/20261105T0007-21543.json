@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:07:54Z",
+  "number": 21543,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Serialize Infrastructure.Tests classes that build Aspire.TestTools"
+}

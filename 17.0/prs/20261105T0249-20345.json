@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T02:49:15Z",
+  "number": 20345,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "fix(ci): Automatically rerun failed `main` rolling builds for specific failures"
+}

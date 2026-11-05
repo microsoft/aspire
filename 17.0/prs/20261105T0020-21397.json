@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:20:49Z",
+  "number": 21397,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Add explicit-start shutdown regression coverage (startup-token cancellation and process exit)"
+}

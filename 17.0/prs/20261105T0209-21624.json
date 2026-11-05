@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Coordinated builds for projects when the IDE cannot launch them",
+  "mergedAt": "2026-11-05T02:09:23Z",
+  "number": 21624,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "included",
+  "title": "Coordinate project builds when the IDE cannot launch projects (fix VS Code E2E tree-actions flake)"
+}

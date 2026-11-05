@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes concurrent `dotnet run` builds of the same project colliding on `obj/` files in IDE debug sessions that don't support launching projects, which could make a resource exit right after starting.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏗️",
+  "firstMergedAt": "2026-11-05T02:09:23Z",
+  "lastMergedAt": "2026-11-05T02:09:23Z",
+  "name": "Coordinated builds for projects when the IDE cannot launch them",
+  "owner": "davidfowl",
+  "prs": [
+    21624
+  ]
+}

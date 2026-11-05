@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:30:43Z",
+  "number": 21537,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Reserve DownloadNativeArchives mock server port atomically to fix 'Address already in use' flake"
+}

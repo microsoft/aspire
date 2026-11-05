@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:19:10Z",
+  "number": 21634,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Ignore just-published npm releases in polyglot TypeScript validation"
+}

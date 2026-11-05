@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:11:11Z",
+  "number": 21497,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Fix flaky RemoteHost StartupExit test: avoid crash dumps for expected test-server failures"
+}

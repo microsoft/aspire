@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@codebytes"
+  ],
+  "description": "`WithPurgeTask` now also deletes eligible untagged manifests (using a pinned `acr-cli` image and `--ago`/`--min-tags`), so scheduled cleanup reclaims storage instead of only removing tags.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-11-05T03:53:36Z",
+  "lastMergedAt": "2026-11-05T03:53:36Z",
+  "name": "Azure Container Registry purge tasks remove untagged manifests",
+  "owner": "eerhardt",
+  "prs": [
+    21720
+  ]
+}

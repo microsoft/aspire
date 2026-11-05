@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only, CI, or engineering-process change with no user-facing impact",
+  "mergedAt": "2026-11-05T00:30:09Z",
+  "number": 21534,
+  "runDate": "2026-11-05T06:05:00Z",
+  "status": "excluded",
+  "title": "Fix AzureSql test fixture Docker port collisions and re-enable reconciliation tests"
+}
