@@ -40,7 +40,7 @@ internal static partial class CombinedTrxReportGuard
         {
             throw new ValidationException("Combined report validation requires a nonempty named job inventory.");
         }
-        var producers = await github.GetCombinedResultProducersAsync(repository, runId, runAttempt, jobs, new AspireCiWorkflowConventions());
+        var producers = await github.GetTestArtifactExpectationsForRunAsync(repository, runId, runAttempt, jobs, new AspireCiWorkflowConventions());
         var matching = new CombinedTrxReports(reports, producers);
         var assigned = producers.SelectMany(matching.GetFileNamesForJob).ToHashSet(StringComparer.Ordinal);
         foreach (var report in reports)

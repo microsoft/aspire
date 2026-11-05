@@ -151,7 +151,14 @@ The separate `Combined TRX report contract (advisory)` job in `ci.yml` downloads
 `All-TestResults` and checks actual TRX paths with the same `CombinedTrxReports`
 matcher. It runs alongside the required Final Results gate, not as its dependency,
 and uses job-level `continue-on-error` so report-contract failures do not fail
-product CI. Artifact publication and test summaries are unaffected. The read-only
+product CI. It runs on main pushes and on PRs whose existing selected test matrix
+includes `Infrastructure.Tests` or `AnalyzeCiFailure.Tests`. That selection
+already uses `eng/github-ci/test-trigger-map.yml` and the affected-project graph;
+there is no separate report-contract path list or selection step. This is
+deliberately coarser than TRX-only changes: other infrastructure changes and
+full-CI selections also run the advisory check. Unrelated PRs selecting neither
+project and release-branch pushes skip it. Artifact publication and test summaries
+are unaffected. The read-only
 `check-combined-reports` command requires each available, unmerged report to
 identify one known producer. Current jobs retain duplicate identities;
 historical jobs provide rerun context without duplicating current job names.
@@ -174,7 +181,9 @@ aggregate download layouts from `run-tests.yml` and `tests.yml` through the real
 consumer. Controlled metadata mutations exercise drift detection. Its synthetic
 report names do not verify the filename emitter in
 `tests/Shared/RepoTesting/Aspire.RepoTesting.targets`; the advisory job
-validates the actual available outputs instead.
+validates the actual available outputs instead. The selector's existing routing
+tests cover the shared selection policy; they do not substitute for hosted
+execution of the advisory job condition.
 
 Evidence policy is separate from the result format:
 

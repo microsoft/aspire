@@ -52,7 +52,7 @@ internal sealed class AnalysisGitHubClient(GitHubApiClient githubApi, Cancellati
 
     // Include passing and historical producers, but retain current-name precedence.
     // Historical context identifies reports; it never creates actionable failed jobs.
-    internal async Task<TestArtifactExpectation[]> GetCombinedResultProducersAsync(
+    internal async Task<TestArtifactExpectation[]> GetTestArtifactExpectationsForRunAsync(
         string repository, long runId, int runAttempt, JsonArray allJobs, IGitHubWorkflowConventions workflow)
     {
         IEnumerable<JsonObject> producerJobs = allJobs.OfType<JsonObject>();

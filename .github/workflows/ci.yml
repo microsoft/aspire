@@ -121,11 +121,16 @@ jobs:
 
   # Report-contract failures are advisory, not product failures. Keep this job
   # outside the required Final Results dependencies so it can finish separately.
+  # Reuse the selected test matrix rather than maintaining another changed-path list.
   combined_report_contract:
     name: Combined TRX report contract (advisory)
     runs-on: ubuntu-latest
     needs: [prepare_for_ci, tests]
-    if: ${{ !cancelled() && github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: >-
+      ${{ !cancelled() && github.repository == 'microsoft/aspire' &&
+          needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
+          ((github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+           (github.event_name == 'pull_request' && needs.tests.outputs.run_combined_report_contract == 'true')) }}
     continue-on-error: true
     permissions:
       actions: read

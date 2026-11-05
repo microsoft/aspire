@@ -751,7 +751,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                         Text(run["run_started_at"]) ?? "", Text(run["updated_at"]) ?? "", diagnostics: _progress.Diagnostics).Single();
                     // Establish ownership before acquisition. Reruns can retain reports
                     // from historical producers whose names overlap current jobs.
-                    var producers = await gitHub.GetCombinedResultProducersAsync(_repository, runId, runAttempt, allJobs, _workflow);
+                    var producers = await gitHub.GetTestArtifactExpectationsForRunAsync(_repository, runId, runAttempt, allJobs, _workflow);
                     var extractedReports = new List<(string EntryPath, string ExtractedFileName)>();
                     if (await DownloadAndExtractTestResultsAsync(combined, (entry, file) => extractedReports.Add((entry, file)), reportFailure: false))
                     {
