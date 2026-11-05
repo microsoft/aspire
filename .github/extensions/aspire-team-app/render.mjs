@@ -1467,6 +1467,7 @@ function onPreferences(nextPrefs) {
   if (!nextPrefs || typeof nextPrefs !== "object") return;
   const wasEnabled = autoApplyEnabled();
   prefs = nextPrefs;
+  reconcilePendingLayout();
   updateRefreshControls();
   applyLayout();
   if (!wasEnabled && autoApplyEnabled() && updateAvailable) {
@@ -1479,6 +1480,7 @@ function onSnapshot(payload) {
   // Display preferences can change without advancing the dashboard revision.
   if (payload?.prefs && typeof payload.prefs === "object") {
     prefs = payload.prefs;
+    reconcilePendingLayout();
     applyLayout();
   }
   if (!payload || typeof payload.seq !== "number" || payload.seq <= lastAppliedSeq) return;
@@ -1546,6 +1548,13 @@ async function toggleAutoApply() {
   }
 }
 
+function reconcilePendingLayout() {
+  // Deferred dashboard data must not restore a layout superseded by a preference update.
+  if (pendingState) {
+    pendingState = { ...pendingState, prefs: { ...pendingState.prefs, layout: prefs?.layout } };
+  }
+}
+
 function applyLayout() {
   app.classList.toggle("rows-view", prefs?.layout === "rows");
   const select = document.getElementById("layout-select");
@@ -1561,6 +1570,7 @@ async function setLayout(layout) {
   const previous = prefs?.layout === "rows" ? "rows" : "grid";
   if (layout === previous) return;
   prefs = { ...(prefs || {}), layout };
+  reconcilePendingLayout();
   savingLayout = true;
   applyLayout();
   try {
@@ -1568,8 +1578,11 @@ async function setLayout(layout) {
     onPreferences(data.prefs);
   } catch (e) {
     prefs = { ...(prefs || {}), layout: previous };
+    reconcilePendingLayout();
     loadError = String((e && e.message) || e);
+    const settingsDraft = captureSettingsDraft();
     render();
+    restoreSettingsDraft(settingsDraft);
   } finally {
     savingLayout = false;
     applyLayout();

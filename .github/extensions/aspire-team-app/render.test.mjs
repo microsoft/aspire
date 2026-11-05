@@ -191,6 +191,83 @@ test("reconnecting applies a layout change even when dashboard data has not chan
   assert.equal(api.getAppliedSeq(), 1);
 });
 
+test("returning from a form keeps newer layout preferences when applying a deferred dashboard", () => {
+  for (const view of ["settings", "accounts"]) {
+    for (const event of ["preferences", "snapshot"]) {
+      const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+      api.applyPushedState({ dashboard: { ...reviewDashboard(3), seq: 1 }, prefs: rendererPrefs() });
+      api.goView(view);
+      api.applyPushedState({ dashboard: { ...reviewDashboard(4), seq: 2 }, prefs: rendererPrefs() });
+      const form = app.innerHTML;
+      const nextPrefs = { ...rendererPrefs(), layout: "rows" };
+      if (event === "preferences") api.onPreferences(nextPrefs);
+      else api.onSnapshot({ seq: 1, prefs: nextPrefs });
+      assert.equal(app.innerHTML, form);
+      api.goView("queue");
+      assert.equal(api.getAppliedSeq(), 2);
+      assert.equal(api.getPrefs().layout, "rows", view + ": " + event);
+      assert.equal(app.classList.contains("rows-view"), true);
+      assert.match(app.innerHTML, /value="rows" selected/);
+    }
+  }
+});
+
+test("failed layout saves preserve settings edits made while the request was pending", async () => {
+  const draft = {
+    "release-input": { value: "13.4-preview" },
+    "s-drafts": { checked: true },
+    "s-detached": { checked: true },
+    "n-review": { checked: false },
+    "n-ready": { checked: true },
+    "n-changes": { checked: false },
+    "n-ci": { checked: false },
+  };
+  const elements = structuredClone(draft);
+  const app = {
+    html: "",
+    get innerHTML() { return this.html; },
+    set innerHTML(value) {
+      this.html = value;
+      if (value.includes("<h2>Settings</h2>")) {
+        for (const [id, field] of Object.entries(elements)) {
+          if (id === "release-input") field.value = "13.1";
+          else field.checked = false;
+        }
+      }
+    },
+    removeAttribute() {},
+    classList: classList(),
+  };
+  let rejectSave;
+  const { api } = createRendererHarness({
+    app, elements,
+    fetch: (path) => String(path) === "api/layout"
+      ? new Promise((_, reject) => { rejectSave = reject; })
+      : new Promise(() => {}),
+  });
+  api.setState(reviewDashboard(3));
+  api.setPrefs(rendererPrefs());
+  api.render();
+  const saving = api.setLayout("rows");
+  api.goView("settings");
+  api.applyPushedState({
+    dashboard: { ...reviewDashboard(4), seq: 2 },
+    prefs: { ...rendererPrefs(), layout: "rows" },
+  });
+  for (const [id, field] of Object.entries(draft)) Object.assign(elements[id], field);
+  rejectSave(new Error("Could not save layout"));
+  await saving;
+  assert.deepEqual(elements, draft);
+  assert.match(app.innerHTML, /<h2>Settings<\/h2>/);
+  assert.match(app.innerHTML, /role="alert">Could not save layout/);
+  assert.equal(app.classList.contains("rows-view"), false);
+  assert.equal(api.getPrefs().layout, "grid");
+  api.goView("queue");
+  assert.equal(api.getAppliedSeq(), 2);
+  assert.equal(api.getPrefs().layout, "grid");
+  assert.equal(app.classList.contains("rows-view"), false);
+});
+
 test("row layout flattens masonry columns in queue order and restores grid columns", () => {
   function node(isCard = false) {
     return {
@@ -2101,7 +2178,7 @@ function createRendererHarness(overrides = {}) {
   vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
-  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill, setLayout })", sandbox));
+  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill, setLayout, goView })", sandbox));
   return { app, api: sandbox.__test, events, document };
 }
 
