@@ -82,6 +82,7 @@ Measured on Linux (2 cores) with SDK 11.0.100-rc.2 and the playground; latency i
 | Dashboard Stop / Start / Restart / Rebuild | works | Start after Stop ~13 s; Restart re-launches with the latest applied code; Rebuild 11 s | #20702 |
 | Ctrl+C | works | CLI exits in 0.27–0.32 s; DCP stops the watcher and services within ~10–20 s (up to 50 s seen); `/tmp/aspw-*` removed | #17590 |
 | Env vars and endpoints across restarts | works | `GREETING_SOURCE`, `services__api__*` and the 5380 endpoint survive rude-edit restarts (11 s edit→served) and relaunches (same target port; worker keeps reaching api); [transcript](docs/transcripts/08-restart-preserves-env-and-endpoints.txt) | |
+| App arguments (`WithArgs`) | fixed | The watcher appends arguments directly to `dotnet run`; the proxy now prefixes them with `--`, so `WithArgs("--Demo:Greeting", "from args")` reaches the app (`/config` → `from args`) | |
 | `WithReplicas(2)` | works | Shared edit reaches both replicas; rude edit restarts both. [transcript](docs/transcripts/03-replicas-csproj-static.txt) | #13738 |
 | File-based C# app (`AddDotnetProject("x", "app.cs")`) | not supported | rc.2 watch server runs `dotnet run` without `--file` ("Couldn't find a project to run"); such apps now run unwatched with a warning. [transcript](docs/transcripts/07-file-based-app-unwatched.txt) | |
 | Watch tool download offline | fixed | Actionable terminal error; services wait; `aspire resource dotnet-watch start` recovers. [transcript](docs/transcripts/06-offline-tool-download.txt) | |
