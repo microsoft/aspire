@@ -1,0 +1,65 @@
+{
+  "run_id": 42121673973,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42121673973",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T23:31:44Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21693,
+    "title": "Add Aspire Outage game to the dashboard resource graph",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/dashboard-resource-graph-game",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21693",
+    "merged_at": "2026-11-05T22:27:36Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "a039cca8e7c3c810a43fc1bcad0b1e9aee046d8b",
+    "failed_sha": "d9b9972ef64cc9bf204060ac64e3b68f02e17ed3",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "7f31342fa04291019da9f944b2334c0694b3c360",
+        "message": "Add resource type display names to Dashboard and CLI (#21279) ## Description Add a `ResourceTypeDisplayName` presentation label to resources, so they can show a friendly type such as `Redis` or `PostgreSQL Server` instead of the technical `Container` type. - Resource classes supply defaults. `ResourceTypeDisplayName` falls back to `ResourceType` when no service-specific label is supplied. - Add `.WithResourceTypeDisplayName(...)` to override the label for an individual resource, including projec",
+        "html_url": "https://github.com/microsoft/aspire/commit/7f31342fa04291019da9f944b2334c0694b3c360",
+        "pull_request": {
+          "number": 21279,
+          "title": "Add resource type display names to Dashboard and CLI",
+          "url": "https://github.com/microsoft/aspire/pull/21279",
+          "merged_at": "2026-11-05T22:22:22Z"
+        }
+      },
+      {
+        "sha": "d9b9972ef64cc9bf204060ac64e3b68f02e17ed3",
+        "message": "Add Aspire Outage game to the dashboard resource graph (#21693) ## Description Adds Aspire Outage, an arcade game played on the dashboard's resource graph, where the app's resources are the enemies. - **Starting it:** select the Play Aspire Outage button at the bottom left of the graph, or press O while the graph has focus (listed in the keyboard shortcuts help). Esc returns to the graph. - **Game:** it runs on a canvas overlay in plain JS (`app-resourcegraph-game.js`), with keyboard and mouse c",
+        "html_url": "https://github.com/microsoft/aspire/commit/d9b9972ef64cc9bf204060ac64e3b68f02e17ed3",
+        "pull_request": {
+          "number": 21693,
+          "title": "Add Aspire Outage game to the dashboard resource graph",
+          "url": "https://github.com/microsoft/aspire/pull/21693",
+          "merged_at": "2026-11-05T22:27:36Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 127586222819,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42121673973/job/127586222819",
+      "classification": "transient-infra",
+      "reason": "Test host crashed with exit code 3 (run exit 7) after 9453 passed and 0 failed tests; no failed test observations.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-crash-exit-3"
+  ]
+}
