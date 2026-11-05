@@ -355,23 +355,35 @@ public class AtsPythonCodeGeneratorTests
             aspirePy);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("list")]
+    [InlineData("tuple")]
+    [InlineData("set")]
+    [InlineData("generator")]
+    [InlineData("empty_generator")]
     [RequiresTools(["python3"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
-    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnUnix()
-        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python3");
+    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnUnix(string iterableKind)
+        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python3", iterableKind);
 
-    [Fact]
+    [Theory]
+    [InlineData("list")]
+    [InlineData("tuple")]
+    [InlineData("set")]
+    [InlineData("generator")]
+    [InlineData("empty_generator")]
     [RequiresTools(["python"])]
     [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
-    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnWindows()
-        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python");
+    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnWindows(string iterableKind)
+        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python", iterableKind);
 
-    private Task GeneratedLaunchGroupsKeyword_AcceptsIterables(string pythonExecutable)
+    private Task GeneratedLaunchGroupsKeyword_AcceptsIterables(string pythonExecutable, string iterableKind)
     {
         var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
         return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            $"iterable_kind = '{iterableKind}'{Environment.NewLine}" +
             """
+            import json
             import typing
             import aspire_app
 
@@ -379,25 +391,64 @@ public class AtsPythonCodeGeneratorTests
             handle = aspire_app.Handle({"$handle": "resource", "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource"})
             calls = []
 
-            def invoke_capability(capability_id, args, kwargs=None):
-                calls.append((capability_id, args))
-                return args["builder"]
+            class Socket:
+                def sendall(self, message):
+                    # Keep the real marshalling, JSON encoder, and request/response path.
+                    header, payload = message.split(b"\r\n\r\n", 1)
+                    assert header == f"Content-Length: {len(payload)}".encode()
+                    request = json.loads(payload)
+                    assert request["method"] == "invokeCapability"
+                    capability_id, args = request["params"]
+                    calls.append((capability_id, args))
+                    client._pending_results[request["id"]] = (args["builder"], None)
+                    client._pending_requests[request["id"]].set()
 
-            client.invoke_capability = invoke_capability
-            for groups in (["catalog", "basket"], ("catalog", "basket")):
-                aspire_app.ExecutableResource(handle, client, launch_groups=groups)
-                capability_id, args = calls.pop()
-                assert capability_id == "Aspire.Hosting/withLaunchGroups"
-                assert args["builder"] == handle
-                assert list(args["launchGroupNames"]) == ["catalog", "basket"]
+            client._socket = Socket()
+            client._connected = True
+            groups = {
+                "list": lambda: ["catalog", "basket"],
+                "tuple": lambda: ("catalog", "basket"),
+                "set": lambda: {"catalog", "basket"},
+                "generator": lambda: (name for name in ["catalog", "basket"]),
+                "empty_generator": lambda: (name for name in []),
+            }[iterable_kind]()
+            resource = aspire_app.ExecutableResource(handle, client, launch_groups=groups)
+            assert resource.handle.to_json() == handle.to_json()
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withLaunchGroups"
+            assert args["builder"] == handle.to_json()
+            expected = [] if iterable_kind == "empty_generator" else ["catalog", "basket"]
+            actual = args["launchGroupNames"]
+            assert isinstance(actual, list)
+            assert (sorted(actual) if iterable_kind == "set" else actual) == (
+                sorted(expected) if iterable_kind == "set" else expected
+            )
 
-            for groups in ("catalog", ["catalog", 42], 42):
+            for groups in ("catalog", ["catalog", 42], 42, (name for name in ["catalog", 42])):
                 try:
                     aspire_app.ExecutableResource(handle, client, launch_groups=groups)
                     raise AssertionError("Invalid launch_groups was accepted")
                 except TypeError as error:
                     assert "launch_groups" in str(error)
                 assert calls == []
+
+            callback = lambda context: None
+            aspire_app.ExecutableResource(handle, client, pipeline_step_factory=("build", callback))
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "build" and "callback" in args
+
+            aspire_app.ExecutableResource(handle, client, pipeline_step_factory={
+                "step_name": "deploy",
+                "callback": callback,
+                "depends_on": (name for name in ["build"]),
+                "tags": {"release"},
+            })
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "deploy" and "callback" in args
+            assert args["dependsOn"] == ["build"]
+            assert args["tags"] == ["release"]
 
             assert aspire_app._validate_type({"catalog": ["api", "cache"]}, typing.Mapping[str, typing.Iterable[str]])
             assert not aspire_app._validate_type({"catalog": ["api", 42]}, typing.Mapping[str, typing.Iterable[str]])

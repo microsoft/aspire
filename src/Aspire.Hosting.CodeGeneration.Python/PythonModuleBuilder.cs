@@ -1741,6 +1741,20 @@ internal sealed class PythonModuleBuilder
                 )
 
 
+        def _normalize_constructor_value(value: typing.Any) -> typing.Any:
+            # Validation must not exhaust generators that are later sent over JSON-RPC.
+            # Preserve tuple and mapping shapes used to select constructor overloads.
+            if isinstance(value, (str, _ReferenceHandle)) or callable(value):
+                return value
+            if isinstance(value, typing.Mapping):
+                return {key: _normalize_constructor_value(item) for key, item in value.items()}
+            if isinstance(value, tuple):
+                return tuple(_normalize_constructor_value(item) for item in value)
+            if isinstance(value, typing.Iterable):
+                return [_normalize_constructor_value(item) for item in value]
+            return value
+
+
         def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
             if typing.get_origin(expected_type) is typing.get_origin(typing.Iterable):
                 if isinstance(arg, str):

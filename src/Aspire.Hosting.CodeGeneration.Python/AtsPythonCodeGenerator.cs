@@ -2718,6 +2718,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 var hasBooleanParameter = variations.Any(v => v.OptionType.Split(" | ").Contains("bool"));
                 var flagGuard = hasFlag && !hasBooleanParameter ? $" and _{optionName} is not False" : string.Empty;
                 builder.AppendLine(CultureInfo.InvariantCulture, $"        if (_{optionName} := kwargs.pop(\"{optionName}\", None)) is not None{flagGuard}:");
+                builder.AppendLine(CultureInfo.InvariantCulture, $"            _{optionName} = _normalize_constructor_value(_{optionName})");
             }
         }
 
