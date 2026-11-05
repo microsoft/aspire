@@ -4,7 +4,12 @@ Launch groups select a named subset of an application's resources for a local ru
 They work with containers, executables, .NET projects, and resources that honor
 `WithExplicitStart`. They do not change publishing or deployment.
 
+The public launch-group APIs are experimental and may change or be removed.
+Suppress `ASPIRELAUNCHGROUPS001` to opt in when calling them from C#.
+
 ```csharp
+#pragma warning disable ASPIRELAUNCHGROUPS001
+
 var database = builder.AddPostgres("database").WithLaunchGroup("catalog");
 var cache = builder.AddRedis("cache").WithLaunchGroup("basket");
 var catalog = builder.AddDotnetProject("catalog", "../Catalog/Catalog.csproj")

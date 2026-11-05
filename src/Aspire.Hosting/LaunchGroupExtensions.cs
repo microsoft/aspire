@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Internal use of the experimental launch-group annotation.
+
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Pipelines;
@@ -12,6 +15,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides methods for configuring named subsets of resources for local application runs.
 /// </summary>
+[Experimental("ASPIRELAUNCHGROUPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class LaunchGroupExtensions
 {
     /// <summary>
@@ -37,6 +41,7 @@ public static class LaunchGroupExtensions
     /// <exception cref="ArgumentNullException">The builder or group name is null.</exception>
     /// <exception cref="ArgumentException">The group name is invalid.</exception>
     [AspireExport]
+    [Experimental("ASPIRELAUNCHGROUPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithLaunchGroup<T>(this IResourceBuilder<T> builder, string launchGroupName) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -64,6 +69,7 @@ public static class LaunchGroupExtensions
     /// <exception cref="ArgumentNullException">The builder, group names array, or a group name is null.</exception>
     /// <exception cref="ArgumentException">A group name is invalid.</exception>
     [AspireExport]
+    [Experimental("ASPIRELAUNCHGROUPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithLaunchGroups<T>(this IResourceBuilder<T> builder, params string[] launchGroupNames) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREWATCH001
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Registers launch-group support from AppHost configuration.
 
 using System.Diagnostics;
 using System.Reflection;

@@ -48,6 +48,7 @@ public sealed class LaunchGroupTests(ITestOutputHelper output)
               await builder.addExecutable("basket", "sleep", ".", ["600"]).withLaunchGroup("basket");
               """
             : """
+              #pragma warning disable ASPIRELAUNCHGROUPS001
               builder.AddExecutable("catalog", "sleep", ".", "600").WithLaunchGroup("catalog");
               builder.AddExecutable("basket", "sleep", ".", "600").WithLaunchGroup("basket");
               """;

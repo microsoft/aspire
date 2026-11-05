@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Tests the experimental launch-group APIs.
+
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.Orchestrator;
@@ -15,6 +19,23 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class LaunchGroupTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void PublicLaunchGroupApisUseSharedExperimentalDiagnostic()
+    {
+        var types = new[] { typeof(LaunchGroupExtensions), typeof(LaunchGroupAnnotation) };
+        var methods = typeof(LaunchGroupExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Assert.Equal(
+            [nameof(LaunchGroupExtensions.WithLaunchGroup), nameof(LaunchGroupExtensions.WithLaunchGroups)],
+            methods.Select(method => method.Name).Order(StringComparer.Ordinal));
+
+        foreach (var member in types.Cast<MemberInfo>().Concat(methods))
+        {
+            var attribute = Assert.Single(member.GetCustomAttributes<ExperimentalAttribute>());
+            Assert.Equal("ASPIRELAUNCHGROUPS001", attribute.DiagnosticId);
+            Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("CATALOG")]

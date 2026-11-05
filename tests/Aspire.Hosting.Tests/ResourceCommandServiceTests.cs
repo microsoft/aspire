@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Tests launch-group lifecycle behavior.
+
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Aspire.Hosting.Dcp;

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRETERMINAL001 // Terminal APIs are experimental.
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Opt in to experimental launch-group APIs.
 
 var builder = DistributedApplication.CreateBuilder(args);
 

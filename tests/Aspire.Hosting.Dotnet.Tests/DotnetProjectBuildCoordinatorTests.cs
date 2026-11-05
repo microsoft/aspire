@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Tests launch-group build coordination.
+
 extern alias HostingDotnet;
 
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001

@@ -13078,6 +13078,7 @@ export interface ContainerRegistryResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ContainerRegistryResourcePromise;
     /**
@@ -13087,6 +13088,7 @@ export interface ContainerRegistryResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
     /**
@@ -13462,6 +13464,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ContainerRegistryResourcePromise;
     /**
@@ -13471,6 +13474,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
     /**
@@ -13895,6 +13899,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -13917,6 +13922,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -15536,6 +15542,7 @@ export interface ContainerResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ContainerResourcePromise;
     /**
@@ -15545,6 +15552,7 @@ export interface ContainerResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
     /**
@@ -16416,6 +16424,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ContainerResourcePromise;
     /**
@@ -16425,6 +16434,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
     /**
@@ -17644,6 +17654,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -17666,6 +17677,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -20180,6 +20192,7 @@ export interface CSharpAppResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): CSharpAppResourcePromise;
     /**
@@ -20189,6 +20202,7 @@ export interface CSharpAppResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
     /**
@@ -20900,6 +20914,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): CSharpAppResourcePromise;
     /**
@@ -20909,6 +20924,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
     /**
@@ -21669,6 +21685,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -21691,6 +21708,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -24328,6 +24346,7 @@ export interface DotnetToolResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): DotnetToolResourcePromise;
     /**
@@ -24337,6 +24356,7 @@ export interface DotnetToolResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
     /**
@@ -25084,6 +25104,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): DotnetToolResourcePromise;
     /**
@@ -25093,6 +25114,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
     /**
@@ -26011,6 +26033,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -26033,6 +26056,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -28562,6 +28586,7 @@ export interface ExecutableResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ExecutableResourcePromise;
     /**
@@ -28571,6 +28596,7 @@ export interface ExecutableResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
     /**
@@ -29279,6 +29305,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ExecutableResourcePromise;
     /**
@@ -29288,6 +29315,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
     /**
@@ -30096,6 +30124,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -30118,6 +30147,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -32617,6 +32647,7 @@ export interface ExternalServiceResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ExternalServiceResourcePromise;
     /**
@@ -32626,6 +32657,7 @@ export interface ExternalServiceResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
     /**
@@ -33006,6 +33038,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ExternalServiceResourcePromise;
     /**
@@ -33015,6 +33048,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
     /**
@@ -33463,6 +33497,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -33485,6 +33520,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -34925,6 +34961,7 @@ export interface ParameterResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ParameterResourcePromise;
     /**
@@ -34934,6 +34971,7 @@ export interface ParameterResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
     /**
@@ -35356,6 +35394,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ParameterResourcePromise;
     /**
@@ -35365,6 +35404,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
     /**
@@ -35837,6 +35877,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -35859,6 +35900,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -37425,6 +37467,7 @@ export interface ProjectResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ProjectResourcePromise;
     /**
@@ -37434,6 +37477,7 @@ export interface ProjectResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
     /**
@@ -38145,6 +38189,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ProjectResourcePromise;
     /**
@@ -38154,6 +38199,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
     /**
@@ -38915,6 +38961,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -38937,6 +38984,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -41693,6 +41741,7 @@ export interface TestDatabaseResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestDatabaseResourcePromise;
     /**
@@ -41702,6 +41751,7 @@ export interface TestDatabaseResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
     /**
@@ -42573,6 +42623,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestDatabaseResourcePromise;
     /**
@@ -42582,6 +42633,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
     /**
@@ -43800,6 +43852,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -43822,6 +43875,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -46516,6 +46570,7 @@ export interface TestRedisResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestRedisResourcePromise;
     /**
@@ -46525,6 +46580,7 @@ export interface TestRedisResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
     /**
@@ -47480,6 +47536,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestRedisResourcePromise;
     /**
@@ -47489,6 +47546,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
     /**
@@ -48791,6 +48849,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -48813,6 +48872,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -51836,6 +51896,7 @@ export interface TestVaultResource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestVaultResourcePromise;
     /**
@@ -51845,6 +51906,7 @@ export interface TestVaultResource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
     /**
@@ -52718,6 +52780,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestVaultResourcePromise;
     /**
@@ -52727,6 +52790,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
     /**
@@ -53947,6 +54011,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -53969,6 +54034,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
@@ -56783,6 +56849,7 @@ export interface Resource {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ResourcePromise;
     /**
@@ -56792,6 +56859,7 @@ export interface Resource {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
     /**
@@ -57167,6 +57235,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ResourcePromise;
     /**
@@ -57176,6 +57245,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
     /**
@@ -57601,6 +57671,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * to select a group. No selection preserves normal startup, and publishing is unaffected.
      * @param launchGroupName The case-insensitive launch group name.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroup(launchGroupName: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withLaunchGroupInternal(launchGroupName), this._client);
@@ -57623,6 +57694,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Unselected resources can be started later from the dashboard or resource commands.
      * @param launchGroupNames The case-insensitive launch group names.
      * @returns The resource builder.
+     * @experimental
      */
     withLaunchGroups(launchGroupNames: string[]): ResourcePromise {
         return new ResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);

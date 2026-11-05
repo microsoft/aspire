@@ -2973,6 +2973,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -2985,6 +2990,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithLifetime sets the lifetime behavior of the container resource.
@@ -6439,6 +6449,11 @@ type CSharpAppResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) CSharpAppResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -6451,6 +6466,11 @@ type CSharpAppResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) CSharpAppResource
 
 	// WithLifetimeOf configures a resource to match the lifetime of another
@@ -10532,6 +10552,11 @@ type ContainerRegistryResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) ContainerRegistryResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -10544,6 +10569,11 @@ type ContainerRegistryResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) ContainerRegistryResource
 
 	// WithLifetimeOf configures a resource to match the lifetime of another
@@ -12801,6 +12831,11 @@ type ContainerResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) ContainerResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -12813,6 +12848,11 @@ type ContainerResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) ContainerResource
 
 	// WithLifetime sets the lifetime behavior of the container resource.
@@ -18199,6 +18239,11 @@ type DotnetToolResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) DotnetToolResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -18211,6 +18256,11 @@ type DotnetToolResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) DotnetToolResource
 
 	// WithLifetimeOf configures a resource to match the lifetime of another
@@ -22542,6 +22592,11 @@ type ExecutableResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) ExecutableResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -22554,6 +22609,11 @@ type ExecutableResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) ExecutableResource
 
 	// WithLifetimeOf configures a resource to match the lifetime of another
@@ -25463,6 +25523,11 @@ type ExternalServiceResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) ExternalServiceResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -25475,6 +25540,11 @@ type ExternalServiceResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) ExternalServiceResource
 
 	// WithLifetimeOf configures a resource to match the lifetime of another
@@ -29320,6 +29390,11 @@ type ParameterResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) ParameterResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -29332,6 +29407,11 @@ type ParameterResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) ParameterResource
 
 	// WithLifetimeOf configures a resource to match the lifetime of another
@@ -32381,6 +32461,11 @@ type ProjectResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) ProjectResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -32393,6 +32478,11 @@ type ProjectResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) ProjectResource
 
 	// WithLifetimeOf configures a resource to match the lifetime of another
@@ -37596,6 +37686,11 @@ type TestDatabaseResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) TestDatabaseResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -37608,6 +37703,11 @@ type TestDatabaseResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) TestDatabaseResource
 
 	// WithLifetime sets the lifetime behavior of the container resource.
@@ -41385,6 +41485,11 @@ type TestRedisResource interface {
 	//   - launchGroupName: The case-insensitive launch group name.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroup(launchGroupName string) TestRedisResource
 
 	// WithLaunchGroups adds a resource to multiple launch groups.
@@ -41397,6 +41502,11 @@ type TestRedisResource interface {
 	//   - launchGroupNames: The case-insensitive launch group names.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithLaunchGroups(launchGroupNames []string) TestRedisResource
 
 	// WithLifetime sets the lifetime behavior of the container resource.

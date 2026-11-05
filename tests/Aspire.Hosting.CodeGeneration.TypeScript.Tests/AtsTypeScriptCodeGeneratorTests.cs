@@ -23,6 +23,17 @@ public class AtsTypeScriptCodeGeneratorTests
 {
     private readonly AtsTypeScriptCodeGenerator _generator = new();
 
+    [Theory]
+    [InlineData("withLaunchGroup")]
+    [InlineData("withLaunchGroups")]
+    public void Scanner_LaunchGroupCapabilities_AreExperimental(string methodName)
+    {
+        var capability = Assert.Single(ScanCapabilitiesFromHostingAssembly(),
+            capability => capability.CapabilityId == $"Aspire.Hosting/{methodName}");
+
+        Assert.True(capability.IsExperimental);
+    }
+
     [Fact]
     public void Language_ReturnsTypeScript()
     {
