@@ -1,0 +1,29 @@
+{
+  "id": "devtunnels-dcpstartup-assert-true-failure",
+  "type": "flaky-test",
+  "title": "Flaky: DcpStartupPublishesDevTunnelUrls fails Assert.True at line 810 on Windows",
+  "error_pattern": "Assert.True() Failure\nExpected: True\nActual:   False\n   at DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls ... DevTunnelResourceBuilderExtensionsTests.cs:line 810",
+  "occurrences": [
+    {
+      "run_id": 41932442823,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41932442823",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+      "observed_at": "2026-11-05T00:04:48Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(useConsoleOutput: True, stopDuringUrlCallback: True, restartBeforeUrlCallbackCompletes: False)",
+          "job_id": 126935468256,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+          "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+          "stack_trace": "   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 810\n   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 839\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "84826fd7-cf98-444a-ab00-cd478926251c"
+        }
+      ]
+    }
+  ]
+}

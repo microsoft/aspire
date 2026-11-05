@@ -1,0 +1,28 @@
+{
+  "id": "vscode-e2e-resource-debug-tools-variables-evaluation-aborted",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code resource debug E2E gets failed 'variables' response 'Evaluation aborted.'",
+  "error_pattern": "Expected values to be strictly deep-equal:\n+ command: 'variables', message: 'Evaluation aborted.', success: false\n- []",
+  "occurrences": [
+    {
+      "run_id": 41932442823,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/41932442823",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "observed_at": "2026-11-05T00:04:48Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire resource debug language model tool E2E attaches packaged .NET and Go debuggers, hits breakpoints, detaches, and tears down",
+          "job_id": 126943883962,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+          "error": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     body: {\n+       command: 'variables',\n+       message: 'Evaluation aborted.',\n+       request_seq: 13,\n+       seq: 232,\n+       success: false,\n+       type: 'response'\n+     },\n+     command: 'variables',\n+     sessionId: 'edeef187-6c50-445e-93c0-7c54728cb0b5',\n+     sessionName: 'Attach debugger: e2e-custom-output-worker',\n+     sessionType: 'coreclr',\n+     success: false\n+   }\n+ ]\n- []\n",
+          "stack_trace": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     body: {\n+       command: 'variables',\n+       message: 'Evaluation aborted.',\n+       request_seq: 13,\n+       seq: 232,\n+       success: false,\n+       type: 'response'\n+     },\n+     command: 'variables',\n+     sessionId: 'edeef187-6c50-445e-93c0-7c54728cb0b5',\n+     sessionName: 'Attach debugger: e2e-custom-output-worker',\n+     sessionType: 'coreclr',\n+     success: false\n+   }\n+ ]\n- []\n\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\resourceDebugTools.e2e.test.js:296:20)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "run_id": 41932442823,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/41932442823",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T00:04:48Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21773,
+    "title": "Explain Team App card tags with accessible tooltips",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/team-card-tooltips",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21773",
+    "merged_at": "2026-11-04T23:16:47Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "7e34f6f994c92b3996c0f0c18eaae3e70cc7a6cb",
+    "failed_sha": "1823c68700b4b1f99e81c99f792ac6fc8d2857c6",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "d698a4f9cb800649791da2b3d81c5850330072c1",
+        "message": "fix(ci): Fix internal build (#21774) ## Description Automatic main builds fail in the `Assemble + Publish` stage, during the `\uD83D\uDFE3Verify NuGet package signatures` step: ```text ##[section]Starting: \uD83D\uDFE3Verify NuGet package signatures Verifying signatures for 158 NuGet release packages. Verifying Aspire.AppHost.Sdk.17.0.0-preview.1.26553.7 error: NU3004: The package is not signed. Package signature validation failed. ##[error]PowerShell exited with code '1'. ``` The NuGet verifier checks for real signi",
+        "html_url": "https://github.com/microsoft/aspire/commit/d698a4f9cb800649791da2b3d81c5850330072c1",
+        "pull_request": {
+          "number": 21774,
+          "title": "fix(ci): Fix internal build",
+          "url": "https://github.com/microsoft/aspire/pull/21774",
+          "merged_at": "2026-11-04T22:27:26Z"
+        }
+      },
+      {
+        "sha": "e47d80e8df45ceec8e638c11eb2fb77b83b09a87",
+        "message": "Order Team App Needs attention by first readiness (#21726) ## Description The Aspire Team App's Needs attention section helps the team decide whose work to unblock next. It currently puts the most recently updated PRs first, can order equal timestamps by fetch completion, and uses a column-first layout that looks different at different widths. This changes Needs attention to a numbered, row-major queue ordered by **first-ever non-draft readiness**, oldest first: creation time for PRs opened read",
+        "html_url": "https://github.com/microsoft/aspire/commit/e47d80e8df45ceec8e638c11eb2fb77b83b09a87",
+        "pull_request": {
+          "number": 21726,
+          "title": "Order Team App Needs attention by first readiness",
+          "url": "https://github.com/microsoft/aspire/pull/21726",
+          "merged_at": "2026-11-04T23:10:39Z"
+        }
+      },
+      {
+        "sha": "1823c68700b4b1f99e81c99f792ac6fc8d2857c6",
+        "message": "Explain Team App card tags with accessible tooltips (#21773) ## Description Team App card tags can be difficult to interpret or can suggest the wrong owner needs to act. Add hover and keyboard-focus tooltips explaining computed tags and their expected next action, using the existing tooltip behavior so explanations remain visible outside clipped card sections. - Explain that **review debt** means the PR is not currently approved and its relevant activity is at least 14 days old—not that nobody h",
+        "html_url": "https://github.com/microsoft/aspire/commit/1823c68700b4b1f99e81c99f792ac6fc8d2857c6",
+        "pull_request": {
+          "number": 21773,
+          "title": "Explain Team App card tags with accessible tooltips",
+          "url": "https://github.com/microsoft/aspire/pull/21773",
+          "merged_at": "2026-11-04T23:16:47Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.SqlServer.Tests, Hosting.SqlServer, Hosting.SqlServer, ... / Hosting.SqlServer (ubuntu-latest)",
+      "id": 126935434853,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41932442823/job/126935434853",
+      "classification": "flaky-test",
+      "reason": "SQL Server container never became healthy within the timeout in both REPL test variants.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+      "id": 126935468256,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41932442823/job/126935468256",
+      "classification": "flaky-test",
+      "reason": "DevTunnels startup test assertion failed intermittently on Windows; no related changes evident.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 126935477167,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41932442823/job/126935477167",
+      "classification": "transient-infra",
+      "reason": "Test host crashed with exit code 3 and no failed tests, matching a recorded macOS crash mechanism.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "id": 126943883962,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/41932442823/job/126943883962",
+      "classification": "flaky-test",
+      "reason": "Debugger variables request returned 'Evaluation aborted' in the VS Code E2E test, a timing-dependent debugger failure.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire resource debug language model tool E2E attaches packaged .NET and Go debuggers, hits breakpoints, detaches, and tears down",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, resource-debug-tools)",
+      "error": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     body: {\n+       command: 'variables',\n+       message: 'Evaluation aborted.',\n+       request_seq: 13,\n+       seq: 232,\n+       success: false,\n+       type: 'response'\n+     },\n+     command: 'variables',\n+     sessionId: 'edeef187-6c50-445e-93c0-7c54728cb0b5',\n+     sessionName: 'Attach debugger: e2e-custom-output-worker',\n+     sessionType: 'coreclr',\n+     success: false\n+   }\n+ ]\n- []\n",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n+ [\n+   {\n+     body: {\n+       command: 'variables',\n+       message: 'Evaluation aborted.',\n+       request_seq: 13,\n+       seq: 232,\n+       success: false,\n+       type: 'response'\n+     },\n+     command: 'variables',\n+     sessionId: 'edeef187-6c50-445e-93c0-7c54728cb0b5',\n+     sessionName: 'Attach debugger: e2e-custom-output-worker',\n+     sessionType: 'coreclr',\n+     success: false\n+   }\n+ ]\n- []\n\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\resourceDebugTools.e2e.test.js:296:20)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Debugger evaluation aborted during E2E; timing-dependent.",
+      "job_id": 126943883962,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(useConsoleOutput: True, stopDuringUrlCallback: True, restartBeforeUrlCallbackCompletes: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (windows-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 810\n   at Aspire.Hosting.DevTunnels.Tests.DevTunnelResourceBuilderExtensionsTests.DcpStartupPublishesDevTunnelUrls(Boolean useConsoleOutput, Boolean stopDuringUrlCallback, Boolean restartBeforeUrlCallbackCompletes) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.DevTunnels.Tests\\DevTunnelResourceBuilderExtensionsTests.cs:line 839\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Intermittent assertion failure in DCP startup/stop race test.",
+      "job_id": 126935468256,
+      "execution_id": "84826fd7-cf98-444a-ab00-cd478926251c",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.SqlServer.Tests.SqlServerReplCommandTests.ReplExecutesAuthenticatedBatch(configure: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.SqlServer.Tests, Hosting.SqlServer, Hosting.SqlServer, ... / Hosting.SqlServer (ubuntu-latest)",
+      "error": "System.OperationCanceledException : Resource 'sqlserver' failed to become healthy before the operation was cancelled.\n- Current State: Starting\n- Creation Time: 11/04/2026 23:26:53\n- Current Health: (null)\n- Health Reports:\n  - sqlserver_check: Unknown\n---- System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceCoreAsync(String resourceName, Func`2 predicate, String cancellationMessage, CancellationToken cancellationToken, String waitCondition) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 753\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 273\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 211\n   at Aspire.Hosting.Tests.ContainerReplCommandTestBase.VerifyReplAsync(DistributedApplication app, ContainerResource resource, String title, ValueTuple`2[] interactions, String expectedOutput) in /home/runner/work/aspire/aspire/tests/Shared/ContainerReplCommandTestBase.cs:line 165\n   at Aspire.Hosting.SqlServer.Tests.SqlServerReplCommandTests.ReplExecutesAuthenticatedBatch(Boolean configure) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.SqlServer.Tests/SqlServerReplCommandTests.cs:line 145\n   at Aspire.Hosting.SqlServer.Tests.SqlServerReplCommandTests.ReplExecutesAuthenticatedBatch(Boolean configure) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.SqlServer.Tests/SqlServerReplCommandTests.cs:line 145\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at System.Threading.Channels.AsyncOperation`2.GetResult(Int16 token)\n   at System.Threading.Channels.ChannelReader`1.ReadAllAsync(CancellationToken cancellationToken)+MoveNext()\n   at System.Threading.Channels.ChannelReader`1.ReadAllAsync(CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()\n   at Aspire.Hosting.ApplicationModel.Reso",
+      "standard_output": "| [2026-11-04T23:26:51] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-11-04T23:26:51] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-04T23:26:51] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-11-04T23:26:51] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-04T23:26:51] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-04T23:26:51] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-04T23:26:51] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIpq9ItJjk.4295\n| [2026-11-04T23:26:51] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIpq9ItJjk.4295\n| [2026-11-04T23:26:51] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint E84D14A8BBDBFBAB11EAA768EDE693AA8756A2BC.\n| [2026-11-04T23:26:51] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcpbKF9Dl\n| [2026-11-04T23:26:51] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 4295 --detach --kubeconfig \"/tmp/aspire-dcpbKF9Dl/kubeconfig\" --tls-cert-thumbprint \"E84D14A8BBDBFBAB11EAA768EDE693AA8756A2BC\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/0E4ADDF3DADEF7A2F90F6FF72751052A807ED9965AC74994C200F3C0576D8DEB.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/0E4ADDF3DADEF7A2F90F6FF72751052A807ED9965AC74994C200F3C0576D8DEB.key\"\n| [2026-11-04T23:26:51] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-11-04T23:26:52] Aspire.Hosting.ApplicationModel.ResourceNotificationService Debug: Resource password/password changed state: Waiting -> Running\n| [2026-11-04T23:26:52] Aspire.Hosting.Dcp.dcp.start-apiserver.monitor Debug: Started monitoring process\t{\"PID\": 4295}\n| [2026-11-04T23:26:52] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource password/password update published: ResourceType = Parameter, CreationTimeStamp = (null), State = { Text = Running, Style = (null) }, IsHidden = False, HeathStatus = Healthy, ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.source = Parameters:password Value = Repl-p@ss$word1 }, HealthReports = {  }, Commands = {  }\n| [2026-11-04T23:26:52] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Resource password/password update skipped because the snapshot is unchanged.\n| [2026-11-04T23:26:52] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource sqlserver/sqlserver-xmfcndcy update published: ResourceType = Container, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { sqlserver_check = (null) }, Commands = { repl (REPL) = Disabled start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-11-04T23:26:52] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Starting health monitoring for resource 'password'.\n| [2026-11-04T23:26:52] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Endpoint resources.\n| [2026-11-04T23:26:52] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Executable resources.\n| [2026-11-04T23:26:52] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Resource 'password' has no health checks to monitor.\n| [2026-11-04T23:26:52] Asp",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "SQL Server container stuck in Starting state until cancellation.",
+      "job_id": 126935434853,
+      "execution_id": "db0467f9-1fe8-4e53-a934-f93b1aeab729",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.SqlServer.Tests.SqlServerReplCommandTests.ReplExecutesAuthenticatedBatch(configure: True)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.SqlServer.Tests, Hosting.SqlServer, Hosting.SqlServer, ... / Hosting.SqlServer (ubuntu-latest)",
+      "error": "System.OperationCanceledException : Resource 'sqlserver' failed to become healthy before the operation was cancelled.\n- Current State: Starting\n- Creation Time: 11/04/2026 23:28:03\n- Current Health: (null)\n- Health Reports:\n  - sqlserver_check: Unknown\n---- System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceCoreAsync(String resourceName, Func`2 predicate, String cancellationMessage, CancellationToken cancellationToken, String waitCondition) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 753\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 273\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 211\n   at Aspire.Hosting.Tests.ContainerReplCommandTestBase.VerifyReplAsync(DistributedApplication app, ContainerResource resource, String title, ValueTuple`2[] interactions, String expectedOutput) in /home/runner/work/aspire/aspire/tests/Shared/ContainerReplCommandTestBase.cs:line 165\n   at Aspire.Hosting.SqlServer.Tests.SqlServerReplCommandTests.ReplExecutesAuthenticatedBatch(Boolean configure) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.SqlServer.Tests/SqlServerReplCommandTests.cs:line 145\n   at Aspire.Hosting.SqlServer.Tests.SqlServerReplCommandTests.ReplExecutesAuthenticatedBatch(Boolean configure) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.SqlServer.Tests/SqlServerReplCommandTests.cs:line 145\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at System.Threading.Channels.AsyncOperation`2.GetResult(Int16 token)\n   at System.Threading.Channels.ChannelReader`1.ReadAllAsync(CancellationToken cancellationToken)+MoveNext()\n   at System.Threading.Channels.ChannelReader`1.ReadAllAsync(CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()\n   at Aspire.Hosting.ApplicationModel.Reso",
+      "standard_output": "| [2026-11-04T23:28:03] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-11-04T23:28:03] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-04T23:28:03] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-11-04T23:28:03] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-04T23:28:03] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-04T23:28:03] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIak9NHn66.4295\n| [2026-11-04T23:28:03] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIak9NHn66.4295\n| [2026-11-04T23:28:03] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-04T23:28:03] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint E84D14A8BBDBFBAB11EAA768EDE693AA8756A2BC.\n| [2026-11-04T23:28:03] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcpsPwNZF\n| [2026-11-04T23:28:03] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 4295 --detach --kubeconfig \"/tmp/aspire-dcpsPwNZF/kubeconfig\" --tls-cert-thumbprint \"E84D14A8BBDBFBAB11EAA768EDE693AA8756A2BC\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/0E4ADDF3DADEF7A2F90F6FF72751052A807ED9965AC74994C200F3C0576D8DEB.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/0E4ADDF3DADEF7A2F90F6FF72751052A807ED9965AC74994C200F3C0576D8DEB.key\"\n| [2026-11-04T23:28:03] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-11-04T23:28:03] Aspire.Hosting.ApplicationModel.ResourceNotificationService Debug: Resource password/password changed state: Waiting -> Running\n| [2026-11-04T23:28:03] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Starting health monitoring for resource 'password'.\n| [2026-11-04T23:28:03] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource password/password update published: ResourceType = Parameter, CreationTimeStamp = (null), State = { Text = Running, Style = (null) }, IsHidden = False, HeathStatus = Healthy, ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.source = Parameters:password Value = Repl-p@ss$word1 }, HealthReports = {  }, Commands = {  }\n| [2026-11-04T23:28:03] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Resource 'password' has no health checks to monitor.\n| [2026-11-04T23:28:03] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Resource 'password' is ready.\n| [2026-11-04T23:28:03] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Publishing ResourceReadyEvent for 'password'.\n| [2026-11-04T23:28:03] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Resource password/password update skipped because the snapshot is unchanged.\n| [2026-11-04T23:28:03] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Waiting for ResourceReadyEvent for 'password'.\n| [2026-11-04T23:28:03] Aspire.Hosting.Health.ResourceHealthCheckService Debug: ResourceReadyEvent for 'password' completed.\n| [2026-11-04T23:28:03] Aspire.Hosting.Health.ResourceHealthCheckService Debug: Publishing the result of ResourceReadyEvent for 'password'.\n| [2026-11-04T23:28:03] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 2 Resource password/password update published: ResourceType = Parameter, CreationTimeStamp = (null), State = { Text = Running, Style = (null) }, IsHidden = False, HeathStatus = ",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "SQL Server container stuck in Starting state until cancellation.",
+      "job_id": 126935434853,
+      "execution_id": "ef217c13-80a2-4edb-9387-cf38c2efa7e7",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-crash-exit-3",
+    "sqlserver-repl-test-container-not-healthy",
+    "devtunnels-dcpstartup-assert-true-failure",
+    "vscode-e2e-resource-debug-tools-variables-evaluation-aborted"
+  ]
+}
