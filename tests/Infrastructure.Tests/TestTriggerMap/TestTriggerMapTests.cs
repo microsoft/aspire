@@ -279,6 +279,10 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Cli.EndToEnd.Tests"]
         },
         {
+            "tests/Shared/Docker/Dockerfile.e2e",
+            ["test:Aspire.Cli.EndToEnd.Tests"]
+        },
+        {
             "eng/clipack/Common.projitems",
             [
                 "test:Aspire.Cli.Tests",
@@ -484,6 +488,17 @@ public sealed class TestTriggerMapTests
             .Concat(result.Jobs)
             .Order(StringComparer.Ordinal);
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
+    }
+
+    [Fact]
+    public void PodmanDockerImageDoesNotSelectRegularPrTargets()
+    {
+        var result = SelectWithRealMap("tests/Shared/Docker/Dockerfile.e2e-podman");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
     }
 
     [Theory]
