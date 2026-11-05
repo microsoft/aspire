@@ -11,6 +11,26 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
       "pr_number": 0,
       "observed_at": "2026-09-25T19:01:53Z"
+    },
+    {
+      "run_id": 42109969955,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42109969955",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "observed_at": "2026-11-05T22:12:05Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire Java AppHost E2E stops on breakpoints in both the Java AppHost and a Java resource",
+          "job_id": 127556165577,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+          "error": "Failed to apply E2E control revision 1793915649446: E2E control command failed.",
+          "stack_trace": "Error: Failed to apply E2E control revision 1793915649446: E2E control command failed.\n    at applyE2eControl (out/test-e2e/test-e2e/helpers/assertions.js:389:15)\n    at async executeE2eControlCommand (out/test-e2e/test-e2e/helpers/fixtures.js:170:12)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/javaAppHost.e2e.test.js:99:24)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20488"

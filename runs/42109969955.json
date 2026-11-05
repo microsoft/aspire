@@ -1,0 +1,189 @@
+{
+  "run_id": 42109969955,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42109969955",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T22:12:05Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21183,
+    "title": "Remove the Go AppHost experimental feature flag",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "ievangelist-go-remove-experimental-flag",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21183",
+    "merged_at": "2026-11-05T21:08:58Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "e37145f3298242cec5a322ebf0cbcd081273bf3a",
+    "failed_sha": "9dfa1516fcf0478c78e64256933831a862e45480",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "message": "[automated] test(cli): Find Radius MongoDB pods in their application namespace (#21422) ## Description The Radius deployment outerloop test fails while waiting for MongoDB: ```text error: no matching resources found ``` The legacy MongoDB recipe labels its pods, not its Deployment metadata. Its workload also lives in the legacy application's namespace, which appends `-app` to the environment namespace. Wait for the MongoDB pod to become Ready in that namespace, and use the same namespace for pod",
+        "html_url": "https://github.com/microsoft/aspire/commit/a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "pull_request": {
+          "number": 21422,
+          "title": "[automated] test(cli): Find Radius MongoDB pods in their application namespace",
+          "url": "https://github.com/microsoft/aspire/pull/21422",
+          "merged_at": "2026-11-05T17:08:30Z"
+        }
+      },
+      {
+        "sha": "1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "message": "fix intermittent internal build failures (#21768) ## Description **Add bounded retries for transient connection loss during macOS tray notarization-ticket stapling and validation.** Internal builds intermittently fail when Apple's CloudKit connection drops: ```text Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\" ``` These network failures currently stop the build immediately. Retry only the failed stapler operation when its output identifies connection loss, rather th",
+        "html_url": "https://github.com/microsoft/aspire/commit/1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "pull_request": {
+          "number": 21768,
+          "title": "fix intermittent internal build failures",
+          "url": "https://github.com/microsoft/aspire/pull/21768",
+          "merged_at": "2026-11-05T17:38:09Z"
+        }
+      },
+      {
+        "sha": "9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "message": "Give the Deno AppHost inspector attach the AppHost startup budget (#21604) ## Description Fixes #21603. That issue is the Windows `launch-profiles` flake \"debugs a Deno AppHost through the built-in JavaScript debugger\", #5/#7 on the 7-day top-flakes list in #21600. **Root cause.** - To debug a Deno AppHost, the extension launches `deno run --inspect-wait=127.0.0.1:<port> ...` through js-debug (`pwa-node`) with `attachSimplePort`, but never sets `timeout`. - js-debug's default 10s budget starts b",
+        "html_url": "https://github.com/microsoft/aspire/commit/9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "pull_request": {
+          "number": 21604,
+          "title": "Give the Deno AppHost inspector attach the AppHost startup budget",
+          "url": "https://github.com/microsoft/aspire/pull/21604",
+          "merged_at": "2026-11-05T18:32:56Z"
+        }
+      },
+      {
+        "sha": "401491d6d3c71b46c8250af4eb5d3a83c60034ad",
+        "message": "Clarify dotnet-inspect requirements in agent init help (#21770) ## Description Clarify `aspire agent init --skills` help to explain that `dotnet-inspect` requires a C# AppHost. Update the existing `aspire init --help` snapshot to match. No runtime behavior changes. Fixes #16574 ### Before / after `aspire agent init --help --nologo`: ```diff - --skills <skills>  Comma-separated skill/tool IDs (aspire,playwright-cli,dotnet-inspect), 'all', or 'none' (default: aspire) + --skills <skills>  Comma-sep",
+        "html_url": "https://github.com/microsoft/aspire/commit/401491d6d3c71b46c8250af4eb5d3a83c60034ad",
+        "pull_request": {
+          "number": 21770,
+          "title": "Clarify dotnet-inspect requirements in agent init help",
+          "url": "https://github.com/microsoft/aspire/pull/21770",
+          "merged_at": "2026-11-05T18:54:18Z"
+        }
+      },
+      {
+        "sha": "d6743601b69f637ac1773ed0e5f485c0d1d620c8",
+        "message": "Clarify Aspire agent integration scope during project creation (#21809) ## Description Clarifies that the installation-scope choice applies to agent skills and tools, not Aspire itself. **Before** ```text Installation scope > Project (Install in your workspace root; committed with your project)   Global (Install in your home directory; available across all projects) ``` **After** ```text Where should skills and tools be installed? > This project (In your workspace, ready to commit with your proj",
+        "html_url": "https://github.com/microsoft/aspire/commit/d6743601b69f637ac1773ed0e5f485c0d1d620c8",
+        "pull_request": {
+          "number": 21809,
+          "title": "Clarify Aspire agent integration scope during project creation",
+          "url": "https://github.com/microsoft/aspire/pull/21809",
+          "merged_at": "2026-11-05T20:51:54Z"
+        }
+      },
+      {
+        "sha": "9dfa1516fcf0478c78e64256933831a862e45480",
+        "message": "Remove the Go AppHost experimental feature flag (#21183) > [!IMPORTANT] > **Merge last.** This PR depends on the other open Go AppHost PRs and must land after them. > > - **Must land first**, because each adds references to the flag that this PR has to delete: #21189 (E2E helper and call sites), #21195 (`SdkExportCommandTests`) and #21196 (`GoAppHostToolingCheck` and its tests). > - **Must land first**, because it edits the same hunk of `DefaultLanguageDiscovery.cs` and this PR rebases onto it: ",
+        "html_url": "https://github.com/microsoft/aspire/commit/9dfa1516fcf0478c78e64256933831a862e45480",
+        "pull_request": {
+          "number": 21183,
+          "title": "Remove the Go AppHost experimental feature flag",
+          "url": "https://github.com/microsoft/aspire/pull/21183",
+          "merged_at": "2026-11-05T21:08:58Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+      "id": 127545170575,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42109969955/job/127545170575",
+      "classification": "flaky-test",
+      "reason": "Three Go toolchain subprocess waits were cancelled after 3-5 minutes while the runner CPU was saturated by cc1/Go compiles; no assertion or compile error.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 127545185127,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42109969955/job/127545185127",
+      "classification": "transient-infra",
+      "reason": "macOS Aspire.Cli.Tests host exited with code 3 (MTP exit 7) with zero failed tests.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "id": 127556165577,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42109969955/job/127556165577",
+      "classification": "flaky-test",
+      "reason": "Java AppHost breakpoint E2E failed in applyE2eControl, the same phase as the recorded intermittent catalog-endpoint wait.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire Java AppHost E2E stops on breakpoints in both the Java AppHost and a Java resource",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, java-apphost)",
+      "error": "Failed to apply E2E control revision 1793915649446: E2E control command failed.",
+      "stack_trace": "Error: Failed to apply E2E control revision 1793915649446: E2E control command failed.\n    at applyE2eControl (out/test-e2e/test-e2e/helpers/assertions.js:389:15)\n    at async executeE2eControlCommand (out/test-e2e/test-e2e/helpers/fixtures.js:170:12)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/javaAppHost.e2e.test.js:99:24)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same test and failing E2E control phase as the recorded intermittent failure; no related code change evident.",
+      "job_id": 127556165577,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "   at System.Diagnostics.Process.WaitForExitAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoCodeGeneratorTests.cs:line 1694\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoCodeGeneratorTests.cs:line 1704\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Go subprocess WaitForExitAsync cancelled by timeout under CPU saturation.",
+      "job_id": 127545170575,
+      "execution_id": "287cfe99-33cc-4e34-a1e3-16abacf5863e",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "   at System.Diagnostics.Process.WaitForExitAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.RunGoAsync(DirectoryInfo workingDirectory, String[] arguments, CancellationToken cancellationToken) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoDerivedBuilderTests.cs:line 435\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoDerivedBuilderTests.cs:line 293\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Go subprocess WaitForExitAsync cancelled by timeout under CPU saturation.",
+      "job_id": 127545170575,
+      "execution_id": "09f1c575-3d4b-47b2-9096-81b539f66f1d",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.GeneratedSdk_PassesGoToolchainChecks",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "   at System.Diagnostics.Process.WaitForExitAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.RunAsync(String fileName, String workingDirectory, CancellationToken cancellationToken, String[] arguments) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/GoDocCommentTests.cs:line 313\n   at Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.GeneratedSdk_PassesGoToolchainChecks() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/GoDocCommentTests.cs:line 232\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Go subprocess WaitForExitAsync cancelled by timeout under CPU saturation.",
+      "job_id": 127545170575,
+      "execution_id": "65802041-ae4a-474e-8f3f-fead8bd3ef11",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-java-apphost-catalog-timeout",
+    "aspire-cli-tests-macos-testhost-crash-exit-3",
+    "hosting-codegen-go-process-waitforexit-canceled"
+  ]
+}

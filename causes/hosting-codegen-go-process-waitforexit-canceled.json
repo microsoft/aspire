@@ -1,0 +1,53 @@
+{
+  "id": "hosting-codegen-go-process-waitforexit-canceled",
+  "type": "flaky-test",
+  "title": "Flaky: Aspire.Hosting.CodeGeneration.Go.Tests Go toolchain subprocess WaitForExitAsync cancelled by timeout on ubuntu-latest",
+  "error_pattern": "System.Threading.Tasks.TaskCanceledException : A task was canceled.\n   at System.Diagnostics.Process.WaitForExitAsync(CancellationToken cancellationToken)",
+  "occurrences": [
+    {
+      "run_id": 42109969955,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42109969955",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+      "observed_at": "2026-11-05T22:12:05Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper",
+          "job_id": 127545170575,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+          "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+          "stack_trace": "   at System.Diagnostics.Process.WaitForExitAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoCodeGeneratorTests.cs:line 1694\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoCodeGeneratorTests.cs:line 1704\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "287cfe99-33cc-4e34-a1e3-16abacf5863e"
+        },
+        {
+          "name": "Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface",
+          "job_id": 127545170575,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+          "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+          "stack_trace": "   at System.Diagnostics.Process.WaitForExitAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.RunGoAsync(DirectoryInfo workingDirectory, String[] arguments, CancellationToken cancellationToken) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoDerivedBuilderTests.cs:line 435\n   at Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/AtsGoDerivedBuilderTests.cs:line 293\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "09f1c575-3d4b-47b2-9096-81b539f66f1d"
+        },
+        {
+          "name": "Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.GeneratedSdk_PassesGoToolchainChecks",
+          "job_id": 127545170575,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.CodeGeneration.Go.Tests, Hosting.CodeGeneration.Go, Hos... / Hosting.CodeGeneration.Go (ubuntu-latest)",
+          "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+          "stack_trace": "   at System.Diagnostics.Process.WaitForExitAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.RunAsync(String fileName, String workingDirectory, CancellationToken cancellationToken, String[] arguments) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/GoDocCommentTests.cs:line 313\n   at Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.GeneratedSdk_PassesGoToolchainChecks() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.CodeGeneration.Go.Tests/GoDocCommentTests.cs:line 232\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "65802041-ae4a-474e-8f3f-fead8bd3ef11"
+        }
+      ]
+    }
+  ]
+}
