@@ -3,7 +3,6 @@
 
 #pragma warning disable AZPROVISION001 // Azure.Provisioning.Network is experimental
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
 using Aspire.Hosting.Azure;
 using Azure.Provisioning.Network;

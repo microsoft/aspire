@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Retain legacy ProjectResource defaults and fluent return contracts.
-#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.

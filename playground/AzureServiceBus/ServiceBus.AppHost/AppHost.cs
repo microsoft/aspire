@@ -1,8 +1,6 @@
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Azure;
 
-#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
-
 var builder = DistributedApplication.CreateBuilder(args);
 
 var serviceBus = builder.AddAzureServiceBus("sbemulator");

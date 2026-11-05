@@ -2,14 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Persistence modes for resources that support lifetime configuration.
 /// </summary>
-[Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum PersistenceMode
 {
     /// <summary>
@@ -36,7 +34,6 @@ public enum PersistenceMode
 /// <summary>
 /// Annotation that controls the persistence behavior of a resource.
 /// </summary>
-[Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [DebuggerDisplay("Type = {GetType().Name,nq}, Mode = {Mode}")]
 public sealed class PersistenceAnnotation : IResourceAnnotation
 {

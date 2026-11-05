@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;

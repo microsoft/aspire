@@ -2,7 +2,6 @@ using Aspire.Hosting.Yarp.Transforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRETERMINAL001 // Terminal APIs are experimental.
 
 var builder = DistributedApplication.CreateBuilder(args);

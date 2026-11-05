@@ -14,7 +14,6 @@ using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREPERSISTENCE001
 
 namespace Aspire.Hosting.Redis.Tests;
 

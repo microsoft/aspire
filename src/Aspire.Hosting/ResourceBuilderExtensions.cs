@@ -3,7 +3,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 #pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
 
 using System.Diagnostics.CodeAnalysis;
@@ -35,7 +34,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class ResourceBuilderExtensions
 {
-    private const string PersistenceExperimentalDiagnosticId = "ASPIREPERSISTENCE001";
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     // Mirrors the ATS marshaller's JSON options (camelCase, string enums, millisecond durations, cycle-safe) so that a
@@ -72,7 +70,6 @@ public static class ResourceBuilderExtensions
     /// </remarks>
     /// <ats-remarks />
     /// <exception cref="InvalidOperationException">Thrown when the resource does not support lifetime configuration.</exception>
-    [Experimental(PersistenceExperimentalDiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithSessionLifetime<T>(this IResourceBuilder<T> builder)
         where T : IResource
@@ -104,7 +101,6 @@ public static class ResourceBuilderExtensions
     /// </remarks>
     /// <ats-remarks />
     /// <exception cref="InvalidOperationException">Thrown when the resource does not support lifetime configuration.</exception>
-    [Experimental(PersistenceExperimentalDiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithPersistentLifetime<T>(this IResourceBuilder<T> builder)
         where T : IResource
@@ -128,7 +124,6 @@ public static class ResourceBuilderExtensions
     /// changes to the source resource are reflected by this resource.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the resource does not support lifetime configuration.</exception>
-    [Experimental(PersistenceExperimentalDiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithLifetimeOf<T, TSource>(this IResourceBuilder<T> builder, IResourceBuilder<TSource> sourceBuilder)
         where T : IResource
@@ -177,7 +172,6 @@ public static class ResourceBuilderExtensions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="parentProcessId"/> is less than or equal to zero.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="parentProcessId"/> does not identify a running process.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the resource does not support lifetime configuration.</exception>
-    [Experimental(PersistenceExperimentalDiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithParentProcessLifetime<T>(this IResourceBuilder<T> builder, int parentProcessId)
         where T : IResource
