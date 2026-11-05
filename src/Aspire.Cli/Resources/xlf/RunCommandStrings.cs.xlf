@@ -237,9 +237,24 @@
         <target state="translated">Čeká se na spuštění AppHostu...</target>
         <note />
       </trans-unit>
+      <trans-unit id="Watch">
+        <source>Watch</source>
+        <target state="new">Watch</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WatchArgumentDescription">
         <source>Start project resources in watch mode</source>
         <target state="translated">Umožňuje spustit prostředky projektu v režimu kukátka.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchEnabledSummary">
+        <source>Hot reload is on for C# services (preview). Save a file to apply changes.</source>
+        <target state="new">Hot reload is on for C# services (preview). Save a file to apply changes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchOptionDescription">
+        <source>(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service.</source>
+        <target state="new">(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service.</target>
         <note />
       </trans-unit>
     </body>

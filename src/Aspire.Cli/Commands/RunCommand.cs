@@ -129,11 +129,15 @@ internal sealed class RunCommand : BaseCommand
     {
         Description = RunCommandStrings.NoBuildArgumentDescription
     };
-    // SPIKE (plan Session 7): TODO localize via RunCommandStrings.resx before productizing.
     private static readonly Option<bool> s_watchOption = new("--watch")
     {
-        Description = "(Preview) Watch C# services added with AddCSharpProgram/AddDotnetProject and apply edits via dotnet-watch."
+        Description = RunCommandStrings.WatchOptionDescription
     };
+
+    /// <summary>AppHost logger category (and prefix) for the concise notices of <c>aspire run --watch</c>.</summary>
+    internal const string WatchNoticeCategory = "Aspire.Hosting.Dotnet.Watch";
+
+    private bool _watchRequested;
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -392,6 +396,7 @@ internal sealed class RunCommand : BaseCommand
             if (parseResult.GetValue(s_watchOption))
             {
                 DotnetWatch.DotnetWatchRunEnvironment.Apply(context.EnvironmentVariables);
+                _watchRequested = true;
             }
 
             // Start the project run as a pending task - we'll handle UX while it runs
@@ -510,7 +515,8 @@ internal sealed class RunCommand : BaseCommand
                     dashboardUrls.BaseUrlWithLoginToken,
                     dashboardUrls.CodespacesUrlWithLoginToken,
                     _fileLoggerProvider.LogFilePath,
-                    isExtensionHost);
+                    isExtensionHost,
+                    watchEnabled: _watchRequested);
 
                 if (ExtensionHelper.IsExtensionHost(InteractionService, out var extInteractionService, out _))
                 {
@@ -1021,7 +1027,17 @@ internal sealed class RunCommand : BaseCommand
         // Start log capture early so any output produced while we wait for dashboard URLs is
         // routed into the unified CLI log file. The task is returned to the caller so the run
         // command can await/cancel it during teardown.
-        var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, InteractionService, logCaptureCancellationSource.Token);
+        // In watch runs, hot reload/build/restart notices from the AppHost are shown in the terminal as they happen.
+        Action<BackchannelLogEntry>? onAppHostLogEntry = _watchRequested && !ExtensionHelper.IsExtensionHost(InteractionService, out _, out _)
+            ? entry =>
+            {
+                if (FormatWatchNotice(entry) is { } markup)
+                {
+                    InteractionService.DisplayMarkupLine(markup);
+                }
+            }
+            : null;
+        var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, InteractionService, logCaptureCancellationSource.Token, onAppHostLogEntry);
         // Observe faults in case the caller never gets to await it - e.g., if a subsequent
         // step in this method throws, the local task goes out of scope without being returned
         // through AppHostStartupResult. CaptureAppHostLogsAsync already handles OCE and
@@ -1136,6 +1152,7 @@ internal sealed class RunCommand : BaseCommand
     /// <param name="codespacesUrl">The codespaces URL with login token, or null if not in codespaces.</param>
     /// <param name="logFilePath">The full path to the log file.</param>
     /// <param name="pid">The process ID to display, or null to omit the PID row.</param>
+    /// <param name="watchEnabled">Whether to show the hot reload (<c>--watch</c>) row.</param>
     /// <param name="isExtensionHost">Whether the AppHost is running in the Aspire extension.</param>
     /// <returns>The column width used, for subsequent grid additions.</returns>
     internal static int RenderAppHostSummary(
@@ -1145,7 +1162,8 @@ internal sealed class RunCommand : BaseCommand
         string? codespacesUrl,
         string logFilePath,
         bool isExtensionHost,
-        int? pid = null)
+        int? pid = null,
+        bool watchEnabled = false)
     {
         console.DisplayEmptyLine();
         var grid = new Grid();
@@ -1156,6 +1174,7 @@ internal sealed class RunCommand : BaseCommand
         var dashboardLabel = RunCommandStrings.Dashboard;
         var logsLabel = RunCommandStrings.Logs;
         var pidLabel = RunCommandStrings.ProcessId;
+        var watchLabel = RunCommandStrings.Watch;
 
         // Calculate column width based on labels that will actually be displayed
         var labels = new List<string> { appHostLabel, logsLabel };
@@ -1166,6 +1185,10 @@ internal sealed class RunCommand : BaseCommand
         if (pid.HasValue)
         {
             labels.Add(pidLabel);
+        }
+        if (watchEnabled)
+        {
+            labels.Add(watchLabel);
         }
         var longestLabelLength = labels.Max(s => s.Length) + 1; // +1 for colon
 
@@ -1215,6 +1238,16 @@ internal sealed class RunCommand : BaseCommand
         // Logs row
         grid.AddRow(LabelMarkup(logsLabel), new Markup(MarkupHelpers.SafeFileLink(console, logFilePath)));
 
+        // Watch row
+        if (watchEnabled)
+        {
+            if (!isExtensionHost)
+            {
+                grid.AddRow(Text.Empty, Text.Empty);
+            }
+            grid.AddRow(LabelMarkup(watchLabel), new Markup($"🔥 {RunCommandStrings.WatchEnabledSummary.EscapeMarkup()}"));
+        }
+
         // PID row (if provided)
         if (pid.HasValue)
         {
@@ -1231,7 +1264,30 @@ internal sealed class RunCommand : BaseCommand
         return longestLabelLength;
     }
 
-    internal static async Task CaptureAppHostLogsAsync(FileLoggerProvider fileLoggerProvider, IAppHostCliBackchannel backchannel, IInteractionService interactionService, CancellationToken cancellationToken)
+    /// <summary>
+    /// Formats an AppHost log entry from the watch notice category as a terminal line, or returns <see langword="null"/>
+    /// for every other entry.
+    /// </summary>
+    internal static string? FormatWatchNotice(BackchannelLogEntry entry)
+    {
+        if (entry.LogLevel < LogLevel.Information ||
+            !(entry.CategoryName == WatchNoticeCategory || entry.CategoryName.StartsWith(WatchNoticeCategory + ".", StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        var time = entry.Timestamp.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        var message = entry.Message.EscapeMarkup();
+        var styled = entry.LogLevel switch
+        {
+            >= LogLevel.Error => $"[red]{message}[/]",
+            LogLevel.Warning => $"[yellow]{message}[/]",
+            _ => message
+        };
+        return $"[grey]{time}[/] {styled}";
+    }
+
+    internal static async Task CaptureAppHostLogsAsync(FileLoggerProvider fileLoggerProvider, IAppHostCliBackchannel backchannel, IInteractionService interactionService, CancellationToken cancellationToken, Action<BackchannelLogEntry>? onEntry = null)
     {
         try
         {
@@ -1312,6 +1368,7 @@ internal sealed class RunCommand : BaseCommand
                             ? entry.Message
                             : $"{entry.Message}{Environment.NewLine}{entry.Exception}";
                         fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", message);
+                        onEntry?.Invoke(entry);
 
                         // Preserve the previous RPC volume. Trace and Debug still arrive through the
                         // AppHost console provider and are styled by the extension.

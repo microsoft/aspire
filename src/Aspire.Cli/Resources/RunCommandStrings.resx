@@ -267,4 +267,13 @@
   <data name="NoBuildNotSupportedWithWatchMode" xml:space="preserve">
     <value>The --no-build option cannot be used when watch mode is enabled.</value>
   </data>
+  <data name="WatchOptionDescription" xml:space="preserve">
+    <value>(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service.</value>
+  </data>
+  <data name="Watch" xml:space="preserve">
+    <value>Watch</value>
+  </data>
+  <data name="WatchEnabledSummary" xml:space="preserve">
+    <value>Hot reload is on for C# services (preview). Save a file to apply changes.</value>
+  </data>
 </root>
