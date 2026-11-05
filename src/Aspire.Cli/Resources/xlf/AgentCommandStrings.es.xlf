@@ -266,8 +266,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
-        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</source>
+        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
