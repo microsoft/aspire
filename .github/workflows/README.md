@@ -90,6 +90,25 @@ Node 20 action. There is no supported Node 24 upgrade for that dependency;
 replacing it requires a separate migration of its authentication and locking
 behavior, rather than merely changing an action pin.
 
+## Weekly test-selection audit
+
+`test-selection-audit.md` audits recent PR selection evidence each Monday, or
+selected PRs through `workflow_dispatch`. It can propose at most one issue per
+run; it never edits the trigger map directly. Missing or unattributable selection
+artifacts are data gaps, not evidence that a rule needs changing.
+
+The collector and compactor retain a rolling processed-head ledger and durable
+watchlist in `memory/test-selection-audit`. The agent must update both ledgers
+even when it finds nothing actionable. Its shell allowlist includes `jq`,
+`python3`, and `node` for structured evidence, memory updates, and self-validation.
+
+gh-aw validates memory twice. On the agent runner, the host uses a protected
+copy of `test-selection-audit/validate_memory.js` and requires all collector
+evidence and baseline snapshots. The separate push runner has no such snapshots;
+it loads the validator from its trusted checkout's Git object and repeats schema
+and derived-counter validation before persisting memory. Partial provenance is
+rejected in either context. Keep both phases working when changing validation.
+
 ## Auto-sec dependency reconciliation
 
 `auto-sec.md` runs every 12 hours (and on demand). It reconciles open Dependabot

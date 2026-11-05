@@ -142,8 +142,19 @@ tools:
       timeout-minutes: 1
       # Use the same entry point for agent self-checks and host validation.
       script: |
-        const { validateMemory } = require(`${process.env.RUNNER_TEMP}/gh-aw/test-selection-audit/validate_memory.js`);
-        validateMemory(memoryRoot);
+        const validatorPath = path.join(process.env.RUNNER_TEMP, "gh-aw/test-selection-audit/validate_memory.js");
+        const requireProvenance = fs.existsSync(validatorPath);
+        if (!requireProvenance) {
+          // The push job has a fresh runner and a root-only sparse checkout.
+          // Load trusted code from its checked-out commit, not agent memory.
+          const { execFileSync } = require("node:child_process");
+          const source = execFileSync("git", ["--no-pager", "show", "HEAD:.github/workflows/test-selection-audit/validate_memory.js"], {
+            cwd: process.env.GITHUB_WORKSPACE,
+          });
+          fs.mkdirSync(path.dirname(validatorPath), { recursive: true });
+          fs.writeFileSync(validatorPath, source, { mode: 0o444 });
+        }
+        require(validatorPath).validateMemory(memoryRoot, requireProvenance);
 
 safe-outputs:
   steps:

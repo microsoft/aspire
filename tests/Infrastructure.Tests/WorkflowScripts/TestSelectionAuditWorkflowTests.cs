@@ -225,6 +225,10 @@ public sealed class TestSelectionAuditWorkflowTests
         var partialProvenance = await command.ExecuteScriptAsync(validationPath, memoryPath);
         Assert.NotEqual(0, partialProvenance.ExitCode);
         Assert.Contains("provenance files are incomplete", partialProvenance.Output, StringComparison.Ordinal);
+        var partialPushProvenance = await command.ExecuteScriptAsync(
+            "-e", "require(process.argv[1]).validateMemory(process.argv[2], false)", validationPath, memoryPath);
+        Assert.NotEqual(0, partialPushProvenance.ExitCode);
+        Assert.Contains("provenance files are incomplete", partialPushProvenance.Output, StringComparison.Ordinal);
         await File.WriteAllTextAsync(evidencePath, JsonSerializer.Serialize(evidence));
 
         File.Delete(evidencePath);
@@ -233,6 +237,18 @@ public sealed class TestSelectionAuditWorkflowTests
         var noProvenance = await command.ExecuteScriptAsync(validationPath, memoryPath);
         Assert.NotEqual(0, noProvenance.ExitCode);
         Assert.Contains("provenance files are incomplete", noProvenance.Output, StringComparison.Ordinal);
+        var pushValidation = await command.ExecuteScriptAsync(
+            "-e", "require(process.argv[1]).validateMemory(process.argv[2], false)", validationPath, memoryPath);
+        Assert.True(pushValidation.ExitCode == 0, pushValidation.Output);
+
+        watch["all_runs"] = 2;
+        await File.WriteAllTextAsync(watchPath, JsonSerializer.Serialize(watch) + Environment.NewLine);
+        var invalidPushCounters = await command.ExecuteScriptAsync(
+            "-e", "require(process.argv[1]).validateMemory(process.argv[2], false)", validationPath, memoryPath);
+        Assert.NotEqual(0, invalidPushCounters.ExitCode);
+        Assert.Contains("counter 2 does not match 1 processed heads", invalidPushCounters.Output, StringComparison.Ordinal);
+        watch["all_runs"] = 1;
+        await File.WriteAllTextAsync(watchPath, JsonSerializer.Serialize(watch) + Environment.NewLine);
         await File.WriteAllTextAsync(evidencePath, JsonSerializer.Serialize(evidence));
         await File.WriteAllTextAsync(baselinePath, "");
         await File.WriteAllTextAsync(watchBaselinePath, "");

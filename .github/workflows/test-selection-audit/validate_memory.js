@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-function validateMemory(memoryRoot) {
+function validateMemory(memoryRoot, requireProvenance = true) {
   // Validates agent-edited memory before saving.
   // Protected evidence controls findings; snapshots keep history.
   // Reject malformed, invented, deleted, or unsupported state.
@@ -74,7 +74,10 @@ function validateMemory(memoryRoot) {
     ["evidence.json", "processed-runs-before.jsonl", "watchlist-before.jsonl"]
       .map(fileName => path.join(provenanceRoot, fileName));
   const provenance = [evidenceFile, processedBefore, watchBefore].map(fs.existsSync);
-  if (!provenance.every(Boolean)) fail("provenance files are incomplete");
+  // gh-aw revalidates the downloaded memory on a fresh push runner. Only that
+  // phase may omit all provenance; partial provenance is always an error.
+  if ((requireProvenance || provenance.some(Boolean)) && !provenance.every(Boolean))
+    fail("provenance files are incomplete");
   const hasProvenance = provenance[0];
   // Canonicalize before comparing baseline rows.
   const canonical = value => {
