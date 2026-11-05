@@ -1,0 +1,87 @@
+{
+  "run_id": 42059719831,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42059719831",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T16:37:53Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21767,
+    "title": "Update dashboard feedback welcome message",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "ievangelist-dashboard-feedback-copy",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21767",
+    "merged_at": "2026-11-05T15:54:25Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "100acc9d651a854775cde61f86ee8e85373a3ffb",
+    "failed_sha": "619b8ef8625459ee8f6ef28b9ef5e82090f3f905",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "ace20894ceed70dd8ed4b53c9f2d5cdd30c507eb",
+        "message": "Add untagged manifest cleanup options to ACR purge tasks (#21720) ## Description Scheduled ACR purge tasks currently remove tags only, leaving manifests and image layers behind. This fixes `WithPurgeTask` to also delete eligible untagged manifests so cleanup can reclaim storage, without adding public API options or changing the existing method signature. - Pin the task image internally to `mcr.microsoft.com/acr/acr-cli:0.21`. - Use `--ago` and `--min-tags` to delete matching tags older than `ago",
+        "html_url": "https://github.com/microsoft/aspire/commit/ace20894ceed70dd8ed4b53c9f2d5cdd30c507eb",
+        "pull_request": {
+          "number": 21720,
+          "title": "Add untagged manifest cleanup options to ACR purge tasks",
+          "url": "https://github.com/microsoft/aspire/pull/21720",
+          "merged_at": "2026-11-05T03:53:36Z"
+        }
+      },
+      {
+        "sha": "6b484acc5cb6dd8c8af68d38df4c88bfb76f70d9",
+        "message": "Serialize integral numbers as JSON integers in Java ATS client (#21440) ## Description In a Java AppHost, `addParameterWithGeneratedValue` with a `GenerateParameterDefault` fails with: ``` The JSON value could not be converted to System.Int32. Path: $.minUpper ``` **Root cause:** ATS maps every numeric type to Java `double`/`Number`. The generated Java client's `AspireClient.toJson` (`Transport.java`) serialized a `Number` with `value.toString()`, so an int DTO field set to `32` went over the wi",
+        "html_url": "https://github.com/microsoft/aspire/commit/6b484acc5cb6dd8c8af68d38df4c88bfb76f70d9",
+        "pull_request": {
+          "number": 21440,
+          "title": "Serialize integral numbers as JSON integers in Java ATS client",
+          "url": "https://github.com/microsoft/aspire/pull/21440",
+          "merged_at": "2026-11-05T04:21:53Z"
+        }
+      },
+      {
+        "sha": "be803a14adb6d759a854cdd48e591fd3ad83a726",
+        "message": "Avoid SIGPIPE false failures in the extension changelog finalized gate (#21541) Fixes #19835 ## Root cause `.github/workflows/check-extension-changelog-finalized.sh` runs with `set -euo pipefail` and validated the current release section with pipelines: ```bash if ! printf '%s\\n' \"$current_section\" | grep -Fxq \"$finalized_marker_line\"; then if ! printf '%s\\n' \"$current_section\" | grep -Eq '^- .*[^[:space:]]'; then ``` `grep -q` exits as soon as it finds a match. If `printf`, running in its own p",
+        "html_url": "https://github.com/microsoft/aspire/commit/be803a14adb6d759a854cdd48e591fd3ad83a726",
+        "pull_request": {
+          "number": 21541,
+          "title": "Avoid SIGPIPE false failures in the extension changelog finalized gate",
+          "url": "https://github.com/microsoft/aspire/pull/21541",
+          "merged_at": "2026-11-05T04:39:56Z"
+        }
+      },
+      {
+        "sha": "619b8ef8625459ee8f6ef28b9ef5e82090f3f905",
+        "message": "Update dashboard feedback welcome message (#21767) ## Description Replace the dashboard feedback banner's lengthy invitation with a concise welcome to the new Aspire dashboard. Feedback actions and dismissal behavior remain unchanged. Update the resource designer comments and regenerate all 13 localization files with the new source text. ### User-facing usage The banner now reads: > **Welcome to the new Aspire dashboard!** We'd love your feedback on the new experience. ### Validation - `.\\restor",
+        "html_url": "https://github.com/microsoft/aspire/commit/619b8ef8625459ee8f6ef28b9ef5e82090f3f905",
+        "pull_request": {
+          "number": 21767,
+          "title": "Update dashboard feedback welcome message",
+          "url": "https://github.com/microsoft/aspire/pull/21767",
+          "merged_at": "2026-11-05T15:54:25Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 127359064180,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42059719831/job/127359064180",
+      "classification": "transient-infra",
+      "reason": "macOS Aspire.Cli.Tests test host crashed (exit code 3, then 7) with zero failed tests; matches recorded crash mechanism.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-crash-exit-3"
+  ]
+}
