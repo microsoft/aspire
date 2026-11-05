@@ -7,13 +7,18 @@ namespace Aspire.Tray;
 internal readonly record struct TrayApplicationKey(string GitDirectory, string AppHostPath);
 
 /// <summary>Optional Git presentation data, captured with discovery rather than during painting.</summary>
-internal sealed record TrayGitCheckout(TrayApplicationKey Application, string Directory, string Label)
+internal sealed record TrayGitCheckout(TrayApplicationKey Application, string Directory, string Label, string ApplicationName)
 {
     public static TrayGitCheckout? Read(string appHostPath)
     {
         try
         {
             appHostPath = Path.GetFullPath(appHostPath);
+            if (!System.IO.Directory.Exists(Path.GetDirectoryName(appHostPath)))
+            {
+                // A removed checkout must not inherit Git metadata from an unrelated ancestor.
+                return null;
+            }
             for (var root = Path.GetDirectoryName(appHostPath); root is not null; root = Path.GetDirectoryName(root))
             {
                 var git = Path.Combine(root, ".git");
@@ -27,6 +32,14 @@ internal sealed record TrayGitCheckout(TrayApplicationKey Application, string Di
                         return null;
                     }
                     git = Path.GetFullPath(pointer[7..].Trim(), root);
+                    var backPointer = Path.Combine(git, "gitdir");
+                    // A copied checkout retains its old .git pointer. Git's administrative
+                    // gitdir file must point back to this checkout's .git, not the original.
+                    if (!File.Exists(Path.Combine(git, "commondir")) || !File.Exists(backPointer)
+                        || !TrayAppHostPath.Comparer.Equals(Path.GetFullPath(ReadMetadata(backPointer), git), Path.Combine(root, ".git")))
+                    {
+                        return null;
+                    }
                 }
                 else if (!System.IO.Directory.Exists(git))
                 {
@@ -37,12 +50,16 @@ internal sealed record TrayGitCheckout(TrayApplicationKey Application, string Di
                 // https://git-scm.com/docs/gitrepository-layout
                 var commonFile = Path.Combine(git, "commondir");
                 var common = File.Exists(commonFile) ? Path.GetFullPath(ReadMetadata(commonFile), git) : git;
-                if (!System.IO.Directory.Exists(common))
+                if (!System.IO.Directory.Exists(common) || !File.Exists(Path.Combine(common, "HEAD")))
                 {
                     return null;
                 }
                 var headFile = Path.Combine(git, "HEAD");
-                var head = File.Exists(headFile) ? ReadMetadata(headFile) : "";
+                if (!File.Exists(headFile))
+                {
+                    return null;
+                }
+                var head = ReadMetadata(headFile);
                 const string BranchPrefix = "ref: refs/heads/";
                 var label = head.StartsWith(BranchPrefix, StringComparison.Ordinal) ? head[BranchPrefix.Length..] : Path.GetFileName(root);
                 if (string.IsNullOrWhiteSpace(label))
@@ -55,7 +72,11 @@ internal sealed record TrayGitCheckout(TrayApplicationKey Application, string Di
                 var key = OperatingSystem.IsWindows()
                     ? new TrayApplicationKey(common.ToUpperInvariant(), relative.ToUpperInvariant())
                     : new TrayApplicationKey(common, relative);
-                return new(key, root, label.ReplaceLineEndings(" ").Replace('\t', ' '));
+                // Resolve the display name against the main checkout, so root apphost.cs and
+                // AppHost/apphost.cs never acquire a transient worktree folder as their title.
+                var canonicalPath = Path.Combine(Path.GetDirectoryName(common)!, relative);
+                var name = AppHostPresentation.GetDisplayName(new(canonicalPath, 0, null));
+                return new(key, root, label.ReplaceLineEndings(" ").Replace('\t', ' '), name);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
@@ -98,7 +119,8 @@ internal sealed record TrayAppHostGroup(TrayApplicationKey? Key, string Name, IR
             }
             group.Add(host);
         }
-        return groups.Select(group => new TrayAppHostGroup(group[0].Checkout?.Application, group[0].DisplayName,
+        return groups.Select(group => new TrayAppHostGroup(group[0].Checkout?.Application,
+            group[0].Checkout?.ApplicationName ?? group[0].DisplayName,
             group.Count > 1 ? LabelInstances(group) : group)).ToArray();
     }
 
