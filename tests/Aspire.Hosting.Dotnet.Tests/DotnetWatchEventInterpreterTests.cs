@@ -75,6 +75,25 @@ public class DotnetWatchEventInterpreterTests
     }
 
     [Fact]
+    public void RevertingBrokenEditReportsFixedInsteadOfNoChanges()
+    {
+        var interpreter = CreateReady();
+
+        interpreter.OnLogLine($"File updated: {s_apiProgram}");
+        interpreter.OnLogLine("Unable to apply changes due to compilation errors.");
+        Assert.Single(interpreter.OnLogLine($"{s_apiProgram}(19,32): error CS1525: Invalid expression term ')' [{s_api}]"));
+
+        interpreter.OnLogLine($"File updated: {s_apiProgram}");
+        var notice = Assert.Single(interpreter.OnLogLine("No managed code changes to apply."));
+        Assert.Equal(LogLevel.Information, notice.Level);
+        Assert.StartsWith("✅ Fixed. api already runs this code", notice.Message);
+
+        // Back to normal afterwards.
+        interpreter.OnLogLine($"File updated: {s_apiProgram}");
+        Assert.StartsWith("📝", Assert.Single(interpreter.OnLogLine("No managed code changes to apply.")).Message);
+    }
+
+    [Fact]
     public void FailureWithoutErrorLineIsFlushedWithPointerToLogs()
     {
         var interpreter = CreateReady();

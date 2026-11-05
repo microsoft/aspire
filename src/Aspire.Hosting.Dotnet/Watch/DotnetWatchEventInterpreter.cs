@@ -162,7 +162,16 @@ internal sealed partial class DotnetWatchEventInterpreter
         {
             var files = _changedFiles.ToArray();
             _changedFiles.Clear();
-            if (files.Length > 0 && !TryAddProjectFileNotice(files, notices))
+            if (_inError)
+            {
+                // Reverting the broken edit leaves nothing to apply; the app already runs this code.
+                _inError = false;
+                _pending = null;
+                var fixedProjects = Attribute(files);
+                notices.Add(Notice(WatchNoticeKind.HotReloadApplied, LogLevel.Information,
+                    $"✅ Fixed. {Names(fixedProjects)} already runs this code; nothing to apply.", fixedProjects));
+            }
+            else if (files.Length > 0 && !TryAddProjectFileNotice(files, notices))
             {
                 var projects = Attribute(files);
                 notices.Add(Notice(WatchNoticeKind.NoCodeChanges, LogLevel.Information,
