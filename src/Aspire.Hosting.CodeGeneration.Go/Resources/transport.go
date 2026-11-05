@@ -280,7 +280,7 @@ type connection struct {
 	reader  *bufio.Reader
 	client  *client
 
-	writeQueue chan map[string]any
+	writeQueue chan []byte
 	done       chan struct{}
 
 	mu      sync.Mutex
@@ -296,7 +296,7 @@ func newConnection(rawConn io.ReadWriteCloser, c *client, onClose func(error)) *
 		rawConn:    rawConn,
 		reader:     bufio.NewReader(rawConn),
 		client:     c,
-		writeQueue: make(chan map[string]any, 64),
+		writeQueue: make(chan []byte, 64),
 		done:       make(chan struct{}),
 		pending:    make(map[int64]chan map[string]any),
 		onClose:    onClose,
@@ -345,7 +345,7 @@ func (c *connection) writeLoop() {
 	for {
 		select {
 		case msg := <-c.writeQueue:
-			if err := writeMessage(c.rawConn, msg); err != nil {
+			if err := writeMessageBody(c.rawConn, msg); err != nil {
 				c.close(err)
 				return
 			}
@@ -385,8 +385,22 @@ func (c *connection) dispatch(msg map[string]any) {
 }
 
 func (c *connection) enqueue(msg map[string]any) {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		// A user callback can return an unencodable value. Fail that callback,
+		// not every unrelated pending call on the connection.
+		body, err = json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      msg["id"],
+			"error":   map[string]any{"code": -32603, "message": fmt.Sprintf("Callback result encoding failed: %v", err)},
+		})
+		if err != nil {
+			c.close(err)
+			return
+		}
+	}
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
 	case <-c.done:
 	}
 }
@@ -411,12 +425,26 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 	// the other runtimes send for a throwing callback (-32603, "Callback
 	// execution failed: <message>"). Only the panic value is reported; the stack
 	// stays inside the process.
+	completed := false
 	defer func() {
 		if r := recover(); r != nil {
+			code := -32603
+			message := fmt.Sprintf("Callback execution failed: %v", r)
+			if err, ok := r.(*callbackArgumentError); ok {
+				code = -32602
+				message = err.Error()
+			}
 			c.enqueue(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      requestID,
-				"error":   map[string]any{"code": -32603, "message": fmt.Sprintf("Callback execution failed: %v", r)},
+				"error":   map[string]any{"code": code, "message": message},
+			})
+		} else if !completed {
+			// runtime.Goexit runs defers without a recoverable panic value.
+			c.enqueue(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestID,
+				"error":   map[string]any{"code": -32603, "message": "Callback execution failed: goroutine exited without returning"},
 			})
 		}
 	}()
@@ -445,6 +473,7 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 			"result":  result,
 		})
 	}
+	completed = true
 }
 
 // sendRequest sends a JSON-RPC request over the write queue and blocks until
@@ -455,6 +484,10 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 // also notifies the AppHost, but this method does not need to wait for that
 // round-trip — it returns ctx.Err() as soon as ctx is done.
 func (c *connection) sendRequest(ctx context.Context, method string, params []any) (any, error) {
+	return c.sendRequestQueued(ctx, method, params, nil)
+}
+
+func (c *connection) sendRequestQueued(ctx context.Context, method string, params []any, onQueued func()) (any, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -470,6 +503,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 		"method":  method,
 		"params":  params,
 	}
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("aspire: encode %s request: %w", method, err)
+	}
 
 	c.mu.Lock()
 	if c.closed {
@@ -480,7 +517,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 	c.mu.Unlock()
 
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
+		if onQueued != nil {
+			onQueued()
+		}
 	case <-ctx.Done():
 		c.mu.Lock()
 		delete(c.pending, id)
@@ -541,8 +581,13 @@ type client struct {
 	// each cancellation ID handed to the AppHost to the function that detaches
 	// its watcher from the token's context.
 	cancellationsMu     sync.Mutex
-	cancellations       map[string]func() bool
+	cancellations       map[string]*cancellationRegistration
 	cancellationCounter atomic.Int64
+}
+
+type cancellationRegistration struct {
+	token *CancellationToken
+	stop  func() bool
 }
 
 // newClient constructs a client; callers must invoke connect before using it.
@@ -551,7 +596,7 @@ func newClient(socketPath string) *client {
 		socketPath:    socketPath,
 		wrappers:      make(map[string]handleWrapperFactory),
 		callbacks:     make(map[string]func(...any) any),
-		cancellations: make(map[string]func() bool),
+		cancellations: make(map[string]*cancellationRegistration),
 	}
 }
 
@@ -650,17 +695,25 @@ func (c *client) registerCancellation(token *CancellationToken) string {
 		return ""
 	}
 	id := fmt.Sprintf("ct_%d_%d", c.cancellationCounter.Add(1), time.Now().UnixMilli())
-	// AfterFunc starts a goroutine only once the context is done, so a token
-	// that is never canceled does not park one goroutine per registration.
-	stop := context.AfterFunc(token.ctx, func() { c.cancelToken(id) })
 	c.cancellationsMu.Lock()
-	// Canceling a context closes its Done channel before it starts the AfterFunc
-	// goroutine, so a call that returns because of this very cancel can get here
-	// first. Stopping the watcher then would drop the cancelToken request, so
-	// only a token that is still live is stopped.
-	c.cancellations[id] = func() bool { return token.ctx.Err() == nil && stop() }
+	c.cancellations[id] = &cancellationRegistration{token: token}
 	c.cancellationsMu.Unlock()
 	return id
+}
+
+// Arm watchers only after the request carrying their IDs is on the FIFO write
+// queue. Otherwise an already canceled token can reach the host before the
+// invocation that registers it, and the host ignores unknown cancellation IDs.
+func (c *client) startCancellations(args map[string]any) {
+	c.cancellationsMu.Lock()
+	defer c.cancellationsMu.Unlock()
+	for _, v := range args {
+		if id, ok := v.(string); ok {
+			if registration := c.cancellations[id]; registration != nil && registration.stop == nil {
+				registration.stop = context.AfterFunc(registration.token.ctx, func() { c.cancelToken(id) })
+			}
+		}
+	}
 }
 
 // releaseCancellations detaches the watchers of the cancellation IDs carried
@@ -675,8 +728,12 @@ func (c *client) releaseCancellations(args map[string]any) {
 		if !ok {
 			continue
 		}
-		if stop, found := c.cancellations[id]; found {
-			stop()
+		if registration, found := c.cancellations[id]; found {
+			// Cancellation closes Done before running AfterFunc. Do not stop a
+			// canceled token's notification when its local call returns first.
+			if registration.stop != nil && registration.token.ctx.Err() == nil {
+				registration.stop()
+			}
 			delete(c.cancellations, id)
 		}
 	}
@@ -744,7 +801,15 @@ func (c *client) invokeCapability(ctx context.Context, capabilityID string, args
 		return nil, err
 	}
 
-	result, err := c.sendRequest(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)})
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return nil, errors.New("not connected to AppHost")
+	}
+	result, err := conn.sendRequestQueued(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)}, func() {
+		c.startCancellations(args)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -793,7 +858,9 @@ func (c *client) authenticate(ctx context.Context, token string) error {
 }
 
 func (c *client) cancelToken(tokenID string) bool {
-	result, err := c.sendRequest(context.Background(), "cancelToken", []any{tokenID})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := c.sendRequest(ctx, "cancelToken", []any{tokenID})
 	if err != nil {
 		return false
 	}
@@ -886,11 +953,15 @@ func writeMessage(w io.Writer, msg map[string]any) error {
 	if err != nil {
 		return err
 	}
+	return writeMessageBody(w, body)
+}
+
+func writeMessageBody(w io.Writer, body []byte) error {
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	if _, err = w.Write([]byte(header)); err != nil {
+	if _, err := w.Write([]byte(header)); err != nil {
 		return err
 	}
-	_, err = w.Write(body)
+	_, err := w.Write(body)
 	return err
 }
 
@@ -898,17 +969,39 @@ func writeMessage(w io.Writer, msg map[string]any) error {
 // or hostile stream cannot make readMessage allocate an arbitrarily large body.
 // It matches the cap in the Python runtime.
 const maxMessageSize = 64 * 1024 * 1024
+const maxHeaderSize = 8 * 1024
+const maxHeaderCount = 16
 
 func readMessage(reader *bufio.Reader) (map[string]any, error) {
 	headers := make(map[string]string)
+	headerSize := 0
+	headerCount := 0
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, err
+		// Accumulate fragments only within the total budget, including a line
+		// with no newline. Example: "Content-Length: 42\r\n\r\n{...}".
+		var lineBytes []byte
+		for {
+			fragment, err := reader.ReadSlice('\n')
+			headerSize += len(fragment)
+			if headerSize > maxHeaderSize {
+				return nil, errors.New("AppHost message headers exceed 8192 bytes")
+			}
+			lineBytes = append(lineBytes, fragment...)
+			if err == bufio.ErrBufferFull {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			break
 		}
-		line = strings.TrimSpace(line)
+		line := strings.TrimSpace(string(lineBytes))
 		if line == "" {
 			break
+		}
+		headerCount++
+		if headerCount > maxHeaderCount {
+			return nil, errors.New("AppHost message has more than 16 headers")
 		}
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) == 2 {
