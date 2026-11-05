@@ -23,6 +23,7 @@ internal static class KnownConfigNames
 
     public const string ShowDashboardResources = "ASPIRE_SHOW_DASHBOARD_RESOURCES";
     public const string ResourceServiceEndpointUrl = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
+    public const string PersistPortsInIsolatedMode = "ASPIRE_PERSIST_PORTS_IN_ISOLATED_MODE";
 
     public const string ContainerRuntime = "ASPIRE_CONTAINER_RUNTIME";
     public const string ContainerTunnelBaseImage = "ASPIRE_CONTAINER_TUNNEL_BASE_IMAGE";

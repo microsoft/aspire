@@ -86,6 +86,13 @@ internal sealed class AspireJsonConfiguration
     public Dictionary<string, IntegrationSourceConfiguration>? IntegrationSources { get; set; }
 
     /// <summary>
+    /// Port allocation configuration.
+    /// </summary>
+    [JsonPropertyName(AspireConfigPortAllocation.SectionName)]
+    [Description("Port allocation configuration.")]
+    public AspireConfigPortAllocation? PortAllocation { get; set; }
+
+    /// <summary>
     /// Captures any additional properties not explicitly defined in this class.
     /// This ensures settings like "features" are preserved when saving.
     /// </summary>

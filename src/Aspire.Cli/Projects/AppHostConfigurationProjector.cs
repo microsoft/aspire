@@ -13,7 +13,8 @@ internal sealed class AppHostConfigurationProjector(IConfigurationService config
 {
     private static readonly EnvironmentVariableProjection[] s_environmentVariableProjections =
     [
-        new(AspireConfigContainerTunnel.BaseImageConfigPath, KnownConfigNames.ContainerTunnelBaseImage)
+        new(AspireConfigContainerTunnel.BaseImageConfigPath, KnownConfigNames.ContainerTunnelBaseImage),
+        new(AspireConfigPortAllocation.PersistInIsolatedModeConfigPath, KnownConfigNames.PersistPortsInIsolatedMode)
     ];
 
     /// <summary>
