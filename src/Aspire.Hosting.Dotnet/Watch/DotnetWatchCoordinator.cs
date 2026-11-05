@@ -279,6 +279,10 @@ internal static class DotnetWatchCoordinator
             builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) =>
             {
                 var noticeLogger = e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
+
+                // Resources removed or replaced after registration must not be built or watched.
+                _projects.RemoveAll(p => !e.Model.Resources.Contains(p.Resource));
+
                 foreach (var project in _projects.ToArray())
                 {
                     var added = _watchAnnotations[project.Resource];

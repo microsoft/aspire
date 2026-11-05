@@ -3,10 +3,12 @@
 
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
@@ -69,6 +71,27 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Contains(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
         Assert.DoesNotContain(script.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
     }
+
+    [Fact]
+    public async Task RemovedProjectsAreNotWatched()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll"]);
+
+        var service = builder.AddDotnetProject("service", Path.GetDirectoryName(projectPath)!);
+        builder.Resources.Remove(service.Resource);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.DoesNotContain(model.Resources, r => r is DotnetWatchServerResource);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
     [Fact]
     public void WatchWithoutProxyFallsBackToNormalRun()
