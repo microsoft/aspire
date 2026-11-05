@@ -38,6 +38,7 @@ await builder.addKubernetesEnvironment("k8s");
 The dashboard container included in the published Helm chart opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
 
 Browser-origin endpoint properties use deployment inputs rather than internal Kubernetes service addresses.
+The referenced endpoint must be external HTTP(S); internal and non-HTTP(S) endpoint references are rejected.
 For example, `frontend.GetEndpoint("http").BrowserOrigins` reads `Parameters:frontend-http-BrowserOrigins`, which `aspire deploy` supplies through its Helm values override file.
 The input accepts a comma-separated origin list; published charts retain a placeholder for it.
 Explicit literal hostnames on matching Ingress paths or Gateway routes provide overridable defaults. Route-specific hostnames override inherited hostnames, and matching TLS configuration selects HTTPS.

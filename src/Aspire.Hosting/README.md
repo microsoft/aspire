@@ -34,7 +34,7 @@ For the full details and specification, see the [App Model document](https://git
 
 In run mode, endpoint URLs targeting `localhost` are projected to the HTTPS Codespaces forwarding address after URL customization and before allocation notifications. `endpoint.BrowserOrigins` and dashboard links therefore use the same projected URLs, including details-only endpoint links. Custom public URLs remain unchanged, and paths, queries, and fragments are preserved.
 
-Physical endpoint allocation and host/container service discovery remain unchanged. Snapshot-only resource URLs continue to use the dashboard notification rewriter.
+Physical endpoint allocation and host/container service discovery remain unchanged. The allocated HTTP(S) endpoint origin remains in `BrowserOrigins` after customized or forwarded origins, even when its dashboard links are removed. Snapshot-only resource URLs continue to use the dashboard notification rewriter.
 
 Non-absolute endpoint links are excluded from browser-origin collections with a warning, but remain available to the dashboard without affecting other links. Non-HTTP(S) links do not contribute browser origins.
 

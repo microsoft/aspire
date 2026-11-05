@@ -4154,6 +4154,15 @@ internal sealed class RadiusInfrastructureBuilder
             case EndpointReferenceExpression endpointReferenceExpression when endpointReferenceExpression.Property is
                 EndpointProperty.BrowserOrigins:
                 ThrowIfEndpointMissing(endpointReferenceExpression.Endpoint, owner);
+                var browserEndpoint = endpointReferenceExpression.Endpoint;
+                if (ResourceTypeMapper.IsBackingResource(ResolveToParent(browserEndpoint.Resource)) ||
+                    !browserEndpoint.EndpointAnnotation.IsExternal ||
+                    browserEndpoint.EndpointAnnotation.UriScheme is not ("http" or "https"))
+                {
+                    throw new NotSupportedException(
+                        $"Radius cannot provide browser origins for endpoint '{browserEndpoint.EndpointName}' on resource '{browserEndpoint.Resource.Name}' because it is not an external HTTP(S) workload endpoint. " +
+                        "Reference an external HTTP(S) workload endpoint or supply an explicit origin parameter.");
+                }
                 _endpointInputs.ReserveModelNames(_executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources);
                 var input = _endpointInputs.GetOrAdd(endpointReferenceExpression,
                     _executionContext.Services.GetRequiredService<IConfiguration>());

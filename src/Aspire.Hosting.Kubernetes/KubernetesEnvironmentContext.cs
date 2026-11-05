@@ -17,6 +17,14 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
 
     public ParameterResource GetEndpointInput(EndpointReferenceExpression reference, DistributedApplicationExecutionContext executionContext)
     {
+        if (!reference.Endpoint.EndpointAnnotation.IsExternal ||
+            reference.Endpoint.EndpointAnnotation.UriScheme is not ("http" or "https"))
+        {
+            throw new NotSupportedException(
+                $"Kubernetes cannot provide browser origins for endpoint '{reference.Endpoint.EndpointName}' on resource '{reference.Endpoint.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.");
+        }
+
         var resources = executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources;
         _endpointInputs.ReserveModelNames(resources);
         return _endpointInputs.GetOrAdd(reference, executionContext.Services.GetRequiredService<IConfiguration>(),

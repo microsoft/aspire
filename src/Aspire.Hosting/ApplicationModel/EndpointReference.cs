@@ -59,8 +59,9 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// </summary>
     /// <remarks>
     /// Origins use finalized URL customization and are independent of this reference's service-discovery
-    /// network context. Origins are distinct and ordered by display preference. An endpoint
-    /// without browser-facing HTTP(S) URLs resolves to an empty string.
+    /// network context. Origins are distinct and ordered by display preference. The allocated
+    /// HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+    /// An endpoint without HTTP(S) origins resolves to an empty string.
     /// </remarks>
     /// <example>
     /// <code>
@@ -401,10 +402,17 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
             var urls = await snapshot.GetValueAsync(cancellationToken).ConfigureAwait(false);
             var origins = urls.Select(url => new Uri(url.Url, UriKind.Absolute))
                 .Where(uri => uri.Scheme is "http" or "https")
-                .Select(BrowserOriginHelpers.GetOrigin)
-                .Distinct(StringComparer.Ordinal)
-                .ToArray();
-            return string.Join(",", origins);
+                .Select(BrowserOriginHelpers.GetOrigin);
+            // Display customization may replace or remove every link. Preserve the physical
+            // endpoint as an additional origin without restoring its dashboard link. Read the
+            // current allocation on each resolution so facade reconnects cannot leave a stale origin.
+            if (Endpoint.EndpointAnnotation.AllocatedEndpoint is { UriScheme: "http" or "https" } allocatedEndpoint)
+            {
+                var allocatedOrigin = BrowserOriginHelpers.GetOrigin(new Uri(allocatedEndpoint.UriString, UriKind.Absolute));
+                origins = origins.Where(origin => !string.Equals(origin, allocatedOrigin, StringComparison.Ordinal))
+                    .Append(allocatedOrigin);
+            }
+            return string.Join(",", origins.Distinct(StringComparer.Ordinal));
         }
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()

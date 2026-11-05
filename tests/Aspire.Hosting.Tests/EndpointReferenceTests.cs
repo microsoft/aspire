@@ -514,6 +514,54 @@ public class EndpointReferenceTests
     }
 
     [Fact]
+    public async Task BrowserOriginsKeepAllocatedEndpointAfterCustomOrigins()
+    {
+        var resource = new TestResource("frontend");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https"));
+        var endpoint = resource.GetEndpoint("https");
+        endpoint.EndpointAnnotation.AllocatedEndpoint = new(endpoint.EndpointAnnotation, "localhost", 8443);
+        endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue(
+        [
+            new() { Url = "https://localhost:8443/original" },
+            new() { Url = "https://public.example/path" },
+            new() { Url = "https://alias.example/home" },
+            new() { Url = "https://public.example/duplicate" }
+        ]);
+
+        Assert.Equal("https://public.example,https://alias.example,https://localhost:8443", await endpoint.BrowserOrigins.GetValueAsync());
+    }
+
+    [Theory]
+    [InlineData("https", "https://localhost:8443")]
+    [InlineData("tcp", "")]
+    public async Task BrowserOriginsWithNoDisplayUrlsIncludeOnlyHttpAllocatedEndpoints(string scheme, string expected)
+    {
+        var resource = new TestResource("frontend");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: scheme));
+        var endpoint = resource.GetEndpoint(scheme);
+        endpoint.EndpointAnnotation.AllocatedEndpoint = new(endpoint.EndpointAnnotation, "localhost", 8443);
+        endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([]);
+
+        Assert.Equal(expected, await endpoint.BrowserOrigins.GetValueAsync());
+    }
+
+    [Fact]
+    public async Task BrowserOriginsDeduplicateAllocatedEndpointAndFollowAllocationChanges()
+    {
+        var resource = new TestResource("frontend");
+        resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: "https"));
+        var endpoint = resource.GetEndpoint("https");
+        endpoint.EndpointAnnotation.AllocatedEndpoint = new(endpoint.EndpointAnnotation, "frontend.example", 443);
+        endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = "https://frontend.example/path" }]);
+
+        Assert.Equal("https://frontend.example", await endpoint.BrowserOrigins.GetValueAsync());
+
+        endpoint.EndpointAnnotation.AllocatedEndpoint = new(endpoint.EndpointAnnotation, "replacement.example", 443);
+
+        Assert.Equal("https://frontend.example,https://replacement.example", await endpoint.BrowserOrigins.GetValueAsync());
+    }
+
+    [Fact]
     public async Task BrowserOriginsAreEndpointScoped()
     {
         var resource = new TestResource("frontend");

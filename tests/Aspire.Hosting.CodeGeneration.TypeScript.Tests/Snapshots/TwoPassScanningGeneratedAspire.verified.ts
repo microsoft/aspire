@@ -4345,8 +4345,9 @@ export interface EndpointReference {
      * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
      *
      * Origins use finalized URL customization and are independent of this reference's service-discovery
-     * network context. Origins are distinct and ordered by display preference. An endpoint
-     * without browser-facing HTTP(S) URLs resolves to an empty string.
+     * network context. Origins are distinct and ordered by display preference. The allocated
+     * HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+     * An endpoint without HTTP(S) origins resolves to an empty string.
      */
     browserOrigins(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
@@ -4420,8 +4421,9 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
      * Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
      *
      * Origins use finalized URL customization and are independent of this reference's service-discovery
-     * network context. Origins are distinct and ordered by display preference. An endpoint
-     * without browser-facing HTTP(S) URLs resolves to an empty string.
+     * network context. Origins are distinct and ordered by display preference. The allocated
+     * HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+     * An endpoint without HTTP(S) origins resolves to an empty string.
      */
     browserOrigins(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */

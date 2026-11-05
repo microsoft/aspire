@@ -279,14 +279,14 @@ public class DevTunnelMonitorTests
             {
                 notifications++;
                 Assert.Equal(1, callbacks);
-                Assert.Equal("https://original-3000.usw2.devtunnels.ms,https://custom.example", await origin.GetValueAsync(ct));
+                Assert.Equal("https://custom.example,https://original-3000.usw2.devtunnels.ms", await origin.GetValueAsync(ct));
             });
 
         await test.StartAsync();
         await test.ReadyAsync();
 
         Assert.Equal(
-            "https://original-3000.usw2.devtunnels.ms,https://custom.example",
+            "https://custom.example,https://original-3000.usw2.devtunnels.ms",
             await endpoint.BrowserOrigins.GetValueAsync());
 
         test.Client.TunnelStatus = test.Client.TunnelStatus with
@@ -297,9 +297,9 @@ public class DevTunnelMonitorTests
 
         Assert.Equal(1, callbacks);
         Assert.Equal(1, notifications);
-        Assert.Equal("https://replacement-3000.usw2.devtunnels.ms,https://custom.example", await origin.GetValueAsync());
+        Assert.Equal("https://custom.example,https://replacement-3000.usw2.devtunnels.ms", await origin.GetValueAsync());
         Assert.Equal(
-            "https://replacement-3000.usw2.devtunnels.ms,https://custom.example",
+            "https://custom.example,https://replacement-3000.usw2.devtunnels.ms",
             await endpoint.BrowserOrigins.GetValueAsync());
         Assert.Equal([
             "https://replacement-3000.usw2.devtunnels.ms/swagger?x=1#operations",

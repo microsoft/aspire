@@ -205,7 +205,9 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             EndpointProperty.BrowserOrigins when isHttpIngress && external =>
                 GetHostValue($"{scheme}://"),
             EndpointProperty.BrowserOrigins =>
-                AllocateParameter(_containerAppEnvironmentContext.GetEndpointInput(reference)),
+                throw new NotSupportedException(
+                    $"Azure Container Apps cannot provide browser origins for endpoint '{reference.Endpoint.EndpointName}' on resource '{reference.Endpoint.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                    "Reference an external HTTP(S) endpoint or supply an explicit origin parameter."),
             EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: isHttpIngress ? null : $":{port}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
             EndpointProperty.Port => port.ToString(CultureInfo.InvariantCulture),

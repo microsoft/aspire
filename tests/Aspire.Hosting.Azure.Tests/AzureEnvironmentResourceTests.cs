@@ -3,9 +3,7 @@
 
 #pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
 
-using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
@@ -21,38 +19,28 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task BrowserOriginInputsKeepDistinctEndpointIdentities(bool longNames)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void ComputeEnvironmentExplainsUnsupportedBrowserOrigins(bool appService, bool nonHttp)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
-        var prefix = longNames ? new string('a', 45) : "a";
-        var first = builder.AddContainer($"{prefix}-b", "image").WithHttpEndpoint(name: "c", targetPort: 80);
-        var second = builder.AddContainer(prefix, "image").WithHttpEndpoint(name: "b-c", targetPort: 80);
-        builder.AddAzureContainerAppEnvironment("env");
-        var backend = builder.AddContainer("consumer", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints()
-            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins)
-            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins)
-            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins);
-        using var app = builder.Build();
+        IComputeEnvironmentResource environment = appService
+            ? builder.AddAzureAppServiceEnvironment("env").Resource
+            : builder.AddAzureContainerAppEnvironment("env").Resource;
+        var frontend = builder.AddContainer("frontend", "image")
+            .WithEndpoint(name: "endpoint", scheme: nonHttp ? "tcp" : "http", targetPort: 8080, isExternal: nonHttp);
 
-        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+#pragma warning disable ASPIRECOMPUTE002 // Verify owner-level endpoint resolution matches native publication.
+        var error = Assert.Throws<NotSupportedException>(() =>
+            environment.GetEndpointPropertyExpression(frontend.GetEndpoint("endpoint").BrowserOrigins));
+#pragma warning restore ASPIRECOMPUTE002
 
-        var target = backend.Resource.GetDeploymentTargetAnnotation()!;
-        var provisioning = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
-        var bicep = provisioning.GetBicepTemplateString();
-        var inputs = provisioning.Parameters.Values.OfType<ParameterResource>().ToArray();
-        Assert.Equal(2, inputs.Length);
-        var firstInput = inputs[0];
-        var secondInput = inputs[1];
-        Assert.NotSame(firstInput, secondInput);
-        Assert.NotEqual(firstInput.Name, secondInput.Name);
-        Assert.All(new[] { firstInput, secondInput }, parameter => Assert.InRange(parameter.Name.Length, 1, 64));
-        builder.Configuration[$"Parameters:{firstInput.Name}"] = "https://first.example";
-        builder.Configuration[$"Parameters:{secondInput.Name}"] = "https://second.example";
-        Assert.Equal("https://first.example", await firstInput.GetValueAsync(default));
-        Assert.Equal("https://second.example", await secondInput.GetValueAsync(default));
-        await Verify(bicep, "bicep").UseParameters(longNames);
+        var platform = appService ? "Azure App Service" : "Azure Container Apps";
+        Assert.Equal(
+            $"{platform} environment 'env' cannot provide browser origins for endpoint 'endpoint' on resource 'frontend' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.Message);
     }
 
     [Theory]
@@ -132,22 +120,10 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
         var target = backend.Resource.GetDeploymentTargetAnnotation()!;
         var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
-        var bicep = provisioningResource.GetBicepTemplateString();
-        var inputs = provisioningResource.Parameters.Values.OfType<ParameterResource>().ToArray();
+        var error = Assert.Throws<NotSupportedException>(provisioningResource.GetBicepTemplateString);
         Assert.Equal(
-            ["frontend-http-BrowserOrigins"],
-            inputs.Select(input => input.Name));
-        builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
-        var inputBindings = new AzureBicepResource("inputs", templateString: "");
-        foreach (var (name, value) in provisioningResource.Parameters.Where(parameter => parameter.Value is ParameterResource))
-        {
-            inputBindings.Parameters.Add(name, value);
-        }
-        var parameters = new JsonObject();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await BicepUtilities.SetParametersAsync(parameters, inputBindings, builder.ExecutionContext, cancellationToken: cts.Token);
-
-        await Verify(bicep, "bicep").AppendContentAsFile(parameters.ToJsonString(), "json").UseParameters(appService);
+            "Azure Container Apps cannot provide browser origins for endpoint 'http' on resource 'frontend' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.Message);
     }
 
     [Fact]

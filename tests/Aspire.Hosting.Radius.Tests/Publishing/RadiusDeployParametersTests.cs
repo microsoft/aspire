@@ -19,13 +19,49 @@ namespace Aspire.Hosting.Radius.Tests.Publishing;
 /// </summary>
 public class RadiusDeployParametersTests
 {
+    [Theory]
+    [InlineData("http", false, false)]
+    [InlineData("tcp", true, false)]
+    [InlineData("http", true, true)]
+    public async Task BrowserOriginsRejectUnsupportedEndpoints(string scheme, bool external, bool backingResource)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddRadiusEnvironment("myenv");
+        IResourceBuilder<IResourceWithEndpoints> producer;
+        if (backingResource)
+        {
+            producer = builder.AddRedis("producer")
+                .WithHttpEndpoint(name: "endpoint", targetPort: 8080).WithExternalHttpEndpoints();
+        }
+        else
+        {
+            producer = builder.AddContainer("producer", "image")
+                .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
+        }
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGINS", producer.GetEndpoint("endpoint").BrowserOrigins);
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(environment.Resource, model);
+        var infrastructure = new RadiusInfrastructureBuilder(environment.Resource, model,
+            new ResourceTypeMapper(NullLogger.Instance), NullLogger.Instance);
+
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() =>
+            infrastructure.BuildAsync(app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), default));
+
+        Assert.Equal(
+            "Radius cannot provide browser origins for endpoint 'endpoint' on resource 'producer' because it is not an external HTTP(S) workload endpoint. " +
+            "Reference an external HTTP(S) workload endpoint or supply an explicit origin parameter.", error.Message);
+        Assert.Empty(environment.Resource.Annotations.OfType<RadiusDeployParametersAnnotation>());
+    }
+
     [Fact]
     public async Task BrowserOriginInputsKeepDistinctEndpointIdentities()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddRadiusEnvironment("myenv");
-        var first = builder.AddContainer("a-b", "image").WithHttpEndpoint(name: "c", targetPort: 80);
-        var second = builder.AddContainer("a", "image").WithHttpEndpoint(name: "b-c", targetPort: 80);
+        var first = builder.AddContainer("a-b", "image").WithHttpEndpoint(name: "c", targetPort: 80).WithExternalHttpEndpoints();
+        var second = builder.AddContainer("a", "image").WithHttpEndpoint(name: "b-c", targetPort: 80).WithExternalHttpEndpoints();
         builder.AddContainer("consumer", "image")
             .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins)
             .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins)
@@ -56,7 +92,7 @@ public class RadiusDeployParametersTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddRadiusEnvironment("myenv");
-        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         builder.AddContainer("consumer", "image")
             .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins)
             .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins)

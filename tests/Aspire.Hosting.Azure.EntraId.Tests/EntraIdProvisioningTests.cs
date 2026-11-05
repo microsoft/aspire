@@ -913,8 +913,8 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         var signIn = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
         var signOut = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri1"]);
-        Assert.Equal("https://web.dev.localhost:7081", await signIn.GetValueAsync(CancellationToken.None));
-        Assert.Equal("https://web.dev.localhost:7081", await signOut.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://web.dev.localhost:7081,https://localhost:7081", await signIn.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://web.dev.localhost:7081,https://localhost:7081", await signOut.GetValueAsync(CancellationToken.None));
         var provider = Assert.IsType<EntraIdRunModeBrowserOrigin>(Assert.Single(signIn.ValueProviders));
         Assert.Equal(endpoint.BrowserOrigins.ValueExpression, provider.ValueExpression);
         Assert.Same(endpoint, Assert.Single(provider.References));
@@ -989,7 +989,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://web-hashr.dev.localhost:7081", await resolveTask.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("https://web-hashr.dev.localhost:7081,https://localhost:7081", await resolveTask.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
@@ -1016,7 +1016,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://public.example:9443,https://web.dev.localhost:7081", await expression.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://public.example:9443,https://web.dev.localhost:7081,https://localhost:7081", await expression.GetValueAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -1055,8 +1055,8 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             entra.Resource.Outputs["clientId"] = ClientId;
             entra.Resource.ProvisioningTaskCompletionSource!.TrySetResult();
             await publish.WaitAsync(cts.Token);
-            Assert.Equal("https://web.example", await pendingOrigin);
-            Assert.Equal("https://web.example", await expression.GetValueAsync(cts.Token));
+            Assert.Equal("https://web.example,https://localhost:7081", await pendingOrigin);
+            Assert.Equal("https://web.example,https://localhost:7081", await expression.GetValueAsync(cts.Token));
         }
         finally
         {
@@ -1197,7 +1197,7 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithRedirectUris_Endpoint_RunMode_ClearedUrlsProvideEmptyOrigins()
+    public async Task WithRedirectUris_Endpoint_RunMode_ClearedDisplayUrlsUseAllocatedOrigin()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddContainer("web", "image")
@@ -1207,14 +1207,15 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
         web.WithUrls(context => context.Urls.Clear());
 
-        _ = entra.Resource.GetBicepTemplateString();
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
 
         using var app = builder.Build();
         _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
         await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("", await expression.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(CancellationToken.None));
+        Assert.Empty(web.Resource.Annotations.OfType<ResourceUrlAnnotation>());
     }
 
     [Fact]

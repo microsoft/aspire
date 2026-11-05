@@ -20347,8 +20347,9 @@ type EndpointReference interface {
 	//
 	// Origins use finalized URL customization and are independent of this
 	// reference's service-discovery network context. Origins are distinct and
-	// ordered by display preference. An endpoint without browser-facing HTTP(S)
-	// URLs resolves to an empty string.
+	// ordered by display preference. The allocated HTTP(S) endpoint origin is
+	// included after display origins, even if its display links are removed. An
+	// endpoint without HTTP(S) origins resolves to an empty string.
 	BrowserOrigins() EndpointReferenceExpression
 
 	// EndpointName gets the name of the endpoint associated with the endpoint

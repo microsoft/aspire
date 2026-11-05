@@ -10,6 +10,25 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "6")]
 public class ComputeEnvironmentValidationTests
 {
+    [Theory]
+    [InlineData("http")]
+    [InlineData("tcp")]
+    public void DefaultComputeEnvironmentExplainsMissingBrowserOriginSupport(string scheme)
+    {
+        IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
+        var endpoint = CreateEndpointReference(scheme, port: null, targetPort: 5000);
+
+#pragma warning disable ASPIRECOMPUTE002 // Verify the default deployed endpoint-property contract.
+        var error = Assert.Throws<NotSupportedException>(() =>
+            environment.GetEndpointPropertyExpression(endpoint.BrowserOrigins));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(
+            $"Compute environment 'env' cannot provide browser origins for endpoint '{endpoint.EndpointName}' on resource '{endpoint.Resource.Name}' because it does not implement deployed browser-origin resolution. " +
+            "An endpoint host address alone does not establish a browser-facing origin. Use an environment that supports browser origins or supply an explicit origin parameter.",
+            error.Message);
+    }
+
     [Fact]
     public async Task MultipleComputeEnvironments_WithUnboundComputeResource_Throws()
     {

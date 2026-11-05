@@ -14,6 +14,7 @@ using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Docker.Tests;
 
@@ -92,16 +93,39 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, 8080)]
-    [InlineData(true, null)]
-    public void BrowserOriginWithoutPublishedPortRequiresInput(bool external, int? port)
+    [InlineData("http", false)]
+    [InlineData("tcp", true)]
+    [InlineData("tcp", false)]
+    public async Task BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
-        var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: port, targetPort: 80)
-            .WithEndpoint("http", endpoint => endpoint.IsExternal = external);
+        var web = builder.AddContainer("web", "image")
+            .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
+        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").BrowserOrigins);
+        using var app = builder.Build();
+        var context = new DockerComposeEnvironmentContext(environment.Resource, NullLogger.Instance);
+        await context.CreateDockerComposeServiceResourceAsync(web.Resource, builder.ExecutionContext, default);
+        var target = await context.CreateDockerComposeServiceResourceAsync(consumer.Resource, builder.ExecutionContext, default);
+
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() => target.BuildComposeServiceAsync(builder.Configuration));
+
+        Assert.Equal(
+            "Docker Compose cannot provide browser origins for endpoint 'endpoint' on resource 'web' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.GetBaseException().Message);
+        Assert.Empty(environment.Resource.CapturedEnvironmentVariables);
+    }
+
+    [Fact]
+    public void BrowserOriginWithoutPublishedPortRequiresInput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 80).WithExternalHttpEndpoints();
         builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
         using var app = builder.Build();
 
@@ -148,7 +172,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         var environment = builder.AddDockerComposeEnvironment("env");
         builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
-        var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080);
+        var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080).WithExternalHttpEndpoints();
         var origin = frontend.GetEndpoint("HTTP").BrowserOrigins;
         builder.AddContainer("backend", "nginx:alpine")
             .WithEnvironment("ORIGIN", origin)

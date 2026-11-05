@@ -103,7 +103,16 @@ internal static class DockerComposeServiceResourceExtensions
         }
 
         ParameterResource GetEndpointInput(EndpointReferenceExpression reference, DockerComposeServiceResource.EndpointMapping mapping)
-            => resource.Parent.EndpointInputs.GetOrAdd(reference, configuration, () => GetOriginDefault(mapping));
+        {
+            if (!mapping.IsExternal || mapping.Scheme is not ("http" or "https"))
+            {
+                throw new NotSupportedException(
+                    $"Docker Compose cannot provide browser origins for endpoint '{reference.Endpoint.EndpointName}' on resource '{reference.Endpoint.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                    "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.");
+            }
+
+            return resource.Parent.EndpointInputs.GetOrAdd(reference, configuration, () => GetOriginDefault(mapping));
+        }
 
         static string? GetOriginDefault(DockerComposeServiceResource.EndpointMapping mapping)
         {

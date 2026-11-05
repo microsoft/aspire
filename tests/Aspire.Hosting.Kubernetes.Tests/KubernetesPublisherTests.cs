@@ -21,6 +21,28 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData("tcp", false)]
+    [InlineData("tcp", true)]
+    [InlineData("http", false)]
+    public void BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var web = builder.AddContainer("web", "image")
+            .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
+        builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").BrowserOrigins);
+        using var app = builder.Build();
+
+        var error = Assert.Throws<AggregateException>(app.Run);
+
+        Assert.EndsWith(
+            "Kubernetes cannot provide browser origins for endpoint 'endpoint' on resource 'web' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.GetBaseException().Message);
+        Assert.Empty(environment.Resource.CapturedHelmValues);
+    }
+
+    [Theory]
     [RequiresTools(["helm"])]
     [InlineData(false)]
     [InlineData(true)]
@@ -337,7 +359,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
         var environment = builder.AddKubernetesEnvironment("env");
         builder.Configuration["Parameters:frontend-http-BrowserOrigins"] = "https://public.example,https://alias.example";
-        var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080);
+        var frontend = builder.AddContainer("frontend", "nginx:alpine").WithHttpEndpoint(port: 8080, targetPort: 8080).WithExternalHttpEndpoints();
         var origin = frontend.GetEndpoint("http").BrowserOrigins;
         builder.AddContainer("backend", "nginx:alpine")
             .WithEnvironment("ORIGIN", origin)
