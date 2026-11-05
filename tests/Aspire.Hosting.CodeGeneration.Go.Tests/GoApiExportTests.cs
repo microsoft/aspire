@@ -228,6 +228,86 @@ public class GoApiExportTests
     }
 
     [Fact]
+    public void ApiExport_FieldsAndConstantsHaveTypesAndAtsOptionality()
+    {
+        var model = s_everything.Value;
+        var items = model.Modules.Single().Items;
+        var fields = items.SelectMany(item => item.Members)
+            .Where(member => member.Kind is GoApiMemberKind.Field or GoApiMemberKind.Constant)
+            .ToList();
+        Assert.NotEmpty(fields);
+        Assert.All(fields, member => Assert.False(string.IsNullOrEmpty(member.DeclaredType), member.Id));
+
+        var dto = Assert.Single(items, item => item.Id == "dto:TestConfigDto");
+        var name = Assert.Single(dto.Members, member => member.Name == "Name");
+        Assert.Equal("string", name.DeclaredType);
+        Assert.False(name.IsOptional);
+        var optional = Assert.Single(dto.Members, member => member.Name == "OptionalField");
+        Assert.Equal("*string", optional.DeclaredType);
+        Assert.False(optional.IsOptional);
+
+        // Both tags contain omitempty; neither the tag nor a pointer alone
+        // determines whether ATS lets a consumer omit a property.
+        Assert.Contains("omitempty", name.Declaration);
+        Assert.Contains("omitempty", optional.Declaration);
+        var options = Assert.Single(items, item => item.Id == "options:WithPersistenceOptions");
+        Assert.All(options.Members.Where(member => member.Kind == GoApiMemberKind.Field), member => Assert.True(member.IsOptional));
+        var constant = Assert.Single(items, item => item.Id == "enum:TestPersistenceMode").Members[0];
+        Assert.Equal("TestPersistenceMode", constant.DeclaredType);
+        Assert.False(constant.IsOptional);
+
+        var json = JsonNode.Parse(GoApiExportWriter.WriteToJson(model))!;
+        var jsonMembers = json["modules"]!.AsArray()
+            .SelectMany(module => module!["items"]!.AsArray())
+            .SelectMany(item => item!["members"]?.AsArray() ?? [])
+            .Where(member => (string?)member!["kind"] is "field" or "constant")
+            .ToList();
+        Assert.Equal(fields.Count, jsonMembers.Count);
+        Assert.All(jsonMembers, member =>
+        {
+            Assert.False(string.IsNullOrEmpty((string?)member!["type"]));
+            Assert.True(member["optional"] is JsonValue value && value.TryGetValue<bool>(out _));
+        });
+    }
+
+    [Fact]
+    public void ApiExport_DtoFieldOptionalityComesFromMetadata()
+    {
+        var context = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Test/Settings",
+                    Name = "Settings",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo { Name = "Required", Type = new AtsTypeRef { TypeId = "string", Category = AtsTypeCategory.Primitive } },
+                        new AtsDtoPropertyInfo { Name = "Optional", Type = new AtsTypeRef { TypeId = "string", Category = AtsTypeCategory.Primitive }, IsOptional = true }
+                    ]
+                }
+            ]
+        };
+        var model = new AtsGoCodeGenerator().BuildApiModel(context, "Test", PackageVersion, ["Test"], CancellationToken.None);
+        var fields = Assert.Single(model.Modules.Single().Items, item => item.Kind == GoApiItemKind.Dto)
+            .Members.Where(member => member.Kind == GoApiMemberKind.Field).ToArray();
+
+        Assert.Collection(fields,
+            field =>
+            {
+                Assert.Equal(("Required", "string", false), (field.Name, field.DeclaredType, field.IsOptional));
+            },
+            field =>
+            {
+                Assert.Equal(("Optional", "*string", true), (field.Name, field.DeclaredType, field.IsOptional));
+            });
+    }
+
+    [Fact]
     public void ApiExport_WithHosting_HasUniqueIds()
     {
         var model = s_everything.Value;
@@ -986,6 +1066,8 @@ public class GoApiExportTests
                                     Kind = GoApiMemberKind.Field,
                                     Name = "KeysChangedThreshold",
                                     Declaration = "KeysChangedThreshold *float64 `json:\"keysChangedThreshold,omitempty\"`",
+                                    DeclaredType = "*float64",
+                                    IsOptional = true,
                                     JsonName = "keysChangedThreshold"
                                 }
                             ]
@@ -1007,6 +1089,7 @@ public class GoApiExportTests
                                     Kind = GoApiMemberKind.Constant,
                                     Name = "RedisKindValkey",
                                     Declaration = "RedisKindValkey RedisKind = \"valkey\"",
+                                    DeclaredType = "RedisKind",
                                     Value = "valkey"
                                 }
                             ]

@@ -331,7 +331,9 @@
               "kind": "field",
               "name": "Mode",
               "declaration": "Mode *TestPersistenceMode \u0060json:\u0022mode,omitempty\u0022\u0060",
-              "jsonName": "mode"
+              "jsonName": "mode",
+              "type": "*TestPersistenceMode",
+              "optional": true
             },
             {
               "id": "WithPersistenceOptions.ToMap",
@@ -359,7 +361,9 @@
               "name": "Name",
               "declaration": "Name string \u0060json:\u0022name,omitempty\u0022\u0060",
               "summary": "Name is the name of the test config.",
-              "jsonName": "name"
+              "jsonName": "name",
+              "type": "string",
+              "optional": false
             },
             {
               "id": "TestConfigDto.Port",
@@ -367,7 +371,9 @@
               "name": "Port",
               "declaration": "Port float64 \u0060json:\u0022port,omitempty\u0022\u0060",
               "summary": "Port is the port used by the test config.",
-              "jsonName": "port"
+              "jsonName": "port",
+              "type": "float64",
+              "optional": false
             },
             {
               "id": "TestConfigDto.Enabled",
@@ -375,7 +381,9 @@
               "name": "Enabled",
               "declaration": "Enabled bool \u0060json:\u0022enabled,omitempty\u0022\u0060",
               "summary": "Enabled is a value indicating whether the test config is enabled.",
-              "jsonName": "enabled"
+              "jsonName": "enabled",
+              "type": "bool",
+              "optional": false
             },
             {
               "id": "TestConfigDto.OptionalField",
@@ -383,7 +391,9 @@
               "name": "OptionalField",
               "declaration": "OptionalField *string \u0060json:\u0022optionalField,omitempty\u0022\u0060",
               "summary": "OptionalField is an optional test config field.",
-              "jsonName": "optionalField"
+              "jsonName": "optionalField",
+              "type": "*string",
+              "optional": false
             },
             {
               "id": "TestConfigDto.ToMap",
@@ -412,7 +422,9 @@
               "name": "TestResourceStatusPending",
               "declaration": "TestResourceStatusPending TestResourceStatus = \u0022Pending\u0022",
               "summary": "TestResourceStatusPending - The resource is pending.",
-              "value": "Pending"
+              "value": "Pending",
+              "type": "TestResourceStatus",
+              "optional": false
             },
             {
               "id": "TestResourceStatus.TestResourceStatusRunning",
@@ -420,7 +432,9 @@
               "name": "TestResourceStatusRunning",
               "declaration": "TestResourceStatusRunning TestResourceStatus = \u0022Running\u0022",
               "summary": "TestResourceStatusRunning - The resource is running.",
-              "value": "Running"
+              "value": "Running",
+              "type": "TestResourceStatus",
+              "optional": false
             },
             {
               "id": "TestResourceStatus.TestResourceStatusStopped",
@@ -428,7 +442,9 @@
               "name": "TestResourceStatusStopped",
               "declaration": "TestResourceStatusStopped TestResourceStatus = \u0022Stopped\u0022",
               "summary": "TestResourceStatusStopped - The resource is stopped.",
-              "value": "Stopped"
+              "value": "Stopped",
+              "type": "TestResourceStatus",
+              "optional": false
             },
             {
               "id": "TestResourceStatus.TestResourceStatusFailed",
@@ -436,7 +452,9 @@
               "name": "TestResourceStatusFailed",
               "declaration": "TestResourceStatusFailed TestResourceStatus = \u0022Failed\u0022",
               "summary": "TestResourceStatusFailed is the resource failed.",
-              "value": "Failed"
+              "value": "Failed",
+              "type": "TestResourceStatus",
+              "optional": false
             }
           ]
         },
@@ -455,7 +473,9 @@
               "declaration": "Default *TestConfigDto",
               "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
               "summary": "The default test configuration.",
-              "value": "\u0026TestConfigDto{Name: \u0022default\u0022, Port: 6379, Enabled: true, OptionalField: func(value string) *string { return \u0026value }(\u0022cache\u0022)}"
+              "value": "\u0026TestConfigDto{Name: \u0022default\u0022, Port: 6379, Enabled: true, OptionalField: func(value string) *string { return \u0026value }(\u0022cache\u0022)}",
+              "type": "*TestConfigDto",
+              "optional": false
             },
             {
               "id": "TestConfigs.Profiles.Development",
@@ -463,7 +483,9 @@
               "name": "Profiles.Development",
               "declaration": "Profiles.Development *TestConfigDto",
               "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
-              "value": "\u0026TestConfigDto{Name: \u0022development\u0022, Port: 5001, Enabled: false, OptionalField: nil}"
+              "value": "\u0026TestConfigDto{Name: \u0022development\u0022, Port: 5001, Enabled: false, OptionalField: nil}",
+              "type": "*TestConfigDto",
+              "optional": false
             },
             {
               "id": "TestConfigs.Secure",
@@ -471,7 +493,9 @@
               "name": "Secure",
               "declaration": "Secure *TestConfigDto",
               "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
-              "value": "\u0026TestConfigDto{Name: \u0022secure\u0022, Port: 6380, Enabled: true, OptionalField: nil}"
+              "value": "\u0026TestConfigDto{Name: \u0022secure\u0022, Port: 6380, Enabled: true, OptionalField: nil}",
+              "type": "*TestConfigDto",
+              "optional": false
             },
             {
               "id": "TestConfigs.UnicodeGreeting",
@@ -479,7 +503,9 @@
               "name": "UnicodeGreeting",
               "declaration": "UnicodeGreeting string",
               "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
-              "value": "\u0022\u4F60\u597D\u3053\u3093\u306B\u3061\u306F\u0022"
+              "value": "\u0022\u4F60\u597D\u3053\u3093\u306B\u3061\u306F\u0022",
+              "type": "string",
+              "optional": false
             }
           ]
         },
@@ -497,49 +523,63 @@
               "kind": "constant",
               "name": "CapabilityNotFound",
               "declaration": "CapabilityNotFound AtsErrorCode = \u0022CAPABILITY_NOT_FOUND\u0022",
-              "value": "CAPABILITY_NOT_FOUND"
+              "value": "CAPABILITY_NOT_FOUND",
+              "type": "AtsErrorCode",
+              "optional": false
             },
             {
               "id": "AtsErrorCode.HandleNotFound",
               "kind": "constant",
               "name": "HandleNotFound",
               "declaration": "HandleNotFound AtsErrorCode = \u0022HANDLE_NOT_FOUND\u0022",
-              "value": "HANDLE_NOT_FOUND"
+              "value": "HANDLE_NOT_FOUND",
+              "type": "AtsErrorCode",
+              "optional": false
             },
             {
               "id": "AtsErrorCode.TypeMismatch",
               "kind": "constant",
               "name": "TypeMismatch",
               "declaration": "TypeMismatch AtsErrorCode = \u0022TYPE_MISMATCH\u0022",
-              "value": "TYPE_MISMATCH"
+              "value": "TYPE_MISMATCH",
+              "type": "AtsErrorCode",
+              "optional": false
             },
             {
               "id": "AtsErrorCode.InvalidArgument",
               "kind": "constant",
               "name": "InvalidArgument",
               "declaration": "InvalidArgument AtsErrorCode = \u0022INVALID_ARGUMENT\u0022",
-              "value": "INVALID_ARGUMENT"
+              "value": "INVALID_ARGUMENT",
+              "type": "AtsErrorCode",
+              "optional": false
             },
             {
               "id": "AtsErrorCode.ArgumentOutOfRange",
               "kind": "constant",
               "name": "ArgumentOutOfRange",
               "declaration": "ArgumentOutOfRange AtsErrorCode = \u0022ARGUMENT_OUT_OF_RANGE\u0022",
-              "value": "ARGUMENT_OUT_OF_RANGE"
+              "value": "ARGUMENT_OUT_OF_RANGE",
+              "type": "AtsErrorCode",
+              "optional": false
             },
             {
               "id": "AtsErrorCode.CallbackError",
               "kind": "constant",
               "name": "CallbackError",
               "declaration": "CallbackError AtsErrorCode = \u0022CALLBACK_ERROR\u0022",
-              "value": "CALLBACK_ERROR"
+              "value": "CALLBACK_ERROR",
+              "type": "AtsErrorCode",
+              "optional": false
             },
             {
               "id": "AtsErrorCode.InternalError",
               "kind": "constant",
               "name": "InternalError",
               "declaration": "InternalError AtsErrorCode = \u0022INTERNAL_ERROR\u0022",
-              "value": "INTERNAL_ERROR"
+              "value": "INTERNAL_ERROR",
+              "type": "AtsErrorCode",
+              "optional": false
             }
           ]
         }

@@ -304,17 +304,17 @@ internal sealed partial class AtsGoCodeGenerator
             if (enumsByName.TryGetValue(type.Name, out var enumType))
             {
                 var owner = GetOwningAssemblyName(enumType.TypeId, enumType.ClrType?.Assembly.GetName().Name);
-                AddGeneratedType(scope, GoApiItemKind.Enum, "enum", enumType.TypeId, owner, type, members, usedBy: []);
+                AddGeneratedType(scope, GoApiItemKind.Enum, "enum", enumType.TypeId, owner, type, members, usedBy: [], dtoType: null);
             }
             else if (dtosByName.TryGetValue(type.Name, out var dtoType))
             {
                 var owner = GetOwningAssemblyName(dtoType.TypeId, dtoType.ClrType?.Assembly.GetName().Name);
-                AddGeneratedType(scope, GoApiItemKind.Dto, "dto", dtoType.TypeId, owner, type, members, usedBy: []);
+                AddGeneratedType(scope, GoApiItemKind.Dto, "dto", dtoType.TypeId, owner, type, members, usedBy: [], dtoType);
             }
             else if (optionsByName.TryGetValue(type.Name, out var producer))
             {
                 var owner = GetCapabilityOwningAssemblyName(context, producer.Capability);
-                AddGeneratedType(scope, GoApiItemKind.Options, "options", $"{owner}/{type.Name}", owner, type, members, producer.UsedBy);
+                AddGeneratedType(scope, GoApiItemKind.Options, "options", $"{owner}/{type.Name}", owner, type, members, producer.UsedBy, dtoType: null);
             }
         }
     }
@@ -329,7 +329,8 @@ internal sealed partial class AtsGoCodeGenerator
         string owner,
         GoDeclaration type,
         List<GoDeclaration> members,
-        IReadOnlyList<string> usedBy)
+        IReadOnlyList<string> usedBy,
+        AtsDtoTypeInfo? dtoType)
     {
         scope.AddDeclaration(new GoApiDeclaration
         {
@@ -354,7 +355,17 @@ internal sealed partial class AtsGoCodeGenerator
             Summary = type.Summary,
             Remarks = type.Remarks,
             UsedBy = usedBy,
+            // DTO tags always contain omitempty, including required fields.
+            // Preserve ATS optionality instead of inferring it from Go source.
             Members = ProjectMembers(type.Name, members, GoApiErrorModel.None)
+                .Select(member => member.Kind == GoApiMemberKind.Field
+                    ? member with
+                    {
+                        IsOptional = kind == GoApiItemKind.Options ||
+                            dtoType?.Properties.Any(property => ToPascalCase(property.Name) == member.Name && property.IsOptional) == true
+                    }
+                    : member)
+                .ToList()
         });
     }
 
@@ -442,6 +453,7 @@ internal sealed partial class AtsGoCodeGenerator
                         Kind = GoApiMemberKind.Field,
                         Name = leaf.Path,
                         Declaration = $"{leaf.Path} {MapTypeRefToGo(leaf.Value.Type, isOptional: false)}",
+                        DeclaredType = MapTypeRefToGo(leaf.Value.Type, isOptional: false),
                         Summary = leaf.Value.Documentation?.Summary ?? leaf.Value.Description,
                         Value = RenderGoExportedValue(leaf.Value.Value, leaf.Value.Type, dtoTypesById),
                         OwningAssemblyName = leaf.Value.OwningAssemblyName
@@ -898,8 +910,18 @@ internal sealed partial class AtsGoCodeGenerator
 
             members.Add(declaration.Kind switch
             {
-                GoDeclarationKind.Field => member with { JsonName = ParseJsonName(declaration.Value) },
-                GoDeclarationKind.Constant => member with { Value = declaration.Value },
+                GoDeclarationKind.Field => member with
+                {
+                    JsonName = ParseJsonName(declaration.Value),
+                    DeclaredType = declaration.Signature[(declaration.Name.Length + 1)..]
+                },
+                // Constants are emitted as `Name Type = "value"`; the type may
+                // be a named enum, and the quoted value can itself contain '='.
+                GoDeclarationKind.Constant => member with
+                {
+                    Value = declaration.Value,
+                    DeclaredType = declaration.Signature[(declaration.Name.Length + 1)..declaration.Signature.IndexOf(" = ", StringComparison.Ordinal)]
+                },
                 _ => member with
                 {
                     ReturnType = GoDeclarationScanner.GetReturnType(declaration.Signature),
