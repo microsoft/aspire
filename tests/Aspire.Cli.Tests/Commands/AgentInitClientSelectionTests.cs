@@ -360,15 +360,26 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var homeDirectory = workspace.CreateDirectory("fake-home");
         // Bound nearest-settings discovery to this workspace.
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), "{}");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        const string skill = "My customized Aspire instructions.";
+        await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
         var prompts = new List<string>();
-        var riskWarnings = new List<string>();
+        var warnings = new List<string>();
+        var expectedWarnings = new[]
+        {
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
+                AspireSkillsRemoteConfiguration.RepositoryUrl),
+            $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
+                "  .agents/skills/aspire/SKILL.md")
+        };
         var interaction = new TestInteractionService
         {
             DisplayMessageCallback = (emoji, message, _) =>
             {
-                if (emoji.Equals(KnownEmojis.PoliceCarLight))
+                if (emoji.Equals(KnownEmojis.Information) || emoji.Equals(KnownEmojis.PoliceCarLight))
                 {
-                    riskWarnings.Add(message);
+                    warnings.Add(message);
                 }
             },
             PromptForSelectionsCallback = (prompt, choices, _, _) =>
@@ -379,6 +390,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                     return choices.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId)).Cast<object>().ToArray();
                 }
                 Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
+                Assert.Equal(expectedWarnings, warnings);
                 Assert.Equal(["aspire", "playwright-cli"], choices.Cast<string>());
                 return ["aspire"];
             },
@@ -387,11 +399,18 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 prompts.Add(prompt);
                 return prompt == AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt;
             },
-            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            PromptForSelectionCallback = (prompt, choices, formatter, _) =>
             {
                 prompts.Add(prompt);
+                Assert.Equal("Where should skills and tools be installed?", prompt);
                 Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.Global], choices.Cast<AgentConfigurationScope>());
-                Assert.Equal([$"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"], riskWarnings);
+                Assert.Equal(
+                    [
+                        "This project (In your workspace, ready to commit with your project)",
+                        "Global (In your home directory, available across all projects)"
+                    ],
+                    choices.Cast<object>().Select(formatter));
+                Assert.Equal(expectedWarnings, warnings);
                 Assert.Empty(homeDirectory.GetFileSystemInfos());
                 return AgentConfigurationScope.Global;
             }
@@ -411,12 +430,69 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             [AgentCommandStrings.InitCommand_SelectAgentsPrompt, AgentCommandStrings.InitCommand_SelectSkills,
                 AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt],
             prompts);
-        Assert.Equal([$"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"], riskWarnings);
+        Assert.Equal(expectedWarnings, warnings);
+        Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(
             workspace.WorkspaceRoot, AgentConfigurationScope.Global, [SkillSource.BuiltIn]));
         Assert.True(File.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "mcp-config.json")));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AgentInit_AspireConfigurationErrors_OnlyBlockAspireSelection(bool invalidSource, bool configureAspire)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
+            invalidSource ? """{"skillSources":{"default":{"repository":""}}}""" : "{}");
+        if (!invalidSource)
+        {
+            // A directory at SKILL.md makes the scan fail on every platform.
+            Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md"));
+        }
+        var skillsPrompted = false;
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionsCallback = (prompt, choices, _, _) =>
+            {
+                if (prompt == AgentCommandStrings.InitCommand_SelectAgentsPrompt)
+                {
+                    return choices.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId)).Cast<object>().ToArray();
+                }
+                Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
+                skillsPrompted = true;
+                return configureAspire ? ["aspire"] : [];
+            },
+            ConfirmCallback = (prompt, _) => prompt == AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt,
+            PromptForSelectionCallback = (_, _, _, _) => AgentConfigurationScope.Global
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse("agent init");
+        Assert.Equal(configureAspire ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
+            await result.InvokeAsync().DefaultTimeout());
+        Assert.True(skillsPrompted);
+        Assert.Equal(!configureAspire, File.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "mcp-config.json")));
+        if (configureAspire)
+        {
+            Assert.Single(interaction.DisplayedErrors);
+        }
+        else
+        {
+            Assert.Empty(interaction.DisplayedErrors);
+        }
     }
 
     [Fact]

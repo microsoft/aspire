@@ -410,14 +410,13 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         {
             options.CliExecutionContextFactory = _ => BuildExecutionContextWithIdentity(workspace, identityChannel);
             options.PackagingServiceFactory = _ => BuildPackagingService(identityChannel, registerIdentityChannel);
-            // Enable all polyglot feature flags so the Python / Go / Java / Rust templates
+            // Enable all polyglot feature flags so the Python / Java / Rust templates
             // register as subcommands of `aspire new`. Outside tests these are gated by
             // KnownFeatures.ExperimentalPolyglot* flags; here we want to exercise the full
             // matrix regardless of release state.
             options.EnabledFeatures =
             [
                 KnownFeatures.ExperimentalPolyglotPython,
-                KnownFeatures.ExperimentalPolyglotGo,
                 KnownFeatures.ExperimentalPolyglotJava,
                 KnownFeatures.ExperimentalPolyglotRust,
             ];
@@ -548,7 +547,6 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             options.EnabledFeatures =
             [
                 KnownFeatures.ExperimentalPolyglotPython,
-                KnownFeatures.ExperimentalPolyglotGo,
                 KnownFeatures.ExperimentalPolyglotJava,
                 KnownFeatures.ExperimentalPolyglotRust,
                 KnownFeatures.ShowAllTemplates,

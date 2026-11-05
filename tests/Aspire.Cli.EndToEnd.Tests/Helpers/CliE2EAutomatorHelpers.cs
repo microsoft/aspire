@@ -314,7 +314,6 @@ internal static class CliE2EAutomatorHelpers
 
     /// <summary>
     /// Creates a Go empty AppHost using the direct <c>aspire new aspire-go-empty</c> command.
-    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
     /// </summary>
     internal static async Task AspireNewGoEmptyAppHostAsync(
         this Hex1bTerminalAutomator auto,
@@ -840,25 +839,7 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Enables experimental Go polyglot support for CLI tests.
-    /// </summary>
-    /// <remarks>
-    /// Go AppHosts are gated behind the <c>experimentalPolyglotGo</c> feature, which hides both the Go starter template
-    /// and the Go entry in the language picker. Every Go test goes through this helper so that dropping the gate only
-    /// requires turning this method into a no-op like <see cref="EnablePolyglotSupportAsync"/>.
-    /// </remarks>
-    internal static async Task EnableExperimentalGoSupportAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
-    {
-        await auto.TypeAsync("aspire config set features:experimentalPolyglotGo true --global --non-interactive");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-    }
-
-    /// <summary>
     /// Creates a Go AppHost in the current directory through the interactive <c>aspire init</c> language picker.
-    /// Requires <see cref="EnableExperimentalGoSupportAsync"/> to have run first.
     /// </summary>
     internal static async Task AspireInitGoAppHostAsync(
         this Hex1bTerminalAutomator auto,

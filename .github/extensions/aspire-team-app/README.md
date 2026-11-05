@@ -104,9 +104,18 @@ If transition history is missing, inconsistent, or exceeds the pagination safety
 limit, the PR is omitted from Needs attention with a visible error, not assigned
 a guessed timestamp. A later refresh retries.
 
-The existing ten-card cap and review-debt spillover remain; numbers retain their
-positions in the full eligible queue, so spillover can leave gaps. Other lanes,
-personal watched repositories, eligibility, and refresh preferences are unchanged.
+The main queue shows the first **10** eligible PRs (or all of them when fewer than
+10 qualify), with no review-debt spillover or per-user limit override.
+**Later in queue** shows the remaining count and starts collapsed. Expand it to
+look up a PR's position, not to pick an alternative review pool: prioritize the
+first 10 in Needs attention. This compact reference list has PR links but no
+review-action buttons. Positions continue at 11 without gaps or duplicates and
+keep their order at every window width. Expansion follows your choice during
+refreshes, but starts collapsed when the canvas reloads.
+
+The loader preserves the full eligible queue as `attention.focus` (positions
+1–10), `attention.focusRemainder` (11 onward), and `attention.focusTotal`.
+Other lanes, personal watched repositories, eligibility, and refresh preferences are unchanged.
 Shared PRs have the same relative order for the same GitHub snapshot, but different
 repository access, scopes, and refresh times can still produce different lists.
 

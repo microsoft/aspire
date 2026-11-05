@@ -602,7 +602,7 @@ function laneReason(laneId, pr) {
   }
 }
 
-function bucketReview(prs, { showDrafts = false, limit = REVIEW_LIMIT } = {}) {
+function bucketReview(prs, { showDrafts = false } = {}) {
   // Drafts are filtered out by default; they are prototypes, not review work.
   const source = showDrafts ? prs : prs.filter((pr) => !pr.draft);
   const defs = LANE_DEFS.review;
@@ -622,7 +622,7 @@ function bucketReview(prs, { showDrafts = false, limit = REVIEW_LIMIT } = {}) {
   if (queue) {
     queue.items.sort((a, b) => reviewQueueScore(b.pr) - reviewQueueScore(a.pr));
     queue.cappedTotal = queue.items.length;
-    if (queue.items.length > limit) queue.items = queue.items.slice(0, limit);
+    if (queue.items.length > REVIEW_LIMIT) queue.items = queue.items.slice(0, REVIEW_LIMIT);
   }
   return lanes.filter((l) => l.items.length > 0);
 }
@@ -719,19 +719,11 @@ export function buildNotifications(prs, prefs, dismissed = []) {
   return items;
 }
 
-// Keep the first `limit` cards in first-readiness order plus any review-debt cards
-// beyond the cap, so their "Address review" action stays reachable.
-export function capFocusKeepingDebt(cards, limit) {
-  const head = cards.slice(0, limit);
-  const spilloverDebt = cards.slice(limit).filter((c) => c && c.reviewDebt);
-  return head.concat(spilloverDebt);
-}
-
 // ---------------------------------------------------------------------------
 // Top-level loader
 // ---------------------------------------------------------------------------
 
-export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT, onProgress }) {
+export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, onProgress }) {
   const usable = (accounts ?? []).filter((a) => a && a.token && a.login);
   if (usable.length === 0) {
     return { authenticated: false, message: "No active GitHub account. Enable an account in the Accounts tab so the canvas can read your review queue." };
@@ -845,7 +837,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     let lanes;
     if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
     else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
-    else lanes = bucketReview(allPrs, { showDrafts, limit: reviewLimit });
+    else lanes = bucketReview(allPrs, { showDrafts });
 
     // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
     // queue is the capped headline; attention buckets, the community list, the personal
@@ -863,14 +855,13 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       // "review debt" pill is truncated off the displayed signals. Derive it from the shared
       // isReviewDebt predicate, NOT from c.signals: signalsFor caps the display pills, so a debt PR
       // that also carries release/regression pills would lose its "review debt" pill and be wrongly
-      // treated as non-debt. The predicate is the same one createAttentionSignals, the focus-retention
-      // filter and capFocusKeepingDebt use, so they cannot drift.
+      // treated as non-debt. The predicate is shared with createAttentionSignals and the
+      // focus-retention filter so they cannot drift.
       const card = (pr, reason, extra) =>
         Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || ""), reviewDebt: isReviewDebt(pr) }, extra || {});
       const focusCards = focusAll.map((f, index) => {
         return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone, queuePosition: index + 1 });
       });
-      const focus = capFocusKeepingDebt(focusCards, reviewLimit);
       attention = {
         forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
           // Personal pick leads with its own call-to-action; the engine's action pill is
@@ -886,14 +877,12 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           c.action = f.action;
           return c;
         }),
-        focus,
+        // Keep the entire ranked queue across the split, including debt cards. The remainder
+        // is position lookup, not an exception to the team's ten-card review priority.
+        focus: focusCards.slice(0, REVIEW_LIMIT),
+        focusRemainder: focusCards.slice(REVIEW_LIMIT),
         focusTotal: focusAll.length,
-        focusLimit: reviewLimit,
-        // True when capFocusKeepingDebt appended review-debt cards from past the cap, so `focus`
-        // is no longer a prefix of the sorted list: non-debt cards between retained debt cards are
-        // skipped. A "top N of total" label would then be false, so the canvas shows an honest
-        // "N shown" metric for this mixed selection instead.
-        focusMixed: focus.length > reviewLimit,
+        focusLimit: REVIEW_LIMIT,
         focusExclusions: focusExclusions.map((e) => ({
           pr: e.pullRequest,
           reason: e.reason.detail,
@@ -940,7 +929,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       notifications,
       counts,
       showDrafts,
-      reviewLimit,
+      reviewLimit: REVIEW_LIMIT,
       errors,
       fetchedAt: new Date().toISOString(),
     };

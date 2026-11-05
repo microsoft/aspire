@@ -32,7 +32,6 @@ public sealed class GoCodegenValidationTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         var existingFiles = new Dictionary<string, string>();
         if (existingProject)

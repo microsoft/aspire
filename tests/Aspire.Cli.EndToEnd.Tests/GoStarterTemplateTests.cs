@@ -75,7 +75,6 @@ public sealed class GoStarterTemplateTests(ITestOutputHelper output)
         {
             await auto.InstallAspireCliAsync(strategy, counter);
         }
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireNewAsync("GoStarterApp", counter, template: AspireTemplate.GoStarter);
 
