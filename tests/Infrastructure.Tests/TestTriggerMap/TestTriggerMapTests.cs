@@ -136,6 +136,22 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.js")]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.yml")]
+    [InlineData(".github/workflows/auto-rerun/common.js")]
+    [InlineData(".github/workflows/auto-rerun/github.js")]
+    [InlineData(".github/workflows/auto-rerun/rerun-main.js")]
+    [InlineData(".github/workflows/auto-rerun/rerun-pull-request.js")]
+    public void AutoRerunWorkflowInputsReachInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)

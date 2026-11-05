@@ -316,6 +316,41 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData("node,browser")]
+    public void DebugSessionWithoutProjectCapabilityCoordinatesBuildForProcessLaunches(string supportedLaunchConfigurations)
+    {
+        // VS Code without the C# extension advertises an explicit capability list without "project". DCP then runs
+        // project resources as processes, so they need the same single coordinated build as outside an IDE. Otherwise
+        // resources that share a project each run an implicit, concurrent `dotnet run` build of it, and one can exit
+        // on files the other holds open in obj/.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
+        builder.Configuration[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = supportedLaunchConfigurations.Split(',', StringSplitOptions.RemoveEmptyEntries)
+        });
+
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var worker = builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true);
+        var terminal = builder.AddDotnetProject("terminal", projectPath, options => options.ExcludeLaunchProfile = true);
+
+        Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        Assert.All(
+            new[] { worker, terminal },
+            project =>
+            {
+                Assert.True(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
+                Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+                Assert.False(project.Resource.SupportsDebugging(builder.Configuration, out _));
+            });
+    }
+
+    [Theory]
     [InlineData("null")]
     [InlineData("[]")]
     [InlineData("42")]
