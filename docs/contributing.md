@@ -118,11 +118,18 @@ The Go CLI E2E scenarios in `GoCodegenValidationTests` cover interactive initial
 non-interactive initialization in an empty directory and alongside an existing Go application,
 SDK refresh, and Go build/vet checks. `GoStarterTemplateTests.RestoreAndBuildGoStarterFromStablePackages`
 requires a stable-shaped local hive; normal prerelease PR archives skip that test.
-To exercise both classes on Linux with Docker:
+
+**Prerequisite:** use an already-built stable-shaped local-hive archive containing the CLI
+and matching packages at an unpublished stable version. Building one with
+`localhive --version 17.0.99 --archive` currently fails during packing with `NU5104`
+because stable component packages depend on prerelease .NET 11 packages. This also
+affects Linux; changing the RID does not avoid the package-version restriction.
+The test command below does not prepare that archive or validate a stable native bundle.
+
+Given such an archive, exercise both classes on Linux with Docker:
 
 ```bash
-./localhive.sh --version 17.0.99 -o ./artifacts/go-stable-e2e -r linux-x64 --archive
-ASPIRE_E2E_ARCHIVE="$PWD/artifacts/go-stable-e2e.tar.gz" \
+ASPIRE_E2E_ARCHIVE="/path/to/stable-shaped-localhive.tar.gz" \
   dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj --no-launch-profile -- \
     --filter-class "*.GoCodegenValidationTests" --filter-class "*.GoStarterTemplateTests" \
     --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
