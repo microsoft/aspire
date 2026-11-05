@@ -1,10 +1,9 @@
 /**
- * Offset classification for AppHost languages that have no resource parser.
+ * Offset classification for AppHost languages without a syntax tree.
  *
  * The tree-sitter and TypeScript parsers answer "is this offset inside a comment or a string?" from a
- * real syntax tree. Java, Python and Go AppHosts have no parser — they are recognised only well enough
- * to surface the Spring Boot Dashboard warning — so this scanner answers the same question from the
- * source text. It is not a lexer for those languages: it tracks only the three states a warning needs
+ * real syntax tree. Java, Python and Go use this scanner to answer the same question from the
+ * source text. It is not a full lexer for those languages: it tracks only the three states a warning needs
  * to distinguish (code, comment, string literal), which is exactly enough to avoid warning about a
  * commented-out or quoted `withMavenGoal("spring-boot:run")`.
  */

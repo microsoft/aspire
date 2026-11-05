@@ -19,6 +19,8 @@ import { appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, a
 import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchService';
 import { getAspireDebugConfigurationExternalLaunchReservation, getAspireDebugConfigurationResolvedCliPath, getAspireDebugConfigurationResolvedCliPathScope, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope, tryMarkAspireDebugConfigurationDiscoveryFailureRecorded } from './AspireDebugConfigurationProviderInternal';
 import { removeRootLaunchProfileCliArg } from '../utils/launchProfile';
+import { getDebuggerInstallHintForAppHost } from './debuggerInstallHints';
+import { appHostDebuggerSetupRequired, debuggerSetupAction } from '../loc/strings';
 
 export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
 
@@ -256,6 +258,30 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             const effectiveAppHostLanguage = launchTargetPath && await isDirectory(launchTargetPath)
                 ? await classifyAppHostDirectory(launchTargetPath)
                 : classifyAppHostPath(launchTargetPath);
+            const debuggerHint = command === 'run' && aspireConfig.noDebug !== true
+                ? getDebuggerInstallHintForAppHost(effectiveAppHostLanguage)
+                : undefined;
+            if (debuggerHint) {
+                // Without the language capability the CLI runs the AppHost itself. A successful
+                // launch would then look like debugging succeeded even though no breakpoint can bind.
+                if (existingExternalReservation) {
+                    if (existingExternalReservation.kind === 'operation') {
+                        this._launchReservation.releaseExternalOperationReservation(
+                            existingExternalReservation.appHostPath, existingExternalReservation.reservationId);
+                    }
+                    else {
+                        this._launchReservation.releaseExternalLaunchReservation(
+                            existingExternalReservation.appHostPath, existingExternalReservation.reservationId);
+                    }
+                }
+                const selected = await vscode.window.showWarningMessage(
+                    appHostDebuggerSetupRequired(debuggerHint.debuggerName),
+                    debuggerSetupAction);
+                if (selected === debuggerSetupAction) {
+                    await vscode.commands.executeCommand('aspire-vscode.installDebuggerExtension', debuggerHint);
+                }
+                return undefined;
+            }
             // Only C# advertises the `project` capability that hands .NET AppHost launches
             // to the debugger (see getSupportedCapabilities), even with noDebug.
             // Let the CLI validate unknown directory targets it discovers recursively.

@@ -243,6 +243,7 @@ export const nodeLabel = 'Node.js';
 // vscode.extensions, so we cannot tell missing from disabled until the action runs.
 export const debuggerSetupAction = vscode.l10n.t({ message: 'Set Up', comment: 'Button label; "Set Up" is an imperative verb.' });
 export const debuggerSetupNotification = (debuggerName: string) => vscode.l10n.t('Set up {0} debugging support to debug resources in this app.', debuggerName);
+export const appHostDebuggerSetupRequired = (debuggerName: string) => vscode.l10n.t('Set up {0} debugging support before debugging this AppHost. You can run it without debugging instead.', debuggerName);
 export const debuggerExtensionDisabled = (debuggerName: string) => vscode.l10n.t('One or more extensions required for {0} debugging did not become available. They may be disabled or require a window reload. Open the Extensions view to continue setup.', debuggerName);
 export const debuggerInstalledRestartAppHost = (debuggerName: string) => vscode.l10n.t('The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.', debuggerName);
 export const openExtensionsLabel = vscode.l10n.t('Open Extensions');

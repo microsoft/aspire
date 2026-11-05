@@ -3,6 +3,7 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 import { filterActiveOffsetsInPlainText } from './parsers/plainTextInactiveOffsets';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
+import './parsers/goAppHostParser';
 import './parsers/javaAppHostParser';
 import './parsers/jsTsAppHostParser';
 import './parsers/rustAppHostParser';
@@ -183,9 +184,8 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         }
 
         if (!parser) {
-            // Python and Go AppHosts have no resource parser, so none of the state or action
-            // lenses apply. The Spring Boot warning still does: it is about the Java resource being
-            // declared, not about the language declaring it.
+            // Keep the Spring Boot warning available for conventional AppHost files even when
+            // no resource parser recognises the document, such as an incomplete Go AppHost.
             if (!isParserlessAppHostDocument(document)) {
                 return [];
             }

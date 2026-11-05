@@ -1929,6 +1929,7 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
         matchingStackFrame: resourceHit.matchingFrame,
         topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
       },
+      appHostCodeLenses: await getCodeLensesForFile(appHostSourcePath),
       debugSessions,
       launchRequests,
       debugAdapterResponses,
