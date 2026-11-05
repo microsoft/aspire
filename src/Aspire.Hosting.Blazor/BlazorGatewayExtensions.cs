@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Dotnet;
@@ -197,7 +198,8 @@ public static class BlazorGatewayExtensions
                 ResourceType = "BlazorWasmApp",
                 State = KnownResourceStates.Waiting,
                 Properties = [
-                    new(CustomResourceKnownProperties.Source, Path.GetFileName(projectPath))
+                    new(CustomResourceKnownProperties.Source, Path.GetFileName(projectPath)),
+                    new(KnownProperties.Project.Path, projectPath)
                 ]
             })
             .ExcludeFromManifest();
@@ -221,7 +223,8 @@ public static class BlazorGatewayExtensions
                 ResourceType = "BlazorWasmApp",
                 State = KnownResourceStates.Waiting,
                 Properties = [
-                    new(CustomResourceKnownProperties.Source, Path.GetFileName(resolvedPath))
+                    new(CustomResourceKnownProperties.Source, Path.GetFileName(resolvedPath)),
+                    new(KnownProperties.Project.Path, resolvedPath)
                 ]
             })
             .ExcludeFromManifest();

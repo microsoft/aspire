@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
@@ -18,6 +19,9 @@ import {
     appHostPathInvalid,
     appHostSourceNotFound,
     appHostSourceOpenFailed,
+    resourceSourceNotFound,
+    resourceSourceOpenFailed,
+    resourceSourceOutsideWorkspace,
     logFileOpenFailed,
     logFilePathInvalid,
     attachingDebugger,
@@ -58,6 +62,7 @@ import type { ResourceDebugger } from '../debugger/resourceDebugContracts';
 import { isWebDashboardUrl } from '../debugger/session/dashboardLauncher';
 import {
     getParentResourceName,
+    getResourceSourcePaths,
     getTerminalReplicaIndex,
     getVisibleCommands,
     getVisibleResourceUrls,
@@ -1498,13 +1503,61 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         const sourcePath = resolveAppHostSourcePath(appHostPath);
         try {
-            // Open the resolved source path directly so TypeScript AppHosts open their
-            // file as-is, while C# AppHosts route through the .csproj special case above.
-            const document = await vscode.workspace.openTextDocument(vscode.Uri.file(sourcePath));
-            await vscode.window.showTextDocument(document, { preview: false });
+            await this._openSourceFile(vscode.Uri.file(sourcePath));
         } catch {
             vscode.window.showWarningMessage(appHostSourceOpenFailed(sourcePath));
         }
+    }
+
+    async openResourceSource(element?: ResourceItem): Promise<void> {
+        if (!element) {
+            vscode.window.showWarningMessage(resourceSourceNotFound);
+            return;
+        }
+
+        const sourcePaths = getResourceSourcePaths(element.resource, element.appHostPath);
+        if (sourcePaths.length === 0) {
+            vscode.window.showWarningMessage(resourceSourceNotFound);
+            return;
+        }
+
+        let sourcePath = sourcePaths[0];
+        try {
+            for (const [index, candidate] of sourcePaths.entries()) {
+                sourcePath = candidate;
+                let sourceStat: fs.Stats;
+                try {
+                    sourceStat = await fs.promises.stat(sourcePath);
+                } catch (error) {
+                    const isMissing = error instanceof Error && 'code' in error
+                        && (error.code === 'ENOENT' || error.code === 'ENOTDIR');
+                    if (isMissing && index < sourcePaths.length - 1) {
+                        continue;
+                    }
+                    throw error;
+                }
+
+                const sourceUri = vscode.Uri.file(sourcePath);
+                if (sourceStat.isDirectory()) {
+                    if (!vscode.workspace.getWorkspaceFolder(sourceUri)) {
+                        vscode.window.showWarningMessage(resourceSourceOutsideWorkspace(sourcePath));
+                        return;
+                    }
+                    await vscode.commands.executeCommand('revealInExplorer', sourceUri);
+                } else {
+                    await this._openSourceFile(sourceUri);
+                }
+                return;
+            }
+        } catch (error) {
+            extensionLogOutputChannel.warn(`Unable to open resource source '${sourcePath}': ${getErrorMessage(error)}`);
+            vscode.window.showWarningMessage(resourceSourceOpenFailed(sourcePath));
+        }
+    }
+
+    private async _openSourceFile(sourceUri: vscode.Uri): Promise<void> {
+        const document = await vscode.workspace.openTextDocument(sourceUri);
+        await vscode.window.showTextDocument(document, { preview: false });
     }
 
     async stopResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
