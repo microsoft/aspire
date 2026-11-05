@@ -11,4 +11,7 @@ builder.AddDotnetProject("worker", "../services/WatchDemo.Worker")
     .WithReference(api)
     .WaitFor(api);
 
+// A file-based C# app is watched the same way.
+builder.AddDotnetProject("ticker", "../services/Scripts/ticker.cs");
+
 builder.Build().Run();
