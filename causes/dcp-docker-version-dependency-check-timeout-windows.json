@@ -17,6 +17,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
       "observed_at": "2026-11-05T18:25:00Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 42088737959,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42088737959",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "observed_at": "2026-11-05T19:54:13Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21771"

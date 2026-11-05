@@ -1,0 +1,128 @@
+{
+  "run_id": 42088737959,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42088737959",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T19:54:13Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21770,
+    "title": "Clarify dotnet-inspect requirements in agent init help",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-agent-init-context-aware-skills",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21770",
+    "merged_at": "2026-11-05T18:54:18Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "e37145f3298242cec5a322ebf0cbcd081273bf3a",
+    "failed_sha": "401491d6d3c71b46c8250af4eb5d3a83c60034ad",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "message": "[automated] test(cli): Find Radius MongoDB pods in their application namespace (#21422) ## Description The Radius deployment outerloop test fails while waiting for MongoDB: ```text error: no matching resources found ``` The legacy MongoDB recipe labels its pods, not its Deployment metadata. Its workload also lives in the legacy application's namespace, which appends `-app` to the environment namespace. Wait for the MongoDB pod to become Ready in that namespace, and use the same namespace for pod",
+        "html_url": "https://github.com/microsoft/aspire/commit/a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "pull_request": {
+          "number": 21422,
+          "title": "[automated] test(cli): Find Radius MongoDB pods in their application namespace",
+          "url": "https://github.com/microsoft/aspire/pull/21422",
+          "merged_at": "2026-11-05T17:08:30Z"
+        }
+      },
+      {
+        "sha": "1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "message": "fix intermittent internal build failures (#21768) ## Description **Add bounded retries for transient connection loss during macOS tray notarization-ticket stapling and validation.** Internal builds intermittently fail when Apple's CloudKit connection drops: ```text Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\" ``` These network failures currently stop the build immediately. Retry only the failed stapler operation when its output identifies connection loss, rather th",
+        "html_url": "https://github.com/microsoft/aspire/commit/1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "pull_request": {
+          "number": 21768,
+          "title": "fix intermittent internal build failures",
+          "url": "https://github.com/microsoft/aspire/pull/21768",
+          "merged_at": "2026-11-05T17:38:09Z"
+        }
+      },
+      {
+        "sha": "9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "message": "Give the Deno AppHost inspector attach the AppHost startup budget (#21604) ## Description Fixes #21603. That issue is the Windows `launch-profiles` flake \"debugs a Deno AppHost through the built-in JavaScript debugger\", #5/#7 on the 7-day top-flakes list in #21600. **Root cause.** - To debug a Deno AppHost, the extension launches `deno run --inspect-wait=127.0.0.1:<port> ...` through js-debug (`pwa-node`) with `attachSimplePort`, but never sets `timeout`. - js-debug's default 10s budget starts b",
+        "html_url": "https://github.com/microsoft/aspire/commit/9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "pull_request": {
+          "number": 21604,
+          "title": "Give the Deno AppHost inspector attach the AppHost startup budget",
+          "url": "https://github.com/microsoft/aspire/pull/21604",
+          "merged_at": "2026-11-05T18:32:56Z"
+        }
+      },
+      {
+        "sha": "401491d6d3c71b46c8250af4eb5d3a83c60034ad",
+        "message": "Clarify dotnet-inspect requirements in agent init help (#21770) ## Description Clarify `aspire agent init --skills` help to explain that `dotnet-inspect` requires a C# AppHost. Update the existing `aspire init --help` snapshot to match. No runtime behavior changes. Fixes #16574 ### Before / after `aspire agent init --help --nologo`: ```diff - --skills <skills>  Comma-separated skill/tool IDs (aspire,playwright-cli,dotnet-inspect), 'all', or 'none' (default: aspire) + --skills <skills>  Comma-sep",
+        "html_url": "https://github.com/microsoft/aspire/commit/401491d6d3c71b46c8250af4eb5d3a83c60034ad",
+        "pull_request": {
+          "number": 21770,
+          "title": "Clarify dotnet-inspect requirements in agent init help",
+          "url": "https://github.com/microsoft/aspire/pull/21770",
+          "merged_at": "2026-11-05T18:54:18Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "id": 127471333808,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42088737959/job/127471333808",
+      "classification": "transient-infra",
+      "reason": "DCP docker --version dependency check timed out on Windows runner",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 127471387779,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42088737959/job/127471387779",
+      "classification": "transient-infra",
+      "reason": "macOS test host crashed with exit code 3 with zero failed tests",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(creationSurface: Type)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-05T19:17:33.721Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 5972, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.Testing.DistributedApplicationFactory.ObservedHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting.Testing/DistributedApplicationFactory.cs:line 616\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.Testing.DistributedApplicationTestingBuilder.SuspendingDistributedApplicationFactory.DelegatedHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting.Testing/DistributedApplicationTestingBuilder.cs:line 597\n   at Aspire.Hosting.Testing.DistributedApplicationTestingBuilder.SuspendingDistributedApplicationFactory.DelegatedDistributedApplication.StartAsync(CancellationToken cancellationToke",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Failed at DCP docker --version dependency check timeout before app host start",
+      "job_id": 127471333808,
+      "execution_id": "0ac53f01-c941-4519-80c4-861b2cb4579f",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    },
+    {
+      "name": "Aspire.Hosting.Testing.Tests.TestingPublicApiTests.DefaultEndpointSelectionPrefersHttpsOverHttp",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-05T19:17:31.501Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 6840, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Aspire.Hosting.Testing.Tests.TestingPublicApiTests.DefaultEndpointSelectionPrefersHttpsOverHttp() in /_/tests/Aspire.Hosting.Testing.Tests/TestingPublicApiTests.cs:line 212\n   at Aspire.Hosting.Testing.Tests.TestingPublicApiTests.DefaultEndpointSelectionPrefersHttpsOverHttp() in /_/tests/Aspire.Hosting.Testing.Tests/TestingPublicApiTests.cs:line 220\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Failed at DCP docker --version dependency check timeout before app host start",
+      "job_id": 127471333808,
+      "execution_id": "5709fb01-4244-47ee-8fef-8e1d0c537d51",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dcp-docker-version-dependency-check-timeout-windows",
+    "aspire-cli-tests-macos-testhost-crash-exit-3"
+  ]
+}
