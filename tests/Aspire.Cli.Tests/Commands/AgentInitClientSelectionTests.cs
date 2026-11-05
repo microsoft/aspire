@@ -399,10 +399,17 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 prompts.Add(prompt);
                 return prompt == AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt;
             },
-            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            PromptForSelectionCallback = (prompt, choices, formatter, _) =>
             {
                 prompts.Add(prompt);
+                Assert.Equal("Where should skills and tools be installed?", prompt);
                 Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.Global], choices.Cast<AgentConfigurationScope>());
+                Assert.Equal(
+                    [
+                        "This project (In your workspace, ready to commit with your project)",
+                        "Global (In your home directory, available across all projects)"
+                    ],
+                    choices.Cast<object>().Select(formatter));
                 Assert.Equal(expectedWarnings, warnings);
                 Assert.Empty(homeDirectory.GetFileSystemInfos());
                 return AgentConfigurationScope.Global;
