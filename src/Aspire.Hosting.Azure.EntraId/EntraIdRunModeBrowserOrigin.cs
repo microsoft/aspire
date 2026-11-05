@@ -23,16 +23,19 @@ internal sealed class EntraIdRunModeBrowserOrigin(
 
     public IEnumerable<object> References => [endpoint];
 
-    public async ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
+    public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) =>
+        GetValueAsync(new(), cancellationToken);
+
+    public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
     {
         // Preserve the existing Entra wait boundary: allocation (which can include a slow
         // build) is not part of the 30-second budget for URL customization.
-        var allocatedUrl = await endpoint.Property(EndpointProperty.Url).GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var allocatedUrl = await endpoint.Property(EndpointProperty.Url).GetValueAsync(context, cancellationToken).ConfigureAwait(false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         try
         {
-            return await endpoint.BrowserOrigins.GetValueAsync(timeout.Token).ConfigureAwait(false);
+            return await endpoint.BrowserOrigins.GetValueAsync(context, timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
