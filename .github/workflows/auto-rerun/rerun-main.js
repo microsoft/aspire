@@ -29,6 +29,17 @@ const mainTestExecutionStepPatterns = [
     /^Run tests\b/i,
     /^Run nuget dependent tests\b/i,
 ];
+// Registry vetoes include validation and smoke-test lanes. Keep the successful-test
+// requirement for the Windows post-test exception limited to the test runner steps above.
+const mainRegistryTestExecutionStepPatterns = [
+    ...mainTestExecutionStepPatterns,
+    /^Run extension E2E tests$/i,
+    /^Run (?:Python|Go|Java|Rust|TypeScript) SDK validation$/i,
+    /^Create starter app and validate startup$/i,
+    /^Test Native AOT Dashboard(?: interactivity)?$/i,
+    /^Extract and smoke test Native AOT Dashboard$/i,
+    /^Smoke test packaged CLI$/i,
+];
 
 function classifyMainFailedJob(job, annotationsOrText, jobLogText = '') {
     const failedSteps = getFailedSteps(job);
@@ -49,7 +60,7 @@ function classifyMainFailedJob(job, annotationsOrText, jobLogText = '') {
     // A recovered image pull can coexist with an unrelated failing test in the
     // same job. Without per-test attribution, fail closed for test-step failures.
     const canRetryRegistryFailure = failedSteps.length > 0 &&
-        !failedSteps.some(step => matchesAny(step, mainTestExecutionStepPatterns));
+        !failedSteps.some(step => matchesAny(step, mainRegistryTestExecutionStepPatterns));
     if (canRetryRegistryFailure &&
         diagnosticTexts.some(text => matchesAny(text, mainAcrFailurePatterns))) {
         return {

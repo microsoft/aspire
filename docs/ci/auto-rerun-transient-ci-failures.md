@@ -81,11 +81,16 @@ Current-main reruns are intentionally narrower than pull request reruns. After i
 3. The job diagnostics contain a failed `Get` or `Head` request to `https://mcr.microsoft.com/v2/...` followed on the same line, within 500 characters, by HTTP 503, `503 Service Unavailable`, or `ServiceUnavailable`. A bare image name or `CONTAINER1014` is not enough.
 4. The job diagnostics contain Windows process initialization exit `-1073741502` or `0xC0000142`, at least one `Run tests*` or `Run nuget dependent tests*` step succeeded, and every failed step is a post-test reporting or cleanup step. A failed, skipped, or absent test execution step prevents this override.
 
-Registry retries require at least one failed step and no failed `Run tests*` or
-`Run nuget dependent tests*` step. A recovered image pull can appear alongside an
+Registry retries require at least one failed step and no failed test execution
+step. This includes `Run tests*` and `Run nuget dependent tests*`, plus extension
+E2E tests, polyglot SDK validation, starter startup validation, Native AOT
+Dashboard tests (including the extraction/smoke step), and the packaged CLI smoke
+test. These lanes are defined in [`tests.yml`](../../.github/workflows/tests.yml)
+and its reusable workflows. A recovered image pull can appear alongside an
 unrelated failing test in the same job, so registry signals cannot override test
 execution failures. This also deliberately skips genuine registry outages
-encountered inside tests.
+encountered inside tests. Successful validation or smoke steps do not satisfy the
+separate Windows post-test exception's successful-test requirement.
 
 Generic messages such as `Operation timed out`, generic container failures, and the broader pull request/TRX patterns do not make a current-main run eligible.
 

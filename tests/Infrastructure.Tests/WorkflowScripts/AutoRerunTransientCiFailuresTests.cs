@@ -1129,35 +1129,105 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     }
 
     [Theory]
+    [InlineData("Run tests")]
     [InlineData("Run tests (Linux/macOS)")]
     [InlineData("Run tests (Windows)")]
     [InlineData("Run nuget dependent tests (Linux/macOS)")]
+    [InlineData("Run nuget dependent tests (Windows)")]
+    [MemberData(nameof(CurrentMainValidationStepNames))]
     [RequiresTools(["node"])]
     public async Task CurrentMainVetoesRegistryRetriesWhenTestsFailedInTheSameJob(string testStep)
     {
         WorkflowJob job = CreateJob(
             failedSteps: ["Pull container image", testStep]);
 
+        string[] diagnostics =
+        [
+            "Get \"https://netaspireci.azurecr.io/v2/aspire/testimage/manifests/latest\": connect: connection refused",
+            "Head \"https://mcr.microsoft.com/v2/dotnet/aspnet/manifests/latest\": HTTP 503"
+        ];
+        foreach (string diagnostic in diagnostics)
+        {
+            foreach (bool useAnnotation in new[] { true, false })
+            {
+                AnalyzeFailedJobsResult result = await AnalyzeMainJobsAsync(
+                    [job],
+                    new Dictionary<string, string> { ["1"] = useAnnotation ? diagnostic : "" },
+                    new Dictionary<string, string> { ["1"] = useAnnotation ? "" : diagnostic });
+
+                Assert.False(result.RerunEligible, $"{testStep}: {diagnostic} (annotation: {useAnnotation})");
+                Assert.Empty(result.RetryableJobs);
+                Assert.Single(result.SkippedJobs);
+                Assert.Equal([1], result.AnnotationRequestJobIds);
+                Assert.Equal([1], result.LogRequestJobIds);
+            }
+        }
+    }
+
+    public static TheoryData<string> CurrentMainValidationStepNames =>
+    [
+        "Run extension E2E tests",
+        "Run Python SDK validation",
+        "Run Go SDK validation",
+        "Run Java SDK validation",
+        "Run Rust SDK validation",
+        "Run TypeScript SDK validation",
+        "Create starter app and validate startup",
+        "Test Native AOT Dashboard",
+        "Test Native AOT Dashboard interactivity",
+        "Extract and smoke test Native AOT Dashboard",
+        "Smoke test packaged CLI"
+    ];
+
+    [Theory]
+    [MemberData(nameof(CurrentMainValidationStepNames))]
+    [RequiresTools(["node"])]
+    public async Task CurrentMainValidationSuccessDoesNotEnableWindowsPostTestRetry(string testStep)
+    {
+        WorkflowJob job = CreateJob(
+            failedSteps: ["Check for hang dump files"],
+            successfulSteps: [testStep]);
+
         AnalyzeFailedJobsResult result = await AnalyzeMainJobsAsync(
             [job],
-            new Dictionary<string, string>
-            {
-                ["1"] = "Get \"https://netaspireci.azurecr.io/v2/aspire/testimage/manifests/latest\": connect: connection refused"
-            },
-            new Dictionary<string, string>
-            {
-                ["1"] = """
-                    Head "https://mcr.microsoft.com/v2/dotnet/aspnet/manifests/latest": HTTP 503
-                    Image pull recovered on retry.
-                    Test Run Failed. Failed: 1.
-                    """
-            });
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code -1073741502." });
 
         Assert.False(result.RerunEligible);
         Assert.Empty(result.RetryableJobs);
         Assert.Single(result.SkippedJobs);
-        Assert.Equal([1], result.AnnotationRequestJobIds);
-        Assert.Equal([1], result.LogRequestJobIds);
+    }
+
+    [Theory]
+    [InlineData("Get \"https://netaspireci.azurecr.io/v2/library/redis/manifests/latest\": connect: connection refused")]
+    [InlineData("Head \"https://mcr.microsoft.com/v2/dotnet/runtime/manifests/latest\": 503 Service Unavailable")]
+    [RequiresTools(["node"])]
+    public async Task DispatcherMainVetoesExtensionTestFailureDespiteRegistryDiagnostics(string diagnostic)
+    {
+        JsonElement result = await InvokeHarnessAsync<JsonElement>(
+            "dispatchWorkflow",
+            new
+            {
+                workflowRun = CreateCurrentMainRun(),
+                execute = true,
+                jobs = new[]
+                {
+                    CreateJob(name: "Tests / Extension E2E (ubuntu-latest)", failedSteps: ["Run extension E2E tests"]),
+                    CreateJob(id: 2, name: "Tests / Final Test Results"),
+                    CreateJob(id: 3, name: "Final Results")
+                },
+                jobLogTextByJobId = new Dictionary<string, string> { ["1"] = diagnostic },
+                currentRun = CreateCurrentMainRun(),
+                currentMainSha = "main-sha",
+                mainWorkflowRuns = new[] { CreateCurrentMainWorkflowRun() }
+            });
+
+        JsonElement analysis = result.GetProperty("analysis");
+        Assert.Equal("main", analysis.GetProperty("policy").GetString());
+        Assert.False(analysis.GetProperty("executionEligible").GetBoolean());
+        Assert.Empty(analysis.GetProperty("retryableJobs").EnumerateArray());
+        Assert.Equal(
+            result.GetProperty("analysisRequests").GetArrayLength(),
+            result.GetProperty("requests").GetArrayLength());
     }
 
     [Theory]
