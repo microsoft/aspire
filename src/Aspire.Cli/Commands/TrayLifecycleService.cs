@@ -130,7 +130,7 @@ internal sealed class TrayLifecycleService(
                 if (start && exitCode == CliExitCodes.Success && environment.IsLinux()
                     && output.Split('\n').Any(line => line.Trim() == LinuxTrayPayload.NoTrayHostMarker))
                 {
-                    interactionService.DisplayMessage(KnownEmojis.Warning, TrayCommandStrings.NoTrayHost);
+                    interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, TrayCommandStrings.NoTrayHost);
                 }
 
                 return exitCode == CliExitCodes.Success

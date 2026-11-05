@@ -223,17 +223,6 @@
         <target state="translated">Interfejs wiersza polecenia Playwright wymaga pakietu npm, którego nie znaleziono w zmiennej PATH. Pomijanie instalacji.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_PluginRiskWarning">
-        <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</source>
-        <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Install skills directly from {0}.</target>
-        <note>{0} lists the comma-separated configured skill source repository and/or catalog URLs for the selected agent clients.</note>
-      </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>Project (Install in your workspace root; committed with your project)</source>
         <target state="translated">Project (zainstaluj w katalogu głównym obszaru roboczego; zatwierdzone w projekcie)</target>
@@ -263,6 +252,13 @@ Prefer skill files only? Install skills directly from {0}.</target>
         <source>Shared files may be discovered by agents that aren't selected.</source>
         <target state="translated">Udostępnione pliki mogą być wykrywane przez agentów, którzy nie są wybrani.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillSources">
+        <source>Skill sources:
+{0}</source>
+        <target state="new">Skill sources:
+{0}</target>
+        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>

@@ -43,7 +43,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             ReadConfiguration = (source, _) =>
             {
                 var warning = Assert.Single(interaction.DisplayedMessages);
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, warning.Message);
+                Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                 Assert.Equal("https://git.example/configuration", source.Repository);
                 Assert.Equal(path ?? AspireConfigFile.FileName, source.Path);
@@ -53,6 +54,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                       "templateSources:enterprise:repository": "https://git.example/templates",
                       "templateSources:enterprise:ref": "template-preview",
                       "templateSources:enterprise:path": "templates",
+                      "templateSources:enterprise:displayName": "Enterprise templates",
                       "docs": { "llmsTxtUrl": "https://docs.example/llms.txt" },
                       "features": { "unrelated": true }
                     }
@@ -73,6 +75,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("https://git.example/templates", definition.Value!["repository"]!.GetValue<string>());
         Assert.Equal("template-preview", definition.Value["ref"]!.GetValue<string>());
         Assert.Equal("templates", definition.Value["path"]!.GetValue<string>());
+        Assert.Equal("Enterprise templates", definition.Value["displayName"]!.GetValue<string>());
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
 
@@ -148,11 +151,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("""{"templateSources":null}""")]
-    [InlineData("""{"templateSources":{"invalid.name":{"repository":"https://git.example/templates"}}}""")]
-    [InlineData("""{"templateSources":{"enterprise":{}}}""")]
-    [InlineData("""{"templateSources":{"enterprise":{"path":"relative"}}}""")]
-    public async Task TemplateSources_InvalidInheritedDefinitionsFailWithoutWritingSettings(string json)
+    [InlineData("""{"templateSources":null}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{".invalid":{"repository":"https://git.example/templates"}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{"enterprise":{}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{"enterprise":{"path":"relative"}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{"enterprise":{"repository":"https://git.example/templates","displayName":42}}}""", typeof(ConfigSourceException))]
+    [InlineData("""{"templateSources":{"enterprise":{"repository":"https://git.example/templates","displayName":"Team\nTemplates"}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    public async Task TemplateSources_InvalidInheritedDefinitionsFailWithoutWritingSettings(string json, Type exceptionType)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = new TestEnvironment(new Dictionary<string, string?>
@@ -165,7 +170,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, environment: environment);
 
-        await Assert.ThrowsAsync<Aspire.Cli.Templating.TemplateSourceConfigurationException>(
+        await Assert.ThrowsAsync(exceptionType,
             () => service.GetTemplateSourcesAsync(CancellationToken.None));
 
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
@@ -880,7 +885,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             prompted = true;
             var warning = Assert.Single(interaction.DisplayedMessages,
-                message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
             Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
             return ConfigSourceStrings.Accept;
         };
@@ -889,7 +894,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             ReadConfiguration = (_, _) =>
             {
                 Assert.Single(interaction.DisplayedMessages,
-                    message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                    message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
                 return Task.FromResult(("version-1", new JsonObject()));
             }
         };
@@ -909,7 +914,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(consent is null, prompted);
         Assert.Equal(consent is false ? 0 : 1, git.Calls);
         var warning = Assert.Single(interaction.DisplayedMessages,
-            message => message.Message == SharedCommandStrings.SourceTrustWarning);
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
     }
 
@@ -1164,6 +1169,27 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
                 {"SKILLSOURCES":{"TEAM":{"REPOSITORY":"example/new","excluded":"remote"},"extra":{"repository":"example/extra","openCodeV1Catalog":"https://example.com/v1/"}}}
+                """)!.AsObject()))
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
+
+        await service.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Fact]
+    public async Task Materialize_CopiesEntireIntegrationSourcesSection()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {"integrationSources":{"local":{"source":"https://example.com/old","patterns":["Old.*"]}},"docs":{"custom":"keep"}}
+            """);
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
+                {"INTEGRATIONSOURCES":{"default":{"enabled":false},"team":{"source":"https://example.com/team","patterns":["Acme.*","Exact.Integration"]}},"docs":{"custom":"excluded"}}
                 """)!.AsObject()))
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1864,14 +1890,14 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();
-        using var next = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
+        using var next = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, clock: clock, interaction: interaction);
 
         await next.CheckProjectAsync(workspace.WorkspaceRoot, true, CancellationToken.None);
 
         Assert.Collection(interaction.DisplayedMessages,
             message =>
             {
-                Assert.Equal(SharedCommandStrings.SourceTrustWarning, message.Message);
+                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             },
             message => Assert.Contains(changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, message.Message));

@@ -59,7 +59,7 @@ public sealed class TestConfigurationService : IConfigurationService
 
     public Func<string, DirectoryInfo, string?>? OnGetConfigurationFromDirectory { get; set; }
 
-    public string SettingsFilePath { get; set; } = string.Empty;
+    public string SettingsFilePath { get; set; } = Path.Combine(AppContext.BaseDirectory, "settings.global.json");
 
     public string GetSettingsFilePath(bool isGlobal)
     {

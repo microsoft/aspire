@@ -189,6 +189,10 @@ public partial class AspireProject : IAsyncDisposable
             WorkingDirectory = AppHostProjectDirectory
         };
 
+        // The AppHost builds its child projects before starting them. Remove repository MSBuild paths
+        // so those builds use the isolated test SDK; explicit overrides are applied below.
+        ToolCommand.RemoveInheritedMSBuildPaths(AppHostProcess.StartInfo.Environment);
+
         foreach (var item in _buildEnv.EnvVars)
         {
             AppHostProcess.StartInfo.Environment[item.Key] = item.Value;

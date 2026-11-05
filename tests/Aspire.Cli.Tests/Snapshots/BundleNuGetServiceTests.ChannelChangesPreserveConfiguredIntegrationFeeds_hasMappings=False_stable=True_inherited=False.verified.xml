@@ -1,0 +1,23 @@
+﻿<configurations>
+  <preview>
+    <configuration>
+      <disabledPackageSources>
+        <clear />
+        <add key="aspire-staging" value="true" />
+      </disabledPackageSources>
+      <packageSourceMapping>
+        <clear />
+      </packageSourceMapping>
+    </configuration>
+  </preview>
+  <persisted>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="aspire-daily" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-team/nuget/v3/index.json" />
+        <add key="team-alias" value="https://PKGS.DEV.AZURE.COM/dnceng/public/_packaging/darc-pub-microsoft-aspire-team/nuget/v3/index.json" />
+        <add key="public" value="https://api.nuget.org/v3/index.json" />
+      </packageSources>
+    </configuration>
+  </persisted>
+</configurations>

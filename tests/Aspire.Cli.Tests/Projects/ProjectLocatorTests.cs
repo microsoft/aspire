@@ -1306,7 +1306,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ProjectLocatorFailureReason.UnsupportedProjects, exception.FailureReason);
         var warning = Assert.Single(interactionService.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+        Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
         Assert.Contains("apphost.custom", warning.Message);
     }
 
@@ -3898,7 +3898,7 @@ builder.Build().Run();");
         await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
 
         var warning = Assert.Single(interactionService.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+        Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
         Assert.Contains(aspireSettingsFile.FullName, warning.Message);
         Assert.DoesNotContain(AspireConfigFile.FileName, warning.Message);
     }

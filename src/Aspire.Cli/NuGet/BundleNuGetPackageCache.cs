@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -48,24 +50,17 @@ internal sealed class BundleNuGetPackageCache(
             configuration,
             "Aspire.ProjectTemplates",
             prerelease,
+            SearchTake,
             cancellationToken).ConfigureAwait(false);
 
-        return packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
+        return packages.Packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+    public Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
         bool prerelease,
         CancellationToken cancellationToken)
-    {
-        var packages = await SearchAsync(
-            configuration,
-            "Aspire.Hosting",
-            prerelease,
-            cancellationToken).ConfigureAwait(false);
-
-        return FilterPackages(packages, filter: null);
-    }
+        => GetPackagesAsync(configuration, "Aspire.Hosting", filter: null, prerelease, useCache: true, cancellationToken);
 
     public async Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
@@ -76,12 +71,13 @@ internal sealed class BundleNuGetPackageCache(
             configuration,
             "Aspire.Cli",
             prerelease,
+            SearchTake,
             cancellationToken).ConfigureAwait(false);
 
-        return packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
+        return packages.Packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(
+    public async Task<PackageSearchResult<NuGetPackage>> GetPackagesAsync(
         NuGetPackageOperationConfiguration configuration,
         string packageId,
         Func<string, bool>? filter,
@@ -89,13 +85,25 @@ internal sealed class BundleNuGetPackageCache(
         bool useCache,
         CancellationToken cancellationToken)
     {
+        var startTimestamp = Stopwatch.GetTimestamp();
+        var displayQuery = PackageSourceRedactor.RedactForDisplay(packageId);
+        logger.LogDebug("Searching NuGet packages for query '{Query}' (prerelease: {Prerelease}).", displayQuery, prerelease);
+
+        // Allowed integration patterns are applied after searching, so matching packages
+        // must not be lost behind unrelated results on the first page.
         var packages = await SearchAsync(
             configuration,
             packageId,
             prerelease,
+            filter is null ? SearchTake : int.MaxValue,
             cancellationToken).ConfigureAwait(false);
 
-        return FilterPackages(packages, filter);
+        var matches = FilterPackages(packages.Packages, filter).ToArray();
+        logger.LogDebug(
+            "NuGet search for query '{Query}' returned {ReturnedCount} packages; {MatchedCount} matched in {ElapsedMilliseconds} ms.",
+            displayQuery, packages.Packages.Count, matches.Length, Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds);
+
+        return new(matches, packages.LimitReached, packages.FailedSources);
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
@@ -109,11 +117,12 @@ internal sealed class BundleNuGetPackageCache(
             configuration,
             exactPackageId,
             prerelease,
+            SearchTake,
             cancellationToken).ConfigureAwait(false);
 
         // The helper had no exact-match mode. The CLI ran an ordinary search for the package ID and expanded the
         // versions of the one result whose ID matched it exactly, including its casing.
-        var exactMatch = results.FirstOrDefault(package => package.Id.Equals(exactPackageId, StringComparison.Ordinal));
+        var exactMatch = results.Packages.FirstOrDefault(package => package.Id.Equals(exactPackageId, StringComparison.Ordinal));
         if (exactMatch is null)
         {
             return [];
@@ -127,30 +136,35 @@ internal sealed class BundleNuGetPackageCache(
         }).ToList();
     }
 
-    private async Task<List<NuGetPackage>> SearchAsync(
+    private async Task<PackageSearchResult<NuGetPackage>> SearchAsync(
         NuGetPackageOperationConfiguration configuration,
         string query,
         bool prerelease,
+        int take,
         CancellationToken cancellationToken)
     {
         var results = await SearchClientAsync(
             configuration,
             query,
             prerelease,
+            take,
             cancellationToken).ConfigureAwait(false);
 
-        return results.Select(package => new NuGetPackage
+        var packages = results.Packages.Select(package => new NuGetPackage
         {
             Id = package.Id,
             Version = package.Version,
             Source = package.Source
         }).ToList();
+
+        return new(packages, results.LimitReached, results.FailedSources);
     }
 
-    private async Task<IReadOnlyList<NuGetSearchResult>> SearchClientAsync(
+    private async Task<PackageSearchResult<NuGetSearchResult>> SearchClientAsync(
         NuGetPackageOperationConfiguration configuration,
         string query,
         bool prerelease,
+        int take,
         CancellationToken cancellationToken)
     {
         try
@@ -158,7 +172,7 @@ internal sealed class BundleNuGetPackageCache(
             return await nuGetClient.SearchAsync(
                 query,
                 prerelease,
-                SearchTake,
+                take,
                 explicitSources: [],
                 configuration.ExplicitConfigFile?.FullName,
                 configuration.EffectiveWorkingDirectory.FullName,

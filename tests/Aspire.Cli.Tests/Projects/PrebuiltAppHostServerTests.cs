@@ -264,7 +264,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             NullLogger<NuGetClient>.Instance);
         var nuGetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient)
+            nuGetClient,
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };
@@ -319,6 +320,124 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [PackageSourceOverrideMappings.DefaultPackagePattern],
             GetPackagePatternsForSource(overlay, identityPackageSource.FullName));
+    }
+
+    [Theory]
+    [InlineData(PackageChannelNames.Daily, false)]
+    [InlineData(PackageChannelNames.Daily, true)]
+    [InlineData(PackageChannelNames.Staging, false)]
+    [InlineData(PackageChannelNames.Staging, true)]
+    public async Task PackageScopedSourceRestore_PreservesOtherConfiguredIntegrationMappings(string channelName, bool reuseOverrideAlias)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string sdkVersion = "99.0.0";
+        const string packageVersion = "1.0.0";
+        const string selectedPackage = "Aspire.Hosting.Selected";
+        const string privatePackage = "Aspire.Hosting.Private";
+        const string otherPackage = "Aspire.Hosting.Other";
+        var channelFeed = workspace.CreateDirectory("channel-feed");
+        var teamFeed = workspace.CreateDirectory("team-feed");
+        var overrideFeed = workspace.CreateDirectory("override-feed");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var projectPolicyDirectory = workspace.CreateDirectory("project-policy");
+        CreateDependencyPackage(channelFeed, "Aspire.Hosting", sdkVersion,
+            packageFiles: new Dictionary<string, string> { ["lib/net10.0/Aspire.Hosting.dll"] = "channel-hosting" });
+        CreateDependencyPackage(teamFeed, privatePackage, packageVersion,
+            packageFiles: new Dictionary<string, string> { [$"lib/net10.0/{privatePackage}.dll"] = "private-integration" });
+        CreateDependencyPackage(teamFeed, selectedPackage, packageVersion,
+            packageFiles: new Dictionary<string, string> { [$"lib/net10.0/{selectedPackage}.dll"] = "previous-integration" });
+        CreateDependencyPackage(overrideFeed, selectedPackage, packageVersion,
+            dependencyId: privatePackage, dependencyVersion: $"[{packageVersion}]",
+            packageFiles: new Dictionary<string, string> { [$"lib/net10.0/{selectedPackage}.dll"] = "selected-integration" });
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "team": {"source": {{JsonSerializer.Serialize(teamFeed.FullName)}}},
+                "other": {"source": {{JsonSerializer.Serialize(overrideFeed.FullName)}}}
+              }
+            }
+            """);
+        var packageSources = new XElement("packageSources",
+            new XElement("clear"),
+            new XElement("add", new XAttribute("key", "channel"), new XAttribute("value", channelFeed.FullName)),
+            new XElement("add", new XAttribute("key", "team"), new XAttribute("value", teamFeed.FullName)));
+        var packageMappings = new XElement("packageSourceMapping",
+            new XElement("clear"),
+            new XElement("packageSource", new XAttribute("key", "channel"),
+                new XElement("package", new XAttribute("pattern", "Aspire*"))),
+            new XElement("packageSource", new XAttribute("key", "team"),
+                new XElement("package", new XAttribute("pattern", privatePackage)),
+                new XElement("package", new XAttribute("pattern", selectedPackage))));
+        if (reuseOverrideAlias)
+        {
+            packageSources.Add(new XElement("add", new XAttribute("key", "other"), new XAttribute("value", overrideFeed.FullName)));
+            packageMappings.Add(new XElement("packageSource", new XAttribute("key", "other"),
+                new XElement("package", new XAttribute("pattern", otherPackage))));
+        }
+        var configPath = Path.Combine(workspace.Path, "NuGet.Config");
+        await File.WriteAllTextAsync(configPath, new XElement("configuration",
+            packageSources, new XElement("auditSources", new XElement("clear")), packageMappings).ToString());
+        var originalContent = await File.ReadAllBytesAsync(configPath);
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName, PackageChannelQuality.Both, [new PackageMapping("Aspire*", channelFeed.FullName)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var nuGetService = new BundleNuGetService(
+            NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
+        {
+            SourceIdentityKeyFactory = static () => s_sourceIdentityKey
+        };
+        var resolver = new IntegrationRestorePlanResolver(packagingService, nuGetService,
+            CreateContextWithIdentityChannel(channelName, sdkVersion), NullLogger.Instance);
+
+        var plan = await resolver.ResolveAsync(workspace.Path, "test-apphost", sdkVersion, channelName,
+            overrideFeed.FullName, selectedPackage, TestContext.Current.CancellationToken);
+        using var restoreConfiguration = await plan.CreatePackageRestoreConfigurationAsync(TestContext.Current.CancellationToken);
+        var projectConfiguration = plan.ApplyProjectRestoreConfiguration(projectPolicyDirectory, TestContext.Current.CancellationToken);
+        var manifestPath = await nuGetService.RestorePackagesAsync(
+            [(selectedPackage, $"[{packageVersion}]"), (privatePackage, $"[{packageVersion}]"), ("Aspire.Hosting", $"[{sdkVersion}]")],
+            workspace.Path, sources: restoreConfiguration.Sources,
+            nugetConfigPaths: restoreConfiguration.ConfigPaths,
+            nugetSettingsCacheIdentity: restoreConfiguration.SettingsCacheIdentity,
+            nugetConfigOverlayCacheIdentity: restoreConfiguration.OverlayCacheIdentity,
+            additionalSensitiveSources: restoreConfiguration.SensitiveSources,
+            globalPackagesFolderOverride: packagesDirectory.FullName,
+            ct: TestContext.Current.CancellationToken);
+
+        Assert.True(File.Exists(manifestPath));
+        foreach (var (packageId, version, expectedContent) in new[]
+        {
+            (selectedPackage, packageVersion, "selected-integration"),
+            (privatePackage, packageVersion, "private-integration"),
+            ("Aspire.Hosting", sdkVersion, "channel-hosting")
+        })
+        {
+            Assert.Equal(expectedContent, await File.ReadAllTextAsync(Path.Combine(packagesDirectory.FullName,
+                packageId.ToLowerInvariant(), version, "lib", "net10.0", $"{packageId}.dll")));
+        }
+        Assert.IsType<FileInfo>(restoreConfiguration.PolicyOverlayFile);
+        // Temporary overlays inherit ambient aliases and mappings, so inspect the effective
+        // hierarchy rather than expecting every preserved entry in the overlay itself.
+        foreach (var settings in new[]
+        {
+            global::NuGet.Configuration.Settings.LoadSettingsGivenConfigPaths(restoreConfiguration.ConfigPaths),
+            NuGetTestHelper.LoadSettings(projectConfiguration.RestoreRootConfigDirectory)
+        })
+        {
+            Assert.Equal([teamFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(settings, privatePackage));
+            Assert.Equal([overrideFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(settings, selectedPackage));
+            Assert.Equal(new[] { channelFeed.FullName, overrideFeed.FullName }.Order(StringComparer.Ordinal),
+                NuGetTestHelper.GetEligiblePackageSources(settings, "Aspire.Hosting"));
+            if (reuseOverrideAlias)
+            {
+                Assert.Equal([overrideFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(settings, otherPackage));
+            }
+        }
+        Assert.Equal(originalContent, await File.ReadAllBytesAsync(configPath));
     }
 
     [Fact]
@@ -2276,7 +2395,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         nuGetClient ??= CreateIsolatedNuGetClient();
         var nugetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient)
+            nuGetClient,
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") })
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };

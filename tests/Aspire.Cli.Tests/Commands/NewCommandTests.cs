@@ -1359,7 +1359,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 Assert.NotNull(interactionService);
                 var warning = Assert.Single(interactionService.DisplayedMessages,
-                    message => message.Message == SharedCommandStrings.SourceTrustWarning);
+                    message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
                 capturedPackageSourceOverride = context.PackageSourceOverride;
                 File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, scaffoldFileName), "// test apphost");
@@ -1377,7 +1377,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
         Assert.NotNull(interactionService);
         Assert.Single(interactionService.DisplayedMessages,
-            message => message.Message == SharedCommandStrings.SourceTrustWarning);
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
         Assert.DoesNotContain(
             interactionService!.DisplayedMessages,
             entry => entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);

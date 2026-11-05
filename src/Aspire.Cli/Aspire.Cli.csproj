@@ -316,6 +316,8 @@
     <EmbeddedResource Include="Templating\Templates\java-starter\**\*" LogicalName="java-starter.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+    <!-- Repo-only .npmrc files pin the public registry for Dependabot lockfile updates; don't ship them in generated projects. -->
+    <EmbeddedResource Remove="Templating\Templates\**\.npmrc" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">

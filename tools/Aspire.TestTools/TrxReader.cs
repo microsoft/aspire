@@ -10,10 +10,8 @@ public class TrxReader
 {
     public static IList<TestResult> GetTestResultsFromTrx(string filepath, Func<string, string, bool>? testFilter = null)
     {
-        XmlSerializer serializer = new(typeof(TestRun));
-        using FileStream fileStream = new(filepath, FileMode.Open);
-
-        if (serializer.Deserialize(fileStream) is not TestRun testRun || testRun.Results?.UnitTestResults is null)
+        var testRun = DeserializeTrxFile(filepath);
+        if (testRun?.Results?.UnitTestResults is null)
         {
             return Array.Empty<TestResult>();
         }
@@ -76,7 +74,11 @@ public class TrxReader
                 Outcome: unitTestResult.Outcome,
                 ErrorMessage: unitTestResult.Output?.ErrorMessage,
                 StackTrace: unitTestResult.Output?.StackTrace,
-                Stdout: unitTestResult.Output?.StdOut);
+                Stdout: unitTestResult.Output?.StdOut)
+            {
+                Stderr = unitTestResult.Output?.StdErr,
+                ExecutionId = unitTestResult.ExecutionId,
+            };
 
             if (testFilter is not null && !testFilter(detailedTestResult))
             {
@@ -96,10 +98,14 @@ public class TrxReader
             throw new ArgumentException($"{nameof(filePath)} cannot be null or empty.", nameof(filePath));
         }
 
-        XmlSerializer serializer = new(typeof(TestRun));
+        var document = TrxDocument.Load(filePath);
+        var xmlNamespace = document.Root!.Name.NamespaceName;
+        // Both <TestRun> and <TestRun xmlns=".../TeamTest/2010"> are emitted by
+        // our fixtures/report producers. Keep child elements in the same namespace.
+        XmlSerializer serializer = new(typeof(TestRun), xmlNamespace);
 
-        using FileStream fileStream = new(filePath, FileMode.Open, FileAccess.Read);
-        return serializer.Deserialize(fileStream) as TestRun;
+        using var reader = document.CreateReader();
+        return serializer.Deserialize(reader) as TestRun;
     }
 
     public static double GetTestRunDurationInMinutes(TestRun testRun)
@@ -171,7 +177,7 @@ public class TrxReader
     }
 }
 
-[XmlRoot("TestRun", Namespace = "http://microsoft.com/schemas/VisualStudio/TeamTest/2010")]
+[XmlRoot("TestRun")]
 public class TestRun
 {
     public Results? Results { get; set; }
@@ -206,6 +212,9 @@ public class Times
 
 public class UnitTestResult
 {
+    [XmlAttribute("executionId")]
+    public string? ExecutionId { get; set; }
+
     [XmlAttribute("testId")]
     public string? TestId { get; set; }
 
@@ -231,6 +240,7 @@ public class Output
 {
     public ErrorInfo? ErrorInfo { get; set; }
     public string? StdOut { get; set; }
+    public string? StdErr { get; set; }
 
     [XmlIgnore]
     public string ErrorInfoString => string.Join(
@@ -295,7 +305,11 @@ public class Counters
 
 public record TestResult(string Name, string Outcome, TimeSpan StartTime, TimeSpan EndTime, string? ErrorMessage = null, string? Stdout = null);
 
-public record DetailedTestResult(string CanonicalName, string DisplayName, string Outcome, string? ErrorMessage = null, string? StackTrace = null, string? Stdout = null);
+public record DetailedTestResult(string CanonicalName, string DisplayName, string Outcome, string? ErrorMessage = null, string? StackTrace = null, string? Stdout = null)
+{
+    public string? Stderr { get; init; }
+    public string? ExecutionId { get; init; }
+}
 
 public class TestDefinitions
 {

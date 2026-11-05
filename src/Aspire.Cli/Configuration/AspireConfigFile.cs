@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
@@ -118,8 +119,12 @@ internal sealed class AspireConfigFile
     public AspireConfigDocs? Docs { get; set; }
 
     [JsonPropertyName(SkillSource.SectionName)]
-    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.")]
+    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
     public Dictionary<string, SkillSource>? SkillSources { get; set; }
+
+    [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
+    [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]
+    public Dictionary<string, IntegrationSourceConfiguration>? IntegrationSources { get; set; }
 
     /// <summary>
     /// Developer certificate configuration.
@@ -171,7 +176,7 @@ internal sealed class AspireConfigFile
     public Dictionary<string, PackageEntry>? Packages { get; set; }
 
     [JsonPropertyName(TemplateSourcesSectionName)]
-    [Description("Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path.")]
+    [Description("Named template sources from global or accepted init-source configuration. Each source specifies an absolute local path or a Git repository with optional ref, path, and displayName. " + SourceNameValidator.Description)]
     public Dictionary<string, AspireConfigTemplateSource?>? TemplateSources { get; set; }
 
     // Unmodeled settings must survive typed load/save cycles.
@@ -471,6 +476,7 @@ internal sealed class AspireConfigFile
             config.Channel = settings.Channel;
             config.Features = settings.Features;
             config.SkillSources = settings.SkillSources;
+            config.IntegrationSources = settings.IntegrationSources;
 
             // Legacy settings.json stored packages as Dictionary<string,string> with an
             // ad-hoc ".csproj" suffix for project references. Translate to strong entries.
@@ -596,6 +602,10 @@ internal sealed class AspireConfigApiDocs
 /// </summary>
 internal sealed class AspireConfigTemplateSource
 {
+    [JsonPropertyName("displayName")]
+    [Description("Optional template selector group heading. Defaults to the source alias when omitted or blank; the alias remains the source identity.")]
+    public string? DisplayName { get; set; }
+
     [JsonPropertyName("path")]
     public string? Path { get; set; }
 

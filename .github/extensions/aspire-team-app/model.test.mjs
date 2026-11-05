@@ -71,6 +71,7 @@ function makePr(overrides = {}) {
     authorAvatarUrl: null,
     createdAt: isoAgo(2 * dayMs),
     readyForReviewAt: null,
+    firstReadyForReviewAt: isoAgo(2 * dayMs),
     updatedAt: isoAgo(dayMs),
     baseRef: "main",
     milestone: null,
@@ -175,6 +176,54 @@ test("computeFocusItems keys focus identity by host so same-slug PRs on differen
     "https://ghe.example.com/microsoft/aspire/pull/500",
     "https://github.com/microsoft/aspire/pull/500",
   ]);
+});
+
+test("computeFocusItems breaks first-readiness ties by ordinal host, repository, and PR number", () => {
+  const firstReadyForReviewAt = isoAgo(3 * dayMs);
+  const make = (host, repository, number) => makePr({
+    firstReadyForReviewAt, repository, number, url: `https://${host}/${repository}/pull/${number}`,
+  });
+  const ordered = [
+    make("ghe.example.com", "microsoft/aspire", 1),
+    make("github.com", "Microsoft/Aspire", 2),
+    make("github.com", "microsoft/aspire", 10),
+    make("github.com", "microsoft/dcp", 1),
+  ];
+  for (const input of [ordered, [...ordered].reverse(), [ordered[2], ordered[0], ordered[3], ordered[1]]]) {
+    const focus = computeFocusItems(createAttentionBuckets(input, "joperezr"));
+    assert.deepEqual(focus.map((item) => item.pullRequest.url), ordered.map((pr) => pr.url));
+  }
+});
+
+test("blocked PRs return at their original first-readiness priority", () => {
+  const older = makePr({ number: 1, firstReadyForReviewAt: isoAgo(5 * dayMs) });
+  const newer = makePr({ number: 2, url: "https://github.com/microsoft/aspire/pull/2", firstReadyForReviewAt: isoAgo(3 * dayMs) });
+  const blockers = [
+    { draft: true },
+    { mergeableState: "dirty" },
+    { labels: ["needs-author-action"] },
+    { labels: ["no-merge"] },
+    { checks: { state: "failure" } },
+    { review: { state: "changes_requested", lastReviewedAt: isoAgo(hourMs) } },
+    { review: { state: "reviewed", unresolvedThreadCount: 1, lastReviewedAt: isoAgo(hourMs) } },
+  ];
+  for (const blocker of blockers) {
+    const blocked = makePr({ ...older, ...blocker });
+    const focus = computeFocusItems(createAttentionBuckets([newer, blocked], "joperezr"));
+    assert.deepEqual(focus.map((item) => item.pullRequest.number), [2]);
+    const returned = makePr({ ...older, updatedAt: new Date().toISOString() });
+    const restored = computeFocusItems(createAttentionBuckets([newer, returned], "joperezr"));
+    assert.deepEqual(restored.map((item) => item.pullRequest.number), [1, 2]);
+  }
+});
+
+test("focus omits unavailable first readiness and explains it without using updatedAt or PR age", () => {
+  const unavailable = makePr({ firstReadyForReviewAt: null, isMine: true });
+  const buckets = createAttentionBuckets([unavailable], "davidfowl");
+  const focus = computeFocusItems(buckets);
+  assert.deepEqual(focus, []);
+  const exclusions = computeFocusExclusionItems([unavailable], buckets, focus, "davidfowl");
+  assert.equal(exclusions[0].reason.kind, "readiness-unavailable");
 });
 
 test("computeFocusItems retains review-debt PRs through the full createAttentionBuckets pipeline", () => {
@@ -473,4 +522,12 @@ test("createIssueSignals leads with the highest-priority action pill", () => {
   // login has no "bot" substring (normalizeIssue now carries authorType for issues).
   const botTyped = makeIssue({ number: 6, author: "dependa", authorType: "Bot" });
   assert.ok(createIssueSignals(botTyped).some((s) => s.label === "bot"));
+});
+
+test("issue repository labels retain their kind for tooltip explanations", () => {
+  const signals = createIssueSignals(makeIssue({ labels: ["review debt", "custom"] }));
+  assert.deepEqual(signals.filter((signal) => signal.kind === "repo-label"), [
+    { label: "review debt", tone: "accent", kind: "repo-label" },
+    { label: "custom", tone: "accent", kind: "repo-label" },
+  ]);
 });

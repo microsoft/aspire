@@ -458,14 +458,12 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Use the Aspire plugin at your own risk.
-        ///Review the source before enabling it.
-        ///
-        ///Prefer skill files only? Install skills directly from {0}..
+        ///   Looks up a localized string similar to Skill sources:
+        ///{0}.
         /// </summary>
-        internal static string InitCommand_PluginRiskWarning {
+        internal static string InitCommand_SkillSources {
             get {
-                return ResourceManager.GetString("InitCommand_PluginRiskWarning", resourceCulture);
+                return ResourceManager.GetString("InitCommand_SkillSources", resourceCulture);
             }
         }
 
