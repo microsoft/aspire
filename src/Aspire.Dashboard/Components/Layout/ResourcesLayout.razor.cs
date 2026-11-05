@@ -448,9 +448,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // An unscoped page can restore saved filters, e.g. /traces -> /traces?type=server.
         // That redirect must not reopen content the user just closed. Resource selections and
         // navigation to another page still leave the full-canvas list normally.
+        // Browser back/forward can produce the same URL change, for example /metrics back to a
+        // directly opened /metrics?meter=Test, so only the redirect's history entry marker counts.
         var previousUri = NavigationManager.ToAbsoluteUri(_lastLocation);
         var currentUri = NavigationManager.ToAbsoluteUri(location);
         var restoringPageState = _isPaneFullCanvas && IsAllSelected && previousUri.Query.Length == 0 &&
+            string.Equals(NavigationManager.HistoryEntryState, PageExtensions.RestoredPageStateHistoryEntryState, StringComparison.Ordinal) &&
             string.Equals(previousUri.AbsolutePath, currentUri.AbsolutePath, StringComparisons.UrlPath) &&
             ParseLocation(NavigationManager.ToBaseRelativePath(location)).SelectedResourceNames.Count == 0;
         _lastLocation = location;
@@ -520,8 +523,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 // Re-renders can overlap asynchronous setup. Sharing the registration prevents
                 // handlers from being replaced while they hold the initiating selection control.
-                _paneInteractionsRegistration ??= RegisterPaneInteractionsAsync(_jsModule);
-                await _paneInteractionsRegistration;
+                var registration = _paneInteractionsRegistration ??= RegisterPaneInteractionsAsync(_jsModule);
+                try
+                {
+                    await registration;
+                }
+                catch
+                {
+                    // A faulted shared task would fail every later render, so the handlers could never
+                    // register after the circuit reconnects. Only clear this attempt: an overlapping render
+                    // may already have started a newer one.
+                    if (ReferenceEquals(_paneInteractionsRegistration, registration))
+                    {
+                        _paneInteractionsRegistration = null;
+                    }
+                    throw;
+                }
                 _isOrderingRegistered = true;
             }
             if (registrationChanged && showResizer)

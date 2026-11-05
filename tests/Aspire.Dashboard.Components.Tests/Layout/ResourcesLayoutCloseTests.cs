@@ -8,12 +8,15 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -213,6 +216,32 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData("/metrics?meter=Test", "metrics")]
+    [InlineData("/metrics?meter=Test&instrument=Requests", "metrics?meter=Test")]
+    public async Task CloseDetail_HistoryNavigationBackToQueryDetailOpensContent(string url, string expectedParent)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(url);
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.Find(".detail-page-close").ClickAsync();
+        cut.Render();
+        Assert.Equal(expectedParent, navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        // Browser back reaches the previous detail entry without the page state restoration marker.
+        navigation.NavigateTo(url);
+        cut.Render();
+
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+    }
+
+    [Theory]
     [InlineData("/structuredlogs")]
     [InlineData("/traces?resource=api")]
     [InlineData("/traces/detail/missing")]
@@ -325,5 +354,42 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
 
         Assert.Equal(["api", "cache"], cut.Instance.SelectedResourceNames);
         Assert.Equal("/traces?resource=api&resource=cache&type=server&filters=example", cut.Instance.DetailParentUrl);
+    }
+
+    [Fact]
+    public async Task TraceActionsViewDetails_CarriesSelectionAndListFilters()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/traces?resource=api&resource=cache&type=server&filters=example");
+        var layout = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        layout.WaitForAssertion(() => Assert.True(layout.Instance.IsLoaded));
+
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var summary = new TraceSummary
+        {
+            TraceId = "trace",
+            LastUpdatedTimestampTicks = 0,
+            FullName = "api: GET /",
+            StartTime = DateTime.UnixEpoch,
+            Duration = TimeSpan.Zero,
+            RootResource = new OtlpResource("api", "instance", uninstrumentedPeer: false, context),
+            Resources = [],
+            HasError = false,
+            HasGenAI = false
+        };
+        var actions = Render<TraceActions>(p => p
+            .Add(a => a.Summary, summary)
+            .AddCascadingValue(layout.Instance));
+
+        var viewDetails = Assert.Single(actions.FindComponent<AspireMenuButton>().Instance.ItemsProvider(),
+            item => item.Text == Resources.ControlsStrings.ActionViewDetailsText);
+        await actions.InvokeAsync(viewDetails.OnClick!);
+
+        Assert.Equal(navigation.ToAbsoluteUri(layout.Instance.GetTraceDetailUrl("trace")).AbsoluteUri, navigation.Uri);
+        Assert.Equal("traces/detail/trace?resource=api&resource=cache&type=server&filters=example", navigation.ToBaseRelativePath(navigation.Uri));
     }
 }
