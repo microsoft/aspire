@@ -5,7 +5,7 @@ Usage:
   aspire init [options]
 
 Options:
-  --language <language>                                                  The programming language for the AppHost (csharp, typescript)
+  --language <language>                                                  The programming language for the AppHost
   --file-based                                                           Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.
   --use-config-source                                                    Use the proposed Git configuration source. Specify false to decline it.
   --suppress-agent-init                                                  Suppress AI agent environment configuration after project creation

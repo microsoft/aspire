@@ -1354,6 +1354,13 @@ classDiagram
 | `aspire publish` | `PublishAsync` | Gets `RuntimeSpec`, executes in publish mode |
 | `aspire add` | `AddPackageAsync` | Add integration package, regenerate SDK |
 
+When `aspire init --language go` runs in a directory that already contains `go.mod`,
+it creates the AppHost in `aspire-apphost/` and records
+`aspire-apphost/apphost.go` in the root `aspire.config.json`. The AppHost has its
+own `go.mod` and `go.work`, so the application's module, source files, and
+workspace remain unchanged. The local workspace also lets the AppHost run
+without adding it to an existing parent `go.work`.
+
 ---
 
 ## Configuration

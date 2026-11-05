@@ -153,6 +153,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         projectFile.AddProperty("TargetFramework", TargetFramework);
         projectFile.AddProperty("AssemblyName", AssemblyName);
         projectFile.AddProperty("OutDir", BuildFolder);
+        // Integrations can copy C# sources (for example Blazor's file-based Gateway.cs) into the output.
+        // They are build artifacts, not AppHost server sources, and must stay out of subsequent builds.
+        projectFile.AddProperty("DefaultItemExcludes", $"$(DefaultItemExcludes);{BuildFolder}/**");
         projectFile.AddProperty("UserSecretsId", _userSecretsId);
         projectFile.AddProperty("IsAspireHost", "true");
         projectFile.AddProperty("IsPublishable", "false");

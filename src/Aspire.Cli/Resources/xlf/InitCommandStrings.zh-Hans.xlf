@@ -98,8 +98,8 @@
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
-        <source>The programming language for the AppHost (csharp, typescript)</source>
-        <target state="translated">适用于 AppHost 的编程语言(csharp、typescript)</target>
+        <source>The programming language for the AppHost</source>
+        <target state="needs-review-translation">适用于 AppHost 的编程语言(csharp、typescript)</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleSolutionsFound">
