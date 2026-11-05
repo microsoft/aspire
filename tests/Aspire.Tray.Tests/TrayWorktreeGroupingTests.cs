@@ -9,6 +9,137 @@ public class TrayWorktreeGroupingTests
 {
     private static AppHostMenuItem Host(string path, int pid) => TrayPanelSamples.Running(path, pid) with { Checkout = TrayGitCheckout.Read(path) };
 
+    [Theory]
+    [InlineData("apphost.cs", "main")]
+    [InlineData("AppHost/apphost.cs", "main")]
+    [InlineData("Shop.AppHost/apphost.cs", "Shop")]
+    public void ApplicationTitleDoesNotDependOnTheFirstLiveCheckout(string relativePath, string expected)
+    {
+        using var repo = new TrayWorktreeRepository();
+        var first = Host(repo.CreateHost("feature-first", "feature/first", relativePath), 1);
+        var second = Host(repo.CreateHost("feature-second", "feature/second", relativePath), 2);
+        var third = Host(repo.CreateHost("feature-third", "feature/third", relativePath), 3);
+        Assert.Equal(expected, Assert.Single(TrayAppHostGroup.Create([first, second])).Name);
+        Assert.Equal(expected, Assert.Single(TrayAppHostGroup.Create([second, first])).Name);
+        Assert.Equal(expected, Assert.Single(TrayAppHostGroup.Create([second, third])).Name);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CopiedAndForgedGitPointersDoNotJoinAnotherCheckout(bool pointAtMain)
+    {
+        using var repo = new TrayWorktreeRepository();
+        var original = repo.CreateHost("original", "cart");
+        var copy = repo.CreateHost("copy", "other");
+        var originalPointer = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(original))!, ".git");
+        var copyPointer = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(copy))!, ".git");
+        File.WriteAllText(copyPointer, pointAtMain ? "gitdir: " + repo.CommonDirectory : File.ReadAllText(originalPointer));
+        Assert.NotNull(TrayGitCheckout.Read(original));
+        Assert.Null(TrayGitCheckout.Read(copy));
+        var groups = TrayAppHostGroup.Create([Host(original, 1), Host(copy, 2)]);
+        Assert.Equal(2, groups.Count);
+        Assert.All(groups, group => Assert.False(group.IsGroup));
+    }
+
+    [Fact]
+    public void EmptyGitDirectoryAndRemovedCheckoutDoNotInheritAncestorMetadata()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var path = repo.CreateHost("main", "main");
+        var removed = Path.Combine(Path.GetDirectoryName(repo.CommonDirectory)!, "removed", "apphost.cs");
+        Assert.Null(TrayGitCheckout.Read(removed));
+        File.Delete(Path.Combine(repo.CommonDirectory, "HEAD"));
+        Assert.Null(TrayGitCheckout.Read(path));
+    }
+
+    [Fact]
+    public void OpenActionsRemainVisibleWhenDiscoveryFormsAGroup()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var first = Host(repo.CreateHost("main", "main"), 1);
+        var second = Host(repo.CreateHost("cart", "cart"), 2);
+        var panel = new TrayPanel(new(DiscoveryState.Live, [first], ""), TrayPanelPalette.Light);
+        panel.Invoke(new(PanelTargetKind.More, PanelSection.Running, first.Id));
+        panel.Update(new(DiscoveryState.Live, [first, second], ""));
+        Assert.Single(panel.Scene.Targets, target => target.Kind == PanelTargetKind.TogglePin && target.Key.Host == first.Id);
+        Assert.Equal(new PanelTargetKey(PanelTargetKind.More, PanelSection.Running, first.Id), panel.FocusedTarget);
+        Assert.Null(panel.Key(PanelKey.Escape).Action);
+        Assert.Null(panel.ActionsRow);
+        Assert.Equal(PanelActionKind.Close, panel.Key(PanelKey.Escape).Action!.Kind);
+        panel.Invoke(new(PanelTargetKind.More, PanelSection.Running, first.Id));
+        panel.Invoke(Assert.Single(panel.Scene.Targets, target => target.Kind == PanelTargetKind.ToggleApplication).Key);
+        Assert.Null(panel.ActionsRow);
+        Assert.All(panel.Scene.Targets, target => Assert.Null(target.Host));
+        Assert.Equal(PanelActionKind.Close, panel.Key(PanelKey.Escape).Action!.Kind);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MissingFileConfirmationRevealsItsGroupAndKeepsKeyboardFocus(bool groupFormsAfterConfirm)
+    {
+        using var repo = new TrayWorktreeRepository();
+        var first = Host(repo.CreateHost("main", "main"), 0) with { IsRunning = false, CanStart = true };
+        var second = Host(repo.CreateHost("cart", "cart"), 0) with { IsRunning = false, CanStart = true };
+        var initial = groupFormsAfterConfirm ? new[] { first } : new[] { first, second };
+        var panel = new TrayPanel(new(DiscoveryState.Live, [], "") { RecentAppHosts = initial }, TrayPanelPalette.Light);
+        panel.ConfirmRemoveMissing(first);
+        if (groupFormsAfterConfirm)
+        {
+            panel.Update(new(DiscoveryState.Live, [], "") { RecentAppHosts = [first, second] });
+        }
+        var cancel = Assert.Single(panel.Scene.Targets, target => target.Kind == PanelTargetKind.ConfirmCancel);
+        Assert.False(cancel.HitBounds.IsEmpty);
+        Assert.Equal(cancel.Key, panel.FocusedTarget);
+        panel.Invoke(new(PanelTargetKind.ConfirmAccept, PanelSection.Recent, first.Id));
+        Assert.Null(panel.Confirmation);
+        Assert.Equal(PanelActionKind.Close, panel.Key(PanelKey.Escape).Action!.Kind);
+    }
+
+    [Theory]
+    [InlineData((int)AppHostHealth.Healthy, false, false, true, "Healthy")]
+    [InlineData((int)AppHostHealth.Warning, false, false, true, "Needs attention")]
+    [InlineData((int)AppHostHealth.Unhealthy, false, false, true, "Unhealthy")]
+    [InlineData((int)AppHostHealth.Unknown, false, false, true, "Status unavailable")]
+    [InlineData((int)AppHostHealth.Healthy, true, false, true, "Starting or stopping")]
+    [InlineData((int)AppHostHealth.Healthy, false, true, true, "Stopped")]
+    [InlineData((int)AppHostHealth.Healthy, false, false, false, "Status unavailable")]
+    public void CollapsedApplicationsExposeAggregateStatusToNativeAccessibility(int health, bool starting, bool stopped, bool live, string expected)
+    {
+        using var repo = new TrayWorktreeRepository();
+        var first = Host(repo.CreateHost("main", "main"), 1) with { Health = (AppHostHealth)health, IsStarting = starting, IsRunning = !stopped };
+        var second = Host(repo.CreateHost("cart", "cart"), 2);
+        var panel = new TrayPanel(new(live ? DiscoveryState.Live : DiscoveryState.Disconnected, [first, second], ""), TrayPanelPalette.Light);
+        var application = Assert.Single(panel.Scene.Accessibility, element => element.Target?.Kind == PanelTargetKind.ToggleApplication);
+        Assert.Equal(expected, application.Description);
+        Assert.Equal("Show 2 instances of Shop", application.Name);
+    }
+
+    [Fact]
+    public void PidDisambiguationUsesDisplayedRowsRatherThanCollapsedApplicationNames()
+    {
+        using var shop = new TrayWorktreeRepository();
+        using var billing = new TrayWorktreeRepository();
+        var first = Host(shop.CreateHost("main", "main"), 1);
+        var second = Host(shop.CreateHost("cart", "cart"), 2);
+        var third = Host(billing.CreateHost("main", "main", "Billing.AppHost/apphost.cs"), 3);
+        var fourth = Host(billing.CreateHost("fix", "fix", "Billing.AppHost/apphost.cs"), 4);
+        var standalone = Host(shop.CreateHost("standalone", "standalone"), 5) with { Checkout = null };
+        var panel = new TrayPanel(new(DiscoveryState.Live, [first, second, third, fourth, standalone], ""), TrayPanelPalette.Light);
+        var row = Assert.Single(panel.Scene.Targets, target => target.Kind == PanelTargetKind.Row);
+        Assert.Equal(standalone.Id, row.Host!.Id);
+        Assert.Equal("Shop, Running · " + AppHostPresentation.GetLocation(standalone.Id.AppHostPath), row.AccessibleName);
+        foreach (var application in panel.Scene.Targets.Where(target => target.Kind == PanelTargetKind.ToggleApplication).ToArray())
+        {
+            panel.Invoke(application.Key);
+        }
+        var mainRows = panel.Scene.Targets.Where(target => target.Kind == PanelTargetKind.Row && target.Host!.DisplayName == "main").ToArray();
+        Assert.Equal([first.Id, third.Id], mainRows.Select(target => target.Host!.Id));
+        Assert.Equal(["main, Running · " + AppHostPresentation.GetLocation(first.Id.AppHostPath) + " · PID 1",
+            "main, Running · " + AppHostPresentation.GetLocation(third.Id.AppHostPath) + " · PID 3"], mainRows.Select(target => target.AccessibleName));
+    }
+
     [Fact]
     public void RelatedWorktreesGroupButClonesAndDifferentAppHostsRemainSeparate()
     {

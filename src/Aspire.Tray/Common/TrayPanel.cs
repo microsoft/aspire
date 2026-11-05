@@ -814,6 +814,14 @@ internal sealed class TrayPanel
             {
                 if (application.IsGroup)
                 {
+                    // Discovery can turn a singleton with an open interaction into a group.
+                    // Keep its card visible, including asynchronous missing-file confirmations.
+                    if (application.Hosts.Any(host => _actions == (section, host.Id)
+                        || (_confirm is { Kind: PanelConfirmKind.RemoveMissing } confirm
+                            && confirm.Section == section && confirm.Host?.Id == host.Id)))
+                    {
+                        _expandedApplications.Add((section, application.Key!.Value));
+                    }
                     Add(ListItemKind.Application, RowHeight, section, null, application: application);
                     if (!_expandedApplications.Contains((section, application.Key!.Value)))
                     {
@@ -884,8 +892,12 @@ internal sealed class TrayPanel
             commands.Add(new FillPathCommand(PanelPath.Rectangle(new(0, _viewport.Y, Width, 1)), palette.Separator));
         }
 
-        var duplicateNames = running.GroupBy(host => host.DisplayName, StringComparer.OrdinalIgnoreCase)
+        var visibleRunning = items.Where(item => item.Kind == ListItemKind.Row && item.Section == PanelSection.Running)
+            .Select(item => item.Host!).ToArray();
+        var duplicateNames = visibleRunning.GroupBy(host => host.DisplayName, StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var duplicatePaths = visibleRunning.GroupBy(host => host.Id.AppHostPath, TrayAppHostPath.Comparer)
+            .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(TrayAppHostPath.Comparer);
         commands.Add(new PushClipCommand(_viewport));
         var hidden = new List<PanelCommand>();
         foreach (var item in items)
@@ -912,7 +924,7 @@ internal sealed class TrayPanel
                 case ListItemKind.Row:
                     AddRow(sink, targets, item.Host!, item.Section, top, live,
                         item.Section == PanelSection.Running && (duplicateNames.Contains(item.Host!.DisplayName)
-                            || running.Count(host => TrayAppHostPath.Comparer.Equals(host.Id.AppHostPath, item.Host!.Id.AppHostPath)) > 1),
+                            || duplicatePaths.Contains(item.Host!.Id.AppHostPath)),
                         palette, item.Nested);
                     break;
                 case ListItemKind.Application:
@@ -1207,14 +1219,25 @@ internal sealed class TrayPanel
         var key = new PanelTargetKey(PanelTargetKind.ToggleApplication, section, null) { Application = application.Key };
         var row = new PanelRect(RowInset, top + 2, Width - 2 * RowInset, RowHeight - 4);
         AddInteractionFill(commands, key, row, palette, includeFocus: false);
-        TrayPanelGlyphs.AddStatus(commands, application.Status(live), new(EdgeMargin, top + 16, 20, 20), palette);
+        var status = application.Status(live);
+        var statusText = status switch
+        {
+            PanelStatusGlyph.Healthy => "Healthy",
+            PanelStatusGlyph.Warning => "Needs attention",
+            PanelStatusGlyph.Unhealthy => "Unhealthy",
+            PanelStatusGlyph.Busy => "Starting or stopping",
+            PanelStatusGlyph.Stopped => "Stopped",
+            _ => "Status unavailable"
+        };
+        TrayPanelGlyphs.AddStatus(commands, status, new(EdgeMargin, top + 16, 20, 20), palette);
         commands.Add(new TextCommand(new(TextLeft, top + 8, TrailingCenter - TextLeft - 20, 18), application.Name,
             PanelFontRole.Name, palette.TextPrimary));
         commands.Add(new TextCommand(new(TextLeft, top + 27, TrailingCenter - TextLeft - 20, 16),
             $"{application.Hosts.Count} instances", PanelFontRole.Body, palette.TextSecondary));
         TrayPanelGlyphs.AddIcon(commands, expanded ? PanelIcon.ChevronDown : PanelIcon.ChevronRight,
             new(TrailingCenter - 8, top + 18, 16, 16), palette.TextSecondary);
-        AddTarget(targets, key, row, $"{(expanded ? "Hide" : "Show")} {application.Hosts.Count} instances of {application.Name}", true, null);
+        AddTarget(targets, key, row, $"{(expanded ? "Hide" : "Show")} {application.Hosts.Count} instances of {application.Name}",
+            true, null, description: statusText);
     }
 
     private void AddRow(List<PanelCommand> commands, List<PanelHitTarget> targets, AppHostMenuItem host, PanelSection section,
