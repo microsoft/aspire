@@ -25,6 +25,9 @@ public class ResourceNotificationService : IDisposable
 {
     // Resource state is keyed by the unique name of the resource. This could be the name of the resource, or a replica ID.
     private readonly ConcurrentDictionary<string, ResourceNotificationState> _resourceNotificationStates = new();
+    // Readiness is model-wide. Serialize replica publications so concurrent preparations cannot
+    // both observe only terminal siblings and reserve different generations for the same restart.
+    private readonly ConcurrentDictionary<string, object> _resourceNotificationLocks = new();
     private readonly ILogger<ResourceNotificationService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly CancellationTokenSource _disposing = new();
@@ -889,21 +892,27 @@ public class ResourceNotificationService : IDisposable
             await PublishUpdateAsync(resource, resourceId, snapshot =>
             {
                 notificationState.PendingStart = attempt;
-                // Readiness callbacks are model-wide. A nonterminal sibling with the same ready task
-                // keeps that monitor valid, even while starting/stopping. A freshly prepared sibling
-                // has already cleared its old task and must not preserve another replica's stale readiness.
-                var retainReadiness = resource.GetResolvedResourceNames().Any(name =>
-                    name != resourceId &&
-                    TryGetCurrentState(name, out var sibling) &&
-                    !KnownResourceStates.TerminalStates.Contains(sibling.Snapshot.State?.Text) &&
-                    ReferenceEquals(sibling.Snapshot.ResourceReadyEvent?.EventTask, snapshot.ResourceReadyEvent?.EventTask));
+                // A nonterminal sibling keeps the model's monitor valid, including while its ready
+                // callback is pending. After all replicas stop, reserve a new generation even if the
+                // health service has not consumed the terminal events. Later preparations join it.
+                var sibling = resource.GetResolvedResourceNames()
+                    .Where(name => name != resourceId)
+                    .Select(name => TryGetCurrentState(name, out var current) ? current : null)
+                    .FirstOrDefault(current => current is not null &&
+                        !KnownResourceStates.TerminalStates.Contains(current.Snapshot.State?.Text));
+                var generation = sibling is not null ? sibling.Snapshot.ReadinessGeneration : new object();
+                var readiness = sibling is null ? null
+                    : ReferenceEquals(generation, snapshot.ReadinessGeneration)
+                        ? snapshot.ResourceReadyEvent ?? sibling.Snapshot.ResourceReadyEvent
+                        : sibling.Snapshot.ResourceReadyEvent;
                 return snapshot with
                 {
                     State = KnownResourceStates.Starting,
                     ExitCode = null,
                     StartTimeStamp = null,
                     StopTimeStamp = null,
-                    ResourceReadyEvent = retainReadiness ? snapshot.ResourceReadyEvent : null,
+                    ReadinessGeneration = generation,
+                    ResourceReadyEvent = readiness,
                     HealthReports = [.. snapshot.HealthReports.Select(report => new HealthReportSnapshot(report.Name, null, null, null))]
                 };
             }).ConfigureAwait(false);
@@ -921,7 +930,7 @@ public class ResourceNotificationService : IDisposable
     internal void CompleteResourceStart(IResource resource, string resourceId)
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
-        lock (notificationState)
+        lock (notificationState.SyncRoot)
         {
             notificationState.PendingStart = null;
         }
@@ -930,7 +939,7 @@ public class ResourceNotificationService : IDisposable
     internal bool IsResourceStartPending(IResource resource, string resourceId)
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
-        lock (notificationState)
+        lock (notificationState.SyncRoot)
         {
             return notificationState.PendingStart is not null;
         }
@@ -974,7 +983,7 @@ public class ResourceNotificationService : IDisposable
             throw new InvalidOperationException($"Resource instance doesn't match resource previously registered with specified resource id '{resourceId}'.");
         }
 
-        lock (notificationState)
+        lock (notificationState.SyncRoot)
         {
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
@@ -1405,7 +1414,8 @@ public class ResourceNotificationService : IDisposable
     }
 
     private ResourceNotificationState GetResourceNotificationState(string resourceId, IResource resource) =>
-        _resourceNotificationStates.GetOrAdd(resourceId, _ => new ResourceNotificationState(resource));
+        _resourceNotificationStates.GetOrAdd(resourceId, _ =>
+            new ResourceNotificationState(resource, _resourceNotificationLocks.GetOrAdd(resource.Name, static _ => new object())));
 
     private string BuildCancellationErrorMessage(string cancellationMessage, string resourceName)
     {
@@ -1527,7 +1537,7 @@ public class ResourceNotificationService : IDisposable
     {
         public void Dispose()
         {
-            lock (state)
+            lock (state.SyncRoot)
             {
                 if (ReferenceEquals(state.PendingStart, this))
                 {
@@ -1540,8 +1550,9 @@ public class ResourceNotificationService : IDisposable
     /// <summary>
     /// The annotation that allows publishing and subscribing to changes in the state of a resource.
     /// </summary>
-    private sealed class ResourceNotificationState(IResource resource)
+    private sealed class ResourceNotificationState(IResource resource, object syncRoot)
     {
+        public object SyncRoot { get; } = syncRoot;
         public PendingResourceStart? PendingStart { get; set; }
         private long _lastVersion = 1;
         public long GetNextVersion() => _lastVersion++;

@@ -106,13 +106,57 @@ public class ResourceNotificationTests
     }
 
     [Fact]
+    public async Task ConcurrentReplicaPreparationsShareReadinessGeneration()
+    {
+        var resource = new ExecutableResource("resource", "unused", ".");
+        resource.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("resource-first", "first", 0),
+            new DcpInstance("resource-second", "second", 1)
+        ]));
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        });
+        var begin = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var starts = resource.GetResolvedResourceNames().Select(name => Task.Run(async () =>
+        {
+            await begin.Task;
+            return await notifications.BeginResourceStartAsync(resource, name);
+        })).ToArray();
+        begin.SetResult();
+        var attempts = await Task.WhenAll(starts).DefaultTimeout();
+        try
+        {
+            Assert.True(notifications.TryGetCurrentState("resource-first", out var first));
+            Assert.True(notifications.TryGetCurrentState("resource-second", out var second));
+            Assert.NotNull(first.Snapshot.ReadinessGeneration);
+            Assert.Same(first.Snapshot.ReadinessGeneration, second.Snapshot.ReadinessGeneration);
+            Assert.Null(first.Snapshot.ResourceReadyEvent);
+            Assert.Null(second.Snapshot.ResourceReadyEvent);
+        }
+        finally
+        {
+            foreach (var attempt in attempts)
+            {
+                attempt.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public async Task DisposingPreviousStartDoesNotReleaseNewAttemptGuard()
     {
         var resource = new ExecutableResource("resource", "unused", ".");
         var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var firstStart = await notifications.BeginResourceStartAsync(resource, resource.Name);
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var first));
         notifications.CompleteResourceStart(resource, resource.Name);
         using var secondStart = await notifications.BeginResourceStartAsync(resource, resource.Name);
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var second));
+        Assert.NotSame(first.Snapshot.ReadinessGeneration, second.Snapshot.ReadinessGeneration);
+        Assert.True(second.Snapshot.Version > first.Snapshot.Version);
 
         firstStart.Dispose();
         Assert.False(await notifications.TryPublishDcpUpdateAsync(resource, resource.Name,

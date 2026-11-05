@@ -33,11 +33,38 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
                 lock (_resourceMonitoringStates)
                 {
-                    if (_resourceMonitoringStates.TryGetValue(resourceName, out state))
-                    {
-                        state.SetLatestEvent(resourceEvent);
-                    }
+                    _resourceMonitoringStates.TryGetValue(resourceName, out state);
                 }
+
+                // WatchAsync can still deliver the old terminal/Running events after a restart has
+                // already been prepared. Ignore those generations rather than reviving their monitor.
+                if (resourceNotificationService.TryGetCurrentState(resourceEvent.ResourceId, out var current) &&
+                    !ReferenceEquals(current.Snapshot.ReadinessGeneration, resourceEvent.Snapshot.ReadinessGeneration))
+                {
+                    continue;
+                }
+
+                if (state is not null &&
+                    !ReferenceEquals(state.ReadinessGeneration, resourceEvent.Snapshot.ReadinessGeneration))
+                {
+                    // A terminal replica can keep publishing metadata from an older generation
+                    // after a sibling restarts. It must not retire that sibling's active monitor.
+                    if (resourceEvent.Resource.GetResolvedResourceNames().Any(name =>
+                        resourceNotificationService.TryGetCurrentState(name, out var sibling) &&
+                        !KnownResourceStates.TerminalStates.Contains(sibling.Snapshot.State?.Text) &&
+                        ReferenceEquals(sibling.Snapshot.ReadinessGeneration, state.ReadinessGeneration)))
+                    {
+                        continue;
+                    }
+
+                    state.StopResourceMonitor();
+                    lock (_resourceMonitoringStates)
+                    {
+                        _resourceMonitoringStates.Remove(resourceName);
+                    }
+                    state = null;
+                }
+                state?.SetLatestEvent(resourceEvent);
 
                 if (resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running)
                 {
@@ -125,7 +152,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
             //       would need to revisit this and scan for transitive health checks
             //       on a periodic basis (you wouldn't want to do it on every pass.
             logger.LogDebug("Resource '{ResourceName}' has no health checks to monitor.", resource.Name);
-            FireResourceReadyEvent(resource, cancellationToken);
+            FireResourceReadyEvent(state);
 
             return;
         }
@@ -177,7 +204,7 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                     if (!resourceReadyEventFired)
                     {
                         resourceReadyEventFired = true;
-                        FireResourceReadyEvent(resource, cancellationToken);
+                        FireResourceReadyEvent(state);
                     }
                     nonHealthyReportCount = 0;
                 }
@@ -196,6 +223,13 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
                 // Publish updated health reports every time because the last run time has changed.
                 await resourceNotificationService.PublishUpdateAsync(resource, s =>
                 {
+                    // Cancellation alone is asynchronous. Check the generation inside the snapshot
+                    // publication lock so an old in-flight check cannot mark a new attempt healthy.
+                    if (cancellationToken.IsCancellationRequested ||
+                        !ReferenceEquals(s.ReadinessGeneration, state.ReadinessGeneration))
+                    {
+                        return s;
+                    }
                     var healthReports = MergeHealthReports(s.HealthReports, report, lastRunAt);
 
                     return s with
@@ -252,12 +286,14 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
         return false;
     }
 
-    private void FireResourceReadyEvent(IResource resource, CancellationToken cancellationToken)
+    private void FireResourceReadyEvent(ResourceMonitorState state)
     {
+        var resource = state.LatestEvent.Resource;
+        var cancellationToken = state.CancellationToken;
         logger.LogDebug("Resource '{ResourceName}' is ready.", resource.Name);
 
         // We don't want to block the monitoring loop while we fire the event.
-        _ = Task.Run(async () =>
+        state.StartResourceReadyEvent(async () =>
         {
             var resourceReadyEvent = new ResourceReadyEvent(resource, services);
 
@@ -283,13 +319,14 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
 
             logger.LogDebug("Publishing the result of ResourceReadyEvent for '{ResourceName}'.", resource.Name);
 
-            await resourceNotificationService.PublishUpdateAsync(resource, s => s with
-            {
-                ResourceReadyEvent = new(task)
-            })
+            // Subscribers may ignore cancellation and finish after another start is prepared.
+            // Never let their completion replace that attempt's readiness, even before retirement.
+            await resourceNotificationService.PublishUpdateAsync(resource, s =>
+                !cancellationToken.IsCancellationRequested && ReferenceEquals(s.ReadinessGeneration, state.ReadinessGeneration)
+                    ? s with { ResourceReadyEvent = new(task) }
+                    : s)
             .ConfigureAwait(false);
-        },
-        cancellationToken);
+        });
     }
 
     private static ImmutableArray<HealthReportSnapshot> MergeHealthReports(ImmutableArray<HealthReportSnapshot> healthReports, HealthReport report, DateTime runAt)
@@ -333,12 +370,14 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
         private readonly object _lock = new object();
         private readonly string _resourceName;
         private TaskCompletionSource? _delayInterruptTcs;
+        private Task _resourceReadyTask = Task.CompletedTask;
 
         public ResourceMonitorState(ILogger logger, ResourceEvent initialEvent, CancellationToken serviceStoppingToken)
         {
             _logger = logger;
             _cts = CancellationTokenSource.CreateLinkedTokenSource(serviceStoppingToken);
             _resourceName = initialEvent.Resource.Name;
+            ReadinessGeneration = initialEvent.Snapshot.ReadinessGeneration;
             LatestEvent = initialEvent;
 
             _logger.LogDebug("Starting health monitoring for resource '{ResourceName}'.", _resourceName);
@@ -348,6 +387,28 @@ internal class ResourceHealthCheckService(ILogger<ResourceHealthCheckService> lo
         public CancellationToken CancellationToken => _cts.Token;
 
         public ResourceEvent LatestEvent { get; private set; }
+
+        public object? ReadinessGeneration { get; }
+
+        // Includes publication of subscriber results, which can outlive monitor cancellation.
+        internal Task ResourceReadyTask
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _resourceReadyTask;
+                }
+            }
+        }
+
+        public void StartResourceReadyEvent(Func<Task> callback)
+        {
+            lock (_lock)
+            {
+                _resourceReadyTask = Task.Run(callback, CancellationToken);
+            }
+        }
 
         public void StopResourceMonitor()
         {
