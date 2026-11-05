@@ -1,0 +1,29 @@
+{
+  "id": "native-core-cliprotocol-silent-partial-frames-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients canceled after 20s timeout on Linux",
+  "error_pattern": "System.OperationCanceledException : The operation was canceled.\n   at Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(String frame)",
+  "occurrences": [
+    {
+      "run_id": 42085297816,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42085297816",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (ubuntu-latest)",
+      "observed_at": "2026-11-05T19:17:05Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(frame: \"Content-Length: 100\\r\\n\\r\\n{\")",
+          "job_id": 127449890066,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (ubuntu-latest)",
+          "error": "System.OperationCanceledException : The operation was canceled.",
+          "stack_trace": "   at System.Threading.Channels.AsyncOperation`2.GetResult(Int16 token)\n   at System.Threading.Tasks.ValueTask`1.ValueTaskSourceAsTask.<>c.<.cctor>b__4_0(Object state)\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(String frame) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Native.Core.Tests/NativeCliProtocolTests.cs:line 120\n   at Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(String frame) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Native.Core.Tests/NativeCliProtocolTests.cs:line 121\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "83891ebe-5376-40a6-9837-059236498377"
+        }
+      ]
+    }
+  ]
+}

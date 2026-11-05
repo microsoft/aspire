@@ -1,0 +1,103 @@
+{
+  "run_id": 42085297816,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42085297816",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-05T19:17:05Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21604,
+    "title": "Give the Deno AppHost inspector attach the AppHost startup budget",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-21603-deno-apphost-attach-timeout",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21604",
+    "merged_at": "2026-11-05T18:32:56Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "e37145f3298242cec5a322ebf0cbcd081273bf3a",
+    "failed_sha": "9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "message": "[automated] test(cli): Find Radius MongoDB pods in their application namespace (#21422) ## Description The Radius deployment outerloop test fails while waiting for MongoDB: ```text error: no matching resources found ``` The legacy MongoDB recipe labels its pods, not its Deployment metadata. Its workload also lives in the legacy application's namespace, which appends `-app` to the environment namespace. Wait for the MongoDB pod to become Ready in that namespace, and use the same namespace for pod",
+        "html_url": "https://github.com/microsoft/aspire/commit/a5c31f478cab6bbac15fa3b428267f2de9e517be",
+        "pull_request": {
+          "number": 21422,
+          "title": "[automated] test(cli): Find Radius MongoDB pods in their application namespace",
+          "url": "https://github.com/microsoft/aspire/pull/21422",
+          "merged_at": "2026-11-05T17:08:30Z"
+        }
+      },
+      {
+        "sha": "1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "message": "fix intermittent internal build failures (#21768) ## Description **Add bounded retries for transient connection loss during macOS tray notarization-ticket stapling and validation.** Internal builds intermittently fail when Apple's CloudKit connection drops: ```text Error Domain=NSURLErrorDomain Code=-1005 \"The network connection was lost.\" ``` These network failures currently stop the build immediately. Retry only the failed stapler operation when its output identifies connection loss, rather th",
+        "html_url": "https://github.com/microsoft/aspire/commit/1d7bba1356867e89e5476e4973e3c83298fcbd7d",
+        "pull_request": {
+          "number": 21768,
+          "title": "fix intermittent internal build failures",
+          "url": "https://github.com/microsoft/aspire/pull/21768",
+          "merged_at": "2026-11-05T17:38:09Z"
+        }
+      },
+      {
+        "sha": "9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "message": "Give the Deno AppHost inspector attach the AppHost startup budget (#21604) ## Description Fixes #21603. That issue is the Windows `launch-profiles` flake \"debugs a Deno AppHost through the built-in JavaScript debugger\", #5/#7 on the 7-day top-flakes list in #21600. **Root cause.** - To debug a Deno AppHost, the extension launches `deno run --inspect-wait=127.0.0.1:<port> ...` through js-debug (`pwa-node`) with `attachSimplePort`, but never sets `timeout`. - js-debug's default 10s budget starts b",
+        "html_url": "https://github.com/microsoft/aspire/commit/9b353dde48c6943e6fe11b2f6c5a90d966b9195a",
+        "pull_request": {
+          "number": 21604,
+          "title": "Give the Deno AppHost inspector attach the AppHost startup budget",
+          "url": "https://github.com/microsoft/aspire/pull/21604",
+          "merged_at": "2026-11-05T18:32:56Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (ubuntu-latest)",
+      "id": 127449890066,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42085297816/job/127449890066",
+      "classification": "flaky-test",
+      "reason": "One parameterized case hit a 20s cancellation in a socket/fake-clock timing test while 586 other tests passed.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 127449942919,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42085297816/job/127449942919",
+      "classification": "transient-infra",
+      "reason": "macOS test host crashed with exit code 3 (run exit 7) with zero failed tests, matching the known host crash.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(frame: \"Content-Length: 100\\r\\n\\r\\n{\")",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (ubuntu-latest)",
+      "error": "System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "   at System.Threading.Channels.AsyncOperation`2.GetResult(Int16 token)\n   at System.Threading.Tasks.ValueTask`1.ValueTaskSourceAsTask.<>c.<.cctor>b__4_0(Object state)\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(String frame) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Native.Core.Tests/NativeCliProtocolTests.cs:line 120\n   at Aspire.Hosting.Native.Core.Tests.NativeCliProtocolTests.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients(String frame) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Native.Core.Tests/NativeCliProtocolTests.cs:line 121\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "OperationCanceledException after 20s timeout in a timing-dependent socket test; no code path deterministically fails.",
+      "job_id": 127449890066,
+      "execution_id": "83891ebe-5376-40a6-9837-059236498377",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "native-core-cliprotocol-silent-partial-frames-timeout",
+    "aspire-cli-tests-macos-testhost-crash-exit-3"
+  ]
+}
