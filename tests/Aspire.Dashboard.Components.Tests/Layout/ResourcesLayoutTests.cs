@@ -47,7 +47,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.Empty(cut.FindAll(".resource-row-source"));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         var source = cut.Find("[data-resource-name='source'] .resource-row-source-value");
         Assert.Equal(value, source.TextContent);
         Assert.Equal(original, source.GetAttribute("data-tooltip"));
@@ -109,9 +109,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("Running", cut.Find("[data-resource-name='api'] .state-dot + span").TextContent);
         Assert.Equal("10 minutes ago", cut.Find("[data-resource-name='api'] time").TextContent);
         Assert.Equal("Finished", cut.Find("[data-resource-name='finished'] .state-dot + span").TextContent);
-        Assert.IsType<Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.PanelLeftExpand>(
-            cut.FindComponents<FluentButton>().Single(button => button.Instance.Class?.Contains("resource-pane-canvas-toggle") is true).Instance.IconStart);
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
+        ResourceSetupHelpers.ToggleResourceList(cut);
 
         var row = cut.Find("[data-resource-name='api']");
         var endpoint = Assert.Single(row.QuerySelectorAll(".resource-row-endpoint-address"));
@@ -128,8 +127,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(row.QuerySelectorAll(".resource-row-health-status"));
         Assert.Equal("Running", row.QuerySelector(".state-dot + span")!.TextContent);
         Assert.Contains("Healthy", row.QuerySelector(".resource-row-link")!.GetAttribute("aria-description"));
-        Assert.IsType<Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.PanelLeftContract>(
-            cut.FindComponents<FluentButton>().Single(button => button.Instance.Class?.Contains("resource-pane-canvas-toggle") is true).Instance.IconStart);
+        Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         var time = health.QuerySelector(".resource-row-start-time time")!;
         Assert.Equal(api.StartTimeStamp!.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture), time.GetAttribute("datetime"));
         Assert.Equal("Started 10 minutes ago", time.TextContent.Trim());
@@ -148,8 +146,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(parameter.QuerySelectorAll("time, .resource-row-health-status, .resource-row-endpoint-address"));
 
         clock.UtcNow = clock.UtcNow.AddMinutes(1);
-        cut.Find(".resource-pane-canvas-toggle").Click();
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Equal("Started 11 minutes ago",
             cut.Find("[data-resource-name='api'] .resource-row-health time").TextContent.Trim()));
     }
@@ -231,7 +229,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var rows = cut.FindAll(".resource-row").Select(r => r.GetAttribute("data-resource-name")).ToArray();
         var url = navigation.Uri;
 
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
 
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.True(cut.Find(".resource-content").HasAttribute("inert"));
@@ -269,7 +267,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             builder.Add(p => p.Value, desktop).AddChildContent<ResourcesLayout>());
         var layout = cut.FindComponent<ResourcesLayout>().Instance;
         cut.WaitForAssertion(() => Assert.True(layout.IsLoaded));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
 
         cut.Render(builder => builder.Add(p => p.Value, mobile).AddChildContent<ResourcesLayout>());
@@ -283,7 +281,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Single(cut.FindAll($"[aria-label='{Resources.Layout.ResourcePaneClose}']"));
 
         cut.Render(builder => builder.Add(p => p.Value, desktop).AddChildContent<ResourcesLayout>());
-        Assert.Single(cut.FindAll(".resource-pane-canvas-toggle"));
+        Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         Assert.Empty(cut.FindAll(".pane-full-canvas"));
         Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
     }
@@ -304,7 +302,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.Empty(JSInterop.Invocations["startPaneSelectionReveal"]);
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         var fitCalls = JSInterop.Invocations["fitPaneToActions"].Count;
         cut.Find("[data-resource-name='api'] .resource-row-link").Click();
         cut.Render();
@@ -321,7 +319,7 @@ public class ResourcesLayoutTests : DashboardTestContext
                 cut.Render();
                 break;
             case "reverse":
-                cut.Find(".resource-pane-canvas-toggle").Click();
+                ResourceSetupHelpers.ToggleResourceList(cut);
                 break;
             case "resize":
                 await cut.InvokeAsync(() => cut.Instance.SetPaneWidthAsync(440));
@@ -749,7 +747,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-row-type"));
         Assert.Empty(cut.FindAll("[data-resource-name='api'] .persistent-container-badge"));
         Assert.Single(cut.FindAll("[data-resource-name='cache'] .persistent-container-badge"));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         Assert.Equal("Project", cut.Find("[data-resource-name='api'] .resource-row-type").TextContent);
         Assert.Equal("Container (persistent)", cut.Find("[data-resource-name='cache'] .resource-row-type").TextContent);
     }
@@ -939,7 +937,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-highlighted")));
         Assert.Equal("stop api", cut.Find(".resource-row-highlighted").GetAttribute("aria-label"));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-highlighted").Count));
         var buttons = cut.FindAll(".resource-row-highlighted");
         Assert.Equal(["stop api", "restart api"], buttons.Select(b => b.GetAttribute("aria-label")));
@@ -1016,7 +1014,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Empty(membership.QuerySelectorAll(".resource-tree-guide, .resource-tree-stem"));
             Assert.Equal("0", membership.QuerySelector(".resource-row-link")!.GetAttribute("data-resource-depth"));
         }
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         Assert.All(cut.FindAll("[data-resource-name='catalogdb']"), membership =>
         {
             Assert.Empty(membership.QuerySelectorAll(".resource-relationship-summary, .resource-row-dependencies, .resource-row-references"));
@@ -1661,7 +1659,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.Empty(cut.FindAll("[data-resource-name='cache'] .resource-row-type"));
         Assert.Equal($"Running; {expectedType}; Health state: Healthy", cut.Find("[data-resource-name='cache'] .resource-row-link").GetAttribute("aria-description"));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         var type = cut.Find("[data-resource-name='cache'] .resource-row-type");
         Assert.Equal(expectedType, type.TextContent);
         Assert.Equal(expectedType, type.GetAttribute("data-tooltip"));

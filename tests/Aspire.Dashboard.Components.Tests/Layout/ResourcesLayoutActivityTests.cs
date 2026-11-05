@@ -69,7 +69,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         var cut = Render<CascadingValue<ViewportInformation>>(builder =>
             builder.Add(p => p.Value, desktop).AddChildContent<ResourcesLayout>());
         cut.WaitForAssertion(() => Assert.True(cut.FindComponent<ResourcesLayout>().Instance.IsLoaded));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         var token = await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         cut.Render(builder => builder.Add(p => p.Value, mobile).AddChildContent<ResourcesLayout>());
@@ -102,7 +102,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         Assert.NotNull(notifyLogs);
         var before = cut.RenderCount;
         for (var i = 0; i < 28; i++)
@@ -211,7 +211,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         WaitForInsightCount(2);
         // Child renders finish before the shared refresh's finally releases its coalescing gate.
         await cut.Instance.PaneActivityRefreshTask.WaitAsync(TimeSpan.FromSeconds(10));
@@ -355,7 +355,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.Equal(0, Volatile.Read(ref calls));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
 
         cut.WaitForAssertion(() => Assert.Equal(sampleCount >= 20 ? 6 : 4, cut.FindAll(".resource-row-insight").Count));
         var expected = sampled ? new[] { "20+ incoming", "p95 19ms", "" } : ["2 incoming", ""];
@@ -437,13 +437,13 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         try
         {
             await firstStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Empty(cut.FindAll(".resource-row-insight"));
-            cut.Find(".resource-pane-canvas-toggle").Click();
-            cut.Find(".resource-pane-canvas-toggle").Click();
+            ResourceSetupHelpers.ToggleResourceList(cut);
+            ResourceSetupHelpers.ToggleResourceList(cut);
             firstRelease.SetResult();
             await secondStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Empty(cut.FindAll(".resource-row-insight"));
@@ -510,7 +510,7 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        cut.Find(".resource-pane-canvas-toggle").Click();
+        ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-insight")));
         clock.UtcNow += TimeSpan.FromMinutes(6);
         await SeedAsync("2");
