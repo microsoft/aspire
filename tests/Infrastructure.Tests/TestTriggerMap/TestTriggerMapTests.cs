@@ -486,6 +486,24 @@ public sealed class TestTriggerMapTests
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
     }
 
+    [Fact]
+    public void CliE2eImageRoutingExcludesOuterloopPodmanImageFromRegularTargets()
+    {
+        var cliE2eImage = SelectWithRealMap("tests/Shared/Docker/Dockerfile.e2e");
+
+        Assert.False(cliE2eImage.SelectsAll);
+        Assert.Empty(cliE2eImage.UnmatchedFiles);
+        Assert.Equal(["Aspire.Cli.EndToEnd.Tests"], cliE2eImage.TestProjects);
+        Assert.Empty(cliE2eImage.Jobs);
+
+        var podmanImage = SelectWithRealMap("tests/Shared/Docker/Dockerfile.e2e-podman");
+
+        Assert.False(podmanImage.SelectsAll);
+        Assert.Empty(podmanImage.UnmatchedFiles);
+        Assert.Empty(podmanImage.TestProjects);
+        Assert.Empty(podmanImage.Jobs);
+    }
+
     [Theory]
     [InlineData("tests/Shared/TemplatesTesting/data/deleted-fixture_cs", "Aspire.Templates.Tests")]
     [InlineData("tests/Shared/TestCertificates/deleted-certificate.pfx", "Aspire.Dashboard.Tests")]
