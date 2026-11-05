@@ -1,0 +1,3 @@
+<Project>
+  <!-- Stops MSBuild from importing the repo's Directory.Packages.props. -->
+</Project>

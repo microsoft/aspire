@@ -129,6 +129,11 @@ internal sealed class RunCommand : BaseCommand
     {
         Description = RunCommandStrings.NoBuildArgumentDescription
     };
+    // SPIKE (plan Session 7): TODO localize via RunCommandStrings.resx before productizing.
+    private static readonly Option<bool> s_watchOption = new("--watch")
+    {
+        Description = "(Preview) Watch C# services added with AddCSharpProgram/AddDotnetProject and apply edits via dotnet-watch."
+    };
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -167,6 +172,7 @@ internal sealed class RunCommand : BaseCommand
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
+        Options.Add(s_watchOption);
         AppHostLauncher.AddLaunchOptions(this);
 
         TreatUnmatchedTokensAsErrors = false;
@@ -382,6 +388,11 @@ internal sealed class RunCommand : BaseCommand
             // environment-specific file, so Hosting selects secrets after the final environment is known.
             context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
                 await _aspireSecretsStoreResolver.ResolveAppHostIdAsync(effectiveAppHostFile, project, cancellationToken);
+
+            if (parseResult.GetValue(s_watchOption))
+            {
+                DotnetWatch.DotnetWatchRunEnvironment.Apply(context.EnvironmentVariables);
+            }
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -1501,6 +1512,11 @@ internal sealed class RunCommand : BaseCommand
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
+        }
+
+        if (parseResult.GetValue(s_watchOption))
+        {
+            additionalArgs.Add("--watch");
         }
 
         if (!string.IsNullOrEmpty(launchProfile))

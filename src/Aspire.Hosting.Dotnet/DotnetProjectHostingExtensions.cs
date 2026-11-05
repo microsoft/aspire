@@ -502,6 +502,12 @@ public static class DotnetProjectHostingExtensions
             return Task.CompletedTask;
         });
 
+        // SPIKE: `aspire run --watch` routes the launch through the package-owned watch server.
+        if (Dotnet.Watch.DotnetWatchCoordinator.IsWatchRun(builder))
+        {
+            Dotnet.Watch.DotnetWatchCoordinator.Configure(builder, resource, projectMetadata);
+        }
+
         return resource;
     }
 
