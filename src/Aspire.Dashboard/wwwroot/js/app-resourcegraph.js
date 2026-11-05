@@ -1,10 +1,12 @@
 import './d3.v7.min.js'
+import { attachResourceGraphGame } from './app-resourcegraph-game.js'
 
 let resourceGraph = null;
 
 export function initializeResourcesGraph(resourcesInterop, graphIcons) {
     resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
     resourceGraph.resize();
+    attachResourceGraphGame(resourceGraph, graphIcons?.game);
 
     const observer = new ResizeObserver(function () {
         resourceGraph.resize();
