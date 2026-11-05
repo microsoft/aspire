@@ -88,11 +88,17 @@ internal sealed record TrayGitCheckout(TrayApplicationKey Application, string Di
 
     private static string ReadMetadata(string path)
     {
-        using var reader = File.OpenText(path);
+        // Git replaces refs by renaming a lock file over them. Presentation reads must
+        // permit that replacement, including on Windows, rather than blocking git switch.
+        using var stream = OpenMetadata(path);
+        using var reader = new StreamReader(stream);
         var buffer = new char[4097];
         var length = reader.ReadBlock(buffer, 0, buffer.Length);
         return length <= 4096 ? new string(buffer, 0, length).Trim() : throw new IOException("Git metadata exceeds 4096 characters.");
     }
+
+    internal static FileStream OpenMetadata(string path)
+        => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 }
 
 /// <summary>A section's application row and its individually actionable instances.</summary>
