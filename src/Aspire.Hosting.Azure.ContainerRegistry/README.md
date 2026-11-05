@@ -69,10 +69,9 @@ See the [Container Apps deployment guide](https://aspire.dev/deployment/azure/co
 
 ## Schedule image cleanup
 
-`WithPurgeTask` removes matching tags older than `ago` while always retaining the newest `keep`
-matching tags per repository. All younger matching tags are also retained, so more than `keep`
-tags can remain. By default, `ago` is zero, `keep` is three, and eligible untagged manifests are
-also removed to reclaim storage.
+`WithPurgeTask` schedules image cleanup, retaining the newest `keep` matching tags per repository
+and removing other matching tags older than `ago`. Defaults are `keep: 3` and `ago: 0` (no age
+protection); younger tags are retained, so more than `keep` can remain.
 
 **C#**
 
@@ -93,27 +92,9 @@ await registry.withPurgeTask("0 1 * * *", {
 });
 ```
 
-Manifest deletion works with a Basic registry; no Premium SKU or retention policy is required. Previously untagged manifests
-in matching repositories are also eligible, so deletion can break digest-based pulls and
-rollbacks. Shared image layers remain until no retained manifests reference them, and storage
-usage reporting can lag behind deletion.
-
-The task pins `mcr.microsoft.com/acr/acr-cli:0.21` and generates:
-
-```text
-mcr.microsoft.com/acr/acr-cli:0.21 purge --filter 'myapp:.*' --ago 7d --min-tags 5 --untagged --max-untagged-manifests 0
-```
-
-`keep` sets `--min-tags`, not `--keep` or `--max-tags`. The minimum protects the newest matching
-tags even when all tags are older than `ago`; other tags are eligible only when older than `ago`.
-When `ago` is omitted or zero, the task emits `--ago 0d`, making all tags outside the minimum
-eligible. The C# `ago` parameter accepts a `TimeSpan`; the TypeScript option accepts milliseconds.
-
-Untagged cleanup is independent of tag retention: `--max-untagged-manifests 0` retains no extra
-eligible untagged manifests, including ones younger than `ago`.
-
-Locked artifacts and dependencies of retained images remain protected, so these limits do not
-guarantee that only `keep` manifests or `keep` deployable application versions remain. See
+**Warning:** Cleanup also deletes eligible untagged manifests in matching repositories, regardless
+of age, which can break digest-based pulls and rollbacks. Locked artifacts and dependencies of
+retained images remain protected. See
 [ACR purge behavior](https://learn.microsoft.com/azure/container-registry/container-registry-auto-purge).
 
 ## Additional documentation

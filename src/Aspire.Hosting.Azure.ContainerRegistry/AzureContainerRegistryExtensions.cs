@@ -147,14 +147,9 @@ public static class AzureContainerRegistryExtensions
     /// or <paramref name="ago"/> is negative or less than 1 minute (when non-zero).</exception>
     /// <remarks>
     /// Tag removal alone does not reclaim storage. The task also deletes eligible
-    /// previously untagged manifests and can break digest-based pulls and rollbacks. No Premium SKU or retention
-    /// policy is required.
-    /// The task uses ACR CLI 0.21 with a minimum tag count and a separate untagged-manifest count limit. Untagged cleanup retains no
-    /// additional untagged manifests, regardless of age. Locked artifacts and dependencies of retained images are protected,
-    /// so cleanup is not an unconditional guarantee of the number of remaining tags or manifests.
-    /// The newest <paramref name="keep"/> matching tags are protected even when all tags are old. All tags younger than
-    /// <paramref name="ago"/> are also retained, so more than <paramref name="keep"/> tags can remain.
-    /// Counts apply to tags, not application versions.
+    /// previously untagged manifests and can break digest-based pulls and rollbacks.
+    /// Tags younger than <paramref name="ago"/> are also retained, so more than <paramref name="keep"/> tags can remain.
+    /// Eligible untagged manifests are deleted regardless of age. Locked artifacts and dependencies of retained images are protected.
     /// </remarks>
     /// <example>
     /// This example schedules a daily purge of tags older than 7 days, protecting the 5 newest matching tags per repository
@@ -332,8 +327,16 @@ public static class AzureContainerRegistryExtensions
     }
 
     /// <summary>
-    /// Formats a duration using the Go-style units accepted by <c>acr purge --ago</c>.
+    /// Formats a <see cref="TimeSpan"/> into a Go-style duration string compatible with <c>acr purge --ago</c>.
+    /// Valid units: <c>d</c> (days), <c>h</c> (hours), <c>m</c> (minutes).
     /// </summary>
+    /// <remarks>
+    /// From the docs: https://learn.microsoft.com/azure/container-registry/container-registry-auto-purge#example-scheduled-purge-of-multiple-repositories-in-a-registry
+    ///   A Go-style duration string to indicate a duration beyond which images are deleted. The duration consists of a sequence
+    ///   of one or more decimal numbers, each with a unit suffix. Valid time units include "d" for days, "h" for hours, and "m"
+    ///   for minutes. For example, --ago 2d3h6m selects all filtered images last modified more than two days, 3 hours, and 6 minutes
+    ///   ago, and --ago 1.5h selects images last modified more than 1.5 hours ago.
+    /// </remarks>
     private static string FormatAgo(TimeSpan ago)
     {
         if (ago.TotalMinutes < 1 && ago != TimeSpan.Zero)

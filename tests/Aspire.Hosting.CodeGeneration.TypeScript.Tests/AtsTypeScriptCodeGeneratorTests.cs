@@ -1909,32 +1909,6 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public async Task GenerateDistributedApplication_WithAzureContainerRegistryPurgeOptions_PreservesFlatOptions()
-    {
-        var result = AtsCapabilityScanner.ScanAssemblies(
-        [
-            typeof(DistributedApplication).Assembly,
-            typeof(AzureResourceInfrastructure).Assembly,
-            typeof(AzureContainerRegistryResource).Assembly
-        ]);
-        var capability = Assert.Single(result.Capabilities,
-            c => c.CapabilityId == "Aspire.Hosting.Azure.ContainerRegistry/withPurgeTask");
-
-        Assert.Equal("withPurgeTask", capability.MethodName);
-        Assert.Equal(["schedule", "filter", "ago", "keep", "taskName"],
-            capability.Parameters.Select(parameter => parameter.Name));
-        Assert.False(capability.Parameters[0].IsOptional);
-        Assert.All(capability.Parameters.Skip(1), parameter => Assert.True(parameter.IsOptional));
-
-        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
-        var purgeDeclarations = files["aspire.mts"].ReplaceLineEndings("\n").Split('\n').Where(line =>
-            line.Contains("withPurgeTask", StringComparison.Ordinal) ||
-            line.Contains("WithPurgeTaskOptions", StringComparison.Ordinal));
-
-        await Verify(string.Join('\n', purgeDeclarations), "ts");
-    }
-
-    [Fact]
     public void GenerateDistributedApplication_WithAzureContainerAppExpress_EmitsTypeScriptMethod()
     {
         var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());

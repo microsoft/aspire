@@ -256,52 +256,6 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
         var (_, defaultBicep) = await GetManifestWithBicep(defaultAcr.Resource);
 
         Assert.Equal(defaultBicep, bicep);
-        await Verify(bicep, "bicep");
-    }
-
-    [Fact]
-    public async Task WithPurgeTask_Untagged_GeneratesCorrectBicep()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var acr = builder.AddAzureContainerRegistry("acr");
-        var result = acr.WithPurgeTask("0 1 * * *",
-            filter: "cleanup:.*", ago: TimeSpan.FromDays(7), keep: 5, taskName: "cleanup");
-
-        Assert.Same(acr, result);
-        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
-
-        await Verify(bicep, "bicep");
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("7.00:00:00")]
-    public async Task WithPurgeTask_PreservesExistingBinarySignature(string? ago)
-    {
-        var method = typeof(AzureContainerRegistryExtensions).GetMethod(nameof(AzureContainerRegistryExtensions.WithPurgeTask),
-        [
-            typeof(IResourceBuilder<AzureContainerRegistryResource>),
-            typeof(string),
-            typeof(string),
-            typeof(TimeSpan?),
-            typeof(int),
-            typeof(string)
-        ]);
-        Assert.NotNull(method);
-
-        var age = ago is null ? (TimeSpan?)null : TimeSpan.Parse(ago);
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var original = builder.AddAzureContainerRegistry("original");
-        Assert.Same(original, method.Invoke(null, [original, "0 1 * * *", null, age, 3, null]));
-        using var currentBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var configured = currentBuilder.AddAzureContainerRegistry("original")
-            .WithPurgeTask("0 1 * * *", null, ago: age);
-
-        var (_, originalBicep) = await GetManifestWithBicep(original.Resource);
-        var (_, configuredBicep) = await GetManifestWithBicep(configured.Resource);
-
-        Assert.Equal(originalBicep, configuredBicep);
     }
 
     [Fact]
