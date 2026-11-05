@@ -267,14 +267,18 @@ arguments have distinct roles; replacing a tool prefix must not discard program 
 required IDE launch configuration is reported, not silently retried as a DCP process.
 
 Coordinated V2 builds negotiate **`project-with-external-build.v1`**
-(`KnownLaunchConfigurationTypes.ProjectWithExternalBuild`). In an external debug session, the coordinator
-runs when that capability is advertised, or when the launcher advertises an explicit capability list
-without `project` (for example VS Code without the C# extension). Those resources run as DCP processes
-exactly as they do outside an IDE, so they need the coordinated build; otherwise resources that share a
-project race on its implicit `dotnet run` builds. Capability-less launchers (Visual Studio) and launchers
-that advertise `project` without the external-build capability retain the legacy project-build path;
-persistent lifetime can retain normal process execution. Build configuration, build-only environment, build working directory, and build
-suppression flow through project launch metadata.
+(`KnownLaunchConfigurationTypes.ProjectWithExternalBuild`). In an external debug session:
+
+- The coordinator runs when that capability is advertised.
+- The coordinator also runs when the launcher advertises an explicit capability list without `project`;
+  the IDE cannot launch those resources, so they run as DCP processes and use the coordinated build as
+  they do outside an IDE.
+- Older/capability-less launchers, and launchers that advertise `project` without the external-build
+  capability, retain the legacy project-build path.
+- Unsupported project launch or persistent lifetime can retain normal process execution.
+
+Build configuration, build-only environment, build working directory, and build suppression flow through
+project launch metadata.
 
 The VS Code debugger understands externally built projects and file apps, resolves SDK-selected
 commands/arguments, and preserves selected/disabled launch-profile behavior and required host variables.
