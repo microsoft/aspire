@@ -59,8 +59,7 @@
     --resource-insight-failure-width: 40px;
 }
 
-/* Keep the pane mounted while its grid track closes. Visibility waits for motion to
-   finish; inert and pointer-events exclude it from interaction immediately. */
+/* The collapsed sidebar track is hidden; the popup overrides this for its own pane. */
 .resources-layout.pane-collapsed .resource-pane {
     visibility: hidden;
     pointer-events: none;
@@ -83,6 +82,75 @@
 
 .resources-layout.pane-full-canvas .resource-pane::after {
     display: none;
+}
+
+.resource-picker-popover {
+    position: fixed;
+    position-anchor: --resource-picker;
+    top: anchor(bottom);
+    left: anchor(left);
+    right: auto;
+    bottom: 12px;
+    margin: 6px 0 0;
+    position-try-fallbacks: flip-inline;
+    box-sizing: border-box;
+    width: min(var(--resource-pane-expanded-width, 290px), calc(100vw - 24px));
+    max-width: none;
+    height: max-content;
+    max-height: stretch;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
+    background: var(--aspire-page-background);
+    color: var(--colorNeutralForeground1);
+    box-shadow: var(--shadow16);
+    overflow: hidden;
+}
+
+.resource-picker-popover:popover-open {
+    display: flex;
+    flex-direction: column;
+}
+
+.resource-title:has(.resource-picker-button) {
+    overflow: visible;
+}
+
+.resource-title ::deep .resource-picker-button {
+    max-width: 100%;
+    font: inherit;
+    font-size: var(--fontSizeBase400);
+}
+
+.resource-picker-button > [slot="start"] {
+    display: flex;
+    align-items: center;
+}
+
+.resource-picker-button .resource-header-icon {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    background: transparent;
+}
+
+.resource-picker-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resources-layout.pane-collapsed .resource-pane-popup {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.resource-pane.resource-pane-popup {
+    flex: 0 1 auto;
+    width: 100%;
+    max-height: min(600px, calc(100dvh - 120px));
+    border-right: 0;
 }
 
 .resources-layout.pane-full-canvas .resource-content-foot {
@@ -1171,7 +1239,7 @@
 
     /* Preserve row geometry while the containing track shrinks; only the clip
        boundary moves. Full canvas still discloses metadata at its actual width. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-contents > * {
+    .resources-layout:not(.pane-full-canvas) .resource-pane:not(.resource-pane-popup) .resource-pane-contents > * {
         width: calc(var(--resource-pane-width) - 1px);
     }
 

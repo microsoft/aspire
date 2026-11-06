@@ -17,7 +17,6 @@ export function usesCommandSelectionModifier() {
 
 export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
     unregisterPaneActivityVisibility(layoutElement);
-    const pane = layoutElement.querySelector(':scope > .resource-pane');
     let frame = 0;
     let reported;
     let forceRefresh = false;
@@ -37,8 +36,9 @@ export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
         }
         frame = requestAnimationFrame(() => {
             frame = 0;
+            const pane = layoutElement.querySelector(':scope > .resource-pane');
             // Match the activity disclosure boundary, not the saved compact sidebar width.
-            const visible = document.visibilityState === 'visible' &&
+            const visible = pane !== null && document.visibilityState === 'visible' &&
                 layoutElement.classList.contains('pane-full-canvas') &&
                 pane.getBoundingClientRect().width >= 1440;
             const force = forceRefresh;
@@ -67,9 +67,28 @@ export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
     };
     const reconnectModal = document.getElementById('components-reconnect-modal');
     const resize = new ResizeObserver(() => schedule());
-    const presentation = new MutationObserver(() => schedule());
-    resize.observe(pane);
-    presentation.observe(layoutElement, { attributes: true, attributeFilter: ['class'] });
+    let observedPane = null;
+    const observePane = () => {
+        const pane = layoutElement.querySelector(':scope > .resource-pane');
+        if (pane !== observedPane) {
+            if (observedPane) {
+                resize.unobserve(observedPane);
+            }
+            observedPane = pane;
+            if (pane) {
+                resize.observe(pane);
+            }
+        }
+    };
+    const presentation = new MutationObserver(() => {
+        observePane();
+        schedule();
+    });
+    // Grid-track animations resize the pane without resizing its workspace.
+    // Collapse can remove the pane, so rebind its observation when it is remounted.
+    resize.observe(layoutElement);
+    observePane();
+    presentation.observe(layoutElement, { attributes: true, attributeFilter: ['class'], childList: true });
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('pageshow', resume);
     window.addEventListener('focus', resume);
@@ -89,6 +108,42 @@ export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
 export function unregisterPaneActivityVisibility(layoutElement) {
     activityRegistrations.get(layoutElement)?.();
     activityRegistrations.delete(layoutElement);
+}
+
+const resourcePickers = new WeakMap();
+
+export function setResourcePickerOpen(layoutElement, dotNetRef, open) {
+    const picker = layoutElement.querySelector(':scope > .resource-picker-popover');
+    let registration = resourcePickers.get(layoutElement);
+    if (registration?.picker !== picker) {
+        unregisterResourcePicker(layoutElement);
+        if (!picker) {
+            return;
+        }
+
+        const onToggle = event => {
+            // Only the native popover's own toggle closes the picker. Nested controls can emit bubbling toggle events.
+            // https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/toggle_event
+            if (event.target === picker && event.newState === "closed") {
+                dotNetRef.invokeMethodAsync("OnResourcePickerClosedAsync");
+            }
+        };
+        picker.addEventListener("toggle", onToggle);
+        registration = { picker, onToggle };
+        resourcePickers.set(layoutElement, registration);
+    }
+
+    if (picker.matches(":popover-open") !== open) {
+        picker.togglePopover(open);
+    }
+}
+
+export function unregisterResourcePicker(layoutElement) {
+    const registration = resourcePickers.get(layoutElement);
+    if (registration) {
+        registration.picker.removeEventListener("toggle", registration.onToggle);
+        resourcePickers.delete(layoutElement);
+    }
 }
 
 // Priority+ overflow for the tab strip in the header. Tabs that no longer fit are marked with data-tab-overflow (hidden
