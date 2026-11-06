@@ -18,21 +18,19 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     public void Dispose() => _loggerFactory.Dispose();
 
     private GitCommandRunner CreateRunner() =>
-        new(TestHelpers.CreateInteractiveHostEnvironment(), _loggerFactory.CreateLogger<GitCommandRunner>());
+        new(_loggerFactory.CreateLogger<GitCommandRunner>());
 
     [Fact]
     public void CreateStartInfo_CapturedCommandsUseLiteralArgumentsAndPreserveCredentialHelpers()
     {
-        var runner = CreateRunner();
-        var startInfo = runner.CreateStartInfo(Environment.CurrentDirectory,
+        var startInfo = GitCommandRunner.CreateStartInfo(Environment.CurrentDirectory,
             ["fetch", "--", "-repository with spaces", "HEAD"], GitCommandMode.Captured);
 
         Assert.Equal("git", startInfo.FileName);
-        Assert.Equal(["--literal-pathspecs", "fetch", "--", "-repository with spaces", "HEAD"], startInfo.ArgumentList);
+        Assert.Equal(["--literal-pathspecs", "-c", "core.askPass=", "fetch", "--", "-repository with spaces", "HEAD"], startInfo.ArgumentList);
         Assert.Equal("0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
         Assert.Equal("C", startInfo.Environment["LC_ALL"]);
-        startInfo.Environment.TryGetValue("GCM_INTERACTIVE", out var credentialManager);
-        Assert.Equal(Environment.GetEnvironmentVariable("GCM_INTERACTIVE"), credentialManager);
+        Assert.Equal("never", startInfo.Environment["GCM_INTERACTIVE"]);
         Assert.True(startInfo.RedirectStandardInput);
         Assert.True(startInfo.RedirectStandardOutput);
         Assert.True(startInfo.RedirectStandardError);
@@ -132,13 +130,13 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     public async Task RunProcess_NonzeroExitClassifiesWithoutExposingPrivateDetails(string diagnostic, string expectedFailure)
     {
         var logger = new FakeLogger<GitCommandRunner>();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), logger);
+        var runner = new GitCommandRunner(logger);
         var message = $"{diagnostic}: private-repository-secret-marker";
         var startInfo = CreateShellStartInfo($"printf '%s' '{message}' >&2; exit 128",
             $"[Console]::Error.Write('{message}'); exit 128");
 
         var exception = await Assert.ThrowsAsync<GitCommandException>(() =>
-            runner.RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, TestContext.Current.CancellationToken));
+            runner.RunProcessAsync(startInfo, TestContext.Current.CancellationToken));
 
         var failure = Enum.Parse<GitFailure>(expectedFailure);
         Assert.Equal(failure, exception.Failure);
@@ -154,15 +152,12 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         Assert.All(logger.Collector.GetSnapshot(), entry => Assert.False(entry.Message.Contains(message, StringComparison.Ordinal)));
     }
 
-    [Theory]
-    [InlineData(nameof(GitCommandMode.Captured), nameof(GitFailure.AuthenticationFailed))]
-    [InlineData(nameof(GitCommandMode.Interactive), nameof(GitFailure.CommandFailed))]
-    [InlineData(nameof(GitCommandMode.Unattended), nameof(GitFailure.CommandFailed))]
-    public void CreateCommandException_PreservesPasswordDiagnosticClassification(string mode, string expectedFailure)
+    [Fact]
+    public void CreateCommandException_ClassifiesDisabledPasswordPromptsAsAuthenticationFailure()
     {
-        var exception = GitCommandRunner.CreateCommandException("fatal: could not read Password", 128, Enum.Parse<GitCommandMode>(mode));
+        var exception = GitCommandRunner.CreateCommandException("fatal: could not read Password", 128);
 
-        Assert.Equal(Enum.Parse<GitFailure>(expectedFailure), exception.Failure);
+        Assert.Equal(GitFailure.AuthenticationFailed, exception.Failure);
     }
 
     [Fact]
@@ -176,7 +171,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         };
 
         var exception = await Assert.ThrowsAsync<GitCommandException>(() =>
-            CreateRunner().RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, TestContext.Current.CancellationToken));
+            CreateRunner().RunProcessAsync(startInfo, TestContext.Current.CancellationToken));
 
         Assert.Equal(GitFailure.Unavailable, exception.Failure);
         Assert.Equal(ErrorStrings.GitUnavailable, exception.Message);
@@ -190,7 +185,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         var startInfo = new ProcessStartInfo("missing-executable");
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            CreateRunner().RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, new CancellationToken(canceled: true)));
+            CreateRunner().RunProcessAsync(startInfo, new CancellationToken(canceled: true)));
     }
 
     [Fact]
@@ -198,20 +193,24 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     {
         var startInfo = CreateShellStartInfo("printf 'first\\r\\nsecond\\000last'", "[Console]::Out.Write(\"first`r`nsecond`0last\")");
 
-        var output = await CreateRunner().RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, TestContext.Current.CancellationToken);
+        var output = await CreateRunner().RunProcessAsync(startInfo, TestContext.Current.CancellationToken);
 
         Assert.Equal("first\r\nsecond\0last", output);
     }
 
-    [Fact]
-    public async Task RunProcess_CapturedCommandsReceiveStandardInputEof()
+    [Theory]
+    [InlineData(nameof(GitCommandMode.Captured))]
+    [InlineData(nameof(GitCommandMode.Interactive))]
+    [InlineData(nameof(GitCommandMode.Unattended))]
+    public async Task RunProcess_AllModesReceiveEofAndPreserveCapturedOutputWithoutLoggingDiagnostics(string mode)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var runner = CreateRunner();
-        var startInfo = runner.CreateStartInfo(workspace.Path, ["fetch"], GitCommandMode.Captured);
+        var logger = new FakeLogger<GitCommandRunner>();
+        var runner = new GitCommandRunner(logger);
+        var startInfo = GitCommandRunner.CreateStartInfo(workspace.Path, ["fetch"], Enum.Parse<GitCommandMode>(mode));
         var shell = CreateShellStartInfo(
-            """input=$(cat); if [ -n "$input" ]; then exit 1; fi; printf EOF""",
-            """$inputText = [Console]::In.ReadToEnd(); if ($inputText.Length -ne 0) { exit 1 }; [Console]::Out.Write('EOF')""");
+            """input=$(cat); if [ -n "$input" ]; then exit 1; fi; printf '%s\r\nrefs\000partial' "$GIT_TERMINAL_PROMPT"; printf private-progress-marker >&2""",
+            """$inputText = [Console]::In.ReadToEnd(); if ($inputText.Length -ne 0) { exit 1 }; [Console]::Out.Write("$env:GIT_TERMINAL_PROMPT`r`nrefs`0partial"); [Console]::Error.Write('private-progress-marker')""");
         startInfo.FileName = shell.FileName;
         startInfo.ArgumentList.Clear();
         foreach (var argument in shell.ArgumentList)
@@ -221,10 +220,13 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
         using var timeoutSource = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 10_000);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeoutSource.Token);
 
-        var output = await runner.RunProcessAsync(startInfo, captureCancellationOutput: false, GitCommandMode.Captured, cancellation.Token);
+        var output = await runner.RunProcessAsync(startInfo, cancellation.Token);
 
         Assert.True(startInfo.RedirectStandardInput);
-        Assert.Equal("EOF", output);
+        Assert.True(startInfo.RedirectStandardOutput);
+        Assert.True(startInfo.RedirectStandardError);
+        Assert.Equal("0\r\nrefs\0partial", output);
+        Assert.All(logger.Collector.GetSnapshot(), entry => Assert.False(entry.Message.Contains("private-progress-marker", StringComparison.Ordinal)));
     }
 
     private static ProcessStartInfo CreateShellStartInfo(string unixCommand, string windowsCommand)

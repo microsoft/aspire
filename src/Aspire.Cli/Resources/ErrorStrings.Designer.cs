@@ -394,7 +394,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand..
+        ///   Looks up a localized string similar to Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand..
         /// </summary>
         internal static string GitUnattendedSshUnsupported {
             get {

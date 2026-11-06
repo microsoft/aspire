@@ -124,14 +124,20 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
         }
     }
 
-    private static ProcessStartInfo CreateGitStartInfo(DirectoryInfo workingDirectory, string[] arguments) =>
-        new("git", arguments)
+    internal static ProcessStartInfo CreateGitStartInfo(DirectoryInfo workingDirectory, string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo("git", arguments)
         {
             WorkingDirectory = workingDirectory.FullName,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+
+        return startInfo;
+    }
 
     private static async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
     {

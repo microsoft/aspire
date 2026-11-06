@@ -87,11 +87,15 @@ public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelpe
         Assert.Equal(string.Format(NewCommandStrings.TemplateRepositoryGitExited, 128, ErrorStrings.GitRepositoryUnavailable), exception.Message);
         Assert.Null(exception.InnerException);
         var logs = logger.Collector.GetSnapshot();
-        Assert.Collection(logs,
-            entry => Assert.Equal("Starting Git process.", entry.Message),
-            entry => Assert.StartsWith("Git process ", entry.Message),
-            entry => Assert.StartsWith("Git process ", entry.Message),
-            entry => Assert.StartsWith("Git process completed after ", entry.Message));
+        Assert.NotEmpty(logs);
+        foreach (var commandLogs in logs.Chunk(4))
+        {
+            Assert.Collection(commandLogs,
+                entry => Assert.Equal("Starting Git process.", entry.Message),
+                entry => Assert.StartsWith("Git process ", entry.Message),
+                entry => Assert.StartsWith("Git process ", entry.Message),
+                entry => Assert.StartsWith("Git process completed after ", entry.Message));
+        }
         Assert.All(logs, entry => Assert.False(entry.Message.Contains("private-repository-secret-marker", StringComparison.Ordinal)));
     }
 
