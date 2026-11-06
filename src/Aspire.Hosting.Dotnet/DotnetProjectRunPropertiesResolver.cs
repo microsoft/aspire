@@ -11,7 +11,9 @@ namespace Aspire.Hosting.Dotnet;
 internal sealed record DotnetProjectRunProperties(
     string Command,
     string Arguments,
-    string? WorkingDirectory);
+    string? WorkingDirectory,
+    string TargetPath,
+    bool UseAppHost);
 
 internal delegate Task<DotnetProjectRunProperties> DotnetProjectRunPropertiesResolverCallback(
     string projectPath,
@@ -51,7 +53,7 @@ internal static class DotnetProjectRunPropertiesResolver
             startInfo.ArgumentList.Add(projectPath);
             startInfo.ArgumentList.Add("-nologo");
             startInfo.ArgumentList.Add("-target:ComputeRunArguments");
-            startInfo.ArgumentList.Add("-getProperty:RunCommand,RunArguments,RunWorkingDirectory");
+            startInfo.ArgumentList.Add("-getProperty:RunCommand,RunArguments,RunWorkingDirectory,TargetPath,UseAppHost");
             startInfo.ArgumentList.Add($"-getResultOutputFile:{resultOutputPath}");
             startInfo.ArgumentList.Add("-v:q");
             if (!string.IsNullOrEmpty(buildConfiguration))
@@ -124,7 +126,8 @@ internal static class DotnetProjectRunPropertiesResolver
             try
             {
                 // Multiple -getProperty values produce:
-                //   { "Properties": { "RunCommand": "...", "RunArguments": "...", "RunWorkingDirectory": "..." } }
+                //   { "Properties": { "RunCommand": "...", "RunArguments": "...", "RunWorkingDirectory": "...",
+                //                     "TargetPath": "/repo/bin/Release/net10.0/Api.dll", "UseAppHost": "true" } }
                 // Keep the machine-readable result separate so SDK diagnostics on stdout cannot corrupt it.
                 var resultOutput = await File.ReadAllTextAsync(resultOutputPath, cancellationToken).ConfigureAwait(false);
                 using var document = JsonDocument.Parse(resultOutput);
@@ -132,6 +135,8 @@ internal static class DotnetProjectRunPropertiesResolver
                 var command = properties.GetProperty("RunCommand").GetString();
                 var arguments = properties.GetProperty("RunArguments").GetString() ?? string.Empty;
                 var runWorkingDirectory = properties.GetProperty("RunWorkingDirectory").GetString();
+                var targetPath = properties.GetProperty("TargetPath").GetString();
+                var useAppHost = properties.GetProperty("UseAppHost").GetString();
                 var normalizedCommand = command?.Trim().Trim('"');
                 var normalizedWorkingDirectory = string.IsNullOrEmpty(runWorkingDirectory)
                     ? null
@@ -142,7 +147,21 @@ internal static class DotnetProjectRunPropertiesResolver
                         $"dotnet msbuild returned an empty run command for project '{projectPath}'.");
                 }
 
-                return new(normalizedCommand, arguments, normalizedWorkingDirectory);
+                if (string.IsNullOrWhiteSpace(targetPath))
+                {
+                    throw new DistributedApplicationException(
+                        $"dotnet msbuild returned an empty target path for project '{projectPath}'.");
+                }
+
+                var normalizedTargetPath = Path.GetFullPath(
+                    targetPath.Trim(),
+                    Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
+                return new(
+                    normalizedCommand,
+                    arguments,
+                    normalizedWorkingDirectory,
+                    normalizedTargetPath,
+                    string.Equals(useAppHost, bool.TrueString, StringComparison.OrdinalIgnoreCase));
             }
             catch (Exception ex) when (ex is ArgumentException or JsonException or InvalidOperationException or KeyNotFoundException or IOException or UnauthorizedAccessException)
             {

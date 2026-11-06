@@ -106,6 +106,7 @@ In your AppHost project, install the `Aspire.Hosting.Oracle` library with [NuGet
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Oracle
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register an Oracle container and consume the connection using the following methods: 
@@ -113,7 +114,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register an Oracle container and co
  ```csharp 
  var freepdb1 = builder.AddOracle("oracle").AddDatabase("freepdb1");
   
- var myService = builder.AddProject<Projects.MyService>() 
+ var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                         .WithReference(freepdb1); 
  ``` 
 

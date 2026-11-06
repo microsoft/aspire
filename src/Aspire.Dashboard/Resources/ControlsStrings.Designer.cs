@@ -709,38 +709,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Delete.
-        /// </summary>
-        public static string ParameterDeleteShortAction {
-            get {
-                return ResourceManager.GetString("ParameterDeleteShortAction", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Delete value.
         /// </summary>
         public static string ParameterDeleteValueAction {
             get {
                 return ResourceManager.GetString("ParameterDeleteValueAction", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Edit.
-        /// </summary>
-        public static string ParameterEditShortAction {
-            get {
-                return ResourceManager.GetString("ParameterEditShortAction", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Set.
-        /// </summary>
-        public static string ParameterSetShortAction {
-            get {
-                return ResourceManager.GetString("ParameterSetShortAction", resourceCulture);
             }
         }
 

@@ -102,6 +102,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
+        var appHostStartAttempted = false;
         try
         {
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
@@ -124,18 +125,31 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
             await auto.RunCommandAsync("unset ASPIRE_PLAYGROUND", counter);
 
-            await auto.RunCommandAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
+            // Start the AppHost detached and gate on each resource reaching the Running state before probing
+            // endpoints. Starting with `aspire run &` and probing immediately made the verification budget
+            // include AppHost server preparation and startup, which regularly exceeded it on busy CI runners.
+            appHostStartAttempted = true;
+            await auto.AspireStartAsync(counter, TimeSpan.FromMinutes(5));
+
+            foreach (var resource in s_runtimeResourceNames)
+            {
+                await auto.RunCommandAsync($"aspire wait {resource} --status up --timeout 300", counter, TimeSpan.FromMinutes(6));
+            }
+
             await auto.RunCommandAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
         }
         finally
         {
-            try
+            if (appHostStartAttempted)
             {
-                await auto.RunCommandAsync("if [ -f aspire-run.pid ]; then kill \"$(cat aspire-run.pid)\" 2>/dev/null || true; wait \"$(cat aspire-run.pid)\" 2>/dev/null || true; fi", counter, TimeSpan.FromMinutes(1));
-            }
-            catch
-            {
-                // Best effort. A failure before aspire run writes its PID leaves no process to stop.
+                try
+                {
+                    await auto.AspireStopAsync(counter);
+                }
+                catch
+                {
+                    // Best effort so cleanup failures do not mask the original test failure.
+                }
             }
         }
     }
@@ -172,6 +186,8 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             await builder.build().run();
             """);
     }
+
+    private static readonly string[] s_runtimeResourceNames = ["node-npm", "javascript-pnpm", "vite-yarn", "next-bun"];
 
     private static void WriteRuntimeAppHost(TemporaryWorkspace workspace)
     {
@@ -299,9 +315,11 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
                 done
 
                 echo "${name}_FAIL"
-                echo "===== aspire-run.log ====="
-                cat aspire-run.log || true
-                echo "===== end aspire-run.log ====="
+                echo "===== aspire describe ${name} ====="
+                aspire describe "${name}" || true
+                echo "===== aspire logs ${name} ====="
+                aspire logs "${name}" || true
+                echo "===== end aspire logs ${name} ====="
                 echo "===== runtime fixture files ====="
                 for file in package.json node-npm/package.json node-npm/ready-port javascript-pnpm/package.json javascript-pnpm/ready-port vite-yarn/package.json vite-yarn/yarn.lock vite-yarn/ready-port next-bun/package.json next-bun/ready-port; do
                     if [ -f "$file" ]; then

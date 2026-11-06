@@ -2428,7 +2428,7 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
-                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(KnownEmojis.PoliceCarLight.Name, m.Emoji.Name);
                 Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
             },
             m =>
@@ -2524,12 +2524,12 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
-                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(KnownEmojis.PoliceCarLight.Name, m.Emoji.Name);
                 Assert.Equal(expectedWarning, Markup.Remove(m.Message));
             },
             m =>
             {
-                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(KnownEmojis.PoliceCarLight.Name, m.Emoji.Name);
                 Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
             },
             m =>

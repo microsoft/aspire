@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using System.Text.Json;
 using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Xunit;
@@ -40,6 +41,21 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        // Override the type label on apiservice. The first .WithHttpHealthCheck("/health"); in the
+        // starter AppHost belongs to apiservice; the template's cache keeps the Redis class default
+        // and webfrontend has no label, so it falls back to its technical type.
+        var appHostDir = Path.Combine(workspace.WorkspaceRoot.FullName, "AspireResourcesTestApp", "AspireResourcesTestApp.AppHost");
+        var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+        var content = File.ReadAllText(appHostFilePath);
+        const string originalPattern = ".WithHttpHealthCheck(\"/health\");";
+        var index = content.IndexOf(originalPattern, StringComparison.Ordinal);
+        Assert.True(index >= 0, $"Expected to find '{originalPattern}' in {appHostFilePath}.");
+        const string replacement = """
+            .WithHttpHealthCheck("/health")
+            .WithResourceTypeDisplayName("Orders API");
+            """;
+        File.WriteAllText(appHostFilePath, content[..index] + replacement + content[(index + originalPattern.Length)..]);
+
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
@@ -57,6 +73,16 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Name", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("webfrontend", timeout: TimeSpan.FromSeconds(5));
         await auto.WaitUntilTextAsync("apiservice", timeout: TimeSpan.FromSeconds(5));
+
+        // The Type column shows the label on the same row as its resource:
+        //   │ cache      │ Redis      │ Running │ Healthy │ tcp://localhost:6379 │
+        // Match with .* so the checks don't depend on the table's border characters or column widths.
+        foreach (var (resourceName, expectedType) in new[] { ("cache", "Redis"), ("apiservice", "Orders API"), ("webfrontend", "Project") })
+        {
+            var typeRow = new CellPatternSearcher().FindPattern($"{resourceName}.*{expectedType}");
+            await auto.WaitUntilAsync(s => typeRow.Search(s).Count > 0, timeout: TimeSpan.FromSeconds(5), description: $"describe table showing {resourceName} with type {expectedType}");
+        }
+
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Test aspire describe --format json output - pipe to file to avoid terminal buffer issues
@@ -70,11 +96,26 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("webfrontend", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
+        // The label travels through the real backchannel while resourceType stays the technical discriminator.
+        // The workspace is a bind mount, so the file written inside the container is readable from here.
+        using var resourcesJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(appHostDir, "resources.json")));
+        var resources = resourcesJson.RootElement.GetProperty("resources").EnumerateArray().ToList();
+        AssertResourceTypes(resources, "cache", "Container", "Redis");
+        AssertResourceTypes(resources, "apiservice", "Project", "Orders API");
+        AssertResourceTypes(resources, "webfrontend", "Project", "Project");
+
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    private static void AssertResourceTypes(List<JsonElement> resources, string displayName, string expectedResourceType, string expectedTypeDisplayName)
+    {
+        var resource = Assert.Single(resources, r => r.GetProperty("displayName").GetString() == displayName);
+        Assert.Equal(expectedResourceType, resource.GetProperty("resourceType").GetString());
+        Assert.Equal(expectedTypeDisplayName, resource.GetProperty("resourceTypeDisplayName").GetString());
     }
 
     [Fact]

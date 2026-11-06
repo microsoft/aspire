@@ -217,7 +217,9 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Dockerfile publishing and context behavior.
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
                             .WithArgs("/usr/foo")
                             .PublishAsDockerFile(c =>
                              {
@@ -272,7 +274,9 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Dockerfile publishing and context behavior.
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
                               .PublishAsDockerFile();
 
         var container = Assert.Single(builder.Resources.OfType<ContainerResource>());
@@ -289,7 +293,9 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Dockerfile publishing and context behavior.
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
                              .WithHttpEndpoint()
                              .PublishAsDockerFile();
 
@@ -309,7 +315,9 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Dockerfile publishing and context behavior.
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
                              .WithEndpoint("http", e =>
                              {
                                  e.UriScheme = "http";
@@ -332,7 +340,9 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Dockerfile publishing and context behavior.
         var project = builder.AddProject<TestProjectWithHttpAndHttpsProfile>("project", o => o.LaunchProfileName = "https")
+#pragma warning restore CS0618
                              .PublishAsDockerFile();
 
         // Container resource produced
@@ -408,7 +418,9 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var path = workspace.WorkspaceRoot.FullName;
         var projectPath = Path.Combine(path, "project.csproj");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Dockerfile publishing and context behavior.
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .PublishAsDockerFile()
             .PublishAsDockerFile(); // Call again - should not throw
 
@@ -427,7 +439,9 @@ public class PublishAsDockerfileTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(path, "project.csproj");
 
         var callbackCount = 0;
+#pragma warning disable CS0618 // Retain legacy ProjectResource Dockerfile publishing and context behavior.
         var project = builder.AddProject("project", projectPath, o => o.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .PublishAsDockerFile(c =>
             {
                 callbackCount++;

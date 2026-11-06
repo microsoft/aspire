@@ -1,0 +1,8 @@
+﻿┌────────────┬───────────────────────────────────────────┐
+│ Name       │ Configuration                             │
+├────────────┼───────────────────────────────────────────┤
+│ enterprise │ repository: https://git.example/templates │
+│            │ ref: template-preview                     │
+│            │ path: templates                           │
+│ Personal   │ path: ./personal                          │
+└────────────┴───────────────────────────────────────────┘

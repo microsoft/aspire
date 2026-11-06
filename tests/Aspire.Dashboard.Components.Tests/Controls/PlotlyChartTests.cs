@@ -279,6 +279,57 @@ public class PlotlyChartTests : DashboardTestContext
         Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeChart");
     }
 
+    [Theory]
+    [InlineData("ms", OtlpInstrumentType.Sum, false)]
+    [InlineData("{request}", OtlpInstrumentType.Gauge, false)]
+    [InlineData("{request}", OtlpInstrumentType.Sum, true)]
+    public async Task UpdateDataAsync_SameInstrumentKeyWithDifferentUnitTypeOrMonotonicity_ReinitializesChart(string unit, OtlpInstrumentType type, bool isMonotonic)
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        MetricsSetupHelpers.SetupPlotlyChart(this);
+
+        var context = new OtlpContext { Options = new TelemetryLimitOptions(), Logger = NullLogger.Instance };
+        var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, context);
+        var scope = new OtlpScope("meter", string.Empty, []);
+
+        OtlpInstrumentSummary CreateInstrument(string instrumentUnit, OtlpInstrumentType instrumentType, bool instrumentIsMonotonic) => new OtlpInstrumentSummary
+        {
+            Name = "requests",
+            Unit = instrumentUnit,
+            Description = string.Empty,
+            Parent = scope,
+            Type = instrumentType,
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            IsMonotonic = instrumentIsMonotonic,
+            ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
+        };
+
+        DimensionScope CreateDimension()
+        {
+            var dimension = new DimensionScope(capacity: 100, [KeyValuePair.Create("http.route", "/")]);
+            dimension.AddPointValue(new NumberDataPoint { AsInt = 1, StartTimeUnixNano = 0, TimeUnixNano = long.MaxValue }, context);
+            return dimension;
+        }
+
+        var model = new InstrumentViewModel();
+        await model.UpdateDataAsync(CreateInstrument("{request}", OtlpInstrumentType.Sum, instrumentIsMonotonic: false), [CreateDimension()], hasOverflow: false);
+
+        var cut = Render<PlotlyChart>(builder =>
+        {
+            builder.Add(p => p.InstrumentViewModel, model);
+            builder.Add(p => p.Duration, TimeSpan.FromSeconds(1));
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeChart"));
+
+        // Switching resources can show an instrument with the same meter, name and dimensions but a
+        // different unit, type or monotonicity. Only a full initialization replaces the rendered trace names and layout.
+        await cut.InvokeAsync(() => model.UpdateDataAsync(CreateInstrument(unit, type, isMonotonic), [CreateDimension()], hasOverflow: false));
+        cut.Render();
+
+        cut.WaitForAssertion(() => Assert.Equal(2, JSInterop.Invocations.Count(i => i.Identifier == "initializeChart")));
+    }
+
     [Fact]
     public async Task UpdateDataAsync_SubscriptionRemovedDuringUpdate_CompletesSuccessfully()
     {

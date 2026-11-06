@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Existing registrations remove the framework's provisioning annotations.
 #pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
 
+using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
@@ -27,6 +28,9 @@ namespace Aspire.Hosting.Azure;
 /// <para>
 /// Aspire creates new registrations using a resource-group-scoped Microsoft Graph Bicep deployment.
 /// Use <c>AddExistingEntraApplication</c> to reference an existing registration without deploying infrastructure.
+/// Registration-only builder APIs throw on existing references. Converting a resource with
+/// <c>AsExistingApplication</c> also throws if registration-only configuration was already applied.
+/// Consumer configuration and explicit metadata describing existing API URIs and scopes remain supported.
 /// </para>
 /// <para>
 /// References to this resource inject configuration as environment variables.
@@ -133,8 +137,52 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         return EntraIdResourceExtensions.WithReference(builder, application, connectionName);
     }
 
+    internal void EnsureCanBeExistingApplication()
+    {
+        var incompatibleSetting = this switch
+        {
+            _ when AppRoleAssignments.Count > 0 => nameof(EntraIdResourceExtensions.PublishWithAppRoleAssignment),
+            _ when _redirectUriValues.Count > 0 => nameof(EntraIdResourceExtensions.WithRedirectUris),
+            _ when ApplicationOwners.Count > 0 => nameof(EntraIdResourceExtensions.WithApplicationOwners),
+            _ when ServicePrincipalOwners.Count > 0 => nameof(EntraIdResourceExtensions.WithServicePrincipalOwners),
+            _ when EnableIdTokenIssuance => nameof(EntraIdResourceExtensions.WithIdTokenIssuance),
+            _ when AppRoles.Count > 0 => nameof(EntraIdResourceExtensions.WithAppRole),
+            _ when PreAuthorizedClients.Count > 0 => nameof(EntraIdResourceExtensions.WithPreAuthorizedApplication),
+            _ when ApiAccess.Any(a => a.Consented.Count > 0) => nameof(EntraIdResourceExtensions.WithAdminConsent),
+            _ when UsesDefaultApplicationIdUri => nameof(EntraIdResourceExtensions.WithApplicationIdUri),
+            _ when HasLocalDeveloperCertificateConfiguration || ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().Any()
+                => nameof(EntraIdResourceExtensions.RunWithLocalDeveloperCertificateCredential),
+            _ when HasPublishFederationConfiguration || ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Any(c => c.IsResourceBacked)
+                => nameof(EntraIdResourceExtensions.PublishWithFederatedManagedIdentityCredential),
+            _ => null
+        };
+        if (incompatibleSetting is not null)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{Name}' cannot be converted to an existing registration because '{incompatibleSetting}' requires a registration created by Aspire. " +
+                $"Remove that registration-only configuration before calling AsExistingApplication and configure it on the registration yourself. " +
+                "Aspire does not modify existing registrations. For an existing API, use WithApplicationIdUri with its registered URI.");
+        }
+    }
+
+    // Keep intent even in the mode where these APIs do nothing, so conversion is independent of run/publish mode.
+    internal bool HasLocalDeveloperCertificateConfiguration { get; set; }
+
+    internal bool HasPublishFederationConfiguration { get; set; }
+
+    internal void ThrowIfExistingApplication(string guidance)
+    {
+        if (IsExistingApplication)
+        {
+            throw new InvalidOperationException(
+                $"Entra ID application '{Name}' is an existing registration, and Aspire does not modify existing registrations. {guidance}");
+        }
+    }
+
     internal void SetExistingApplication()
     {
+        EnsureCanBeExistingApplication();
+
         IsExistingApplication = true;
         ProvisioningTaskCompletionSource = null;
 
@@ -353,6 +401,8 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     // for resources that need one, but only environments that support managed identities do.
     internal void ValidateManagedIdentities()
     {
+        _ = GetManagedIdentityRoleAssignments(requireIdentity: true);
+
         foreach (var credential in ClientCredentials.OfType<EntraIdFederatedIdentityCredential>().Where(c => c.IsResourceBacked))
         {
             IEnumerable<IResource> targets = credential.ComputeTarget is { } target ? [target] : Consumers;
@@ -367,6 +417,65 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
                 credential.ValidateConsumer(this, resource);
             }
         }
+    }
+
+    internal List<EntraIdAppRoleAssignment> AppRoleAssignments { get; } = [];
+
+    internal Dictionary<string, BicepOutputReference> AppRoleAssignmentParameters { get; } = [];
+
+    internal EntraIdAppRole GetAssignableAppRole(string value)
+    {
+        var role = AppRoles.SingleOrDefault(role => string.Equals(role.Value, value, StringComparison.Ordinal))
+            ?? throw new ArgumentException($"Application role '{value}' is not declared on '{Name}'. Declare it with WithAppRole before assigning it.", nameof(value));
+
+        if (!role.IsEnabled || !role.AllowedMemberTypes.Contains("Application", StringComparer.Ordinal))
+        {
+            throw new ArgumentException($"Application role '{value}' on '{Name}' must be enabled and allow Application members to be assigned to a managed identity.", nameof(value));
+        }
+
+        return role;
+    }
+
+    internal IReadOnlyList<(AzureUserAssignedIdentityResource Identity, EntraIdAppRole Role)> GetManagedIdentityRoleAssignments(bool requireIdentity)
+    {
+        var assignments = new List<(AzureUserAssignedIdentityResource Identity, EntraIdAppRole Role)>();
+        var assigned = new HashSet<(AzureUserAssignedIdentityResource Identity, Guid RoleId)>();
+        foreach (var assignment in AppRoleAssignments)
+        {
+            var roles = assignment.RoleValues.Select(GetAssignableAppRole).ToArray();
+            if (assignment.Target.IsExcludedFromPublish())
+            {
+                continue;
+            }
+
+            var identity = assignment.Target as AzureUserAssignedIdentityResource
+                ?? (assignment.Target.TryGetLastAnnotation<AppIdentityAnnotation>(out var annotation)
+                    ? annotation.IdentityResource as AzureUserAssignedIdentityResource
+                    : null);
+            if (identity is null)
+            {
+                // Templates are inspected before preparation discovers compute identities. The pipeline requires
+                // an identity after preparation, so an unsupported deployment target cannot silently lose a grant.
+                if (requireIdentity)
+                {
+                    throw new InvalidOperationException(
+                        $"Resource '{assignment.Target.Name}' has an application role assignment for '{Name}', but has no user-assigned managed identity. " +
+                        "Use a compute environment that supports managed identities, such as AddAzureContainerAppEnvironment, or call WithAzureUserAssignedIdentity.");
+                }
+
+                continue;
+            }
+
+            foreach (var role in roles)
+            {
+                if (assigned.Add((identity, role.GetStableId(Name))))
+                {
+                    assignments.Add((identity, role));
+                }
+            }
+        }
+
+        return assignments;
     }
 
     /// <summary>
@@ -444,13 +553,17 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
                 continue;
             }
 
-            if (value is IEntraIdDerivedRedirectUri derivedRedirectUri)
+            if (value is EntraIdEndpointRedirectUri endpointRedirect)
             {
-                // The value is only known when the parameter is resolved: after endpoint allocation when running
-                // locally, from the compute environment when deploying, or from the host parameter's value.
-                var uriParameter = derivedRedirectUri
-                    .CreateExpression()
-                    .AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                var origin = endpointRedirect.Origin().AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                literals.Add(BicepFunction.Interpolate($"{origin.Value}{endpointRedirect.Path}").Compile());
+                continue;
+            }
+
+            if (value is ReferenceExpression uriExpression)
+            {
+                // Keep runtime browser origins and deployment parameters/outputs deferred until resolution.
+                var uriParameter = uriExpression.AsProvisioningParameter(infrastructure, NextDerivedParameterName());
                 literals.Add(uriParameter.Value.Compile());
                 continue;
             }
@@ -515,6 +628,25 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
             application.AppRoles = [.. resource.AppRoles.Select(role => CreateAppRole(resource, role))];
         }
 
+        if (resource.ClientCredentials.OfType<EntraIdLocalDeveloperCertificateCredential>().SingleOrDefault() is { } localCredential)
+        {
+            // This developer registration owns the full key collection. Embed only the selected public
+            // certificate so renewal changes the template checksum without a separate Graph read.
+            // Let Graph assign keyId: resubmitting an explicit existing ID can fail with KeyNotUpdatable.
+            // See https://learn.microsoft.com/graph/applications-how-to-add-certificate#step-2-add-the-certificate-details-using-microsoft-graph.
+            var certificate = localCredential.GetCertificate(resource);
+            application.KeyCredentials = [new MicrosoftGraphKeyCredential
+            {
+                CustomKeyIdentifier = certificate.Thumbprint,
+                DisplayName = "Aspire local developer certificate",
+                EndDateTime = certificate.NotAfter.ToString("O", CultureInfo.InvariantCulture),
+                Key = certificate.PublicCertificate,
+                StartDateTime = certificate.NotBefore.ToString("O", CultureInfo.InvariantCulture),
+                Type = "AsymmetricX509Cert",
+                Usage = "Verify"
+            }];
+        }
+
         resource.ValidateScopeReferences();
 
         // Names for the API access settings are allocated against everything that the template already declares.
@@ -536,6 +668,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         infrastructure.Add(servicePrincipal);
 
         EntraIdApiProvisioning.ConfigureGrants(resource, infrastructure, symbolNames, servicePrincipal);
+        EntraIdApiProvisioning.ConfigureManagedIdentityRoleAssignments(resource, infrastructure, symbolNames, servicePrincipal);
 
         // A symbol name must not collide with another symbol in the template, such as a user-supplied redirect URI
         // parameter named "web-identity-principalId" and an identity named "web-identity". Parameters and resources share
@@ -563,7 +696,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
             // The Graph extension names a child as '{applicationUniqueName}/{credentialName}'. Referencing the
             // application's property, rather than reusing its name expression, makes the child depend on the application.
             BicepValue<string> applicationUniqueName = application.UniqueName.ToBicepExpression();
-            infrastructure.Add(new FederatedIdentityCredential(credentialIdentifier)
+            infrastructure.Add(new MicrosoftGraphFederatedIdentityCredential(credentialIdentifier)
             {
                 Name = BicepFunction.Interpolate($"{applicationUniqueName}/{credentialName}").Compile(),
                 Issuer = BicepFunction.Interpolate($"{EntraIdFederation.GetIssuerPrefix(resource.Instance)}/{BicepFunction.GetTenant().TenantId}/v2.0").Compile(),
@@ -670,14 +803,16 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </remarks>
     public IReadOnlyList<ParameterResource> RedirectUriParameters => [.. _redirectUriValues.OfType<ParameterResource>()];
 
-    // Holds string or ParameterResource entries in the order they were added, so registration order matches call order.
+    // Keep literal, parameter, expression, and endpoint-derived entries in registration order.
     private readonly List<object> _redirectUriValues = [];
 
     internal void AddRedirectUri(string redirectUri) => _redirectUriValues.Add(redirectUri);
 
     internal void AddRedirectUri(ParameterResource redirectUri) => _redirectUriValues.Add(redirectUri);
 
-    internal void AddRedirectUri(IEntraIdDerivedRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
+    internal void AddRedirectUri(ReferenceExpression redirectUri) => _redirectUriValues.Add(redirectUri);
+
+    internal void AddRedirectUri(EntraIdEndpointRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
 
     /// <summary>
     /// Gets the application roles to declare on an application created by Aspire.
@@ -739,7 +874,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </summary>
     /// <remarks>
     /// Defaults to <see langword="false"/>. This does not enable implicit access-token issuance and is not required
-    /// for authorization-code-only flows. Existing registrations are not modified.
+    /// for authorization-code-only flows. Existing registrations are not modified; configure their Authentication settings manually.
     /// </remarks>
     public bool EnableIdTokenIssuance { get; set; }
 
@@ -1191,12 +1326,25 @@ public sealed class EntraIdFederatedIdentityCredential : EntraIdClientCredential
 public sealed class EntraIdKeyVaultCertificateCredential : EntraIdClientCredential
 {
     /// <inheritdoc />
-    public override string SourceType => "KeyVault";
+    /// <exception cref="InvalidOperationException">Thrown when neither or both of <see cref="KeyVault"/> and <see cref="KeyVaultUrl"/> are set.</exception>
+    public override string SourceType => (KeyVault, KeyVaultUrl) switch
+    {
+        (not null, null) or (null, not null) => "KeyVault",
+        _ => throw new InvalidOperationException(
+            $"Exactly one of {nameof(KeyVault)} or {nameof(KeyVaultUrl)} must be set on {nameof(EntraIdKeyVaultCertificateCredential)}.")
+    };
 
     /// <summary>
     /// Gets the URL of the Azure Key Vault (e.g., <c>"https://myvault.vault.azure.net"</c>).
     /// </summary>
-    public required string KeyVaultUrl { get; init; }
+    /// <remarks>Set either this property or <see cref="KeyVault"/>, but not both.</remarks>
+    public string? KeyVaultUrl { get; init; }
+
+    /// <summary>
+    /// Gets the Key Vault resource containing the certificate.
+    /// </summary>
+    /// <remarks>Set either this property or <see cref="KeyVaultUrl"/>, but not both. The vault URI is resolved for the consuming resource.</remarks>
+    public AzureKeyVaultResource? KeyVault { get; init; }
 
     /// <summary>
     /// Gets the name of the certificate in Azure Key Vault.
@@ -1207,7 +1355,7 @@ public sealed class EntraIdKeyVaultCertificateCredential : EntraIdClientCredenti
     internal override bool EmitEnvironmentVariables(IDictionary<string, object> envVars, string prefix, string separator, EntraIdApplicationResource application, IResource consumer, DistributedApplicationExecutionContext executionContext)
     {
         base.EmitEnvironmentVariables(envVars, prefix, separator, application, consumer, executionContext);
-        envVars[$"{prefix}{separator}KeyVaultUrl"] = KeyVaultUrl;
+        envVars[$"{prefix}{separator}KeyVaultUrl"] = KeyVault is { } vault ? vault.UriExpression : KeyVaultUrl!;
         envVars[$"{prefix}{separator}KeyVaultCertificateName"] = CertificateNameInKeyVault;
 
         return true;

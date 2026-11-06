@@ -13,6 +13,34 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class SecretTypeScriptAppHostTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task SecretInputSourcesOnTypeScriptAppHost()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output,
+            variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.TypeAsync("aspire init");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("> C#", timeout: TimeSpan.FromSeconds(30));
+        await auto.DownAsync();
+        await auto.WaitUntilTextAsync("> TypeScript (Node.js)", timeout: TimeSpan.FromSeconds(5));
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
+
+        await SecretInputTestHelpers.VerifyInputSourcesAsync(auto, counter, workspace, appHostOptions: " --apphost apphost.mts");
+    }
+
+    [Fact]
     public async Task SecretCrudOnTypeScriptAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

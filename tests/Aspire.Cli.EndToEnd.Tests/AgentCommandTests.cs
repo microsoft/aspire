@@ -59,9 +59,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("aspire agent init [options]", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilAsync(
-            s => s.ContainsText("--agents") && s.ContainsText("--scope") && s.ContainsText("--skills") &&
-                s.ContainsText("--aspire-source") && s.ContainsText("--mcp"),
-            timeout: TimeSpan.FromSeconds(30), description: "agent init help showing clients, scope, skills, source, and separate MCP");
+            s => s.ContainsText("--agents") && s.ContainsText("--scope") &&
+                s.ContainsText("--skills") && s.ContainsText("--mcp"),
+            timeout: TimeSpan.FromSeconds(30), description: "agent init help showing clients, scope, skills, and separate MCP");
+        Assert.DoesNotContain("--aspire-source", auto.CreateSnapshot().GetScreenText());
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 4: aspire mcp --help (now shows tools and call subcommands)
@@ -178,6 +179,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentNativeSkillsConfiguration(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -195,6 +197,20 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         // Create .vscode folder so the scanner detects VS Code environment
         Directory.CreateDirectory(vscodePath);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        await File.WriteAllTextAsync(configPath, """{"skillSources":{"default":{}}}""");
+        var localSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(localSkillPath)!);
+        const string localSkillContent = "My customized Aspire instructions.";
+        await File.WriteAllTextAsync(localSkillPath, localSkillContent);
+        string[] expectedWarnings =
+        [
+            "Skill sources:",
+            "https://github.com/microsoft/aspire-skills",
+            "Only use sources you trust.",
+            "Local Aspire skill files may override plugin skills",
+            ".agents/skills/aspire/SKILL.md"
+        ];
 
         // Accept agents before choosing independent assets and project scope.
         await auto.TypeAsync("aspire agent init");
@@ -208,17 +224,27 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30), description: "agent selection prompt");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which skills and tools do you want to configure?", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("aspire — Agent assets from microsoft/aspire-skills", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Which source do you want to use for Aspire?", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("aspire — Agent assets from configured skill sources", timeout: TimeSpan.FromSeconds(30));
+        var skillsScreen = auto.CreateSnapshot().GetScreenText();
+        foreach (var warning in expectedWarnings)
+        {
+            Assert.Contains(warning, skillsScreen);
+            Assert.True(skillsScreen.IndexOf(warning, StringComparison.Ordinal) <
+                skillsScreen.IndexOf("Which skills and tools do you want to configure?", StringComparison.Ordinal));
+        }
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("Configure the Aspire MCP server for selected agent environments?"),
             timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
+        var mcpScreen = auto.CreateSnapshot().GetScreenText();
+        foreach (var warning in expectedWarnings)
+        {
+            Assert.Contains(warning, mcpScreen);
+        }
         // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Installation scope", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -229,7 +255,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.RunCommandAsync(
             """jq -e '.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.repo == "microsoft/aspire-skills"' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
             counter);
-        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
+        Assert.Equal(localSkillContent, await File.ReadAllTextAsync(localSkillPath));
+        Assert.Equal([localSkillPath], Directory.GetFiles(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills"), "*", SearchOption.AllDirectories));
 
         // Verify MCP was not configured, since it was never selected in the prompt above.
         var vscodeMcpConfigPath = Path.Combine(vscodePath, "mcp.json");
@@ -237,14 +265,14 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Bundled mode includes manifest-defined skills without selecting independent tools.
+    /// Aspire selection registers the plugin without restoring copied skills.
     /// </summary>
     [Fact]
-    public async Task AgentInit_NonInteractive_BundleOnlySkillsNotInCatalog()
+    public async Task AgentInit_NonInteractive_RegistersAspireWithoutCopiedSkills()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
-        RequireCurrentAspireSkillsBundle(strategy);
+        RequireCurrentNativeSkillsConfiguration(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -257,20 +285,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        var bundleOnlySkills = new[] { "aspire-init", "aspire-monitoring", "aspire-orchestration" };
-
-        await auto.TypeAsync("aspire agent init --workspace-root . --agents copilot --scope project --skills aspire --aspire-source embedded --mcp=false");
+        await auto.TypeAsync("aspire agent init --workspace-root . --agents copilot --scope project --skills aspire --mcp=false");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(60));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var skillsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills");
-        foreach (var skillName in bundleOnlySkills)
-        {
-            var skillFile = Path.Combine(skillsRoot, skillName, "SKILL.md");
-            Assert.True(File.Exists(skillFile), $"Expected {skillName} SKILL.md at {skillFile}");
-            Assert.Contains($"name: {skillName}", File.ReadAllText(skillFile));
-        }
+        await auto.RunCommandAsync(
+            """jq -e '.enabledPlugins["aspire@aspire-skills"] == true' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
+            counter);
+        Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
     }
 
     /// <summary>
@@ -285,7 +308,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
-        RequireCurrentAspireSkillsBundle(strategy);
+        RequireCurrentNativeSkillsConfiguration(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -304,7 +327,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         const string originalMcpConfig = """{"mcpServers":{"custom":{"command":"custom"}}}""";
 
         // Pass --language so the interactive language prompt is skipped, then accept the chained
-        // agent init prompt (instead of declining it) to reach the skills-source selection.
+        // agent init prompt instead of declining it.
         await auto.TypeAsync("aspire init --language csharp --skills aspire");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created aspire.config.json", timeout: TimeSpan.FromMinutes(2));
@@ -324,18 +347,12 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30), description: "agent selection prompt");
         await auto.EnterAsync();
 
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("Which source do you want to use for Aspire?"),
-            timeout: TimeSpan.FromSeconds(60), description: "Aspire skills-source selection");
-        var skillSelectionScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Embedded (bundled skill files)", skillSelectionScreen);
-        Assert.Contains("Remote (plugin)", skillSelectionScreen);
-        Assert.Contains("at your own risk", skillSelectionScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", skillSelectionScreen);
-        Assert.DoesNotContain("Install Aspire MCP server", skillSelectionScreen);
-        await auto.EnterAsync();
-
-        await auto.WaitUntilTextAsync("Installation scope", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
+        var scopeScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("Only use sources you trust.", scopeScreen);
+        Assert.Contains("https://github.com/microsoft/aspire-skills", scopeScreen);
+        Assert.DoesNotContain("Install Aspire MCP server", scopeScreen);
+        Assert.DoesNotContain("Which source do you want to use for Aspire?", scopeScreen);
         await auto.EnterAsync();
 
         // The chained flow never registers --mcp. It completes after client and scope selection
@@ -346,19 +363,22 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         Assert.Equal(originalMcpConfig, await File.ReadAllTextAsync(mcpConfigPath));
+        await auto.RunCommandAsync(
+            """jq -e '.enabledPlugins["aspire@aspire-skills"] == true' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
+            counter);
     }
 
     /// <summary>
     /// Regression test for the chained agent init flow reached via <c>aspire new</c>: verifies that
-    /// bundled mode includes <c>aspireify</c>, and MCP configuration remains unavailable.
+    /// Aspire registration succeeds, and MCP configuration remains unavailable.
     /// </summary>
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task AspireNew_ChainedAgentInit_BundledIncludesAspireifyAndNeverOffersMcp()
+    public async Task AspireNew_ChainedAgentInit_RegistersAspireAndNeverOffersMcp()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
-        RequireCurrentAspireSkillsBundle(strategy);
+        RequireCurrentNativeSkillsConfiguration(strategy);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -375,36 +395,74 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var mcpConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp", ".mcp.json");
         const string originalMcpConfig = """{"mcpServers":{"custom":{"command":"custom"}}}""";
 
-        // Explicit client, tool, and scope choices leave only the skills-source prompt.
+        // Explicit client and skill choices leave only the scope prompt.
         await auto.AspireNewAcceptingAgentInitAsync(
             "StarterApp",
-            extraArguments: "--agents claude --scope project --skills aspire",
+            extraArguments: "--agents claude --skills aspire",
             beforeAcceptingAgentInit: () => File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig));
 
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("Which source do you want to use for Aspire?"),
-            timeout: TimeSpan.FromSeconds(60), description: "Aspire skills-source selection");
-        var skillSelectionScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Embedded (bundled skill files)", skillSelectionScreen);
-        Assert.DoesNotContain("Install Aspire MCP server", skillSelectionScreen);
-        await auto.DownAsync();
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
+        var scopeScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("This project (In your workspace, ready to commit with your project)", scopeScreen);
+        Assert.Contains("Global (In your home directory, available across all projects)", scopeScreen);
         await auto.EnterAsync();
 
-        // aspire new never registers --mcp, so it goes straight from skill selection to
-        // "configuration complete" — no MCP prompt is ever shown, and Claude's selected
-        // project MCP configuration is left untouched.
+        // aspire new never registers --mcp, so it goes straight to configuration after
+        // registration — no MCP prompt is shown, and Claude's project MCP file is untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("Only use sources you trust.", completionScreen);
+        Assert.Contains("https://github.com/microsoft/aspire-skills", completionScreen);
+        Assert.DoesNotContain("Which source do you want to use for Aspire?", completionScreen);
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);
 
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp", ".claude", "skills", "aspireify", "SKILL.md")));
         Assert.Equal(originalMcpConfig, await File.ReadAllTextAsync(mcpConfigPath));
+        await auto.RunCommandAsync(
+            """jq -e '.enabledPlugins["aspire@aspire-skills"] == true' "$ASPIRE_E2E_WORKSPACE/StarterApp/.claude/settings.json" """,
+            counter);
+        Assert.False(Directory.Exists(Path.Combine(
+            workspace.WorkspaceRoot.FullName, "StarterApp", ".claude", "skills", "aspireify")));
+    }
+
+    [Theory]
+    [InlineData("ssh://git@github.com/microsoft/aspire-skills.git")]
+    [InlineData("git@github.com:microsoft/aspire-skills.git")]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireInit_OfficialSshSource_RecommendsAspireify(string repository)
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        RequireCurrentNativeSkillsConfiguration(strategy);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
+            JsonSerializer.Serialize(new { skillSources = new { @default = new { repository } } }),
+            TestContext.Current.CancellationToken);
+        await auto.RunCommandAsync("cd \"$ASPIRE_E2E_WORKSPACE\"", counter);
+        await auto.RunCommandAsync(
+            "aspire init --language csharp --file-based --agents claude --scope project --skills aspire --use-config-source=false --non-interactive --nologo",
+            counter, TimeSpan.FromMinutes(2));
+
+        Assert.Contains("claude \"run the aspireify skill\"", auto.CreateSnapshot().GetScreenText());
+        // Newly created native settings are owner-only, so inspect them as the container's user.
+        await auto.RunCommandAsync(
+            $"jq -e --arg repository {AspireCliShellCommandHelpers.QuoteBashArg(repository)} " +
+            """'.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.url == $repository' "$ASPIRE_E2E_WORKSPACE/.claude/settings.json" """,
+            counter);
     }
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task AgentInit_DefaultSource_RegistersAllClientsOfflineAndPreservesSettingsOnRepeat()
+    public async Task AgentInit_RegistersAllClientsOfflineAndPreservesSettingsOnRepeat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -514,11 +572,11 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         }
     }
 
-    private static void RequireCurrentAspireSkillsBundle(CliInstallStrategy strategy)
+    private static void RequireCurrentNativeSkillsConfiguration(CliInstallStrategy strategy)
     {
         Assert.SkipWhen(
             strategy.Mode == CliInstallMode.InstallScript ||
             (strategy.Mode == CliInstallMode.DotnetTool && strategy.NupkgSourcePath is null),
-            "This test validates the current Aspire CLI's embedded skills bundle. Use a local or PR CLI build instead of a released CLI.");
+            "This test validates the current Aspire CLI's native skills configuration. Use a local or PR CLI build instead of a released CLI.");
     }
 }

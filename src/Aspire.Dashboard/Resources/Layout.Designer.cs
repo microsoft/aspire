@@ -673,6 +673,114 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to No structured logs are currently available for this resource. Select to open its logs view..
+        /// </summary>
+        public static string ResourcePaneNoStructuredLogs {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoStructuredLogs", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No traces are currently available for this resource. Select to open its traces view..
+        /// </summary>
+        public static string ResourcePaneNoTraces {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoTraces", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No metrics are currently available for this resource. Select to open its metrics view..
+        /// </summary>
+        public static string ResourcePaneNoMetrics {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoMetrics", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters do not produce console logs. Select to view this parameter's overview..
+        /// </summary>
+        public static string ResourcePaneParameterNoConsoleLogs {
+            get {
+                return ResourceManager.GetString("ResourcePaneParameterNoConsoleLogs", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters do not produce structured logs. Select to view this parameter's overview..
+        /// </summary>
+        public static string ResourcePaneParameterNoStructuredLogs {
+            get {
+                return ResourceManager.GetString("ResourcePaneParameterNoStructuredLogs", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters do not produce traces. Select to view this parameter's overview..
+        /// </summary>
+        public static string ResourcePaneParameterNoTraces {
+            get {
+                return ResourceManager.GetString("ResourcePaneParameterNoTraces", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters do not produce metrics. Select to view this parameter's overview..
+        /// </summary>
+        public static string ResourcePaneParameterNoMetrics {
+            get {
+                return ResourceManager.GetString("ResourcePaneParameterNoMetrics", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters do not support terminal sessions. Select to view this parameter's overview..
+        /// </summary>
+        public static string ResourcePaneParameterNoTerminal {
+            get {
+                return ResourceManager.GetString("ResourcePaneParameterNoTerminal", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No logs.
+        /// </summary>
+        public static string ResourcePaneNoStructuredLogsLabel {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoStructuredLogsLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No traces.
+        /// </summary>
+        public static string ResourcePaneNoTracesLabel {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoTracesLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No metrics.
+        /// </summary>
+        public static string ResourcePaneNoMetricsLabel {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoMetricsLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Not applicable.
+        /// </summary>
+        public static string ResourcePaneNotApplicableLabel {
+            get {
+                return ResourceManager.GetString("ResourcePaneNotApplicableLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Collapse resource list.
         /// </summary>
         public static string ResourcePaneCollapse {
@@ -1015,29 +1123,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Unable to save the resource order. Try again..
-        /// </summary>
-        public static string ResourcePaneReorderFailed {
-            get {
-                return ResourceManager.GetString("ResourcePaneReorderFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Clear search, filters and grouping, and move resources within the same parent..
         /// </summary>
         public static string ResourcePaneReorderUnavailable {
             get {
                 return ResourceManager.GetString("ResourcePaneReorderUnavailable", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Unable to save the group order. Try again..
-        /// </summary>
-        public static string ResourcePaneGroupReorderFailed {
-            get {
-                return ResourceManager.GetString("ResourcePaneGroupReorderFailed", resourceCulture);
             }
         }
 
@@ -1073,6 +1163,129 @@ namespace Aspire.Dashboard.Resources {
         public static string NavMenuToggleCollapse {
             get {
                 return ResourceManager.GetString("NavMenuToggleCollapse", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Child of {0}.
+        /// </summary>
+        public static string ResourcePaneChildOf {
+            get {
+                return ResourceManager.GetString("ResourcePaneChildOf", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Depends on {0}.
+        /// </summary>
+        public static string ResourcePaneDependsOn {
+            get {
+                return ResourceManager.GetString("ResourcePaneDependsOn", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to References {0}.
+        /// </summary>
+        public static string ResourcePaneReferences {
+            get {
+                return ResourceManager.GetString("ResourcePaneReferences", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionAddHint {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionAddHint", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionRangeHint {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionRangeHint", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionControlChord {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionControlChord", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionCommandChord {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionCommandChord", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionRangeChord {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionRangeChord", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionControlDescription {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionControlDescription", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionCommandDescription {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionCommandDescription", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityCount {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityCount", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityFailures {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityFailures", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityP95 {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityP95", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampledCount {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampledCount", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampledFailures {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampledFailures", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampledP95 {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampledP95", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityContext {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityContext", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampled {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampled", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySamples {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySamples", resourceCulture);
             }
         }
 

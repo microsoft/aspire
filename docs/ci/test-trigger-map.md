@@ -249,6 +249,13 @@ The one general path-glob → targets matcher. `targets` may be `test:` / `job:`
 a group name / `ALL`. Comment headers in the YAML group the entries by intent;
 the selector treats them all identically.
 
+An optional `exclude_paths` array removes matching files from that rule only.
+It uses the same case-sensitive glob syntax as `paths`; other matching rules
+and Layer 1 remain additive. An excluded file still needs another owner,
+an explicit `ignore` classification, or it triggers the normal run-all fallback.
+Use exclusions for dedicated consumers carved out of a broad shared rule, such
+as analyzer workflow inputs owned by `AnalyzeCiFailure.Tests`.
+
 Highlights:
 
 - **RESX metadata inputs** — the resource metadata tests read seven production

@@ -10,7 +10,7 @@
     <ChildContent>
         @if (!string.IsNullOrEmpty(Content.Message))
         {
-            <div class="interaction-message">
+            <div class="interaction-message markdown-container">
                 @((MarkupString)Content.Message)
             </div>
         }

@@ -88,6 +88,7 @@ In your AppHost project, install the `Aspire.Hosting.MySql` library with [NuGet]
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.MySql
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a MySQL database and consume the connection using the following methods:
@@ -95,7 +96,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a MySQL database and consu
 ```csharp
 var mysqldb = builder.AddMySql("mysql").AddDatabase("mysqldb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(mysqldb);
 ```
 

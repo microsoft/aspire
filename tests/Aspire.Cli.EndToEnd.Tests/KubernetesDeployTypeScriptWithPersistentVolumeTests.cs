@@ -258,13 +258,7 @@ app.get("/health", (_req, res) => {
             // (i.e. the binding annotation was lost in TS lowering) or generated a
             // fresh PVC name on each render, the marker file would be gone.
             output.WriteLine("Phase 7: delete app-statefulset-0 and wait for K8s to recreate it");
-            await auto.TypeAsync($"kubectl delete pod app-statefulset-0 -n {k8sNamespace}");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            await auto.TypeAsync($"kubectl wait --for=condition=Ready pod app-statefulset-0 -n {k8sNamespace} --timeout=180s");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+            await auto.RestartStatefulSetPodAsync(counter, k8sNamespace, "app-statefulset-0");
 
             // =====================================================================
             // Phase 8: Read marker — the durability proof

@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 stringData:
-  param1: "{{ .Values.secrets.myapp.param1 }}"
-  param3: "{{ .Values.secrets.myapp.param3 }}"
-  ConnectionStrings__cs: "Url={{ .Values.config.myapp.param0 }}, Secret={{ .Values.secrets.myapp.param1 }}"
+  param1: {{ tpl "{{ .Values.secrets.myapp.param1 }}" . | quote }}
+  param3: {{ tpl "{{ .Values.secrets.myapp.param3 }}" . | quote }}
+  ConnectionStrings__cs: {{ tpl "Url={{ .Values.config.myapp.param0 }}, Secret={{ .Values.secrets.myapp.param1 }}" . | quote }}
 type: "Opaque"

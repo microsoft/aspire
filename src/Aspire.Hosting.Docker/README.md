@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Docker` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Docker
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -30,6 +31,14 @@ await builder.addDockerComposeEnvironment("compose");
 
 The dashboard container included in the published Compose file opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
 
+Browser-origin endpoint properties use overridable deployment inputs because a Compose service address does not identify its public browser address.
+For example, `frontend.GetEndpoint("http").BrowserOrigins` reads `Parameters:frontend-http-BrowserOrigins` when preparing deployment.
+The input accepts a comma-separated origin list; local URL customization is unchanged.
+`frontend.GetEndpoint("http").PrimaryBrowserOrigin` uses a separate `Parameters:frontend-http-PrimaryBrowserOrigin` input containing a single origin, with the same localhost default rules.
+External HTTP endpoints with an explicit published port default to `http://localhost:<published-port>` (or HTTPS for an HTTPS endpoint), not the service's container port.
+External HTTP(S) endpoints without a known published port require an explicit input. Internal and non-HTTP(S) endpoint references are rejected.
+Generated input names include a stable suffix for hyphenated endpoint names so different resource/endpoint combinations cannot share an input.
+
 ### Volumes
 
 Use an environment variable so projects and executables can use a local Aspire store directory while Docker Compose mounts the published named volume:
@@ -37,7 +46,7 @@ Use an environment variable so projects and executables can use a local Aspire s
 **C#**
 
 ```csharp
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithVolume("data", "/data", env: "DATA_PATH");
 ```
 
