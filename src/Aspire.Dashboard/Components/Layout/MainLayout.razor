@@ -36,15 +36,15 @@
             else if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
-                <DashboardRunSelect ButtonId="@RunSelectButtonId"
-                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
-                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
-                                    OnClick="@LaunchRecordingsAsync" />
                 @if (!selectedRun.IsCurrent)
                 {
                     <DashboardRunPill SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                       OnClick="@LaunchRecordingsAsync" />
                 }
+                <DashboardRunSelect ButtonId="@RunSelectButtonId"
+                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
+                                    OnClick="@LaunchRecordingsAsync" />
             }
             @if (_navigationAvailability.HasResourceTerminals)
             {
