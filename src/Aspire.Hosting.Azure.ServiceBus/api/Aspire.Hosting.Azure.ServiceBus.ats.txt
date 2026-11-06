@@ -39,6 +39,7 @@ Aspire.Hosting.Azure.ServiceBus/withConfigurationFile(path: string) -> Aspire.Ho
 Aspire.Hosting.Azure.ServiceBus/withHostPort(port: number) -> Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusEmulatorResource
 Aspire.Hosting.Azure.ServiceBus/withQueueProperties(configure: callback) -> Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusQueueResource
 Aspire.Hosting.Azure.ServiceBus/withServiceBusRoleAssignments(target: Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusResource, roles: enum:Aspire.Hosting.AzureServiceBusRole[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting.Azure.ServiceBus/withSqlServer(sqlServer: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusEmulatorResource
 Aspire.Hosting.Azure.ServiceBus/withSubscriptionProperties(configure: callback) -> Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusSubscriptionResource
 Aspire.Hosting.Azure.ServiceBus/withTopicProperties(configure: callback) -> Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusTopicResource
 Aspire.Hosting.Azure/AzureServiceBusQueueResource.connectionStringExpression(context: Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.AzureServiceBusQueueResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression

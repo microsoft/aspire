@@ -4,6 +4,11 @@
 # Handle Types
 Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource [ExposeProperties]
 Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource [ExposeProperties]
+Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions
+
+# Exported Values
+SqlServerReplCommand.Version17: string = "/opt/mssql-tools/bin/sqlcmd" # The sqlcmd executable path for SQL Server client tools version 17.
+SqlServerReplCommand.Version18: string = "/opt/mssql-tools18/bin/sqlcmd" # The sqlcmd executable path for SQL Server client tools version 18.
 
 # Capabilities
 Aspire.Hosting.ApplicationModel/SqlServerDatabaseResource.connectionStringExpression(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
@@ -28,3 +33,6 @@ Aspire.Hosting.SqlServer/withDataBindMount(source: string, isReadOnly?: boolean)
 Aspire.Hosting.SqlServer/withDataVolume(name?: string, isReadOnly?: boolean) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
 Aspire.Hosting.SqlServer/withHostPort(port: number) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
 Aspire.Hosting.SqlServer/withPassword(password: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
+Aspire.Hosting.SqlServer/withRepl(configure?: callback) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
+Aspire.Hosting/SqlServerReplOptions.command(context: Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions) -> string
+Aspire.Hosting/SqlServerReplOptions.setCommand(context: Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions, value: string) -> Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions
