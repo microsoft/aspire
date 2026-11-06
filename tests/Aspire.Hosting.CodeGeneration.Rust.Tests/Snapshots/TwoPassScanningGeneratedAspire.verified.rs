@@ -391,6 +391,8 @@ pub enum EndpointProperty {
     TlsEnabled,
     #[serde(rename = "BrowserOrigins")]
     BrowserOrigins,
+    #[serde(rename = "PrimaryBrowserOrigin")]
+    PrimaryBrowserOrigin,
 }
 
 impl std::fmt::Display for EndpointProperty {
@@ -405,6 +407,7 @@ impl std::fmt::Display for EndpointProperty {
             Self::HostAndPort => write!(f, "HostAndPort"),
             Self::TlsEnabled => write!(f, "TlsEnabled"),
             Self::BrowserOrigins => write!(f, "BrowserOrigins"),
+            Self::PrimaryBrowserOrigin => write!(f, "PrimaryBrowserOrigin"),
         }
     }
 }
@@ -8653,6 +8656,15 @@ impl EndpointReference {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
+    }
+
+    /// Gets the deferred primary browser-facing origin associated with this endpoint.
+    pub fn primary_browser_origin(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
     }

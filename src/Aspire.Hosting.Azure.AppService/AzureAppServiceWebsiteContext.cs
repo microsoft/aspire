@@ -903,9 +903,9 @@ internal sealed class AzureAppServiceWebsiteContext(
     {
         return property switch
         {
-            EndpointProperty.BrowserOrigins when mapping.IsHttpIngress && mapping.External =>
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin when mapping.IsHttpIngress && mapping.External =>
                 BicepFunction.Interpolate($"{mapping.Scheme}://{mapping.Host}.azurewebsites.net"),
-            EndpointProperty.BrowserOrigins =>
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
                 throw new NotSupportedException(
                     "Azure App Service cannot provide browser origins because the endpoint is not an external HTTP(S) endpoint. " +
                     "Reference an external HTTP(S) endpoint or supply an explicit origin parameter."),

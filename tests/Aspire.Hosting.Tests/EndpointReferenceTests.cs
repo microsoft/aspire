@@ -508,6 +508,8 @@ public class EndpointReferenceTests
         var origins = endpoint.BrowserOrigins;
 
         Assert.Equal(EndpointProperty.BrowserOrigins, origins.Property);
+        Assert.Equal(EndpointProperty.PrimaryBrowserOrigin, endpoint.PrimaryBrowserOrigin.Property);
+        Assert.Equal("{frontend.bindings.http.primaryBrowserOrigin}", endpoint.PrimaryBrowserOrigin.ValueExpression);
         Assert.Same(endpoint, origins.Endpoint);
         Assert.Same(endpoint, Assert.Single(((IValueWithReferences)origins).References));
         Assert.Empty(resource.Annotations);
@@ -529,6 +531,7 @@ public class EndpointReferenceTests
         ]);
 
         Assert.Equal("https://public.example,https://alias.example,https://localhost:8443", await endpoint.BrowserOrigins.GetValueAsync());
+        Assert.Equal("https://public.example", await endpoint.PrimaryBrowserOrigin.GetValueAsync());
     }
 
     [Theory]
@@ -543,6 +546,7 @@ public class EndpointReferenceTests
         endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([]);
 
         Assert.Equal(expected, await endpoint.BrowserOrigins.GetValueAsync());
+        Assert.Equal(expected, await endpoint.PrimaryBrowserOrigin.GetValueAsync());
     }
 
     [Fact]
@@ -559,6 +563,7 @@ public class EndpointReferenceTests
         endpoint.EndpointAnnotation.AllocatedEndpoint = new(endpoint.EndpointAnnotation, "replacement.example", 443);
 
         Assert.Equal("https://frontend.example,https://replacement.example", await endpoint.BrowserOrigins.GetValueAsync());
+        Assert.Equal("https://frontend.example", await endpoint.PrimaryBrowserOrigin.GetValueAsync());
     }
 
     [Fact]
@@ -585,10 +590,14 @@ public class EndpointReferenceTests
 
         Assert.Equal("https://public.example", await host.BrowserOrigins.GetValueAsync());
         Assert.Equal("https://public.example", await container.BrowserOrigins.GetValueAsync());
+        Assert.Equal("https://public.example", await host.PrimaryBrowserOrigin.GetValueAsync());
+        Assert.Equal("https://public.example", await container.PrimaryBrowserOrigin.GetValueAsync(
+            new ValueProviderContext { Network = KnownNetworkIdentifiers.DefaultAspireContainerNetwork }));
     }
 
     [Theory]
     [InlineData(EndpointProperty.BrowserOrigins, "http://preferred.example:8080,https://frontend.example,https://127.0.0.1:8443,https://frontend.example:9443")]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin, "http://preferred.example:8080")]
     public async Task BrowserOriginPropertiesResolveFinalizedUrls(EndpointProperty property, string expected)
     {
         var resource = new TestResource("frontend");
@@ -619,10 +628,12 @@ public class EndpointReferenceTests
         endpoint.EndpointAnnotation.BrowserUrlsSnapshot.SetValue([new() { Url = url }]);
 
         Assert.Equal(expected, await endpoint.BrowserOrigins.GetValueAsync());
+        Assert.Equal(expected, await endpoint.PrimaryBrowserOrigin.GetValueAsync());
     }
 
     [Theory]
     [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin)]
     public async Task BrowserOriginPropertiesSupportCancellation(EndpointProperty property)
     {
         var resource = new TestResource("frontend");
@@ -637,6 +648,7 @@ public class EndpointReferenceTests
 
     [Theory]
     [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin)]
     public async Task BrowserOriginPropertiesAwaitFinalizedUrlsRegardlessOfExecutionMode(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -11,16 +11,18 @@ namespace Aspire.Hosting.Tests;
 public class ComputeEnvironmentValidationTests
 {
     [Theory]
-    [InlineData("http")]
-    [InlineData("tcp")]
-    public void DefaultComputeEnvironmentExplainsMissingBrowserOriginSupport(string scheme)
+    [InlineData("http", EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", EndpointProperty.BrowserOrigins)]
+    [InlineData("http", EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", EndpointProperty.PrimaryBrowserOrigin)]
+    public void DefaultComputeEnvironmentExplainsMissingBrowserOriginSupport(string scheme, EndpointProperty property)
     {
         IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
         var endpoint = CreateEndpointReference(scheme, port: null, targetPort: 5000);
 
 #pragma warning disable ASPIRECOMPUTE002 // Verify the default deployed endpoint-property contract.
         var error = Assert.Throws<NotSupportedException>(() =>
-            environment.GetEndpointPropertyExpression(endpoint.BrowserOrigins));
+            environment.GetEndpointPropertyExpression(endpoint.Property(property)));
 #pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(

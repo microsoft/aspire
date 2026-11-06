@@ -457,12 +457,8 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
 
             if (value is EntraIdEndpointRedirectUri endpointRedirect)
             {
-                var origins = endpointRedirect.Origins().AsProvisioningParameter(infrastructure, NextDerivedParameterName());
-                // BrowserOrigins is a comma-separated list. This consumer needs one preferred
-                // origin: '${first(split(redirectUri0, ','))}/signin-oidc'.
-                var firstOrigin = new FunctionCallExpression(new IdentifierExpression("first"),
-                    new FunctionCallExpression(new IdentifierExpression("split"), origins.Value.Compile(), new StringLiteralExpression(",")));
-                literals.Add(BicepFunction.Interpolate($"{(BicepValue<string>)firstOrigin}{endpointRedirect.Path}").Compile());
+                var origin = endpointRedirect.Origin().AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                literals.Add(BicepFunction.Interpolate($"{origin.Value}{endpointRedirect.Path}").Compile());
                 continue;
             }
 

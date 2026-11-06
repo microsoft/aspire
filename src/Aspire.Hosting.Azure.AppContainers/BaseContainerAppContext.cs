@@ -202,9 +202,9 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         return reference.Property switch
         {
-            EndpointProperty.BrowserOrigins when isHttpIngress && external =>
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin when isHttpIngress && external =>
                 GetHostValue($"{scheme}://"),
-            EndpointProperty.BrowserOrigins =>
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
                 throw new NotSupportedException(
                     $"Azure Container Apps cannot provide browser origins for endpoint '{reference.Endpoint.EndpointName}' on resource '{reference.Endpoint.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
                     "Reference an external HTTP(S) endpoint or supply an explicit origin parameter."),
@@ -320,7 +320,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             // Express cannot use a standard environment's private DNS either. Check visibility
             // before delegating, while the original endpoint metadata is still available.
             if (epExpr.Property is EndpointProperty.Url or EndpointProperty.Host or EndpointProperty.IPV4Host or EndpointProperty.HostAndPort or
-                EndpointProperty.BrowserOrigins)
+                EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin)
             {
                 ValidateExpressEndpointReference(epExpr.Endpoint);
             }

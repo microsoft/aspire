@@ -55,7 +55,7 @@ internal static class DockerComposeServiceResourceExtensions
 
                 return epExpr.Property switch
                 {
-                    EndpointProperty.BrowserOrigins =>
+                    EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
                         GetEndpointInput(epExpr, mapping).AsEnvironmentPlaceholder(resource),
                     _ => GetValue(mapping, epExpr.Property)
                 };

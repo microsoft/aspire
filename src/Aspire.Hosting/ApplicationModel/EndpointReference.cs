@@ -71,6 +71,22 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     public EndpointReferenceExpression BrowserOrigins => Property(EndpointProperty.BrowserOrigins);
 
     /// <summary>
+    /// Gets the deferred primary browser-facing origin associated with this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first origin in <see cref="BrowserOrigins"/>, following finalized URL display ordering.
+    /// The allocated HTTP(S) endpoint origin is used when no display origins remain.
+    /// An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+    /// of this reference's service-discovery network context.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// frontend.WithEnvironment("PUBLIC_ORIGIN", frontend.GetEndpoint("https").PrimaryBrowserOrigin);
+    /// </code>
+    /// </example>
+    public EndpointReferenceExpression PrimaryBrowserOrigin => Property(EndpointProperty.PrimaryBrowserOrigin);
+
+    /// <summary>
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.
     /// </summary>
     public string? ErrorMessage { get; init; }
@@ -163,6 +179,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             EndpointProperty.HostAndPort => $"{Binding("host")}:{Binding("port")}",
             EndpointProperty.TlsEnabled => Binding("tlsEnabled"),
             EndpointProperty.BrowserOrigins => Binding("browserOrigins"),
+            EndpointProperty.PrimaryBrowserOrigin => Binding("primaryBrowserOrigin"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{EndpointName}'.")
         };
 
@@ -380,7 +397,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         return Property switch
         {
-            EndpointProperty.BrowserOrigins =>
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
                 await ResolveBrowserOriginsAsync().ConfigureAwait(false),
             EndpointProperty.Scheme => new(Endpoint.Scheme),
             EndpointProperty.TlsEnabled => Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString,
@@ -412,7 +429,9 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
                 origins = origins.Where(origin => !string.Equals(origin, allocatedOrigin, StringComparison.Ordinal))
                     .Append(allocatedOrigin);
             }
-            return string.Join(",", origins.Distinct(StringComparer.Ordinal));
+            return Property == EndpointProperty.PrimaryBrowserOrigin
+                ? origins.FirstOrDefault() ?? string.Empty
+                : string.Join(",", origins.Distinct(StringComparer.Ordinal));
         }
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
@@ -485,5 +504,8 @@ public enum EndpointProperty
     TlsEnabled,
 
     /// <summary>Comma-separated browser-facing origins for this endpoint.</summary>
-    BrowserOrigins
+    BrowserOrigins,
+
+    /// <summary>The primary browser-facing origin for this endpoint.</summary>
+    PrimaryBrowserOrigin
 }

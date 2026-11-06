@@ -139,7 +139,8 @@ builder.Build().Run();
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, frontendDeclaration, $"var webfrontend = {frontendDeclaration}");
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, """
                 apiService.WithExternalHttpEndpoints()
-                    .WithEnvironment("BROWSER_ORIGINS", webfrontend.GetEndpoint("http").BrowserOrigins);
+                    .WithEnvironment("BROWSER_ORIGINS", webfrontend.GetEndpoint("http").BrowserOrigins)
+                    .WithEnvironment("PRIMARY_BROWSER_ORIGIN", webfrontend.GetEndpoint("http").PrimaryBrowserOrigin);
 
                 builder.Build().Run();
                 """);
@@ -149,6 +150,8 @@ builder.Build().Run();
             DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath, "var app = builder.Build();", """
                 var browserOrigins = builder.Configuration["BROWSER_ORIGINS"]
                     ?? throw new InvalidOperationException("The deployed browser origins are missing.");
+                var primaryBrowserOrigin = builder.Configuration["PRIMARY_BROWSER_ORIGIN"]
+                    ?? throw new InvalidOperationException("The deployed primary browser origin is missing.");
                 var allowedOrigins = browserOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries);
                 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
                     policy.WithOrigins(allowedOrigins).WithMethods("GET")));
@@ -158,7 +161,7 @@ builder.Build().Run();
             DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath,
                 "app.Run();", $$"""
                 app.MapGet("/deployment-marker", () => "{{marker}}");
-                app.MapGet("/browser-origins", () => new { origins = browserOrigins });
+                app.MapGet("/browser-origins", () => new { origins = browserOrigins, primaryOrigin = primaryBrowserOrigin });
                 app.Run();
                 """);
             DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(projectDir, $"{projectName}.Web", "Program.cs"),
@@ -234,6 +237,7 @@ builder.Build().Run();
                 originsResponse.EnsureSuccessStatusCode();
                 using var received = JsonDocument.Parse(await originsResponse.Content.ReadAsStringAsync(cancellationToken));
                 Assert.Equal(frontendUrl, received.RootElement.GetProperty("origins").GetString());
+                Assert.Equal(frontendUrl, received.RootElement.GetProperty("primaryOrigin").GetString());
 
                 using var preflight = new HttpRequestMessage(HttpMethod.Options, $"{apiUrl}/browser-origins");
                 preflight.Headers.Add("Origin", frontendUrl);

@@ -416,11 +416,11 @@ public class AzureContainerAppEnvironmentResource :
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
-        if (property == EndpointProperty.BrowserOrigins && IsExpress)
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && IsExpress)
         {
             ValidatePublicEndpointReference(endpointReference);
         }
-        if (property == EndpointProperty.BrowserOrigins && (!endpoint.IsExternal || endpoint.UriScheme is not ("http" or "https")))
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && (!endpoint.IsExternal || endpoint.UriScheme is not ("http" or "https")))
         {
             throw new NotSupportedException(
                 $"Azure Container Apps environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
@@ -433,7 +433,7 @@ public class AzureContainerAppEnvironmentResource :
 
         return property switch
         {
-            EndpointProperty.BrowserOrigins =>
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
                 ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host,

@@ -1,5 +1,7 @@
 ﻿extension radius
 
+param web_http_PrimaryBrowserOrigin string
+
 param web_http_BrowserOrigins string
 
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
@@ -62,13 +64,13 @@ resource consumer 'Radius.Compute/containers@2025-08-01-preview' = {
         image: 'image:latest'
         env: {
           ORIGIN: {
-            value: web_http_BrowserOrigins
+            value: web_http_PrimaryBrowserOrigin
           }
           ORIGINS: {
             value: web_http_BrowserOrigins
           }
           CONFIG: {
-            value: 'origin=${web_http_BrowserOrigins}'
+            value: 'origin=${web_http_PrimaryBrowserOrigin}'
           }
         }
       }

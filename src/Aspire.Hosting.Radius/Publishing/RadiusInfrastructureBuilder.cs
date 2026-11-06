@@ -4152,7 +4152,7 @@ internal sealed class RadiusInfrastructureBuilder
                 }
                 return;
             case EndpointReferenceExpression endpointReferenceExpression when endpointReferenceExpression.Property is
-                EndpointProperty.BrowserOrigins:
+                EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin:
                 ThrowIfEndpointMissing(endpointReferenceExpression.Endpoint, owner);
                 var browserEndpoint = endpointReferenceExpression.Endpoint;
                 if (ResourceTypeMapper.IsBackingResource(ResolveToParent(browserEndpoint.Resource)) ||

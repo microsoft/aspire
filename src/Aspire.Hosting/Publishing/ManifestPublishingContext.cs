@@ -807,7 +807,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
             return source switch
             {
                 EndpointReferenceExpression endpoint when endpoint.Property is
-                    EndpointProperty.BrowserOrigins =>
+                    EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
                     RegisterEndpointPropertyInput(endpoint),
                 ReferenceExpression referenceExpression => GetManifestExpression(referenceExpression),
                 _ => LowerManifestReferences(source, expression)

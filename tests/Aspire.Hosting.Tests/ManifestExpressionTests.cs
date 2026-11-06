@@ -397,6 +397,7 @@ public class ManifestExpressionTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin)]
     public async Task EndpointOriginPropertiesBecomeRequiredInputs(EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

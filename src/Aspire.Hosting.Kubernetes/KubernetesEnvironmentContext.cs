@@ -57,7 +57,9 @@ internal sealed class KubernetesEnvironmentContext(KubernetesEnvironmentResource
         }
 
         var distinct = origins.Distinct(StringComparer.Ordinal).ToArray();
-        return distinct.Length == 0 ? null : string.Join(",", distinct);
+        return reference.Property == EndpointProperty.PrimaryBrowserOrigin
+            ? distinct.FirstOrDefault()
+            : distinct.Length == 0 ? null : string.Join(",", distinct);
 
         bool Matches(EndpointReference endpoint) =>
             string.Equals(endpoint.Resource.Name, reference.Endpoint.Resource.Name, StringComparison.OrdinalIgnoreCase) &&

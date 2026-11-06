@@ -13,7 +13,7 @@ resource application 'Microsoft.Graph/applications@v1.0' = {
   }
   web: {
     redirectUris: [
-      '${first(split(redirectUri0, ','))}/signin-oidc'
+      '${redirectUri0}/signin-oidc'
     ]
     implicitGrantSettings: {
       enableIdTokenIssuance: false

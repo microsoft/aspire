@@ -19,11 +19,15 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    [InlineData(true, true)]
-    public void ComputeEnvironmentExplainsUnsupportedBrowserOrigins(bool appService, bool nonHttp)
+    [InlineData(false, false, EndpointProperty.BrowserOrigins)]
+    [InlineData(true, false, EndpointProperty.BrowserOrigins)]
+    [InlineData(false, true, EndpointProperty.BrowserOrigins)]
+    [InlineData(true, true, EndpointProperty.BrowserOrigins)]
+    [InlineData(false, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData(true, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData(false, true, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData(true, true, EndpointProperty.PrimaryBrowserOrigin)]
+    public void ComputeEnvironmentExplainsUnsupportedBrowserOrigins(bool appService, bool nonHttp, EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         IComputeEnvironmentResource environment = appService
@@ -34,7 +38,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 
 #pragma warning disable ASPIRECOMPUTE002 // Verify owner-level endpoint resolution matches native publication.
         var error = Assert.Throws<NotSupportedException>(() =>
-            environment.GetEndpointPropertyExpression(frontend.GetEndpoint("endpoint").BrowserOrigins));
+            environment.GetEndpointPropertyExpression(frontend.GetEndpoint("endpoint").Property(property)));
 #pragma warning restore ASPIRECOMPUTE002
 
         var platform = appService ? "Azure App Service" : "Azure Container Apps";
@@ -62,7 +66,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 #pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
         var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
-        var origin = frontend.GetEndpoint("http").BrowserOrigins;
+        var origin = frontend.GetEndpoint("http").PrimaryBrowserOrigin;
         var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
@@ -98,7 +102,7 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         }
 #pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
         var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null).WithHttpEndpoint(targetPort: 8080);
-        var origins = frontend.GetEndpoint("http").BrowserOrigins;
+        var origins = frontend.GetEndpoint("http").PrimaryBrowserOrigin;
         var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()

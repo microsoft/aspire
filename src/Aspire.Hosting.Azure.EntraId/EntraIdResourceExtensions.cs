@@ -1420,7 +1420,7 @@ public static class EntraIdResourceExtensions
             }
 
             // Delay environment lookup until infrastructure generation, so compute-environment
-            // configuration can follow WithRedirectUris. Keep output references symbolic for Bicep.
+            // configuration can follow WithRedirectUris. Keep the primary origin symbolic for Bicep.
             if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpoint.Resource, out var computeEnvironment))
             {
                 throw new InvalidOperationException(
@@ -1429,10 +1429,9 @@ public static class EntraIdResourceExtensions
                     "or register the redirect URI with an explicit URL.");
             }
 
-#pragma warning disable ASPIRECOMPUTE002 // Preserve the compute environment's deferred hostname expression.
-            var host = computeEnvironment.GetHostAddressExpression(endpoint);
+#pragma warning disable ASPIRECOMPUTE002 // Preserve the compute environment's deferred browser-origin expression.
+            return computeEnvironment.GetEndpointPropertyExpression(endpoint.PrimaryBrowserOrigin);
 #pragma warning restore ASPIRECOMPUTE002
-            return ReferenceExpression.Create($"https://{host}");
         }
     }
 

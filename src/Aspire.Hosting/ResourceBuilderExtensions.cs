@@ -2485,7 +2485,8 @@ public static class ResourceBuilderExtensions
     /// This allows you to modify the URL or its display text.
     /// </para>
     /// <para>
-    /// The finalized origin is available through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// The preferred finalized origin is available through <see cref="EndpointReference.PrimaryBrowserOrigin"/>,
+    /// and all origins through <see cref="EndpointReference.BrowserOrigins"/>.
     /// Localhost and container network references are unchanged.
     /// </para>
     /// <para>

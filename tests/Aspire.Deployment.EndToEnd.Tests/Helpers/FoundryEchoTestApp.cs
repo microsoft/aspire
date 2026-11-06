@@ -93,7 +93,9 @@ internal static class FoundryEchoTestApp
                     {
                         echo = $"Echo: {input}",
                         origins = Environment.GetEnvironmentVariable("BROWSER_ORIGINS")
-                            ?? throw new InvalidOperationException("The deployed browser origins are missing.")
+                            ?? throw new InvalidOperationException("The deployed browser origins are missing."),
+                        primaryOrigin = Environment.GetEnvironmentVariable("PRIMARY_BROWSER_ORIGIN")
+                            ?? throw new InvalidOperationException("The deployed primary browser origin is missing.")
                     });
                 }
 

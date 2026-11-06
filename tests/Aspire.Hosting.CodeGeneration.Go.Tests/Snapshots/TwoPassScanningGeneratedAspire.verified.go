@@ -256,6 +256,9 @@ const (
 	// EndpointPropertyBrowserOrigins - Comma-separated browser-facing origins for
 	// this endpoint.
 	EndpointPropertyBrowserOrigins EndpointProperty = "BrowserOrigins"
+	// EndpointPropertyPrimaryBrowserOrigin is the primary browser-facing origin for
+	// this endpoint.
+	EndpointPropertyPrimaryBrowserOrigin EndpointProperty = "PrimaryBrowserOrigin"
 )
 
 // InputType specifies the type of input for an [InteractionInput].
@@ -20421,6 +20424,16 @@ type EndpointReference interface {
 	// Port gets the port for this endpoint.
 	Port() (float64, error)
 
+	// PrimaryBrowserOrigin gets the deferred primary browser-facing origin
+	// associated with this endpoint.
+	//
+	// Returns the first origin in BrowserOrigins, following finalized URL display
+	// ordering. The allocated HTTP(S) endpoint origin is used when no display
+	// origins remain. An endpoint without HTTP(S) origins resolves to an empty
+	// string. This value is independent of this reference's service-discovery
+	// network context.
+	PrimaryBrowserOrigin() EndpointReferenceExpression
+
 	// Property gets the specified property expression of the endpoint.
 	//
 	// Parameters:
@@ -20691,6 +20704,26 @@ func (s *endpointReference) Port() (float64, error) {
 		return zero, err
 	}
 	return decodeAs[float64](result)
+}
+
+// PrimaryBrowserOrigin gets the deferred primary browser-facing origin
+// associated with this endpoint.
+func (s *endpointReference) PrimaryBrowserOrigin() EndpointReferenceExpression {
+	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // Property gets the specified property expression of the endpoint.

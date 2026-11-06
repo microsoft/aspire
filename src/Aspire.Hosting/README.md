@@ -32,6 +32,8 @@ For the full details and specification, see the [App Model document](https://git
 
 ## Browser origins in Codespaces
 
+Use `endpoint.PrimaryBrowserOrigin` for a single preferred origin, such as an authentication callback base URL, and `endpoint.BrowserOrigins` for the comma-separated origin list, such as a CORS allowlist. Both follow finalized URL display ordering and ignore service-discovery network context. If no display origins remain, the primary origin falls back to the allocated HTTP(S) endpoint origin; without any HTTP(S) origin it is empty.
+
 In run mode, endpoint URLs targeting `localhost` are projected to the HTTPS Codespaces forwarding address after URL customization and before allocation notifications. `endpoint.BrowserOrigins` and dashboard links therefore use the same projected URLs, including details-only endpoint links. Custom public URLs remain unchanged, and paths, queries, and fragments are preserved.
 
 Physical endpoint allocation and host/container service discovery remain unchanged. The allocated HTTP(S) endpoint origin remains in `BrowserOrigins` after customized or forwarded origins, even when its dashboard links are removed. Snapshot-only resource URLs continue to use the dashboard notification rewriter.

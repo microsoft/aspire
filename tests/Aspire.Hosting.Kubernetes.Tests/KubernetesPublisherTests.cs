@@ -21,17 +21,20 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData("tcp", false)]
-    [InlineData("tcp", true)]
-    [InlineData("http", false)]
-    public void BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external)
+    [InlineData("tcp", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", true, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", true, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("http", false, EndpointProperty.PrimaryBrowserOrigin)]
+    public void BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external, EndpointProperty property)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         var environment = builder.AddKubernetesEnvironment("env").WithDashboard(false);
         var web = builder.AddContainer("web", "image")
             .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
-        builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").BrowserOrigins);
+        builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").Property(property));
         using var app = builder.Build();
 
         var error = Assert.Throws<AggregateException>(app.Run);
@@ -243,6 +246,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             }
         }
         builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", endpoint.PrimaryBrowserOrigin)
             .WithEnvironment("ORIGINS", endpoint.BrowserOrigins);
         using var app = builder.Build();
 
@@ -251,6 +255,7 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var scheme = tls ? "https" : "http";
         var consumer = Assert.IsType<KubernetesResource>(builder.Resources.Single(resource => resource.Name == "consumer").GetDeploymentTargetAnnotation()!.DeploymentTarget);
         Assert.Equal($"{scheme}://public.example,{scheme}://alias.example", await consumer.EnvironmentVariables["ORIGINS"].ParameterSource!.GetValueAsync(default));
+        Assert.Equal($"{scheme}://public.example", await consumer.EnvironmentVariables["ORIGIN"].ParameterSource!.GetValueAsync(default));
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml").UseParameters(gateway, tls);
     }
 
@@ -307,7 +312,10 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         environment.AddIngress("public").WithHostname("public.example").WithPath("/", web.GetEndpoint("http"));
         builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://override.example";
-        builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
+        builder.Configuration["Parameters:web-http-PrimaryBrowserOrigin"] = "https://primary.example";
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
+            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
         using var app = builder.Build();
 
         app.Run();
@@ -341,7 +349,9 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         {
             ingress.WithHostname(hostname);
         }
-        builder.AddContainer("consumer", "image").WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins);
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
+            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
         using var app = builder.Build();
 
         app.Run();
@@ -349,6 +359,9 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var parameter = Assert.Single(environment.Resource.CapturedHelmValues, value => value.Parameter.Name == "web-http-BrowserOrigins").Parameter;
         Assert.Null(parameter.Default);
         Assert.True(parameter.Required);
+        var primaryParameter = Assert.Single(environment.Resource.CapturedHelmValues, value => value.Parameter.Name == "web-http-PrimaryBrowserOrigin").Parameter;
+        Assert.Null(primaryParameter.Default);
+        Assert.True(primaryParameter.Required);
     }
 
     [Fact]

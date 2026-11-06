@@ -29,6 +29,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
 {
     [Theory]
     [InlineData(EndpointProperty.BrowserOrigins, "https://api.example.test")]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin, "https://api.example.test")]
     public async Task BrowserOriginsUseDeployedSandboxProxyAuthority(EndpointProperty property, string expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);

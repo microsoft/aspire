@@ -20,10 +20,13 @@ namespace Aspire.Hosting.Radius.Tests.Publishing;
 public class RadiusDeployParametersTests
 {
     [Theory]
-    [InlineData("http", false, false)]
-    [InlineData("tcp", true, false)]
-    [InlineData("http", true, true)]
-    public async Task BrowserOriginsRejectUnsupportedEndpoints(string scheme, bool external, bool backingResource)
+    [InlineData("http", false, false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", true, false, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", true, true, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", false, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", true, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("http", true, true, EndpointProperty.PrimaryBrowserOrigin)]
+    public async Task BrowserOriginsRejectUnsupportedEndpoints(string scheme, bool external, bool backingResource, EndpointProperty property)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddRadiusEnvironment("myenv");
@@ -39,7 +42,7 @@ public class RadiusDeployParametersTests
                 .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
         }
         builder.AddContainer("consumer", "image")
-            .WithEnvironment("ORIGINS", producer.GetEndpoint("endpoint").BrowserOrigins);
+            .WithEnvironment("ORIGINS", producer.GetEndpoint("endpoint").Property(property));
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         RadiusTestHelper.AttachDeploymentTargets(environment.Resource, model);
@@ -94,9 +97,9 @@ public class RadiusDeployParametersTests
         var environment = builder.AddRadiusEnvironment("myenv");
         var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
         builder.AddContainer("consumer", "image")
-            .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
             .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins)
-            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={web.GetEndpoint("http").BrowserOrigins}"));
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={web.GetEndpoint("http").PrimaryBrowserOrigin}"));
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         RadiusTestHelper.AttachDeploymentTargets(environment.Resource, model);
@@ -106,7 +109,7 @@ public class RadiusDeployParametersTests
         var options = await infrastructure.BuildAsync(app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), default);
 
         var bindings = Assert.Single(environment.Resource.Annotations.OfType<RadiusDeployParametersAnnotation>()).Parameters;
-        Assert.Single(bindings);
+        Assert.Equal(2, bindings.Count);
         Assert.All(bindings.Values, parameter =>
         {
             Assert.True(parameter.Required);
@@ -119,6 +122,7 @@ public class RadiusDeployParametersTests
             return;
         }
         builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://public.example,https://alias.example";
+        builder.Configuration["Parameters:web-http-PrimaryBrowserOrigin"] = "https://public.example";
         var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
         Assert.NotNull(path);
         try

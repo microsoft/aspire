@@ -45,7 +45,7 @@ public interface IComputeEnvironmentResource : IResource
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
-        if (property == EndpointProperty.BrowserOrigins)
+        if (property is EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin)
         {
             throw new NotSupportedException(
                 $"Compute environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it does not implement deployed browser-origin resolution. " +

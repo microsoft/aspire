@@ -620,6 +620,8 @@ export enum EndpointProperty {
     TlsEnabled = "TlsEnabled",
     /** Comma-separated browser-facing origins for this endpoint. */
     BrowserOrigins = "BrowserOrigins",
+    /** The primary browser-facing origin for this endpoint. */
+    PrimaryBrowserOrigin = "PrimaryBrowserOrigin",
 }
 
 /** Enum type for HealthStatus */
@@ -4350,6 +4352,15 @@ export interface EndpointReference {
      * An endpoint without HTTP(S) origins resolves to an empty string.
      */
     browserOrigins(): EndpointReferenceExpressionPromise;
+    /**
+     * Gets the deferred primary browser-facing origin associated with this endpoint.
+     *
+     * Returns the first origin in `BrowserOrigins`, following finalized URL display ordering.
+     * The allocated HTTP(S) endpoint origin is used when no display origins remain.
+     * An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+     * of this reference's service-discovery network context.
+     */
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4426,6 +4437,15 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
      * An endpoint without HTTP(S) origins resolves to an empty string.
      */
     browserOrigins(): EndpointReferenceExpressionPromise;
+    /**
+     * Gets the deferred primary browser-facing origin associated with this endpoint.
+     *
+     * Returns the first origin in `BrowserOrigins`, following finalized URL display ordering.
+     * The allocated HTTP(S) endpoint origin is used when no display origins remain.
+     * An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+     * of this reference's service-discovery network context.
+     */
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
@@ -4521,6 +4541,17 @@ class EndpointReferenceImpl implements EndpointReference {
         const promise = (async () => {
             const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
                 'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+                { context: this._handle }
+            );
+            return new EndpointReferenceExpressionImpl(handle, this._client);
+        })();
+        return new EndpointReferenceExpressionPromiseImpl(promise, this._client, false);
+    }
+
+    primaryBrowserOrigin(): EndpointReferenceExpressionPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin',
                 { context: this._handle }
             );
             return new EndpointReferenceExpressionImpl(handle, this._client);
@@ -4679,6 +4710,7 @@ const EndpointReferencePromiseImpl = $aspireCreateFluentPromiseClass<EndpointRef
     ["resource"]: [() => ResourceWithEndpointsPromiseImpl, false] as const,
     ["endpointName"]: null,
     ["browserOrigins"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
+    ["primaryBrowserOrigin"]: [() => EndpointReferenceExpressionPromiseImpl, false] as const,
     ["errorMessage"]: null,
     ["isAllocated"]: null,
     ["exists"]: null,

@@ -198,7 +198,7 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
 
         return property switch
         {
-            EndpointProperty.BrowserOrigins =>
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
                 throw new NotSupportedException(
                     $"Radius environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because its service DNS is cluster-local and does not establish a browser-facing address. " +
                     "Supply an explicit deployment origin parameter or reference a public gateway endpoint."),

@@ -93,10 +93,13 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("http", false)]
-    [InlineData("tcp", true)]
-    [InlineData("tcp", false)]
-    public async Task BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external)
+    [InlineData("http", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", true, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", false, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", true, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", false, EndpointProperty.PrimaryBrowserOrigin)]
+    public async Task BrowserOriginsRejectInternalOrNonHttpEndpoints(string scheme, bool external, EndpointProperty property)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
@@ -104,7 +107,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
         var web = builder.AddContainer("web", "image")
             .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
-        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").BrowserOrigins);
+        var consumer = builder.AddContainer("consumer", "image").WithEnvironment("ORIGINS", web.GetEndpoint("endpoint").Property(property));
         using var app = builder.Build();
         var context = new DockerComposeEnvironmentContext(environment.Resource, NullLogger.Instance);
         await context.CreateDockerComposeServiceResourceAsync(web.Resource, builder.ExecutionContext, default);
@@ -147,10 +150,11 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var environment = builder.AddDockerComposeEnvironment("env").WithDashboard(false);
         var web = builder.AddContainer("web", "image").WithHttpEndpoint(port: 8080, targetPort: 80).WithExternalHttpEndpoints();
         builder.AddContainer("consumer", "image")
-            .WithEnvironment("ORIGIN", web.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
             .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins);
         if (overridden)
         {
+            builder.Configuration["Parameters:web-http-PrimaryBrowserOrigin"] = "https://primary.example";
             builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://public.example";
         }
         using var app = builder.Build();
@@ -158,8 +162,11 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         var inputs = environment.Resource.CapturedEnvironmentVariables.Values.Select(value => Assert.IsType<ParameterResource>(value.Source)).ToArray();
-        Assert.Equal("http://localhost:8080", inputs[0].Default!.GetDefaultValue());
-        Assert.Equal(overridden ? "https://public.example" : "http://localhost:8080", await inputs[0].GetValueAsync(default));
+        var primary = Assert.Single(inputs, input => input.Name == "web-http-PrimaryBrowserOrigin");
+        var origins = Assert.Single(inputs, input => input.Name == "web-http-BrowserOrigins");
+        Assert.Equal("http://localhost:8080", primary.Default!.GetDefaultValue());
+        Assert.Equal(overridden ? "https://primary.example" : "http://localhost:8080", await primary.GetValueAsync(default));
+        Assert.Equal(overridden ? "https://public.example" : "http://localhost:8080", await origins.GetValueAsync(default));
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production")), "env").UseParameters(overridden);
     }
 

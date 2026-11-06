@@ -13,6 +13,7 @@ public class ProjectResourceTests
 {
     [Theory]
     [InlineData(EndpointProperty.BrowserOrigins, "{my-project.outputs.endpointOrigin}", "https://account.services.ai.azure.com")]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin, "{my-project.outputs.endpointOrigin}", "https://account.services.ai.azure.com")]
     public async Task BrowserOriginPropertiesUseDeployedProjectAuthority(EndpointProperty property, string expression, string expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
