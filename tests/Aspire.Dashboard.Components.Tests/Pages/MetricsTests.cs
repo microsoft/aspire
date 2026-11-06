@@ -22,6 +22,7 @@ using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
@@ -1514,6 +1515,80 @@ public partial class MetricsTests : DashboardTestContext
             // A counter's sparkline shows bars of the increase per interval.
             Assert.NotNull(tile.QuerySelector(".metric-sparkline-bars"));
         });
+    }
+
+    [Fact]
+    public async Task Metrics_DisposedDuringSplitterImport_DoesNotRegisterDetachedElement()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        await Services.GetRequiredService<SqliteTelemetryRepository>().AddMetricsAsync(new(),
+            [new ResourceMetrics
+            {
+                Resource = CreateResource("TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }]);
+        var import = TestJSObjectReference.SetupImport(this, "/Components/Pages/Metrics.razor.js");
+        var module = new TestJSObjectReference();
+        var cut = Render<Metrics>(builder => builder
+            .Add(c => c.ResourceName, "TestApp")
+            .AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        cut.WaitForAssertion(() => Assert.NotEmpty(import.Invocations));
+
+        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+        import.SetResult(module);
+
+        cut.WaitForAssertion(() => Assert.Equal(1, module.DisposeCount));
+        await cut.InvokeAsync(() => cut.Instance.SetMetricGroupsPaneSizeAsync(50));
+        Assert.Empty(module.Invocations);
+        Assert.False(Renderer.UnhandledException.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MeterOverview_ImportFailureWhileActive_IsNotSuppressed(bool disconnected)
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var import = TestJSObjectReference.SetupImport(this, "/Components/Controls/Chart/MeterOverview.razor.js");
+        Render<MeterOverview>(builder => builder
+            .Add(c => c.Instruments, [])
+            .Add(c => c.Duration, TimeSpan.FromMinutes(5))
+            .Add(c => c.ShowMeterName, false)
+            .Add(c => c.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}"));
+        Exception failure = disconnected
+            ? new JSDisconnectedException("Metric observer import disconnected.")
+            : new JSException("Metric observer import failed.");
+        import.SetException(failure);
+
+        Assert.Same(failure, await Renderer.UnhandledException.DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task MeterOverview_DisposedDuringImport_ReleasesModuleWithoutRegisteringObserver()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var import = TestJSObjectReference.SetupImport(this, "/Components/Controls/Chart/MeterOverview.razor.js");
+        var module = new TestJSObjectReference();
+        var cut = Render<MeterOverview>(builder => builder
+            .Add(c => c.Instruments, [])
+            .Add(c => c.Duration, TimeSpan.FromMinutes(5))
+            .Add(c => c.ShowMeterName, false)
+            .Add(c => c.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}"));
+
+        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+        import.SetResult(module);
+
+        cut.WaitForAssertion(() => Assert.Equal(1, module.DisposeCount));
+        await cut.InvokeAsync(() => cut.Instance.OnVisibleCardsChanged([]));
+        Assert.Empty(module.Invocations);
+        Assert.False(Renderer.UnhandledException.IsCompleted);
     }
 
     [Fact]

@@ -4,6 +4,12 @@
  cards would otherwise call the server for every card that crosses the margin.
  */
 export function observeCards(container, dotNetReference) {
+    // A server-side JS invocation can arrive after navigation removes the element.
+    // No observer should be created for an outgoing component's detached container.
+    if (!container?.isConnected) {
+        return null;
+    }
+
     const visibleIds = new Set();
     let reportTimer = null;
     let disposed = false;

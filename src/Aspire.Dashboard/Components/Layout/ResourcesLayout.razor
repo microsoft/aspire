@@ -29,6 +29,7 @@
          data-pane-location="@_lastLocation"
          data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
          style="@GetLayoutStyle()"
+         data-tab-navigation="@_navigatingToHref"
          @ref="_layoutElement">
         @* A single header keeps section subscriptions stable across viewport changes. *@
         <header class="resource-header resource-context-header">
@@ -420,7 +421,7 @@
                  tabindex="-1"
                  inert="@(_isPaneFullCanvas || _isPaneSelectionReveal || (!isDesktop && _isDrawerOpen))"
                  aria-hidden="@(_isPaneFullCanvas || _isPaneSelectionReveal || (!isDesktop && _isDrawerOpen) ? "true" : null)">
-            <div class="resource-tab-body">
+            <div class="resource-tab-body" data-resource-tab="@CurrentTab">
                 <CascadingValue Value="this" IsFixed="true" @key="IsTelemetryPane">
                     @Body
                 </CascadingValue>
@@ -840,6 +841,7 @@
         // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged).
         var activeTab = _navigatingToTab ?? CurrentTab;
         var renderedLocation = _lastLocation;
+        var renderedSelection = _selectedResourceNames;
         var currentTabItem = GetTabs().FirstOrDefault(t => t.Tab == activeTab);
     <div class="resource-tabs-nav">
         @* Keep queued native change events bound to their original location. Reusing the component would
@@ -854,6 +856,8 @@
                 <FluentTab HeaderClass="tab-label"
                            Id="@GetTabId(tab.Tab)"
                            Visible="@tab.IsVisible"
+                           @onclick="@(_ => OnTabActivated(tab.Tab, isDesktop, renderedSelection))"
+                           @onkeydown="@(args => OnTabActivationKeyDown(args, tab.Tab, isDesktop, renderedSelection))"
                            data-tooltip="@(tab.IsAvailable ? null : Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)])"
                            IconStart="@tab.Icon">
                     <HeaderTemplate>

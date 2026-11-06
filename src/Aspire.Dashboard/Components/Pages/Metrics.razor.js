@@ -1,6 +1,11 @@
 const registrations = new WeakMap();
 
 export function registerMetricsSplitter(element, dotNetRef) {
+    // A queued server invocation can arrive after navigation removes the metrics page.
+    if (!element?.isConnected) {
+        return false;
+    }
+
     unregisterMetricsSplitter(element);
 
     const splitter = element.querySelector(':scope > .fluent-multi-splitter');
@@ -13,6 +18,10 @@ export function registerMetricsSplitter(element, dotNetRef) {
     let disposed = false;
 
     const fitGroupsPane = event => {
+        if (disposed || !element.isConnected) {
+            return;
+        }
+
         event.preventDefault();
 
         const currentWidth = groupsPane.getBoundingClientRect().width;

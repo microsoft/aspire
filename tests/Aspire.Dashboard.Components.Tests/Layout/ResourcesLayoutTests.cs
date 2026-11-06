@@ -850,6 +850,160 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Tabs_DelayedFocusCheckCannotClearExplicitActivationOfSameTab()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var focusCheck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = identifier => identifier == "isResourceTabFocused" ? focusCheck.Task : Task.CompletedTask
+        };
+        TestJSObjectReference.SetupImport(this, "./Components/Layout/ResourcesLayout.razor.js").SetResult(module);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId));
+        var metrics = cut.FindComponents<FluentTab>().Single(tab => tab.Instance.Id == "tab-Metrics").Instance;
+        var pendingChange = cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(metrics));
+        cut.WaitForAssertion(() => Assert.Contains(module.Invocations, call => call.Identifier == "isResourceTabFocused"));
+
+        cut.Find("#tab-Metrics").Click();
+        Assert.Equal("http://localhost/metrics/resource/api", navigation.Uri);
+        focusCheck.SetResult();
+        await pendingChange;
+        Assert.Equal("http://localhost/metrics/resource/api", navigation.Uri);
+        Assert.Equal("tab-Metrics", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        cut.Render();
+        Assert.Equal(ResourceTab.Metrics, cut.Instance.CurrentTab);
+    }
+
+    [Fact]
+    public async Task Tabs_ExplicitActivationsReplacePendingTargetAndIgnoreStaleChanges()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var renderAck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = identifier => identifier == "waitForResourceTabRender" ? renderAck.Task : Task.CompletedTask
+        };
+        TestJSObjectReference.SetupImport(this, "./Components/Layout/ResourcesLayout.razor.js").SetResult(module);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var locations = new List<string>();
+        navigation.LocationChanged += (_, args) => locations.Add(args.Location);
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId));
+        var previousChanged = cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged;
+        var previousOverview = cut.FindComponents<FluentTab>().Single(tab => tab.Instance.Id == "tab-Overview").Instance;
+
+        for (var cycle = 0; cycle < 3; cycle++)
+        {
+            renderAck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            foreach (var tab in new[] { "Overview", "Console", "StructuredLogs", "Traces", "Metrics" })
+            {
+                cut.Find($"#tab-{tab}").Click();
+            }
+            var firstLocation = cycle == 0 ? "http://localhost/consolelogs/resource/api" : "http://localhost/resources/api";
+            Assert.Equal(firstLocation, navigation.Uri);
+            Assert.Equal("tab-Metrics", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+            await cut.InvokeAsync(() => previousChanged.InvokeAsync(previousOverview));
+            Assert.Equal(firstLocation, navigation.Uri);
+            cut.Render();
+            Assert.Equal(firstLocation, navigation.Uri);
+            Assert.Equal(cycle * 2 + 1, locations.Count);
+            renderAck.SetResult();
+            cut.WaitForAssertion(() => Assert.Equal("http://localhost/metrics/resource/api", navigation.Uri));
+            cut.Render();
+            Assert.Equal(ResourceTab.Metrics, cut.Instance.CurrentTab);
+            Assert.Equal(new[] { firstLocation, "http://localhost/metrics/resource/api" }, locations.Skip(cycle * 2));
+        }
+
+        cut.Find("#tab-Console").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Enter" });
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
+        cut.Render();
+        Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+    }
+
+    [Fact]
+    public void Tabs_RenderAcknowledgementTimeoutReleasesLatestTarget()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var suspendedAck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var acknowledgements = 0;
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = identifier => identifier == "waitForResourceTabRender" && ++acknowledgements == 1
+                ? suspendedAck.Task : Task.CompletedTask
+        };
+        TestJSObjectReference.SetupImport(this, "./Components/Layout/ResourcesLayout.razor.js").SetResult(module);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId));
+
+        cut.Find("#tab-Console").Click();
+        cut.Find("#tab-Metrics").Click();
+        cut.Render();
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
+        cut.WaitForAssertion(() => Assert.Equal("http://localhost/metrics/resource/api", navigation.Uri));
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.False(cut.Find(".resources-layout").HasAttribute("data-tab-navigation")));
+        Assert.Equal("tab-Metrics", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        cut.Find("#tab-Traces").Click();
+        Assert.Equal("http://localhost/traces/resource/api", navigation.Uri);
+    }
+
+    [Fact]
+    public async Task Tabs_ExternalNavigationCancelsQueuedTargetAndInvalidatesItsRenderAck()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var firstAck = new TaskCompletionSource();
+        var secondAck = new TaskCompletionSource();
+        var acknowledgementCount = 0;
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = identifier => identifier == "waitForResourceTabRender"
+                ? ++acknowledgementCount == 1 ? firstAck.Task : secondAck.Task
+                : Task.CompletedTask
+        };
+        TestJSObjectReference.SetupImport(this, "./Components/Layout/ResourcesLayout.razor.js").SetResult(module);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId));
+        cut.Find("#tab-Console").Click();
+        cut.Find("#tab-Metrics").Click();
+        cut.Render();
+        Assert.Equal(1, acknowledgementCount);
+
+        navigation.NavigateTo("/traces/resource/api");
+        cut.Render();
+        cut.Find("#tab-StructuredLogs").Click();
+        cut.Find("#tab-Metrics").Click();
+        cut.Render();
+        Assert.Equal(2, acknowledgementCount);
+        await cut.InvokeAsync(firstAck.SetResult);
+        Assert.Equal("http://localhost/structuredlogs/resource/api", navigation.Uri);
+        await cut.InvokeAsync(secondAck.SetResult);
+        cut.WaitForAssertion(() => Assert.Equal("http://localhost/metrics/resource/api", navigation.Uri));
+        cut.Render();
+        Assert.Equal(ResourceTab.Metrics, cut.Instance.CurrentTab);
+        cut.WaitForAssertion(() => Assert.False(cut.Find(".resources-layout").HasAttribute("data-tab-navigation")));
+    }
+
+    [Fact]
     public async Task Tabs_ClickedTabStaysActiveUntilItsPageShows()
     {
         // The tab strip is inline on narrow viewports; on desktop it's in the app's header, which isn't rendered here.

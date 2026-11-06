@@ -79,6 +79,8 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
+    protected bool IsDisposed => _disposeToken.IsCancellationRequested;
+
     protected LiveSparklinesBase()
     {
         _disposeToken = _disposeCts.Token;
@@ -368,6 +370,11 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (IsDisposed)
+        {
+            return;
+        }
+
         await _disposeCts.CancelAsync();
         if (_refreshTask is { } task)
         {

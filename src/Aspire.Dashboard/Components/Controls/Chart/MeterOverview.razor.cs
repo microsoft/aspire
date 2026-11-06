@@ -58,7 +58,7 @@ public partial class MeterOverview : LiveSparklinesBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender)
+        if (!firstRender || IsDisposed)
         {
             return;
         }
@@ -67,17 +67,35 @@ public partial class MeterOverview : LiveSparklinesBase
         // for example when the module fails to load, every card keeps refreshing.
         try
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MeterOverview.razor.js"]}");
+            var module = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MeterOverview.razor.js"]}");
+            if (IsDisposed)
+            {
+                await module.DisposeAsync();
+                return;
+            }
+
+            _jsModule = module;
             _selfReference = DotNetObjectReference.Create(this);
-            _cardObserver = await _jsModule.InvokeAsync<IJSObjectReference>("observeCards", _container, _selfReference);
+            var observer = await module.InvokeAsync<IJSObjectReference?>("observeCards", _container, _selfReference);
+            if (IsDisposed && observer is not null)
+            {
+                await observer.InvokeVoidAsync("dispose");
+                await observer.DisposeAsync();
+                return;
+            }
+
+            _cardObserver = observer;
         }
-        catch (JSDisconnectedException)
+        catch (JSDisconnectedException) when (IsDisposed)
+        {
+        }
+        catch (ObjectDisposedException) when (IsDisposed)
         {
         }
     }
 
     [JSInvokable]
-    public Task OnVisibleCardsChanged(string[] instrumentIds) => SetVisibleInstrumentsAsync(instrumentIds);
+    public Task OnVisibleCardsChanged(string[] instrumentIds) => IsDisposed ? Task.CompletedTask : SetVisibleInstrumentsAsync(instrumentIds);
 
     protected override async ValueTask DisposeCoreAsync()
     {

@@ -1,3 +1,64 @@
+/* Only the route content is captured; the shell remains live and stationary.
+   Fluent motion fallbacks match https://github.com/microsoft/fluentui/tree/master/packages/tokens/src/global. */
+html[data-route-transition] {
+    view-transition-name: none;
+    --route-transition-offset: 10px;
+}
+
+html[data-route-transition="backward"] {
+    --route-transition-offset: -10px;
+}
+
+html[data-route-transition] .resource-tab-body {
+    view-transition-name: resource-route;
+}
+
+html[data-route-transition]::view-transition {
+    pointer-events: none;
+}
+
+html[data-route-transition]::view-transition-group(resource-route) {
+    animation: none;
+    overflow: clip;
+}
+
+html[data-route-transition]::view-transition-old(resource-route),
+html[data-route-transition]::view-transition-new(resource-route) {
+    animation-duration: var(--durationFast, 150ms);
+    animation-timing-function: var(--curveEasyEase, cubic-bezier(0.33, 0, 0.67, 1));
+    animation-fill-mode: both;
+    mix-blend-mode: normal;
+}
+
+html[data-route-transition]::view-transition-old(resource-route) {
+    animation-name: route-content-out;
+}
+
+html[data-route-transition]::view-transition-new(resource-route) {
+    animation-name: route-content-in;
+}
+
+@keyframes route-content-out {
+    to {
+        opacity: 0;
+        transform: translateX(calc(-1 * var(--route-transition-offset)));
+    }
+}
+
+@keyframes route-content-in {
+    from {
+        opacity: 0;
+        transform: translateX(var(--route-transition-offset));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-route-transition]::view-transition-old(resource-route),
+    html[data-route-transition]::view-transition-new(resource-route) {
+        animation: none;
+    }
+}
+
 .log-overflow {
     width: 100%;
     overflow: auto;

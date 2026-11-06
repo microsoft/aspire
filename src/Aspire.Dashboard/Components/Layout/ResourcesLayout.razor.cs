@@ -83,6 +83,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? _lastLocation;
     // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
     private ResourceTab? _navigatingToTab;
+    private string? _navigatingToHref;
+    private ResourceTab? _queuedTabNavigation;
+    private int _tabRenderVersion;
+    private int _acknowledgingTabVersion;
+    private int _tabNavigationVersion;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
@@ -442,7 +447,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The router sets a new body on every navigation. Selection is updated here, rather than in a
         // LocationChanged handler, so it's current before the page in the body renders.
         var location = NavigationManager.Uri;
-        if (string.Equals(location, _lastLocation, StringComparison.Ordinal))
+        var isNewLocation = !string.Equals(location, _lastLocation, StringComparison.Ordinal);
+        // Back can return to the still-rendered page before the requested page commits.
+        if ((isNewLocation || _navigatingToHref is not null) &&
+            (_navigatingToHref is null ||
+             !string.Equals(location, NavigationManager.ToAbsoluteUri(_navigatingToHref).AbsoluteUri, StringComparison.Ordinal)))
+        {
+            _navigatingToTab = null;
+            _navigatingToHref = null;
+            _queuedTabNavigation = null;
+            _tabRenderVersion++;
+        }
+        if (!isNewLocation)
         {
             return;
         }
@@ -470,7 +486,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _isPaneFullCanvas = false;
         _fullCanvasNavigation = null;
         ClearPaneActivity();
-        _navigatingToTab = null;
+        _tabNavigationVersion++;
         var previousTab = CurrentTab;
         var previousSelection = _selectedResourceNames;
         // Closing the menu can yield a render. Publish the new selection first so
@@ -499,6 +515,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        await FinishTabNavigationAsync();
         var showResizer = ViewportInformation.IsDesktop && !_isPaneCollapsed && !_isPaneFullCanvas;
         var registrationChanged = showResizer != _isResizerRegistered || !_isOrderingRegistered;
         if (_usesCommandSelectionModifier is not null && !registrationChanged && _isTabOverflowRegistered &&
@@ -509,7 +526,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         try
         {
-            _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Layout/ResourcesLayout.razor.js"]}");
+            if (_jsModule is null)
+            {
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Layout/ResourcesLayout.razor.js"]}");
+                await _jsModule.InvokeVoidAsync("registerRouteTransitions", _layoutElement);
+            }
             var renderSelectionModifier = _usesCommandSelectionModifier is null;
             if (renderSelectionModifier)
             {
@@ -574,6 +595,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 StateHasChanged();
             }
+            await FinishTabNavigationAsync();
         }
         catch (JSDisconnectedException)
         {
@@ -2535,11 +2557,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         // A newly mounted FluentTabs can report its initial first tab after ActiveTabId
         // has been applied. Only focused pointer/keyboard tab changes own navigation.
-        if (_jsModule is null || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href)
+        if (_jsModule is null || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is null)
         {
             return;
         }
         // Keep the user's choice rendered while the browser focus check is in flight.
+        var navigationVersion = ++_tabNavigationVersion;
         _navigatingToTab = tab;
         bool isFocused;
         try
@@ -2550,19 +2573,115 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             return;
         }
-        if (!isFocused || _isDisposed || isDesktop != ViewportInformation.IsDesktop || _navigatingToTab != tab ||
+        if (!isFocused || _isDisposed || navigationVersion != _tabNavigationVersion ||
+            isDesktop != ViewportInformation.IsDesktop || _navigatingToTab != tab ||
             !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) ||
             !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal))
         {
-            if (_navigatingToTab == tab && string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal))
+            if (navigationVersion == _tabNavigationVersion && _navigatingToTab == tab &&
+                string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal))
             {
                 _navigatingToTab = null;
             }
             return;
         }
 
-        // Tabs map to pages, so a tab change is a navigation. The tab URL keeps the current resource selection.
-        NavigationManager.NavigateTo(href);
+        OnTabActivated(tab, isDesktop, _selectedResourceNames);
+    }
+
+    private void OnTabActivated(ResourceTab tab, bool isDesktop, IReadOnlyList<string> renderedSelection)
+    {
+        if (_isDisposed || isDesktop != ViewportInformation.IsDesktop ||
+            !renderedSelection.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName))
+        {
+            return;
+        }
+
+        // Explicit input supersedes a pending Fluent focus check, including one for the same tab.
+        // Its stale completion must not clear or navigate away from the latest activation.
+        if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is { } href)
+        {
+            _tabNavigationVersion++;
+            _navigatingToTab = tab;
+            if (_navigatingToHref is not null)
+            {
+                _queuedTabNavigation = string.Equals(_navigatingToHref, href, StringComparison.Ordinal) ? null : tab;
+                return;
+            }
+            if (string.Equals(NavigationManager.Uri, NavigationManager.ToAbsoluteUri(href).AbsoluteUri, StringComparison.Ordinal))
+            {
+                if (tab == CurrentTab)
+                {
+                    _navigatingToTab = null;
+                }
+                return;
+            }
+
+            // Click, key activation and Fluent's change can describe the same input before the browser acknowledges it.
+            _navigatingToHref = href;
+            _tabRenderVersion++;
+            NavigationManager.NavigateTo(href);
+        }
+    }
+
+    private void OnTabActivationKeyDown(KeyboardEventArgs args, ResourceTab tab, bool isDesktop, IReadOnlyList<string> renderedSelection)
+    {
+        if (args.Key is "Enter" or " ")
+        {
+            OnTabActivated(tab, isDesktop, renderedSelection);
+        }
+    }
+
+    private async Task FinishTabNavigationAsync()
+    {
+        if (_isDisposed || _jsModule is null || _navigatingToHref is not { } href ||
+            _acknowledgingTabVersion == _tabRenderVersion ||
+            !string.Equals(_lastLocation, NavigationManager.ToAbsoluteUri(href).AbsoluteUri, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var renderVersion = _tabRenderVersion;
+        _acknowledgingTabVersion = renderVersion;
+        using var acknowledgementCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        acknowledgementCts.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            await _jsModule.InvokeVoidAsync("waitForResourceTabRender", acknowledgementCts.Token, _layoutElement);
+        }
+        catch (OperationCanceledException ex) when (acknowledgementCts.IsCancellationRequested)
+        {
+            if (_isDisposed || _cts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            // A suspended browser must not leave the coalescer locked after interop times out.
+            Logger.LogWarning(ex, "Timed out waiting for the primary tab render acknowledgement.");
+        }
+        catch (ObjectDisposedException) when (_isDisposed)
+        {
+            return;
+        }
+        catch (JSDisconnectedException) when (_isDisposed)
+        {
+            return;
+        }
+        if (_isDisposed || renderVersion != _tabRenderVersion ||
+            !string.Equals(NavigationManager.Uri, NavigationManager.ToAbsoluteUri(href).AbsoluteUri, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _navigatingToHref = null;
+        _navigatingToTab = null;
+        var queued = _queuedTabNavigation;
+        _queuedTabNavigation = null;
+        if (queued is { } target)
+        {
+            OnTabActivated(target, ViewportInformation.IsDesktop, _selectedResourceNames);
+        }
+        StateHasChanged();
     }
 
     private IEnumerable<TabItem> GetTabs()
@@ -2605,6 +2724,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private IList<MenuButtonItem> GetTabMenuItems()
     {
         var items = new List<MenuButtonItem>();
+        var renderedSelection = _selectedResourceNames;
+        var isDesktop = ViewportInformation.IsDesktop;
 
         foreach (var tab in GetTabs())
         {
@@ -2620,9 +2741,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 Text = tab.Text,
                 StartIcon = tab.Icon,
                 Role = MenuItemRole.Radio,
-                Checked = tab.Tab == CurrentTab,
+                Checked = tab.Tab == (_navigatingToTab ?? CurrentTab),
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
-                OnClick = () => { NavigationManager.NavigateTo(tab.Href); return Task.CompletedTask; }
+                OnClick = () => { OnTabActivated(tab.Tab, isDesktop, renderedSelection); return Task.CompletedTask; }
             });
         }
 
@@ -2668,6 +2789,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 await module.InvokeVoidAsync("unregisterPaneActivityVisibility", _layoutElement);
                 await module.InvokeVoidAsync("cancelPaneSelectionReveal", _layoutElement);
                 await module.InvokeVoidAsync("unregisterTabOverflow");
+                await module.InvokeVoidAsync("unregisterRouteTransitions", _layoutElement);
             }
             catch (JSDisconnectedException)
             {

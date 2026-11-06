@@ -70,6 +70,9 @@ internal static class ResourceSetupHelpers
         module.SetupVoid("cancelPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("registerTabOverflow", _ => true).SetVoidResult();
         module.SetupVoid("unregisterTabOverflow", _ => true).SetVoidResult();
+        module.SetupVoid("registerRouteTransitions", _ => true).SetVoidResult();
+        module.SetupVoid("waitForResourceTabRender", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterRouteTransitions", _ => true).SetVoidResult();
     }
 
     public static void SetupResourceDetails(BunitContext context)
