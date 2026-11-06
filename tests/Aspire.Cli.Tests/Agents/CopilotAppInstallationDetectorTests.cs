@@ -8,6 +8,47 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class CopilotAppInstallationDetectorTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("GitHub-Copilot-linux-x64.AppImage", false)]
+    [InlineData("GitHub-Copilot-linux-arm64.AppImage", false)]
+    [InlineData("GitHub-Copilot-linux-x64.AppImage", true)]
+    [InlineData("GitHub-Copilot-linux-arm64.AppImage", true)]
+    public async Task GetInstallationMarker_WithUnlaunchedLinuxAppImage_ReturnsPath(string fileName, bool onPath)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appDirectory = workspace.CreateDirectory(onPath ? "portable apps" : "Applications");
+        var appPath = Path.Combine(appDirectory.FullName, fileName);
+        await File.WriteAllTextAsync(appPath, string.Empty, TestContext.Current.CancellationToken);
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["PATH"] = onPath
+                ? string.Join(Path.PathSeparator, workspace.CreateDirectory("bin").FullName, appDirectory.FullName)
+                : null,
+            ["XDG_DATA_HOME"] = workspace.CreateDirectory("xdg-home").FullName,
+            ["XDG_DATA_DIRS"] = workspace.CreateDirectory("xdg-system").FullName,
+        });
+
+        Assert.Equal(appPath, CreateDetector(environment, workspace).GetInstallationMarker());
+    }
+
+    [Theory]
+    [InlineData("Other.AppImage")]
+    [InlineData("GitHub-Copilot-linux-arm64.AppImage.part")]
+    public async Task GetInstallationMarker_WithUnrelatedOrIncompleteAppImage_ReturnsNull(string fileName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appDirectory = workspace.CreateDirectory("Applications");
+        await File.WriteAllTextAsync(Path.Combine(appDirectory.FullName, fileName),
+            string.Empty, TestContext.Current.CancellationToken);
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["XDG_DATA_HOME"] = workspace.CreateDirectory("xdg-home").FullName,
+            ["XDG_DATA_DIRS"] = workspace.CreateDirectory("xdg-system").FullName,
+        });
+
+        Assert.Null(CreateDetector(environment, workspace).GetInstallationMarker());
+    }
+
     [Fact]
     public async Task GetInstallationMarker_WhenWindowsAppExecutableExists_ReturnsPath()
     {
