@@ -1,6 +1,9 @@
 name: Generate API Diffs
 
 on:
+  pull_request:
+    paths:
+      - .github/workflows/generate-api-diffs.yml
   workflow_dispatch:
     inputs:
       target_branch:
@@ -8,12 +11,21 @@ on:
         required: true
         default: main
         type: string
+      dry_run:
+        description: 'Generate changes without creating a pull request'
+        default: false
+        type: boolean
   schedule:
     - cron: '0 16 * * *' # 8am PST (16:00 UTC)
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+concurrency:
+  # Cancel obsolete PR runs before their matrix jobs start. Publishing and manual dry runs use
+  # unique workflow-level groups because the per-target job concurrency below serializes them.
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   generate-and-pr:
@@ -22,8 +34,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Add active release branches here; do not run against historical releases automatically.
-        target_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', toJSON(inputs.target_branch)) || '["main","release/13.6"]') }}
+        # Scheduled runs cover active branches; pull requests and manual runs validate one target.
+        target_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', toJSON(inputs.target_branch)) || github.event_name == 'pull_request' && format('[{0}]', toJSON(github.base_ref)) || '["main","release/13.6"]') }}
+    concurrency:
+      group: ${{ format('{0}-{1}-{2}', github.workflow, matrix.target_branch, github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true && 'dry-run') || 'publish') }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true) }}
     steps:
       - name: Validate target branch
         env:
@@ -34,39 +49,78 @@ jobs:
             *) echo "::error::Target branch must be main or release/*"; exit 1 ;;
           esac
 
+      - name: Validate workflow_dispatch publishing target
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
+        env:
+          TARGET_BRANCH: ${{ matrix.target_branch }}
+        run: |
+          # Token-bearing runs must not load local action code from inactive release branches.
+          case "$TARGET_BRANCH" in
+            main|release/13.6) ;;
+            *) echo "::error::Manual publishing is restricted to active branches: main and release/13.6"; exit 1 ;;
+          esac
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ matrix.target_branch }}
+          # Exercise PR code and scripts together in the merge commit.
+          ref: ${{ github.event_name == 'pull_request' && github.sha || matrix.target_branch }}
           persist-credentials: false
-
-      - name: Read target branch framework
-        run: |
-          # Release branches retain their own framework baseline.
-          framework=$(python3 -c "import xml.etree.ElementTree as ET; print(ET.parse('eng/Versions.props').find('.//DefaultTargetFramework').text)")
-          echo "API_TARGET_FRAMEWORK=$framework" >> "$GITHUB_ENV"
 
       - name: Restore and build (main)
         if: ${{ matrix.target_branch == 'main' }}
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          set +e
+          API_TARGET_FRAMEWORK=$(python3 -c "import xml.etree.ElementTree as ET; print(ET.parse('eng/Versions.props').find('.//DefaultTargetFramework').text)")
 
-          # Keep main's best-effort API review behavior; release baselines must be complete.
-          find src -name '*.csproj' | grep -Ev 'Aspire.ProjectTemplates|Aspire.Cli' | while IFS= read -r proj; do
+          # Keep scheduled and publishing runs best-effort; validation runs must fail on build errors.
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" || "$DRY_RUN" == "false" ]]; then
+            set +e
+            project_exclusions='Aspire.ProjectTemplates|Aspire.Cli'
+          else
+            set -euo pipefail
+            # Strict validation only builds projects that produce the selected API baseline.
+            native_exclusion=''
+            native_project='src/Aspire.Hosting.Native.Server/Aspire.Hosting.Native.Server.csproj'
+            if [[ -f "$native_project" ]]; then
+              native_framework=$(./dotnet.sh msbuild "$native_project" -nologo -getProperty:TargetFramework)
+              if [[ "$native_framework" != "$API_TARGET_FRAMEWORK" ]]; then
+                native_exclusion='|Aspire.Hosting.Native[^/]*'
+              fi
+            fi
+            project_exclusions="/(Aspire.ProjectTemplates|Aspire.Cli|Aspire.Dashboard|Aspire.Hosting.Analyzers|Aspire.Hosting.Azure.Provisioning.Generators|Aspire.Hosting.Integration.Analyzers|Aspire.Hosting.RemoteHost|Aspire.Managed|Aspire.AppHost.Sdk|Aspire.TerminalHost|Tools${native_exclusion})/"
+          fi
+
+          find src -name '*.csproj' | grep -Ev "$project_exclusions" | while IFS= read -r proj; do
             ./dotnet.sh build "$proj" -f "$API_TARGET_FRAMEWORK" --configuration Release --no-incremental /t:"Build;GenAPIGenerateReferenceAssemblySource"
           done
-        continue-on-error: true
+        continue-on-error: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
 
       - name: Restore and build (release)
         if: ${{ matrix.target_branch != 'main' }}
         run: |
           set -euo pipefail
+          API_TARGET_FRAMEWORK=$(python3 -c "import xml.etree.ElementTree as ET; print(ET.parse('eng/Versions.props').find('.//DefaultTargetFramework').text)")
 
           # Exclude projects that do not generate a release API baseline.
           find src -name '*.csproj' | grep -Ev '/(Aspire.ProjectTemplates|Aspire.Cli|Aspire.Dashboard|Aspire.Hosting.Analyzers|Aspire.Hosting.Azure.Provisioning.Generators|Aspire.Hosting.Integration.Analyzers|Aspire.Hosting.RemoteHost|Aspire.Managed|Aspire.AppHost.Sdk|Aspire.TerminalHost|Tools)/' | while IFS= read -r proj; do
             ./dotnet.sh build "$proj" -f "$API_TARGET_FRAMEWORK" --configuration Release --no-incremental /t:"Build;GenAPIGenerateReferenceAssemblySource"
           done
 
+      - name: Summarize generated changes
+        env:
+          TARGET_BRANCH: ${{ matrix.target_branch }}
+        run: |
+          {
+            echo "### API generation for \`$TARGET_BRANCH\`"
+            echo '```text'
+            git status --short
+            git diff --stat
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Generate GitHub App Token
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -80,6 +134,7 @@ jobs:
           permission-workflows: ${{ startsWith(matrix.target_branch, 'release/') && 'write' || '' }}
 
       - name: Create or update pull request
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) }}
         uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
