@@ -4,8 +4,10 @@
     Claude Code,
     OpenCode
   ],
-  Locations:
-Installation locations:
-  Skills: .agents/skills (shared: GitHub Copilot, OpenCode)
-Shared files may be discovered by agents that aren't selected.
+  Results: [
+    Installed skills:
+  Skills: dotnet-inspect
+  Locations: .agents/skills (GitHub Copilot, OpenCode)
+  [dim]Shared files may be discovered by agents that aren't selected.[/]
+  ]
 }
