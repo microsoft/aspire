@@ -119,6 +119,34 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
                     TimeSpan.FromMinutes(4));
             }
 
+            // The frontend is a build-only resource whose output is copied into the API container.
+            // A separate workload would expose the wrong production model and duplicate the public surface.
+            await auto.RunCommandAsync(
+                $"test -z \"$(kubectl get deployments,pods,services -n {k8sNamespace} -l app.kubernetes.io/component=frontend -o name)\"",
+                counter);
+
+            // Verify the API container serves the SPA, one of its compiled assets, and the API endpoint
+            // from the same origin. Vite emits the entry script as:
+            //   <script type="module" crossorigin src="/assets/index-<hash>.js"></script>
+            await auto.RunCommandAsync(
+                $$"""
+                (service_port=$(kubectl get service api-service -n {{k8sNamespace}} -o jsonpath='{.spec.ports[0].port}'); \
+                kubectl port-forward -n {{k8sNamespace}} service/api-service 18081:$service_port > port-forward.log 2>&1 & \
+                forward_pid=$!; trap 'kill "$forward_pid" 2>/dev/null || true' EXIT; \
+                found=0; for i in $(seq 1 30); do \
+                if curl --connect-timeout 2 --max-time 5 -fsS http://localhost:18081/ -o index.html && \
+                asset=$(node -e 'const fs = require("node:fs"); const html = fs.readFileSync("index.html", "utf8"); const match = html.match(/<script[^>]+src="([^"]+\.js)"/); if (!match) process.exit(1); process.stdout.write(match[1]);') && \
+                curl --connect-timeout 2 --max-time 5 -fsS "http://localhost:18081$asset" -o frontend.js && \
+                test -s frontend.js && \
+                curl --connect-timeout 2 --max-time 5 -fsS http://localhost:18081/api/weatherforecast -o weather.json && \
+                node -e 'const assert = require("node:assert/strict"); const weather = require("./weather.json"); assert.equal(weather.length, 5); for (const forecast of weather) { assert.equal(typeof forecast.temperatureC, "number"); assert.equal(typeof forecast.summary, "string"); }'; \
+                then found=1; break; fi; \
+                echo "Attempt $i: deployed Go starter is not ready, retrying..."; sleep 5; done; \
+                test "$found" = 1)
+                """,
+                counter,
+                TimeSpan.FromMinutes(6));
+
             // =====================================================================
             // Phase 6: Cleanup
             // =====================================================================
