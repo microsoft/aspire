@@ -4522,6 +4522,43 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CaptureAppHostLogsAsync_DisplaysDashboardStoppedUnexpectedlyWarning()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var displayed = new List<(KnownEmoji Emoji, string Message)>();
+        var interactionService = new TestInteractionService
+        {
+            DisplayMessageCallback = (emoji, message, _) => displayed.Add((emoji, message))
+        };
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+
+        using (var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()))
+        {
+            await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+        }
+
+        var (emoji, message) = Assert.Single(displayed);
+        Assert.Equal(KnownEmojis.Warning, emoji);
+        Assert.Equal("The Aspire dashboard stopped unexpectedly (state: Finished, exit code: -1).", message);
+        Assert.Contains("[WARN] [AppHost/DistributedApplication] The Aspire dashboard stopped unexpectedly", await File.ReadAllTextAsync(logFilePath));
+
+        static async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            // Deserialize the payloads the AppHost sends so the test covers the JSON-RPC wire format.
+            yield return DeserializeEntry("""{"EventId":{"Id":1,"Name":"SomethingElse"},"EventName":"SomethingElse","LogLevel":3,"Message":"Some other AppHost warning","Timestamp":"2026-03-16T12:00:00+00:00","CategoryName":"Aspire.Hosting.DistributedApplication"}""");
+            yield return DeserializeEntry("""{"EventId":{"Id":1,"Name":"DashboardStoppedUnexpectedly"},"EventName":"DashboardStoppedUnexpectedly","LogLevel":3,"Message":"The Aspire dashboard stopped unexpectedly (state: Finished, exit code: -1).","Timestamp":"2026-03-16T12:00:01+00:00","CategoryName":"Aspire.Hosting.DistributedApplication"}""");
+            await Task.CompletedTask;
+        }
+
+        static BackchannelLogEntry DeserializeEntry(string json)
+            => JsonSerializer.Deserialize<BackchannelLogEntry>(json, BackchannelJsonSerializerContext.CreateJsonSerializerOptions())!;
+    }
+
+    [Fact]
     public async Task CaptureAppHostLogsAsync_ForwardsStructuredEntries()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
