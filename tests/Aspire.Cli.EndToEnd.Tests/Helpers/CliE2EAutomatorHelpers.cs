@@ -278,7 +278,6 @@ internal static class CliE2EAutomatorHelpers
             projectName,
             "C#",
             counter,
-            AppHostLanguagePromptSelection.DefaultCSharp,
             effectiveTimeout);
     }
 
@@ -308,7 +307,6 @@ internal static class CliE2EAutomatorHelpers
             projectName,
             "TypeScript",
             counter,
-            AppHostLanguagePromptSelection.TypeScript,
             effectiveTimeout);
     }
 
@@ -338,7 +336,6 @@ internal static class CliE2EAutomatorHelpers
             projectName,
             "Go",
             counter,
-            AppHostLanguagePromptSelection.Go,
             effectiveTimeout);
     }
 
@@ -367,7 +364,6 @@ internal static class CliE2EAutomatorHelpers
         string projectName,
         string languageDisplayName,
         SequenceCounter counter,
-        AppHostLanguagePromptSelection languagePromptSelection,
         TimeSpan effectiveTimeout)
     {
         var languagePrompt = new CellPatternSearcher()
@@ -414,7 +410,7 @@ internal static class CliE2EAutomatorHelpers
         switch (result)
         {
             case AspireNewEmptyAppHostResult.LanguagePrompt:
-                await auto.SelectAppHostLanguageAsync(languagePromptSelection);
+                await auto.SelectAppHostLanguageAsync(languageDisplayName);
                 await auto.DeclineAgentInitPromptAsync(counter, effectiveTimeout);
                 return;
 
@@ -434,38 +430,16 @@ internal static class CliE2EAutomatorHelpers
         }
     }
 
-    private static async Task SelectAppHostLanguageAsync(
+    internal static async Task SelectAppHostLanguageAsync(
         this Hex1bTerminalAutomator auto,
-        AppHostLanguagePromptSelection languagePromptSelection)
+        string languageDisplayName)
     {
-        switch (languagePromptSelection)
-        {
-            case AppHostLanguagePromptSelection.DefaultCSharp:
-                await auto.EnterAsync();
-                return;
-
-            case AppHostLanguagePromptSelection.TypeScript:
-                await auto.DownAsync();
-                await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> TypeScript (Node.js)").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "TypeScript AppHost language selected");
-                await auto.EnterAsync();
-                return;
-
-            case AppHostLanguagePromptSelection.Go:
-                // Search by text so the selection does not depend on which other languages the picker lists.
-                await auto.TypeAsync("Go");
-                await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
-                    timeout: TimeSpan.FromSeconds(5),
-                    description: "Go AppHost language selected");
-                await auto.EnterAsync();
-                return;
-
-            default:
-                throw new InvalidOperationException($"Unexpected AppHost language prompt selection: {languagePromptSelection}.");
-        }
+        await auto.TypeAsync(languageDisplayName);
+        await auto.WaitUntilAsync(
+            snapshot => new CellPatternSearcher().Find($"> {languageDisplayName}").Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromSeconds(5),
+            description: $"{languageDisplayName} AppHost language selected");
+        await auto.EnterAsync();
     }
 
     /// <summary>
@@ -848,7 +822,7 @@ internal static class CliE2EAutomatorHelpers
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        await auto.SelectAppHostLanguageAsync(AppHostLanguagePromptSelection.Go);
+        await auto.SelectAppHostLanguageAsync("Go");
         await auto.WaitUntilTextAsync("Created apphost.go", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
     }
@@ -1341,10 +1315,4 @@ internal static class CliE2EAutomatorHelpers
         ErrorPrompt
     }
 
-    private enum AppHostLanguagePromptSelection
-    {
-        DefaultCSharp,
-        TypeScript,
-        Go
-    }
 }

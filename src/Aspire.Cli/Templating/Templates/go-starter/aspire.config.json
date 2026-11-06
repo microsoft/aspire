@@ -5,8 +5,7 @@
   },
   "packages": {
     "Aspire.Hosting.Go": "{{aspireVersion}}",
-    "Aspire.Hosting.JavaScript": "{{aspireVersion}}",
-    "Aspire.Hosting.Redis": "{{aspireVersion}}"
+    "Aspire.Hosting.JavaScript": "{{aspireVersion}}"
   },
   "profiles": {
     "https": {
