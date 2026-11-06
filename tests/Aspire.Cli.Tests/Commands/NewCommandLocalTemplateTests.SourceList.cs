@@ -201,12 +201,12 @@ public partial class NewCommandLocalTemplateTests
         var prompts = 0;
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            ConfirmCallback = (prompt, defaultValue) =>
             {
                 prompts++;
                 Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
-                Assert.Equal([ConfigSourceStrings.Accept, ConfigSourceStrings.Decline], choices.Cast<string>());
-                return accept ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
+                Assert.True(defaultValue);
+                return accept;
             }
         };
         var git = new TestConfigSourceRepository
@@ -252,7 +252,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(includeInherited ? [json ? GitCommandMode.Unattended : GitCommandMode.Interactive] : [], git.FetchModes);
         Assert.Equal(git.FetchModes, git.ResolutionModes);
         Assert.Empty(interaction.StringPromptCalls);
-        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Equal(prompts, interaction.BooleanPromptCalls.Count);
         Assert.Equal(globalSettings, await File.ReadAllTextAsync(globalPath));
         Assert.Equal(localSettings, await File.ReadAllTextAsync(localPath));
         Assert.Equal(consentRequired ? CliExitCodes.InvalidCommand : CliExitCodes.Success, result);
@@ -260,7 +260,7 @@ public partial class NewCommandLocalTemplateTests
         {
             Assert.Equal(ConfigSourceStrings.ConsentRequired, Assert.Single(interaction.DisplayedErrors));
             Assert.Empty(interaction.DisplayedRawText);
-            Assert.Empty(interaction.DisplayedRenderables);
+            Assert.IsType<Padder>(Assert.Single(interaction.DisplayedRenderables));
             return;
         }
 
@@ -270,7 +270,7 @@ public partial class NewCommandLocalTemplateTests
             var raw = Assert.Single(interaction.DisplayedRawText);
             Assert.Equal(ConsoleOutput.Standard, raw.ConsoleOverride);
             Assert.Equal(ConsoleOutput.Error, interaction.Console);
-            Assert.Empty(interaction.DisplayedRenderables);
+            Assert.Equal(useSource is true ? 1 : 0, interaction.DisplayedRenderables.Count);
             await Verify(raw.Text, "json").UseParameters(json, interactive, useSource, accept);
         }
         else
@@ -280,7 +280,10 @@ public partial class NewCommandLocalTemplateTests
             var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(writer), Ansi = AnsiSupport.No });
             console.Profile.Capabilities.Ansi = false;
             console.Profile.Width = 160;
-            console.Write(Assert.Single(interaction.DisplayedRenderables));
+            Assert.Collection(interaction.DisplayedRenderables,
+                details => Assert.IsType<Padder>(details),
+                sources => Assert.IsType<Table>(sources));
+            console.Write(interaction.DisplayedRenderables[^1]);
             await Verify(writer.ToString()).UseParameters(json, interactive, useSource, accept);
         }
     }
@@ -293,7 +296,7 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("JSON must not prompt.")
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("JSON must not prompt.")
         };
         var git = new TestConfigSourceRepository
         {
@@ -331,7 +334,7 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("No candidate must not prompt.")
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("No candidate must not prompt.")
         };
         var git = new TestConfigSourceRepository();
         var detector = new TestConfigSourceDetector();
@@ -384,10 +387,10 @@ public partial class NewCommandLocalTemplateTests
         var prompts = 0;
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, _, _, _) =>
+            ConfirmCallback = (_, _) =>
             {
                 prompts++;
-                return ConfigSourceStrings.Accept;
+                return true;
             }
         };
         var git = new TestConfigSourceRepository
@@ -422,7 +425,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(useSource is true || (!json && useSource is null) ? 1 : 0, git.Calls);
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Empty(interaction.StringPromptCalls);
-        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Equal(prompts, interaction.BooleanPromptCalls.Count);
         if (json)
         {
             Assert.Equal(("{}", (ConsoleOutput?)ConsoleOutput.Standard), Assert.Single(interaction.DisplayedRawText));

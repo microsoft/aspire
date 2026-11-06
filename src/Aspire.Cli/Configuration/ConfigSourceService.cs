@@ -19,6 +19,7 @@ using Aspire.Shared;
 using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Configuration;
 
@@ -33,6 +34,7 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
+    internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
     private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
@@ -175,9 +177,47 @@ internal sealed class ConfigSourceService(
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
-        interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
-            source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
-            explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+        var readmeUrl = environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
+            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
+        if (readmeUrl is not null && (!UrlHelper.IsHttpUrl(readmeUrl) || readmeUrl.Any(char.IsControl)))
+        {
+            throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
+                ConfigSourceStrings.InvalidReadmeUrl, CliConfigNames.InitSourceReadmeUrl));
+        }
+
+        interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.Explanation);
+        List<(string Label, string Value)> details =
+        [
+            (ConfigSourceStrings.ConfigurationSource, source.Repository)
+        ];
+        if (source.Path != AspireConfigFile.FileName)
+        {
+            details.Add((ConfigSourceStrings.ConfigurationFile, source.Path));
+        }
+        if (source.Ref is not null)
+        {
+            details.Add((ConfigSourceStrings.ConfigurationRef, source.Ref));
+        }
+        details.Add((ConfigSourceStrings.SourceOrigin, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+        grid.Columns[0].Width = details.Max(detail => detail.Label.Length) + 1;
+        foreach (var (label, value) in details)
+        {
+            grid.AddRow(
+                new Align(new Markup($"[bold green]{label.EscapeMarkup()}[/]:"), HorizontalAlignment.Right),
+                new Text(value));
+        }
+        interaction.DisplayEmptyLine();
+        interaction.DisplayRenderable(new Padder(grid, new Padding(3, 0)));
+        interaction.DisplayEmptyLine();
+        if (readmeUrl is not null)
+        {
+            interaction.DisplayMessage(KnownEmojis.Information,
+                MarkupHelpers.SafeLink(interaction, readmeUrl, ConfigSourceStrings.ReadmeLink), allowMarkup: true);
+        }
         interaction.DisplaySourceTrustWarning(executionContext);
 
         // Machine-configured or detected sources suggest useful defaults for new apps;
@@ -190,12 +230,9 @@ internal sealed class ConfigSourceService(
             {
                 throw new ConfigSourceException(ConfigSourceStrings.ConsentRequired);
             }
-            // Boolean choices let the prompt select default(bool), highlighting decline
-            // even when accept is first. String choices preserve the first-item default.
-            var selection = await interaction.PromptForSelectionAsync(ConfigSourceStrings.UseSourcePrompt,
-                new[] { ConfigSourceStrings.Accept, ConfigSourceStrings.Decline }, choice => choice,
+            accepted = await interaction.PromptConfirmAsync(ConfigSourceStrings.UseSourcePrompt,
+                binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
-            accepted = selection == ConfigSourceStrings.Accept;
         }
         _sourceDeclined = !accepted.Value;
         if (_sourceDeclined)
@@ -574,6 +611,11 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
+            interaction.DisplayMessage(KnownEmojis.DownArrow,
+                allowInteractiveInput && hostEnvironment.SupportsInteractiveInput
+                    ? ConfigSourceStrings.FetchingSourceWithAuthentication
+                    : ConfigSourceStrings.FetchingSource,
+                consoleOverride: ConsoleOutput.Error);
             var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken);
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();

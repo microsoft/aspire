@@ -154,14 +154,11 @@ internal sealed class ConfigSourceTestContext
         await _auto.EnterAsync();
         if (!useOption)
         {
-            var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source?");
+            var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
             await _auto.WaitUntilAsync(snapshot => consentPrompt.Search(snapshot).Count > 0,
                 timeout: TimeSpan.FromMinutes(2), description: "waiting for configuration source consent");
-            if (!accept)
-            {
-                await _auto.DownAsync();
-            }
-            await _auto.EnterAsync();
+            // Confirmation consumes a single key; an extra Enter could reach the next prompt.
+            await _auto.TypeAsync(accept ? "y" : "n");
         }
         var templatePrompt = new CellPatternSearcher().Find("> Starter App");
         await _auto.WaitUntilAsync(snapshot => templatePrompt.Search(snapshot).Count > 0,
@@ -353,10 +350,10 @@ internal sealed class ConfigSourceTestContext
         await _auto.TypeAsync("aspire update --yes");
         await _auto.EnterAsync();
         var candidate = new CellPatternSearcher().Find("Configuration source:");
-        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source?");
+        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
         await _auto.WaitUntilAsync(snapshot => candidate.Search(snapshot).Count > 0 && consentPrompt.Search(snapshot).Count > 0,
             timeout: TimeSpan.FromMinutes(2), description: "waiting for brownfield configuration source consent");
-        await _auto.EnterAsync();
+        await _auto.TypeAsync("y");
         await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(5));
     }
 
