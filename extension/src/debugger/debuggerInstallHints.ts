@@ -42,9 +42,11 @@ interface DebuggableResourceSnapshot {
 }
 
 interface DebuggerInstallHintDataSource {
+    readonly workspaceAppHostCandidatePaths: readonly string[];
     readonly workspaceResources: readonly DebuggableResourceSnapshot[];
     readonly appHosts: readonly { resources?: readonly DebuggableResourceSnapshot[] | null }[];
     readonly onDidChangeData: vscode.Event<void>;
+    keepDataActive(): vscode.Disposable;
 }
 
 const debuggerInstallHints = new Map<string, DebuggerInstallHint>([
@@ -118,9 +120,20 @@ export class DebuggerInstallHintService {
     }
 
     watchForMissingDebuggers(dataSource: DebuggerInstallHintDataSource): vscode.Disposable {
+        let dataLease: vscode.Disposable | undefined;
         const refresh = () => {
-            // Hints consume data requested by the panel or visible editors; they must not keep
-            // ps/describe running merely because discovery found an AppHost in the workspace.
+            const hasKnownAppHost = dataSource.workspaceAppHostCandidatePaths.length > 0
+                || dataSource.appHosts.length > 0;
+            if (hasKnownAppHost && !dataLease) {
+                // AppHost discovery runs independently of the panel data lifecycle. Wait for a real
+                // candidate before keeping ps/describe active so unrelated .NET workspaces do not
+                // acquire a permanent Aspire CLI process just because the extension activated.
+                dataLease = dataSource.keepDataActive();
+            } else if (!hasKnownAppHost && dataLease) {
+                dataLease.dispose();
+                dataLease = undefined;
+            }
+
             const resources = [
                 ...dataSource.workspaceResources,
                 ...dataSource.appHosts.flatMap(appHost => appHost.resources ?? []),
@@ -134,7 +147,10 @@ export class DebuggerInstallHintService {
         const extensionSubscription = vscode.extensions.onDidChange(refresh);
         refresh();
 
-        return vscode.Disposable.from(dataSubscription, extensionSubscription);
+        return vscode.Disposable.from(
+            dataSubscription,
+            extensionSubscription,
+            new vscode.Disposable(() => dataLease?.dispose()));
     }
 
     async notifyMissingDebuggers(resources: Iterable<DebuggableResourceSnapshot>): Promise<void> {

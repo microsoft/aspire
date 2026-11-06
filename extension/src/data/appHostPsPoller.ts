@@ -110,6 +110,7 @@ export class AppHostPsPoller implements vscode.Disposable {
 
         if (this._supportsPsFollow) {
             this._startPsFollow();
+            this._startPsFollowReconciliation();
             return;
         }
 
@@ -322,7 +323,7 @@ export class AppHostPsPoller implements vscode.Disposable {
                     }
 
                     this._supportsPsFollow = false;
-                    extensionLogOutputChannel.warn(`aspire ps --follow failed (exit code ${code}): ${psFollowStderr.value.trim()}`);
+                    extensionLogOutputChannel.info('aspire ps --follow failed, falling back to aspire ps polling');
                     this._startPsIntervalPolling();
                     return;
                 }
@@ -358,9 +359,6 @@ export class AppHostPsPoller implements vscode.Disposable {
             return;
         }
 
-        if (!callbackInvoked) {
-            this._startPsFollowReconciliation();
-        }
         this._onDidStartPsFollow.fire();
     }
 
@@ -554,7 +552,7 @@ export class AppHostPsPoller implements vscode.Disposable {
         const invocationArgs = this._cliRunner.normalizeNoLogoArgs(cliPath, args);
 
         let stdout = '';
-        const stderr = new LimitedOutputBuffer(AppHostPsPoller._oneShotOutputBufferLimit);
+        let stderr = '';
         let callbackInvoked = false;
 
         let psProcess: ChildProcessWithoutNullStreams | undefined;
@@ -579,12 +577,12 @@ export class AppHostPsPoller implements vscode.Disposable {
 
                 stdout += data;
             },
-            stderrCallback: (data) => { stderr.append(data); },
+            stderrCallback: (data) => { stderr += data; },
             exitCallback: (code) => {
                 removePsProcess();
                 if (!callbackInvoked) {
                     if ((code ?? 1) !== 0) {
-                        const retryArgs = this._cliRunner.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout, stderr.value, 'aspire ps');
+                        const retryArgs = this._cliRunner.tryGetNoLogoRetryArgs(cliPath, invocationArgs, stdout, stderr, 'aspire ps');
                         if (retryArgs) {
                             // A rejected --nologo can report itself on stdout, which already fired
                             // onFirstStdout for an attempt that produced no snapshot. Let the caller
@@ -597,7 +595,7 @@ export class AppHostPsPoller implements vscode.Disposable {
 
                     callbackInvoked = true;
                     if (isCurrentPsCommand()) {
-                        callback(code ?? 1, stdout, stderr.value);
+                        callback(code ?? 1, stdout, stderr);
                     }
                 }
             },
@@ -612,7 +610,7 @@ export class AppHostPsPoller implements vscode.Disposable {
                 if (!callbackInvoked) {
                     callbackInvoked = true;
                     if (isCurrentPsCommand()) {
-                        callback(1, stdout, stderr.value || error.message);
+                        callback(1, stdout, stderr || error.message);
                     }
                 }
             }

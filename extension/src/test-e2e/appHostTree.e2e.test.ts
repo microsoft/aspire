@@ -99,11 +99,13 @@ suite('Aspire AppHost tree E2E', function () {
             await executeE2eControlCommand({ name: 'closeAllEditors' });
             await openAspireView();
             await waitForRepositoryIdle();
+            // The debugger-install hint service holds a keep-alive lease for the discovered
+            // AppHost even with the panel hidden. Settings exercise actual follower replacements.
             writeWorkspaceSetting(pollingSetting, 1000);
             await waitForFollowers(1);
 
             await executeCommandFromPalette('workbench.view.explorer');
-            await waitForFollowers(0);
+            await waitForFollowers(1);
             await openAspireView();
             await waitForFollowers(1);
             await executeE2eControlCommand({ name: 'switchToGlobalView' });
@@ -114,9 +116,9 @@ suite('Aspire AppHost tree E2E', function () {
             await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
             await executeE2eControlCommand({ name: 'openFile', filePath: getWorkspaceSettingsPath() });
             await executeCommandFromPalette('workbench.view.explorer');
-            await waitForFollowers(0);
+            await waitForFollowers(1);
             await executeE2eControlCommand({ name: 'closeAllEditors' });
-            await waitForFollowers(0);
+            await waitForFollowers(1);
 
             await openAspireView();
             await waitForFollowers(1);
@@ -134,7 +136,7 @@ suite('Aspire AppHost tree E2E', function () {
             'previous extension-host ps followers to exit', 30_000);
             await waitForFollowers(1, previousStarts + 1);
             await executeE2eControlCommand({ name: 'closeAllEditors' });
-            await waitForFollowers(0);
+            await waitForFollowers(1);
             assert.strictEqual(observationFailure, undefined);
         } finally {
             try {
@@ -143,9 +145,9 @@ suite('Aspire AppHost tree E2E', function () {
                     () => executeCommandFromPalette('workbench.view.explorer'),
                     async () => { writeWorkspaceSetting(pollingSetting, previousPollingInterval); },
                     async () => {
+                        const previousStarts = getPsFollowProcesses().length;
                         await reloadWorkspaceForE2E();
-                        await waitForWorkspaceAppHost();
-                        await waitForFollowers(0);
+                        await waitForFollowers(1, previousStarts + 1);
                     },
                 ], 'ps follower lifecycle cleanup failed.');
             } finally {

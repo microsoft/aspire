@@ -22,14 +22,10 @@ interface CapturedListeners {
 // real via the spy) can drive ps polling without spawning an actual `aspire` process.
 class TestChildProcess extends EventEmitter {
     public killed = false;
-    public exitCode: number | null = null;
-    public signalCode: NodeJS.Signals | null = null;
     public stdout = new EventEmitter();
     public stderr = new EventEmitter();
     kill(): boolean {
         this.killed = true;
-        this.exitCode = 0;
-        this.emit('close', 0);
         return true;
     }
 }
@@ -193,7 +189,6 @@ suite('AppHostFilePresenceWatcher', () => {
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
-        assert.strictEqual(setOpenSpy.firstCall.args[1], true);
         watcher.dispose();
     });
 
@@ -205,8 +200,6 @@ suite('AppHostFilePresenceWatcher', () => {
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
-        assert.strictEqual(setOpenSpy.firstCall.args[1], false);
-        assert.strictEqual(spawnStub.getCalls().filter(call => call.args[2]?.[0] === 'ps').length, 0);
         watcher.dispose();
     });
 
@@ -271,65 +264,20 @@ suite('AppHostFilePresenceWatcher', () => {
         watcher.dispose();
     });
 
-    test('hiding an AppHost editor stops polling without removing its background tab from scope', async () => {
+    test('a visible-editor change that leaves the open tab set unchanged does not re-report', async () => {
         const document = makeDocument('/test/AppHost.cs', appHostCsContent);
         setOpenDocuments([document]);
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
-        const psProcess = spawnStub.getCalls().find(call => call.args[2]?.[0] === 'ps')?.returnValue;
-        assert.ok(psProcess, 'visible AppHost editor should start status watching');
 
         visibleDocuments = [];
         captured.visibleEditorsListeners.forEach(l => l());
         await waitForUpdate(watcher);
 
-        assert.strictEqual(setOpenSpy.callCount, 2);
-        assert.deepStrictEqual(reportedPaths(setOpenSpy.secondCall), [fsPath('/test/AppHost.cs')]);
-        assert.strictEqual(setOpenSpy.secondCall.args[1], false);
-        assert.strictEqual(psProcess.killed, true);
+        assert.strictEqual(setOpenSpy.callCount, 1, 'a visibility-only change must not re-report the unchanged open tab set');
         watcher.dispose();
-    });
-
-    test('quick editor switches do not restart status watching', async () => {
-        const document = makeDocument('/test/AppHost.cs', appHostCsContent);
-        setOpenDocuments([document]);
-        const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
-        const psCalls = () => spawnStub.getCalls().filter(call => call.args[2]?.[0] === 'ps');
-        const psProcess = psCalls()[0]?.returnValue;
-        assert.ok(psProcess);
-
-        visibleDocuments = [];
-        captured.visibleEditorsListeners.forEach(listener => listener());
-        await clock.tickAsync(100);
-        visibleDocuments = [document];
-        captured.visibleEditorsListeners.forEach(listener => listener());
-        await waitForUpdate(watcher);
-
-        assert.strictEqual(psCalls().length, 1);
-        assert.strictEqual(psProcess.killed, false);
-        assert.strictEqual(setOpenSpy.callCount, 1);
-        watcher.dispose();
-    });
-
-    test('showing a backgrounded AppHost editor resumes watching and disposal releases demand', async () => {
-        const document = makeDocument('/test/AppHost.cs', appHostCsContent);
-        setOpenDocuments([document], []);
-        const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
-        assert.strictEqual(setOpenSpy.firstCall.args[1], false);
-
-        visibleDocuments = [document];
-        captured.visibleEditorsListeners.forEach(listener => listener());
-        await waitForUpdate(watcher);
-        assert.strictEqual(setOpenSpy.secondCall.args[1], true);
-        const psProcess = spawnStub.getCalls().find(call => call.args[2]?.[0] === 'ps')?.returnValue;
-        assert.ok(psProcess);
-
-        watcher.dispose();
-        assert.strictEqual(psProcess.killed, true);
     });
 
     test('closing the last AppHost tab reports an empty set', async () => {
@@ -457,10 +405,8 @@ suite('AppHostFilePresenceWatcher', () => {
 
         assert.strictEqual(setOpenSpy.called, false);
     });
-
-    async function waitForUpdate(watcher: AppHostFilePresenceWatcher): Promise<void> {
-        await clock.tickAsync(250);
-        await (watcher as unknown as { _updateTask: Promise<void> })._updateTask;
-        await clock.tickAsync(0);
-    }
 });
+
+async function waitForUpdate(watcher: AppHostFilePresenceWatcher): Promise<void> {
+    await (watcher as unknown as { _updateTask: Promise<void> })._updateTask;
+}

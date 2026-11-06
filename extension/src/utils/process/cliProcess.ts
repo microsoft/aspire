@@ -73,11 +73,11 @@ export function mergeCliSpawnEnvironment(env: Record<string, string | undefined>
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
     const workingDirectory = options?.workingDirectory ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const env: Record<string, string | undefined> = {};
-    const cliArgs = args ?? [];
-    const spawnCommand = getCliSpawnCommand(command, cliArgs);
+    const spawnCommand = getCliSpawnCommand(command, args);
 
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables, command));
     mergeCliSpawnEnvironment(env, options?.env);
+
     extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.diagnosticArgs ?? spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
     const createProcessGroup = process.platform !== 'win32' && options?.createProcessGroup === true;
@@ -123,7 +123,7 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
         options?.exitCallback?.(code);
     });
 
-    cliProcessSpawned.fire({ childProcess: child, args: cliArgs });
+    cliProcessSpawned.fire({ childProcess: child, args: args ?? [] });
     return child;
 }
 

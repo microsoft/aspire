@@ -7,9 +7,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
-import * as vscode from 'vscode';
-import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, onDidSpawnCliProcess, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
-import { extensionLogOutputChannel } from '../utils/logging';
+import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { canVsCodeQuoteCommandShimLaunch, getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
@@ -19,35 +17,6 @@ import { getPsFollowProcessLogPath, readPsFollowProcesses } from '../testing/psF
 
 import { removeDirectorySafely } from './testHelpers';
 suite('spawnCliProcess tests', () => {
-    for (const platform of ['win32', 'linux', 'darwin'] as const) {
-        test(`CLI queries on ${platform} preserve logging arguments and output streams`, () => {
-            const sandbox = sinon.createSandbox();
-            sandbox.stub(process, 'platform').value(platform);
-            const childProcess = createTestChildProcess(4810);
-            const spawnStub = sandbox.stub(nodeChildProcess, 'spawn').returns(childProcess);
-            const stdoutCallback = sandbox.stub();
-            const stderrCallback = sandbox.stub();
-            const terminalProvider = { createEnvironment: () => ({ existing: 'value' }) } as AspireTerminalProvider;
-            const args = ['ps', '--follow', '--format', 'json', '--nologo'];
-            const originalArgs = [...args];
-            try {
-                spawnCliProcess(terminalProvider, platform === 'win32' ? 'aspire.exe' : 'aspire', args, {
-                    stdoutCallback,
-                    stderrCallback,
-                });
-                assert.deepStrictEqual(args, originalArgs);
-                assert.deepStrictEqual(spawnStub.firstCall.args[1], originalArgs);
-                assert.deepStrictEqual(spawnStub.firstCall.args[2].env, { existing: 'value' });
-                childProcess.stdout.emit('data', '[]');
-                childProcess.stderr.emit('data', 'Query failed');
-                sinon.assert.calledOnceWithExactly(stdoutCallback, '[]');
-                sinon.assert.calledOnceWithExactly(stderrCallback, 'Query failed');
-            } finally {
-                sandbox.restore();
-            }
-        });
-    }
-
     test('records native ps followers before output and across extension-host tracker replacement', () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-native-ps-'));
         const stateFile = path.join(directory, 'state.json');

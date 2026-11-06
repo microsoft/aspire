@@ -52,12 +52,6 @@ Also: `package.json` declares commands, settings, and contribution points; `walk
 
 Candidate discovery and default selection are separate. Successful `aspire ls` results are authoritative, including an empty result, for both buffered and streaming output. Configuration can select a returned candidate, but never manufactures one. The legacy `extension get-apphosts` adapter preserves the CLI's `selected_project_file`, including older results where that project is absent from the enumerated candidate list. If both CLI discovery paths fail, file discovery applies the same AppHost-project content check to scanned projects and configured .NET projects outside the workspace. File aliases use filesystem identity when available; case-only paths with distinct identities remain separate. Missing, unreadable, and non-AppHost files do not become buildable candidates.
 
-### Background CLI lifecycle
-
-Status and resource watchers run while the Aspire panel or an AppHost editor is visible, a run/debug session is active, or an explicit consumer needs data. Background tabs alone do not keep polling alive. Active watchers keep the configured polling interval and refresh when monitoring resumes.
-
-CLI diagnostics remain file-backed with [bounded retention and rotation](../src/Aspire.Cli/README.md#diagnostic-log-retention) in updated CLIs. `aspire.enableAspireCliDebugLogging` adds console debug output.
-
 ## Building the full repository (extension + CLI)
 
 Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to compile the CLI, install extension dependencies, and localize. Use this when debugging the extension and CLI together. See [docs/contributing.md](/docs/contributing.md) and [docs/machine-requirements.md](/docs/machine-requirements.md) for the .NET prerequisites.
@@ -125,7 +119,7 @@ The CLI's shared resource-wait budget is covered by `ResourceWaitServiceTests` a
 
 UI end-to-end tests live under `src/test-e2e`. They run a packaged VSIX in a real VS Code instance through ExTester, using a real Aspire CLI and a generated AppHost workspace.
 
-The `apphost-tree` group checks native follower ownership through panel visibility, background AppHost tabs, view switches, polling restarts, and window reload. A hidden panel retains a follower only while an AppHost editor is visible, a run/debug session is active, or an explicit consumer holds a data lease; background tabs and passive debugger-install hints do not keep it alive. Assert live process ownership, not just spawn counts. Restore settings through orderly reload/shutdown, never by signalling historical PIDs, and confirm follow mode resumes when monitoring is needed again.
+The `apphost-tree` group checks native follower ownership through panel visibility, background AppHost tabs, view switches, polling restarts, and window reload. A hidden panel can retain a follower through an open AppHost tab or the debugger-install hint service's background lease. Assert live process ownership, not just spawn counts. Restore settings through orderly reload/shutdown, never by signalling historical PIDs, and confirm follow mode remains active for subsequent scenarios.
 
 For read-only AppHosts tree assertions, use `waitForAppHostsTreePath` with exact labels (for example, `[appHostLabel, 'Run AppHost']`). It captures visible labels and parent/child relationships together; a `TreeItem` returned by a lookup can refer to a recycled row by the time a later `getLabel()` or child lookup runs. Repository readiness alone does not prevent this UI race. Keep handle-returning helpers for interactions, and do not wait for discovery completion when asserting streamed candidates.
 

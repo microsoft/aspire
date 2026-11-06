@@ -123,7 +123,7 @@ suite('Aspire extension edge case E2E', function () {
             60000);
     });
 
-    test('keeps background AppHost tabs followed while another AppHost editor is visible', async () => {
+    test('keeps an external single-file AppHost followed while its tab is backgrounded', async () => {
         const appHostPath = createExternalSingleFileAppHost();
         externalAppHostPath = appHostPath;
         await openAspireView();
