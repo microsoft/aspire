@@ -1,10 +1,11 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import * as path from 'path';
 import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
 import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeBaselineActionCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
-import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, dismissAllNotifications, getActiveQuickPickLabels, getNotificationMessages, openAspireView, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 interface ActiveEditorInfo {
     uri?: string;
@@ -26,11 +27,44 @@ suite('Aspire tree action command E2E', function () {
             () => restoreWorkspaceFoldersForE2E(),
             () => restoreWorkspaceCliPath(),
             () => removeAdditionalAppHostCandidate('AspireE2E.SecondaryActions'),
+            () => removeAdditionalAppHostCandidate('AspireE2E.MissingGoDebugger'),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoRunningAppHost(),
         ], 'Tree action E2E teardown failed.');
+    });
+
+    test('canceling Go debugger setup through the public Debug command does not report a launch failure', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const extensionIds = (await executeE2eControlCommand({ name: 'getVisibleExtensionIds' })).result as string[];
+        assert.strictEqual(extensionIds.some(id => id.toLowerCase() === 'golang.go'), false,
+            'The tree-action shard must run without the Go debugger to exercise its setup prompt.');
+        const fixtureRoot = path.join(getWorkspaceRoot(), 'AspireE2E.MissingGoDebugger');
+        const appHostPath = path.join(fixtureRoot, 'apphost.go');
+        fs.mkdirSync(fixtureRoot, { recursive: true });
+        fs.writeFileSync(appHostPath, 'package main\nimport "apphost/modules/aspire"\nfunc main() { builder, _ := aspire.CreateBuilder(); _ = builder }\n');
+        fs.writeFileSync(path.join(fixtureRoot, 'go.mod'), 'module apphost\n\ngo 1.26\n');
+        fs.writeFileSync(path.join(fixtureRoot, 'aspire.config.json'), JSON.stringify({
+            appHost: { path: 'apphost.go', language: 'go' },
+        }));
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForWorkspaceAppHostCandidate(appHostPath);
+        await dismissAllNotifications();
+
+        const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        const setupBefore = getCommandInvocationCount('aspire-vscode.installDebuggerExtension');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        const prompt = await waitForNotificationMessage('Set up Go debugging support before debugging this AppHost.');
+        await prompt.dismiss();
+
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'canceled', 60000, before);
+        const state = await waitForNoDebugSessions();
+        assert.strictEqual(state.state.launchingPaths.some(candidate => isSamePath(candidate, appHostPath)), false);
+        assert.strictEqual(getCommandInvocationCount('aspire-vscode.installDebuggerExtension'), setupBefore);
+        assert.deepStrictEqual(await getNotificationMessages(), []);
+        await waitForNoRunningAppHost(30000, appHostPath);
     });
 
     test('routes all AppHost actions to the exact secondary AppHost and owning CLI target', async () => {

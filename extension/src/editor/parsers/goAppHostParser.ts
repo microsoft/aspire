@@ -43,7 +43,9 @@ function findStatementStart(tokens: Token[], index: number, text: string): numbe
             depth++;
         }
         else if (['(', '['].includes(previous.text)) {
-            depth--;
+            // An enclosing call can start before this resource's receiver, as in
+            // append(resources, builder.AddRedis("cache")); it is not an unmatched close.
+            depth = Math.max(0, depth - 1);
         }
         index--;
     }

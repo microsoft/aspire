@@ -69,6 +69,9 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
         this.configurationsWithRecordedLaunchFailures.push(configuration);
     }
 
+    markLaunchAttemptCanceled(_configuration: vscode.DebugConfiguration): void {
+    }
+
     validateOrReacquireExternalLaunchReservation(appHostPath: string, reservationId: string, isDirectoryScope = false): string | false {
         this.validations.push({ appHostPath, reservationId, isDirectoryScope });
         return this.validationResult ?? reservationId;

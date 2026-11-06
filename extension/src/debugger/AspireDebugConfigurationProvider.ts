@@ -42,6 +42,8 @@ export interface ExternalLaunchReservation {
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope?: boolean): string | false;
     /** Marks a provider-recorded failure only when this configuration belongs to an active service-owned launch. */
     markLaunchAttemptFailureRecorded(configuration: vscode.DebugConfiguration): void;
+    /** Reports an intentional provider cancellation to its active service-owned launch. */
+    markLaunchAttemptCanceled(configuration: vscode.DebugConfiguration): void;
     /** Releases the reservation only when the path and reservation ID still identify the same launch. */
     releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void;
     /** Claims a durable non-Run operation started from launch.json/F5. */
@@ -280,6 +282,7 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
                 if (selected === debuggerSetupAction) {
                     await vscode.commands.executeCommand('aspire-vscode.installDebuggerExtension', debuggerHint);
                 }
+                this._launchReservation.markLaunchAttemptCanceled(config);
                 return undefined;
             }
             // Only C# advertises the `project` capability that hands .NET AppHost launches
