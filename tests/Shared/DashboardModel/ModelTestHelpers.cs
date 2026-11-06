@@ -27,7 +27,8 @@ public static class ModelTestHelpers
         string? iconName = null,
         IconVariant? iconVariant = null,
         ImmutableArray<VolumeViewModel>? volumes = null,
-        ImmutableArray<HealthReportViewModel>? healthReports = null)
+        ImmutableArray<HealthReportViewModel>? healthReports = null,
+        string? customState = null)
     {
         return new ResourceViewModel
         {
@@ -43,7 +44,7 @@ public static class ModelTestHelpers
             Urls = urls ?? [],
             Volumes = volumes ?? [],
             Properties = properties?.ToImmutableDictionary() ?? ImmutableDictionary<string, ResourcePropertyViewModel>.Empty,
-            State = state?.ToString(),
+            State = customState ?? state?.ToString(),
             KnownState = state,
             StateStyle = stateStyle,
             HealthReports = healthReports ?? (reportHealthStatus is null && !createNullHealthReport ? [] : [new HealthReportViewModel("healthcheck", reportHealthStatus, null, null)]),

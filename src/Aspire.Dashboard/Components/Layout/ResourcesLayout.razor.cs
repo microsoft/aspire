@@ -2415,6 +2415,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 KnownResourceState.FailedToStart or KnownResourceState.RuntimeUnhealthy => "state-error",
                 KnownResourceState.Exited when resource.TryGetExitCode(out var exitCode) && exitCode is not 0 => "state-error",
                 KnownResourceState.Starting or KnownResourceState.Building or KnownResourceState.Waiting or KnownResourceState.Stopping => "state-pending",
+                // Custom states (for example a watched service's "Crashed") carry their severity in the published style.
+                null or KnownResourceState.Unknown => resource.StateStyle switch
+                {
+                    "error" => "state-error",
+                    "warning" => "state-warning",
+                    "success" => "state-success",
+                    _ => "state-neutral"
+                },
                 _ => "state-neutral"
             };
 
