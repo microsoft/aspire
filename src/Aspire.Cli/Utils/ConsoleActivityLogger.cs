@@ -298,7 +298,7 @@ internal sealed class ConsoleActivityLogger
                     var warningText = warningSteps == 1
                         ? string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsSingular, warningSteps)
                         : string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsPlural, warningSteps);
-                    summaryParts.Add($"[yellow]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.Warning, _console, suppressColor: true)}{warningText}[/]");
+                    summaryParts.Add($"[yellow]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.PoliceCarLight, _console, suppressColor: true)}{warningText}[/]");
                 }
                 if (failedSteps > 0)
                 {

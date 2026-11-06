@@ -1591,7 +1591,7 @@ ContainerTargetPlatform = typing.Literal["LinuxAmd64", "LinuxArm64", "AllLinux",
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
-EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
+EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled", "BrowserOrigins", "PrimaryBrowserOrigin"]
 
 HealthStatus = typing.Literal["Unhealthy", "Degraded", "Healthy"]
 
@@ -2641,6 +2641,21 @@ class DistributedApplicationBuilder:
             kwargs,
         )
         return typing.cast(CSharpAppResource, result)
+
+    def with_output_diffing(self, *, target_step: str = "publish", diff_step_name: str | None = None, description: str | None = None) -> typing.Self:
+        """Adds an opt-in target that checks for stale generated pipeline output."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if target_step is not None:
+            rpc_args['targetStep'] = target_step
+        if diff_step_name is not None:
+            rpc_args['diffStepName'] = diff_step_name
+        if description is not None:
+            rpc_args['description'] = description
+        self._client.invoke_capability(
+            'Aspire.Hosting/withOutputDiffing',
+            rpc_args
+        )
+        return self
 
     def get_config(self) -> AbstractConfiguration:
         """Gets the application configuration."""
@@ -4925,6 +4940,24 @@ class EndpointReference:
             {'context': self._handle}
         )
         return typing.cast(str, result)
+
+    @_cached_property
+    def browser_origins(self) -> EndpointReferenceExpression:
+        """Gets a deferred comma-separated list of browser-facing origins associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+    @_cached_property
+    def primary_browser_origin(self) -> EndpointReferenceExpression:
+        """Gets the deferred primary browser-facing origin associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
 
     @_cached_property
     def error_message(self) -> str | None:
@@ -7656,6 +7689,10 @@ class AbstractResource(abc.ABC):
         """Sets a child relationship"""
 
     @abc.abstractmethod
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+
+    @abc.abstractmethod
     def with_icon_name(self, icon_name: str, *, icon_variant: IconVariant = "Filled") -> typing.Self:
         """Specifies the icon to use when displaying the resource in the dashboard."""
 
@@ -8088,6 +8125,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     relationship: tuple[AbstractResource, str]
     parent_relationship: AbstractResource
     child_relationship: AbstractResource
+    resource_type_display_name: str
     icon_name: str | tuple[str, IconVariant]
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
@@ -8410,6 +8448,17 @@ class _BaseResource(AbstractResource):
         rpc_args['child'] = child
         result = self._client.invoke_capability(
             'Aspire.Hosting/withBuilderChildRelationship',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resourceTypeDisplayName'] = resource_type_display_name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withResourceTypeDisplayName',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9021,6 +9070,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBuilderChildRelationship', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'child_relationship'. Expected: AbstractResource")
+        if (_resource_type_display_name := kwargs.pop("resource_type_display_name", None)) is not None:
+            if _validate_type(_resource_type_display_name, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resourceTypeDisplayName"] = typing.cast(str, _resource_type_display_name)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withResourceTypeDisplayName', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'resource_type_display_name'. Expected: str")
         if (_icon_name := kwargs.pop("icon_name", None)) is not None:
             if _validate_type(_icon_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

@@ -1029,6 +1029,19 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     }
 
     [Fact]
+    public void RealMapApiManagementProjectChangeRunsPolyglotValidation()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories(), EnumerateAllTestProjects());
+
+        var result = selector.Select([], ["Aspire.Hosting.Azure.ApiManagement"], new SelectorOptions());
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("job:polyglot", result.Jobs);
+        Assert.Contains("job:typescript-api-compat", result.Jobs);
+    }
+
+    [Fact]
     public void RealMapRepresentativeExtensionRuntimeConsumerSelectsExtensionE2e()
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
@@ -1064,6 +1077,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     [InlineData("Aspire.StackExchange.Redis")]
     [InlineData("Aspire.Hosting.Go")]
     [InlineData("Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("Aspire.Hosting.Azure.Storage")]
+    [InlineData("Aspire.Azure.Storage.Blobs")]
     public void RealMapRepresentativeCliE2eRuntimeConsumerSelectsCliE2e(string project)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
@@ -1078,9 +1093,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     {
         // The regular PR test selects the published Azure Redis package rather than this repo-built package.
         "Aspire.Hosting.Azure.Redis",
-        // These Hosting/client pairs are consumed only by quarantined tests.
-        "Aspire.Hosting.Azure.Storage",
-        "Aspire.Azure.Storage.Blobs",
+        // This Hosting/client pair is consumed only by quarantined tests.
         "Aspire.Hosting.Nats",
         "Aspire.NATS.Net",
         // This package is consumed only by a LocalHive-only test that regular PR CI skips.

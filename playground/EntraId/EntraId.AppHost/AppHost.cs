@@ -61,7 +61,7 @@ var nodeWeb = builder.AddNodeApp("nodefrontend", "../EntraId.NodeWeb", "server.m
     .WithReference(entraWeb);
 #pragma warning restore ASPIRECERTIFICATES001
 
-nodeWeb.WithEnvironment("NODE_WEB_BASE_URL", nodeWeb.GetEndpoint("https"));
+nodeWeb.WithEnvironment("NODE_WEB_BASE_URL", nodeWeb.GetEndpoint("https").PrimaryBrowserOrigin);
 
 // The callback paths are configured by each front end, so they are declared here; the host and port follow the endpoints.
 if (!useExistingApplication)

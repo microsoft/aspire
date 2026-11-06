@@ -187,7 +187,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.ContextFilterMatches, PageViewModel.DurationFilterMatches);
     }
 
-    private string TracesListUrl => ResourcesLayout?.GetTabUrl(ResourceTab.Traces) ?? DashboardUrls.TracesUrl();
+    private string TracesListUrl => ResourcesLayout?.DetailParentUrl ?? DashboardUrls.TracesUrl();
 
     internal string? GetPageTitle()
     {
@@ -250,7 +250,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             // Navigate to remove ?spanId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
             await Task.Delay(200, _cts.Token);
 
-            NavigationManager.NavigateTo(ResourcesLayout?.AddPaneToUrl(DashboardUrls.TraceDetailUrl(TraceId)) ?? DashboardUrls.TraceDetailUrl(TraceId), new NavigationOptions { ReplaceHistoryEntry = true });
+            NavigationManager.NavigateTo(ResourcesLayout?.GetTraceDetailUrl(TraceId) ?? DashboardUrls.TraceDetailUrl(TraceId), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 

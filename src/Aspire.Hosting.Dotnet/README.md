@@ -4,10 +4,6 @@ Use this integration to model, configure, and orchestrate SDK-style C#, F#, and 
 projects and file-based C# apps (added **by path**) in an Aspire solution. It is the .NET peer of `Aspire.Hosting.Go`,
 `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`.
 
-> [!NOTE]
-> `Aspire.Hosting.Dotnet` is a prerelease package.
-> Its API surface may change in future releases.
-
 ## Getting started
 
 ### Prerequisites

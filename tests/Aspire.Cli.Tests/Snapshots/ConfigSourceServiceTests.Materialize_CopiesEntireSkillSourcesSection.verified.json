@@ -1,0 +1,17 @@
+﻿{
+  "SKILLSOURCES": {
+    "TEAM": {
+      "REPOSITORY": "example/new",
+      "excluded": "remote"
+    },
+    "extra": {
+      "repository": "example/extra",
+      "openCodeV1Catalog": "https://example.com/v1/"
+    }
+  },
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-1"
+  }
+}

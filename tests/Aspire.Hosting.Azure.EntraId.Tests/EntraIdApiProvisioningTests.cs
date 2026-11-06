@@ -240,14 +240,64 @@ public class EntraIdApiProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WithApplicationIdUri_DefaultDoesNotClearTheUriOfAnExistingRegistration()
+    public void WithApplicationIdUri_DefaultThrowsWithoutClearingTheUriOfAnExistingRegistration()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var existing = builder.AddExistingEntraApplication("existing-api", TenantId, ClientId)
-            .WithApplicationIdUri("api://contoso-orders")
-            .WithApplicationIdUri();
+            .WithApplicationIdUri("api://contoso-orders");
 
+        var exception = Assert.Throws<InvalidOperationException>(existing.WithApplicationIdUri);
+
+        Assert.Contains("Call WithApplicationIdUri with the URI that the registration already defines", exception.Message);
         Assert.Equal("api://contoso-orders", existing.Resource.ApplicationIdUri);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task AsExistingApplication_PreservesConsumerConfigurationInEitherOrder(DistributedApplicationOperation operation)
+    {
+        foreach (var configureFirst in new[] { false, true })
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(operation);
+            var entra = builder.AddEntraIdApplication("entra-api");
+            if (!configureFirst)
+            {
+                entra.AsExistingApplication(TenantId, ClientId);
+            }
+            else
+            {
+                entra.WithApplicationIdUri();
+            }
+
+            entra.WithApplicationIdUri("api://existing")
+                .WithScope("read", "Read data.", scope => scope.Id = Guid.Parse(ClientId))
+                .WithSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
+                .WithAudience("api://accepted")
+                .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
+            if (configureFirst)
+            {
+                entra.AsExistingApplicationForExport(TenantId, ClientId);
+            }
+
+            var consumer = builder.AddResource(new ProjectResource("consumer")).WithReference(entra);
+            var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+                consumer.Resource, operation, TestServiceProvider.Instance);
+
+            Assert.Equal(new Dictionary<string, string>
+            {
+                ["AzureAd__Instance"] = "https://login.microsoftonline.com/",
+                ["AzureAd__TenantId"] = "organizations",
+                ["AzureAd__AppHomeTenantId"] = TenantId,
+                ["AzureAd__ClientId"] = ClientId,
+                ["AzureAd__Audiences__0"] = "api://accepted",
+                ["AzureAd__Scopes"] = "read",
+                ["DownstreamApis__MicrosoftGraph__Scopes__0"] = "https://graph.microsoft.com/User.Read",
+                ["DownstreamApis__MicrosoftGraph__BaseUrl"] = "https://graph.microsoft.com/v1.0"
+            }, environment);
+            Assert.Equal("api://existing/read", entra.Resource.GetScopeUri("read").ValueExpression);
+            Assert.Null(await ManifestUtils.GetManifestOrNull(entra.Resource));
+        }
     }
 
     [Theory]

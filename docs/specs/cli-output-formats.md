@@ -297,6 +297,13 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 ### `aspire describe`
 
+The standard table's **Type** column shows the resource's type display name, such as
+`Redis` or `PostgreSQL Server`. Integrations supply defaults from their resource classes;
+`.WithResourceTypeDisplayName("ASP.NET Core")` overrides the label for an individual resource.
+Resources without a specific label, and older AppHosts that do not supply this metadata,
+fall back to the technical resource type. This is presentation metadata only: it does not
+change resource identity, service discovery, or OpenTelemetry's `service.name`.
+
 `aspire resources` is an alias for `aspire describe`. Use `--format mermaid` to export a resource graph snapshot directly to stdout:
 
 ```bash
@@ -317,6 +324,7 @@ Progress and informational messages go to stderr, so redirection captures only M
       "name": "api",
       "displayName": "api",
       "resourceType": "Project",
+      "resourceTypeDisplayName": "ASP.NET Core",
       "state": "Running",
       "stateStyle": "success",
       "healthStatus": "Healthy",
@@ -343,8 +351,8 @@ Progress and informational messages go to stderr, so redirection captures only M
 `aspire describe --format json --follow` emits NDJSON. Each line is a resource object, not the snapshot wrapper:
 
 ```json
-{"name":"api","displayName":"api","resourceType":"Project","state":"Starting","stateStyle":"info"}
-{"name":"api","displayName":"api","resourceType":"Project","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Starting","stateStyle":"info"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
 ```
 
 #### Resource fields
@@ -356,6 +364,7 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `name` | Stable resource name. |
 | `displayName` | User-facing resource name. |
 | `resourceType` | Resource type, such as `Project`, `Container`, or `Executable`. |
+| `resourceTypeDisplayName` | Human-readable type label, such as `Redis` or `PostgreSQL Server`. Falls back to `resourceType` when no label is supplied. Not a stable discriminator for behavior. |
 | `uid` | Resource unique ID, when available. |
 | `state` | Current resource state. |
 | `stateStyle` | UI style hint for the state. |
@@ -641,7 +650,7 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `aspire secret list --all --format json` groups the same secret objects by environment name. `--all` cannot be combined with `--environment`.
 
-`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the Aspire environment secrets file path as raw text on stdout.
+`aspire secret get <key>` emits the secret value as raw text on stdout. `aspire secret path` emits the Aspire environment secrets file path as raw text on stdout, without loading, importing, or migrating secrets. It can therefore locate the environment store even when its JSON is malformed. If a data operation encounters malformed JSON in an environment store, legacy user-secrets file, or migration source, it fails with the affected file path and one-based line and byte position so the file can be repaired. Invalid JSON is not automatically escaped or overwritten; a connection string containing `server\sql` must be stored in JSON as `"server\\sql"`.
 
 ### `aspire doctor`
 
