@@ -34,6 +34,20 @@ jobs:
         with:
           persist-credentials: false
 
+      # Dependabot bumps the pinned gh-aw-actions SHAs but not the `version` input that selects the
+      # installed compiler, so recompiling with that older compiler reverts the new gh-aw action pins.
+      # For those PRs the strict drift check is replaced by one that tolerates differences in gh-aw
+      # action pin lines only. Any other drift still fails, such as a grouped update that also edits a
+      # checkout or artifact pin in a generated file, which recompilation would revert anyway. After the
+      # merge, recompile-agentic-workflows.yml opens the follow-up PR that aligns the compiler and
+      # regenerates the lock files, and that PR is validated strictly. See .github/workflows/README.md.
+      - name: Detect a pending Dependabot gh-aw update
+        id: compiler-update
+        if: >-
+          github.event.pull_request.user.login == 'dependabot[bot]' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        run: node .github/workflows/recompile-agentic-workflows.js compiler-update-pending
+
       # Keep this pinned to the same gh-aw release as copilot-setup-steps.yml so the recompiled
       # workflows are byte-for-byte comparable with what a contributor generates locally; see
       # .github/workflows/README.md.
@@ -54,6 +68,7 @@ jobs:
           node .github/workflows/auto-sec/publication-guard.js
 
       - name: Verify generated files are up to date
+        if: steps.compiler-update.outputs.pending != 'true'
         run: |
           set -euo pipefail
           changes=$(git status --porcelain --untracked-files=all -- \
@@ -65,6 +80,10 @@ jobs:
             printf '%s\n' "$changes"
             exit 1
           fi
+
+      - name: Verify generated files differ only by pending gh-aw action pins
+        if: steps.compiler-update.outputs.pending == 'true'
+        run: node .github/workflows/recompile-agentic-workflows.js generated-drift
 
       - name: Lint generated agentic workflows
         run: gh aw lint --shellcheck

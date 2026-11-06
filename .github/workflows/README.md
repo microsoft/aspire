@@ -27,6 +27,56 @@ input in `copilot-setup-steps.yml` aligned with the compiler used to generate th
 workflows and with `validate-agentic-workflows.yml`. Updating only the setup
 action does not update the installed compiler; its `version` input controls that.
 
+`recompile-agentic-workflows.yml` uses `pull_request: closed` to handle merged
+upstream Dependabot PRs targeting the default branch, including grouped GitHub
+Actions updates. Unmerged closures are skipped. It detects changed
+`github/gh-aw-actions` pins from the PR diff and verifies their release comments
+against upstream tag commits (or resolves an uncommented SHA through upstream
+tags). It never selects a compiler from the PR title or the latest release.
+It can also be run manually from the default branch using **Run workflow** or
+`gh workflow run recompile-agentic-workflows.yml`. Manual dispatch selects the
+newest release already pinned by `github/gh-aw-actions` references in the default
+branch's workflow YAML, verifies those pins against upstream tags, and aligns both
+compiler inputs before recompiling. It does not fetch the latest upstream release.
+Manual runs reuse the `recompile-agentic-workflows-manual` branch and update its
+open PR, refreshing its title and body to match the selected release; if there
+are no changes, they open no PR.
+The workflow checks out only the trusted default branch, skips superseded pins,
+aligns both `setup-cli` pins and version inputs, and runs:
+
+```shell
+gh extension install github/gh-aw --pin <detected-version> --force
+gh aw version
+gh aw compile --no-check-update --schedule-seed microsoft/aspire
+node .github/workflows/auto-sec/publication-guard.js
+gh aw lint --shellcheck
+```
+
+It does not run `gh aw upgrade` or refresh authoring scaffolding. Compilation
+replaces `auto-sec.lock.yml` with raw output, so the publication guard reapplies
+its gates before linting. Compilation, guard, or lint failures prevent publication
+(the guard fails on compiler output it does not recognize), unexpected changed
+paths fail the run, and an empty diff opens no PR. Aspirey creates or updates a
+stable branch per source PR; reruns do not reopen a closed follow-up PR. Runs
+sharing a follow-up branch are serialized: each source PR gets its own concurrency
+group, and manual dispatches share a separate group. Unrelated PR closures cannot
+replace a queued gh-aw update; a pending rerun can only be replaced by another run
+for the same source.
+Version verification captures both stdout and stderr
+because older gh-aw releases print their version to stderr.
+The existing `ASPIRE_BOT_APP_ID` and `ASPIRE_BOT_PRIVATE_KEY` secrets are
+required as both **Actions secrets** (manual runs) and **Dependabot secrets**
+(Dependabot-triggered runs), using the same names. GitHub does not expose normal
+Actions secrets to Dependabot-triggered `pull_request` workflows, even on a manual
+rerun; see [GitHub's Dependabot secrets guidance](https://docs.github.com/en/code-security/reference/supply-chain-security/troubleshoot-dependabot/dependabot-on-actions#accessing-secrets).
+The workflow explicitly grants `GITHUB_TOKEN` only Contents and Pull requests read
+permissions; all writes use the separately minted App token. No privileged
+`pull_request_target` trigger or dangerous-trigger suppression is needed.
+The App installation must grant **Contents**, **Pull requests**, and
+**Workflows** write permissions to push generated workflow YAML. Newly introduced
+third-party action SHAs still require the repository/enterprise allow-list update
+before the generated PR is merged.
+
 Commit the generated `.lock.yml` files and `.github/aw/actions-lock.json` alongside
 their source changes. `agentics-maintenance-microsoft-aspire.dev.yml` is generated
 by the same full compilation despite not having a `.lock.yml` suffix. Do not edit
@@ -50,6 +100,22 @@ Apply this trait to new agentic contract classes so dedicated validation include
 Main CI covers selector routing when the trigger map or lint policy changes.
 README-only changes do not trigger dedicated agentic validation; new Markdown
 workflow sources still trigger it even before their generated locks exist.
+
+Dependabot bumps the pinned `github/gh-aw-actions` SHAs but not the `version` input
+that selects the installed compiler, so recompiling with that older compiler reverts
+the new gh-aw action pins. For a same-repo Dependabot PR whose `setup-cli` pin is
+ahead of its `version` input, validation therefore still compiles with the pinned
+compiler but replaces the strict drift check with one that tolerates differences in
+gh-aw action pin lines only. Any other drift fails. A grouped update that also edits
+a pin owned by the compiler or an agentic workflow source, such as `actions/checkout`
+or `actions/upload-artifact` in a generated file, would be undone by recompilation,
+so reconcile it in that PR by aligning the compiler and regenerating the files as the
+recompile workflow does. The `recompile-agentic-workflows.yml` run after the merge
+aligns both compiler inputs and opens the follow-up PR that regenerates the lock
+files, and that PR is validated strictly. Until it merges, the default branch carries
+the new pins with the old compiler, so other PRs that touch agentic inputs report
+drift: merge the follow-up PR promptly. Pull requests from anyone else are always
+validated strictly.
 
 Compile-time lint diagnostics alone are not a blocking gate. The lint command
 owns the actionlint image and compatibility exceptions; `.github/actionlint.yaml`
