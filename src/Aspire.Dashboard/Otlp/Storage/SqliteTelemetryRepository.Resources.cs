@@ -41,10 +41,19 @@ public sealed partial class SqliteTelemetryRepository
         // Resource flags record signals received, even after retention evicts their last item.
         // Indexed existence probes reflect retained data (including incoming client spans) without
         // scanning the telemetry tables, and are shared by every row in the layout snapshot.
-        return connection.Query<ResourceSignalAvailabilityRecord>(ResourceSignalAvailabilitySql)
-            .ToDictionary(
-                resource => new ResourceKey(resource.ResourceName, resource.InstanceId),
-                resource => new ResourceSignalAvailability(resource.HasLogs, resource.HasTraces, resource.HasMetrics));
+        // Read explicitly so this startup path never falls back to Dapper's runtime-generated
+        // deserializer, which is unavailable in the Native AOT dashboard.
+        using var command = connection.CreateCommand();
+        command.CommandText = ResourceSignalAvailabilitySql;
+        using var reader = command.ExecuteReader();
+        var availability = new Dictionary<ResourceKey, ResourceSignalAvailability>();
+        while (reader.Read())
+        {
+            var key = new ResourceKey(reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1));
+            availability.Add(key, new ResourceSignalAvailability(reader.GetBoolean(2), reader.GetBoolean(3), reader.GetBoolean(4)));
+        }
+
+        return availability;
     }
 
     private async Task DeleteTelemetryResourceFromDatabaseAsync(ResourceKey resourceKey)
@@ -136,13 +145,6 @@ public sealed partial class SqliteTelemetryRepository
                 .OrderBy(resource => resource.ResourceKey)
                 .ToList();
         }
-    }
-
-    private sealed class ResourceSignalAvailabilityRecord : TelemetryResourceRecord
-    {
-        public bool HasLogs { get; init; }
-        public bool HasTraces { get; init; }
-        public bool HasMetrics { get; init; }
     }
 
     private sealed class ResourceViewPropertiesComparer : IEqualityComparer<KeyValuePair<string, string>[]>
