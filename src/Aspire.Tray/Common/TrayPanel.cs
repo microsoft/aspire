@@ -761,11 +761,17 @@ internal sealed class TrayPanel
         }
         // Preserve visible interactions, but do not undo an intentional scroll away from
         // the card every time a discovery heartbeat updates health.
-        var target = Scene.Targets.FirstOrDefault(target => target.Key == _focus);
+        var controls = Scene.Targets.Where(IsActiveInteractionTarget).ToArray();
+        var target = controls.FirstOrDefault(target => target.Key == _focus);
         return target is not null && _viewport.Contains(target.Bounds)
-            || _focus is null && Scene.Targets.Any(target => (IsConfirmTarget(target.Kind) || IsActionItem(target.Kind))
-                && _viewport.Contains(target.Bounds));
+            || _focus is null && controls.Any(target => _viewport.Contains(target.Bounds));
     }
+
+    private bool IsActiveInteractionTarget(PanelHitTarget target)
+        => _confirm is { } confirm
+            ? IsConfirmTarget(target.Kind) && target.Key.Section == confirm.Section && target.Key.Host == confirm.Host?.Id
+            : _actions is { } actions && target.Key.Section == actions.Section && target.Key.Host == actions.Host
+                && (IsActionItem(target.Kind) || target.Kind is PanelTargetKind.Row or PanelTargetKind.More);
 
     private TrayPanelScene Build()
     {
@@ -979,9 +985,7 @@ internal sealed class TrayPanel
         if (_revealInteractionAfterUpdate)
         {
             _revealInteractionAfterUpdate = false;
-            var controls = targets.Where(target => _confirm is not null ? IsConfirmTarget(target.Kind)
-                : _actions is { } actions && target.Key.Section == actions.Section && target.Key.Host == actions.Host
-                    && (IsActionItem(target.Kind) || target.Kind == PanelTargetKind.More)).ToArray();
+            var controls = targets.Where(IsActiveInteractionTarget).ToArray();
             if (controls.Length > 0)
             {
                 // Inserting a group header can move a focused card below the fold. Prefer
