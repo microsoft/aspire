@@ -26,6 +26,76 @@ internal enum WatchNoticeKind
 internal sealed record WatchNotice(WatchNoticeKind Kind, LogLevel Level, string Message, IReadOnlyList<string> ProjectPaths);
 
 /// <summary>
+/// Event types of the watcher's structured status pipe (<c>--status-pipe</c>): one JSON object per line with
+/// <c>type</c>, <c>projects</c> and optional <c>success</c>, <c>error</c> and <c>exitCode</c>.
+/// </summary>
+/// <remarks>
+/// Mirrors <c>WatchStatusEvent.Types</c> in dotnet/sdk (src/Dotnet.Watch/Watch.Aspire/Server/WatchStatusEvent.cs). The
+/// build/apply/restart events are raised from the watcher's log notifications (<c>StatusReportingLoggerFactory</c>);
+/// the process events from the resource launcher.
+/// </remarks>
+internal static class DotnetWatchStatusTypes
+{
+    public const string Building = "building";
+    public const string BuildComplete = "build_complete";
+    public const string HotReloadApplied = "hot_reload_applied";
+    public const string Restarting = "restarting";
+    public const string ProcessExited = "process_exited";
+    public const string ProcessStarted = "process_started";
+}
+
+/// <summary>
+/// SPIKE: every piece of the watcher's console text the notices depend on, in one place.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The status pipe has no field for these details: <c>error</c> is never set, there is no event for a compile error, a
+/// rude edit or "nothing to apply", and <c>hot_reload_applied</c> carries neither the changed files nor the apply time
+/// (and is raised for every running project). Until the watcher reports them (see the upstream ask in the PR), the
+/// interpreter reads them from the server's console output. The literals come from dotnet/sdk
+/// <c>MessageDescriptor</c> (src/Dotnet.Watch/Watch/UI/IReporter.cs) and are not localized.
+/// </para>
+/// <para>
+/// <c>DotnetWatchRecordedOutputTests</c> replays output recorded from the real watcher and fails if any pattern here no
+/// longer matches it; <c>DotnetWatchContractTests</c> (outerloop) re-records it against the current watcher.
+/// </para>
+/// </remarks>
+internal static partial class DotnetWatchOutputPatterns
+{
+    /// <summary><c>MessageDescriptor.NoManagedCodeChangesToApply</c>.</summary>
+    public const string NoManagedCodeChanges = "No managed code changes to apply";
+
+    /// <summary><c>MessageDescriptor.RestartNeededToApplyChanges</c> (a rude edit).</summary>
+    public const string RestartNeeded = "Restart is needed to apply the changes";
+
+    /// <summary><c>MessageDescriptor.UnableToApplyChanges</c>.</summary>
+    public const string CompilationErrors = "Unable to apply changes due to compilation errors";
+
+    /// <summary>The watcher's changed-file log line: <c>File updated: /path/a.cs</c> (comma-separated when several).</summary>
+    [GeneratedRegex(@"\bFiles? (?:updated|added|deleted): (?<files>.+)$")]
+    public static partial Regex FileChange();
+
+    /// <summary>MSBuild/Roslyn diagnostic: <c>path(line,col): error CODE: message [project]</c>.</summary>
+    [GeneratedRegex(@"(?:^|\s)(?<file>(?:[A-Za-z]:)?[\\/][^(]*?|[^\s(\\/][^\s(]*)\((?<pos>\d+,\d+)\): error (?<code>[A-Za-z]+\d+): (?<msg>.*?)(?:\s+\[[^\]]+\])?\s*$")]
+    public static partial Regex CompilerError();
+
+    /// <summary><c>MessageDescriptor.ManagedCodeChangesApplied</c>: <c>C# and Razor changes applied in {0}ms.</c></summary>
+    [GeneratedRegex(@"changes applied in (?<ms>\d+)ms")]
+    public static partial Regex ChangesApplied();
+
+    /// <summary>Every pattern, for coverage against recorded watcher output.</summary>
+    public static IReadOnlyList<(string Name, Func<string, bool> Matches)> All { get; } =
+    [
+        (nameof(FileChange), line => FileChange().IsMatch(line)),
+        (nameof(CompilerError), line => CompilerError().IsMatch(line)),
+        (nameof(ChangesApplied), line => ChangesApplied().IsMatch(line)),
+        (nameof(NoManagedCodeChanges), line => line.Contains(NoManagedCodeChanges, StringComparison.Ordinal)),
+        (nameof(RestartNeeded), line => line.Contains(RestartNeeded, StringComparison.Ordinal)),
+        (nameof(CompilationErrors), line => line.Contains(CompilationErrors, StringComparison.Ordinal)),
+    ];
+}
+
+/// <summary>
 /// SPIKE: turns the watcher's status events and console output into concise notices for the CLI and resource logs.
 /// </summary>
 /// <remarks>
@@ -35,9 +105,10 @@ internal sealed record WatchNotice(WatchNoticeKind Kind, LogLevel Level, string 
 /// apply time), so notices are derived from both streams. Console lines arrive later than status events (they
 /// flow through DCP), so notices that need an error message are held as pending until the first error line
 /// arrives or <see cref="FlushPending"/> is called.
+/// All console literals live in <see cref="DotnetWatchOutputPatterns"/>.
 /// TODO(spike): replace the console parsing with structured status fields once the watcher provides them.
 /// </remarks>
-internal sealed partial class DotnetWatchEventInterpreter
+internal sealed class DotnetWatchEventInterpreter
 {
     private readonly IReadOnlyList<(string ProjectPath, string Name)> _projects;
     private readonly List<string> _changedFiles = [];
@@ -50,9 +121,17 @@ internal sealed partial class DotnetWatchEventInterpreter
     private string? _firstErrorFile;
     private PendingFailure? _pending;
 
-    public DotnetWatchEventInterpreter(IEnumerable<(string ProjectPath, string Name)> projects)
+    private readonly string? _workingDirectory;
+
+    /// <param name="projects">The watched projects and their resource names.</param>
+    /// <param name="workingDirectory">
+    /// The watch server's working directory: the watcher logs changed files under it relative to it
+    /// (<c>File updated: ./Api/Program.cs</c>).
+    /// </param>
+    public DotnetWatchEventInterpreter(IEnumerable<(string ProjectPath, string Name)> projects, string? workingDirectory = null)
     {
         _projects = projects.ToArray();
+        _workingDirectory = workingDirectory;
     }
 
     /// <summary>Whether a notice is waiting for an error line; call <see cref="FlushPending"/> after a short delay.</summary>
@@ -65,7 +144,7 @@ internal sealed partial class DotnetWatchEventInterpreter
 
         switch (type)
         {
-            case "building":
+            case DotnetWatchStatusTypes.Building:
                 _firstError = null;
                 _firstErrorFile = null;
                 if (_ready)
@@ -75,7 +154,7 @@ internal sealed partial class DotnetWatchEventInterpreter
                 }
                 break;
 
-            case "build_complete" when success == true:
+            case DotnetWatchStatusTypes.BuildComplete when success == true:
                 _rebuilding = false;
                 _changedFiles.Clear();
                 if (!_ready)
@@ -96,7 +175,7 @@ internal sealed partial class DotnetWatchEventInterpreter
                 }
                 break;
 
-            case "build_complete":
+            case DotnetWatchStatusTypes.BuildComplete:
                 _rebuilding = false;
                 _restartPending = false;
                 _inError = true;
@@ -104,13 +183,13 @@ internal sealed partial class DotnetWatchEventInterpreter
                 TryCompletePending(notices);
                 break;
 
-            case "restarting":
+            case DotnetWatchStatusTypes.Restarting:
                 _rebuilding = false;
                 notices.Add(Notice(WatchNoticeKind.Restarting, LogLevel.Information,
                     $"🔄 Restarting {Names(projects)} to apply changes that can't be hot reloaded.", projects));
                 break;
 
-            case "process_exited":
+            case DotnetWatchStatusTypes.ProcessExited:
                 foreach (var p in projects)
                 {
                     _crashed.Add(p);
@@ -120,7 +199,7 @@ internal sealed partial class DotnetWatchEventInterpreter
                     $"💥 {Names(projects)} exited with code {exitCode?.ToString(CultureInfo.InvariantCulture) ?? "?"}. Save a change or use Restart to relaunch it.", projects));
                 break;
 
-            case "process_started":
+            case DotnetWatchStatusTypes.ProcessStarted:
                 var relaunched = projects.Where(_crashed.Remove).ToArray();
                 if (relaunched.Length > 0)
                 {
@@ -136,7 +215,7 @@ internal sealed partial class DotnetWatchEventInterpreter
     {
         var notices = new List<WatchNotice>();
 
-        if (FileChangeRegex().Match(line) is { Success: true } change)
+        if (DotnetWatchOutputPatterns.FileChange().Match(line) is { Success: true } change)
         {
             if (_changedFiles.Count == 0)
             {
@@ -144,9 +223,10 @@ internal sealed partial class DotnetWatchEventInterpreter
                 _firstErrorFile = null;
             }
 
-            _changedFiles.AddRange(change.Groups["files"].Value.Split(", ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            _changedFiles.AddRange(change.Groups["files"].Value.Split(", ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(file => _workingDirectory is not null && !Path.IsPathRooted(file) ? Path.GetFullPath(file, _workingDirectory) : file));
         }
-        else if (CompilerErrorRegex().Match(line) is { Success: true } error)
+        else if (DotnetWatchOutputPatterns.CompilerError().Match(line) is { Success: true } error)
         {
             if (_firstError is null)
             {
@@ -158,7 +238,7 @@ internal sealed partial class DotnetWatchEventInterpreter
 
             TryCompletePending(notices);
         }
-        else if (line.Contains("No managed code changes to apply", StringComparison.Ordinal))
+        else if (line.Contains(DotnetWatchOutputPatterns.NoManagedCodeChanges, StringComparison.Ordinal))
         {
             var files = _changedFiles.ToArray();
             _changedFiles.Clear();
@@ -178,14 +258,14 @@ internal sealed partial class DotnetWatchEventInterpreter
                     $"📝 {FileList(files)} changed in {Names(projects)}; no rebuild needed.", projects));
             }
         }
-        else if (line.Contains("Restart is needed to apply the changes", StringComparison.Ordinal))
+        else if (line.Contains(DotnetWatchOutputPatterns.RestartNeeded, StringComparison.Ordinal))
         {
             // The watcher reports the rebuild that follows a rude edit as "changes applied" once the restart is done;
             // the Rebuilding/Restarting notices from the status pipe already describe that cycle.
             _restartPending = true;
             _changedFiles.Clear();
         }
-        else if (line.Contains("Unable to apply changes due to compilation errors", StringComparison.Ordinal))
+        else if (line.Contains(DotnetWatchOutputPatterns.CompilationErrors, StringComparison.Ordinal))
         {
             _inError = true;
             _restartPending = false;
@@ -193,7 +273,7 @@ internal sealed partial class DotnetWatchEventInterpreter
             _changedFiles.Clear();
             TryCompletePending(notices);
         }
-        else if (AppliedRegex().Match(line) is { Success: true } applied)
+        else if (DotnetWatchOutputPatterns.ChangesApplied().Match(line) is { Success: true } applied)
         {
             var files = _changedFiles.ToArray();
             _changedFiles.Clear();
@@ -339,14 +419,4 @@ internal sealed partial class DotnetWatchEventInterpreter
     private static WatchNotice Notice(WatchNoticeKind kind, LogLevel level, string message, IReadOnlyList<string> projects) => new(kind, level, message, projects);
 
     private sealed record PendingFailure(WatchNoticeKind Kind, IReadOnlyList<string> Projects, bool Initial);
-
-    [GeneratedRegex(@"\bFiles? (?:updated|added|deleted): (?<files>.+)$")]
-    private static partial Regex FileChangeRegex();
-
-    // MSBuild/Roslyn diagnostic: path(line,col): error CODE: message [project]
-    [GeneratedRegex(@"(?:^|\s)(?<file>(?:[A-Za-z]:)?[\\/][^(]*?|[^\s(\\/][^\s(]*)\((?<pos>\d+,\d+)\): error (?<code>[A-Za-z]+\d+): (?<msg>.*?)(?:\s+\[[^\]]+\])?\s*$")]
-    private static partial Regex CompilerErrorRegex();
-
-    [GeneratedRegex(@"changes applied in (?<ms>\d+)ms")]
-    private static partial Regex AppliedRegex();
 }

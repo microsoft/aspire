@@ -495,7 +495,7 @@ internal static class DotnetWatchCoordinator
                     _lastBuildError = null;
                     lock (_noticeGate)
                     {
-                        _interpreter = new DotnetWatchEventInterpreter(_projects.Select(p => (((IProjectMetadata)p.Metadata).ProjectPath, p.Resource.Name)));
+                        _interpreter = new DotnetWatchEventInterpreter(_projects.Select(p => (((IProjectMetadata)p.Metadata).ProjectPath, p.Resource.Name)), Server.Resource.WorkingDirectory);
                     }
 
                     _prepareTask = PrepareWithNoticeAsync(services, ++_generation, _monitorCts.Token, cancellationToken);
@@ -627,7 +627,7 @@ internal static class DotnetWatchCoordinator
                     diagnostics.LogDebug("dotnet-watch status: {Line}", line);
                     var projects = status.projects ?? [];
 
-                    if (status.type == "build_complete")
+                    if (status.type == DotnetWatchStatusTypes.BuildComplete)
                     {
                         if (status.success == true)
                         {
@@ -756,7 +756,7 @@ internal static class DotnetWatchCoordinator
             var stamp = DateTime.Now.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
             switch (status.type)
             {
-                case "hot_reload_applied" or "restarting":
+                case DotnetWatchStatusTypes.HotReloadApplied or DotnetWatchStatusTypes.Restarting:
                     await notifications.PublishUpdateAsync(resource, s => s with
                     {
                         Properties = WithProperty(s.Properties, "dotnet-watch.last-event", $"{status.type} @ {stamp}")
@@ -765,7 +765,7 @@ internal static class DotnetWatchCoordinator
 
                 // The resource pipe carries no exit status and the watcher keeps the proxy connected so it can
                 // relaunch the app on the next change. Surface the app's exit code on the resource instead.
-                case "process_exited":
+                case DotnetWatchStatusTypes.ProcessExited:
                     await notifications.PublishUpdateAsync(resource, s => s with
                     {
                         State = new ResourceStateSnapshot(CrashedState, KnownResourceStateStyles.Error),
@@ -774,7 +774,7 @@ internal static class DotnetWatchCoordinator
                     }).ConfigureAwait(false);
                     break;
 
-                case "process_started":
+                case DotnetWatchStatusTypes.ProcessStarted:
                     await notifications.PublishUpdateAsync(resource, s => s.State?.Text == CrashedState
                         ? s with { State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success), ExitCode = null }
                         : s).ConfigureAwait(false);
