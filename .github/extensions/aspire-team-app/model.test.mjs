@@ -201,10 +201,10 @@ test("computeFocusItems breaks first-readiness ties by ordinal host, repository,
 });
 
 test("urgency matches the complete label case-insensitively, not similar labels", () => {
-  for (const label of [urgentReviewLabel, "pr REVIEW URGENT"]) {
+  for (const label of [urgentReviewLabel, "REVIEW-urgent"]) {
     assert.equal(isUrgentPullRequest(makePr({ labels: [label] })), true);
   }
-  for (const labels of [[], ["urgent"], ["PR review urgent later"], ["not PR review urgent"]]) {
+  for (const labels of [[], ["urgent"], ["review-urgent-later"], ["not-review-urgent"], ["PR review urgent"]]) {
     assert.equal(isUrgentPullRequest(makePr({ labels })), false);
   }
 });

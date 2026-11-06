@@ -97,6 +97,7 @@ test("urgent queue cards and collapsed lookup entries have visible text badges w
   const remainder = app.innerHTML.match(/data-sect="later-in-queue">([\s\S]*?)<\/section>/)[1];
   assert.equal([...queue.matchAll(/class="card card-urgent"/g)].length, 10);
   assert.equal([...queue.matchAll(/class="urgent-badge"[^>]*>Urgent<\/span>/g)].length, 10);
+  assert.match(queue, /title="review-urgent label: prioritized ahead of regular eligible PRs\."/);
   assert.equal([...remainder.matchAll(/class="urgent-badge"[^>]*>Urgent<\/span>/g)].length, 2);
   assert.match(remainder, /aria-expanded="false"/);
   assert.deepEqual([...remainder.matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), [11, 12, 13, 14]);
@@ -105,7 +106,7 @@ test("urgent queue cards and collapsed lookup entries have visible text badges w
   api.setPrefs(rendererPrefs());
   api.setView("settings");
   api.render();
-  assert.match(app.innerHTML, /Eligible PRs labeled <b>PR review urgent<\/b> come first/);
+  assert.match(app.innerHTML, /Eligible PRs labeled <b>review-urgent<\/b> come first/);
   assert.match(app.innerHTML, /Removing the label restores first-readiness order/);
 });
 

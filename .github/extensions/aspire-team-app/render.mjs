@@ -2533,7 +2533,7 @@ function isAuthorResponseItem(item) {
 
 function urgencyBadge(item) {
   return item.urgent
-    ? '<span class="urgent-badge" title="PR review urgent label: prioritized ahead of regular eligible PRs.">Urgent</span>'
+    ? '<span class="urgent-badge" title="review-urgent label: prioritized ahead of regular eligible PRs.">Urgent</span>'
     : "";
 }
 
@@ -3228,7 +3228,7 @@ function settingsView() {
   return '<div class="page">' +
     '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, delivery health, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
     '<div class="section"><h3>Review queue</h3>' +
-      '<p class="hint">The shared <b>PR queue</b> is team-managed, not individually sorted. Eligible PRs labeled <b>PR review urgent</b> come first; each group keeps first-readiness order, oldest first. Only the first <b>10</b> are shown as cards, even when more than 10 are urgent. Removing the label restores first-readiness order. Later in queue starts collapsed and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
+      '<p class="hint">The shared <b>PR queue</b> is team-managed, not individually sorted. Eligible PRs labeled <b>review-urgent</b> come first; each group keeps first-readiness order, oldest first. Only the first <b>10</b> are shown as cards, even when more than 10 are urgent. Removing the label restores first-readiness order. Later in queue starts collapsed and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.eye + '<span>A PR only enters the shared queue once <b>checks are green</b> and <b>all review feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>' +
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +

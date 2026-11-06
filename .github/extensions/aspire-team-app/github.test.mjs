@@ -75,7 +75,7 @@ test("urgency uses existing labels across watched repositories and hosts without
     const host = new URL(url).host === "ghe.example.com" ? "ghe.example.com" : "github.com";
     const node = prNode(1, isoAgo(hourMs));
     node.url = `https://${host}/microsoft/${variables.name}/pull/1`;
-    node.labels.nodes = host === "ghe.example.com" || variables.name === "dcp" ? [{ name: "pr REVIEW urgent" }] : [];
+    node.labels.nodes = host === "ghe.example.com" || variables.name === "dcp" ? [{ name: "REVIEW-urgent" }] : [];
     return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
   };
   const { attention, errors } = await loadReview([
