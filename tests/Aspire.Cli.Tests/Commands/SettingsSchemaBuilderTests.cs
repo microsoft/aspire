@@ -50,7 +50,7 @@ public class SettingsSchemaBuilderTests
 
         Assert.Equal(
             ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
-                "integrationSources", "packages", "profiles", "sdk", "skillSources", "templateSources"],
+                "integrationSources", "packages", "profiles", "provenance", "sdk", "skillSources", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
         Assert.NotNull(configSource.SubProperties);
@@ -60,6 +60,20 @@ public class SettingsSchemaBuilderTests
         var optOut = Assert.Single(configSource.SubProperties, property => property.Name == "optOut");
         Assert.Equal("boolean", optOut.Type);
         Assert.False(optOut.Required);
+    }
+
+    [Fact]
+    public void BuildConfigFileSchema_ProvenanceIsLocalGenerationMetadata()
+    {
+        var local = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+        var provenance = Assert.Single(local.Properties, property => property.Name == "provenance");
+        var template = Assert.Single(provenance.SubProperties!);
+        Assert.Equal("template", template.Name);
+        Assert.Equal(["repository", "sha", "path"], template.SubProperties!.Select(property => property.Name));
+        Assert.All(template.SubProperties!, property => Assert.Equal("string", property.Type));
+        var global = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: true);
+        Assert.Equal(local.Properties.Where(property => property.Name is not ("provenance" or "appHost" or "configSource")).Select(property => property.Name),
+            global.Properties.Select(property => property.Name));
     }
 
     [Theory]

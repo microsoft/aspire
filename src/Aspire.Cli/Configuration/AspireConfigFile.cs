@@ -179,6 +179,11 @@ internal sealed class AspireConfigFile
     [Description("Named template sources from global or accepted init-source configuration. Each source specifies an absolute local path or a Git repository with optional ref, path, and displayName. " + SourceNameValidator.Description)]
     public Dictionary<string, AspireConfigTemplateSource?>? TemplateSources { get; set; }
 
+    [JsonPropertyName("provenance")]
+    [Description("Generation-origin metadata for this app. Does not register template sources or inherit configuration.")]
+    [LocalAspireJsonConfigurationProperty]
+    public AspireConfigProvenance? Provenance { get; set; }
+
     // Unmodeled settings must survive typed load/save cycles.
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }

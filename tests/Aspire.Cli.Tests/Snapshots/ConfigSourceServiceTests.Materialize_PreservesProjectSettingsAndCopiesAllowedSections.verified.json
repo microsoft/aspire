@@ -15,6 +15,13 @@
     "custom": "local"
   },
   "custom": "local",
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "path": "templates/web"
+    }
+  },
   "skillSources": {
     "team": {
       "repository": "example/team",

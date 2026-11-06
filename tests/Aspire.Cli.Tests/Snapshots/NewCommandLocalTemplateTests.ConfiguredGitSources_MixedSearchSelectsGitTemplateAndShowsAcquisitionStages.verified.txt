@@ -1,3 +1,14 @@
 ﻿{
+  aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "https://example.test/templates.git",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "path": "."
+    }
+  }
+}
+,
   Demo.txt: Remote: Welcome
 }

@@ -126,6 +126,7 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
                 "git -C template init && git -c safe.directory=\"$PWD/template\" -C template add . && " +
                 "git -c safe.directory=\"$PWD/template\" -C template -c user.name='Aspire tests' " +
                 "-c user.email=tests@example.com -c commit.gpgsign=false commit -m 'Add template' && " +
+                "git -c safe.directory=\"$PWD/template\" -C template rev-parse HEAD > template-commit.txt && " +
                 "git -c safe.directory=\"$PWD/template\" clone --bare template template.git",
                 counter);
         }
@@ -190,9 +191,28 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
         }
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "out");
+        string? repositoryCommit = null;
+        if (server is not null)
+        {
+            // The CLI's owner-only config belongs to the container's root UID, not the
+            // Linux host test runner. Only make this fixture readable for verification.
+            await auto.RunCommandAsync("chmod a+r out/aspire.config.json", counter);
+            repositoryCommit = (await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "template-commit.txt"))).Trim();
+            var config = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(outputDirectory, "aspire.config.json")))!;
+            var provenance = config["provenance"]!["template"]!;
+            Assert.Equal(server.RepositoryUrl, provenance["repository"]!.GetValue<string>());
+            Assert.Equal(repositoryCommit, provenance["sha"]!.GetValue<string>());
+            Assert.Equal(".", provenance["path"]!.GetValue<string>());
+        }
         var files = Directory.GetFiles(outputDirectory, "*", SearchOption.AllDirectories)
             .Order(StringComparer.Ordinal)
             .ToDictionary(path => Path.GetRelativePath(outputDirectory, path).Replace('\\', '/'), File.ReadAllText);
-        await VerifyXunit.Verifier.Verify(files).UseDirectory(Path.Combine(testDirectory, "Snapshots"));
+        var verification = VerifyXunit.Verifier.Verify(files).UseDirectory(Path.Combine(testDirectory, "Snapshots"));
+        if (server is not null && repositoryCommit is not null)
+        {
+            verification = verification.AddScrubber(builder => builder.Replace(server.RepositoryUrl, "http://TEMPLATE_REPOSITORY/template.git")
+                .Replace(repositoryCommit, "TEMPLATE_COMMIT_SHA"));
+        }
+        await verification;
     }
 }

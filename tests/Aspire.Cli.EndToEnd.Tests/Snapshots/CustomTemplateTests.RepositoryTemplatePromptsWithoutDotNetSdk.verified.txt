@@ -1,4 +1,15 @@
 ﻿{
+  aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "http://TEMPLATE_REPOSITORY/template.git",
+      "sha": "TEMPLATE_COMMIT_SHA",
+      "path": "."
+    }
+  }
+}
+,
   PromptDemo.txt:
 Name: PromptDemo
 Greeting: Hello from the terminal

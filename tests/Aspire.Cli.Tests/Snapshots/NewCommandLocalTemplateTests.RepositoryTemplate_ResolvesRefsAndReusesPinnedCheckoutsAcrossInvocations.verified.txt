@@ -1,5 +1,16 @@
 ﻿{
   annotated-tag: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "FIRST_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
@@ -11,6 +22,17 @@ namespace Demo;
     identity.txt: first
   },
   branch: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "SECOND_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
@@ -22,6 +44,17 @@ namespace Demo;
     identity.txt: second
   },
   branch-with-slash: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "FIRST_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
@@ -33,6 +66,17 @@ namespace Demo;
     identity.txt: first
   },
   default: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "SECOND_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
@@ -44,6 +88,17 @@ namespace Demo;
     identity.txt: second
   },
   moved-branch: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "THIRD_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
@@ -55,6 +110,17 @@ namespace Demo;
     identity.txt: third
   },
   qualified-tag: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "FIRST_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
@@ -66,6 +132,17 @@ namespace Demo;
     identity.txt: first
   },
   sha: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "FIRST_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
@@ -77,6 +154,17 @@ namespace Demo;
     identity.txt: first
   },
   tag: {
+    aspire.config.json:
+{
+  "provenance": {
+    "template": {
+      "repository": "TEMPLATE_REPOSITORY",
+      "sha": "FIRST_COMMIT_SHA",
+      "path": "template"
+    }
+  }
+}
+,
     Demo.cs:
 namespace Demo;
 // Hello
