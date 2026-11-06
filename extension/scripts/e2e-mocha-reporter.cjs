@@ -23,17 +23,15 @@ function E2eMochaReporter(runner, options = {}) {
   const passes = [];
   const output = options.reporterOption?.output;
 
-  runner.on(EVENT_TEST_END, test => tests.push(test));
-  runner.on(EVENT_TEST_PASS, test => passes.push(test));
-  runner.on(EVENT_TEST_FAIL, test => failures.push(test));
-  runner.on(EVENT_TEST_PENDING, test => pending.push(test));
-
-  runner.once(EVENT_RUN_END, () => {
+  // Write a partial report as tests finish so failure details survive a run that never reaches
+  // EVENT_RUN_END (for example, when run-e2e kills Mocha at the shard process timeout).
+  const writeResults = complete => {
     if (!output) {
-      return;
+      return undefined;
     }
 
     const results = {
+      complete,
       stats: this.stats,
       tests: tests.map(cleanTest),
       pending: pending.map(cleanTest),
@@ -41,9 +39,27 @@ function E2eMochaReporter(runner, options = {}) {
       passes: passes.map(cleanTest),
     };
 
-    runner.testResults = results;
     fs.mkdirSync(path.dirname(output), { recursive: true });
     fs.writeFileSync(output, JSON.stringify(results, null, 2));
+    return results;
+  };
+
+  runner.on(EVENT_TEST_END, test => {
+    tests.push(test);
+    writeResults(false);
+  });
+  runner.on(EVENT_TEST_PASS, test => passes.push(test));
+  runner.on(EVENT_TEST_FAIL, test => {
+    failures.push(test);
+    writeResults(false);
+  });
+  runner.on(EVENT_TEST_PENDING, test => pending.push(test));
+
+  runner.once(EVENT_RUN_END, () => {
+    const results = writeResults(true);
+    if (results) {
+      runner.testResults = results;
+    }
   });
 }
 

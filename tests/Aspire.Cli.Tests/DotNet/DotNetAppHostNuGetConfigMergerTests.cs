@@ -4,6 +4,7 @@
 using Microsoft.AspNetCore.InternalTesting;
 using System.Xml.Linq;
 using System.Xml;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
@@ -31,6 +32,278 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     private static PackageChannel CreateChannel(PackageMapping[] mappings) => PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateOrUpdateAsync_SwitchesNamedIntegrationFeedsWithoutLosingOtherMappings(bool legacyAlias)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var team = workspace.CreateDirectory("team-feed");
+        var other = workspace.CreateDirectory("other-feed");
+        var sdk = workspace.CreateDirectory("sdk-feed");
+        var publicFeed = workspace.CreateDirectory("public-feed");
+        const string packageId = "Contoso.Hosting.One";
+        foreach (var (feed, name) in new[] { (team, "team"), (other, "other") })
+        {
+            NuGetTestHelper.CreatePackage(feed, packageId, "1.0.0",
+                new Dictionary<string, string> { ["content/source.txt"] = name });
+        }
+        var teamKey = legacyAlias ? "team" : "aspire-integration-team";
+        var config = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="sdk" value="{{sdk.FullName}}" />
+                <add key="public" value="{{publicFeed.FullName}}" />
+                <add key="{{teamKey}}" value="{{team.FullName}}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <{{teamKey}}><add key="Username" value="user" /><add key="ClearTextPassword" value="test-password" /></{{teamKey}}>
+              </packageSourceCredentials>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="sdk"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+                <packageSource key="{{teamKey}}">
+                  <package pattern="{{packageId}}" />
+                  <package pattern="Contoso.Hosting.Keep" />
+                  <package pattern="Contoso.Internal.*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {"integrationSources":{
+              "team":{"source":{{System.Text.Json.JsonSerializer.Serialize(team.FullName)}},"patterns":["Contoso.*"]},
+              "other":{"source":{{System.Text.Json.JsonSerializer.Serialize(other.FullName)}},"patterns":["Contoso.*"]}
+            }
+            }
+            """);
+        var teamSource = Assert.Single(
+            NuGetTestHelper.CreateService().GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).Sources,
+            source => source.Name == teamKey);
+        Assert.True(teamSource.IsIntegrationSource);
+        Assert.False(teamSource.IsCliManaged);
+        var client = NuGetTestHelper.CreateClient();
+        var configurations = new XElement("configurations");
+        var step = 0;
+        foreach (var (feed, name) in new[] { (team, "team"), (other, "other"), (team, "team") })
+        {
+            await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(
+                workspace.WorkspaceRoot, [new(packageId, feed.FullName) { SourceKey = name }],
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal([feed.FullName], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, packageId));
+            Assert.Equal([team.FullName], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Contoso.Hosting.Keep"));
+            Assert.Equal([team.FullName], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Contoso.Internal.Dependency"));
+            Assert.Equal([sdk.FullName], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.AppHost"));
+            Assert.Equal([publicFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Unrelated.Package"));
+            var packages = workspace.CreateDirectory($"packages-{step}");
+            var restore = workspace.CreateDirectory($"restore-{step++}");
+            await client.RestoreAsync(
+                [(packageId, "1.0.0")], "net10.0", runtimeIdentifier: null, restore.FullName,
+                sources: [], nugetConfigPaths: [config.FullName], workingDirectory: workspace.Path,
+                globalPackagesFolderOverride: packages.FullName, sensitiveSources: [],
+                TestContext.Current.CancellationToken);
+            Assert.Equal(name, await File.ReadAllTextAsync(
+                Path.Combine(packages.FullName, packageId.ToLowerInvariant(), "1.0.0", "content", "source.txt"),
+                TestContext.Current.CancellationToken));
+            configurations.Add(new XElement("selection", new XAttribute("feed", name), XDocument.Load(config.FullName).Root));
+        }
+
+        await Verify(configurations.ToString(), "xml")
+            .AddScrubber(builder => builder.Replace(workspace.Path, "<workspace>").Replace('\\', '/'))
+            .UseParameters(legacyAlias);
+    }
+
+    [Theory]
+    [InlineData(false, "Contoso.Hosting.One", false)]
+    [InlineData(true, "Contoso.Hosting.One", false)]
+    [InlineData(true, "Inherited.*", false)]
+    [InlineData(false, "Contoso.Hosting.One", true)]
+    public async Task PrepareAsync_SwitchingNamedFeedsDoesNotModifyOrExposeInheritedMappings(
+        bool localMappingExists, string inheritedPattern, bool selectedMappingExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string source = "https://company.example/v3/index.json";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear /><add key="team" value="{{source}}" /></packageSources>
+              <packageSourceMapping><packageSource key="team"><package pattern="{{inheritedPattern}}" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var childDirectory = workspace.CreateDirectory("apphost");
+        var child = await WriteConfigAsync(childDirectory, $$"""
+            <configuration>
+              <packageSources>
+                <add key="team" value="{{source}}" />
+                {{(selectedMappingExists ? """<add key="other" value="https://other.example/v3/index.json" />""" : "")}}
+              </packageSources>
+              <packageSourceMapping>
+                {{(localMappingExists ? """<packageSource key="team"><package pattern="Contoso.Hosting.One" /></packageSource>""" : "")}}
+                {{(selectedMappingExists ? """<packageSource key="other"><package pattern="Contoso.Hosting.One" /></packageSource>""" : "")}}
+              </packageSourceMapping>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(childDirectory.FullName, AspireConfigFile.FileName), $$"""
+            {"integrationSources":{
+              "team":{"source":"{{source}}","patterns":["Contoso.*"]},
+              "other":{"source":"https://other.example/v3/index.json","patterns":["Contoso.*"]}
+            }
+            }
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var originalChild = await File.ReadAllBytesAsync(child.FullName);
+
+        await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                childDirectory,
+                [new("Contoso.Hosting.One", "https://other.example/v3/index.json") { SourceKey = "other" }],
+                createIfMissing: true, configureGlobalPackagesFolder: false, TestContext.Current.CancellationToken));
+
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+        Assert.Equal(originalChild, await File.ReadAllBytesAsync(child.FullName));
+    }
+
+    [Theory]
+    [InlineData("Contoso.*", true)]
+    [InlineData("Contoso.Hosting.One", false)]
+    public async Task PrepareAsync_IntegrationAliasReuseRetainsChannelAndDisabledSourceGuards(string pattern, bool enabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string source = "https://company.example/v3/index.json";
+        var config = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear /><add key="company-feed" value="{{source}}" /></packageSources>
+              <disabledPackageSources><add key="company-feed" value="{{(!enabled).ToString().ToLowerInvariant()}}" /></disabledPackageSources>
+              <packageSourceMapping><clear /><packageSource key="company-feed"><package pattern="Existing.*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var original = await File.ReadAllBytesAsync(config.FullName);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "team": {"source": "{{source}}", "patterns": ["Contoso.*"]}
+              }
+            }
+            """);
+
+        await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                workspace.WorkspaceRoot, [new(pattern, source) { SourceKey = "team" }],
+                createIfMissing: true, configureGlobalPackagesFolder: false, TestContext.Current.CancellationToken));
+
+        Assert.Equal(original, await File.ReadAllBytesAsync(config.FullName));
+    }
+
+    [Theory]
+    [InlineData(false, "Contoso.*", "company-feed")]
+    [InlineData(true, "Contoso.*", "company-feed")]
+    [InlineData(false, "*", "company-feed")]
+    [InlineData(true, "*", "company-feed")]
+    [InlineData(false, "Existing.*", "company-feed")]
+    [InlineData(true, "Existing.*", "company-feed")]
+    [InlineData(false, "Contoso.*", "aspire-integration-team")]
+    [InlineData(true, "Contoso.*", "aspire-integration-team")]
+    [InlineData(false, "*", "aspire-integration-team")]
+    [InlineData(true, "*", "aspire-integration-team")]
+    [InlineData(false, "Existing.*", "aspire-integration-team")]
+    [InlineData(true, "Existing.*", "aspire-integration-team")]
+    public async Task PrepareAsync_ReusesInheritedIntegrationMappingWithoutShadowingIt(
+        bool childConfigExists, string existingPattern, string sourceKey)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string source = "https://company.example/v3/index.json";
+        var parent = await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear /><add key="{{sourceKey}}" value="{{source}}" /></packageSources>
+              <packageSourceCredentials>
+                <{{sourceKey}}><add key="Username" value="user" /><add key="ClearTextPassword" value="test-password" /></{{sourceKey}}>
+              </packageSourceCredentials>
+              <packageSourceMapping><clear /><packageSource key="{{sourceKey}}"><package pattern="{{existingPattern}}" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var originalParent = await File.ReadAllBytesAsync(parent.FullName);
+        var directory = workspace.CreateDirectory("apphost");
+        File.WriteAllText(Path.Combine(directory.FullName, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "team": {"source": "{{source}}", "patterns": ["Contoso.*"]}
+              }
+            }
+            """);
+        var childPath = Path.Combine(directory.FullName, "nuget.config");
+        byte[]? originalChild = null;
+        if (childConfigExists)
+        {
+            await WriteConfigAsync(directory, $$"""
+                <configuration><packageSources><add key="{{sourceKey}}" value="{{source}}" /></packageSources></configuration>
+                """);
+            originalChild = await File.ReadAllBytesAsync(childPath);
+        }
+        PackageMapping[] mappings = [new("Contoso.Hosting.One", source) { SourceKey = "team" }];
+
+        if (existingPattern == "Existing.*")
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                    directory, mappings, createIfMissing: true, configureGlobalPackagesFolder: false,
+                    TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+                directory, mappings, createIfMissing: true, configureGlobalPackagesFolder: false,
+                TestContext.Current.CancellationToken);
+            Assert.Null(candidate);
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Contoso.Hosting.One"));
+        }
+
+        Assert.Equal(originalParent, await File.ReadAllBytesAsync(parent.FullName));
+        if (originalChild is not null)
+        {
+            Assert.Equal(originalChild, await File.ReadAllBytesAsync(childPath));
+        }
+        else
+        {
+            Assert.False(File.Exists(childPath));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetRecommendedNuGetConfigDirectory_PrefersNearestExistingConfiguration(bool appHostConfigExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var expectedDirectory = appHostConfigExists ? appHostDirectory : workspace.WorkspaceRoot;
+        var configPaths = appHostConfigExists
+            ? new[] { Path.Combine(appHostDirectory.FullName, "NuGet.Config"), Path.Combine(workspace.Path, "nuget.config") }
+            : [Path.Combine(workspace.Path, "nuget.config")];
+
+        var directory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configPaths, appHostDirectory);
+
+        Assert.Equal(expectedDirectory.FullName, directory.FullName);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetRecommendedNuGetConfigDirectory_FallsBackToAppHostWithoutLocalConfiguration(bool globalConfigExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var globalDirectory = Environment.OSVersion.Platform == PlatformID.Win32NT
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NuGet")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "NuGet");
+        string[] configPaths = globalConfigExists ? [Path.Combine(globalDirectory, "NuGet.Config")] : [];
+
+        var directory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configPaths, appHostDirectory);
+
+        Assert.Equal(appHostDirectory.FullName, directory.FullName);
+    }
 
     [Theory]
     [InlineData(true)]
@@ -179,7 +452,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         var originalDisabled = XDocument.Load(target.FullName).Root!.Element("disabledPackageSources")!.ToString();
         var service = NuGetTestHelper.CreateService();
         var configuration = service.BuildAppHostConfiguration(
-            directory, "test", [new("Aspire*", source)], TestContext.Current.CancellationToken);
+            directory, "test", [new("Aspire*", source)], overrideIntegrationSources: false, TestContext.Current.CancellationToken);
         Assert.Equal(clearsDisabledLocally, Assert.Single(configuration.ConfigSources).IsEnabled);
         var merger = new DotNetAppHostNuGetConfigMerger(service);
 
@@ -1616,7 +1889,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         var original = await File.ReadAllBytesAsync(target.FullName);
         var service = NuGetTestHelper.CreateService();
         var configuration = service.BuildAppHostConfiguration(
-            workspace.WorkspaceRoot, "test", [new("Aspire*", source)], TestContext.Current.CancellationToken);
+            workspace.WorkspaceRoot, "test", [new("Aspire*", source)], overrideIntegrationSources: false, TestContext.Current.CancellationToken);
         Assert.True(configuration.HasSourcePolicyChanges);
         var merger = new DotNetAppHostNuGetConfigMerger(service);
 
@@ -1813,6 +2086,7 @@ public class DotNetAppHostNuGetConfigMergerTests
         {
             var configuration = service.BuildAppHostConfiguration(
                 workspace.WorkspaceRoot, "apphost-0123456789abcdef", [new("Aspire*", source)],
+                overrideIntegrationSources: false,
                 cancellationToken: TestContext.Current.CancellationToken);
             using var projection = await service.CreateConfigurationPreviewAsync(
                 workspace.WorkspaceRoot, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);

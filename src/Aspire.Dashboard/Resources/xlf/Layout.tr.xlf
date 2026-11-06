@@ -322,10 +322,60 @@
         <target state="new">Started</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneActivityContext">
+        <source>{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</source>
+        <target state="new">{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</target>
+        <note>{0} is the resource name, {1}-{2} the measured window, {3} the latest span start and {4} the refresh time.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivityCount">
+        <source>{0} incoming</source>
+        <target state="new">{0} incoming</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivityFailures">
+        <source>{0} failed</source>
+        <target state="new">{0} failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivityP95">
+        <source>p95 {0}</source>
+        <target state="new">p95 {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampled">
+        <source>Only the newest 5,000 incoming spans across resources were sampled. Counts are minimums and p95 describes this sample.</source>
+        <target state="new">Only the newest 5,000 incoming spans across resources were sampled. Counts are minimums and p95 describes this sample.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampledCount">
+        <source>{0}+ incoming</source>
+        <target state="new">{0}+ incoming</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampledFailures">
+        <source>{0}+ failed</source>
+        <target state="new">{0}+ failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampledP95">
+        <source>Sample p95 {0}</source>
+        <target state="new">Sample p95 {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySamples">
+        <source>{0} valid duration samples. P95 appears after at least 20 samples.</source>
+        <target state="new">{0} valid duration samples. P95 appears after at least 20 samples.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneAllSelected">
         <source>All selected</source>
         <target state="new">All selected</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneChildOf">
+        <source>Child of {0}</source>
+        <target state="new">Child of {0}</target>
+        <note>{0} is the parent resource name. This is hierarchy, not a dependency.</note>
       </trans-unit>
       <trans-unit id="ResourcePaneClose">
         <source>Hide resource list</source>
@@ -346,6 +396,11 @@
         <source>{0} resource</source>
         <target state="new">{0} resource</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneDependsOn">
+        <source>Depends on {0}</source>
+        <target state="new">Depends on {0}</target>
+        <note>{0} lists logical resource names that this resource waits for.</note>
       </trans-unit>
       <trans-unit id="ResourcePaneExpand">
         <source>Expand resource list</source>
@@ -437,6 +492,26 @@
         <target state="new">Nothing shown</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneNoMetrics">
+        <source>No metrics are currently available for this resource. Select to open its metrics view.</source>
+        <target state="new">No metrics are currently available for this resource. Select to open its metrics view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoMetricsLabel">
+        <source>No metrics</source>
+        <target state="new">No metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoStructuredLogs">
+        <source>No structured logs are currently available for this resource. Select to open its logs view.</source>
+        <target state="new">No structured logs are currently available for this resource. Select to open its logs view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoStructuredLogsLabel">
+        <source>No logs</source>
+        <target state="new">No logs</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneNoTagsDescription">
         <source>Add tags to a resource from its overview to group related resources here.</source>
         <target state="new">Add tags to a resource from its overview to group related resources here.</target>
@@ -445,6 +520,21 @@
       <trans-unit id="ResourcePaneNoTagsTitle">
         <source>No tags yet</source>
         <target state="new">No tags yet</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTraces">
+        <source>No traces are currently available for this resource. Select to open its traces view.</source>
+        <target state="new">No traces are currently available for this resource. Select to open its traces view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTracesLabel">
+        <source>No traces</source>
+        <target state="new">No traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNotApplicableLabel">
+        <source>Not applicable</source>
+        <target state="new">Not applicable</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneOpen">
@@ -461,6 +551,36 @@
         <source>{0} parameter</source>
         <target state="new">{0} parameter</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoConsoleLogs">
+        <source>Parameters do not produce console logs. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce console logs. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoMetrics">
+        <source>Parameters do not produce metrics. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce metrics. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoStructuredLogs">
+        <source>Parameters do not produce structured logs. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce structured logs. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTerminal">
+        <source>Parameters do not support terminal sessions. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not support terminal sessions. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTraces">
+        <source>Parameters do not produce traces. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce traces. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneReferences">
+        <source>References {0}</source>
+        <target state="new">References {0}</target>
+        <note>{0} lists logical resource names referenced by this resource. A reference does not imply waiting for startup.</note>
       </trans-unit>
       <trans-unit id="ResourcePaneReorderFailed">
         <source>Unable to save the resource order. Try again.</source>
@@ -485,6 +605,41 @@
       <trans-unit id="ResourcePaneSelectAll">
         <source>Select all</source>
         <target state="new">Select all</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionAddHint">
+        <source>Add/remove</source>
+        <target state="new">Add/remove</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionCommandChord">
+        <source>⌘ + click</source>
+        <target state="new">⌘ + click</target>
+        <note>Resource selection gesture, displayed in a keycap. The symbol refers to the macOS Command key.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionCommandDescription">
+        <source>To add or remove a resource, hold Command while clicking. To select a range, hold Shift while clicking.</source>
+        <target state="new">To add or remove a resource, hold Command while clicking. To select a range, hold Shift while clicking.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionControlChord">
+        <source>Ctrl + click</source>
+        <target state="new">Ctrl + click</target>
+        <note>Resource selection gesture, displayed in a keycap.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionControlDescription">
+        <source>To add or remove a resource, hold Control while clicking. To select a range, hold Shift while clicking.</source>
+        <target state="new">To add or remove a resource, hold Control while clicking. To select a range, hold Shift while clicking.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionRangeChord">
+        <source>Shift + click</source>
+        <target state="new">Shift + click</target>
+        <note>Resource range selection gesture, displayed in a keycap.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionRangeHint">
+        <source>Select range</source>
+        <target state="new">Select range</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneTagGroupLabel">

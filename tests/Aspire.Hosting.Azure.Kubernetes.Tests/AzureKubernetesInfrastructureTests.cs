@@ -21,6 +21,59 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 {
     [Fact]
+    public async Task ExistingCluster_DoesNotCreateDefaultWorkloadPool()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExisting(builder.AddParameter("cluster-name"), null);
+        var container = builder.AddContainer("myapi", "myimage");
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Single(aks.Resource.NodePools);
+        Assert.Empty(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AksNodePoolResource>());
+        Assert.False(container.Resource.HasAnnotationOfType<KubernetesNodePoolAnnotation>());
+    }
+
+    [Fact]
+    public async Task ExistingCluster_PreservesExplicitAffinity()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExisting(builder.AddParameter("cluster-name"), null);
+        var pool = aks.AddNodePool("custom");
+        var container = builder.AddContainer("myapi", "myimage").WithNodePool(pool);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Equal(2, aks.Resource.NodePools.Count);
+        Assert.True(container.Resource.TryGetLastAnnotation<KubernetesNodePoolAnnotation>(out var affinity));
+        Assert.Same(pool.Resource, affinity.NodePool);
+    }
+
+    [Fact]
+    public async Task ExistingCluster_PreservesWorkloadIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = AzureKubernetesTestBuilder.Create(output, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExisting(builder.AddParameter("cluster-name"), null);
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+        builder.AddContainer("myapi", "myimage").WithAzureUserAssignedIdentity(identity);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        Assert.Same(identity.Resource, Assert.Single(aks.Resource.WorkloadIdentities).Value);
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
     public async Task NoUserPool_CreatesDefaultWorkloadPool()
     {
         using var workspace = TemporaryWorkspace.Create(output);
@@ -433,8 +486,10 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             GetDirectDependencies(diagnosticLines, "destroy-azure-azure-environment"));
     }
 
-    [Fact]
-    public async Task DestroyPipelineUsesPersistedAksOutputAndScopeWithoutProvisioning()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("app-resource-group")]
+    public async Task DestroyPipelineUsesPersistedClusterIdentityInsteadOfModuleScope(string? moduleResourceGroup)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var stateManager = new InMemoryDeploymentStateManager();
@@ -460,8 +515,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             }.ToJsonString(),
             ["Scope"] = new JsonObject
             {
-                ["resourceGroup"] = "cluster-resource-group",
-                ["subscription"] = "00000000-5555-6666-7777-888888888888"
+                ["resourceGroup"] = moduleResourceGroup,
+                ["subscription"] = "00000000-1111-2222-3333-444444444444"
             }.ToJsonString()
         });
         stateManager.SetSection("Helm:aks", new JsonObject
@@ -1369,9 +1424,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-        // The provisioned cluster name comes from a Bicep output, and no resource group is
-        // saved in deployment state, so the step must fall back to the az resource list query.
-        aks.Resource.Outputs["name"] = clusterName;
+        // The cluster ID is authoritative even when deployment state has no resource group.
+        aks.Resource.Outputs["id"] = $"/subscriptions/{subscriptionId}/resourceGroups/queried-rg/providers/Microsoft.ContainerService/managedClusters/{clusterName}";
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1428,7 +1482,6 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         // guard the call site: reverting either call to an unscoped invocation fails here.
         Assert.Equal(
             [
-                $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [].resourceGroup -o tsv --subscription \"{subscriptionId}\"",
                 $"aks get-credentials --resource-group \"queried-rg\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\""
             ],
             invocations);
@@ -1472,7 +1525,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         var aks = builder.AddAzureKubernetesEnvironment("aks")
             .AsExistingInResourceGroup(clusterName, clusterResourceGroup, clusterSubscriptionId);
 
-        aks.Resource.Outputs["name"] = clusterName;
+        aks.Resource.Outputs["id"] = $"/subscriptions/{clusterSubscriptionId}/resourceGroups/{clusterResourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}";
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1660,11 +1713,16 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         Assert.Equal("The Azure resource scope value cannot be null or empty.", exception.Message);
     }
 
-    [Fact]
-    public async Task GetCredentialsStepPrefersExplicitScopeOverExistingResourceAnnotation()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task GetCredentialsStepUsesClusterReferenceScope(bool crossResourceGroup, bool crossSubscription)
     {
         const string scopeSubscriptionId = "00000000-0000-0000-0000-000000000003";
         const string scopeResourceGroup = "scope-assigned-rg";
+        const string clusterSubscriptionId = "00000000-0000-0000-0000-000000000002";
+        const string clusterResourceGroup = "annotation-rg";
         const string clusterName = "scoped-aks";
 
         using var workspace = TemporaryWorkspace.Create(output);
@@ -1679,13 +1737,25 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
             workspace,
             deploymentStateManager: deploymentStateManager);
 
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .AsExistingInResourceGroup(clusterName, "annotation-rg", "00000000-0000-0000-0000-000000000002");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        if (crossSubscription)
+        {
+            aks.AsExistingInResourceGroup(clusterName, clusterResourceGroup, clusterSubscriptionId);
+        }
+        else
+        {
+            aks.AsExisting(
+                builder.AddParameter("cluster-name", () => clusterName),
+                crossResourceGroup ? builder.AddParameter("cluster-rg", () => clusterResourceGroup) : null);
+        }
 
-        // ConfigureInfrastructure can assign Scope directly, and the provisioner gives it precedence
-        // over the annotation, so the credential fetch has to follow the same precedence.
         aks.Resource.Scope = new AzureBicepResourceScope(scopeResourceGroup, scopeSubscriptionId);
-        aks.Resource.Outputs["name"] = clusterName;
+        var expectedResourceGroup = crossResourceGroup ? clusterResourceGroup : scopeResourceGroup;
+        var expectedSubscriptionId = crossSubscription ? clusterSubscriptionId : scopeSubscriptionId;
+        aks.Resource.Outputs["id"] = $"/subscriptions/{expectedSubscriptionId}/resourceGroups/{expectedResourceGroup}/providers/Microsoft.ContainerService/managedClusters/{clusterName}";
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, "bicep").UseParameters(crossResourceGroup, crossSubscription);
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1728,12 +1798,16 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         });
 
         Assert.Equal(
-            [$"aks get-credentials --resource-group \"{scopeResourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{scopeSubscriptionId}\""],
+            [$"aks get-credentials --resource-group \"{expectedResourceGroup}\" --name \"{clusterName}\" --file - --subscription \"{expectedSubscriptionId}\""],
             invocations);
     }
 
-    [Fact]
-    public async Task GetCredentialsStepFallsBackToDeploymentStateForSubscriptionScopedResources()
+    [Theory]
+    [InlineData("/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/app-rg/providers/Microsoft.ContainerService/managedClusters/subscription-scoped-aks", true)]
+    [InlineData("", false)]
+    [InlineData("invalid", false)]
+    [InlineData("/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/app-rg/providers/Microsoft.Storage/storageAccounts/not-aks", false)]
+    public async Task GetCredentialsStepRequiresValidClusterId(string resourceId, bool valid)
     {
         const string subscriptionId = "00000000-0000-0000-0000-000000000001";
         const string clusterName = "subscription-scoped-aks";
@@ -1752,10 +1826,9 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-        // A subscription-scoped Scope pins no resource group, and reading AzureBicepResourceScope.ResourceGroup
-        // in that state throws, so the step must fall back rather than fail.
+        // A subscription-scoped module pins no resource group; the cluster ID supplies it.
         aks.Resource.Scope = AzureBicepResourceScope.CreateForSubscription(subscriptionId);
-        aks.Resource.Outputs["name"] = clusterName;
+        aks.Resource.Outputs["id"] = resourceId;
 
         var invocations = new List<string>();
         aks.Resource.AzCliPathResolverForTesting = () => "/usr/bin/az";
@@ -1791,13 +1864,22 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         aks.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
-        await getCredentialsStep.Action(new PipelineStepContext
+        var stepContext = new PipelineStepContext
         {
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
-        });
+        };
+        if (!valid)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => getCredentialsStep.Action(stepContext));
+            Assert.Equal("The Azure deployment outputs for AKS environment 'aks' do not contain a valid cluster resource ID.", exception.Message);
+            Assert.Empty(invocations);
+            return;
+        }
 
-        // The scope subscription matches deployment state, so the saved resource group still applies.
+        await getCredentialsStep.Action(stepContext);
+
         Assert.Equal(
             [$"aks get-credentials --resource-group \"app-rg\" --name \"{clusterName}\" --file - --subscription \"{subscriptionId}\""],
             invocations);

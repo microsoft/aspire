@@ -630,6 +630,53 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(initializationFinished.called, false);
     });
 
+    test('waits for C# project initialization before reporting the language server project set is fixed', async () => {
+        let finishInitialization!: () => void;
+        const initializationFinished = sandbox.stub().returns(new Promise<void>(resolve => { finishInitialization = resolve; }));
+        const extension = createMockExtension(csharpExtensionId, runRoot, { initializationFinished });
+        const activate = sandbox.spy(extension, 'activate');
+        sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
+        let completed = false;
+
+        const wait = dispatchControlCommand(
+            { name: 'waitForCSharpProjectInitialization' },
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider)
+            .then(result => { completed = true; return result; });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.strictEqual(activate.calledOnce, true);
+        assert.strictEqual(initializationFinished.calledOnce, true);
+        assert.strictEqual(completed, false);
+
+        finishInitialization();
+
+        assert.strictEqual(await wait, 'initialized');
+    });
+
+    test('fails when C# project initialization does not finish in time', async () => {
+        const extension = createMockExtension(csharpExtensionId, runRoot, { initializationFinished: () => new Promise<void>(() => { }) });
+        sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
+
+        await assert.rejects(dispatchControlCommand(
+            { name: 'waitForCSharpProjectInitialization', timeoutMs: 10 },
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider),
+        /did not finish its initial project load within 10ms/);
+    });
+
+    test('rejects C# project initialization waits without an observable C# extension', async () => {
+        const getExtension = sandbox.stub(vscode.extensions, 'getExtension');
+        getExtension.withArgs(csharpExtensionId).returns(undefined);
+        await assert.rejects(dispatchControlCommand(
+            { name: 'waitForCSharpProjectInitialization' },
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider),
+        /ms-dotnettools\.csharp is required to wait for C# project initialization/);
+
+        getExtension.withArgs(csharpExtensionId).returns(createMockExtension(csharpExtensionId, runRoot, {}));
+        await assert.rejects(dispatchControlCommand(
+            { name: 'waitForCSharpProjectInitialization' },
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider),
+        /did not export initializationFinished\(\)/);
+    });
+
     test('does not misclassify a C# activation failure as a missing component', async () => {
         const error = new Error('C# activation failed');
         const extension = createMockExtension(csharpExtensionId, runRoot, {});

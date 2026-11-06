@@ -9,6 +9,20 @@ namespace Aspire.Dashboard.Tests;
 public class DashboardUIHelpersTests
 {
     [Theory]
+    [InlineData("redis://:password@localhost:6379", "redis://localhost:6379")]
+    [InlineData("https://user:p%40ssword@[::1]:7443/a%2Fb?token=secret#access_token=secret", "https://[::1]:7443/a%2Fb?token=MASK")]
+    [InlineData("HTTPS://User:password@Host/a@b?token=secret&key=secret", "HTTPS://Host/a@b?token=MASK&key=MASK")]
+    [InlineData("https://host/path#access_token=secret?other=secret", "https://host/path")]
+    [InlineData("https://host/path?token=secret#access_token=secret", "https://host/path?token=MASK")]
+    [InlineData("tcp://host:6379/path%23fragment?token=secret", "tcp://host:6379/path%23fragment?token=MASK")]
+    [InlineData("https://host/a@b?token=secret@host", "https://host/a@b?token=MASK")]
+    [InlineData("https://host/path", "https://host/path")]
+    public void MaskUrlForDisplay_RemovesCredentialsAndFragmentsAndMasksQueryValues(string url, string expected)
+    {
+        Assert.Equal(expected.Replace("MASK", new string('\u25cf', 8)), DashboardUIHelpers.MaskUrlForDisplay(url));
+    }
+
+    [Theory]
     [InlineData(200_000, 200_000)]
     [InlineData(600_000, 200_000)]
     public void GetVirtualizedItemCount_LimitsLargeResultSets(int totalItemCount, int expected)

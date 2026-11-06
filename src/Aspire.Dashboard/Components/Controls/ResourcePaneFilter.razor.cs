@@ -1,9 +1,11 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
+using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
@@ -15,6 +17,7 @@ public partial class ResourcePaneFilter
 
     private readonly Dictionary<string, bool> _expandedOverrides = new(StringComparer.Ordinal);
     private bool _isOpen;
+    private FluentButton? _button;
 
     /// <summary>
     /// A set of values the pane can be filtered by, such as the resource types.
@@ -54,6 +57,18 @@ public partial class ResourcePaneFilter
     private void Close() => _isOpen = false;
 
     private void OnOpenedChanged(bool opened) => _isOpen = opened;
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            _isOpen = false;
+            if (_button is not null)
+            {
+                await _button.Element.FocusAsync(preventScroll: true);
+            }
+        }
+    }
 
     private bool IsExpanded(FilterGroup group, List<KeyValuePair<string, bool>> options) =>
         _expandedOverrides.TryGetValue(group.Id, out var expanded)

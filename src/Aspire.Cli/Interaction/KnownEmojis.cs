@@ -53,6 +53,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji Dizzy = new("dizzy");
     public static readonly KnownEmoji StopSign = new("stop_sign", "red");
     public static readonly KnownEmoji UpButton = new("up_button", "blue");
-    public static readonly KnownEmoji Warning = new("warning", "yellow");
+    // The warning emoji renders inconsistently across terminals, so use a police car light for warnings instead.
+    public static readonly KnownEmoji PoliceCarLight = new("police_car_light", "red");
     public static readonly KnownEmoji Wrench = new("wrench");
 }

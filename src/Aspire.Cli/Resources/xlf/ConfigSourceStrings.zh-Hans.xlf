@@ -94,8 +94,8 @@ Source origin: {3}</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguration">
-        <source>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</source>
-        <target state="new">The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</target>
+        <source>The source configuration must be a valid Aspire JSON object.</source>
+        <target state="new">The source configuration must be a valid Aspire JSON object.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidPath">
@@ -114,8 +114,8 @@ Source origin: {3}</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingFile">
-        <source>The configuration file is missing or is not a regular file at the selected Git branch or commit.</source>
-        <target state="new">The configuration file is missing or is not a regular file at the selected Git branch or commit.</target>
+        <source>The configuration file is missing or is not a Git blob at the selected Git branch or commit.</source>
+        <target state="new">The configuration file is missing or is not a Git blob at the selected Git branch or commit.</target>
         <note />
       </trans-unit>
       <trans-unit id="NestedSource">
@@ -134,8 +134,8 @@ Source origin: {3}</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
-        <source>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</target>
+        <source>Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</source>
+        <target state="new">Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="Refreshed">

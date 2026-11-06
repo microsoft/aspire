@@ -64,7 +64,7 @@
     <value>Use the proposed Git configuration source. Specify false to decline it.</value>
   </data>
   <data name="RefreshOptionDescription" xml:space="preserve">
-    <value>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</value>
+    <value>Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</value>
   </data>
   <data name="InvalidRepository" xml:space="preserve">
     <value>The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments.</value>
@@ -76,10 +76,10 @@
     <value>The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option.</value>
   </data>
   <data name="MissingFile" xml:space="preserve">
-    <value>The configuration file is missing or is not a regular file at the selected Git branch or commit.</value>
+    <value>The configuration file is missing or is not a Git blob at the selected Git branch or commit.</value>
   </data>
   <data name="InvalidConfiguration" xml:space="preserve">
-    <value>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</value>
+    <value>The source configuration must be a valid Aspire JSON object.</value>
   </data>
   <data name="NestedSource" xml:space="preserve">
     <value>A source configuration file cannot declare another configSource.</value>

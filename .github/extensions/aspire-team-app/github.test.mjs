@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { dayMs } from "./constants.mjs";
-import { capFocusKeepingDebt, loadDashboard } from "./github.mjs";
+import { loadDashboard } from "./github.mjs";
 
 const originalFetch = globalThis.fetch;
 
@@ -10,28 +10,50 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test("capFocusKeepingDebt keeps the head cap plus review-debt cards that spill past it", () => {
-  const cards = [
-    { pr: { number: 1 }, reviewDebt: false },
-    { pr: { number: 2 }, reviewDebt: false },
-    { pr: { number: 3 }, reviewDebt: false },
-    { pr: { number: 4 }, reviewDebt: true },
-    { pr: { number: 5 }, reviewDebt: false },
-    { pr: { number: 6 }, reviewDebt: true },
-  ];
+test("Needs attention serializes a strict ten-card prefix and the complete deduplicated remainder", async () => {
+  for (const count of [0, 4, 10, 11, 25]) {
+    const createdAt = isoAgo(3 * dayMs);
+    const nodes = Array.from({ length: count }, (_, index) => {
+      const node = prNode(index + 1, isoAgo(hourMs));
+      node.createdAt = createdAt;
+      return node;
+    });
+    // Equal readiness timestamps and reversed responses exercise the ordinal PR-number tie
+    // across the split; duplicate accounts must not duplicate either side.
+    mockPullRequests(nodes.toReversed());
+    const dashboard = JSON.parse(JSON.stringify(await loadDashboard({
+      accounts: [
+        { token: "first", login: "davidfowl", repos: ["microsoft/aspire"] },
+        { token: "second", login: "joperezr", repos: ["microsoft/aspire"] },
+      ],
+      mode: "review", prefs: { reviewLimit: 50 }, dismissed: [], reviewLimit: 50,
+    })));
+    const { focus, focusRemainder, focusTotal, focusLimit } = dashboard.attention;
+    const positions = Array.from({ length: count }, (_, index) => index + 1);
+    assert.deepEqual(dashboard.errors, []);
+    assert.equal(dashboard.reviewLimit, 10);
+    assert.equal(focusLimit, 10);
+    assert.equal(focusTotal, count);
+    assert.deepEqual(focus.map((item) => item.queuePosition), positions.slice(0, 10));
+    assert.deepEqual(focusRemainder.map((item) => item.queuePosition), positions.slice(10));
+    assert.deepEqual([...focus, ...focusRemainder].map((item) => item.pr.number), positions);
+  }
+});
 
-  const kept = capFocusKeepingDebt(cards, 2);
-
-  // First 2 (the actionable headline) plus the two review-debt cards beyond the cap; the
-  // non-debt spillover (#3, #5) is dropped, and no card is duplicated.
-  assert.deepEqual(kept.map((c) => c.pr.number), [1, 2, 4, 6]);
-
-  // A debt card already inside the cap is not re-added.
-  const debtInHead = capFocusKeepingDebt([{ pr: { number: 1 }, reviewDebt: true }, { pr: { number: 2 }, reviewDebt: false }], 2);
-  assert.deepEqual(debtInHead.map((c) => c.pr.number), [1, 2]);
-
-  // No spillover at all when everything fits under the cap.
-  assert.deepEqual(capFocusKeepingDebt(cards.slice(0, 2), 5).map((c) => c.pr.number), [1, 2]);
+test("review debt stays eligible in the remainder without spilling into the top ten or losing non-debt PRs", async () => {
+  const nodes = Array.from({ length: 16 }, (_, index) => {
+    const node = prNode(index + 1, isoAgo(index < 13 ? 20 * dayMs : hourMs));
+    node.createdAt = isoAgo((index < 13 ? 40 - index : 16 - index) * dayMs);
+    return node;
+  });
+  mockPullRequests(nodes.toReversed());
+  const { attention } = await loadReview();
+  assert.deepEqual(attention.focus.map((item) => item.pr.number), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+  assert.deepEqual(attention.focusRemainder.map((item) => [item.pr.number, item.queuePosition, item.reviewDebt]), [
+    [11, 11, true], [12, 12, true], [13, 13, true],
+    [14, 14, false], [15, 15, false], [16, 16, false],
+  ]);
+  assert.equal(attention.focusTotal, 16);
 });
 
 test("loadDashboard paginates open pull requests for each watched repo", async () => {
@@ -98,6 +120,194 @@ test("loadDashboard ranks review-ready PRs by time waiting for review", async ()
 
   const reviewQueue = dashboard.lanes.find((lane) => lane.id === "review-queue");
   assert.deepEqual(reviewQueue.items.map((item) => item.pr.number), [2, 1]);
+});
+
+test("Needs attention orders by first readiness, distinguishing PRs opened ready from drafts", async () => {
+  const openedReady = prNode(1, isoAgo(hourMs));
+  openedReady.createdAt = isoAgo(10 * dayMs);
+  openedReady.readinessTransitions = transitionHistory([
+    { __typename: "ConvertToDraftEvent", createdAt: isoAgo(8 * dayMs) },
+    { __typename: "ReadyForReviewEvent", createdAt: isoAgo(3 * dayMs) },
+  ]);
+  const initiallyDraft = prNode(2, isoAgo(2 * hourMs), isoAgo(hourMs));
+  initiallyDraft.createdAt = isoAgo(20 * dayMs);
+  initiallyDraft.readinessTransitions = transitionHistory([
+    { __typename: "ReadyForReviewEvent", createdAt: isoAgo(5 * dayMs) },
+    { __typename: "ConvertToDraftEvent", createdAt: isoAgo(2 * dayMs) },
+    { __typename: "ReadyForReviewEvent", createdAt: initiallyDraft.readyForReviewEvents.nodes[0].createdAt },
+  ]);
+  const alwaysReady = prNode(3, isoAgo(3 * hourMs));
+  alwaysReady.createdAt = isoAgo(6 * dayMs);
+  const neverReady = prNode(4, isoAgo(4 * hourMs));
+  neverReady.isDraft = true;
+
+  mockPullRequests([initiallyDraft, alwaysReady, neverReady, openedReady]);
+  const dashboard = await loadReview();
+
+  assert.deepEqual(dashboard.errors, []);
+  assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [1, 3, 2]);
+  assert.deepEqual(dashboard.attention.focus.map((item) => item.queuePosition), [1, 2, 3]);
+  assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.firstReadyForReviewAt), [
+    openedReady.createdAt,
+    alwaysReady.createdAt,
+    initiallyDraft.readinessTransitions.nodes[0].createdAt,
+  ]);
+  assert.equal(dashboard.attention.focus[2].pr.readyForReviewAt, initiallyDraft.readyForReviewEvents.nodes[0].createdAt);
+  const draft = dashboard.attention.buckets.find((bucket) => bucket.label === "Draft").items[0].pr;
+  assert.equal(draft.firstReadyForReviewAt, null);
+});
+
+test("Needs attention paginates draft and ready transitions on the account's GitHub host", async () => {
+  const nodes = [prNode(1, isoAgo(hourMs)), prNode(2, isoAgo(2 * hourMs))];
+  const histories = [
+    [
+      { __typename: "ConvertToDraftEvent", createdAt: isoAgo(5 * dayMs) },
+      { __typename: "ReadyForReviewEvent", createdAt: isoAgo(4 * dayMs) },
+      { __typename: "ConvertToDraftEvent", createdAt: isoAgo(3 * dayMs) },
+      { __typename: "ReadyForReviewEvent", createdAt: isoAgo(2 * dayMs) },
+    ],
+    [
+      { __typename: "ReadyForReviewEvent", createdAt: isoAgo(5 * dayMs) },
+      { __typename: "ConvertToDraftEvent", createdAt: isoAgo(4 * dayMs) },
+      { __typename: "ReadyForReviewEvent", createdAt: isoAgo(3 * dayMs) },
+    ],
+  ];
+  for (const [index, node] of nodes.entries()) {
+    node.readinessTransitions = transitionHistory(histories[index].slice(0, 2), true, `history-${node.number}`);
+  }
+  const requests = [];
+  const graphql = "https://ghe.example.com/api/graphql";
+  globalThis.fetch = async (url, options) => {
+    assert.equal(url, graphql);
+    const body = JSON.parse(options.body);
+    requests.push(body.variables);
+    if (body.query.includes("pullRequests")) {
+      assert.equal(body.variables.includeReadiness, true);
+      assert.match(body.query, /readinessTransitions:\s*timelineItems\(first:20, itemTypes:\[CONVERT_TO_DRAFT_EVENT, READY_FOR_REVIEW_EVENT\]\)/);
+      return jsonResponse({ data: { repository: { pullRequests: { nodes } } } });
+    }
+    assert.equal(body.variables.after, `history-${body.variables.number}`);
+    return jsonResponse({ data: { repository: { pullRequest: {
+      readinessTransitions: transitionHistory(histories[body.variables.number - 1].slice(2)),
+    } } } });
+  };
+
+  const dashboard = await loadReview([{ token: "enterprise", login: "davidfowl", repos: ["microsoft/aspire"], graphql }]);
+
+  assert.deepEqual(dashboard.errors, []);
+  assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.firstReadyForReviewAt), [
+    nodes[0].createdAt,
+    histories[1][0].createdAt,
+  ]);
+  assert.deepEqual(requests.map((variables) => variables.after ?? null), [null, "history-1", "history-2"]);
+});
+
+test("Needs attention keeps first-readiness order across human and Copilot review rounds and other activity", async () => {
+  const older = prNode(1, isoAgo(2 * dayMs), isoAgo(5 * dayMs));
+  const newer = prNode(2, isoAgo(dayMs));
+  newer.createdAt = isoAgo(3 * dayMs);
+  const reviews = [
+    [],
+    [{ state: "COMMENTED", author: { login: "copilot-pull-request-reviewer[bot]" }, submittedAt: isoAgo(hourMs) }],
+    [{ state: "COMMENTED", author: { login: "human-reviewer" }, submittedAt: isoAgo(hourMs) }],
+    [{ state: "APPROVED", author: { login: "human-reviewer" }, submittedAt: isoAgo(hourMs) }],
+    [{ state: "CHANGES_REQUESTED", author: { login: "human-reviewer" }, submittedAt: isoAgo(hourMs) }],
+  ];
+  for (const history of reviews) {
+    older.updatedAt = new Date().toISOString();
+    older.labels.nodes = [{ name: "enhancement" }];
+    older.reviews.nodes = history;
+    older.commits.nodes[0].commit.committedDate = new Date().toISOString();
+    mockPullRequests([newer, older]);
+    const dashboard = await loadReview();
+    assert.deepEqual(dashboard.errors, []);
+    assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [1, 2]);
+    assert.equal(dashboard.attention.focus[0].pr.firstReadyForReviewAt, older.readyForReviewEvents.nodes[0].createdAt);
+  }
+});
+
+test("Needs attention retains the same relative order across repository fetch completion and watched scopes", async () => {
+  const createdAt = isoAgo(3 * dayMs);
+  const first = prNode(10, isoAgo(hourMs));
+  const second = prNode(2, isoAgo(2 * hourMs));
+  const otherRepo = prNode(1, isoAgo(3 * hourMs));
+  otherRepo.url = "https://github.com/microsoft/dcp/pull/1";
+  for (const node of [first, second, otherRepo]) node.createdAt = createdAt;
+  for (const slowRepo of ["aspire", "dcp"]) {
+    globalThis.fetch = async (_url, options) => {
+      const { variables } = JSON.parse(options.body);
+      if (variables.name === slowRepo) await new Promise((resolve) => setTimeout(resolve, 10));
+      const nodes = variables.name === "aspire" ? [first, second] : [otherRepo];
+      return jsonResponse({ data: { repository: { pullRequests: { nodes } } } });
+    };
+    const dashboard = await loadReview([{ token: "token", login: "davidfowl", repos: ["microsoft/dcp", "microsoft/aspire"] }]);
+    assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.url), [second.url, first.url, otherRepo.url]);
+    const personalScope = await loadReview([{ token: "token", login: "davidfowl", repos: ["microsoft/aspire"] }]);
+    assert.deepEqual(personalScope.repos, ["microsoft/aspire"]);
+    assert.deepEqual(personalScope.attention.focus.map((item) => item.pr.url), [second.url, first.url]);
+  }
+});
+
+test("missing or inconsistent readiness history surfaces an error without guessing or hiding other lanes", async () => {
+  const cases = [
+    { history: undefined, error: "Missing draft/ready transition history" },
+    { history: transitionHistory([], true, null), error: "Incomplete draft/ready transition history" },
+    { history: transitionHistory([{ __typename: "ReadyForReviewEvent", createdAt: "invalid" }]), error: "Inconsistent draft/ready transition history" },
+    { history: transitionHistory([{ __typename: "UnknownEvent", createdAt: isoAgo(dayMs) }]), error: "Inconsistent draft/ready transition history" },
+    { history: transitionHistory([{ __typename: "ConvertToDraftEvent", createdAt: isoAgo(dayMs) }]), error: "Draft state changed while loading transition history; refresh to retry" },
+  ];
+  for (const { history, error } of cases) {
+    const unknown = prNode(1, isoAgo(hourMs));
+    unknown.readinessTransitions = history;
+    mockPullRequests([unknown, prNode(2, isoAgo(dayMs))]);
+    const dashboard = await loadReview();
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from Needs attention. ${error}`]);
+    assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [2]);
+    const unranked = dashboard.attention.buckets.find((bucket) => bucket.label === "Quick wins").items.find((item) => item.pr.number === 1);
+    assert.equal(unranked.pr.firstReadyForReviewAt, null);
+  }
+});
+
+test("readiness pagination failures, repeated cursors, and the safety bound are reported", async () => {
+  for (const failure of ["request", "cursor", "limit"]) {
+    let calls = 0;
+    const node = prNode(1, isoAgo(hourMs));
+    node.readinessTransitions = transitionHistory([], true, "history-0");
+    globalThis.fetch = async (_url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.query.includes("pullRequests")) {
+        return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+      }
+      calls++;
+      if (failure === "request") throw new Error("Timeline access denied");
+      const cursor = failure === "cursor" ? "history-0" : `history-${calls}`;
+      return jsonResponse({ data: { repository: { pullRequest: {
+        readinessTransitions: transitionHistory([], true, cursor),
+      } } } });
+    };
+    const dashboard = await loadReview();
+    const error = failure === "request" ? "Timeline access denied" : "Incomplete draft/ready transition history";
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from Needs attention. ${error}`]);
+    assert.deepEqual(dashboard.attention.focus, []);
+    assert.equal(calls, failure === "limit" ? 24 : 1);
+  }
+});
+
+test("another active account can supply unavailable first-readiness history", async () => {
+  for (const isDraft of [false, true]) {
+    globalThis.fetch = async (_url, options) => {
+      const node = prNode(1, isoAgo(hourMs));
+      node.isDraft = isDraft;
+      if (options.headers.Authorization === "bearer missing") node.readinessTransitions = null;
+      return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+    };
+    const dashboard = await loadReview([
+      { token: "missing", login: "davidfowl", repos: ["microsoft/aspire"] },
+      { token: "complete", login: "joperezr", repos: ["microsoft/aspire"] },
+    ]);
+    assert.deepEqual(dashboard.errors, []);
+    assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), isDraft ? [] : [1]);
+  }
 });
 
 test("loadDashboard attributes Copilot PRs only to their sole human assignee", async () => {
@@ -275,6 +485,24 @@ function isoAgo(ms) {
   return new Date(Date.now() - ms).toISOString();
 }
 
+const hourMs = dayMs / 24;
+
+function transitionHistory(nodes, hasNextPage = false, endCursor = null) {
+  return { nodes, pageInfo: { hasNextPage, endCursor } };
+}
+
+function mockPullRequests(nodes) {
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    assert.equal(body.variables.includeReadiness, true);
+    return jsonResponse({ data: { repository: { pullRequests: { nodes } } } });
+  };
+}
+
+function loadReview(accounts = [{ token: "token", login: "davidfowl", repos: ["microsoft/aspire"] }]) {
+  return loadDashboard({ accounts, mode: "review", prefs: {}, dismissed: [] });
+}
+
 function prNode(number, updatedAt, readyForReviewAt = null) {
   return {
     number,
@@ -284,11 +512,12 @@ function prNode(number, updatedAt, readyForReviewAt = null) {
     state: "OPEN",
     createdAt: "2026-07-01T09:00:00Z",
     updatedAt,
-    author: { __typename: "User", login: "octo", avatarUrl: null },
+    author: { __typename: "User", login: "davidfowl", avatarUrl: null },
     baseRefName: "main",
     mergeable: "MERGEABLE",
     reviewDecision: null,
     readyForReviewEvents: { nodes: readyForReviewAt ? [{ createdAt: readyForReviewAt }] : [] },
+    readinessTransitions: transitionHistory(readyForReviewAt ? [{ __typename: "ReadyForReviewEvent", createdAt: readyForReviewAt }] : []),
     additions: 1,
     deletions: 0,
     changedFiles: 1,

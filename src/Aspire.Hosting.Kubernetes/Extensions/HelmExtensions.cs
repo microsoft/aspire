@@ -1,7 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
 
@@ -93,18 +94,43 @@ internal static partial class HelmExtensions
     /// Evaluates a string as a Helm template and quotes the complete result as a YAML scalar.
     /// </summary>
     public static string ToQuotedHelmTemplateExpression(this string value)
-        => $"{StartDelimiter} tpl {ToGoStringLiteral(value)} . {PipelineDelimiter} quote {EndDelimiter}";
+        => QuotedTemplateExpressionPattern().IsMatch(value)
+            ? value
+            : $"{StartDelimiter} tpl {ToGoStringLiteral(value)} . {PipelineDelimiter} quote {EndDelimiter}";
 
-    /// <summary>
-    /// Quotes a string as a Go template string literal. JSON escaping is Go-compatible except for
-    /// supplementary characters, which JSON writes as UTF-16 surrogate pairs (<c>\uD83D\uDE00</c>)
-    /// that Go rejects, so those are rewritten as <c>\U0001F600</c>.
-    /// </summary>
-    internal static string ToGoStringLiteral(string value)
-        => JsonEscapeSequencePattern().Replace(JsonSerializer.Serialize(value), static match =>
-            match.Groups["high"].Success
-                ? $"\\U{char.ConvertToUtf32((char)Convert.ToInt32(match.Groups["high"].Value, 16), (char)Convert.ToInt32(match.Groups["low"].Value, 16)):X8}"
-                : match.Value);
+    private static string ToGoStringLiteral(string value)
+    {
+        // JSON emits supplementary characters as UTF-16 surrogate escapes, e.g.
+        // "\uD83D\uDE80". Go rejects those escapes; preserve Unicode as UTF-8 instead.
+        // https://go.dev/ref/spec#String_literals
+        var builder = new StringBuilder(value.Length + 2).Append('"');
+        foreach (var ch in value)
+        {
+            var escaped = ch switch
+            {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => null
+            };
+            if (escaped is not null)
+            {
+                builder.Append(escaped);
+            }
+            else if (char.IsControl(ch) || ch is '\u2028' or '\u2029' or '\uFEFF')
+            {
+                builder.Append("\\u").Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.Append('"').ToString();
+    }
 
     public static (bool, ScalarStyle?) ShouldDoubleQuoteString(string value)
     {
@@ -154,10 +180,6 @@ internal static partial class HelmExtensions
 
     [GeneratedRegex(@"\{\{\s*if\b")]
     private static partial Regex HelmFlowControlExpressionPattern();
-
-    // Matches each JSON escape sequence in order, so an escaped backslash is never mistaken for the start of a surrogate escape.
-    [GeneratedRegex(@"\\(?:u(?<high>D[89AB][0-9A-F]{2})\\u(?<low>D[C-F][0-9A-F]{2})|u[0-9A-Fa-f]{4}|.)", RegexOptions.IgnoreCase)]
-    private static partial Regex JsonEscapeSequencePattern();
 
     [GeneratedRegex(@"^\{\{\s*tpl\b.*\|\s*quote\s*\}\}$")]
     private static partial Regex QuotedTemplateExpressionPattern();

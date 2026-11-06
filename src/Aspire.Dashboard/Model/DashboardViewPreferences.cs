@@ -34,25 +34,16 @@ public enum ResourceListDensity
 /// </summary>
 public enum GroupOverview
 {
-    /// <summary>
-    /// A responsive grid of cards for resources and parameters.
-    /// </summary>
-    Cards,
-
+    // Keep the remaining values stable for numeric preferences accepted by Enum.TryParse.
     /// <summary>
     /// The app's health, live activity, insights and recent problems.
     /// </summary>
-    Summary,
+    Summary = 1,
 
     /// <summary>
     /// A relationship graph of the resources.
     /// </summary>
-    Graph,
-
-    /// <summary>
-    /// The former table layout. Stored values are migrated to <see cref="Cards"/>.
-    /// </summary>
-    Resources
+    Graph
 }
 
 /// <summary>
@@ -78,7 +69,7 @@ public enum RecordingsStyle
 public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOptionsMonitor<DashboardOptions> options)
 {
     private Task? _loadTask;
-    private GroupOverview _groupOverview;
+    private GroupOverview _groupOverview = GroupOverview.Summary;
 
     /// <summary>
     /// Gets the resource list's density.
@@ -89,12 +80,12 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     /// Gets what the overview of several resources shows.
     /// </summary>
     /// <remarks>
-    /// A graph choice stored before Dashboard:UI:DisableResourceGraph was set shows the cards instead. The stored
+    /// A graph choice stored before Dashboard:UI:DisableResourceGraph was set shows the summary instead. The stored
     /// choice is kept, so the graph comes back if the setting is removed.
     /// </remarks>
     public GroupOverview GroupOverview
     {
-        get => _groupOverview == GroupOverview.Graph && !IsGraphEnabled ? GroupOverview.Cards : _groupOverview;
+        get => _groupOverview == GroupOverview.Graph && !IsGraphEnabled ? GroupOverview.Summary : _groupOverview;
         private set => _groupOverview = value;
     }
 
@@ -160,12 +151,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
         try
         {
             var density = await ReadAsync<ResourceListDensity>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
-            var groupOverview = await ReadAsync<GroupOverview>(BrowserStorageKeys.GroupOverview).ConfigureAwait(false);
-            if (groupOverview == GroupOverview.Resources)
-            {
-                groupOverview = GroupOverview.Cards;
-                await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, groupOverview.ToString()).ConfigureAwait(false);
-            }
+            var groupOverview = await ReadGroupOverviewAsync().ConfigureAwait(false);
             var recordingsStyle = await ReadAsync<RecordingsStyle>(BrowserStorageKeys.RecordingsStyle).ConfigureAwait(false);
             if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
             {
@@ -180,6 +166,20 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
             // The circuit is gone. Load again if another component asks.
             _loadTask = null;
         }
+    }
+
+    private async Task<GroupOverview> ReadGroupOverviewAsync()
+    {
+        var result = await localStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.GroupOverview).ConfigureAwait(false);
+        // Earlier layouts were stored as "Cards" or "Resources". Replace those removed choices once,
+        // so another opening cannot attempt to restore a layout that no longer exists.
+        if (result.Success && result.Value is "Cards" or "Resources")
+        {
+            await localStorage.SetUnprotectedAsync(BrowserStorageKeys.GroupOverview, nameof(GroupOverview.Summary)).ConfigureAwait(false);
+            return GroupOverview.Summary;
+        }
+
+        return result.Success && Enum.TryParse<GroupOverview>(result.Value, out var value) && Enum.IsDefined(value) ? value : GroupOverview.Summary;
     }
 
     // Values are stored by name, so reordering the enums doesn't change a stored choice.

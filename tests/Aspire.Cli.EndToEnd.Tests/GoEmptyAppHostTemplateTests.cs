@@ -30,7 +30,6 @@ public sealed class GoEmptyAppHostTemplateTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireNewAsync("GoEmptyApp", counter, template: AspireTemplate.GoEmptyAppHost);
 
@@ -52,7 +51,6 @@ public sealed class GoEmptyAppHostTemplateTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         await auto.AspireNewGoEmptyAppHostAsync("GoDirectApp", counter);
 

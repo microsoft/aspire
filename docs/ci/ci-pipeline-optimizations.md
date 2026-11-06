@@ -22,6 +22,7 @@ The main test workflow in `.github/workflows/tests.yml` is organized into these 
 
 2. `build_packages`
    - Produces the shared Aspire package feed used by package-dependent tests
+   - Compiles supported playground projects so sample build failures fail CI
    - Leaves CLI packaging and RID-specific DCP/Dashboard work to the CLI archive jobs
 
 3. `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`
@@ -100,11 +101,17 @@ Even though execution is more parallel, the workflow still uses a single `result
 
 That makes Linux the best place to spend extra build capacity: finishing the shared package build and Linux archive earlier directly reduces the time before downstream validation lanes can start.
 
-### 2. The shared package build stays package-only
+### 2. The shared package build also validates playground compilation
 
 The shared build produces the common package feed; the per-RID jobs own CLI
 archives, CLI tool and npm packages, and bundle dependencies. This keeps the
 jobs independent and avoids producing CLI payloads twice.
+
+The build includes supported playground projects using the selection in
+`eng/Build.props`. This catches compile failures in playgrounds outside the
+curated references in `tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj`.
+Playground compilation lengthens the
+shared package build, so package-dependent test lanes wait for it too.
 
 Excluding bundle dependencies alone does not enforce that boundary: CLI
 archive projects are selected independently and can still invoke publishing

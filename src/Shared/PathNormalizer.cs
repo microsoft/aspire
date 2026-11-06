@@ -106,43 +106,12 @@ internal static class PathNormalizer
                     continue;
                 }
 
-                string? exactMatch = null;
-                string? caseInsensitiveMatch = null;
-                string? normalizationMatch = null;
-                foreach (var entry in Directory.EnumerateFileSystemEntries(current))
-                {
-                    var entryName = Path.GetFileName(entry);
-                    if (entryName.Equals(segment, StringComparison.Ordinal))
-                    {
-                        exactMatch = entry;
-                        break;
-                    }
-
-                    if (caseInsensitiveMatch is null &&
-                        entryName.Equals(segment, StringComparison.OrdinalIgnoreCase))
-                    {
-                        caseInsensitiveMatch = entry;
-                    }
-
-                    if (normalizationMatch is null &&
-                        entryName.Normalize(NormalizationForm.FormC).Equals(
-                            normalizedSegment,
-                            StringComparison.Ordinal))
-                    {
-                        normalizationMatch = entry;
-                    }
-                }
-
-                // Case and normalization aliases can name different entries on filesystems
-                // where only one of those transformations is insensitive. Do not guess.
-                if (exactMatch is null && caseInsensitiveMatch is not null &&
-                    normalizationMatch is not null &&
-                    !caseInsensitiveMatch.Equals(normalizationMatch, StringComparison.Ordinal))
+                if (!TryFindEnumeratedEntry(current, segment, out var match))
                 {
                     return path;
                 }
 
-                current = exactMatch ?? caseInsensitiveMatch ?? normalizationMatch ?? candidate;
+                current = match ?? candidate;
             }
             catch (IOException)
             {
@@ -180,6 +149,86 @@ internal static class PathNormalizer
 
         caseVariant = null;
         return false;
+    }
+
+    /// <summary>
+    /// Finds the enumerated entry in <paramref name="directory"/> that an existing <paramref name="segment"/> names.
+    /// </summary>
+    /// <returns>
+    /// <see langword="false"/> when two different entries could be the one the filesystem selected;
+    /// otherwise <see langword="true"/>, with <paramref name="match"/> set to <see langword="null"/> if nothing matched.
+    /// </returns>
+    private static bool TryFindEnumeratedEntry(string directory, string segment, out string? match)
+    {
+        string? exactMatch = null;
+        string? caseInsensitiveMatch = null;
+        string? normalizationMatch = null;
+        string? combinedMatch = null;
+        var combinedMatchIsAmbiguous = false;
+        var normalizedSegment = segment.Normalize(NormalizationForm.FormC);
+        foreach (var entry in Directory.EnumerateFileSystemEntries(directory))
+        {
+            var entryName = Path.GetFileName(entry);
+            if (entryName.Equals(segment, StringComparison.Ordinal))
+            {
+                exactMatch = entry;
+                break;
+            }
+
+            if (caseInsensitiveMatch is null &&
+                entryName.Equals(segment, StringComparison.OrdinalIgnoreCase))
+            {
+                caseInsensitiveMatch = entry;
+            }
+
+            var normalizedEntryName = entryName.Normalize(NormalizationForm.FormC);
+            if (normalizationMatch is null &&
+                normalizedEntryName.Equals(normalizedSegment, StringComparison.Ordinal))
+            {
+                normalizationMatch = entry;
+            }
+
+            // Case- and normalization-insensitive filesystems (default APFS) also alias spellings that differ in
+            // both ways, such as "CAFE\u0301" for an on-disk "Caf\u00E9", which neither comparison above matches.
+            if (normalizedEntryName.Equals(normalizedSegment, StringComparison.OrdinalIgnoreCase))
+            {
+                combinedMatchIsAmbiguous |= combinedMatch is not null;
+                combinedMatch ??= entry;
+            }
+        }
+
+        if (exactMatch is not null)
+        {
+            match = exactMatch;
+            return true;
+        }
+
+        match = null;
+
+        // Case and normalization aliases can name different entries on filesystems
+        // where only one of those transformations is insensitive. Do not guess.
+        if (caseInsensitiveMatch is not null &&
+            normalizationMatch is not null &&
+            !caseInsensitiveMatch.Equals(normalizationMatch, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (caseInsensitiveMatch is not null || normalizationMatch is not null)
+        {
+            match = caseInsensitiveMatch ?? normalizationMatch;
+            return true;
+        }
+
+        // Only fall back to the combined alias when it identifies exactly one entry. Several combined matches
+        // can coexist only where one transformation is sensitive, and then the probe cannot say which one it hit.
+        if (combinedMatchIsAmbiguous)
+        {
+            return false;
+        }
+
+        match = combinedMatch;
+        return true;
     }
 
     /// <summary>
@@ -251,52 +300,15 @@ internal static class PathNormalizer
                     return false;
                 }
 
-                string? exactMatch = null;
-                string? caseInsensitiveMatch = null;
-                string? normalizationMatch = null;
-                var normalizedSegment = segment.Normalize(NormalizationForm.FormC);
-                foreach (var entry in Directory.EnumerateFileSystemEntries(current))
-                {
-                    var entryName = Path.GetFileName(entry);
-                    if (entryName.Equals(segment, StringComparison.Ordinal))
-                    {
-                        exactMatch = entry;
-                        break;
-                    }
-
-                    if (caseInsensitiveMatch is null &&
-                        entryName.Equals(segment, StringComparison.OrdinalIgnoreCase))
-                    {
-                        caseInsensitiveMatch = entry;
-                    }
-
-                    // The existence probe above must succeed before normalization is considered.
-                    // That prevents normalization-equivalent but distinct entries on a
-                    // normalization-sensitive filesystem from being treated as one path.
-                    if (normalizationMatch is null &&
-                        entryName.Normalize(NormalizationForm.FormC).Equals(
-                            normalizedSegment,
-                            StringComparison.Ordinal))
-                    {
-                        normalizationMatch = entry;
-                    }
-                }
-
-                if (exactMatch is null && caseInsensitiveMatch is null && normalizationMatch is null)
+                // The existence probe above must succeed before enumeration is considered.
+                // That prevents equivalent but distinct entries on a case- or
+                // normalization-sensitive filesystem from being treated as one path.
+                if (!TryFindEnumeratedEntry(current, segment, out var match) || match is null)
                 {
                     return false;
                 }
 
-                // Preserve the distinction between case aliases and normalization aliases.
-                // The existence probe cannot tell which of two conflicting entries is selected.
-                if (exactMatch is null && caseInsensitiveMatch is not null &&
-                    normalizationMatch is not null &&
-                    !caseInsensitiveMatch.Equals(normalizationMatch, StringComparison.Ordinal))
-                {
-                    return false;
-                }
-
-                current = exactMatch ?? caseInsensitiveMatch ?? normalizationMatch!;
+                current = match;
             }
 
             resolvedPath = current;

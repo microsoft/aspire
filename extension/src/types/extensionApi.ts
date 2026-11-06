@@ -267,6 +267,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getSupportedCapabilities' }
     | { name: 'getVisibleExtensionIds' }
     | { name: 'waitForJavaLanguageServer'; timeoutMs?: number }
+    | { name: 'waitForCSharpProjectInitialization'; timeoutMs?: number }
     | {
         name: 'createResourceDebugConfiguration';
         launchConfig: ExecutableLaunchConfiguration;

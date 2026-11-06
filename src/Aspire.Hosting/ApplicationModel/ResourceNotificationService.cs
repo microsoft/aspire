@@ -519,8 +519,16 @@ public class ResourceNotificationService : IDisposable
 
         try
         {
+            // WaitFor on a child resource also adds a wait for its parent, so waiting on several children
+            // of the same parent (or calling WaitFor repeatedly) produces equivalent annotations. Waiting on
+            // each of them again only duplicates the wait and its log messages, so collapse them first.
             var waitAnnotationsToProcess = waitAnnotationList
                 .Where(static waitAnnotation => waitAnnotation.Resource is not IResourceWithoutLifetime)
+                .DistinctBy(waitAnnotation => (
+                    waitAnnotation.Resource,
+                    waitAnnotation.WaitType,
+                    waitAnnotation.WaitType == WaitType.WaitForCompletion ? waitAnnotation.ExitCode : 0,
+                    waitAnnotation.WaitType == WaitType.WaitForCompletion ? (WaitBehavior?)null : waitAnnotation.WaitBehavior ?? DefaultWaitBehavior))
                 .ToArray();
 
             if (waitAnnotationsToProcess.Length == 0)
@@ -900,6 +908,17 @@ public class ResourceNotificationService : IDisposable
             newState = UpdateCommands(resource, newState);
 
             newState = UpdateIcons(resource, newState);
+
+            if (resource.TryGetLastAnnotation<ResourceTypeDisplayNameAnnotation>(out var resourceTypeDisplayNameAnnotation))
+            {
+                newState = newState with { ResourceTypeDisplayName = resourceTypeDisplayNameAnnotation.ResourceTypeDisplayName };
+            }
+            else if (!newState.HasResourceTypeDisplayName() && resource is Resource modelResource &&
+                modelResource.ResourceTypeDisplayName != resource.GetResourceType())
+            {
+                // Keep the snapshot's own resource type as the fallback for custom snapshot producers.
+                newState = newState with { ResourceTypeDisplayName = modelResource.ResourceTypeDisplayName };
+            }
 
             newState = UpdateDashboardVisibility(resource, newState);
 
