@@ -55,7 +55,8 @@
 
   <Target Name="_AddDotnetWatchToolsToPackage" DependsOnTargets="_CollectDotnetWatchToolFiles" Returns="@(TfmSpecificPackageFile)">
     <ItemGroup>
-      <TfmSpecificPackageFile Include="@(_AspireDotnetWatchToolFile)" PackagePath="tools/dotnet-watch/%(Major)/%(RecursiveDir)" />
+      <!-- Full file path: NuGet appends RecursiveDir to directory PackagePaths, which would nest culture folders (cs/cs/). -->
+      <TfmSpecificPackageFile Include="@(_AspireDotnetWatchToolFile)" PackagePath="tools/dotnet-watch/%(Major)/%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
   </Target>
 
