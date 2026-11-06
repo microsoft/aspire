@@ -114,12 +114,12 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     public void PackageLayoutLocatesWatchHost()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var lib = Directory.CreateDirectory(Path.Combine(workspace.Path, "lib", "net10.0")).FullName;
-        var host = Directory.CreateDirectory(Path.Combine(workspace.Path, "tools", DotnetWatchToolResolver.WatchHostPackageFolder)).FullName;
+        var dll = CreatePackageLayout(workspace.Path);
+        var host = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(dll)))!, "tools", DotnetWatchToolResolver.WatchHostPackageFolder);
 
         Assert.Equal(
-            Path.TrimEndingDirectorySeparator(host),
-            Path.TrimEndingDirectorySeparator(DotnetWatchToolResolver.GetPackageToolsDirectory(Path.Combine(lib, "Aspire.Hosting.Dotnet.dll"), DotnetWatchToolResolver.WatchHostPackageFolder)!));
+            host + Path.DirectorySeparatorChar,
+            DotnetWatchToolResolver.GetPayloadDirectory(appHostAssembly: null, DotnetWatchToolResolver.WatchHostDirectoryMetadataKey, DotnetWatchToolResolver.WatchHostPackageFolder, dll));
     }
 
     [Fact]
@@ -195,18 +195,48 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void PackageToolsDirectoryIsFoundNextToTheLoadedAssembly()
+    public void PackageLoadedAssemblyUsesOnlyThePackagePayload()
     {
-        // Prebuilt polyglot AppHost servers load lib/<tfm>/Aspire.Hosting.Dotnet.dll from the restored package.
+        // Prebuilt polyglot AppHost servers load lib/<tfm>/Aspire.Hosting.Dotnet.dll from the restored package. That
+        // package's tools/ folder is the only source, even if it's missing (the resolver then reports that path) and
+        // even if the AppHost assembly carries metadata.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var package = Path.Combine(workspace.Path, "aspire.hosting.dotnet", "13.4.0");
-        var dll = Path.Combine(Directory.CreateDirectory(Path.Combine(package, "lib", "net10.0")).FullName, "Aspire.Hosting.Dotnet.dll");
+        var dll = CreatePackageLayout(workspace.Path);
+        var expected = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(dll)))!, "tools", "dotnet-watch") + Path.DirectorySeparatorChar;
 
-        Assert.Null(DotnetWatchToolResolver.GetPackageToolsDirectory(dll));
-        Assert.Null(DotnetWatchToolResolver.GetPackageToolsDirectory(null));
+        Assert.Equal(expected, DotnetWatchToolResolver.GetPayloadDirectory(null, DotnetWatchToolResolver.ToolsDirectoryMetadataKey, "dotnet-watch", dll));
+        Assert.Equal(expected, DotnetWatchToolResolver.GetPayloadDirectory(
+            typeof(DotnetWatchCoordinatorTests).Assembly, DotnetWatchToolResolver.ToolsDirectoryMetadataKey, "dotnet-watch", dll));
 
-        Directory.CreateDirectory(Path.Combine(package, "tools", "dotnet-watch"));
-        Assert.Equal(Path.Combine(package, "tools", "dotnet-watch") + Path.DirectorySeparatorChar, DotnetWatchToolResolver.GetPackageToolsDirectory(dll));
+        var ex = Assert.Throws<DistributedApplicationException>(() => DotnetWatchToolResolver.ResolveToolPath(null, expected, "10.0.100", NullLogger.Instance));
+        Assert.Contains(Path.Combine(expected, DotnetWatchToolResolver.ToolDllName), ex.Message);
+    }
+
+    [Fact]
+    public void AssemblyOutsideAPackageUsesOnlyAppHostMetadata()
+    {
+        // A lib/<tfm>/ layout without the package's nuspec isn't a restored package, so nothing next to it is probed.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var lib = Directory.CreateDirectory(Path.Combine(workspace.Path, "lib", "net10.0")).FullName;
+        Directory.CreateDirectory(Path.Combine(workspace.Path, "tools", "dotnet-watch"));
+        var dll = Path.Combine(lib, "Aspire.Hosting.Dotnet.dll");
+
+        Assert.Null(DotnetWatchToolResolver.GetPackageRoot(dll));
+        Assert.Null(DotnetWatchToolResolver.GetPackageRoot(null));
+        Assert.Null(DotnetWatchToolResolver.GetPayloadDirectory(typeof(object).Assembly, DotnetWatchToolResolver.ToolsDirectoryMetadataKey, "dotnet-watch", dll));
+
+        var fromMetadata = DotnetWatchToolResolver.GetPayloadDirectory(
+            typeof(DotnetWatchCoordinatorTests).Assembly, DotnetWatchToolResolver.ToolsDirectoryMetadataKey, "dotnet-watch", dll);
+        Assert.NotNull(fromMetadata);
+        Assert.DoesNotContain(workspace.Path, fromMetadata);
+    }
+
+    private static string CreatePackageLayout(string root)
+    {
+        var package = Path.Combine(root, "aspire.hosting.dotnet", "13.4.0");
+        var lib = Directory.CreateDirectory(Path.Combine(package, "lib", "net10.0")).FullName;
+        File.WriteAllText(Path.Combine(package, DotnetWatchToolResolver.PackageNuspecFileName), "<package />");
+        return Path.Combine(lib, "Aspire.Hosting.Dotnet.dll");
     }
 
     [Fact]

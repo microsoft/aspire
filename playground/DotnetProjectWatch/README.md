@@ -144,8 +144,9 @@ file-based apps and package/project reference changes. Still open:
   `TMP`/`TEMP` vs. `TMPDIR` for the temp directory redirect, case-insensitive path comparison for status paths on Windows
   and macOS, and per-user private run directories.
 - The shipped tool is 10.0.403; .NET 10 SDK feature bands other than 10.0.4xx use it unverified.
-- Package-backed polyglot AppHosts (no MSBuild targets run for the prebuilt server) have no `aspiredotnetwatchtoolsdir`
-  metadata; they find `tools/dotnet-watch/` next to `Aspire.Hosting.Dotnet.dll` in the restored package instead (unit-tested,
+- Package-backed polyglot AppHosts (no MSBuild targets run for the prebuilt server) have no AppHost metadata. They load
+  `Aspire.Hosting.Dotnet.dll` straight from its restored package, and then that package's `tools/dotnet-watch/` and
+  `tools/dotnet-watch-host/` are the only source (chosen by load location, not probed after the metadata; unit-tested,
   not yet run end to end against a published package).
 - Build settings travel in the watcher's environment (it has no per-project build arguments), so they have environment
   precedence: a project that sets `Configuration` or `Optimize` unconditionally wins. A variable that was unset before

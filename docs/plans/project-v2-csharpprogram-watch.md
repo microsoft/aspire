@@ -137,7 +137,7 @@ dotnet exec $tool server --sdk $sdk --server $resourcePipe `
     --resource $projectA --resource $projectB
 ```
 
-The planned Aspire CLI proxy connects to that resource pipe instead of constructing a sensitive
+The watch host proxy (D10, `Aspire.Hosting.Dotnet.WatchHost`) connects to that resource pipe instead of constructing a sensitive
 `resource ... -e ...` invocation. `host --sdk $sdk --entrypoint $appHostProject` remains the C# AppHost
 target, subject to Session 8. Do not promise arbitrary argument forwarding just because the outer
 parser accepts `--`: the tool's downstream `dotnet run` construction does not insert a new application
@@ -323,9 +323,11 @@ does not make .NET services watch.
   Missing metadata, a missing payload, or a selected SDK that isn't .NET 10 throws an actionable error (no fallback, no
   network). `ASPIRE_DOTNET_WATCH_TOOL_PATH` is an explicit override only.
 
-- Package-backed polyglot AppHosts (prebuilt server) don't run the package's MSBuild targets, so there's no metadata; the
-  resolver then looks for `tools/dotnet-watch/` next to the loaded `Aspire.Hosting.Dotnet.dll`, which the prebuilt server
-  loads from the restored package (`<package>/lib/<tfm>/`).
+- Package-backed polyglot AppHosts (prebuilt server) don't run the package's MSBuild targets, so there's no metadata.
+  The location is chosen by how `Aspire.Hosting.Dotnet.dll` was loaded, not by probing one place after another: when it
+  is loaded from its restored package (`<package>/lib/<tfm>/`, with `aspire.hosting.dotnet.nuspec` in `<package>/`),
+  that package's `tools/<folder>/` is the only source; otherwise the AppHost metadata is required. Either way a missing
+  payload is an error naming the path it expected.
 
 **Open:** the prebuilt-server path is unit-tested but not yet run against a published package. Payload signing in the official build and .NET 10 SDK feature bands other than 10.0.4xx are unverified.
 
@@ -482,8 +484,8 @@ apphost, so the nupkg stays RID-neutral) with two commands:
 
 Aspire.Hosting.Dotnet packs the host's build output under `tools/dotnet-watch-host/`; its `buildTransitive` targets
 stamp that directory on the AppHost as `aspiredotnetwatchhostdir` metadata (in-repo AppHosts use
-`artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch-host/`), and prebuilt AppHost servers fall back to the package's
-own `tools/` folder. A missing host fails the run with an error naming the fix. The wire constants shared by hosting
+`artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch-host/`). Prebuilt AppHost servers, which load
+`Aspire.Hosting.Dotnet.dll` straight from its restored package, use only that package's `tools/` folder (Session 4). A missing host fails the run with an error naming the fix. The wire constants shared by hosting
 and the host are source-linked from `src/Shared/DotnetWatch/DotnetWatchHostProtocol.cs`; there is no CLI/hosting
 protocol handshake.
 

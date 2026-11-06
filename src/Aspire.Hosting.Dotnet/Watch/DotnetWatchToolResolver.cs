@@ -18,8 +18,10 @@ namespace Aspire.Hosting.Dotnet.Watch;
 /// The watcher loads MSBuild from the selected SDK, so it only works with SDKs of its own major version: watch mode
 /// supports .NET 10 SDKs only. There is no download and no fallback: an unsupported SDK or a missing tool is an error
 /// that says how to fix it.
-/// Package-backed polyglot AppHosts (prebuilt AppHost server) don't run the package's MSBuild targets, so they have no
-/// metadata; they load this assembly straight from the restored package, so the tool is found next to it instead.
+/// The location is chosen by how this assembly was loaded, never by probing one place and then another: when
+/// Aspire.Hosting.Dotnet is loaded straight from its restored NuGet package (package-backed polyglot AppHosts on the
+/// prebuilt AppHost server, which never run the package's MSBuild targets), the payload is that package's
+/// <c>tools/</c> folder; otherwise (C# AppHosts, repo-mode AppHost servers) the AppHost metadata is required.
 /// The watch host (<c>Aspire.Hosting.Dotnet.WatchHost.dll</c>, which hosts the watcher and proxies each service
 /// replica) ships the same way under <c>tools/dotnet-watch-host/</c>, stamped as
 /// <see cref="WatchHostDirectoryMetadataKey"/>.
@@ -50,31 +52,58 @@ internal static class DotnetWatchToolResolver
         return major;
     }
 
-    /// <summary>Reads the shipped tool directory from the AppHost assembly's metadata.</summary>
+    /// <summary>Returns the shipped tool directory for the AppHost (see <see cref="GetPayloadDirectory"/>).</summary>
     public static string? GetToolsDirectory(DistributedApplicationOptions options) =>
         GetToolsDirectory(string.IsNullOrEmpty(options.AssemblyName) ? Assembly.GetEntryAssembly() : Assembly.Load(options.AssemblyName));
 
-    /// <summary>
-    /// Reads the shipped tool directory from <paramref name="appHostAssembly"/>'s metadata, or else from the package this
-    /// assembly was loaded from (prebuilt polyglot AppHost servers).
-    /// </summary>
+    /// <summary>Returns the shipped tool directory for <paramref name="appHostAssembly"/> (see <see cref="GetPayloadDirectory"/>).</summary>
     public static string? GetToolsDirectory(Assembly? appHostAssembly) =>
-        appHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(a => string.Equals(a.Key, ToolsDirectoryMetadataKey, StringComparison.OrdinalIgnoreCase))?.Value is { Length: > 0 } value
-            ? value
-            : GetPackageToolsDirectory(typeof(DotnetWatchToolResolver).Assembly.Location);
+        GetPayloadDirectory(appHostAssembly, ToolsDirectoryMetadataKey, ToolsPackageFolder, typeof(DotnetWatchToolResolver).Assembly.Location);
 
-    /// <summary>Maps <c>&lt;package&gt;/lib/&lt;tfm&gt;/Aspire.Hosting.Dotnet.dll</c> to <c>&lt;package&gt;/tools/&lt;folder&gt;/</c> when that exists.</summary>
-    public static string? GetPackageToolsDirectory(string? hostingDotnetAssemblyPath, string folder = "dotnet-watch")
+    /// <summary>Package folder (under <c>tools/</c>) of the watch tool.</summary>
+    public const string ToolsPackageFolder = "dotnet-watch";
+
+    /// <summary>
+    /// Returns the directory of a payload shipped in the Aspire.Hosting.Dotnet package. Exactly one source applies:
+    /// when <paramref name="hostingDotnetAssemblyPath"/> is inside its restored NuGet package it's that package's
+    /// <c>tools/&lt;packageFolder&gt;/</c>; otherwise it's <paramref name="appHostAssembly"/>'s
+    /// <paramref name="metadataKey"/> metadata, or <see langword="null"/> when the AppHost has none. Existence isn't
+    /// checked here; the resolvers report a missing payload with the path they expected.
+    /// </summary>
+    public static string? GetPayloadDirectory(Assembly? appHostAssembly, string metadataKey, string packageFolder, string? hostingDotnetAssemblyPath)
     {
-        if (string.IsNullOrEmpty(hostingDotnetAssemblyPath) || Path.GetDirectoryName(hostingDotnetAssemblyPath) is not { Length: > 0 } libDirectory)
+        if (GetPackageRoot(hostingDotnetAssemblyPath) is { } packageRoot)
+        {
+            return Path.Combine(packageRoot, "tools", packageFolder) + Path.DirectorySeparatorChar;
+        }
+
+        return appHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => string.Equals(a.Key, metadataKey, StringComparison.OrdinalIgnoreCase))?.Value is { Length: > 0 } value
+            ? value
+            : null;
+    }
+
+    /// <summary>
+    /// Returns the package root when <paramref name="hostingDotnetAssemblyPath"/> is
+    /// <c>&lt;package&gt;/lib/&lt;tfm&gt;/Aspire.Hosting.Dotnet.dll</c> of a restored Aspire.Hosting.Dotnet package (its
+    /// root holds <c>aspire.hosting.dotnet.nuspec</c>), otherwise <see langword="null"/>.
+    /// </summary>
+    internal static string? GetPackageRoot(string? hostingDotnetAssemblyPath)
+    {
+        if (string.IsNullOrEmpty(hostingDotnetAssemblyPath) ||
+            Path.GetDirectoryName(Path.GetFullPath(hostingDotnetAssemblyPath)) is not { Length: > 0 } tfmDirectory ||
+            Path.GetDirectoryName(tfmDirectory) is not { Length: > 0 } libDirectory ||
+            !string.Equals(Path.GetFileName(libDirectory), "lib", StringComparison.OrdinalIgnoreCase) ||
+            Path.GetDirectoryName(libDirectory) is not { Length: > 0 } packageRoot)
         {
             return null;
         }
 
-        var candidate = Path.GetFullPath(Path.Combine(libDirectory, "..", "..", "tools", folder));
-        return Directory.Exists(candidate) ? candidate + Path.DirectorySeparatorChar : null;
+        return File.Exists(Path.Combine(packageRoot, PackageNuspecFileName)) ? packageRoot : null;
     }
+
+    /// <summary>The nuspec NuGet writes into the root of a restored Aspire.Hosting.Dotnet package.</summary>
+    internal const string PackageNuspecFileName = "aspire.hosting.dotnet.nuspec";
 
     /// <summary>AppHost assembly metadata key holding the directory that contains the watch host.</summary>
     public const string WatchHostDirectoryMetadataKey = "aspiredotnetwatchhostdir";
@@ -82,15 +111,9 @@ internal static class DotnetWatchToolResolver
     /// <summary>Package folder (under <c>tools/</c>) of the watch host.</summary>
     public const string WatchHostPackageFolder = "dotnet-watch-host";
 
-    /// <summary>
-    /// Reads the watch host directory from the AppHost assembly's metadata, or else from the package this assembly was
-    /// loaded from (prebuilt polyglot AppHost servers).
-    /// </summary>
+    /// <summary>Returns the watch host directory for <paramref name="appHostAssembly"/> (see <see cref="GetPayloadDirectory"/>).</summary>
     public static string? GetWatchHostDirectory(Assembly? appHostAssembly) =>
-        appHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(a => string.Equals(a.Key, WatchHostDirectoryMetadataKey, StringComparison.OrdinalIgnoreCase))?.Value is { Length: > 0 } value
-            ? value
-            : GetPackageToolsDirectory(typeof(DotnetWatchToolResolver).Assembly.Location, WatchHostPackageFolder);
+        GetPayloadDirectory(appHostAssembly, WatchHostDirectoryMetadataKey, WatchHostPackageFolder, typeof(DotnetWatchToolResolver).Assembly.Location);
 
     /// <summary>Returns the watch host (<c>Aspire.Hosting.Dotnet.WatchHost.dll</c>) under <paramref name="watchHostDirectory"/>.</summary>
     /// <exception cref="DistributedApplicationException">The watch host isn't there; the message says how to fix it.</exception>
