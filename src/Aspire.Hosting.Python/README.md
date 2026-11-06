@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Python` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Python
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -28,7 +29,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var python = builder.AddUvicornApp("python-api", "../python-api", "main:app")
     .WithUv();
 
-builder.AddProject<Projects.WebFrontend>("web")
+builder.AddDotnetProject("web", "../WebFrontend/WebFrontend.csproj")
     .WithReference(python)
     .WaitFor(python);
 
@@ -45,7 +46,7 @@ const builder = await createBuilder();
 const python = await builder.addUvicornApp("python-api", "../python-api", "main:app")
     .withUv();
 
-await builder.addProject("web", "../WebFrontend/WebFrontend.csproj")
+await builder.addDotnetProject("web", "../WebFrontend/WebFrontend.csproj")
     .withReference(python)
     .waitFor(python);
 

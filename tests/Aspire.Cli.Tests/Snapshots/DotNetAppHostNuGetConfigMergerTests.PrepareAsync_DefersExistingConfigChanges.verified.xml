@@ -9,16 +9,4 @@
       <add key="ClearTextPassword" value="test-password" />
     </private>
   </packageSourceCredentials>
-  <packageSourceMapping>
-    <clear />
-    <packageSource key="private">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="nuget.org">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="aspire-test">
-      <package pattern="Aspire*" />
-    </packageSource>
-  </packageSourceMapping>
 </configuration>

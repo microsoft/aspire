@@ -324,6 +324,10 @@ export function registerHandleWrapper(typeId: string, factory: HandleWrapperFact
  * @param client - Optional client for creating typed wrapper instances
  */
 export function wrapIfHandle(value: unknown, client?: AspireClientRpc): unknown {
+    if (value !== null && typeof value === 'object' && trackedCallbackDtos.has(value)) {
+        return value;
+    }
+
     if (isMarshalledHandle(value)) {
         const handle = new Handle(value);
         const typeId = value.$type;
@@ -461,6 +465,85 @@ function validateCapabilityArgs(
 
 const callbackRegistry = new Map<string, CallbackFunction>();
 let callbackIdCounter = 0;
+const trackedCallbackDtos = new WeakSet<object>();
+
+function trackCallbackDto(value: Record<string, unknown>): { value: Record<string, unknown>; changes: Record<string, unknown> } {
+    const changes: Record<string, unknown> = {};
+    const nested = new Map<string, WeakMap<object, object>>();
+    const track = (target: object, changed: () => void, cache: WeakMap<object, object>): object => {
+        const existing = cache.get(target);
+        if (existing) {
+            return existing;
+        }
+        const proxy = new Proxy(target, {
+            get(target, key) {
+                const child = Reflect.get(target, key);
+                return Array.isArray(child) || isPlainObject(child) ? track(child, changed, cache) : child;
+            },
+            set(target, key, value) {
+                const result = Reflect.set(target, key, value);
+                if (result) {
+                    changed();
+                }
+                return result;
+            },
+            defineProperty(target, key, descriptor) {
+                const result = Reflect.defineProperty(target, key, descriptor);
+                if (result) {
+                    changed();
+                }
+                return result;
+            },
+            deleteProperty(target, key) {
+                const result = Reflect.deleteProperty(target, key);
+                if (result) {
+                    changed();
+                }
+                return result;
+            },
+        });
+        cache.set(target, proxy);
+        trackedCallbackDtos.add(proxy);
+        return proxy;
+    };
+    const proxy = new Proxy(value, {
+        get(target, key) {
+            const child = Reflect.get(target, key);
+            if (typeof key !== 'string' || (!Array.isArray(child) && !isPlainObject(child))) {
+                return child;
+            }
+            let cache = nested.get(key);
+            if (!cache) {
+                cache = new WeakMap<object, object>();
+                nested.set(key, cache);
+            }
+            return track(child, () => { changes[key] = target[key]; }, cache);
+        },
+        set(target, key, value) {
+            const result = Reflect.set(target, key, value);
+            if (result && typeof key === 'string') {
+                changes[key] = value;
+            }
+            return result;
+        },
+        defineProperty(target, key, descriptor) {
+            const result = Reflect.defineProperty(target, key, descriptor);
+            if (result && typeof key === 'string') {
+                changes[key] = target[key];
+            }
+            return result;
+        },
+        deleteProperty(target, key) {
+            const result = Reflect.deleteProperty(target, key);
+            if (result && typeof key === 'string') {
+                delete changes[key];
+            }
+            return result;
+        },
+    });
+    trackedCallbackDtos.add(proxy);
+    return { value: proxy, changes };
+}
 
 /**
  * Register a callback function that can be invoked from the .NET side.
@@ -492,12 +575,21 @@ export function registerCallback<TResult = void>(
         if (args && typeof args === 'object' && !Array.isArray(args)) {
             const argObj = args as Record<string, unknown>;
             const argArray: unknown[] = [];
+            const writeback: Record<string, unknown> = {};
 
             // Extract positional parameters (p0, p1, p2, ...)
             for (let i = 0; ; i++) {
                 const key = `p${i}`;
                 if (key in argObj) {
-                    argArray.push(wrapIfHandle(argObj[key], client));
+                    const value = wrapIfHandle(argObj[key], client);
+                    if (isPlainObject(value)) {
+                        const tracked = trackCallbackDto(value);
+                        argArray.push(tracked.value);
+                        writeback[key] = tracked.changes;
+                    } else {
+                        argArray.push(value);
+                        writeback[key] = argObj[key];
+                    }
                 } else {
                     break;
                 }
@@ -506,11 +598,10 @@ export function registerCallback<TResult = void>(
             if (argArray.length > 0) {
                 // Spread positional arguments to callback
                 const result = await callback(...argArray);
-                // DTO writeback protocol: when a void callback returns undefined, we
-                // return the original args object so the .NET host can detect property
-                // mutations made by the callback and apply them back to the original
-                // C# DTO objects. DTO args are plain JS objects (not Handle wrappers),
-                // so any property changes the callback made are reflected in args.
+                // Return only assigned DTO properties: a no-op on
+                // { p0: { columns: 132, rows: 50 } } produces { p0: {} }, while
+                // explicitly assigning columns = 132 produces { p0: { columns: 132 } }.
+                // Invoking unchanged C# setters can otherwise change configuration intent.
                 //
                 // Non-void callbacks (result !== undefined) return their actual result.
                 // The .NET side only activates writeback for void delegates whose
@@ -522,7 +613,7 @@ export function registerCallback<TResult = void>(
                 // a result-unmarshalling path (not writeback), so returning args will
                 // cause an unmarshal error. Void callbacks should never return a
                 // meaningful value; non-void callbacks should always return one.
-                return result !== undefined ? result : args;
+                return result !== undefined ? result : writeback;
             }
 
             // No positional params found — nothing to write back

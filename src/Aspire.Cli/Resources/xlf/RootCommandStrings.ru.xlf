@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
-        <target state="needs-review-translation">Отобразить анимированный приветственный баннер CLI Aspire.</target>
+        <target state="translated">Показать анимированный приветственный баннер интерфейса командной строки Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -19,42 +19,42 @@
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Дождитесь подключения отладчика, прежде чем выполнять команду.</target>
+        <target state="translated">Дождитесь подключения отладчика, прежде чем выполнять команду</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionScriptDescription">
         <source>Write a shell completion script to standard output</source>
-        <target state="new">Write a shell completion script to standard output</target>
+        <target state="translated">Записать сценарий завершения для оболочки в стандартный вывод</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellDescription">
         <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
-        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <target state="translated">Оболочка, для которой создается сценарий (bash, fish, pwsh, zsh). Значение по умолчанию — SHELL, а в Windows — pwsh.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellRequired">
         <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
-        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <target state="translated">Не удалось обнаружить поддерживаемую оболочку. Укажите bash, fish, pwsh или zsh: aspire completions script &lt;shell&gt;.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionsDescription">
         <source>Generate shell completion scripts</source>
-        <target state="new">Generate shell completion scripts</target>
+        <target state="translated">Создать сценарии завершения для оболочки</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
-        <target state="needs-review-translation">Включает журналирование отладки в консоли.</target>
+        <target state="translated">Включает журналирование отладки в консоли</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
         <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
+        <target state="translated">Установить уровень ведения журнала, минимально необходимый для фиксирования вывода консоли (трассировка, отладка, информационное сообщение, предупреждение, ошибка, критическая ошибка)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
-        <target state="needs-review-translation">CLI Aspire можно использовать для создания, запуска и публикации приложений на основе Aspire.</target>
+        <target state="translated">Интерфейс командной строки Aspire можно использовать для создания, запуска и публикации приложений на основе Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -64,37 +64,37 @@
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
 Read more about Aspire CLI telemetry: {0}</source>
-        <target state="new">Telemetry
+        <target state="translated">Телеметрия
 ---------
 
-The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+Интерфейс командной строки Aspire собирает данные об использовании. Эти данные собираются корпорацией Майкрософт и используются для улучшения взаимодействия. Вы можете отказаться от телеметрии, установив для переменной среды ASPIRE_CLI_TELEMETRY_OPTOUT значение "1" или "true" в предпочитаемой оболочке.
 
-Read more about Aspire CLI telemetry: {0}</target>
+Дополнительные сведения о телеметрии Aspire CLI: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
-        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <target state="translated">Aspire CLI эмулирует удостоверение '{0}' версии '{1}'. Поведение может отличаться от установленной сборки; Удостоверение было переопределено с помощью переменных среды или отдельного процесса установки.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidCompletionRequest">
         <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
-        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
+        <target state="translated">Ожидается [suggest] или [suggest:&lt;cursor&gt;] с последующей строкой команды, курсор находится внутри этой строки.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
-        <target state="needs-review-translation">Отключить баннер запуска и уведомление о телеметрии.</target>
+        <target state="translated">Отключить баннер запуска и уведомление о телеметрии</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
         <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
-        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
+        <target state="translated">Выполните команду в неинтерактивном режиме, отключив все интерактивные запросы и вертушки</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Дождитесь подключения отладчика, прежде чем выполнять команду.</target>
+        <target state="translated">Дождитесь подключения отладчика, прежде чем выполнять команду</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
@@ -36,7 +36,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private const string DurationColumn = nameof(DurationColumn);
     private const string ActionsColumn = nameof(ActionsColumn);
     private readonly CancellationTokenSource _cts = new();
-    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private IList<GridColumn> _gridColumns = null!;
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
 
@@ -59,6 +58,13 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     [Parameter]
     public string? ResourceName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resources selected in the resource list when several resources are selected.
+    /// </summary>
+    [Parameter]
+    [SupplyParameterFromQuery(Name = DashboardUrls.ResourceSelectionQueryName)]
+    public string[]? SelectedResourceNames { get; set; }
 
     [Inject]
     public required DashboardDataSource DataSource { get; init; }
@@ -104,6 +110,13 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    /// <summary>
+    /// The resources layout hosting this page. When present, the layout's resource pane selects the resource
+    /// and displays resource commands, so the page doesn't display its own resource selector.
+    /// </summary>
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
+
     [Parameter]
     [SupplyParameterFromQuery(Name = "type")]
     public string? SpanTypeText { get; set; }
@@ -112,31 +125,9 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     [SupplyParameterFromQuery(Name = "filters")]
     public string? SerializedFilters { get; set; }
 
-    private string GetNameTooltip(TraceSummary trace)
-    {
-        var tooltip = string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.TracesFullName)], trace.FullName);
-        tooltip += Environment.NewLine + string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.TracesTraceId)], trace.TraceId);
-
-        return tooltip;
-    }
-
-    private string GetSpansTooltip(TraceResourceSummary resourceSpans)
-    {
-        var count = resourceSpans.TotalSpans;
-        var errorCount = resourceSpans.ErroredSpans;
-
-        var tooltip = string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.TracesResourceSpans)], GetResourceName(resourceSpans.Resource));
-        tooltip += Environment.NewLine + string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.TracesTotalTraces)], count);
-        if (errorCount > 0)
-        {
-            tooltip += Environment.NewLine + string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.TracesTotalErroredTraces)], errorCount);
-        }
-
-        return tooltip;
-    }
-
     private async ValueTask<GridItemsProviderResult<TraceSummary>> GetData(GridItemsProviderRequest<TraceSummary> request)
     {
+        TracesViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
         TracesViewModel.StartIndex = request.StartIndex;
         TracesViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
         var traces = await TracesViewModel.GetTracesAsync(request.CancellationToken);
@@ -168,11 +159,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         _totalItemsCount = traces.TotalItemCount;
         _totalItemsFooter.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
-        if (_endAnchorItemsProviderState.GetInitialResult(request.StartIndex, traces.Items, virtualizedTraceCount) is { } initialResult)
-        {
-            return GridItemsProviderResult.From(initialResult.Items, initialResult.TotalItemCount);
-        }
-
         return GridItemsProviderResult.From(traces.Items, virtualizedTraceCount);
     }
 
@@ -193,6 +179,10 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         PageViewModel = new TracesPageViewModel { SelectedResource = _allResource, SelectedSpanType = _spanTypes[0] };
 
         UpdateResources();
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged += OnLayoutResourcesChanged;
+        }
         _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: () =>
         {
             UpdateResources();
@@ -208,6 +198,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         }
 
         TracesViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        TracesViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
         UpdateSubscription();
     }
 
@@ -274,10 +265,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
         }
 
-        if (_endAnchorItemsProviderState.TryBeginRefresh())
-        {
-            await _dataGrid.RefreshDataAndRenderAsync();
-        }
     }
 
     private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
@@ -287,8 +274,26 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
         : null;
 
+    private void OnLayoutResourcesChanged()
+    {
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } resourceKeys ||
+            TracesViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
+        {
+            return;
+        }
+
+        // The layout can finish loading its resource snapshot after the grid's first query.
+        TracesViewModel.ResourceKeys = resourceKeys;
+        TracesViewModel.ClearData();
+        _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
     public void Dispose()
     {
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged -= OnLayoutResourcesChanged;
+        }
         _cts.Cancel();
         _cts.Dispose();
         _resourcesSubscription?.Dispose();
@@ -299,6 +304,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
         TracesViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        TracesViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
 
         viewModel.SelectedSpanType = _spanTypes.SingleOrDefault(t => t.Id?.Name == SpanTypeText) ?? _spanTypes[0];
         TracesViewModel.SpanType = viewModel.SelectedSpanType.Id;
@@ -324,10 +330,14 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     {
         var filters = (serializable.Filters.Count > 0) ? TelemetryFilterFormatter.SerializeFiltersToString(serializable.Filters) : null;
 
-        return DashboardUrls.TracesUrl(
-            resource: serializable.SelectedResource,
+        // In the resources layout, the resource list owns the selection, so a resource remembered in the session
+        // doesn't replace it.
+        var url = DashboardUrls.TracesUrl(
+            resource: ResourcesLayout is { } layout ? layout.SelectedResourceName : serializable.SelectedResource,
             type: serializable.SelectedSpanType,
             filters: filters);
+
+        return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
 
     public TracesPageState ConvertViewModelToSerializable()
@@ -386,6 +396,10 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private Task ClearTraces(ResourceKey? key)
     {
         DataSource.EnsureWritable();
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys)
+        {
+            return Task.WhenAll(keys.Select(resourceKey => TelemetryRepositoryWriter.ClearTracesAsync(resourceKey)));
+        }
         return TelemetryRepositoryWriter.ClearTracesAsync(key);
     }
 

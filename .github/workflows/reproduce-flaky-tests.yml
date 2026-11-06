@@ -162,12 +162,21 @@ jobs:
       - name: Setup vars (Windows)
         if: runner.os == 'Windows'
         run: |
-          echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
-          echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
+          echo "BUILD_SCRIPT=.\eng\build.ps1" >> $env:GITHUB_ENV
           echo "${{ github.workspace }}\.dotnet" >> $env:GITHUB_PATH
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve SDK executable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Match dotnet.cmd's SDK bootstrap, but never forward arguments through CMD.
+          . ./eng/common/tools.ps1
+          $dotnet = Join-Path (InitializeDotNetCli -install:$true -createSdkLocationFile:$true) 'dotnet.exe'
+          "DOTNET_SCRIPT=$dotnet" >> $env:GITHUB_ENV
+          "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1" >> $env:GITHUB_ENV
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -199,6 +208,13 @@ jobs:
           name: cli-e2e-polyglot-java-image
           path: ${{ github.workspace }}/cli-e2e-image
 
+      - name: Download prebuilt CLI E2E Go Docker image
+        if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-e2e-polyglot-go-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
       - name: Download prebuilt CLI E2E polyglot Docker image
         if: ${{ needs.setup.outputs.is_cli_e2e == 'true' && runner.os == 'Linux' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -215,7 +231,8 @@ jobs:
             --image-dir "${{ github.workspace }}/cli-e2e-image" \
             --require-dotnet true \
             --require-polyglot true \
-            --require-java true
+            --require-java true \
+            --require-go true
 
       - name: Unlock macOS keychain
         if: runner.os == 'macOS'

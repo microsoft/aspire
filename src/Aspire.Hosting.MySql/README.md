@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.MySql` integration with the
 
 ```bash
 aspire add Aspire.Hosting.MySql
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a MySQL resource and reference it from another resource with
 ```csharp
 var db = builder.AddMySql("mysql").AddDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db);
 ```
 

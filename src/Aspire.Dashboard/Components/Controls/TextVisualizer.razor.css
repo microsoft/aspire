@@ -1,3 +1,13 @@
 .text-visualizer-line-number {
     min-width: 33px;
 }
+
+.text-visualizer-no-wrap .log-line-row-container {
+    overflow: visible;
+}
+
+.text-visualizer-no-wrap .log-content {
+    white-space: pre;
+    word-break: normal;
+    overflow-wrap: normal;
+}

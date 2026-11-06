@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Backchannel;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -62,6 +64,14 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
                 var resolvedValue = await resource.ResolveValueAsync(executionContext, resourceLogger, kvp.Value, null, cancellationToken).ConfigureAwait(false);
                 if (resolvedValue?.Value is not null)
                 {
+                    if (resolvedValue.IsSensitive)
+                    {
+                        // Snapshots lose expression sensitivity metadata. Remember complete values so
+                        // composed secrets, such as merged GOFLAGS, remain redacted by the backchannel.
+                        // Standalone execution contexts may not have a backchannel redaction history.
+                        executionContext.ServicesOrNull?.GetService<SecretRedactionHistory>()?.AddValues([resolvedValue.Value]);
+                    }
+
                     resolvedEnvironmentVariables[kvp.Key] = (kvp.Value, resolvedValue.Value);
                     if (kvp.Value is IValueProvider or IManifestExpressionProvider)
                     {

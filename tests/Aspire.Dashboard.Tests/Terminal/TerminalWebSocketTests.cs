@@ -721,6 +721,35 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task BrowserView_DrainsFinalOutputAndGraphicsBeforeDisconnect(bool useGrpc)
+    {
+        await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await host.StartAsync(timeout.Token);
+        using var browser = await host.ConnectBrowserAsync(timeout.Token);
+        // Hold the initial acknowledgement so final output must coalesce behind it.
+        var initial = await ReadFrameAsync(browser, timeout.Token);
+        host.Workload.Write(string.Join("\r\n", Enumerable.Range(0, 35).Select(i => $"Retained output {i:D2}")) +
+            "\r\nfinal line\r\ncompleted\u001b]2;Final screen\u0007" +
+            "\u001b_Ga=T,f=32,t=d,s=1,v=1,i=7300,q=2;/wAA/w==\u001b\\");
+        await host.WaitForProducerTextAsync("completed", timeout.Token);
+        await host.EndTerminalAsync(includeHmpExit: true);
+
+        await SendAsync(browser, $$"""{"type":"ack","revision":{{initial.GetProperty("revision").GetUInt32()}}}""", timeout.Token);
+        var final = await ReadUntilAsync(browser, frame => frame.GetProperty("title").GetString() == "Final screen", timeout.Token);
+        Assert.Single(final.GetProperty("placements").EnumerateArray());
+        var image = Assert.Single(final.GetProperty("images").EnumerateArray());
+        Assert.Equal(4, image.GetProperty("byteLength").GetInt32());
+        Assert.Equal(37, final.GetProperty("history").GetProperty("totalRows").GetInt32());
+        var close = await ReadCloseAsync(browser, timeout.Token);
+        Assert.Equal(useGrpc ? (WebSocketCloseStatus)4000 : WebSocketCloseStatus.EndpointUnavailable, close.CloseStatus);
+        await browser.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Received", timeout.Token);
+        await host.WaitForAttachmentsReleasedAsync(timeout.Token);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task BrowserView_ProducerDisconnectClosesBrowserWhileWaitingForAcknowledgement(bool useGrpc)
     {
         await using var host = new TerminalTestHost(output, requireAuthentication: false, useGrpc);
@@ -803,31 +832,36 @@ public class TerminalWebSocketTests(ITestOutputHelper output)
 
     private static async Task<JsonElement> ReadUntilAsync(WebSocket socket, Func<JsonElement, bool> predicate, CancellationToken cancellationToken)
     {
-        var buffer = new byte[64 * 1024];
         while (true)
         {
-            using var message = new MemoryStream();
-            WebSocketReceiveResult result;
-            do
-            {
-                result = await socket.ReceiveAsync(buffer, cancellationToken);
-                Assert.Equal(WebSocketMessageType.Binary, result.MessageType);
-                message.Write(buffer, 0, result.Count);
-            }
-            while (!result.EndOfMessage);
-
-            // HWT1: four-byte magic, little-endian JSON byte length, JSON metadata,
-            // then binary cell/image sections. Inspect only metadata in these transport tests.
-            var bytes = message.ToArray();
-            Assert.Equal("HWT1", Encoding.ASCII.GetString(bytes, 0, 4));
-            var length = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(4));
-            using var document = JsonDocument.Parse(bytes.AsMemory(8, length));
-            var frame = document.RootElement;
+            var frame = await ReadFrameAsync(socket, cancellationToken);
             await SendAsync(socket, $$"""{"type":"ack","revision":{{frame.GetProperty("revision").GetUInt32()}}}""", cancellationToken);
             if (predicate(frame))
             {
-                return frame.Clone();
+                return frame;
             }
         }
+    }
+
+    private static async Task<JsonElement> ReadFrameAsync(WebSocket socket, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[64 * 1024];
+        using var message = new MemoryStream();
+        WebSocketReceiveResult result;
+        do
+        {
+            result = await socket.ReceiveAsync(buffer, cancellationToken);
+            Assert.Equal(WebSocketMessageType.Binary, result.MessageType);
+            message.Write(buffer, 0, result.Count);
+        }
+        while (!result.EndOfMessage);
+
+        // HWT1: four-byte magic, little-endian JSON byte length, JSON metadata,
+        // then binary cell/image sections. Inspect only metadata in these transport tests.
+        var bytes = message.ToArray();
+        Assert.Equal("HWT1", Encoding.ASCII.GetString(bytes, 0, 4));
+        var length = BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(4));
+        using var document = JsonDocument.Parse(bytes.AsMemory(8, length));
+        return document.RootElement.Clone();
     }
 }

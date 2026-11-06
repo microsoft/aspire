@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -23,6 +24,38 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class StartCommandTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task StartCommand_WhenCancelled_DisplaysStoppingAspire()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var testInteractionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, cancellationToken) =>
+            {
+                cts.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("start");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Equal(InteractionServiceStrings.StoppingAspire, cancellation.Message);
+        Assert.Equal(ConsoleOutput.Error, cancellation.ConsoleOverride);
+    }
+
     [Fact]
     public async Task StartCommand_Help_Works()
     {

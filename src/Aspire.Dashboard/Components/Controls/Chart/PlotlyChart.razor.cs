@@ -51,7 +51,7 @@ public partial class PlotlyChart : ChartBase
         return $"""
                 <b>{HttpUtility.HtmlEncode(title)}</b><br />
                 {Loc[nameof(ControlsStrings.PlotlyChartValue)]}: {formattedValue}<br />
-                {Loc[nameof(ControlsStrings.PlotlyChartTime)]}: {FormatHelpers.FormatTime(TimeProvider, TimeProvider.ToLocal(xValue))}
+                {Loc[nameof(ControlsStrings.PlotlyChartTime)]}: {FormatHelpers.FormatTime(TimeProvider, xValue)}
                 """;
     }
 

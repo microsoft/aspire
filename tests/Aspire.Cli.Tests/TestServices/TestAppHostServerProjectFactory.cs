@@ -8,10 +8,13 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestAppHostServerProjectFactory : IAppHostServerProjectFactory
 {
     public Func<string, CancellationToken, Task<IAppHostServerProject>>? CreateAsyncCallback { get; set; }
+    public Func<string, string>? GetInstanceIdentifierCallback { get; set; }
 
     public string? RestoreRootConfigDirectory { get; private set; }
 
     public FileInfo? AppHostFile { get; private set; }
+
+    public string GetInstanceIdentifier(string appPath) => GetInstanceIdentifierCallback?.Invoke(appPath) ?? appPath;
 
     public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
         => CreateAsync(appPath, restoreRootConfigDirectory: null, cancellationToken);

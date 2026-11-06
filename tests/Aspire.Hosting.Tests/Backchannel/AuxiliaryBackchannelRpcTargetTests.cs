@@ -155,6 +155,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var paramSnapshot = Assert.Single(result, r => r.Name == "myparam");
         Assert.Equal("myparam", paramSnapshot.DisplayName);
         Assert.Equal("Parameter", paramSnapshot.ResourceType);
+        Assert.Equal("Parameter", paramSnapshot.ResourceTypeDisplayName);
 
         // Resource with DcpInstancesAnnotation should return multiple instances
         Assert.Contains(result, r => r.Name == "myresource-abc123");
@@ -180,6 +181,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
         await notificationService.PublishUpdateAsync(custom.Resource, s => s with
         {
+            ResourceTypeDisplayName = "Custom Service",
             State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
             CreationTimeStamp = createdAt,
             StartTimeStamp = startedAt,
@@ -253,6 +255,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
         var snapshot = Assert.Single(result);
+
+        Assert.Equal("CustomResource", snapshot.ResourceType);
+        Assert.Equal("Custom Service", snapshot.ResourceTypeDisplayName);
 
         // State
         Assert.Equal("Running", snapshot.State);
@@ -371,6 +376,48 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("public-value", region.Value);
         var plainVar = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "PLAIN_VAR");
         Assert.Equal("plain-value", plainVar.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetResourceSnapshotsAsync_RedactsComposedSecretEnvironmentValues(bool secret)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var flags = builder.AddParameter("linker-flags", "-ldflags=-X=main.version=1.2.3", secret: secret);
+        var custom = builder.AddResource(new CustomResourceWithEnvironment("go"))
+            .WithEnvironment("GOFLAGS", ReferenceExpression.Create($"prefix {flags.Resource} suffix"))
+            .WithEnvironment("PUBLIC_FLAGS", "-tags=netgo");
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(custom.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext);
+        Assert.Null(executionConfiguration.Exception);
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            EnvironmentVariables = [.. executionConfiguration.EnvironmentVariables
+                .Select(variable => new EnvironmentVariableSnapshot(variable.Key, variable.Value, true))]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+        var snapshot = Assert.Single(result, r => r.Name == "go");
+
+        Assert.Equal(
+            secret ? null : executionConfiguration.EnvironmentVariables.Single(e => e.Key == "GOFLAGS").Value,
+            Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "GOFLAGS").Value);
+        Assert.Equal("-tags=netgo", Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "PUBLIC_FLAGS").Value);
 
         await app.StopAsync().DefaultTimeout();
     }

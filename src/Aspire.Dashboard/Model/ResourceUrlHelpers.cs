@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
@@ -39,6 +39,7 @@ internal static class ResourceUrlHelpers
                     SortOrder = url.DisplayProperties.SortOrder,
                     DisplayName = string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? null : url.DisplayProperties.DisplayName,
                     OriginalUrlString = url.Url.OriginalString,
+                    IsInternal = url.IsInternal,
                     Text = string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? url.Url.OriginalString : url.DisplayProperties.DisplayName
                 });
                 index++;
@@ -73,6 +74,7 @@ public sealed class DisplayedUrl : IPropertyGridItem
     public int SortOrder { get; set; }
     public string? DisplayName { get; set; }
     public required string OriginalUrlString { get; set; }
+    public bool IsInternal { get; set; }
 
     /// <summary>
     /// Don't display a plain string value here. The URL will be displayed as a hyperlink

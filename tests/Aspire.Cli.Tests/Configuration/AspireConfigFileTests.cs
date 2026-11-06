@@ -2,12 +2,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Configuration;
 
 public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void FromLegacy_PreservesNamedSkillSources()
+    {
+        var sources = new Dictionary<string, SkillSource>
+        {
+            ["default"] = new() { Enabled = false },
+            ["team"] = new() { Repository = "example/team" }
+        };
+
+        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { SkillSources = sources }, profiles: null);
+
+        Assert.Same(sources, config.SkillSources);
+    }
+
     [Fact]
     public void Load_ReturnsNull_WhenFileDoesNotExist()
     {
@@ -39,6 +55,82 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LoadAndSave_PreservesTypedTemplateSourcesAndUnmodeledSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {
+              "TemplateSources": {
+                "local": { "Path": "/templates", "DisplayName": "Company [templates]" },
+                "git": { "repository": "https://example.test/templates", "ref": null, "path": null },
+                "unfinished": { "ref": "main" }
+              },
+              "unrelated": { "enabled": true }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(config);
+        Assert.NotNull(config.TemplateSources);
+        Assert.Equal(["local", "git", "unfinished"], config.TemplateSources.Keys);
+        Assert.Equal("/templates", config.TemplateSources["local"]?.Path);
+        Assert.Equal("Company [templates]", config.TemplateSources["local"]?.DisplayName);
+        Assert.Equal("https://example.test/templates", config.TemplateSources["git"]?.Repository);
+        Assert.Null(config.TemplateSources["git"]?.Ref);
+        Assert.Null(config.TemplateSources["git"]?.Path);
+        Assert.Equal("main", config.TemplateSources["unfinished"]?.Ref);
+
+        config.Save(workspace.Path);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LoadAndSave_PreservesSkillSourcePlugins(bool explicitPlugins)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "globalsettings.json"));
+        await File.WriteAllTextAsync(globalSettingsFile.FullName, """
+            {
+              "skillSources": {
+                "team": {
+                  "repository": "example/global",
+                  "plugins": ["deployment", "operations"]
+                }
+              }
+            }
+            """);
+        var plugins = explicitPlugins ? """, "plugins": ["local", "release"]""" : string.Empty;
+        await File.WriteAllTextAsync(path, $$"""
+            {
+              "skillSources": {
+                "default": { "enabled": false },
+                "team": { "repository": "example/local"{{plugins}} }
+              }
+            }
+            """);
+        string[] expectedPlugins = explicitPlugins
+            ? ["local@team", "release@team"]
+            : ["deployment@team", "operations@team"];
+        Assert.Equal(expectedPlugins, Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile)).GetPluginNames());
+
+        var config = AspireConfigFile.Load(workspace.Path);
+        Assert.NotNull(config);
+        config.Channel = "daily";
+        config.Save(workspace.Path);
+
+        var source = Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile));
+        Assert.Equal("example/local", source.Repository);
+        Assert.Equal(expectedPlugins, source.GetPluginNames());
+        await Verify(await File.ReadAllTextAsync(path), "json").UseParameters(explicitPlugins);
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -60,6 +152,31 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(result);
         Assert.Equal("http://localhost:4321/llms-small.txt", result.Docs?.LlmsTxtUrl);
         Assert.Equal("http://localhost:4321/sitemap-0.xml", result.Docs?.Api?.SitemapUrl);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"repository":"https://git.example/configuration"}""")]
+    [InlineData("""{"path":"aspire.config.json"}""")]
+    public void Load_DoesNotValidateIncompleteConfigSource(string binding)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), $$"""
+            {
+              "appHost": { "path": "apphost.cs" },
+              "docs": { "llmsTxtUrl": "https://local.example/llms.txt" },
+              "configSource": {{binding}}
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.Path);
+
+        Assert.NotNull(result);
+        Assert.Equal("apphost.cs", result.AppHost?.Path);
+        Assert.Equal("https://local.example/llms.txt", result.Docs?.LlmsTxtUrl);
+        Assert.NotNull(result.ConfigSource);
+        var error = Assert.Throws<ConfigSourceException>(result.ConfigSource.Validate);
+        Assert.Equal(Aspire.Cli.Resources.ConfigSourceStrings.InvalidBinding, error.Message);
     }
 
     [Fact]
@@ -202,6 +319,22 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         config.Save(subDir);
 
         Assert.True(File.Exists(Path.Combine(subDir, AspireConfigFile.FileName)));
+    }
+
+    [Fact]
+    public void Save_WritesOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var config = new AspireConfigFile
+        {
+            AppHost = new AspireConfigAppHost { Path = "src/AppHost/AppHost.csproj" },
+            Channel = "daily"
+        };
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName));
     }
 
     [Fact]

@@ -68,6 +68,9 @@ dotnet restore playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
 dotnet run --project playground/TestShop/TestShop.AppHost/TestShop.AppHost.csproj
 ```
 
+`dotnet run` delegates to `aspire run` for local orchestration. To publish deployment
+artifacts, use `aspire publish` instead of passing `--operation publish` to `dotnet run`.
+
 Or, if you are using Visual Studio:
 
 1. Open `Aspire.slnx`
@@ -110,6 +113,32 @@ dotnet test --no-launch-profile -- \
 To test changes from a specific pull request locally, see [dogfooding-pull-requests.md](/docs/dogfooding-pull-requests.md) for instructions on installing Aspire CLI and NuGet packages built by that PR's CI run.
 
 To validate how the CLI resolves `Aspire.*` packages for **staging** and **stable** release-branch builds (including making an installed PR build behave like a staging build), see [cli-staging-validation.md](/docs/cli-staging-validation.md).
+
+The Go CLI E2E scenarios in `GoCodegenValidationTests` cover interactive initialization,
+non-interactive initialization in an empty directory and alongside an existing Go application,
+SDK refresh, and Go build/vet checks. `GoStarterTemplateTests.RestoreAndBuildGoStarterFromStablePackages`
+requires a stable-shaped local hive; normal prerelease PR archives skip that test.
+
+**Prerequisite:** use an already-built stable-shaped local-hive archive containing the CLI
+and matching packages at an unpublished stable version. Building one with
+`localhive --version 17.0.99 --archive` currently fails during packing with `NU5104`
+because stable component packages depend on prerelease .NET 11 packages. This also
+affects Linux; changing the RID does not avoid the package-version restriction.
+The test command below does not prepare that archive or validate a stable native bundle.
+
+Given such an archive, exercise both classes on Linux with Docker:
+
+```bash
+ASPIRE_E2E_ARCHIVE="/path/to/stable-shaped-localhive.tar.gz" \
+  dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj --no-launch-profile -- \
+    --filter-class "*.GoCodegenValidationTests" --filter-class "*.GoStarterTemplateTests" \
+    --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
+
+Use an unpublished stable version for the local hive. The stable starter test runs the CLI
+with a stable identity, an isolated NuGet cache and the hive as its package source. It checks
+the exact Go and Redis package pins, regenerates the SDK and compiles/vets it. The separate
+`CreateAndRunGoStarterProject` scenario verifies startup using the archive's normal channel.
 
 ### NuGet configuration in CLI unit tests
 
@@ -223,6 +252,10 @@ cd playground/rust
 ```
 
 On Windows, use `..\..\run-aspire.cmd` instead. Use [`localhive`](#creating-a-local-aspire-build-with-localhive) when you need to validate the complete locally built product, including packages and the bundle payload.
+
+To debug the CLI in VS Code, install the Microsoft C# extension, open the repository root, and select **Debug Aspire CLI** in **Run and Debug**. Set a breakpoint and press <kbd>F5</kbd>. The launch configuration builds the CLI in Debug mode and runs the managed assembly in the integrated terminal so interactive prompts work.
+
+The configuration defaults to `--help`. Edit `args` in [`.vscode/launch.json`](../.vscode/launch.json) to pass a command and its options as separate array entries. For app-specific commands such as `run`, also set `cwd` to the directory containing your AppHost. Follow the [VS Code setup instructions](#using-vs-code) if the repository SDK is not available.
 
 ### Generating local NuGet packages
 

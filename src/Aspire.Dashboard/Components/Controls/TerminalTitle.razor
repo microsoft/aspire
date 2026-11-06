@@ -1,7 +1,7 @@
 @namespace Aspire.Dashboard.Components.Controls
 
 <div class="terminal-metadata" data-directory="@State?.WorkingDirectory" @ref="_metadataElement">
-    <div class="terminal-icon" data-state="@(HasProgress ? State!.ProgressState : "none")" title="@(HasProgress ? ProgressTooltip : null)">
+    <div class="terminal-icon" data-state="@(HasProgress ? State!.ProgressState : "none")" data-tooltip="@(HasProgress ? ProgressTooltip : null)">
         @if (HasProgress)
         {
             <AspireProgressRing Width="16px" Value="@ProgressValue" AriaLabel="@ProgressLabel" />

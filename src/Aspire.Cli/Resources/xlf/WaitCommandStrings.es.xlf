@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Wait for a resource to reach a target status</source>
-        <target state="new">Wait for a resource to reach a target status</target>
+        <target state="translated">Esperar a que un recurso alcance un estado de destino</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidStatusValue">
@@ -14,12 +14,12 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to wait for</source>
-        <target state="new">The name of the resource to wait for</target>
+        <target state="translated">Nombre del recurso que se va a esperar</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceEnteredFailedState">
         <source>Resource '{0}' entered a failed state: {1}</source>
-        <target state="needs-review-translation">El recurso "{0}" entró en un estado de error: {1}.</target>
+        <target state="translated">El recurso "{0}" entró en un estado de error: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

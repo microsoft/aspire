@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
@@ -23,61 +24,41 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedPath, BlazorDotNetCliRunner.GetExecutablePath(dotnetHostPath));
     }
 
-    [Fact]
-    public async Task ProxyService_EmitsYarpRoutes()
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, false, false)]
+    [InlineData(DistributedApplicationOperation.Run, false, true)]
+    [InlineData(DistributedApplicationOperation.Run, true, false)]
+    [InlineData(DistributedApplicationOperation.Run, true, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false, false)]
+    [InlineData(DistributedApplicationOperation.Publish, false, true)]
+    [InlineData(DistributedApplicationOperation.Publish, true, false)]
+    [InlineData(DistributedApplicationOperation.Publish, true, true)]
+    public async Task ProxyService_EmitsYarpRoutes(DistributedApplicationOperation operation, bool useDotnetHost, bool useDotnetService)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
 
-        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
+        IResourceBuilder<IResourceWithServiceDiscovery> weatherApi = useDotnetService
+            ? builder.AddDotnetProject("weatherapi", "weatherapi.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject<TestProjectMetadata>("weatherapi");
+        weatherApi.WithHttpEndpoint().WithHttpsEndpoint();
 
-        builder.AddProject<TestProjectMetadata>("blazorapp")
-            .WithHttpsEndpoint()
-            .ProxyBlazorService(weatherApi);
+        IResource blazorApp = useDotnetHost
+            ? builder.AddDotnetProject("blazorapp", "blazorapp.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithHttpEndpoint()
+                .WithHttpsEndpoint()
+                .ProxyBlazorService(weatherApi).Resource
+            : builder.AddProject<TestProjectMetadata>("blazorapp")
+                .WithHttpEndpoint()
+                .WithHttpsEndpoint()
+                .ProxyBlazorService(weatherApi).Resource;
 
-        var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
 
         Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-weatherapi__ClusterId"]);
         Assert.Equal("/_api/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-weatherapi__Match__Path"]);
         Assert.Equal("/_api/weatherapi", env["ReverseProxy__Routes__route-weatherapi__Transforms__0__PathRemovePrefix"]);
         Assert.Equal("https+http://weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__d1__Address"]);
-    }
 
-    [Fact]
-    public async Task ProxyService_DotnetProjectHost_EmitsYarpRoutes()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
-
-        var blazorApp = builder.AddDotnetProject(
-                "blazorapp",
-                "blazorapp.csproj",
-                options => options.ExcludeLaunchProfile = true)
-            .WithHttpsEndpoint()
-            .ProxyBlazorService(weatherApi);
-
-        var env = await GetEnvironmentVariables(blazorApp.Resource, builder);
-
-        Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-weatherapi__ClusterId"]);
-        Assert.Equal("https+http://weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__d1__Address"]);
-    }
-
-    [Fact]
-    public async Task ProxyService_EmitsClientConfigResponse()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
-
-        builder.AddProject<TestProjectMetadata>("blazorapp")
-            .WithHttpEndpoint()
-            .WithHttpsEndpoint()
-            .ProxyBlazorService(weatherApi);
-
-        var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
-        var env = await GetEnvironmentVariables(blazorApp, builder);
-
-        Assert.True(env.ContainsKey("Client__ConfigResponse"));
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("services__weatherapi__https__0", configJson);
         Assert.Contains("services__weatherapi__http__0", configJson);
@@ -693,3 +674,4 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         public LaunchSettings LaunchSettings { get; } = new();
     }
 }
+#pragma warning restore CS0618

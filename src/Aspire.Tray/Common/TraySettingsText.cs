@@ -6,20 +6,14 @@ using System.Reflection;
 namespace Aspire.Tray;
 
 /// <summary>
-/// Keeps the native Settings windows' user-facing text consistent.
+/// The user-facing text of the panel's Settings view.
 /// </summary>
 internal static class TraySettingsText
 {
-    internal const string Title = "Aspire Tray Settings";
-    internal const string PreviewTitle = "Aspire Tray Preview Settings";
-    internal const string General = "General";
-    internal const string About = "About";
-    internal const string StartupOption = "Launch Aspire Tray when I sign in";
     internal const string StartupDescription = "Keep Aspire available in the notification area.";
+    internal const string PanelTitle = "Settings";
+    internal const string PanelStartupOption = "Launch at sign-in";
     internal const string StableNativeInstallationRequired = "Launch at sign-in requires a stable native CLI installation.";
-
-    internal static string GetAboutText(bool preview)
-        => string.Join(Environment.NewLine, "Aspire Tray", GetVersionText(), GetAboutDescription(preview));
 
     internal static string GetAboutDescription(bool preview)
         => preview ? "Preview: fake AppHosts and startup settings only." : "An experimental companion for Aspire.";

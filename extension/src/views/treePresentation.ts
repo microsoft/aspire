@@ -98,7 +98,7 @@ export function getParentResourceName(resource: ResourceJson): string | null {
     return resource.properties?.['resource.parentName'] ?? null;
 }
 
-export function getResourceContextValue(resource: ResourceJson): string {
+export function getResourceContextValue(resource: ResourceJson, canAttachDebugger: boolean = false): string {
     const commands = resource.commands;
     const parts = ['resource'];
     if (hasEnabledCommand(commands, 'start') || hasEnabledCommand(commands, 'resource-start')) {
@@ -112,6 +112,9 @@ export function getResourceContextValue(resource: ResourceJson): string {
     }
     if (isTerminalEnabled(resource)) {
         parts.push('canOpenTerminal');
+    }
+    if (canAttachDebugger) {
+        parts.push('canAttachDebugger');
     }
     return parts.join(':');
 }

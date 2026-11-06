@@ -125,10 +125,12 @@ public static class AzureWebPubSubExtensions
                     var urlExpression = url;
 
                     BicepValue<string> urlParameter;
-                    if (urlExpression.ManifestExpressions.Count == 0)
+                    // A conditional expression has no manifest expressions but is not a literal.
+                    if (!urlExpression.IsConditional && urlExpression.ManifestExpressions.Count == 0)
                     {
-                        // when urlExpression is literal string, simply add
-                        urlParameter = urlExpression.Format;
+                        // when urlExpression is literal string, simply add. Format escapes braces for string.Format
+                        // ({{event}}); ValueExpression is the URL template as written ({event}).
+                        urlParameter = urlExpression.ValueExpression;
                     }
                     else
                     {
@@ -171,7 +173,7 @@ public static class AzureWebPubSubExtensions
     /// var webPubSub = builder.AddAzureWebPubSub("webpubsub")
     ///     .RunAsEmulator();
     /// var chat = webPubSub.AddHub("chat");
-    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(chat);
+    /// builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(chat);
     /// </code>
     /// </example>
     [AspireExport(RunSyncOnBackgroundThread = true)]
@@ -408,7 +410,7 @@ public static class AzureWebPubSubExtensions
     ///
     /// var webPubSub = builder.AddAzureWebPubSub("webPubSub");
     ///
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithRoleAssignments(webPubSub, WebPubSubBuiltInRole.WebPubSubServiceReader)
     ///   .WithReference(webPubSub);
     /// </code>

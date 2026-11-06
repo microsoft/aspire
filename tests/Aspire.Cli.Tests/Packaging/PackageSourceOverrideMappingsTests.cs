@@ -39,9 +39,21 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
 
         Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(source));
         Assert.Throws<ArgumentException>(() =>
-            PackageSourceOverrideMappings.Create(source, requestedChannel: null, nugetServiceIndexOverride: source));
+            PackageSourceOverrideMappings.Create(source, requestedChannel: null));
         Assert.Throws<ArgumentException>(() =>
             PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source));
+    }
+
+    [Fact]
+    public void Create_IntegrationOverrideDoesNotAddDefaultSource()
+    {
+        const string source = "https://selected.example/v3/index.json";
+
+        var mappings = PackageSourceOverrideMappings.Create(source, requestedChannel: null);
+
+        var mapping = Assert.Single(mappings);
+        Assert.Equal("Aspire*", mapping.PackageFilter);
+        Assert.Equal(source, mapping.Source);
     }
 
     [Fact]
@@ -53,7 +65,6 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         var mappings = PackageSourceOverrideMappings.Create(
             source,
             requestedChannel: null,
-            nugetServiceIndexOverride: null,
             packagePattern: packageId);
 
         Assert.Equal(
@@ -76,15 +87,14 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         const string packageId = "CommunityToolkit.Aspire.Hosting.Redis";
         var channel = CreateSourceIsolatedChannel(canonicalSource, channelPattern);
 
-        var mappings = PackageSourceOverrideMappings.Create(source, channel, nugetServiceIndexOverride: null, packageId);
-        var canonicalMappings = PackageSourceOverrideMappings.Create(canonicalSource, channel, nugetServiceIndexOverride: null, packageId);
+        var mappings = PackageSourceOverrideMappings.Create(source, channel, packageId);
+        var canonicalMappings = PackageSourceOverrideMappings.Create(canonicalSource, channel, packageId);
 
         Assert.Equal(
         [
             (packageId, source),
             ("Aspire*", source),
-            (PackageMapping.AllPackages, source),
-            (PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            (PackageMapping.AllPackages, source)
         ],
             mappings.Select(mapping => (mapping.PackageFilter, mapping.Source)));
         Assert.Equal(
@@ -98,7 +108,7 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources("Aspire.Hosting.Redis"));
         Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources("aspire.hosting.redis"));
         Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources(packageId));
-        Assert.Equal(["aspire-standalone", "aspire-standalone-0"], nativeMapping.GetConfiguredPackageSources("Example.Dependency"));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources("Example.Dependency"));
     }
 
     [Theory]
@@ -111,15 +121,14 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         const string packageId = "CommunityToolkit.Aspire.Hosting.Redis";
         var channel = CreateSourceIsolatedChannel(channelSource, "Aspire*");
 
-        var mappings = PackageSourceOverrideMappings.Create(source, channel, nugetServiceIndexOverride: null, packageId);
+        var mappings = PackageSourceOverrideMappings.Create(source, channel, packageId);
 
         Assert.Equal(
         [
             (packageId, source),
             ("Aspire*", source),
             (PackageMapping.AllPackages, source),
-            ("Aspire*", channelSource),
-            (PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ("Aspire*", channelSource)
         ],
             mappings.Select(mapping => (mapping.PackageFilter, mapping.Source)));
 
@@ -140,15 +149,14 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         const string packageId = "CommunityToolkit.Aspire.Hosting.Redis";
         var channel = CreateSourceIsolatedChannel(fileUri, "Aspire*");
 
-        var mappings = PackageSourceOverrideMappings.Create(source, channel, nugetServiceIndexOverride: null, packageId);
-        var fileUriMappings = PackageSourceOverrideMappings.Create(fileUri, channel, nugetServiceIndexOverride: null, packageId);
+        var mappings = PackageSourceOverrideMappings.Create(source, channel, packageId);
+        var fileUriMappings = PackageSourceOverrideMappings.Create(fileUri, channel, packageId);
 
         Assert.Equal(
         [
             (packageId, source),
             ("Aspire*", source),
-            (PackageMapping.AllPackages, source),
-            (PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            (PackageMapping.AllPackages, source)
         ],
             mappings.Select(mapping => (mapping.PackageFilter, mapping.Source)));
         Assert.Equal(
@@ -227,7 +235,7 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         => PackageChannel.CreateExplicitChannel(
             "staging",
             PackageChannelQuality.Stable,
-            [new PackageMapping(pattern, source), new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)],
+            [new PackageMapping(pattern, source)],
             new FakeNuGetPackageCache(),
             new TestFeatures(),
             NullLogger.Instance,

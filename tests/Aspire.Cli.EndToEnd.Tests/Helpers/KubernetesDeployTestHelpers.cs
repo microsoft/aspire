@@ -25,29 +25,33 @@ internal static class KubernetesDeployTestHelpers
 
     /// <summary>
     /// Installs KinD, Helm, and kubectl binaries to ~/.local/bin and adds to PATH.
-    /// Skips downloads for tools already on PATH (e.g., pre-installed in Dockerfile.e2e).
+    /// Skips downloads for tools already on PATH.
     /// Retries downloads up to 3 times to handle transient GitHub CDN failures.
     /// </summary>
     internal static async Task InstallKindAndHelmAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("mkdir -p ~/.local/bin");
+        await auto.TypeAsync("mkdir -p ~/.local/bin && " +
+            "case \"$(uname -m)\" in " +
+            "aarch64|arm64) K8S_TOOL_ARCH=arm64 ;; " +
+            "x86_64) K8S_TOOL_ARCH=amd64 ;; " +
+            "*) echo 'Unsupported Kubernetes tool architecture' >&2; false ;; esac");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Download KinD if not already installed — GitHub CDN can transiently return HTML instead of a binary.
-        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-amd64\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
+        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-$K8S_TOOL_ARCH\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download Helm if not already installed
-        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-amd64.tar.gz | tar xz -C /tmp && test -f /tmp/linux-amd64/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-amd64/helm ~/.local/bin/helm && rm -rf /tmp/linux-amd64; }}");
+        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-$K8S_TOOL_ARCH.tar.gz | tar xz -C /tmp && test -f /tmp/linux-$K8S_TOOL_ARCH/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-$K8S_TOOL_ARCH/helm ~/.local/bin/helm && rm -rf /tmp/linux-$K8S_TOOL_ARCH; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download kubectl if not already installed
-        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/amd64/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
+        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/$K8S_TOOL_ARCH/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
@@ -513,6 +517,29 @@ internal static class KubernetesDeployTestHelpers
             "test \"$found\" = 1)",
             counter, TimeSpan.FromMinutes(6));
     }
+
+    /// <summary>
+    /// Deletes a StatefulSet pod and waits until the controller has recreated it and it is Ready.
+    /// </summary>
+    internal static async Task RestartStatefulSetPodAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string @namespace,
+        string podName)
+    {
+        await auto.RunCommandAsync(GetDeletePodCommand(@namespace, podName), counter, TimeSpan.FromSeconds(60));
+        await auto.RunCommandAsync(GetWaitForRecreatedPodReadyCommand(@namespace, podName), counter, TimeSpan.FromMinutes(7));
+    }
+
+    // `kubectl delete` waits for the old pod to be removed, so any pod with this name afterwards is
+    // the replacement. The StatefulSet controller creates it asynchronously; waiting for Ready
+    // before it exists fails immediately with NotFound, so wait for creation first.
+    internal static string GetDeletePodCommand(string @namespace, string podName) =>
+        $"kubectl delete pod {podName} -n {@namespace} --wait=true";
+
+    internal static string GetWaitForRecreatedPodReadyCommand(string @namespace, string podName) =>
+        $"kubectl wait --for=create pod/{podName} -n {@namespace} --timeout=180s && " +
+        $"kubectl wait --for=condition=Ready pod/{podName} -n {@namespace} --timeout=180s";
 
     /// <summary>
     /// Cleans up a KinD cluster and its owned registry (best-effort, in-terminal).

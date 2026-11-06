@@ -16,7 +16,8 @@ internal static class CommandPathResolver
         ["bun"] = new("Bun", "https://bun.sh/docs/installation"),
         ["yarn"] = new("Yarn", "https://yarnpkg.com/getting-started/install"),
         ["pnpm"] = new("pnpm", "https://pnpm.io/installation"),
-        ["deno"] = new("Deno", "https://docs.deno.com/runtime/getting_started/installation/")
+        ["deno"] = new("Deno", "https://docs.deno.com/runtime/getting_started/installation/"),
+        ["go"] = new("Go", "https://go.dev/doc/install")
     };
 
     /// <summary>

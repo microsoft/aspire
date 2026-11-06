@@ -280,6 +280,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
                         Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
                         Dashboard = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName),
                         Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
+                        AppHostServer = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.AppHostServerDirectoryName),
                         TerminalHost = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.TerminalHostDirectoryName),
                         Tray = FindTrayRelativePath(layoutPath, BundleDiscovery.BundleDirectoryName),
                     }
@@ -336,7 +337,8 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     internal static string? FindTrayRelativePath(string layoutPath, string bundleDirectory)
     {
         var relativePath = Path.Combine(bundleDirectory, OperatingSystem.IsWindows()
-            ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
+            ? WindowsTrayPayload.ExecutablePath : OperatingSystem.IsLinux()
+                ? LinuxTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
         return File.Exists(Path.Combine(layoutPath, relativePath)) ? relativePath : null;
     }
 

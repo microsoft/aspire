@@ -19,6 +19,25 @@ namespace Aspire.Cli.Tests.Commands;
 public class DescribeCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task DescribeCommand_DefaultTable_UsesResourceTypeDisplayNamesAndFallbacks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new ResourceSnapshot { Name = "cache", ResourceType = "Container", ResourceTypeDisplayName = "Redis", State = "Running" },
+            new ResourceSnapshot { Name = "postgres", ResourceType = "Container", ResourceTypeDisplayName = "PostgreSQL Server", State = "Running" },
+            new ResourceSnapshot { Name = "orders", ResourceType = "Project", ResourceTypeDisplayName = "ASP.NET Core", State = "Running" },
+            new ResourceSnapshot { Name = "generic", ResourceType = "Container", State = "Running" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "txt");
+    }
+
+    [Fact]
     public async Task DescribeCommand_Help_Works()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -46,6 +65,24 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         // Should succeed - no running AppHost is not an error (like Unix ps with no processes)
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Theory]
+    [InlineData("describe --apphost-pid 42")]
+    [InlineData("describe --apphost missing.csproj --apphost-pid 0")]
+    [InlineData("describe --apphost missing.csproj --apphost-pid -1")]
+    public async Task DescribeCommand_AppHostPid_RejectsUnboundOrInvalidValues(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandLine);
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -255,6 +292,98 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(deserialized);
         Assert.Equal(2, deserialized.Resources.Length);
         Assert.Equal("frontend", deserialized.Resources[0].Name);
+    }
+
+    [Fact]
+    public void DescribeCommand_SnapshotFormat_IncludesDebugPropertiesForParentedProjectAndMauiResources()
+    {
+        var resourcesOutput = new ResourcesOutput
+        {
+            Resources =
+            [
+                new ResourceJson
+                {
+                    Name = "api-grouped",
+                    DisplayName = "API",
+                    ResourceType = "Project",
+                    State = "Running",
+                    Source = "Api.csproj",
+                    Properties = new Dictionary<string, JsonNode?>
+                    {
+                        [KnownProperties.Executable.Args] = null,
+                        [KnownProperties.Executable.Path] = JsonValue.Create("dotnet"),
+                        [KnownProperties.Project.Configuration] = JsonValue.Create("Release"),
+                        [KnownProperties.Project.LaunchCommand] = JsonValue.Create("watch"),
+                        [KnownProperties.Project.LaunchProfile] = JsonValue.Create("https"),
+                        [KnownProperties.Project.Path] = JsonValue.Create("/repo/api/Api.csproj"),
+                        [KnownProperties.Project.TargetFramework] = JsonValue.Create("net10.0"),
+                        [KnownProperties.Resource.LaunchConfigurationType] = JsonValue.Create("project"),
+                        [KnownProperties.Resource.ParentName] = JsonValue.Create("group"),
+                    }
+                },
+                new ResourceJson
+                {
+                    Name = "mauiapp-android-emulator",
+                    DisplayName = "MAUI",
+                    ResourceType = "Project",
+                    State = "Running",
+                    Source = "MauiApp.csproj",
+                    Properties = new Dictionary<string, JsonNode?>
+                    {
+                        [KnownProperties.Executable.Args] = null,
+                        [KnownProperties.Executable.Path] = JsonValue.Create("dotnet"),
+                        [KnownProperties.Executable.Pid] = JsonValue.Create(1234),
+                        [KnownProperties.Project.LaunchProfile] = JsonValue.Create("AndroidEmulator"),
+                        [KnownProperties.Project.Path] = JsonValue.Create("/repo/maui/MauiApp.csproj"),
+                        [KnownProperties.Resource.LaunchConfigurationType] = JsonValue.Create("maui"),
+                        [KnownProperties.Resource.ParentName] = JsonValue.Create("mauiapp"),
+                    }
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(resourcesOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+
+        Assert.Equal("""
+            {
+              "resources": [
+                {
+                  "name": "api-grouped",
+                  "displayName": "API",
+                  "resourceType": "Project",
+                  "state": "Running",
+                  "source": "Api.csproj",
+                  "properties": {
+                    "executable.args": null,
+                    "executable.path": "dotnet",
+                    "project.configuration": "Release",
+                    "project.launchCommand": "watch",
+                    "project.launchProfile": "https",
+                    "project.path": "/repo/api/Api.csproj",
+                    "project.targetFramework": "net10.0",
+                    "resource.launchConfigurationType": "project",
+                    "resource.parentName": "group"
+                  }
+                },
+                {
+                  "name": "mauiapp-android-emulator",
+                  "displayName": "MAUI",
+                  "resourceType": "Project",
+                  "state": "Running",
+                  "source": "MauiApp.csproj",
+                  "properties": {
+                    "executable.args": null,
+                    "executable.path": "dotnet",
+                    "executable.pid": 1234,
+                    "project.launchProfile": "AndroidEmulator",
+                    "project.path": "/repo/maui/MauiApp.csproj",
+                    "resource.launchConfigurationType": "maui",
+                    "resource.parentName": "mauiapp"
+                  }
+                }
+              ]
+            }
+            """, json);
     }
 
     [Fact]
@@ -1078,6 +1207,54 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("", string.Join("", outputWriter.Logs));
         Assert.NotEmpty(errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_WhenCanceledAtAppHostSelectionPrompt_DoesNotDisplayStoppingAspire()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var prompted = false;
+        var interactionService = new TestInteractionService
+        {
+            // Simulate the user pressing CTRL+C while the AppHost selection prompt is shown.
+            PromptForSelectionCallback = (_, _, _, cancellationToken) =>
+            {
+                prompted = true;
+                cts.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+        };
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("socket.hash1", new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = false,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "OtherAppHost", "OtherAppHost.csproj"),
+                ProcessId = 1234
+            }
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe");
+
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration(), cts.Token).DefaultTimeout();
+
+        Assert.True(prompted);
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        // "Stopping Aspire." implies the AppHost is being stopped, but describe never owns the AppHost.
+        var cancellation = Assert.Single(interactionService.DisplayedCancellations);
+        Assert.Null(cancellation.Message);
     }
 
     private ServiceProvider CreateDescribeTestServices(

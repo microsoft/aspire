@@ -1,0 +1,49 @@
+.live-metric-tile {
+    position: relative;
+    overflow: hidden;
+    justify-content: space-between;
+    min-height: 52px;
+}
+
+/* Text sits above the background sparkline. */
+.live-metric-tile > span {
+    position: relative;
+}
+
+.live-metric-tile-value {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.live-metric-tile-label,
+.live-metric-tile-unit {
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+}
+
+.live-metric-tile-number {
+    color: var(--colorNeutralForeground1);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The sparkline fills the lower part of the tile, faded so the text overlaid on it stays readable. */
+::deep .live-metric-tile-sparkline {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 65%;
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.live-metric-tile:hover ::deep .live-metric-tile-sparkline {
+    opacity: 0.7;
+}

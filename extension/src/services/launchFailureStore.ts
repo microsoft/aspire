@@ -73,6 +73,8 @@ export function getLaunchFailureProviderKindForAppHostPath(appHostPath: string |
             return 'node';
         case 'java':
             return 'java';
+        case 'go':
+            return 'go';
         case 'rust':
             return 'rust';
         default:

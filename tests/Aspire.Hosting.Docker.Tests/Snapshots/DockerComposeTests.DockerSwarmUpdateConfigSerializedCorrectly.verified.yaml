@@ -1,6 +1,6 @@
 ﻿services:
   swarm-env-dashboard:
-    image: "mcr.microsoft.com/aspire/nightly/dashboard:13.6"
+    image: "mcr.microsoft.com/aspire/nightly/dashboard:17.0"
     environment:
       ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
     ports:
@@ -21,7 +21,7 @@
         delay: "10s"
         failure_action: "rollback"
         monitor: "5s"
-        max_failure_ratio: "0.3"
+        max_failure_ratio: 0.3
         order: "start-first"
 networks:
   aspire:

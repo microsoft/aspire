@@ -38,7 +38,6 @@ public class TrayControllerPinPruningTests
         Assert.Equal(new AppHostInfo(retained, 0, null).Id, Assert.Single(controller.State.AppHosts).Id);
         Assert.Equal(new AppHostInfo(recent, 0, null).Id, Assert.Single(controller.State.RecentAppHosts).Id);
         Assert.Equal("Stopped", controller.State.AppHosts[0].Subtitle);
-        Assert.False(controller.State.ShowStatus);
         var reloaded = new FileTraySavedStateStore(directory.StatePath).Load();
         Assert.Equal([new SavedAppHost(recent, false, true), new SavedAppHost(retained, true, true)], reloaded.AppHosts);
         Assert.True(File.Exists(retained));
@@ -213,7 +212,6 @@ public class TrayControllerPinPruningTests
 
             Assert.True(Assert.Single(controller.State.AppHosts).IsPinned);
             Assert.Equal("Unable to check saved AppHost paths. Unavailable pins were kept.", controller.State.Status);
-            Assert.True(controller.State.ShowStatus);
             Assert.Equal([new SavedAppHost(path, true, true)], new FileTraySavedStateStore(directory.StatePath).Load().AppHosts);
             Assert.Throws<UnauthorizedAccessException>(() => controller.RequestStart(path));
             Assert.Empty(client.StartRequests);
@@ -224,7 +222,6 @@ public class TrayControllerPinPruningTests
         }
         controller.PruneMissingPinnedAppHosts();
         Assert.True(Assert.Single(controller.State.AppHosts).IsPinned);
-        Assert.False(controller.State.ShowStatus);
     }
 
     [Fact(Skip = "Requires a non-root Unix user.", SkipUnless = nameof(SupportsRestrictedUnixDirectory))]
@@ -279,7 +276,6 @@ public class TrayControllerPinPruningTests
         Assert.True(Assert.Single(controller.State.AppHosts).IsPinned);
         Assert.Empty(controller.State.RecentAppHosts);
         Assert.Equal("Unable to save AppHost history. The saved file was left unchanged.", controller.State.Status);
-        Assert.True(controller.State.ShowStatus);
         Assert.Equal("{externally corrupted", File.ReadAllText(directory.StatePath));
         controller.RequestStart(path);
         Assert.Empty(client.StartRequests);

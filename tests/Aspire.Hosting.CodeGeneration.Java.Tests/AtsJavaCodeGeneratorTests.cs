@@ -3,6 +3,8 @@
 
 using System.Reflection;
 using System.Diagnostics;
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -706,6 +708,205 @@ public class AtsJavaCodeGeneratorTests
             run.ExitCode == 0,
             $"Probe failed with exit code {run.ExitCode}.{Environment.NewLine}stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
         Assert.Contains("OK", run.StdOut, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeneratedTransport_IntegralNumberDtoFieldsDeserializeIntoIntProperties()
+    {
+        // ATS maps every numeric to Java double, so the transport must not write integral values with a
+        // fractional part: System.Text.Json rejects "32.0" for int properties such as GenerateParameterDefault.MinLength.
+        // https://github.com/microsoft/aspire/issues/21344
+        var numberType = new AtsTypeRef { TypeId = AtsConstants.Number, Category = AtsTypeCategory.Primitive };
+        var booleanType = new AtsTypeRef { TypeId = AtsConstants.Boolean, Category = AtsTypeCategory.Primitive };
+        var context = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    Name = "GenerateParameterDefault",
+                    TypeId = "Aspire.Hosting/Aspire.Hosting.ApplicationModel.GenerateParameterDefault",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo { Name = "MinLength", Type = numberType },
+                        new AtsDtoPropertyInfo { Name = "Lower", Type = booleanType },
+                        new AtsDtoPropertyInfo { Name = "MinLower", Type = numberType },
+                        new AtsDtoPropertyInfo { Name = "MinUpper", Type = numberType }
+                    ]
+                }
+            ],
+            EnumTypes = []
+        };
+
+        using var workspace = await CreateJavaProbeWorkspaceAsync(context, "aspire/GenerateParameterDefault.java");
+        workspace.WriteSource(
+            "aspire/IntegralNumberDtoProbe.java",
+            """
+            package aspire;
+
+            import java.io.ByteArrayOutputStream;
+            import java.io.InputStream;
+            import java.io.PipedInputStream;
+            import java.io.PipedOutputStream;
+            import java.lang.reflect.Field;
+            import java.lang.reflect.Method;
+            import java.math.BigDecimal;
+            import java.nio.charset.StandardCharsets;
+            import java.util.List;
+            import java.util.Map;
+            import java.util.concurrent.CompletableFuture;
+            import java.util.concurrent.TimeUnit;
+
+            public class IntegralNumberDtoProbe {
+                public static void main(String[] args) throws Exception {
+                    var clientInput = new PipedInputStream(32768);
+                    var serverOutput = new PipedOutputStream(clientInput);
+                    var serverInput = new PipedInputStream(32768);
+                    var clientOutput = new PipedOutputStream(serverInput);
+
+                    var client = new AspireClient("ignored");
+                    setField(client, "inputStream", clientInput);
+                    setField(client, "outputStream", clientOutput);
+
+                    var defaults = new GenerateParameterDefault();
+                    defaults.setMinLength(32);
+                    defaults.setLower(true);
+                    defaults.setMinLower(0);
+                    defaults.setMinUpper(-3);
+
+                    var call = CompletableFuture.supplyAsync(() -> client.invokeCapability("cap.dto", Map.of("value", defaults)));
+                    var request = readMessage(serverInput);
+                    System.out.println("REQUEST:" + request);
+
+                    int marker = request.indexOf("\"id\":") + 5;
+                    int end = marker;
+                    while (Character.isDigit(request.charAt(end))) {
+                        end++;
+                    }
+                    String payload = "{\"jsonrpc\":\"2.0\",\"id\":" + request.substring(marker, end) + ",\"result\":null}";
+                    byte[] body = payload.getBytes(StandardCharsets.UTF_8);
+                    serverOutput.write(("Content-Length: " + body.length + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                    serverOutput.write(body);
+                    serverOutput.flush();
+                    call.get(2, TimeUnit.SECONDS);
+
+                    // Values parsed from JSON responses are BigDecimal and must round-trip without precision loss.
+                    Method toJson = AspireClient.class.getDeclaredMethod("toJson", Object.class);
+                    toJson.setAccessible(true);
+                    var numbers = List.<Object>of(
+                        32.0,
+                        2.5f,
+                        1e20,
+                        new BigDecimal("32.0"),
+                        new BigDecimal("1.0000000000000001"),
+                        new BigDecimal("9007199254740993.0"),
+                        new BigDecimal("1E-400"),
+                        7L);
+                    System.out.println("NUMBERS:" + toJson.invoke(client, numbers));
+
+                    System.out.println("OK");
+                }
+
+                private static void setField(AspireClient client, String name, Object value) throws Exception {
+                    Field field = AspireClient.class.getDeclaredField(name);
+                    field.setAccessible(true);
+                    field.set(client, value);
+                }
+
+                private static String readMessage(InputStream input) throws Exception {
+                    int contentLength = -1;
+                    while (true) {
+                        String line = readLine(input);
+                        if (line.isEmpty()) {
+                            break;
+                        }
+                        if (line.startsWith("Content-Length:")) {
+                            contentLength = Integer.parseInt(line.substring(15).trim());
+                        }
+                    }
+
+                    return new String(input.readNBytes(contentLength), StandardCharsets.UTF_8);
+                }
+
+                private static String readLine(InputStream input) throws Exception {
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    while (true) {
+                        int ch = input.read();
+                        if (ch == -1 || ch == '\n') {
+                            break;
+                        }
+                        if (ch != '\r') {
+                            buffer.write(ch);
+                        }
+                    }
+
+                    return buffer.toString(StandardCharsets.UTF_8);
+                }
+            }
+            """);
+
+        await workspace.CompileAsync();
+        var run = await workspace.RunClassAsync("aspire.IntegralNumberDtoProbe", TimeSpan.FromSeconds(6));
+
+        Assert.True(run.TimedOut is false, $"Probe timed out. stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
+        Assert.True(
+            run.ExitCode == 0,
+            $"Probe failed with exit code {run.ExitCode}.{Environment.NewLine}stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
+
+        var requestLine = run.StdOut.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries).Single(line => line.StartsWith("REQUEST:", StringComparison.Ordinal));
+        var request = JsonNode.Parse(requestLine["REQUEST:".Length..])!;
+        var dtoJson = FindProperty(request, "value");
+        Assert.NotNull(dtoJson);
+
+        // Same options the AppHost server uses to deserialize DTO arguments.
+        var serverOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+        var defaults = dtoJson.Deserialize<GenerateParameterDefault>(serverOptions);
+
+        Assert.NotNull(defaults);
+        Assert.Equal(32, defaults.MinLength);
+        Assert.True(defaults.Lower);
+        Assert.Equal(0, defaults.MinLower);
+        Assert.Equal(-3, defaults.MinUpper);
+
+        var numbersLine = run.StdOut.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries).Single(line => line.StartsWith("NUMBERS:", StringComparison.Ordinal));
+        Assert.Equal("NUMBERS:[32,2.5,1.0E20,32,1.0000000000000001,9007199254740993,1E-400,7]", numbersLine);
+
+        static JsonNode? FindProperty(JsonNode? node, string name)
+        {
+            switch (node)
+            {
+                case JsonObject obj:
+                    foreach (var (key, child) in obj)
+                    {
+                        if (key == name)
+                        {
+                            return child;
+                        }
+                        if (FindProperty(child, name) is { } found)
+                        {
+                            return found;
+                        }
+                    }
+                    break;
+                case JsonArray array:
+                    foreach (var child in array)
+                    {
+                        if (FindProperty(child, name) is { } found)
+                        {
+                            return found;
+                        }
+                    }
+                    break;
+            }
+
+            return null;
+        }
     }
 
     [Fact]
@@ -1667,8 +1868,12 @@ public class AtsJavaCodeGeneratorTests
         Assert.Equal("OK", run.StdOut.Trim());
     }
 
-    [Fact]
-    public async Task GeneratedReferenceExpression_CancellationIsRequestScoped()
+    [Theory]
+    [InlineData(250)]
+    // Client work before the first transport message exceeds the probe's former fixed 1-second wait, as a cold JVM
+    // on a busy CI agent can (https://github.com/microsoft/aspire/issues/20017).
+    [InlineData(1100)]
+    public async Task GeneratedReferenceExpression_CancellationIsRequestScoped(int onCancelDelayMs)
     {
         using var workspace = await CreateJavaProbeWorkspaceAsync();
         workspace.WriteSource(
@@ -1699,7 +1904,7 @@ public class AtsJavaCodeGeneratorTests
                     setField(client, "inputStream", clientInput);
                     setField(client, "outputStream", clientOutput);
                     var expression = new ReferenceExpression(new Handle("expr", "ReferenceExpression"), client);
-                    var token = new SlowPreCancelledToken();
+                    var token = new SlowPreCancelledToken(Long.parseLong(args[0]));
                     token.cancel();
 
                     invokeAndComplete(expression, token, client, serverInput, serverOutput, "first");
@@ -1717,13 +1922,13 @@ public class AtsJavaCodeGeneratorTests
                     PipedOutputStream serverOutput,
                     String expectedResult) throws Exception {
                     var invocation = CompletableFuture.supplyAsync(() -> expression.getValue(token));
-                    String invokeRequest = requireMessage(serverInput);
+                    String invokeRequest = requireMessage(serverInput, invocation);
                     if (!invokeRequest.contains("\"method\":\"invokeCapability\"")
                         || !invokeRequest.contains("\"capabilityId\":\"Aspire.Hosting.ApplicationModel/getValue\"")) {
                         throw new IllegalStateException("cancellation preceded ReferenceExpression request: " + invokeRequest);
                     }
 
-                    String cancellationRequest = requireMessage(serverInput);
+                    String cancellationRequest = requireMessage(serverInput, invocation);
                     String cancellationId = extractCancellationId(cancellationRequest);
                     if (!invokeRequest.contains("\"cancellationToken\":\"" + cancellationId + "\"")) {
                         throw new IllegalStateException(
@@ -1740,7 +1945,7 @@ public class AtsJavaCodeGeneratorTests
                         serverOutput,
                         "{\"jsonrpc\":\"2.0\",\"id\":" + invokeRequestId + ",\"result\":\"" + expectedResult + "\"}");
 
-                    String result = invocation.get(1, TimeUnit.SECONDS);
+                    String result = invocation.get();
                     if (!expectedResult.equals(result)) {
                         throw new IllegalStateException("unexpected ReferenceExpression result: " + result);
                     }
@@ -1818,12 +2023,20 @@ public class AtsJavaCodeGeneratorTests
                     return null;
                 }
 
-                private static String requireMessage(InputStream input) throws Exception {
-                    String message = waitForMessage(input, 1000);
-                    if (message == null) {
-                        throw new IllegalStateException("Timed out waiting for transport message");
+                // The client writes each expected message from a pool thread after cold-start work (class loading,
+                // token registration, first serialization) whose duration is not part of the contract under test.
+                // Wait until the message is readable instead of for a fixed wall-clock budget, and fail fast if the
+                // invocation finishes without writing it. The probe's process timeout still bounds a hang.
+                private static String requireMessage(InputStream input, CompletableFuture<?> invocation) throws Exception {
+                    while (input.available() == 0) {
+                        if (invocation.isDone() && input.available() == 0) {
+                            throw new IllegalStateException(
+                                "invocation completed before writing the expected transport message",
+                                invocation.handle((result, error) -> error).join());
+                        }
+                        TimeUnit.MILLISECONDS.sleep(5);
                     }
-                    return message;
+                    return readMessage(input);
                 }
 
                 private static String readMessage(InputStream input) throws Exception {
@@ -1861,11 +2074,17 @@ public class AtsJavaCodeGeneratorTests
                 }
 
                 private static final class SlowPreCancelledToken extends CancellationToken {
+                    private final long onCancelDelayMs;
+
+                    SlowPreCancelledToken(long onCancelDelayMs) {
+                        this.onCancelDelayMs = onCancelDelayMs;
+                    }
+
                     @Override
                     public void onCancel(Runnable listener) {
                         super.onCancel(listener);
                         try {
-                            TimeUnit.MILLISECONDS.sleep(250);
+                            TimeUnit.MILLISECONDS.sleep(onCancelDelayMs);
                         } catch (InterruptedException exception) {
                             Thread.currentThread().interrupt();
                             throw new RuntimeException(exception);
@@ -1883,7 +2102,10 @@ public class AtsJavaCodeGeneratorTests
             """);
 
         await workspace.CompileAsync();
-        var run = await workspace.RunClassAsync("aspire.ReferenceExpressionCancellationProbe", TimeSpan.FromSeconds(8));
+        var run = await workspace.RunClassAsync(
+            "aspire.ReferenceExpressionCancellationProbe",
+            TimeSpan.FromSeconds(8),
+            onCancelDelayMs.ToString(CultureInfo.InvariantCulture));
 
         Assert.True(run.TimedOut is false, $"Probe timed out. stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
         Assert.True(
@@ -2679,10 +2901,10 @@ public class AtsJavaCodeGeneratorTests
         Assert.Contains($"public String get{expectedAccessorSuffix}() {{ return {expectedField}; }}", generated);
         Assert.Contains($"public void set{expectedAccessorSuffix}(String value) {{ this.{expectedField} = value; }}", generated);
 
-        // The transport key stays the original property name: escaping is a Java source concern and
-        // must not change the shape of the wire payload the .NET host reads and writes.
-        Assert.Contains($"map.get(\"{propertyName}\")", generated);
-        Assert.Contains($"map.put(\"{propertyName}\", AspireClient.serializeValue({expectedField}))", generated);
+        // Java keyword escaping must not leak into the host's camel-case JSON property names.
+        var wireName = JsonNamingPolicy.CamelCase.ConvertName(propertyName);
+        Assert.Contains($"map.get(\"{wireName}\")", generated);
+        Assert.Contains($"map.put(\"{wireName}\", AspireClient.serializeValue({expectedField}))", generated);
     }
 
     [Fact]
@@ -2743,7 +2965,7 @@ public class AtsJavaCodeGeneratorTests
             public class TypedArrayProbe {
                 public static void main(String[] args) {
                     var value = KeywordProbe.fromMap(Map.of(
-                        "Matrix",
+                        "matrix",
                         List.of(List.of("one", "two"), List.of("three"))));
                     String[][] matrix = value.getMatrix();
 
@@ -3160,15 +3382,15 @@ public class AtsJavaCodeGeneratorTests
                             + "\"args\":{\"p0\":[1,null,2.5],\"p1\":[[true,null],[false]]}}}");
                     String callbackResponse = readMessage(serverInput);
                     if (!callbackResponse.contains("\"id\":9001")
-                        || !callbackResponse.contains("\"result\":{\"p0\":[1.0,null,2.5],\"p1\":[[true,null],[false]]}")) {
+                        || !callbackResponse.contains("\"result\":{\"p0\":[1,null,2.5],\"p1\":[[true,null],[false]]}")) {
                         throw new IllegalStateException("unexpected callback response: " + callbackResponse);
                     }
                     writeResult(serverOutput, callbackRequestId, "null");
                     callbackCall.get(2, TimeUnit.SECONDS);
 
                     Map<String, Object> dtoMap = new HashMap<>();
-                    dtoMap.put("Numbers", Arrays.asList(1.0, null, 2.5));
-                    dtoMap.put("Flags", List.of(Arrays.asList(true, null), List.of(false)));
+                    dtoMap.put("numbers", Arrays.asList(1.0, null, 2.5));
+                    dtoMap.put("flags", List.of(Arrays.asList(true, null), List.of(false)));
                     var dto = ArrayDto.fromMap(dtoMap);
                     assertNumbers(dto.getNumbers());
                     assertFlags(dto.getFlags());
@@ -3276,6 +3498,40 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
+    public async Task GeneratedTerminalDto_RoundTripsCallbackWireNames()
+    {
+        using var workspace = await CreateJavaProbeWorkspaceAsync(
+            CreateContextFromBothAssemblies(),
+            "aspire/TerminalOptions.java");
+        workspace.WriteSource(
+            "aspire/TerminalOptionsProbe.java",
+            """
+            package aspire;
+
+            import java.util.Map;
+
+            public class TerminalOptionsProbe {
+                public static void main(String[] args) {
+                    var options = TerminalOptions.fromMap(Map.of("columns", 132, "rows", 50));
+                    if (options.getColumns() != 132 || options.getRows() != 50) {
+                        throw new IllegalStateException("unexpected default dimensions");
+                    }
+                    options.setColumns(200);
+                    var result = Map.of("p0", options.toMap());
+                    if (!result.equals(Map.of("p0", Map.of("columns", 200.0, "rows", 50.0)))) {
+                        throw new IllegalStateException("unexpected callback result: " + result);
+                    }
+                    System.out.println("OK");
+                }
+            }
+            """);
+        await workspace.CompileAsync();
+        var run = await workspace.RunClassAsync("aspire.TerminalOptionsProbe", TimeSpan.FromSeconds(6));
+        Assert.False(run.TimedOut);
+        Assert.True(run.ExitCode == 0, $"Java terminal DTO probe failed:{Environment.NewLine}{run.StdOut}{run.StdErr}");
+    }
+
+    [Fact]
     public async Task GeneratedDtoCallbacks_VoidCallbackReturnsMutatedPositionalArguments()
     {
         var contextType = new AtsTypeRef { TypeId = "Tests/MutableContext", Category = AtsTypeCategory.Dto };
@@ -3343,11 +3599,11 @@ public class AtsJavaCodeGeneratorTests
                     var options = new CallbackOptions();
                     options.setCallback(context -> context.setValue("after"));
 
-                    var callback = (Function<Object, Object>) options.toMap().get("Callback");
-                    var result = (Map<String, Object>) callback.apply(Map.of("Value", "before"));
+                    var callback = (Function<Object, Object>) options.toMap().get("callback");
+                    var result = (Map<String, Object>) callback.apply(Map.of("value", "before"));
                     var serializedResult = (Map<String, Object>) AspireClient.serializeValue(result);
                     var context = (Map<String, Object>) serializedResult.get("p0");
-                    if (serializedResult.size() != 1 || !"after".equals(context.get("Value"))) {
+                    if (serializedResult.size() != 1 || !"after".equals(context.get("value"))) {
                         throw new IllegalStateException("unexpected callback result: " + serializedResult);
                     }
 
@@ -3456,11 +3712,11 @@ public class AtsJavaCodeGeneratorTests
                     writeMessage(serverOutput,
                         "{\"jsonrpc\":\"2.0\",\"id\":9001,\"method\":\"invokeCallback\","
                             + "\"params\":{\"callbackId\":\"" + callbackId + "\","
-                            + "\"args\":{\"p0\":{\"Value\":\"before\"}}}}" );
+                            + "\"args\":{\"p0\":{\"value\":\"before\"}}}}" );
 
                     String callbackResponse = readMessage(serverInput);
                     if (!callbackResponse.contains("\"id\":9001")
-                        || !callbackResponse.contains("\"result\":{\"p0\":{\"Value\":\"after\"}}") ) {
+                        || !callbackResponse.contains("\"result\":{\"p0\":{\"value\":\"after\"}}") ) {
                         throw new IllegalStateException("callback did not return mutated arguments: " + callbackResponse);
                     }
 
@@ -3807,8 +4063,8 @@ public class AtsJavaCodeGeneratorTests
                 $"javac failed with exit code {compile.ExitCode}.{Environment.NewLine}stdout:{Environment.NewLine}{compile.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{compile.StdErr}");
         }
 
-        public Task<ProcessResult> RunClassAsync(string className, TimeSpan timeout)
-            => RunProcessAsync("java", ["-cp", _classes.FullName, className], timeout);
+        public Task<ProcessResult> RunClassAsync(string className, TimeSpan timeout, params string[] args)
+            => RunProcessAsync("java", ["-cp", _classes.FullName, className, .. args], timeout);
 
         public void Dispose()
         {

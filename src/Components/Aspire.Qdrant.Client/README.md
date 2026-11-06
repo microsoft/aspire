@@ -78,6 +78,7 @@ In your AppHost project, install the `Aspire.Hosting.Qdrant` library with [NuGet
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Qdrant
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a Qdrant server and consume the connection using the following methods:
@@ -85,7 +86,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a Qdrant server and consum
 ```csharp
 var qdrant = builder.AddQdrant("qdrant");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(qdrant);
 ```
 

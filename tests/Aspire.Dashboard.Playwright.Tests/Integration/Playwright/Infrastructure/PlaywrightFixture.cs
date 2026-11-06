@@ -43,7 +43,7 @@ public class PlaywrightFixture : IAsyncLifetime
     {
         await page.GotoAsync("/");
         await Assertions
-            .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+            .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName).First)
             .ToBeVisibleAsync();
     }
 }

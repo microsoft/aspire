@@ -129,33 +129,24 @@
 }
 
 .markdown-container table {
-    margin-bottom: calc(.25rem * 6);
-    margin-top: calc(.25rem * 3);
+    border-collapse: collapse;
+    margin: .75rem 0 1.5rem;
     width: 100%;
 }
 
-.markdown-container tr:last-child {
-    border-style: none;
+.markdown-container tbody tr:not(:last-child) {
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }
 
-.markdown-container tr {
-    border-bottom: 1px solid var(--table-body-border-color);
-}
-
-.markdown-container th {
-    padding-right: calc(.25rem * 1);
-}
-
-.markdown-container th {
-    border-bottom: 1px solid var(--table-header-border-color);
-    padding-bottom: calc(.25rem * 1.5);
-    padding-top: calc(.25rem * 1);
-    font-weight: 600;
-}
-
+.markdown-container th,
 .markdown-container td {
-    padding-right: calc(.25rem * 1);
-    padding-block: calc(.25rem * 1.5);
+    padding: .375rem .25rem;
+}
+
+.markdown-container th {
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
+    padding-top: .25rem;
+    font-weight: 600;
 }
 
 /* Markdown headings are modified to never be larger than h4 */

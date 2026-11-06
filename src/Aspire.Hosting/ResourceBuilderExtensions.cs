@@ -63,7 +63,7 @@ public static class ResourceBuilderExtensions
     /// <code language="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    /// builder.AddDotnetProject("api", "../ApiService/ApiService.csproj")
     ///        .WithSessionLifetime();
     ///
     /// builder.Build().Run();
@@ -95,7 +95,7 @@ public static class ResourceBuilderExtensions
     /// <code language="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    /// builder.AddDotnetProject("api", "../ApiService/ApiService.csproj")
     ///        .WithPersistentLifetime();
     ///
     /// builder.Build().Run();
@@ -166,7 +166,7 @@ public static class ResourceBuilderExtensions
     /// <code language="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    /// builder.AddDotnetProject("api", "../ApiService/ApiService.csproj")
     ///        .WithParentProcessLifetime(parentProcessId: 1234);
     ///
     /// builder.Build().Run();
@@ -2247,14 +2247,21 @@ public static class ResourceBuilderExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
-    /// The callback will be executed after endpoints have been allocated for this resource.<br/>
+    /// The callback will be executed after endpoints have been allocated for this resource and before
+    /// <see cref="ResourceEndpointsAllocatedEvent"/> handlers run.<br/>
     /// This allows you to modify any URLs for the resource, including adding, modifying, or even deletion.<br/>
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
+    /// </para>
+    /// <para>
+    /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
+    /// Browser references are finalized after these callbacks. Resolving unfinished browser references from a URL callback
+    /// throws <see cref="InvalidOperationException"/> rather than waiting; already-finalized browser references remain available.
     /// </para>
     /// <example>
     /// Update all displayed URLs to have display text:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrls(c =>
     ///                       {
     ///                           foreach (var url in c.Urls)
@@ -2270,7 +2277,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Update endpoint URLs to use a custom host name based on the resource name:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrls(c =>
     ///                       {
     ///                           foreach (var url in c.Urls)
@@ -2305,9 +2312,16 @@ public static class ResourceBuilderExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// The callback will be executed after endpoints have been allocated for this resource.<br/>
+    /// The callback will be executed after endpoints have been allocated for this resource and before
+    /// <see cref="ResourceEndpointsAllocatedEvent"/> handlers run.<br/>
     /// This allows you to modify any URLs for the resource, including adding, modifying, or even deletion.<br/>
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
+    /// </para>
+    /// <para>
+    /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
+    /// Browser references are finalized after these callbacks. Resolving unfinished browser references from a URL callback
+    /// throws <see cref="InvalidOperationException"/> rather than waiting; already-finalized browser references remain available.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withUrlsCallback.")]
@@ -2337,14 +2351,14 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Add a static URL to be displayed for the resource:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrl("https://example.com/", "Home");
     /// </code>
     /// </example>
     /// <example>
     /// Update all displayed URLs to use the specified path and (optional) display text:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrl("/home", "Home");
     /// </code>
     /// </example>
@@ -2466,8 +2480,14 @@ public static class ResourceBuilderExtensions
     /// To add another URL for an endpoint, use <see cref="WithUrlForEndpoint{T}(IResourceBuilder{T}, string, Func{EndpointReference, ResourceUrlAnnotation})"/>.
     /// </para>
     /// <para>
-    /// The callback will be executed after endpoints have been allocated and the URL has been generated.<br/>
+    /// The callback will be executed after endpoints have been allocated and the URL has been generated,
+    /// but before <see cref="ResourceEndpointsAllocatedEvent"/> handlers run.<br/>
     /// This allows you to modify the URL or its display text.
+    /// </para>
+    /// <para>
+    /// The preferred finalized origin is available through <see cref="EndpointReference.PrimaryBrowserOrigin"/>,
+    /// and all origins through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// Localhost and container network references are unchanged.
     /// </para>
     /// <para>
     /// If the URL returned by <paramref name="callback"/> is relative, it will be combined with the endpoint URL to create an absolute URL.
@@ -2478,14 +2498,14 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Customize the URL for the "https" endpoint to use the link text "Home":
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrlForEndpoint("https", url => url.DisplayText = "Home");
     /// </code>
     /// </example>
     /// <example>
     /// Customize the URL for the "https" endpoint to deep to the "/home" path:
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrlForEndpoint("https", url => url.Url = "/home");
     /// </code>
     /// </example>
@@ -2540,7 +2560,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Add a URL for the "https" endpoint that deep-links to an admin page with the text "Admin":
     /// <code lang="C#">
-    /// var frontend = builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///                       .WithUrlForEndpoint("https", ep => new() { Url = "/admin", DisplayText = "Admin" });
     /// </code>
     /// </example>
@@ -2725,7 +2745,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitFor(messaging);
     /// </code>
@@ -2785,7 +2805,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitFor(messaging, WaitBehavior.StopOnResourceUnavailable);
     /// </code>
@@ -2850,7 +2870,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitForStart(messaging);
     /// </code>
@@ -2908,7 +2928,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var messaging = builder.AddRabbitMQ("messaging");
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(messaging)
     ///        .WaitForStart(messaging, WaitBehavior.StopOnResourceUnavailable);
     /// </code>
@@ -2981,7 +3001,7 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var pgsql = builder.AddPostgres("postgres");
-    /// builder.AddProject&lt;Projects.CleanUpDatabase&gt;("dbcleanuptool")
+    /// builder.AddDotnetProject("dbcleanuptool", "../CleanUpDatabase/CleanUpDatabase.csproj")
     ///        .WithReference(pgsql)
     ///        .WithExplicitStart();
     /// </code>
@@ -3013,9 +3033,9 @@ public static class ResourceBuilderExtensions
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var pgsql = builder.AddPostgres("postgres");
-    /// var dbprep = builder.AddProject&lt;Projects.DbPrepApp&gt;("dbprep")
+    /// var dbprep = builder.AddDotnetProject("dbprep", "../DbPrepApp/DbPrepApp.csproj")
     ///                     .WithReference(pgsql);
-    /// builder.AddProject&lt;Projects.DatabasePrepTool&gt;("dbpreptool")
+    /// builder.AddDotnetProject("dbpreptool", "../DatabasePrepTool/DatabasePrepTool.csproj")
     ///        .WithReference(pgsql)
     ///        .WaitForCompletion(dbprep);
     /// </code>
@@ -3074,7 +3094,7 @@ public static class ResourceBuilderExtensions
     /// var pg = builder.AddPostgres("pg")
     ///                 .WithHealthCheck("mycheck");
     ///
-    /// builder.AddProject&lt;Projects.MyApp&gt;("myapp")
+    /// builder.AddDotnetProject("myapp", "../MyApp/MyApp.csproj")
     ///        .WithReference(pg)
     ///        .WaitFor(pg); // This will result in waiting for the building check, and the
     ///                      // custom check defined in the code.
@@ -3121,9 +3141,9 @@ public static class ResourceBuilderExtensions
     /// "/health" path on the backend server.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                      .WithHttpHealthCheck("/health");
-    /// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///        .WithReference(backend).WaitFor(backend);
     /// </code>
     /// </example>
@@ -3163,9 +3183,9 @@ public static class ResourceBuilderExtensions
     /// "/health" path on the backend server.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
-    /// backend.WithHttpHealthCheck(() => backend.GetEndpoint("https"), path: "/health")
-    /// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
+    /// backend.WithHttpHealthCheck(() => backend.GetEndpoint("https"), path: "/health");
+    /// builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///        .WithReference(backend).WaitFor(backend);
     /// </code>
     /// </example>
@@ -3243,9 +3263,9 @@ public static class ResourceBuilderExtensions
     /// "/health" path on the backend server.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                      .WithHttpsHealthCheck("/health");
-    /// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+    /// builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     ///        .WithReference(backend).WaitFor(backend);
     /// </code>
     /// </example>
@@ -3934,7 +3954,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Adds a command to the project resource that when invoked sends an HTTP POST request to the path <c>/clear-cache</c>.
     /// <code lang="csharp">
-    /// var apiService = builder.AddProject&gt;MyApiService&gt;("api")
+    /// var apiService = builder.AddDotnetProject("api", "../MyApiService/MyApiService.csproj")
     ///     .WithHttpCommand("/clear-cache", "Clear cache");
     /// </code>
     /// </example>
@@ -3943,8 +3963,8 @@ public static class ResourceBuilderExtensions
     /// The request's headers are configured to include an <c>X-Admin-Key</c> header for verification.
     /// <code lang="csharp">
     /// var adminKey = builder.AddParameter("admin-key");
-    /// var apiService = builder.AddProject&gt;MyApiService&gt;("api")
-    ///     .WithHttpsEndpoint("admin")
+    /// var apiService = builder.AddDotnetProject("api", "../MyApiService/MyApiService.csproj")
+    ///     .WithHttpsEndpoint(name: "admin")
     ///     .WithEnvironment("ADMIN_KEY", adminKey)
     ///     .WithHttpCommand("/reset-db", "Reset database",
     ///                      endpointName: "admin",
@@ -4029,9 +4049,9 @@ public static class ResourceBuilderExtensions
     /// Adds commands to a project resource that when invoked sends an HTTP POST request to an endpoint on a separate load generator resource, to generate load against the
     /// resource the command was executed against.
     /// <code lang="csharp">
-    /// var loadGenerator = builder.AddProject&gt;LoadGenerator&gt;("load");
+    /// var loadGenerator = builder.AddDotnetProject("load", "../LoadGenerator/LoadGenerator.csproj");
     /// var loadGeneratorEndpoint = loadGenerator.GetEndpoint("https");
-    /// var customerService = builder.AddProject&gt;CustomerService&gt;("customer-service")
+    /// var customerService = builder.AddDotnetProject("customer-service", "../CustomerService/CustomerService.csproj")
     ///     .WithHttpCommand("/stress?resource=customer-service&amp;requests=1000", "Apply load (1000)", endpointSelector: () => loadGeneratorEndpoint)
     ///     .WithHttpCommand("/stress?resource=customer-service&amp;requests=5000", "Apply load (5000)", endpointSelector: () => loadGeneratorEndpoint);
     /// loadGenerator.WithReference(customerService);
@@ -4408,7 +4428,7 @@ public static class ResourceBuilderExtensions
     ///     Args = args,
     ///     TrustDeveloperCertificate = false,
     /// });
-    /// var project = builder.AddProject&lt;MyService&gt;("my-service")
+    /// var project = builder.AddDotnetProject("my-service", "../MyService/MyService.csproj")
     ///    .WithDeveloperCertificateTrust(true);
     /// </code>
     /// </example>
@@ -4835,8 +4855,8 @@ public static class ResourceBuilderExtensions
     /// This example shows adding a relationship between two resources.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
-    /// var manager = builder.AddProject&lt;Projects.Manager&gt;("manager")
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
+    /// var manager = builder.AddDotnetProject("manager", "../Manager/Manager.csproj")
     ///                      .WithRelationship(backend.Resource, "Manager");
     /// </code>
     /// </example>
@@ -4996,9 +5016,9 @@ public static class ResourceBuilderExtensions
     /// This example shows adding a relationship between two resources.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
     ///
-    /// var frontend = builder.AddProject&lt;Projects.Manager&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Manager/Manager.csproj")
     ///                      .WithParentRelationship(backend);
     /// </code>
     /// </example>
@@ -5028,9 +5048,9 @@ public static class ResourceBuilderExtensions
     /// This example shows adding a relationship between two resources.
     /// <code lang="C#">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
     ///
-    /// var frontend = builder.AddProject&lt;Projects.Manager&gt;("frontend")
+    /// var frontend = builder.AddDotnetProject("frontend", "../Manager/Manager.csproj")
     ///                      .WithParentRelationship(backend.Resource);
     /// </code>
     /// </example>
@@ -5064,7 +5084,7 @@ public static class ResourceBuilderExtensions
     ///
     /// var parameter = builder.AddParameter("parameter");
     ///
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                      .WithChildRelationship(parameter);
     /// </code>
     /// </example>
@@ -5098,7 +5118,7 @@ public static class ResourceBuilderExtensions
     ///
     /// var parameter = builder.AddParameter("parameter");
     ///
-    /// var backend = builder.AddProject&lt;Projects.Backend&gt;("backend");
+    /// var backend = builder.AddDotnetProject("backend", "../Backend/Backend.csproj")
     ///                     .WithChildRelationship(parameter.Resource);
     /// </code>
     /// </example>
@@ -5111,6 +5131,34 @@ public static class ResourceBuilderExtensions
     {
         var childBuilder = builder.ApplicationBuilder.CreateResourceBuilder(child);
         return builder.WithChildRelationship(childBuilder);
+    }
+
+    /// <summary>
+    /// Overrides the human-readable resource type label.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="resourceTypeDisplayName">The type label, such as Redis or PostgreSQL Server.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// When not specified, the resource class supplies the default label, falling back to the resource type.
+    /// This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+    /// Repeated calls replace the previous override.
+    /// </remarks>
+    /// <example>
+    /// <code lang="C#">
+    /// builder.AddProject&lt;Projects.Orders&gt;("orders").WithResourceTypeDisplayName("Orders API");
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">The builder is null.</exception>
+    /// <exception cref="ArgumentException">The resource type display name is empty or whitespace.</exception>
+    [AspireExport]
+    public static IResourceBuilder<T> WithResourceTypeDisplayName<T>(this IResourceBuilder<T> builder, string resourceTypeDisplayName) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceTypeDisplayName);
+
+        return builder.WithAnnotation(new ResourceTypeDisplayNameAnnotation(resourceTypeDisplayName), ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
@@ -5137,7 +5185,7 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// Set a custom service to use a specific icon with Regular variant:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithIconName("CloudArrowUp", IconVariant.Regular);
     /// </code>
     /// </example>
@@ -5484,12 +5532,12 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// For example add a probe to a resource in this way:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health");
     /// </code>
     /// Is the same of writing:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health")
     ///     .WithHttpHealthCheck("/health");
     /// </code>
@@ -5542,12 +5590,12 @@ public static class ResourceBuilderExtensions
     /// <example>
     /// For example add a probe to a resource in this way:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health");
     /// </code>
     /// Is the same of writing:
     /// <code lang="C#">
-    /// var service = builder.AddProject&lt;Projects.MyService&gt;("service")
+    /// var service = builder.AddDotnetProject("service", "../MyService/MyService.csproj")
     ///     .WithHttpProbe(ProbeType.Liveness, "/health")
     ///     .WithHttpHealthCheck("/health");
     /// </code>

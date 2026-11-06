@@ -141,6 +141,13 @@ public sealed class IntegrationHostLifetimeTests(ITestOutputHelper output)
         await auto.RunCommandAsync("node process-control.mjs describe", counter);
         await auto.RunCommandAsync("aspire stop --non-interactive > stop.log 2>&1", counter, TimeSpan.FromMinutes(1));
         await auto.RunCommandAsync("node process-control.mjs clean", counter, TimeSpan.FromSeconds(75));
+        // The container owns the 0600 CLI logs. Export copies before the non-root
+        // host collects evidence, without relaxing permissions on the original logs.
+        await auto.RunCommandAsync("mkdir -p exported-logs && install -m 0644 session.log exported-logs/session.log", counter);
+        if (target == "install")
+        {
+            await auto.RunCommandAsync("install -m 0644 install-session.log exported-logs/install-session.log", counter);
+        }
         var testName = Hex1bTestHelpers.ResolveTestMethodName(nameof(RunScenarioAsync));
         var evidence = IntegrationHostLifetimeTestHelper.CaptureEvidence(workspace.WorkspaceRoot.FullName, testName, target);
         output.WriteLine($"Process identities, diagnostics, and user-visible command results: {evidence}");

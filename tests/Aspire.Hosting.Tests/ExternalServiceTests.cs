@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Synthetic legacy project metadata exercises external-service reference contracts.
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -621,3 +622,4 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         public LaunchSettings LaunchSettings { get; } = new();
     }
 }
+#pragma warning restore CS0618

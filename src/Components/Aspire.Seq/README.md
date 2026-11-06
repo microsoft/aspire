@@ -65,6 +65,7 @@ In your AppHost project, install the `Aspire.Hosting.Seq` library with [NuGet](h
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Seq
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, register a Seq server and propagate its configuration using the following methods (note that you must accept the [Seq End User License Agreement](https://datalust.co/doc/eula-current.pdf) for Seq to start):
@@ -72,7 +73,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, register a Seq server and propagate
 ```csharp
 var seq = builder.AddSeq("seq");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(seq);
 ```
 

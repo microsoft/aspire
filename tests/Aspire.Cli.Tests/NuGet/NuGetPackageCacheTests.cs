@@ -13,6 +13,88 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task SearchPreservesSdkSourceFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchFailedSources = ["private-feed"],
+                SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                    (0, [new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = "public-feed" }])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var results = await provider.GetRequiredService<INuGetPackageCache>().GetPackagesAsync(
+            workspace.WorkspaceRoot, "Aspire.Hosting", filter: null, prerelease: false,
+            nugetConfigFile: null, useCache: false, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["private-feed"], results.FailedSources);
+        Assert.Equal("Aspire.Hosting.Redis", Assert.Single(results.Packages).Id);
+    }
+
+    [Theory]
+    [InlineData(3999, 1, false, true)]
+    [InlineData(4000, 1, true, true)]
+    [InlineData(4001, 1, true, true)]
+    [InlineData(3999, 2, false, true)]
+    [InlineData(4001, 2, true, true)]
+    [InlineData(4001, 2, true, false)]
+    public async Task SearchBoundsPaginationPerFeedAndReportsWhenResultsMayBeIncomplete(int packageCount, int feedCount, bool expectLimitReached, bool includePackages)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "NuGet.Config"), """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="first" value="https://example.test/first/v3/index.json" />
+                <add key="second" value="https://example.test/second/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        var packages = new[] { "https://example.test/first/v3/index.json", "https://example.test/second/v3/index.json" }
+            .Take(feedCount)
+            .SelectMany((source, feedIndex) => Enumerable.Range(0, packageCount).Select(index => new NuGetPackage
+            {
+                Id = $"Paging.Feed{feedIndex}.Package{index:D4}",
+                Version = "1.0.0",
+                Source = source
+            }))
+            .ToArray();
+        var requests = new List<(int Skip, int Take)>();
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.InteractionServiceFactory = _ => interactionService;
+            configure.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+            configure.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, _, _, _, take, skip, _, _, _, _) =>
+                {
+                    requests.Add((skip, take));
+                    return (0, packages.GroupBy(package => package.Source)
+                        .SelectMany(feed => feed.Skip(skip).Take(take)).ToArray());
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var cache = provider.GetRequiredService<INuGetPackageCache>();
+
+        var results = await cache.GetPackagesAsync(
+            workspace.WorkspaceRoot, "Paging.[test]", filter: _ => includePackages, prerelease: true,
+            nugetConfigFile: null, useCache: false, TestContext.Current.CancellationToken);
+
+        Assert.Equal([(0, 1000), (1000, 1000), (2000, 1000), (3000, 1000)], requests);
+        var expectedIds = packages.GroupBy(package => package.Source)
+            .SelectMany(feed => feed.Take(4000)).Where(_ => includePackages).Select(package => package.Id).Order();
+        Assert.Equal(expectedIds, results.Packages.Select(package => package.Id).Order());
+        Assert.Equal(expectLimitReached, results.LimitReached);
+        Assert.Empty(interactionService.DisplayedMessages);
+    }
+
     [Theory]
     [InlineData("Aspire.Hosting.Redis", true)]
     [InlineData("aspire.hosting.redis", true)]
@@ -80,7 +162,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
 
         var packages = await cache.GetIntegrationPackagesAsync(configuration, prerelease: true, TestContext.Current.CancellationToken);
         Assert.Collection(
-            packages,
+            packages.Packages,
             package =>
             {
                 Assert.Equal("Aspire.Hosting.Redis", package.Id);
@@ -163,7 +245,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include regular packages but exclude deprecated Dapr package
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.Dapr", packageIds);
@@ -205,7 +287,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include all packages including deprecated Dapr package when showing deprecated is enabled
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
@@ -321,7 +403,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         // Custom filter should bypass deprecated package filtering
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.Redis", packageIds);
         Assert.DoesNotContain("Other.Package", packageIds);
@@ -356,7 +438,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should filter out all case variations of deprecated package
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.DoesNotContain("aspire.hosting.dapr", packageIds);
         Assert.DoesNotContain("ASPIRE.HOSTING.DAPR", packageIds);
@@ -390,7 +472,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", filter: null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         Assert.Collection(
-            packages.Select(p => p.Id),
+            packages.Packages.Select(p => p.Id),
             id => Assert.Equal("Aspire.Hosting.Redis", id),
             id => Assert.Equal("Aspire.Hosting.PostgreSQL", id));
     }

@@ -17,15 +17,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build with packages
+        shell: bash
         env:
           VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
         run: |
-          args_file=$(mktemp)
+          args_file="$RUNNER_TEMP/version-arguments"
           trap 'rm -f "$args_file"' EXIT
           python3 .github/workflows/parse-command-line.py --format nul VERSION_OVERRIDE_ARG > "$args_file"
           version_args=()
           while IFS= read -r -d '' arg; do version_args+=("$arg"); done < "$args_file"
-          ./build.sh -restore -build -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true -p:SkipBundleDeps=true "${version_args[@]}"
+          ./build.sh \
+            -restore \
+            -build \
+            -ci \
+            -pack \
+            -bl \
+            -p:InstallBrowsersForPlaywright=false \
+            -p:SkipTestProjects=true \
+            -p:SkipBundleDeps=true \
+            -p:SkipNativeBuild=true \
+            "${version_args[@]}"
 
       - name: Generate template component manifest
         shell: pwsh

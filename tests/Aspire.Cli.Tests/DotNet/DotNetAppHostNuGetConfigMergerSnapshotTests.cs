@@ -129,7 +129,17 @@ public class DotNetAppHostNuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        if (channelName == PackageChannelNames.Daily)
+        {
+            var original = await File.ReadAllBytesAsync(Path.Combine(root.FullName, "nuget.config"));
+            await Assert.ThrowsAsync<Aspire.Cli.Projects.ProjectUpdaterException>(() =>
+                DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel));
+            Assert.Equal(original, await File.ReadAllBytesAsync(Path.Combine(root.FullName, "nuget.config")));
+        }
+        else
+        {
+            await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        }
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString()
@@ -191,7 +201,12 @@ public class DotNetAppHostNuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
+        var original = await File.ReadAllBytesAsync(Path.Combine(root.FullName, "nuget.config"));
         await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        if (channelName == PackageChannelNames.Daily)
+        {
+            Assert.Equal(original, await File.ReadAllBytesAsync(Path.Combine(root.FullName, "nuget.config")));
+        }
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -321,7 +336,17 @@ public class DotNetAppHostNuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        if (channelName == PackageChannelNames.Daily)
+        {
+            var original = await File.ReadAllBytesAsync(Path.Combine(root.FullName, "nuget.config"));
+            await Assert.ThrowsAsync<Aspire.Cli.Projects.ProjectUpdaterException>(() =>
+                DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel));
+            Assert.Equal(original, await File.ReadAllBytesAsync(Path.Combine(root.FullName, "nuget.config")));
+        }
+        else
+        {
+            await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        }
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString()

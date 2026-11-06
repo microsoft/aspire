@@ -18,7 +18,8 @@ namespace Aspire.Cli;
 /// available-features listing and <c>aspire config info</c> / its generated VS Code schemas). The
 /// flag still works if set directly in configuration; hiding only removes it from discovery.
 /// </param>
-internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue, bool Hidden = false);
+/// <param name="ProjectOnly">Whether the feature requires explicit project configuration.</param>
+internal sealed record FeatureMetadata(string Name, string Description, bool DefaultValue, bool Hidden = false, bool ProjectOnly = false);
 
 // this is a copy of Shared/KnownResourceNames.cs
 internal static class KnownFeatures
@@ -31,11 +32,15 @@ internal static class KnownFeatures
     public static string ShowAllTemplates => "showAllTemplates";
     public static string ExperimentalPolyglotRust => "experimentalPolyglotRust";
     public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
-    public static string ExperimentalPolyglotGo => "experimentalPolyglotGo";
     public static string ExperimentalPolyglotPython => "experimentalPolyglotPython";
     public static string ExperimentalHostingIntegrations => "experimentalHostingIntegrations";
+    public static string AppHostServerV2 => "appHostServerV2";
+
+    // Server selection is an AppHost migration, not an ambient CLI preference.
+    // A global flag must not silently switch existing applications.
+    public static bool IsAppHostServerV2Enabled(AspireConfigFile? config)
+        => config?.Features is { } features && features.TryGetValue(AppHostServerV2, out var enabled) && enabled;
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
-    public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
@@ -75,11 +80,6 @@ internal static class KnownFeatures
             "Enable or disable experimental Java language support for polyglot Aspire applications",
             DefaultValue: false),
 
-        [ExperimentalPolyglotGo] = new(
-            ExperimentalPolyglotGo,
-            "Enable or disable experimental Go language support for polyglot Aspire applications",
-            DefaultValue: false),
-
         [ExperimentalPolyglotPython] = new(
             ExperimentalPolyglotPython,
             "Enable or disable experimental Python language support for polyglot Aspire applications",
@@ -90,19 +90,16 @@ internal static class KnownFeatures
             "Enable experimental hosting integrations authored outside .NET",
             DefaultValue: false),
 
+        [AppHostServerV2] = new(
+            AppHostServerV2,
+            "Use AppHost Server v2 for this AppHost. Requires an explicit project configuration setting.",
+            DefaultValue: false,
+            ProjectOnly: true),
+
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
             DefaultValue: true),
-
-        [AspireSkillsRemoteFetchEnabled] = new(
-            AspireSkillsRemoteFetchEnabled,
-            "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
-            DefaultValue: false,
-            // Hidden from discovery while the remote-fetch path is preview-only: the CLI ships with a
-            // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
-            // still honored if set directly in config.
-            Hidden: true),
 
         [PolyglotIntegrationFilterEnabled] = new(
             PolyglotIntegrationFilterEnabled,
@@ -139,6 +136,10 @@ internal static class KnownFeatures
     /// </summary>
     public static bool IsHostingIntegrationsEnabled(IFeatures features, AspireConfigFile config)
     {
+        if (IsAppHostServerV2Enabled(config))
+        {
+            return true;
+        }
         // --apphost can target a different directory than the CLI's configuration scope.
         // Honor that AppHost's explicit setting before falling back to CLI/global settings.
         return config.Features is { } projectFeatures

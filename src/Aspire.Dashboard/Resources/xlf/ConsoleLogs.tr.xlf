@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsFound">
         <source>No logs found</source>
-        <target state="new">No logs found</target>
+        <target state="translated">Günlük bulunamadı</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsMatchFilter">
         <source>No logs match the filter</source>
-        <target state="new">No logs match the filter</target>
+        <target state="translated">Filtreyle eşleşen günlük yok</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNotCapturedForRun">
         <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
-        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
+        <target state="translated">Bu çalıştırma için konsol günlükleri yakalanmadı. Konsol günlükleri yalnızca AppHost çalışırken bu sayfa ziyaret edilirse yakalanır.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsTextFilter">
         <source>Console logs filter</source>
-        <target state="new">Console logs filter</target>
+        <target state="translated">Konsol günlükleri filtresi</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="PauseInProgressText">
         <source>Console logs capture paused at {0}</source>
-        <target state="new">Console logs capture paused at {0}</target>
+        <target state="translated">Konsol günlüklerini yakalama işlemi {0} itibarıyla duraklatıldı</target>
         <note>{0} is a time</note>
       </trans-unit>
     </body>

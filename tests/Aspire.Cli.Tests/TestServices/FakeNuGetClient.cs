@@ -3,6 +3,7 @@
 
 using System.Xml.Linq;
 using Aspire.Cli.NuGet;
+using NuGet.Versioning;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -12,6 +13,8 @@ internal sealed class FakeNuGetClient : INuGetClient
     public int RestoreCallCount { get; private set; }
     public int WriteManifestCallCount { get; private set; }
     public int SearchCallCount { get; private set; }
+    public bool SearchLimitReached { get; init; }
+    public IReadOnlyList<string> SearchFailedSources { get; init; } = [];
     public int GetSettingsCallCount { get; private set; }
     public int WriteNuGetConfigCallCount { get; private set; }
     public IReadOnlyList<(string Id, string Version)>? LastRestorePackages { get; private set; }
@@ -48,6 +51,12 @@ internal sealed class FakeNuGetClient : INuGetClient
         Task<IReadOnlyList<NuGetSearchResult>>>? SearchCallback { get; init; }
 
     public Func<string, byte[], NuGetSettingsInfo>? GetSettingsCallback { get; set; }
+    public Func<string, string, CancellationToken, Task<IReadOnlyList<NuGetVersion>>>? GetPackageVersionsCallback { get; set; }
+
+    public Task<IReadOnlyList<NuGetVersion>> GetPackageVersionsAsync(
+        string packageId, string workingDirectory, CancellationToken cancellationToken)
+        => GetPackageVersionsCallback?.Invoke(packageId, workingDirectory, cancellationToken)
+            ?? Task.FromResult<IReadOnlyList<NuGetVersion>>([]);
 
     public Action<NuGetConfigOverlay, string>? WriteNuGetConfigCallback { get; set; }
 
@@ -120,7 +129,7 @@ internal sealed class FakeNuGetClient : INuGetClient
             cancellationToken);
     }
 
-    public Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
+    public async Task<PackageSearchResult<NuGetSearchResult>> SearchAsync(
         string query,
         bool prerelease,
         int take,
@@ -130,14 +139,16 @@ internal sealed class FakeNuGetClient : INuGetClient
         CancellationToken cancellationToken)
     {
         SearchCallCount++;
-        return SearchCallback?.Invoke(
+        var packages = SearchCallback is not null ? await SearchCallback.Invoke(
             query,
             prerelease,
             take,
             explicitSources,
             nugetConfigPath,
             workingDirectory,
-            cancellationToken) ?? Task.FromResult<IReadOnlyList<NuGetSearchResult>>([]);
+            cancellationToken) : [];
+
+        return new(packages, SearchLimitReached, SearchFailedSources);
     }
 
     public NuGetSettingsInfo GetSettings(string workingDirectory, byte[] sourceIdentityKey)

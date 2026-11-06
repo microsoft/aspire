@@ -2,10 +2,11 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
+import type { ExecutableLaunchConfiguration } from '../dcp/types';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { createEmptyAppHostProject, createExternalSingleFileAppHost, executeE2eControlCommand, getGeneratedAppHostPath, getGeneratedProjectRoot, isProcessAlive, removeExternalSingleFileAppHost, removeGeneratedProject, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
+import { chooseActiveQuickPick, dismissAllNotifications, executeCommandFromPalette, openAspireView, waitForEditorTitle, waitForNotificationMessage } from './helpers/vscode';
 
 interface DebugSessionProcessInfo {
     appHostPath?: string;
@@ -75,6 +76,17 @@ suite('Aspire extension edge case E2E', function () {
             executeE2eControlCommand({ name: 'publishAppHost' }),
             /publishAppHost requires appHostPath/);
         assert.strictEqual(getDebugLaunchCount(), beforePublishLaunch);
+
+        await assert.rejects(
+            executeE2eControlCommand({
+                name: 'createResourceDebugConfiguration',
+                launchConfig: {
+                    type: 'browser',
+                    browser: 'safari',
+                    url: 'https://top-secret.invalid',
+                } as ExecutableLaunchConfiguration,
+            }),
+            /E2E control command failed\./);
     });
 
     test('keeps CLI-independent settings commands available when the CLI is unavailable', async () => {
@@ -83,7 +95,9 @@ suite('Aspire extension edge case E2E', function () {
         await setCliUnavailableForE2E(true);
 
         const settingsBefore = getCommandInvocationCount('aspire-vscode.settings');
-        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' });
+        // The first Settings editor open in a window can take well over the 10s control wait on
+        // Windows runners, so the command outcome wait owns completion.
+        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.settings', 'success', 60000, settingsBefore);
 
         const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');
@@ -205,10 +219,10 @@ builder.Build().Run();`));
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 180000, runBefore);
 
-        const notification = await waitForNotificationMessage(
+        await waitForNotificationMessage(
             'Set up Python debugging support to debug resources in this app.',
             60000);
-        await notification.dismiss();
+        await dismissAllNotifications();
     });
 
     test('process-owner cleanup stops the owned CLI and AppHost process tree', async () => {

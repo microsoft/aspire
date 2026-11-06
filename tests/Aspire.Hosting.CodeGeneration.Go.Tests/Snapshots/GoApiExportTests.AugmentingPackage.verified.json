@@ -1,0 +1,109 @@
+﻿{
+  "schemaVersion": 1,
+  "language": "go",
+  "generator": {
+    "name": "Aspire.Hosting.CodeGeneration.Go",
+    "version": "1.0.0"
+  },
+  "package": {
+    "name": "Aspire.Hosting.CodeGeneration.Go.Tests",
+    "version": "13.5.0",
+    "importPath": "apphost/modules/aspire"
+  },
+  "modules": [
+    {
+      "name": "Aspire.Hosting.CodeGeneration.Go.Tests",
+      "items": [
+        {
+          "id": "augmentation:Aspire.Hosting.CodeGeneration.Go.Tests:DistributedApplicationBuilder",
+          "kind": "augmentation",
+          "name": "DistributedApplicationBuilder",
+          "typeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+          "owningAssembly": "Aspire.Hosting",
+          "declaration": "type DistributedApplicationBuilder interface",
+          "members": [
+            {
+              "id": "DistributedApplicationBuilder.AddTestRedis",
+              "kind": "method",
+              "name": "AddTestRedis",
+              "declaration": "AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis",
+              "targetTypeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "TestRedisResource",
+              "errorModel": "deferred",
+              "summary": "Adds a test Redis resource from ATS documentation.",
+              "returns": "The ATS test Redis resource builder.",
+              "returnsBuilder": true,
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": false,
+                  "summary": "The ATS resource name."
+                }
+              ],
+              "options": {
+                "typeName": "AddTestRedisOptions",
+                "fields": [
+                  {
+                    "name": "Port",
+                    "type": "*float64",
+                    "optional": true,
+                    "jsonName": "port"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "DistributedApplicationBuilder.AddTestVault",
+              "kind": "method",
+              "name": "AddTestVault",
+              "declaration": "AddTestVault(name string) TestVaultResource",
+              "capabilityId": "Aspire.Hosting.CodeGeneration.Go.Tests/addTestVault",
+              "targetTypeId": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+              "returnType": "TestVaultResource",
+              "errorModel": "deferred",
+              "summary": "Adds a test vault resource",
+              "returns": "The interface vault resource builder.",
+              "returnsBuilder": true,
+              "parameters": [
+                {
+                  "name": "name",
+                  "type": "string",
+                  "optional": false,
+                  "summary": "The resource name."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "interface:TestVaultResource",
+          "kind": "interface",
+          "name": "TestVaultResource",
+          "typeId": "Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource",
+          "owningAssembly": "Aspire.Hosting.CodeGeneration.Go.Tests",
+          "declaration": "type TestVaultResource interface",
+          "marker": true,
+          "members": [
+            {
+              "id": "TestVaultResource.Err",
+              "kind": "method",
+              "name": "Err",
+              "declaration": "Err() error",
+              "returnType": "error",
+              "errorModel": "none",
+              "summary": "Err returns the first error recorded on this wrapper. Returns nil if the wrapper resolved successfully and no chained operation has failed.",
+              "synthesized": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "declarations": []
+}

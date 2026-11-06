@@ -1,18 +1,20 @@
 import { EventEmitter } from 'node:events';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AspireExport, defineIntegration } from '@aspire/base';
 import { CancellationToken, Handle, invokeRegisteredCallback, registerCallback, registerCancellation, registerHandleWrapper, unregisterCallback, type AspireClientRpc } from '@aspire/transport';
-import { runIntegrationHost } from '../../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/integration-host.mts';
+import { IntegrationResource, runIntegrationHost } from '../../../src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/integration-host.mts';
 
-const { onRequest, sendRequest, onClose } = vi.hoisted(() => ({
+const { onRequest, sendRequest, onClose, dispose, destroy } = vi.hoisted(() => ({
     onRequest: vi.fn(),
     sendRequest: vi.fn(),
     onClose: vi.fn(),
+    dispose: vi.fn(),
+    destroy: vi.fn(),
 }));
 
 vi.mock('node:net', () => ({
     createConnection: () => {
-        const socket = Object.assign(new EventEmitter(), { ref: vi.fn(), unref: vi.fn() });
+        const socket = Object.assign(new EventEmitter(), { ref: vi.fn(), unref: vi.fn(), destroy });
         queueMicrotask(() => socket.emit('connect'));
         return socket;
     },
@@ -30,17 +32,68 @@ vi.mock('vscode-jsonrpc/node.js', () => ({
         onError: vi.fn(),
         onClose,
         listen: vi.fn(),
+        dispose,
     }),
 }));
 
 describe('integration host callback relay', () => {
-    afterEach(() => {
-        for (const [close] of onClose.mock.calls) {
-            close();
+    beforeEach(() => {
+        vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    });
+
+    afterEach(async () => {
+        try {
+            for (const [close] of onClose.mock.calls) {
+                await close();
+            }
+        } finally {
+            vi.unstubAllEnvs();
+            vi.restoreAllMocks();
+            vi.clearAllMocks();
         }
-        vi.unstubAllEnvs();
-        vi.restoreAllMocks();
-        vi.clearAllMocks();
+    });
+
+    it('finishes asynchronous resource cleanup before releasing transport and exiting', async () => {
+        vi.stubEnv('ASPIRE_NATIVE_RPC_ENDPOINT', '127.0.0.1:12345');
+        vi.stubEnv('ASPIRE_NATIVE_RPC_TOKEN', 'integration-test-token');
+        vi.stubEnv('ASPIRE_INTEGRATION_HOST_REGISTRATION_ID', 'integration-test-registration');
+        vi.spyOn(process, 'on').mockReturnValue(process);
+        vi.spyOn(console, 'log').mockImplementation(() => {});
+        sendRequest.mockResolvedValue(true);
+        let finish!: () => void;
+        const pending = new Promise<void>(resolve => { finish = resolve; });
+        const release = vi.fn(() => pending);
+        class OwnedResource extends IntegrationResource {
+            override dispose(): Promise<void> { return release(); }
+        }
+        const resource = new OwnedResource({ toJSON: () => ({ $handle: 'declaration', $type: 'test/Declaration' }) }, 'test/Resource');
+        const capability = AspireExport({
+            id: 'test/resource', method: 'resource', description: 'Exercise provider object shutdown',
+        }, async () => resource);
+        await runIntegrationHost({
+            packageName: 'test-host',
+            integrations: [defineIntegration({ name: 'test', capabilities: [capability] })],
+        });
+        const handler = onRequest.mock.calls.find(([method]) =>
+            typeof method === 'object' && method.method === 'handleExternalCapability')![1];
+        await handler('test/resource', {}, 'create-resource');
+        const close = onClose.mock.calls[0]![0];
+        const closing = close();
+        try {
+            await Promise.resolve();
+            expect(release).toHaveBeenCalledTimes(1);
+            expect(dispose).not.toHaveBeenCalled();
+            expect(destroy).not.toHaveBeenCalled();
+            expect(process.exit).not.toHaveBeenCalled();
+        } finally {
+            finish();
+            await closing;
+        }
+        expect(dispose).toHaveBeenCalledTimes(1);
+        expect(destroy).toHaveBeenCalledTimes(1);
+        expect(process.exit).toHaveBeenCalledWith(0);
+        await close();
+        expect(release).toHaveBeenCalledTimes(1);
     });
 
     it.each(['void', 'string'] as const)('applies DTO writeback only for a %s callback across a serialized round trip', async (returnType) => {

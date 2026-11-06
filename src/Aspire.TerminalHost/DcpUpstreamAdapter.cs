@@ -77,6 +77,11 @@ internal sealed class DcpUpstreamAdapter : IHex1bTerminalWorkloadAdapter
     /// <inheritdoc />
     public event Action? Disconnected;
 
+    /// <summary>
+    /// Completes after the producer transport connects.
+    /// </summary>
+    public Task ConnectedTask => _connectedTcs.Task;
+
     public DcpUpstreamAdapter(
         Func<CancellationToken, Task<Stream>> streamFactory,
         ILogger<DcpUpstreamAdapter> logger)

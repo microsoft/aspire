@@ -1,0 +1,8 @@
+﻿{
+  PromptDemo.txt:
+Name: PromptDemo
+Greeting: Hello from the terminal
+Kind: api
+Features: web|worker
+
+}

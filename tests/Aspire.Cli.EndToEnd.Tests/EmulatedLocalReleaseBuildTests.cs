@@ -56,9 +56,9 @@ public sealed class EmulatedLocalReleaseBuildTests(ITestOutputHelper output)
     /// scaffolding the C# <c>aspire-starter</c> template entirely from the local build.
     ///
     /// Validates the "everything local" promise for C#: <c>aspire new</c> resolves the template from
-    /// the local hive (not nuget.org), pins the AppHost SDK to the local stable version, and — because
-    /// a stable build's packages live on the ambient default source — drops <b>no</b> per-project
-    /// <c>NuGet.config</c>. Then <c>aspire add redis</c> resolves <c>Aspire.Hosting.Redis</c> at the
+    /// the local hive (not nuget.org), pins the AppHost SDK to the local stable version, and retains
+    /// the legacy stable channel's policy of creating <b>no</b> per-project <c>NuGet.config</c>.
+    /// Then <c>aspire add redis</c> resolves <c>Aspire.Hosting.Redis</c> at the
     /// local stable version; since that version exists only in the local hive, resolving it proves the
     /// CLI consulted <c>ASPIRE_CLI_PACKAGES</c> rather than nuget.org.
     /// </summary>
@@ -87,9 +87,8 @@ public sealed class EmulatedLocalReleaseBuildTests(ITestOutputHelper output)
 
         var projectDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
 
-        // A stable build's packages all live on the ambient default source, so the CLI must not pin a
-        // custom feed via NuGet.config — even though resolution here is actually local. The hive is
-        // surfaced through ASPIRE_CLI_PACKAGES, not a per-project feed pin.
+        // Built-in scaffolding retains its channel-based policy, even when a stable identity
+        // resolves packages from a local override rather than nuget.org.
         AssertNoNuGetConfig(projectDir);
 
         // The local stable version exists only in the hive, so an exact match pins the AppHost to
@@ -154,9 +153,7 @@ public sealed class EmulatedLocalReleaseBuildTests(ITestOutputHelper output)
         var projectDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
         var configPath = Path.Combine(projectDir.FullName, "aspire.config.json");
 
-        // The TypeScript polyglot path does not drop a project NuGet.config (a stable build's packages
-        // live on the ambient default source); it instead relies on the hive via ASPIRE_CLI_PACKAGES.
-        // Asserting this for TS too is the point of the matrix — C# and TS diverge here.
+        // Both built-in templates retain their stable no-config behavior under a local override.
         AssertNoNuGetConfig(projectDir);
 
         // The TS starter records its SDK version in aspire.config.json. The local stable version exists

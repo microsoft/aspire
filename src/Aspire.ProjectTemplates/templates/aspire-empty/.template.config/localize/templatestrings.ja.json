@@ -4,7 +4,7 @@
   "description": "空の Aspire アプリを作成するためのプロジェクト テンプレート。",
   "symbols/Framework/description": "プロジェクトのターゲット フレームワークです。",
   "symbols/Framework/choices/net10.0/description": "ターゲット net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "ターゲット net11.0",
   "symbols/AspireVersion/description": "使用する Aspire のバージョン。",
   "symbols/AspireVersion/displayName": "Aspire のバージョン",
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",

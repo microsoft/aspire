@@ -70,12 +70,14 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 var registryEndpoint = builder.AddParameter("registryendpoint");
                 var registry = builder.AddContainerRegistry("registry", registryEndpoint);
 
+                {{(useProjectV2 ? "" : "#pragma warning disable CS0618 // Retain legacy project deployment alongside the modern scenario.")}}
                 var api = {{(useProjectV2
                     ? $"builder.AddDotnetProject(\"{serverName}\", \"../{ProjectName}.ApiService/{ProjectName}.ApiService.csproj\")"
                     : $"builder.AddProject<Projects.{ProjectName}_ApiService>(\"{serverName}\")")}}
                     .WithRemoteImageName("{{imageName}}")
                     .WithRemoteImageTag("{{imageTag}}")
                     .WithExternalHttpEndpoints();
+                {{(useProjectV2 ? "" : "#pragma warning restore CS0618")}}
 
                 builder.AddKubernetesEnvironment("env")
                     .WithHelm(helm =>

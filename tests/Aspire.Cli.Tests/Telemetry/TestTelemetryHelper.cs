@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Telemetry;
 using Aspire.Shared.Telemetry;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;
@@ -34,7 +35,7 @@ internal static class TestTelemetryHelper
             CreateExecutionContext(),
             tagsSource);
         telemetry.Initialize();
-        tagsSource.TagsTask.GetAwaiter().GetResult();
+        tagsSource.TagsTask.DefaultTimeout().GetAwaiter().GetResult();
         return telemetry;
     }
 
@@ -50,7 +51,7 @@ internal static class TestTelemetryHelper
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         var telemetry = new AspireCliTelemetry(NullLogger<AspireCliTelemetry>.Instance, provider, ciDetector, codingAgentDetector, internalMicrosoftDetector, reportedSourceName, diagnosticsSourceName, CreateExecutionContext(), tagsSource);
         telemetry.Initialize();
-        tagsSource.TagsTask.GetAwaiter().GetResult();
+        tagsSource.TagsTask.DefaultTimeout().GetAwaiter().GetResult();
         return telemetry;
     }
 

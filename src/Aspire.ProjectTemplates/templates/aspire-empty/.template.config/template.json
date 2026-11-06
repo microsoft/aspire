@@ -70,14 +70,7 @@
       "type": "parameter",
       "description": "The version of Aspire to use.",
       "displayName": "Aspire version",
-      "datatype": "choice",
-      "choices": [
-        {
-          "choice": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
-          "displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
-          "description": "Chooses Aspire !!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!"
-        }
-      ],
+      "datatype": "string",
       "defaultValue": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!"
     },
     "hostIdentifier": {

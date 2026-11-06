@@ -21,13 +21,14 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
     private readonly ILogger<EnvironmentChecker> _logger;
     private readonly TimeSpan _checkTimeout;
     private readonly TimeSpan _totalTimeout;
+    private readonly TimeProvider _timeProvider;
 
     public EnvironmentChecker(IEnumerable<IEnvironmentCheck> checks, ILogger<EnvironmentChecker> logger)
         : this(checks, logger, s_defaultCheckTimeout, s_defaultTotalTimeout)
     {
     }
 
-    internal EnvironmentChecker(IEnumerable<IEnvironmentCheck> checks, ILogger<EnvironmentChecker> logger, TimeSpan checkTimeout, TimeSpan totalTimeout)
+    internal EnvironmentChecker(IEnumerable<IEnvironmentCheck> checks, ILogger<EnvironmentChecker> logger, TimeSpan checkTimeout, TimeSpan totalTimeout, TimeProvider? timeProvider = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(checkTimeout, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(totalTimeout, TimeSpan.Zero);
@@ -36,14 +37,15 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
         _logger = logger;
         _checkTimeout = checkTimeout;
         _totalTimeout = totalTimeout;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAllAsync(CancellationToken cancellationToken = default)
     {
         var results = new List<EnvironmentCheckResult>();
-        using var totalTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        totalTimeoutCts.CancelAfter(_totalTimeout);
+        using var totalTimerCts = new CancellationTokenSource(_totalTimeout, _timeProvider);
+        using var totalTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, totalTimerCts.Token);
 
         // Run all checks in order (by Order property)
         // Continue running remaining checks even if one fails
@@ -51,8 +53,8 @@ internal sealed class EnvironmentChecker : IEnvironmentChecker
         {
             var checkType = check.GetType();
             var checkName = GetCheckName(checkType);
-            using var checkTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(totalTimeoutCts.Token);
-            checkTimeoutCts.CancelAfter(_checkTimeout);
+            using var checkTimerCts = new CancellationTokenSource(_checkTimeout, _timeProvider);
+            using var checkTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(totalTimeoutCts.Token, checkTimerCts.Token);
             var stopwatch = Stopwatch.StartNew();
 
             _logger.LogDebug("Starting environment check {CheckType}.", checkType.Name);

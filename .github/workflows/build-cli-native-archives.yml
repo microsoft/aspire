@@ -51,16 +51,17 @@ jobs:
     # CLI's IdentityChannelReader can return the channel verbatim, with no
     # separate parse of the version suffix at runtime.
     env:
-      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
+      # Keep caller-supplied values out of script source; consume them as data in PowerShell.
       BUILD_CONFIGURATION: ${{ inputs.configuration }}
-      TARGET_RID: ${{ matrix.targets.rids }}
+      TARGET_RIDS: ${{ matrix.targets.rids }}
       VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
+      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
     steps:
       - name: Configure NuGet package cache (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
+        run: Write-Output "NUGET_PACKAGES=$env:GITHUB_WORKSPACE/.nuget/packages" >> $env:GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -92,7 +93,7 @@ jobs:
           $buildLog = "$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildBundleDeps.log"
           # Repository cleanup can remove artifacts/log while the build is streaming output.
           $temporaryLog = Join-Path '${{ runner.temp }}' 'BuildBundleDeps.log'
-          & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
+          & '${{ runner.os == 'Windows' && './eng/build.ps1' || './build.sh' }}' `
             -ci `
             -restore `
             -build `
@@ -101,7 +102,7 @@ jobs:
             "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildBundleDeps.binlog" `
             /p:ContinuousIntegrationBuild=true `
             /p:BuildBundleDepsOnly=true `
-            "/p:TargetRids=$env:TARGET_RID" `
+            "/p:TargetRids=$env:TARGET_RIDS" `
             "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL" `
             @versionArgs 2>&1 | Tee-Object -FilePath $temporaryLog
           $buildExitCode = $LASTEXITCODE
@@ -117,31 +118,54 @@ jobs:
 
       - name: Build bundle payload archive
         # SkipNativeBuild skips only the outer CLI. Bundle.proj still publishes
-        # native tray payloads on Windows/macOS and verifies the actual archive.
+        # native desktop tray payloads and verifies the actual archive.
         shell: pwsh
         run: |
           $python = if ($IsWindows) { 'python' } else { 'python3' }
           $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
           if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
           $versionArgs = @($versionArgsJson | ConvertFrom-Json)
-          & '${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}' `
+          $dotnet = './dotnet.sh'
+          if ($IsWindows) {
+            . ./eng/common/tools.ps1
+            $dotnet = Join-Path (InitializeDotNetCli -install:$true -createSdkLocationFile:$true) 'dotnet.exe'
+            $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
+          }
+          & $dotnet `
             msbuild `
             eng/Bundle.proj `
             /restore `
             "/p:Configuration=$env:BUILD_CONFIGURATION" `
-            "/p:TargetRid=$env:TARGET_RID" `
+            "/p:TargetRid=$env:TARGET_RIDS" `
             /p:BundleVersion=ci-bundlepayload `
             /p:SkipNativeBuild=true `
             /p:ContinuousIntegrationBuild=true `
             "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BundlePayload.binlog" `
             @versionArgs
 
+      - name: Smoke test packaged native tray
+        shell: pwsh
+        env:
+          TRAY_RID: ${{ matrix.targets.rids }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rid = $env:TRAY_RID
+          $hostOs = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
+          $hostArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+          if ($rid -ne "$hostOs-$hostArch") {
+            Write-Host "Skipping packaged tray launch check for $rid on $hostOs-$hostArch."
+            return
+          }
+          ./eng/scripts/test-native-tray.ps1 `
+            -ArchivePath "artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz" `
+            -Rid $rid
+
       - name: Smoke test bundled Native AOT TerminalHost
         if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
         shell: pwsh
         run: >
           ./eng/scripts/test-native-terminalhost.ps1
-          -TerminalHostPath "$env:GITHUB_WORKSPACE/artifacts/bundle/$env:TARGET_RID/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
+          -TerminalHostPath "$env:GITHUB_WORKSPACE/artifacts/bundle/$env:TARGET_RIDS/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
 
       - name: Build CLI packages
         shell: pwsh
@@ -150,7 +174,7 @@ jobs:
           $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
           if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
           $versionArgs = @($versionArgsJson | ConvertFrom-Json)
-          & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
+          & '${{ runner.os == 'Windows' && './eng/build.ps1' || './build.sh' }}' `
             -ci `
             -build `
             -pack `
@@ -159,8 +183,8 @@ jobs:
             "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildCli.binlog" `
             /p:ContinuousIntegrationBuild=true `
             /p:SkipManagedBuild=true `
-            "/p:TargetRids=$env:TARGET_RID" `
-            "/p:BundlePayloadPath=$env:GITHUB_WORKSPACE/artifacts/bundle/aspire-ci-bundlepayload-$env:TARGET_RID.tar.gz" `
+            "/p:TargetRids=$env:TARGET_RIDS" `
+            "/p:BundlePayloadPath=$env:GITHUB_WORKSPACE/artifacts/bundle/aspire-ci-bundlepayload-$env:TARGET_RIDS.tar.gz" `
             "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL" `
             @versionArgs
 
@@ -169,7 +193,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $rid = $env:TARGET_RID
+          $rid = $env:TARGET_RIDS
           $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
           $archive = @(Get-ChildItem -Path "artifacts/packages/$env:BUILD_CONFIGURATION" -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
           if ($archive.Count -ne 1) {
@@ -270,7 +294,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $rid = $env:TARGET_RID
+          $rid = $env:TARGET_RIDS
           $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
           $archive = @(Get-ChildItem -Path "artifacts/packages/$env:BUILD_CONFIGURATION" -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
           if ($archive.Count -ne 1) {
@@ -282,6 +306,56 @@ jobs:
             -Rid $rid `
             -ArchivePath $archive[0].FullName
 
+      - name: Verify Windows template argument forwarding
+        if: runner.os == 'Windows' && matrix.targets.rids == 'win-x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . ./eng/common/tools.ps1
+          $dotnetRoot = InitializeDotNetCli -install:$true -createSdkLocationFile:$true
+          $dotnet = Join-Path $dotnetRoot 'dotnet.exe'
+          $env:DOTNET_ROOT = $dotnetRoot
+          $env:DOTNET_ROOT_X64 = $dotnetRoot
+          $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
+          $env:PATH = "$dotnetRoot$([IO.Path]::PathSeparator)$env:PATH"
+          Get-Command pwsh, python, dotnet -CommandType Application -ErrorAction Stop |
+            ForEach-Object { Write-Host "Required forwarding test tool: $($_.Source)" }
+
+          $checkoutSha = git --no-pager rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the forwarding test checkout.' }
+          Write-Host "Windows forwarding checkout SHA: $checkoutSha"
+          $sdkVersion = & $dotnet --version
+          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the forwarding test SDK.' }
+          Write-Host "Windows forwarding SDK version: $sdkVersion"
+
+          $resultsDirectory = Join-Path $env:GITHUB_WORKSPACE "artifacts/log/$env:BUILD_CONFIGURATION/windows-template-forwarding"
+          $trxPath = Join-Path $resultsDirectory 'windows-template-forwarding.trx'
+          New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
+          if (Test-Path -LiteralPath $trxPath) {
+            Remove-Item -LiteralPath $trxPath -Force
+          }
+          # These tests are not built by BuildBundleDepsOnly. Keep normal build/restore
+          # and let eng/Testing.targets supply the standard MTP diagnostic timeouts.
+          & $dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj `
+            --configuration $env:BUILD_CONFIGURATION --no-launch-profile -- `
+            --filter-method '*.WindowsBuildStepsForwardLiteralPropertiesThroughRepositoryBuild' `
+            --filter-method '*.WindowsSdkInvocationsPreserveArgumentsAtTheNativeExecutable' `
+            --filter-not-trait 'quarantined=true' --filter-not-trait 'outerloop=true' `
+            --report-trx --report-trx-filename windows-template-forwarding.trx `
+            --results-directory $resultsDirectory
+          if ($LASTEXITCODE -ne 0) { throw "Windows forwarding tests failed with exit code $LASTEXITCODE." }
+
+          # RequiresTools/platform filters can exclude cases without reporting skips.
+          # Require fresh TRX results, not just a successful runner exit or summary.
+          [xml]$report = Get-Content -LiteralPath $trxPath -Raw
+          $namespaces = [System.Xml.XmlNamespaceManager]::new($report.NameTable)
+          $namespaces.AddNamespace('trx', 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
+          $results = @($report.SelectNodes('/trx:TestRun/trx:Results/trx:UnitTestResult', $namespaces))
+          if ($results.Count -ne 5 -or @($results | Where-Object { $_.outcome -cne 'Passed' }).Count -ne 0) {
+            throw "Expected exactly five passed Windows forwarding results, found $($results.Count) results: $($results.outcome -join ', ')."
+          }
+          Write-Host "Verified exactly five passed Windows forwarding results: $trxPath"
+
       # Upload DCP, Dashboard, and CLI tool packages so test/polyglot jobs can download them
       - name: Upload RID-specific packages
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -291,7 +365,14 @@ jobs:
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
-            artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Upload CLI npm packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-npm-packages-${{ matrix.targets.rids }}
+          path: artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
           if-no-files-found: error
           retention-days: 15
 

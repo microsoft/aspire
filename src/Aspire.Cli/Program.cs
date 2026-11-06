@@ -4,11 +4,11 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
@@ -167,7 +167,7 @@ public class Program
         return null;
     }
 
-    private static string GetGlobalSettingsPath(ILogger logger, bool migrate)
+    private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
         var usersAspirePath = GetUsersAspirePath();
         var newPath = Path.Combine(usersAspirePath, Configuration.AspireConfigFile.FileName);
@@ -187,23 +187,33 @@ public class Program
         {
             try
             {
-                var legacyJson = File.ReadAllText(legacyPath);
-                var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
-                var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
-                // Drop the legacy global identity-channel field — the CLI's channel is now
-                // baked into the binary (AspireCliChannel assembly metadata) and never read
-                // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
-                // remains for project-local aspire.config.json files.
-                config.Channel = null;
-                config.Save(usersAspirePath);
+                // Legacy and modern global writers share the modern destination's lock.
+                // Recheck both files after waiting so migration reads the latest completed edit.
+                using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+                    GetCacheDirectory(), new FileInfo(newPath), logger, cancellationToken)
+                    ?? throw new IOException("Could not acquire the global configuration lock.");
+                if (!File.Exists(newPath) && File.Exists(legacyPath))
+                {
+                    var legacyJson = await File.ReadAllTextAsync(legacyPath, cancellationToken);
+                    var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
+                    var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
+                    // Drop the legacy global identity-channel field — the CLI's channel is now
+                    // baked into the binary (AspireCliChannel assembly metadata) and never read
+                    // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
+                    // remains for project-local aspire.config.json files.
+                    config.Channel = null;
+                    var settings = JsonSerializer.SerializeToNode(config, JsonSourceGenerationContext.Default.AspireConfigFile)!.AsObject();
+                    await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(newPath, settings, cancellationToken);
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // If migration fails, newPath will be created on first write.
                 logger.LogError(ex, "Failed to migrate legacy globalsettings.json to {NewPath}.", newPath);
             }
         }
 
+        // If migration fails, preserve the existing recovery path: log the failure
+        // and let a subsequent configuration edit create the modern file.
         return newPath;
     }
 
@@ -218,7 +228,7 @@ public class Program
                 globalSettingsFile.FullName,
                 key);
 
-            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.Warning);
+            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.PoliceCarLight);
         }
     }
 
@@ -236,7 +246,7 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -296,6 +306,10 @@ public class Program
     internal static async Task<IHost> BuildApplicationAsync(string[] args, CliStartupContext startupContext, Dictionary<string, string?>? configurationValues = null)
     {
         var isCompletion = CompletionInvocation.Matches(args);
+        // Source management must not migrate or normalize configuration before a
+        // read-only or rejected operation. Existing config commands retain normal startup.
+        var deferSettingsWrites = isCompletion ||
+            Commands.RootCommand.MatchesCommandPath(args, "template", "source");
         // Check for --non-interactive flag early
         var nonInteractive = args?.Any(a => a == CommonOptionNames.NonInteractive) ?? false;
 
@@ -313,10 +327,12 @@ public class Program
         var builder = Host.CreateEmptyApplicationBuilder(settings);
 
         // Set up settings with appropriate paths.
-        var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger, migrate: !isCompletion);
+        var globalSettingsFilePath = await GetGlobalSettingsPathAsync(
+            startupContext.Logger, migrate: !deferSettingsWrites, startupContext.CancellationManager.Token);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !isCompletion);
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, persistNormalization: !deferSettingsWrites);
+        builder.Services.AddSingleton<ConfigSourceService>();
 
         if (configurationValues is not null)
         {
@@ -550,14 +566,7 @@ public class Program
         builder.Services.AddSingleton<ResourceColorMap>();
         builder.Services.AddMemoryCache();
 
-        // aspire.dev documentation services.
-        builder.Services.AddSingleton<IDocsCache, DocsCache>();
-        builder.Services.AddHttpClient<IDocsFetcher, DocsFetcher>();
-        builder.Services.AddSingleton<IDocsIndexService, DocsIndexService>();
-        builder.Services.AddSingleton<IDocsSearchService, DocsSearchService>();
-        builder.Services.AddSingleton<IApiDocsCache, ApiDocsCache>();
-        builder.Services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>();
-        builder.Services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
+        AddDocumentationServices(builder.Services);
 
         // Bundle layout services (for polyglot apphost without .NET SDK).
         // Registered before NuGetPackageCache so the factory can choose implementation.
@@ -567,6 +576,8 @@ public class Program
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
+        builder.Services.AddSingleton<IGitCommandRunner, GitCommandRunner>();
+        builder.Services.AddSingleton<IGitClient, GitClient>();
 
         // OpenCode CLI operations.
         builder.Services.AddSingleton<IOpenCodeCliRunner, OpenCodeCliRunner>();
@@ -612,12 +623,11 @@ public class Program
         builder.Services.AddSingleton(serviceProvider =>
             new SigstoreVerifier(serviceProvider.GetRequiredService<ITrustRootProvider>()));
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
-        builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
-        builder.Services.AddSingleton<IAspireSkillsBundleProvider, AspireSkillsBundleProvider>();
-        builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
-        builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IAgentClient, CopilotAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, ClaudeCodeAgentClient>();
+        builder.Services.AddSingleton<IAgentClient, OpenCodeAgentClient>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
@@ -627,7 +637,6 @@ public class Program
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, CopilotAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, OpenCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>());
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, DeprecatedMcpCommandScanner>());
 
         // Agent telemetry hook installation/configuration.
         builder.Services.AddSingleton<Aspire.Cli.Agents.Hooks.ITelemetryHookInstaller, Aspire.Cli.Agents.Hooks.TelemetryHookInstaller>();
@@ -636,8 +645,11 @@ public class Program
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
+        builder.Services.AddSingleton<TemplateSourceStore>();
+        builder.Services.AddSingleton<ConfiguredTemplateSourceService>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, DotNetTemplateFactory>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, CliTemplateFactory>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<ITemplateFactory, TemplateEngineFactory>());
 
         // Language discovery for polyglot support.
         builder.Services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
@@ -656,6 +668,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, GoAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
@@ -664,6 +677,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, PendingMigrationsCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, VsCodeExtensionCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
@@ -701,6 +715,7 @@ public class Program
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
+        builder.Services.AddTransient<TemplateManagementCommand>();
         builder.Services.AddTransient<CompletionsCommand>();
         builder.Services.AddTransient<CacheCommand>();
         builder.Services.AddTransient<CertificatesCommand>();
@@ -776,6 +791,19 @@ public class Program
         var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
+    }
+
+    internal static void AddDocumentationServices(IServiceCollection services)
+    {
+        services.AddSingleton<IDocsCache, DocsCache>();
+        services.AddHttpClient<IDocsFetcher, DocsFetcher>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddSingleton<IDocsIndexService, DocsIndexService>();
+        services.AddSingleton<IDocsSearchService, DocsSearchService>();
+        services.AddSingleton<IApiDocsCache, ApiDocsCache>();
+        services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, LogLevel? consoleLogLevel, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
@@ -950,7 +978,7 @@ public class Program
             // to stderr (ConsoleOutput.Error) so it never contaminates stdout for callers that
             // parse it. The surrounding blank lines stay on the same stderr stream for spacing.
             consoleEnvironment.Error.WriteLine();
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
             consoleEnvironment.Error.WriteLine();
         }
     }

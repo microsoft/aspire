@@ -15,6 +15,9 @@ namespace Aspire.Hosting.ApplicationModel;
 public class AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpubsub) : Resource(name),
     IResourceWithParent<AzureWebPubSubResource>, IResourceWithConnectionString
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Web PubSub Hub";
+
     /// <summary>
     /// Represents an Azure Web PubSub Hub setting resource.
     /// </summary>
@@ -43,4 +46,9 @@ public class AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpu
     public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{Parent.ServiceConnectionStringExpression};Hub={HubName}");
 
     internal List<(ReferenceExpression url, string userEvents, string[]? systemEvents, UpstreamAuthSettings? auth)> EventHandlers { get; } = new();
+
+    IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() =>
+        Parent.CombineProperties([
+            new("HubName", ReferenceExpression.Create($"{HubName}")),
+        ]);
 }

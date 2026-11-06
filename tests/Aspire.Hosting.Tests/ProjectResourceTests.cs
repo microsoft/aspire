@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable CS0618 // Covers legacy AddProject/AddCSharpApp behavior and compatibility contracts.
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREEXTENSION001
@@ -145,6 +145,11 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
             },
             env =>
             {
+                Assert.Equal("DOTNET_CLI_TELEMETRY_OPTOUT", env.Key);
+                Assert.Equal("true", env.Value);
+            },
+            env =>
+            {
                 Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_DISABLE_URL_QUERY_REDACTION", env.Key);
                 Assert.Equal("true", env.Value);
             },
@@ -241,6 +246,29 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.Equal(expectedOtlpExporter, config.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint));
+    }
+
+    [Fact]
+    public async Task AddProjectWithResourceAttributesKeepsServiceInstanceId()
+    {
+        var appBuilder = CreateBuilder(operation: DistributedApplicationOperation.Run);
+
+        // AddProject registers the OTLP exporter callback before any call made here, so this value is applied
+        // after the one that carries service.instance.id. The dashboard needs that id to match the telemetry of
+        // each replica to its resource.
+        appBuilder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithReplicas(2)
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev");
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.GetProjectResources());
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal(
+            "deployment.environment=dev,service.instance.id={{- index .Annotations \"otel-service-instance-id\" -}}",
+            config["OTEL_RESOURCE_ATTRIBUTES"]);
     }
 
     [Theory]
@@ -1015,6 +1043,32 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var annotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddProjectIsObsoleteNotExperimental()
+    {
+        var methods = typeof(ProjectResourceBuilderExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name is nameof(ProjectResourceBuilderExtensions.AddProject)
+                or nameof(ProjectResourceBuilderExtensions.AddProjectForPolyglot))
+            .ToArray();
+
+        Assert.Equal(6, methods.Count(method => method.IsPublic));
+        Assert.Single(methods, method => !method.IsPublic);
+        Assert.All(methods, method =>
+        {
+            var obsolete = method.GetCustomAttribute<ObsoleteAttribute>();
+            Assert.NotNull(obsolete);
+            Assert.False(obsolete.IsError);
+            Assert.Equal(
+                method.IsPublic
+                    ? "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead."
+                    : "Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                obsolete.Message);
+            Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
+            Assert.Equal(typeof(IResourceBuilder<ProjectResource>), method.ReturnType);
+        });
     }
 
     [Fact]

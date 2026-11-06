@@ -118,4 +118,8 @@ resource webRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
 
 output api_endpointUrl string = 'https://${apiEndpoint.properties.hostName}'
 
+output api_endpointId string = apiEndpoint.id
+
 output web_endpointUrl string = 'https://${webEndpoint.properties.hostName}'
+
+output web_endpointId string = webEndpoint.id

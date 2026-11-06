@@ -95,14 +95,32 @@ jobs:
       - name: Setup vars (Windows)
         if: ${{ runner.os == 'Windows' }}
         run: |
-          echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
-          echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
+          echo "BUILD_SCRIPT=.\eng\build.ps1" >> $env:GITHUB_ENV
           Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
           echo "TEST_RUN_PATH=${{ github.workspace }}\run-tests" >> $env:GITHUB_ENV
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve SDK executable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Match dotnet.cmd's SDK bootstrap, but never forward arguments through CMD.
+          . ./eng/common/tools.ps1
+          $dotnet = Join-Path (InitializeDotNetCli -install:$true -createSdkLocationFile:$true) 'dotnet.exe'
+          "DOTNET_SCRIPT=$dotnet" >> $env:GITHUB_ENV
+          "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1" >> $env:GITHUB_ENV
+
+      # Diagnostics only: samples CPU, memory, commit charge, page file, and disk pressure
+      # into the uploaded logs so slow or hung Windows jobs can be correlated with machine
+      # load. https://github.com/microsoft/aspire/issues/21570
+      - name: Start resource monitor (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Start -OutputDirectory "${{ github.workspace }}/artifacts/log/test-logs/resource-monitor"
 
       - name: Set up .NET Core
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -145,6 +163,15 @@ jobs:
         if: runner.os == 'Linux'
         run: docker info
 
+      - name: Pin container runtime to Docker (Windows)
+        # Windows images ship WSL, which puts wslc.exe on PATH. Without a configured runtime, DCP
+        # runs `wslc info` and `wslc network list` on every AppHost start. On these hosted runners
+        # that correlates with workers freezing and being reported as "lost communication".
+        # Docker is the only runtime used on these runners. See https://github.com/microsoft/aspire/issues/21570
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"ASPIRE_CONTAINER_RUNTIME=docker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
+
       - name: Download prebuilt CLI E2E Docker image
         if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -166,6 +193,15 @@ jobs:
           name: cli-e2e-polyglot-java-image
           path: ${{ github.workspace }}/cli-e2e-image
 
+      # Go CLI E2E classes are named Go*, so '-Go' matches the class suffix of the split job name
+      # (Cli.EndToEnd-GoStarterTemplateTests) without matching names that merely contain "go" (MongoDB, Config).
+      - name: Download prebuilt CLI E2E Go Docker image
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' && contains(inputs.testShortName, '-Go') }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-e2e-polyglot-go-image
+          path: ${{ github.workspace }}/cli-e2e-image
+
       - name: Load prebuilt CLI E2E Docker images
         if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' }}
         shell: bash
@@ -175,7 +211,8 @@ jobs:
             --image-dir "${{ github.workspace }}/cli-e2e-image" \
             --require-dotnet true \
             --require-polyglot true \
-            --require-java "${{ contains(inputs.testShortName, 'Java') }}"
+            --require-java "${{ contains(inputs.testShortName, 'Java') }}" \
+            --require-go "${{ contains(inputs.testShortName, '-Go') }}"
 
       - name: Download built nugets
         if: ${{ fromJson(inputs.properties).requiresNugets == true }}
@@ -777,6 +814,12 @@ jobs:
           docker container ls --all --format json
           docker volume ls
           docker network ls
+
+      - name: Stop resource monitor (Windows)
+        if: ${{ always() && runner.os == 'Windows' }}
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Stop -OutputDirectory "${{ github.workspace }}/artifacts/log/test-logs/resource-monitor"
 
       - name: Upload logs, and test results
         id: upload-logs

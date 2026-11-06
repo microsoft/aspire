@@ -21,11 +21,29 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalIngressResource, IAzureCdnPrivateLinkTarget
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Container Apps Environment";
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
+
+    /// <inheritdoc />
+    ReferenceExpression IAzureInternalIngressResource.DefaultDomain => ReferenceExpression.Create($"{ContainerAppDomain}");
+
+    /// <inheritdoc />
+    ReferenceExpression IAzureInternalIngressResource.StaticIp => ReferenceExpression.Create($"{ContainerAppStaticIp}");
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(IResource origin) => ContainerAppEnvironmentId;
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(IResource origin) => ContainerAppLocation;
+
+    /// <inheritdoc />
+    string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "managedEnvironments";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.
@@ -257,6 +275,13 @@ public class AzureContainerAppEnvironmentResource :
 
     internal bool IsExpress { get; set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the environment is the target of a private link, such as an Azure Front Door
+    /// Private Link connection. Public network access is disabled for such an environment, so apps in the
+    /// environment are reachable only through the private link.
+    /// </summary>
+    internal bool IsPublicNetworkAccessDisabled => this.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
     internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
     {
         if (!endpointReference.EndpointAnnotation.IsExternal)
@@ -283,6 +308,18 @@ public class AzureContainerAppEnvironmentResource :
     /// Gets the default domain associated with the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppDomain => new("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", this);
+
+    /// <summary>
+    /// Gets the private static IP address associated with an internal Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppStaticIp => new("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", this);
+
+    /// <summary>
+    /// Gets the Azure region of the Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppLocation => new(LocationOutputName, this);
+
+    internal const string LocationOutputName = "AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION";
 
     /// <summary>
     /// Gets the name of the associated Azure Container Registry.
@@ -393,6 +430,16 @@ public class AzureContainerAppEnvironmentResource :
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && IsExpress)
+        {
+            ValidatePublicEndpointReference(endpointReference);
+        }
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && (!endpoint.IsExternal || endpoint.UriScheme is not ("http" or "https")))
+        {
+            throw new NotSupportedException(
+                $"Azure Container Apps environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.");
+        }
         var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
         var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
         var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
@@ -400,6 +447,8 @@ public class AzureContainerAppEnvironmentResource :
 
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host,
             EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),

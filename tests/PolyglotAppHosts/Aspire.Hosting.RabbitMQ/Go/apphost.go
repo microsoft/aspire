@@ -9,14 +9,14 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	rabbitmq := builder.AddRabbitMQ("messaging")
 	rabbitmq.WithDataVolume()
 	rabbitmq.WithManagementPlugin()
 	if err = rabbitmq.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	rabbitmq2 := builder.AddRabbitMQ("messaging2")
@@ -24,7 +24,7 @@ func main() {
 	rabbitmq2.WithDataVolume()
 	rabbitmq2.WithManagementPlugin(&aspire.WithManagementPluginOptions{Port: aspire.Float64Ptr(15673)})
 	if err = rabbitmq2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = rabbitmq.PrimaryEndpoint()
@@ -37,9 +37,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

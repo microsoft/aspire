@@ -204,8 +204,11 @@ public partial class ManageDataDialog : IAsyncDisposable
     {
         var data = new List<TelemetryDataRow>();
 
-        // Add resource details for resources with ResourceViewModel
-        data.Add(CreateTelemetryDataRow(AspireDataType.ResourceDetails, resource.Name));
+        // Add resource details for resources with ResourceViewModel. The previous experience keeps main's query-based
+        // resource URL, which its resources page supports.
+        data.Add(DashboardExperienceComponents.IsLegacyLocation(NavigationManager)
+            ? new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourcesUrl(resource: resource.Name) }
+            : CreateTelemetryDataRow(AspireDataType.ResourceDetails, resource.Name));
 
         // Add console logs for resources with ResourceViewModel
         data.Add(CreateTelemetryDataRow(AspireDataType.ConsoleLogs, resource.Name));
@@ -262,7 +265,7 @@ public partial class ManageDataDialog : IAsyncDisposable
     {
         return dataType switch
         {
-            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourcesUrl(resource: resourceName) },
+            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourceOverviewUrl(resourceName) },
             AspireDataType.ConsoleLogs => new TelemetryDataRow { DataType = AspireDataType.ConsoleLogs, Icon = new Icons.Regular.Size16.SlideText(), Url = DashboardUrls.ConsoleLogsUrl(resource: resourceName) },
             AspireDataType.StructuredLogs => new TelemetryDataRow { DataType = AspireDataType.StructuredLogs, Icon = new Icons.Regular.Size16.SlideTextSparkle(), Url = DashboardUrls.StructuredLogsUrl(resource: resourceName) },
             AspireDataType.Traces => new TelemetryDataRow { DataType = AspireDataType.Traces, Icon = new Icons.Regular.Size16.GanttChart(), Url = DashboardUrls.TracesUrl(resource: resourceName) },

@@ -8,13 +8,13 @@
               Id="@_selectId"
               OptionText="@((SelectViewModel<ResourceTypeDetails>? c) => c?.Name)"
               OptionDisabled="@((SelectViewModel<ResourceTypeDetails>? c) => !CanSelectGrouping && c?.Id?.Type is Otlp.Model.OtlpResourceType.ResourceGrouping)"
-              OptionTitle="@((SelectViewModel<ResourceTypeDetails> c) => DashboardUIHelpers.ResolveTooltip(c.Name))"
               @bind-Value="SelectedResource"
               @bind-Value:after="SelectedResourceChangedCore"
               AriaLabel="@AriaLabel"
               Class="resource-list"
               Height="@GetPopupHeight()">
     <OptionTemplate>
+        <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(context.Name)"></span>
         <ResourceSelectOptionTemplate ViewModel="@context" />
     </OptionTemplate>
 </FluentSelect>

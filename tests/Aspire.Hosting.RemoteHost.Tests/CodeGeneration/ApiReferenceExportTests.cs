@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
@@ -45,11 +46,10 @@ public class ApiReferenceExportTests
         Assert.NotEmpty(items);
 
         // The whole point of the export is that documented declarations are final TypeScript, not
-        // ATS type identifiers.
-        Assert.All(items, item => Assert.DoesNotContain(
-            "Aspire.Hosting/",
-            item.GetProperty("declaration").GetString()!,
-            StringComparison.Ordinal));
+        // ATS type identifiers, so each one declares the item's own TypeScript name.
+        Assert.All(items, item => Assert.Matches(
+            $@"^(export (interface|enum|namespace) |function ){Regex.Escape(item.GetProperty("name").GetString()!)}\b",
+            item.GetProperty("declaration").GetString()!));
 
         Assert.NotEmpty(export.GetProperty("declarations").EnumerateArray());
     }
@@ -169,17 +169,71 @@ public class ApiReferenceExportTests
     }
 
     [Fact]
+    public void ExportApi_Go_ReturnsCanonicalSchemaForRequestedPackage()
+    {
+        var service = CreateCodeGenerationService();
+
+        var export = service.ExportApi("Go", "Aspire.Hosting", "13.5.0", CancellationToken.None);
+        var repeatedExport = service.ExportApi("Go", "Aspire.Hosting", "13.5.0", CancellationToken.None);
+
+        Assert.Equal(export.GetRawText(), repeatedExport.GetRawText());
+        Assert.Equal(1, export.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("go", export.GetProperty("language").GetString());
+        Assert.Equal("Aspire.Hosting", export.GetProperty("package").GetProperty("name").GetString());
+        Assert.Equal("13.5.0", export.GetProperty("package").GetProperty("version").GetString());
+
+        var items = export.GetProperty("modules").EnumerateArray()
+            .SelectMany(module => module.GetProperty("items").EnumerateArray())
+            .ToList();
+        Assert.NotEmpty(items);
+
+        // Documented declarations are the Go the generator emits, never ATS type identifiers, so each one
+        // declares the item's own Go name.
+        Assert.All(items, item => Assert.Matches(
+            $@"^(type|var|func) {Regex.Escape(item.GetProperty("name").GetString()!)}\b",
+            item.GetProperty("declaration").GetString()!));
+
+        // The builder's Build() is written by the generator rather than discovered as a capability, so
+        // seeing it proves the export is projected through the generator.
+        var builder = Assert.Single(items, item => item.GetProperty("id").GetString() == "interface:DistributedApplicationBuilder");
+        Assert.Contains(
+            builder.GetProperty("members").EnumerateArray(),
+            member => member.GetProperty("declaration").GetString() == "Build() (DistributedApplication, error)");
+
+        Assert.NotEmpty(export.GetProperty("declarations").EnumerateArray());
+    }
+
+    [Fact]
+    public void ExportApi_Go_ScopesDocumentedItemsToRequestedPackage()
+    {
+        var service = CreateCodeGenerationService();
+
+        var export = service.ExportApi("Go", "Aspire.Hosting", "13.5.0", CancellationToken.None);
+
+        var items = export.GetProperty("modules").EnumerateArray()
+            .SelectMany(module => module.GetProperty("items").EnumerateArray())
+            .ToList();
+
+        Assert.All(
+            items.Where(item => item.GetProperty("kind").GetString() != "augmentation"),
+            item => Assert.Equal("Aspire.Hosting", item.GetProperty("owningAssembly").GetString()));
+        Assert.All(
+            items.Where(item => item.GetProperty("kind").GetString() == "augmentation"),
+            item => Assert.StartsWith("augmentation:", item.GetProperty("id").GetString(), StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void ExportApi_GeneratorWithoutExporter_ReportsUnsupportedLanguage()
     {
         var service = CreateCodeGenerationService();
 
-        // Go generates runtime source but ships no IApiReferenceExporter, so asking it for
+        // Python generates SDK source but ships no IApiReferenceExporter, so asking it for
         // an API export has to fail with a message that names the gap rather than returning an empty
         // document that a documentation site would silently publish.
-        var ex = Assert.Throws<LocalRpcException>(() => service.ExportApi("Go", "Aspire.Hosting", "13.5.0", CancellationToken.None));
+        var ex = Assert.Throws<LocalRpcException>(() => service.ExportApi("Python", "Aspire.Hosting", "13.5.0", CancellationToken.None));
 
         Assert.Equal((int)JsonRpcErrorCode.InvalidParams, ex.ErrorCode);
-        Assert.Contains("Go", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("Python", ex.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(IApiReferenceExporter), ex.Message, StringComparison.Ordinal);
     }
 
@@ -223,6 +277,7 @@ public class ApiReferenceExportTests
         {
             ["AtsAssemblies:0"] = "Aspire.Hosting.CodeGeneration.Go",
             ["AtsAssemblies:1"] = "Aspire.Hosting.CodeGeneration.TypeScript",
+            ["AtsAssemblies:2"] = "Aspire.Hosting.CodeGeneration.Python",
         };
 
         if (additionalConfiguration is not null)
