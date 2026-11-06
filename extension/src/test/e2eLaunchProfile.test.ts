@@ -778,6 +778,26 @@ suite('E2E launch profile', () => {
         assert.ok(uploadStep.includes('if: always()'));
     });
 
+    test('exports the development certificate for HTTPS probes instead of disabling certificate validation', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const paths = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'paths.ts'), 'utf8');
+
+        // Public certificate only: `dotnet dev-certs` writes a private key just for --password/--no-password.
+        assert.ok(runner.includes("run('dotnet', ['dev-certs', 'https', '--export-path', certificatePath, '--format', 'Pem'], {}, { timeout: 120000 });"));
+        assert.ok(runner.includes("...(devCertificatePath ? { ASPIRE_EXTENSION_E2E_DEV_CERT_PATH: devCertificatePath } : {}),"));
+        assert.ok(paths.includes('process.env.ASPIRE_EXTENSION_E2E_DEV_CERT_PATH'));
+        assert.ok(assertions.includes('https.get(parsed, { headers, ca: readTrustedDevCertificate() }, handleResponse)'));
+
+        for (const source of [runner, assertions, paths]) {
+            const code = stripComments(source);
+            assert.strictEqual(code.includes('rejectUnauthorized'), false);
+            assert.strictEqual(code.includes('NODE_TLS_REJECT_UNAUTHORIZED'), false);
+            assert.strictEqual(code.includes('checkServerIdentity'), false);
+        }
+    });
+
     test('generates all browser debugger fixtures in an isolated shard', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
