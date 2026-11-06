@@ -45,7 +45,7 @@ dotnet run --project tools/CreateLayout/CreateLayout.csproj -- [options]
 | `-a, --artifacts <path>` | Path to build artifacts directory |
 | `--rid <rid>` | Target runtime identifier: `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `linux-musl-x64`, `osx-x64`, or `osx-arm64` |
 | `-c, --configuration <name>` | Build configuration of the published components, such as `Debug` or `Release`. Output from other configurations is not used. |
-| `--tray <directory>` | Prepared native tray directory; required for Windows, macOS, and glibc Linux RIDs. Use the complete `.app` directory on macOS or the executable/icon publish directory on Windows/Linux. Not used for musl. |
+| `--tray-dir <directory>` | Prepared native tray directory; required for Windows, macOS, and glibc Linux RIDs. Use the complete `.app` directory on macOS or the executable/icon publish directory on Windows/Linux. Not used for musl. |
 
 Unsupported runtime identifiers, including `win-x86`, are rejected before the output directory is changed.
 
@@ -90,7 +90,7 @@ dotnet run --project tools/CreateLayout/CreateLayout.csproj -- \
   --artifacts ./artifacts \
   --rid linux-x64 \
   --configuration Release \
-  --tray ./artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
+  --tray-dir ./artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
   --bundle-version 13.5.0 \
   --archive \
   --verbose
@@ -103,7 +103,7 @@ dotnet run --project tools/CreateLayout/CreateLayout.csproj -- `
   --artifacts ./artifacts `
   --configuration Release `
   --rid win-x64 `
-  --tray ./artifacts/bin/Aspire.Tray.Windows/Release/net10.0/win-x64/publish
+  --tray-dir ./artifacts/bin/Aspire.Tray.Windows/Release/net10.0/win-x64/publish
 ```
 
 **Build a macOS layout from published components:**
@@ -113,7 +113,7 @@ dotnet run --project tools/CreateLayout/CreateLayout.csproj -- \
   --artifacts ./artifacts \
   --configuration Release \
   --rid osx-arm64 \
-  --tray "./artifacts/bin/Aspire.Tray.Mac/Release/net10.0/osx-arm64/app/Aspire Tray.app"
+  --tray-dir "./artifacts/bin/Aspire.Tray.Mac/Release/net10.0/osx-arm64/app/Aspire Tray.app"
 ```
 
 ## Output Structure

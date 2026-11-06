@@ -423,7 +423,7 @@ dotnet run --project tools/CreateLayout -- \
   --artifacts artifacts \
   --rid linux-x64 \
   --configuration Release \
-  --tray artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
+  --tray-dir artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
   --bundle-version local-test \
   --archive
 ```
@@ -432,7 +432,7 @@ dotnet run --project tools/CreateLayout -- \
 
 Use `--dashboard "/path/to/prepared/publish"` to select a Dashboard publish directory instead of discovering one under the artifacts directory. Invalid or incomplete input fails without falling back to discovery.
 
-Desktop layouts require `--tray <directory>` for their prepared tray input.
+Desktop layouts require `--tray-dir <directory>` for their prepared tray input.
 Use the complete `.app` directory on macOS and the executable/icon publish
 directory on Windows or glibc Linux. The target RID selects the payload format;
 musl layouts have no tray input.

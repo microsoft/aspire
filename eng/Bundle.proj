@@ -506,7 +506,7 @@
       <_AppHostServerPublishDirArg>$(_AppHostServerPublishDir.TrimEnd('\').TrimEnd('/'))</_AppHostServerPublishDirArg>
 
       <_CreateLayoutArgs>--output "$(_BundleLayoutDirArg)" --artifacts "$(_ArtifactsDirArg)" --managed "$(_ManagedPublishDirArg)" --dashboard "$(_DashboardPublishDirArg)" --terminal-host "$(_TerminalHostPublishDirArg)" --apphost-server "$(_AppHostServerPublishDirArg)" --rid $(TargetRid) --configuration $(Configuration) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
-      <_CreateLayoutArgs Condition="'$(TargetRid)' != 'linux-musl-x64'">$(_CreateLayoutArgs) --tray "$(TrayDirectory.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
+      <_CreateLayoutArgs Condition="'$(TargetRid)' != 'linux-musl-x64'">$(_CreateLayoutArgs) --tray-dir "$(TrayDirectory.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout and archive..." />

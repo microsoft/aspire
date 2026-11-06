@@ -34,7 +34,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
-        Assert.Equal($"The {rid} bundle requires --tray pointing to the prepared native tray directory (.app directory on macOS).", error.Message);
+        Assert.Equal($"The {rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).", error.Message);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.Path));
     }
 
@@ -46,7 +46,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false,
             trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
-        Assert.Equal($"The {rid} bundle requires --tray pointing to the prepared native tray directory (.app directory on macOS).",
+        Assert.Equal($"The {rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).",
             Assert.Throws<InvalidOperationException>(builder.CopyTray).Message);
     }
 
@@ -110,7 +110,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
-        Assert.Equal($"The {rid} bundle requires --tray pointing to the prepared native tray directory (.app directory on macOS).", error.Message);
+        Assert.Equal($"The {rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).", error.Message);
     }
 
     [Theory]
@@ -327,7 +327,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
 
         if (scenario == "missing-input")
         {
-            Assert.Equal("The win-x64 bundle requires --tray pointing to the prepared native tray directory (.app directory on macOS).",
+            Assert.Equal("The win-x64 bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).",
                 Assert.Throws<InvalidOperationException>(builder.CopyTray).Message);
         }
         else

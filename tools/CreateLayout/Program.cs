@@ -58,7 +58,7 @@ public static class Program
             Description = "Create a .tar.gz archive after building on all platforms"
         };
 
-        var trayOption = new Option<string?>("--tray")
+        var trayOption = new Option<string?>("--tray-dir")
         {
             Description = "Prepared native tray directory (.app directory on macOS; required for Windows, macOS, and glibc Linux)"
         };
@@ -212,7 +212,7 @@ internal sealed class LayoutBuilder : IDisposable
 
         if (string.IsNullOrWhiteSpace(_trayDirectory))
         {
-            throw new InvalidOperationException($"The {_rid} bundle requires --tray pointing to the prepared native tray directory (.app directory on macOS).");
+            throw new InvalidOperationException($"The {_rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).");
         }
 
         if (_rid is "linux-x64" or "linux-arm64")

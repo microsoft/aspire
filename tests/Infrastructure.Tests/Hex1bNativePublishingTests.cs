@@ -281,17 +281,17 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         {
             var tray = Path.Combine(_workspace.Path, "windows-tray");
             WindowsTrayTestPayload.Create(tray, rid);
-            arguments.AddRange(["--tray", tray]);
+            arguments.AddRange(["--tray-dir", tray]);
         }
         else if (rid.StartsWith("osx-", StringComparison.Ordinal))
         {
-            arguments.AddRange(["--tray", MacTrayTestPayload.Create(_workspace.Path)]);
+            arguments.AddRange(["--tray-dir", MacTrayTestPayload.Create(_workspace.Path)]);
         }
         else if (rid is "linux-x64" or "linux-arm64")
         {
             var tray = Path.Combine(_workspace.Path, "linux-tray");
             LinuxTrayTestPayload.Create(tray, rid);
-            arguments.AddRange(["--tray", tray]);
+            arguments.AddRange(["--tray-dir", tray]);
         }
 
         var result = await RunDotNetAsync(
