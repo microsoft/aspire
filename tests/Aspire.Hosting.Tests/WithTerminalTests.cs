@@ -1448,9 +1448,8 @@ public class WithTerminalTests : IAsyncLifetime
     [Fact]
     public async Task TerminalHostResourcesHaveUnresolvedCommandUntilTerminalHostPathIsConfigured()
     {
-        // The host process binary path is filled in by TerminalHostEventingSubscriber
-        // from DcpOptions during BeforeStartEvent. The test environment doesn't ship a
-        // real terminalhost binary, so the placeholder remains after the event fires.
+        // PublishBeforeStartAsync materializes hosts without subscribing the DI
+        // TerminalHostEventingSubscriber that resolves their binary paths.
         using var builder = CreateBuilder();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
