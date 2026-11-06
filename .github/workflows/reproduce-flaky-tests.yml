@@ -259,12 +259,19 @@ jobs:
 
       - name: Build test project
         shell: pwsh
-        run: >
-          & $env:BUILD_SCRIPT
-          -restore -ci -build
-          -projects $env:TEST_PROJECT_PATH
-          /p:InstallBrowsersForPlaywright=false
-          /p:RunQuarantinedTests=true
+        run: |
+          $buildCommand = $env:BUILD_SCRIPT
+          $buildPrefix = @()
+          if ($IsWindows) {
+            $buildCommand = 'pwsh'
+            $buildPrefix = @('-NoProfile', '-File', $env:BUILD_SCRIPT)
+          }
+          & $buildCommand @buildPrefix `
+            -restore -ci -build `
+            -projects $env:TEST_PROJECT_PATH `
+            /p:InstallBrowsersForPlaywright=false `
+            /p:RunQuarantinedTests=true
+          exit $LASTEXITCODE
 
       - name: Run test iterations (Linux/macOS)
         if: runner.os != 'Windows'

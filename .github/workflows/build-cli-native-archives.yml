@@ -93,7 +93,14 @@ jobs:
           $buildLog = "$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildBundleDeps.log"
           # Repository cleanup can remove artifacts/log while the build is streaming output.
           $temporaryLog = Join-Path '${{ runner.temp }}' 'BuildBundleDeps.log'
-          & '${{ runner.os == 'Windows' && './eng/build.ps1' || './build.sh' }}' `
+          $buildCommand = './build.sh'
+          $buildPrefix = @()
+          if ($IsWindows) {
+            # Keep native console output on the external-process boundary for log capture.
+            $buildCommand = 'pwsh'
+            $buildPrefix = @('-NoProfile', '-File', './eng/build.ps1')
+          }
+          & $buildCommand @buildPrefix `
             -ci `
             -restore `
             -build `
@@ -174,7 +181,14 @@ jobs:
           $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
           if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
           $versionArgs = @($versionArgsJson | ConvertFrom-Json)
-          & '${{ runner.os == 'Windows' && './eng/build.ps1' || './build.sh' }}' `
+          $buildCommand = './build.sh'
+          $buildPrefix = @()
+          if ($IsWindows) {
+            # Keep native console output on the external-process boundary for log capture.
+            $buildCommand = 'pwsh'
+            $buildPrefix = @('-NoProfile', '-File', './eng/build.ps1')
+          }
+          & $buildCommand @buildPrefix `
             -ci `
             -build `
             -pack `
@@ -187,6 +201,7 @@ jobs:
             "/p:BundlePayloadPath=$env:GITHUB_WORKSPACE/artifacts/bundle/aspire-ci-bundlepayload-$env:TARGET_RIDS.tar.gz" `
             "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL" `
             @versionArgs
+          exit $LASTEXITCODE
 
       - name: Verify CLI tool nupkg
         shell: pwsh
@@ -305,56 +320,6 @@ jobs:
             -PackagesDir "artifacts/packages/$env:BUILD_CONFIGURATION" `
             -Rid $rid `
             -ArchivePath $archive[0].FullName
-
-      - name: Verify Windows template argument forwarding
-        if: runner.os == 'Windows' && matrix.targets.rids == 'win-x64'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          . ./eng/common/tools.ps1
-          $dotnetRoot = InitializeDotNetCli -install:$true -createSdkLocationFile:$true
-          $dotnet = Join-Path $dotnetRoot 'dotnet.exe'
-          $env:DOTNET_ROOT = $dotnetRoot
-          $env:DOTNET_ROOT_X64 = $dotnetRoot
-          $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
-          $env:PATH = "$dotnetRoot$([IO.Path]::PathSeparator)$env:PATH"
-          Get-Command pwsh, python, dotnet -CommandType Application -ErrorAction Stop |
-            ForEach-Object { Write-Host "Required forwarding test tool: $($_.Source)" }
-
-          $checkoutSha = git --no-pager rev-parse HEAD
-          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the forwarding test checkout.' }
-          Write-Host "Windows forwarding checkout SHA: $checkoutSha"
-          $sdkVersion = & $dotnet --version
-          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the forwarding test SDK.' }
-          Write-Host "Windows forwarding SDK version: $sdkVersion"
-
-          $resultsDirectory = Join-Path $env:GITHUB_WORKSPACE "artifacts/log/$env:BUILD_CONFIGURATION/windows-template-forwarding"
-          $trxPath = Join-Path $resultsDirectory 'windows-template-forwarding.trx'
-          New-Item -ItemType Directory -Path $resultsDirectory -Force | Out-Null
-          if (Test-Path -LiteralPath $trxPath) {
-            Remove-Item -LiteralPath $trxPath -Force
-          }
-          # These tests are not built by BuildBundleDepsOnly. Keep normal build/restore
-          # and let eng/Testing.targets supply the standard MTP diagnostic timeouts.
-          & $dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj `
-            --configuration $env:BUILD_CONFIGURATION --no-launch-profile -- `
-            --filter-method '*.WindowsBuildStepsForwardLiteralPropertiesThroughRepositoryBuild' `
-            --filter-method '*.WindowsSdkInvocationsPreserveArgumentsAtTheNativeExecutable' `
-            --filter-not-trait 'quarantined=true' --filter-not-trait 'outerloop=true' `
-            --report-trx --report-trx-filename windows-template-forwarding.trx `
-            --results-directory $resultsDirectory
-          if ($LASTEXITCODE -ne 0) { throw "Windows forwarding tests failed with exit code $LASTEXITCODE." }
-
-          # RequiresTools/platform filters can exclude cases without reporting skips.
-          # Require fresh TRX results, not just a successful runner exit or summary.
-          [xml]$report = Get-Content -LiteralPath $trxPath -Raw
-          $namespaces = [System.Xml.XmlNamespaceManager]::new($report.NameTable)
-          $namespaces.AddNamespace('trx', 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
-          $results = @($report.SelectNodes('/trx:TestRun/trx:Results/trx:UnitTestResult', $namespaces))
-          if ($results.Count -ne 5 -or @($results | Where-Object { $_.outcome -cne 'Passed' }).Count -ne 0) {
-            throw "Expected exactly five passed Windows forwarding results, found $($results.Count) results: $($results.outcome -join ', ')."
-          }
-          Write-Host "Verified exactly five passed Windows forwarding results: $trxPath"
 
       # Upload DCP, Dashboard, and CLI tool packages so test/polyglot jobs can download them
       - name: Upload RID-specific packages

@@ -255,7 +255,7 @@ path_rules:
   - paths:
       - .github/workflows/build-cli-native-archives.yml
     targets: [CLI_ARCHIVE_CONSUMERS]
-    reason: native CLI archive production and Windows argument-forwarding validation
+    reason: this reusable workflow only produces native CLI archives, so only jobs/tests that list build_cli_archive_* or require CLI archives are affected
 
   # --- convention misses: integration dirs whose covering test is NOT the same-named one ------
   - paths: [src/Aspire.Hosting.Azure.*/**]

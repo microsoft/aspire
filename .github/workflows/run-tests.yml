@@ -383,13 +383,20 @@ jobs:
           $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
           if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
           $versionArgs = @($versionArgsJson | ConvertFrom-Json)
-          & $env:BUILD_SCRIPT `
+          $buildCommand = $env:BUILD_SCRIPT
+          $buildPrefix = @()
+          if ($IsWindows) {
+            $buildCommand = 'pwsh'
+            $buildPrefix = @('-NoProfile', '-File', $env:BUILD_SCRIPT)
+          }
+          & $buildCommand @buildPrefix `
             -restore `
             -ci `
             -build `
             -projects $env:TEST_PROJECT_PATH `
             ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }} `
             @versionArgs
+          exit $LASTEXITCODE
 
       - name: Build and archive test project
         if: ${{ fromJson(inputs.properties).requiresNugets == true }}
@@ -399,12 +406,19 @@ jobs:
           $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
           if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
           $versionArgs = @($versionArgsJson | ConvertFrom-Json)
-          & $env:BUILD_SCRIPT -restore -ci -build -projects $env:TEST_PROJECT_PATH `
+          $buildCommand = $env:BUILD_SCRIPT
+          $buildPrefix = @()
+          if ($IsWindows) {
+            $buildCommand = 'pwsh'
+            $buildPrefix = @('-NoProfile', '-File', $env:BUILD_SCRIPT)
+          }
+          & $buildCommand @buildPrefix -restore -ci -build -projects $env:TEST_PROJECT_PATH `
             /p:PrepareForHelix=true `
             /p:ArchiveTests=true `
             "/bl:${{ github.workspace }}/artifacts/log/Debug/BuildAndArchive.binlog" `
             ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }} `
             @versionArgs
+          exit $LASTEXITCODE
 
       # Workaround for bug in Azure Functions Worker SDK. See https://github.com/Azure/azure-functions-dotnet-worker/issues/2969.
       - name: Rebuild for Azure Functions project

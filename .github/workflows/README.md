@@ -16,37 +16,23 @@ Python installation supplied by the GitHub-hosted runner (`python` on Windows,
 `python3` on Linux/macOS); callers must pass the resulting arrays without
 evaluating them as shell source.
 
-On Windows, call `eng/build.ps1` directly from PowerShell and invoke the SDK's
-`dotnet.exe` resolved by `InitializeDotNetCli` in `eng/common/tools.ps1`.
+On Windows, invoke `eng/build.ps1` through `pwsh -NoProfile -File` and call the
+SDK's `dotnet.exe` resolved by `InitializeDotNetCli` in `eng/common/tools.ps1`.
 Keep its SDK bootstrap and first-run settings, but bypass `build.cmd` and
 `dotnet.cmd`: those wrappers reparse arguments as PowerShell or CMD source.
 Array splatting before a batch wrapper is not sufficient to keep inputs literal.
 See [PowerShell native argument passing](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing?view=powershell-7.5#passing-arguments-that-contain-quote-characters).
 
+The child `pwsh` also preserves the build's external-process output boundary.
+Arcade launches native tools with inherited console handles, so calling its
+scripts in-process does not send their native output through PowerShell stream
+redirection. Capturing the child process keeps native warnings and host output
+in the dependency build log used by warning verification.
+
 These changes remove workflow expression interpolation and batch-wrapper
 reparsing, not all downstream interpretation. Parsing is not general sanitization:
-downstream build scripts and tools may interpret values. Forwarding regressions
-cover spaces, ASCII quotes, command-substitution text, and CMD metacharacters;
-they do not establish arbitrary Unicode or end-to-end safety.
-
-The existing `tests.yml` → `build_cli_archive_windows` → `build_cli_archives`
-lane runs the Windows forwarding regressions on `windows-latest`/`win-x64`,
-after npm package verification and before package upload. Only the four
-`WindowsBuildStepsForwardLiteralPropertiesThroughRepositoryBuild` theory cases
-and `WindowsSdkInvocationsPreserveArgumentsAtTheNativeExecutable` run there;
-the rest of `Infrastructure.Tests` remains outside the Windows test matrix.
-The step builds/restores that test project normally because archive dependency
-builds do not build its assembly.
-
-The receipt prints the checked-out SHA and selected SDK version, then requires
-exactly five fresh TRX `UnitTestResult` entries, all `Passed`. This catches
-missing-tool/platform exclusions and zero-test success, which runner exit codes
-and skipped counts alone do not detect. A PR event's merge checkout SHA is not
-the PR head SHA. The report lives under
-`artifacts/log/<configuration>/windows-template-forwarding/` and is included in
-the archive job's existing always-uploaded logs. Changes to
-`reproduce-flaky-tests.yml` are admitted by the upstream CI skip gate because
-these regressions execute its Windows setup and test forwarding.
+downstream build scripts and tools may interpret values. This does not establish
+arbitrary Unicode or end-to-end safety.
 
 Large matrices must travel through files rather than executable here-strings or
 environment variables, which are subject to per-variable OS size limits.

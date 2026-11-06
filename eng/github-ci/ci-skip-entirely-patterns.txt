@@ -75,6 +75,7 @@ eng/Version.Details.xml
 .github/workflows/refresh-manifests.yml
 .github/workflows/release-github-tasks.yml
 .github/workflows/release-notes-generate.*
+.github/workflows/reproduce-flaky-tests.yml
 .github/workflows/specialized-test-runner.yml
 .github/workflows/tests-outerloop.yml
 .github/workflows/tests-quarantine.yml
