@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREAZURE003
 
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
@@ -1388,6 +1389,61 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         // For project resources without explicit target port, should use container port reference
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task UserDefinedSlotConfigNames_AreMergedWithGeneratedStickySettings(bool withDeploymentSlot, bool parameterBackedNames)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+
+        var env = builder.AddAzureAppServiceEnvironment("env");
+        if (withDeploymentSlot)
+        {
+            env.WithDeploymentSlot("stage");
+        }
+
+        var project = builder.AddProject<Project>("project1", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureAppServiceWebsite((infra, site) =>
+            {
+                var slotConfigNames = new global::Azure.Provisioning.AppService.SlotConfigNames("slotConfigNames")
+                {
+                    Parent = site
+                };
+
+                if (parameterBackedNames)
+                {
+                    var stickyNames = new global::Azure.Provisioning.ProvisioningParameter("stickyNames", typeof(string[]));
+                    infra.Add(stickyNames);
+                    slotConfigNames.AppSettingNames = stickyNames;
+                }
+                else
+                {
+                    slotConfigNames.AppSettingNames = ["MY__CUSTOM_SETTING"];
+                }
+
+                infra.Add(slotConfigNames);
+            });
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        Assert.Single(Regex.Matches(bicep, @"^resource slotConfigNames ", RegexOptions.Multiline));
+
+        await Verify(bicep, "bicep")
+            .UseParameters(withDeploymentSlot, parameterBackedNames);
     }
 
     [Fact]
