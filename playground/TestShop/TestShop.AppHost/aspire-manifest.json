@@ -3,11 +3,11 @@
     "postgres": {
       "type": "container.v0",
       "connectionString": "Host={postgres.bindings.tcp.host};Port={postgres.bindings.tcp.port};Username=postgres;Password={postgres-password.value}",
-      "image": "docker.io/library/postgres:17.6",
+      "image": "docker.io/library/postgres:18.3",
       "volumes": [
         {
           "name": "testshop.apphost-48e1ce2b9b-postgres-data",
-          "target": "/var/lib/postgresql/data",
+          "target": "/var/lib/postgresql",
           "readOnly": false
         }
       ],
@@ -119,7 +119,7 @@
     "messaging": {
       "type": "container.v0",
       "connectionString": "amqp://guest:{messaging-password-uri-encoded.value}@{messaging.bindings.tcp.host}:{messaging.bindings.tcp.port}",
-      "image": "docker.io/library/rabbitmq:4.2-management",
+      "image": "docker.io/library/rabbitmq:4.3-management",
       "volumes": [
         {
           "name": "testshop.apphost-48e1ce2b9b-messaging-data",
@@ -231,18 +231,22 @@
       ],
       "env": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "CATALOGSERVICE_HTTP": "{catalogservice.bindings.http.url}",
+        "BASKETSERVICE_HTTP": "{basketservice.bindings.http.url}",
         "REVERSEPROXY__ROUTES__route0__MATCH__PATH": "/catalog/{**catch-all}",
         "REVERSEPROXY__ROUTES__route0__CLUSTERID": "cluster_catalogservice",
         "REVERSEPROXY__ROUTES__route0__TRANSFORMS__0__PathRemovePrefix": "/catalog",
         "REVERSEPROXY__ROUTES__route1__MATCH__PATH": "/basket/{**catch-all}",
         "REVERSEPROXY__ROUTES__route1__CLUSTERID": "cluster_basketservice",
         "REVERSEPROXY__ROUTES__route1__TRANSFORMS__0__PathRemovePrefix": "/basket",
-        "REVERSEPROXY__CLUSTERS__cluster_catalogservice__DESTINATIONS__destination1__ADDRESS": "http://_http.catalogservice",
-        "REVERSEPROXY__CLUSTERS__cluster_basketservice__DESTINATIONS__destination1__ADDRESS": "http://_http.basketservice",
+        "REVERSEPROXY__CLUSTERS__cluster_catalogservice__DESTINATIONS__destination1__ADDRESS": "http://catalogservice",
+        "REVERSEPROXY__CLUSTERS__cluster_basketservice__DESTINATIONS__destination1__ADDRESS": "http://basketservice",
+        "services__basketservice__http__0": "{basketservice.bindings.http.url}",
+        "BASKETSERVICE_HTTPS": "{basketservice.bindings.https.url}",
+        "services__basketservice__https__0": "{basketservice.bindings.https.url}",
+        "CATALOGSERVICE_HTTP": "{catalogservice.bindings.http.url}",
         "services__catalogservice__http__0": "{catalogservice.bindings.http.url}",
-        "BASKETSERVICE_HTTP": "{basketservice.bindings.http.url}",
-        "services__basketservice__http__0": "{basketservice.bindings.http.url}"
+        "CATALOGSERVICE_HTTPS": "{catalogservice.bindings.https.url}",
+        "services__catalogservice__https__0": "{catalogservice.bindings.https.url}"
       },
       "bindings": {
         "http": {

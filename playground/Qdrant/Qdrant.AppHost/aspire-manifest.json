@@ -3,7 +3,7 @@
     "qdrant": {
       "type": "container.v0",
       "connectionString": "Endpoint={qdrant.bindings.grpc.url};Key={qdrant-Key.value}",
-      "image": "docker.io/qdrant/qdrant:v1.16.3",
+      "image": "docker.io/qdrant/qdrant:v1.18.0",
       "volumes": [
         {
           "name": "qdrant-data",
@@ -37,7 +37,7 @@
         "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
         "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
         "HTTP_PORTS": "{apiservice.bindings.http.targetPort}",
-        "ConnectionStrings__qdrant": "Endpoint={qdrant.bindings.grpc.url};Key={qdrant-Key.value}",
+        "ConnectionStrings__qdrant": "{qdrant.connectionString}",
         "QDRANT_GRPCHOST": "{qdrant.bindings.grpc.host}",
         "QDRANT_GRPCPORT": "{qdrant.bindings.grpc.port}",
         "QDRANT_HTTPHOST": "{qdrant.bindings.http.host}",
