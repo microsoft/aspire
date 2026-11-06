@@ -122,6 +122,18 @@ internal static partial class DotnetProjectBuildCoordinator
                     context.Args.Add("--configuration");
                     context.Args.Add(buildConfiguration);
                 }
+
+                // File-based app builds reject MSBuild logger switches, so only MSBuild project builds carry the log.
+                if (buildResource.BuildLogPath is { } buildLogPath &&
+                    !buildTargetPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    await buildResource.WaitForRunningBuildsAsync(
+                        context.Logger,
+                        context.CancellationToken).ConfigureAwait(false);
+
+                    // The file logger's handle on the log marks this build as running until the build process exits.
+                    context.Args.Add($"-flp9:LogFile={buildLogPath};Verbosity=minimal");
+                }
             })
             .WithIconName("CodeCsRectangle")
             .ExcludeFromManifest()
