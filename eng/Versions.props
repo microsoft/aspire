@@ -2,12 +2,12 @@
   <PropertyGroup>
     <!-- This repo version -->
     <MajorVersion>17</MajorVersion>
-    <MinorVersion>0</MinorVersion>
+    <MinorVersion>1</MinorVersion>
     <PatchVersion>0</PatchVersion>
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
     <PreReleaseVersionLabel>preview.1</PreReleaseVersionLabel>
-    <!-- Uncomment this override in future releases when the development branch precedes its dashboard image, using an available tag. -->
-    <!-- <AspireDashboardImageTag>17.0</AspireDashboardImageTag> -->
+    <!-- The development branch precedes its dashboard image. Remove this override once the 17.1 tag is published. -->
+    <AspireDashboardImageTag>17.0</AspireDashboardImageTag>
     <DefaultTargetFramework>net10.0</DefaultTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net11.0</AllTargetFrameworks>
     <!-- dotnet versions for running template tests -->
