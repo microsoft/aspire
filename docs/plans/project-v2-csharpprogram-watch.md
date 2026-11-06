@@ -483,10 +483,24 @@ owns one launched instance, and failures/cancellation never look like successful
 
 ### Session 7 - `aspire run --watch` CLI wiring
 
-**Not implemented.** `RunCommand` currently has no `--watch` option and does not project the V2 signal.
-The existing `defaultWatchEnabled` feature still selects whole-AppHost `dotnet watch` for project-based
-C# AppHosts and the guest runtime's watch path for polyglot hosts. It is not the new service-watch mode.
-Current `--no-build` validation already accounts for legacy watch and extension-terminal launches.
+**Implemented in the spike.** Effective watch is the explicit `--watch[=true|false]` when given and otherwise
+the `defaultWatchEnabled` feature; both mean this per-service watch. The legacy whole-AppHost `dotnet watch`
+for project-based C# AppHosts is **retired** rather than kept under a second meaning of the same setting:
+the C# AppHost is built once by the CLI and launched normally, and `AppHost__Run__WatchEnabled` plus the
+proxy CLI invocation go into its environment. For guest (TypeScript, Python, ...) AppHosts the same signal
+goes into the **AppHost server's** environment, and `context.Watch` still drives the guest's native AppHost
+watch (D4), so C# services referenced from a polyglot AppHost hot reload too; the "C# AppHost only"
+warning is gone.
+
+- `--no-build` with effective watch fails with a clear error that names the cause: an explicit `--watch`,
+  or the `defaultWatchEnabled` feature (with `--watch false` as the way out).
+- IDE-owned runs (`ASPIRE_EXTENSION_DEBUG_SESSION_ID` or `DEBUG_SESSION_PORT`) never start the CLI
+  watcher; the IDE's own watch/debug protocol applies, `--no-build` stays allowed, and an explicit
+  `--watch` prints a notice saying the IDE owns hot reload.
+- `aspire run` typed in the VS Code extension terminal delegates to a VS Code run session: `--watch` is
+  not forwarded, an explicit `--watch` prints the same notice in the terminal, and `--no-build` is rejected
+  because that session builds and watches services itself.
+- `aspire run --detach` forwards an explicit `--watch`/`--watch false` to the detached child.
 
 Add the option, with explicit `--watch` enabling watch and `DefaultWatchEnabled` supplying the default.
 Project `AppHost:Run:WatchEnabled` into the process that actually hosts `Aspire.Hosting`.
