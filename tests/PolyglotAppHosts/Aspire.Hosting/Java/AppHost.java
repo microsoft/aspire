@@ -8,7 +8,7 @@ void main() throws Exception {
         container.withTags(new String[] { "Service" });
         container.withTrait("Owner", "Finance");
         container.withTrait("Owner", "Platform");
-        container.withDisplayPosition(-10);
+        container.withDisplayOrder(10);
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {

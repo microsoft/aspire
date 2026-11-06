@@ -358,6 +358,11 @@ public sealed class InteractionInput
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
     internal List<string> ValidationErrors { get; } = [];
+
+    // The resource the input provides a value for, sent to the dashboard so it can tell which parameter an input is for
+    // without relying on the input's name. See ParameterProcessor.HandleUnresolvedParametersAsync.
+    internal string? RelatedResourceName { get; set; }
+
     internal void SetName(string name)
     {
         ArgumentNullException.ThrowIfNull(name);

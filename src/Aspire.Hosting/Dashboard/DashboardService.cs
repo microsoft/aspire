@@ -278,6 +278,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.FileFilter = input.FileFilter;
         }
+        if (input.RelatedResourceName is not null)
+        {
+            dto.RelatedResourceName = input.RelatedResourceName;
+        }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
     }

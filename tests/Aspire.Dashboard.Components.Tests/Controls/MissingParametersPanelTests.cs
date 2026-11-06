@@ -71,7 +71,7 @@ public class MissingParametersPanelTests : DashboardTestContext
         var commandInput = new InteractionInput { Name = "Value", Label = "Value", InputType = InputType.Text };
         var parameter = CreateParameter(CreateSetCommand(commandInput));
         var cut = RenderPanel(parameter, isReadOnly: false);
-        var interactionInput = new InteractionInput { Name = parameter.Name, Label = "Value", InputType = InputType.Text, UpdateStateOnChange = true };
+        var interactionInput = new InteractionInput { Name = parameter.Name, Label = "Value", InputType = InputType.Text, UpdateStateOnChange = true, RelatedResourceName = parameter.Name };
         var updates = new List<bool>();
         var interaction = new WatchInteractionsResponseUpdate
         {
@@ -100,23 +100,63 @@ public class MissingParametersPanelTests : DashboardTestContext
         Assert.Equal([true], updates);
     }
 
+    [Fact]
+    public async Task InteractionInputNamedAfterResolvedParameter_EditsInputOfItsParameter()
+    {
+        // A dynamically loaded input keeps the name its generator chose, here the name of another parameter that
+        // already has a value. The form must edit and submit the prompt's input for the parameter the AppHost says it's
+        // for, not a copy of the resolved parameter's command input.
+        var region = ModelTestHelpers.CreateResource("region", resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.ValueMissing,
+            commands: [CreateSetCommand(new InteractionInput { Name = "Value", Label = "Region", InputType = InputType.Text })]);
+        var resolved = ModelTestHelpers.CreateResource("Value", resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.Running,
+            commands: [CreateSetCommand(new InteractionInput { Name = "Value", Label = "Value", InputType = InputType.Text })]);
+        var cut = RenderPanel([region, resolved], isReadOnly: false);
+        var promptInput = new InteractionInput { Name = "Value", Label = "Region", InputType = InputType.Text, Required = true, RelatedResourceName = region.Name };
+        var submits = new List<bool>();
+
+        await cut.InvokeAsync(() => Assert.True(Services.GetRequiredService<ParameterInteractionState>().TrySetCurrent(new InteractionsInputsDialogViewModel
+        {
+            Interaction = new WatchInteractionsResponseUpdate
+            {
+                InteractionId = 1,
+                InputsDialog = new InteractionInputsDialog { InputItems = { promptInput } }
+            },
+            Message = string.Empty,
+            OnSubmitCallback = (_, update) =>
+            {
+                submits.Add(update);
+                return Task.CompletedTask;
+            },
+            DashboardClient = Services.GetRequiredService<IDashboardClient>()
+        })));
+
+        await cut.InvokeAsync(() => cut.FindComponent<FluentTextInput>().Instance.ValueChanged.InvokeAsync("west"));
+        await cut.InvokeAsync(() => cut.FindComponents<FluentButton>().Single(b => b.Instance.Appearance == ButtonAppearance.Primary).Instance.OnClick.InvokeAsync());
+
+        Assert.Equal("west", promptInput.Value);
+        Assert.Equal([false], submits);
+    }
+
     private static CommandViewModel CreateSetCommand(InteractionInput input) =>
         new(CommandViewModel.SetParameterCommand, CommandViewModelState.Enabled, "Set", string.Empty, string.Empty, [input], isHighlighted: false, iconName: string.Empty, iconVariant: Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular);
 
     private static ResourceViewModel CreateParameter(CommandViewModel command) =>
         ModelTestHelpers.CreateResource("param", resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.ValueMissing, commands: [command]);
 
-    private IRenderedComponent<MissingParametersPanel> RenderPanel(ResourceViewModel parameter, bool isReadOnly, Func<ResourceViewModel, CommandViewModel, Task>? executeCommand = null)
+    private IRenderedComponent<MissingParametersPanel> RenderPanel(ResourceViewModel parameter, bool isReadOnly, Func<ResourceViewModel, CommandViewModel, Task>? executeCommand = null) =>
+        RenderPanel([parameter], isReadOnly, executeCommand);
+
+    private IRenderedComponent<MissingParametersPanel> RenderPanel(ResourceViewModel[] parameters, bool isReadOnly, Func<ResourceViewModel, CommandViewModel, Task>? executeCommand = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [parameter],
+            initialResources: parameters,
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
             isReadOnly: isReadOnly));
 
         return Render<MissingParametersPanel>(builder =>
         {
-            builder.Add(p => p.Parameters, [parameter]);
+            builder.Add(p => p.Parameters, parameters);
             builder.Add(p => p.OnExecuteCommandAsync, executeCommand ?? ((_, _) => Task.CompletedTask));
             builder.Add(p => p.OnExecuteCommandWithOptionsAsync, (_, _, _) => Task.CompletedTask);
             builder.Add(p => p.IsCommandExecuting, (_, _) => false);

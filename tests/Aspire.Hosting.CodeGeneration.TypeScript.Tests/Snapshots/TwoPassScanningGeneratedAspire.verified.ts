@@ -13370,11 +13370,11 @@ export interface ContainerRegistryResource {
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ContainerRegistryResourcePromise;
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -13742,11 +13742,11 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ContainerRegistryResourcePromise;
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -14651,22 +14651,22 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<ContainerRegistryResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -15313,7 +15313,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withHiddenOnCompletion"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTrait"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTags"]: () => ContainerRegistryResourcePromiseImpl,
-    ["withDisplayPosition"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
@@ -16070,11 +16070,11 @@ export interface ContainerResource {
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ContainerResourcePromise;
+    withDisplayOrder(order: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -16938,11 +16938,11 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ContainerResourcePromise;
+    withDisplayOrder(order: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -19276,22 +19276,22 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ContainerResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -20084,7 +20084,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withRemoteImageTag"]: () => ContainerResourcePromiseImpl,
     ["withTrait"]: () => ContainerResourcePromiseImpl,
     ["withTags"]: () => ContainerResourcePromiseImpl,
-    ["withDisplayPosition"]: () => ContainerResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ContainerResourcePromiseImpl,
     ["withTerminal"]: () => ContainerResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerResourcePromiseImpl,
@@ -20683,11 +20683,11 @@ export interface CSharpAppResource {
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): CSharpAppResourcePromise;
+    withDisplayOrder(order: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -21391,11 +21391,11 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): CSharpAppResourcePromise;
+    withDisplayOrder(order: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -23317,22 +23317,22 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<CSharpAppResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -24120,7 +24120,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withRemoteImageTag"]: () => CSharpAppResourcePromiseImpl,
     ["withTrait"]: () => CSharpAppResourcePromiseImpl,
     ["withTags"]: () => CSharpAppResourcePromiseImpl,
-    ["withDisplayPosition"]: () => CSharpAppResourcePromiseImpl,
+    ["withDisplayOrder"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
@@ -24762,11 +24762,11 @@ export interface DotnetToolResource {
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): DotnetToolResourcePromise;
+    withDisplayOrder(order: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -25506,11 +25506,11 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): DotnetToolResourcePromise;
+    withDisplayOrder(order: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -27547,22 +27547,22 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<DotnetToolResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -28337,7 +28337,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withRemoteImageTag"]: () => DotnetToolResourcePromiseImpl,
     ["withTrait"]: () => DotnetToolResourcePromiseImpl,
     ["withTags"]: () => DotnetToolResourcePromiseImpl,
-    ["withDisplayPosition"]: () => DotnetToolResourcePromiseImpl,
+    ["withDisplayOrder"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
@@ -28946,11 +28946,11 @@ export interface ExecutableResource {
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ExecutableResourcePromise;
+    withDisplayOrder(order: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -29651,11 +29651,11 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ExecutableResourcePromise;
+    withDisplayOrder(order: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -31582,22 +31582,22 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -32366,7 +32366,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withRemoteImageTag"]: () => ExecutableResourcePromiseImpl,
     ["withTrait"]: () => ExecutableResourcePromiseImpl,
     ["withTags"]: () => ExecutableResourcePromiseImpl,
-    ["withDisplayPosition"]: () => ExecutableResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
@@ -32659,11 +32659,11 @@ export interface ExternalServiceResource {
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ExternalServiceResourcePromise;
+    withDisplayOrder(order: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -33036,11 +33036,11 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ExternalServiceResourcePromise;
+    withDisplayOrder(order: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -33969,22 +33969,22 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<ExternalServiceResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -34632,7 +34632,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withHiddenOnCompletion"]: () => ExternalServiceResourcePromiseImpl,
     ["withTrait"]: () => ExternalServiceResourcePromiseImpl,
     ["withTags"]: () => ExternalServiceResourcePromiseImpl,
-    ["withDisplayPosition"]: () => ExternalServiceResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
@@ -34945,11 +34945,11 @@ export interface ParameterResource {
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ParameterResourcePromise;
+    withDisplayOrder(order: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -35364,11 +35364,11 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ParameterResourcePromise;
+    withDisplayOrder(order: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -36377,22 +36377,22 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<ParameterResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -37080,7 +37080,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
     ["withTrait"]: () => ParameterResourcePromiseImpl,
     ["withTags"]: () => ParameterResourcePromiseImpl,
-    ["withDisplayPosition"]: () => ParameterResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
@@ -37678,11 +37678,11 @@ export interface ProjectResource {
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ProjectResourcePromise;
+    withDisplayOrder(order: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -38386,11 +38386,11 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ProjectResourcePromise;
+    withDisplayOrder(order: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -40313,22 +40313,22 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<ProjectResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -41116,7 +41116,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withRemoteImageTag"]: () => ProjectResourcePromiseImpl,
     ["withTrait"]: () => ProjectResourcePromiseImpl,
     ["withTags"]: () => ProjectResourcePromiseImpl,
-    ["withDisplayPosition"]: () => ProjectResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
@@ -41877,11 +41877,11 @@ export interface TestDatabaseResource {
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestDatabaseResourcePromise;
+    withDisplayOrder(order: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -42745,11 +42745,11 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestDatabaseResourcePromise;
+    withDisplayOrder(order: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -45082,22 +45082,22 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<TestDatabaseResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -45890,7 +45890,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withRemoteImageTag"]: () => TestDatabaseResourcePromiseImpl,
     ["withTrait"]: () => TestDatabaseResourcePromiseImpl,
     ["withTags"]: () => TestDatabaseResourcePromiseImpl,
-    ["withDisplayPosition"]: () => TestDatabaseResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestDatabaseResourcePromiseImpl,
     ["withTerminal"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestDatabaseResourcePromiseImpl,
@@ -46666,11 +46666,11 @@ export interface TestRedisResource {
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestRedisResourcePromise;
+    withDisplayOrder(order: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -47618,11 +47618,11 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestRedisResourcePromise;
+    withDisplayOrder(order: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -50059,22 +50059,22 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<TestRedisResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new TestRedisResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -51144,7 +51144,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withRemoteImageTag"]: () => TestRedisResourcePromiseImpl,
     ["withTrait"]: () => TestRedisResourcePromiseImpl,
     ["withTags"]: () => TestRedisResourcePromiseImpl,
-    ["withDisplayPosition"]: () => TestRedisResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestRedisResourcePromiseImpl,
     ["withTerminal"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestRedisResourcePromiseImpl,
@@ -51920,11 +51920,11 @@ export interface TestVaultResource {
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestVaultResourcePromise;
+    withDisplayOrder(order: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -52790,11 +52790,11 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestVaultResourcePromise;
+    withDisplayOrder(order: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -55129,22 +55129,22 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<TestVaultResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new TestVaultResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -55952,7 +55952,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withRemoteImageTag"]: () => TestVaultResourcePromiseImpl,
     ["withTrait"]: () => TestVaultResourcePromiseImpl,
     ["withTags"]: () => TestVaultResourcePromiseImpl,
-    ["withDisplayPosition"]: () => TestVaultResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestVaultResourcePromiseImpl,
     ["withTerminal"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestVaultResourcePromiseImpl,
@@ -56525,11 +56525,11 @@ export interface Resource {
      */
     withTags(tags: string[]): ResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ResourcePromise;
+    withDisplayOrder(order: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -56897,11 +56897,11 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withTags(tags: string[]): ResourcePromise;
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ResourcePromise;
+    withDisplayOrder(order: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -57807,22 +57807,22 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withDisplayPositionInternal(position: number): Promise<Resource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/withDisplayPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
      */
-    withDisplayPosition(position: number): ResourcePromise {
-        return new ResourcePromiseImpl(this._withDisplayPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ResourcePromise {
+        return new ResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -58469,7 +58469,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withHiddenOnCompletion"]: () => ResourcePromiseImpl,
     ["withTrait"]: () => ResourcePromiseImpl,
     ["withTags"]: () => ResourcePromiseImpl,
-    ["withDisplayPosition"]: () => ResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,

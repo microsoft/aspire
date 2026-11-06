@@ -35,7 +35,7 @@ internal static class KnownProperties
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
         public const string TraitPrefix = "resource.trait.";
-        public const string DisplayPosition = "resource.displayPosition";
+        public const string DisplayOrder = "resource.displayOrder";
     }
 
     public static class Container

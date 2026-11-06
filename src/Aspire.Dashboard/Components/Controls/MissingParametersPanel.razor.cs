@@ -124,8 +124,9 @@ public partial class MissingParametersPanel : IAsyncDisposable
         var existingEditors = _editors.ToDictionary(editor => editor.Resource.Name, StringComparers.ResourceName);
         var editors = new List<ParameterEditor>();
         var interaction = Interaction;
-        var interactionInputs = interaction?.Inputs
-            .ToDictionary(input => input.Name, StringComparers.InteractionInputName);
+        // The interaction's inputs are matched by the parameter the AppHost says they're for, not by name. See
+        // ParameterInteractionState.GetParameterInputs.
+        var interactionInputs = interaction is null ? null : ParameterInteractionState.GetParameterInputs(interaction);
 
         foreach (var parameter in Parameters
             .Where(parameter => parameter.HasMissingParameterValueState())
@@ -158,8 +159,7 @@ public partial class MissingParametersPanel : IAsyncDisposable
 
         _editors = editors;
 
-        var interactionSaveInput = interaction?.Inputs.FirstOrDefault(input =>
-            string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName));
+        var interactionSaveInput = interaction?.Inputs.FirstOrDefault(ParameterInteractionState.IsSaveToUserSecretsInput);
         if (interactionSaveInput is not null)
         {
             _saveInput ??= new InputViewModel(interactionSaveInput);

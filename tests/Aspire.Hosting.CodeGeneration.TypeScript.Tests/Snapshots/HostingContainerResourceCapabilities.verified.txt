@@ -560,8 +560,8 @@
     ]
   },
   {
-    CapabilityId: Aspire.Hosting/withDisplayPosition,
-    MethodName: withDisplayPosition,
+    CapabilityId: Aspire.Hosting/withDisplayOrder,
+    MethodName: withDisplayOrder,
     TargetType: {
       TypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource,
       IsInterface: true

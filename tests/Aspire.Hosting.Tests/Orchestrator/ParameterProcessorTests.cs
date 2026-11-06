@@ -1420,6 +1420,59 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task InitializeParametersAsync_WithGeneratedNameOfResolvedParameter_InputNamesItsOwnParameter()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var resolvedParameter = CreateParameterResource("Value", "existing");
+        var regionParameter = CreateParameterWithMissingValue("region");
+
+        // The generator's name is kept because a dynamically loaded input is in the prompt, and it's the name of the
+        // resolved parameter. The dashboard must still be able to tell the input is for region.
+        regionParameter.Annotations.Add(new InputGeneratorAnnotation(_ => new InteractionInput
+        {
+            Name = "Value",
+            InputType = InputType.Choice,
+            Label = "Region",
+            Required = true,
+            DynamicLoading = new InputLoadOptions
+            {
+                LoadCallback = context =>
+                {
+                    context.Input.Options = [KeyValuePair.Create("west", "West")];
+                    return Task.CompletedTask;
+                }
+            }
+        }));
+
+        await parameterProcessor.InitializeParametersAsync([resolvedParameter, regionParameter]).DefaultTimeout();
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Collection(inputsInteraction.Inputs,
+            input =>
+            {
+                Assert.Equal("Value", input.Name);
+                Assert.Equal("region", input.RelatedResourceName);
+                Assert.Equal("region", Aspire.Hosting.Dashboard.DashboardService.CreateInteractionInputDto(input).RelatedResourceName);
+            },
+            input =>
+            {
+                Assert.Equal("SaveToUserSecrets", input.Name);
+                Assert.Null(input.RelatedResourceName);
+                Assert.Equal(string.Empty, Aspire.Hosting.Dashboard.DashboardService.CreateInteractionInputDto(input).RelatedResourceName);
+            });
+
+        inputsInteraction.Inputs["Value"].Value = "west";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("west", await regionParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal("existing", await resolvedParameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
     public async Task InitializeParametersAsync_WithDynamicInputAndDuplicateGeneratedNames_RenamesOnlyDuplicates()
     {
         var testInteractionService = new TestInteractionService { IsAvailable = true };

@@ -40,7 +40,7 @@ public sealed class ResourceOrderStore
     public IReadOnlyDictionary<string, long> GetPositions() => GetPositions(grouping: null);
 
     /// <summary>
-    /// Gets the positions to display the given run's resources with. AppHost defaults apply until the user reorders.
+    /// Gets the positions to display the given run's resources with. AppHost display orders apply until the user reorders.
     /// </summary>
     /// <remarks>
     /// Declared defaults are specific to a run while this store is shared by every circuit, and circuits can select
@@ -48,11 +48,11 @@ public sealed class ResourceOrderStore
     /// </remarks>
     public IReadOnlyDictionary<string, long> GetPositions(IEnumerable<ResourceViewModel> resources)
     {
-        var defaults = GetDefaultPositions(resources);
+        var displayOrders = GetDisplayOrders(resources);
         lock (_lock)
         {
             EnsureLoaded();
-            return GetEffectiveResourcePositions(defaults);
+            return GetEffectiveResourcePositions(displayOrders);
         }
     }
 
@@ -107,7 +107,7 @@ public sealed class ResourceOrderStore
     {
         var snapshot = resources.ToList();
 
-        // Resources can share a position, for example the same AppHost default. Those are displayed by name, so the move
+        // Resources can share a position, for example the same AppHost display order. Those are displayed by name, so the move
         // needs the same tie-breaker or the moved resource lands somewhere other than where it was dropped.
         var nameRanks = new Dictionary<string, int>(StringComparers.ResourceName);
         foreach (var resource in snapshot.OrderBy(r => r, ResourceViewModelNameComparer.Instance))
@@ -115,12 +115,12 @@ public sealed class ResourceOrderStore
             nameRanks.TryAdd(resource.PersistentKey, nameRanks.Count);
         }
 
-        return TryMove(grouping: null, resourceKey, targetKey, after, GetDefaultPositions(snapshot), nameRanks);
+        return TryMove(grouping: null, resourceKey, targetKey, after, GetDisplayOrders(snapshot), nameRanks);
     }
 
     public bool TryMoveGroup(string grouping, string groupKey, string targetKey, bool after) => TryMove(grouping, groupKey, targetKey, after, [], []);
 
-    private bool TryMove(string? grouping, string resourceKey, string targetKey, bool after, Dictionary<string, long> defaultPositions, Dictionary<string, int> nameRanks)
+    private bool TryMove(string? grouping, string resourceKey, string targetKey, bool after, Dictionary<string, int> displayOrders, Dictionary<string, int> nameRanks)
     {
         lock (_lock)
         {
@@ -135,7 +135,7 @@ public sealed class ResourceOrderStore
                 return true;
             }
 
-            var effectivePositions = grouping is null ? GetEffectiveResourcePositions(defaultPositions) : currentPositions;
+            var effectivePositions = grouping is null ? GetEffectiveResourcePositions(displayOrders) : currentPositions;
             var orderedKeys = effectivePositions
                 .OrderBy(pair => pair.Value)
                 .ThenBy(pair => nameRanks.GetValueOrDefault(pair.Key, int.MaxValue))
@@ -179,34 +179,52 @@ public sealed class ResourceOrderStore
         return positions;
     }
 
-    private static Dictionary<string, long> GetDefaultPositions(IEnumerable<ResourceViewModel> resources)
+    private static Dictionary<string, int> GetDisplayOrders(IEnumerable<ResourceViewModel> resources)
     {
-        var positions = new Dictionary<string, long>(StringComparers.ResourceName);
+        var orders = new Dictionary<string, int>(StringComparers.ResourceName);
         foreach (var resource in resources)
         {
-            if (resource.DefaultDisplayPosition is { } position)
+            if (resource.DisplayOrder is { } order)
             {
-                positions[resource.PersistentKey] = position;
+                orders[resource.PersistentKey] = order;
             }
         }
 
-        return positions;
+        return orders;
     }
 
-    private Dictionary<string, long> GetEffectiveResourcePositions(Dictionary<string, long> defaultPositions)
+    private Dictionary<string, long> GetEffectiveResourcePositions(Dictionary<string, int> displayOrders)
     {
-        if (_hasCustomResourceOrder || defaultPositions.Count == 0)
+        if (_hasCustomResourceOrder || displayOrders.Count == 0)
         {
             return new Dictionary<string, long>(_positions, StringComparers.ResourceName);
         }
 
-        // Keep declared defaults separate from saved order: a new AppHost default must take
+        // Keep declared display orders separate from saved order: a new AppHost value must take
         // effect until the user explicitly reorders, including after restarting the dashboard.
+        //
+        // Display orders are relative sort keys like ResourceUrlAnnotation.DisplayOrder: higher values
+        // come first and resources without one count as 0. Resources declaring the same order share a
+        // position so they're displayed by name; undeclared resources keep the order they were first seen in.
         var positions = new Dictionary<string, long>(StringComparers.ResourceName);
-        var nextPosition = defaultPositions.Values.Max() + 1;
-        foreach (var pair in _positions.OrderBy(p => p.Value))
+        var nextPosition = 0L;
+        var groups = _positions.GroupBy(pair => displayOrders.GetValueOrDefault(pair.Key)).OrderByDescending(group => group.Key);
+        foreach (var group in groups)
         {
-            positions[pair.Key] = defaultPositions.TryGetValue(pair.Key, out var position) ? position : nextPosition++;
+            var hasDeclaredOrder = false;
+            foreach (var pair in group.Where(pair => displayOrders.ContainsKey(pair.Key)))
+            {
+                positions[pair.Key] = nextPosition;
+                hasDeclaredOrder = true;
+            }
+            if (hasDeclaredOrder)
+            {
+                nextPosition++;
+            }
+            foreach (var pair in group.Where(pair => !displayOrders.ContainsKey(pair.Key)).OrderBy(pair => pair.Value))
+            {
+                positions[pair.Key] = nextPosition++;
+            }
         }
 
         return positions;

@@ -69,7 +69,7 @@ builder.AddProject<Projects.Api>("api")
     .WithTags("Backend", "API")
     .WithTrait("Owner", "Finance")
     .WithTrait("Owner", "Platform")
-    .WithDisplayPosition(-10);
+    .WithDisplayOrder(10);
 ```
 
 `WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
@@ -79,9 +79,12 @@ dashboard tag grouping but cannot be removed in the dashboard. User-added tags a
 stored separately in the application settings database, so restarting an AppHost
 does not lose customizations or copy declared tags from a different run.
 
-`WithDisplayPosition` stores its own annotation rather than a trait, and is transported
-as the `resource.displayPosition` resource property; repeated calls replace the previous
-value. It isn't specific to the dashboard, so other UIs can use it too. Lower positions appear first; defaults can change between runs until
+`WithDisplayOrder` stores its own annotation rather than a trait, and is transported
+as the `resource.displayOrder` resource property; repeated calls replace the previous
+value. It isn't specific to the dashboard, so other UIs can use it too. Like
+`ResourceUrlAnnotation.DisplayOrder`, it's a relative sort key: higher values appear first,
+and resources without one are treated as 0, so a negative value moves a resource after them.
+Resources with the same order are displayed by name. Orders can change between runs until
 the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
 per application, independently of the run database.
 

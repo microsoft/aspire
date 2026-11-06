@@ -12,8 +12,8 @@ internal static class ResourceTraitSnapshotProperties
     public static ImmutableArray<ResourcePropertySnapshot> AddTraitProperties(IResource resource, ImmutableArray<ResourcePropertySnapshot> properties)
     {
         var traits = resource.Annotations.OfType<TraitAnnotation>().ToArray();
-        var hasDisplayPosition = resource.TryGetLastAnnotation<DisplayPositionAnnotation>(out var displayPosition);
-        if (traits.Length == 0 && !hasDisplayPosition)
+        var hasDisplayOrder = resource.TryGetLastAnnotation<DisplayOrderAnnotation>(out var displayOrder);
+        if (traits.Length == 0 && !hasDisplayOrder)
         {
             return properties;
         }
@@ -22,7 +22,7 @@ internal static class ResourceTraitSnapshotProperties
         // already stored in recordings and returned to tooling, so traits don't need their own protocol fields or storage,
         // and a list keeps delimiters in user-provided values from being ambiguous.
         var result = properties.Where(p => !p.Name.StartsWith(KnownProperties.Resource.TraitPrefix, StringComparison.Ordinal) &&
-            p.Name != KnownProperties.Resource.DisplayPosition).ToImmutableArray();
+            p.Name != KnownProperties.Resource.DisplayOrder).ToImmutableArray();
         foreach (var group in traits.GroupBy(t => t.Name, StringComparer.Ordinal))
         {
             var values = group.Select(t => t.Value).Distinct(StringComparer.Ordinal).ToArray();
@@ -32,9 +32,9 @@ internal static class ResourceTraitSnapshotProperties
             });
         }
 
-        if (hasDisplayPosition)
+        if (hasDisplayOrder)
         {
-            result = result.Add(new ResourcePropertySnapshot(KnownProperties.Resource.DisplayPosition, displayPosition!.Position.ToString(CultureInfo.InvariantCulture)));
+            result = result.Add(new ResourcePropertySnapshot(KnownProperties.Resource.DisplayOrder, displayOrder!.Order.ToString(CultureInfo.InvariantCulture)));
         }
 
         return result;

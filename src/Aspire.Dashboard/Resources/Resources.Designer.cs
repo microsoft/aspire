@@ -1252,11 +1252,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Display position.
+        ///   Looks up a localized string similar to Display order.
         /// </summary>
-        public static string ResourceDisplayPosition {
+        public static string ResourceDisplayOrder {
             get {
-                return ResourceManager.GetString("ResourceDisplayPosition", resourceCulture);
+                return ResourceManager.GetString("ResourceDisplayOrder", resourceCulture);
             }
         }
 

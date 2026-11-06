@@ -34,7 +34,7 @@ await container.withTags(["Backend", "API"]);
 await container.withTags(["Service"]);
 await container.withTrait("Owner", "Finance");
 await container.withTrait("Owner", "Platform");
-await container.withDisplayPosition(-10);
+await container.withDisplayOrder(10);
 await container.withOtlpExporter({ protocol: OtlpProtocol.HttpJson });
 const taggedContainer = await builder.addContainer("mytaggedcontainer", {
     image: "nginx",

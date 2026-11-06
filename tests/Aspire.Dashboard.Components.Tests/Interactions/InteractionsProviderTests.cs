@@ -390,7 +390,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         });
 
         var inputsDialog = new InteractionInputsDialog();
-        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text });
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text, RelatedResourceName = "first" });
         await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,

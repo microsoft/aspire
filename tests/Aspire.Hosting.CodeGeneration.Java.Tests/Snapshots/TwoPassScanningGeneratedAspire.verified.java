@@ -3522,12 +3522,12 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public CSharpAppResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public CSharpAppResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -5968,12 +5968,12 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public ContainerRegistryResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public ContainerRegistryResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -7979,12 +7979,12 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public ContainerResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public ContainerResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -10819,12 +10819,12 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public DotnetToolResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public DotnetToolResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -13360,12 +13360,12 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public ExecutableResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public ExecutableResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -14546,12 +14546,12 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public ExternalServiceResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public ExternalServiceResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -19485,12 +19485,12 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public ParameterResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public ParameterResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -21931,12 +21931,12 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public ProjectResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public ProjectResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -25546,12 +25546,12 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public TestDatabaseResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public TestDatabaseResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -27892,12 +27892,12 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public TestRedisResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public TestRedisResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 
@@ -30422,12 +30422,12 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    /** Sets the default position of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the position. */
-    public TestVaultResource withDisplayPosition(double position) {
+    /** Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order. */
+    public TestVaultResource withDisplayOrder(double order) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("position", AspireClient.serializeValue(position));
-        getClient().invokeCapability("Aspire.Hosting/withDisplayPosition", reqArgs);
+        reqArgs.put("order", AspireClient.serializeValue(order));
+        getClient().invokeCapability("Aspire.Hosting/withDisplayOrder", reqArgs);
         return this;
     }
 

@@ -18,8 +18,8 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     {
         var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
         var store = new ResourceOrderStore(databasePath, NullLogger.Instance);
-        var api = CreateResourceWithPosition("api", 20);
-        var cache = CreateResourceWithPosition("cache", -10);
+        var api = CreateResourceWithDisplayOrder("api", 10);
+        var cache = CreateResourceWithDisplayOrder("cache", 20);
         var worker = ModelTestHelpers.CreateResource("worker");
         ResourceViewModel[] resources = [api, cache, worker];
         store.EnsureResources(resources.Select(r => r.PersistentKey));
@@ -27,11 +27,12 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
         Assert.Equal([cache.PersistentKey, api.PersistentKey, worker.PersistentKey],
             store.GetPositions(resources).OrderBy(p => p.Value).Select(p => p.Key));
 
-        // A restart must not turn inferred order into a user customization.
+        // A restart must not turn inferred order into a user customization. Higher orders come first and resources
+        // without one count as 0, so a negative order moves cache after worker.
         store = new ResourceOrderStore(databasePath, NullLogger.Instance);
-        resources = [api, CreateResourceWithPosition("cache", 30), worker];
+        resources = [api, CreateResourceWithDisplayOrder("cache", -10), worker];
         store.EnsureResources(resources.Select(r => r.PersistentKey));
-        Assert.Equal([api.PersistentKey, cache.PersistentKey, worker.PersistentKey],
+        Assert.Equal([api.PersistentKey, worker.PersistentKey, cache.PersistentKey],
             store.GetPositions(resources).OrderBy(p => p.Value).Select(p => p.Key));
         Assert.True(store.TryMove(cache.PersistentKey, api.PersistentKey, false, resources));
 
@@ -42,15 +43,15 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
     }
 
     [Fact]
-    public void DefaultPositionsAreScopedToTheRequestingRun()
+    public void DisplayOrdersAreScopedToTheRequestingRun()
     {
         var store = new ResourceOrderStore(databasePath: null, NullLogger.Instance);
-        ResourceViewModel[] liveRun = [CreateResourceWithPosition("api", 0), CreateResourceWithPosition("cache", 10)];
-        ResourceViewModel[] recordedRun = [CreateResourceWithPosition("api", 10), CreateResourceWithPosition("cache", 0)];
+        ResourceViewModel[] liveRun = [CreateResourceWithDisplayOrder("api", 0), CreateResourceWithDisplayOrder("cache", 10)];
+        ResourceViewModel[] recordedRun = [CreateResourceWithDisplayOrder("api", 10), CreateResourceWithDisplayOrder("cache", 0)];
         store.EnsureResources(liveRun.Select(r => r.PersistentKey));
 
-        Assert.Equal(["cache_0", "api_0"], store.GetPositions(recordedRun).OrderBy(p => p.Value).Select(p => p.Key));
-        Assert.Equal(["api_0", "cache_0"], store.GetPositions(liveRun).OrderBy(p => p.Value).Select(p => p.Key));
+        Assert.Equal(["api_0", "cache_0"], store.GetPositions(recordedRun).OrderBy(p => p.Value).Select(p => p.Key));
+        Assert.Equal(["cache_0", "api_0"], store.GetPositions(liveRun).OrderBy(p => p.Value).Select(p => p.Key));
     }
 
     [Fact]
@@ -60,9 +61,9 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
         // Inserted out of name order, with b and a sharing a position. The pane displays a, b, c.
         ResourceViewModel[] resources =
         [
-            CreateResourceWithPosition("b", 0, "Container"),
-            CreateResourceWithPosition("a", 0, "Project"),
-            CreateResourceWithPosition("c", 10, "Project")
+            CreateResourceWithDisplayOrder("b", 0, "Container"),
+            CreateResourceWithDisplayOrder("a", 0, "Project"),
+            CreateResourceWithDisplayOrder("c", -10, "Project")
         ];
         store.EnsureResources(resources.Select(r => r.PersistentKey));
 
@@ -71,10 +72,10 @@ public sealed class ResourceOrderStoreTests(ITestOutputHelper testOutputHelper) 
         Assert.Equal(["a_0", "c_0", "b_0"], GetOrderedKeys(store));
     }
 
-    private static ResourceViewModel CreateResourceWithPosition(string name, int position, string resourceType = "Container") =>
+    private static ResourceViewModel CreateResourceWithDisplayOrder(string name, int order, string resourceType = "Container") =>
         ModelTestHelpers.CreateResource(name, resourceType: resourceType, properties: new()
         {
-            [KnownProperties.Resource.DisplayPosition] = new(KnownProperties.Resource.DisplayPosition, Value.ForString(position.ToString(CultureInfo.InvariantCulture)), false, null, 0, null, false)
+            [KnownProperties.Resource.DisplayOrder] = new(KnownProperties.Resource.DisplayOrder, Value.ForString(order.ToString(CultureInfo.InvariantCulture)), false, null, 0, null, false)
         });
 
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);

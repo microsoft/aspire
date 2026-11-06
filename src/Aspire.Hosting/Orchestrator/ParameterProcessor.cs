@@ -763,18 +763,22 @@ public sealed class ParameterProcessor(
                 {
                     // Create an input for each unresolved parameter.
                     var input = parameter.CreateInput();
+
+                    // The dashboard shows the prompt in its parameter form by matching each input to the parameter it
+                    // names here. Input names can't identify parameters: a kept generator name below can be the name of
+                    // a different, already resolved parameter, and the form would then edit that parameter's own input
+                    // while the prompt's input stays empty.
+                    input.RelatedResourceName = parameter.Name;
                     resourceInputs.Add((parameter, input, version));
                 }
 
                 // Name the inputs after their parameters, like the set-parameter command names its input, rather than
-                // whatever names WithCustomInput generators chose: the dashboard matches the prompt's inputs to
-                // parameters by name to show them in its parameter form, and two custom inputs could otherwise share
-                // a name in the same prompt. A custom input's load callback can read any input of the prompt by the name
+                // whatever names WithCustomInput generators chose, because two custom inputs could otherwise share a
+                // name in the same prompt. A custom input's load callback can read any input of the prompt by the name
                 // its generator chose, through context.AllInputs. DependsOnInputs only schedules reloads, so it doesn't
                 // say which names a callback reads, and the callback can't be rewritten. With any dynamically loaded
                 // input in the prompt the generators' names are kept, except names that can't be shown because they
-                // aren't unique, which no callback could read anyway. The dashboard then shows the prompt in a dialog,
-                // as it does for any input that isn't named after a parameter.
+                // aren't unique, which no callback could read anyway.
                 // The save-values checkbox appended below owns its name, and input names must be unique in a prompt, so
                 // an input for a parameter that happens to share that name keeps the name its generator chose.
                 var inputsToRename = resourceInputs

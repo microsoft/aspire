@@ -455,6 +455,10 @@ message InteractionInput {
     int64 max_file_size = 16;
     bool allow_multiple_files = 17;
     string file_filter = 18;
+    // The resource the input provides a value for, for example the parameter an unresolved parameters prompt asks
+    // for. A client must use it, not the input's name, to know which resource an input is for: an input's name is
+    // chosen by whoever creates the input and can match a different resource. Empty when the input isn't for a resource.
+    string related_resource_name = 19;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;

@@ -432,10 +432,10 @@
         <target state="translated">Konsol günlüklerini görüntüle</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourceDisplayPosition">
-        <source>Display position</source>
-        <target state="new">Display position</target>
-        <note>Name of the property holding the default position a resource declares in the AppHost.</note>
+      <trans-unit id="ResourceDisplayOrder">
+        <source>Display order</source>
+        <target state="new">Display order</target>
+        <note>Name of the property holding the default display order a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourceExpandAllChildren">
         <source>Expand child resources</source>
