@@ -13071,7 +13071,8 @@ export interface ContainerRegistryResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -13457,7 +13458,8 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -13892,7 +13894,8 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -15535,7 +15538,8 @@ export interface ContainerResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -16417,7 +16421,8 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -17647,7 +17652,8 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -20185,7 +20191,8 @@ export interface CSharpAppResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -20907,7 +20914,8 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -21678,7 +21686,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -24339,7 +24348,8 @@ export interface DotnetToolResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -25097,7 +25107,8 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -26026,7 +26037,8 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -28579,7 +28591,8 @@ export interface ExecutableResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -29298,7 +29311,8 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -30117,7 +30131,8 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -32640,7 +32655,8 @@ export interface ExternalServiceResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -33031,7 +33047,8 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -33490,7 +33507,8 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -34954,7 +34972,8 @@ export interface ParameterResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -35387,7 +35406,8 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -35870,7 +35890,8 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -37460,7 +37481,8 @@ export interface ProjectResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -38182,7 +38204,8 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -38954,7 +38977,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -41734,7 +41758,8 @@ export interface TestDatabaseResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -42616,7 +42641,8 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -43845,7 +43871,8 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -46563,7 +46590,8 @@ export interface TestRedisResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -47529,7 +47557,8 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -48842,7 +48871,8 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -51889,7 +51919,8 @@ export interface TestVaultResource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -52773,7 +52804,8 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -54004,7 +54036,8 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -56842,7 +56875,8 @@ export interface Resource {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -57228,7 +57262,8 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
@@ -57664,7 +57699,8 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Adds a resource to a launch group.
      *
      * Membership is additive. Select one group with the `Aspire:LaunchGroup` configuration setting.
-     * Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+     * Selecting a group marks resources without that membership for explicit start, including ungrouped resources,
+     * unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
      * Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
      * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
      * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`

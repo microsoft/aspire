@@ -2962,13 +2962,14 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -6439,13 +6440,14 @@ type CSharpAppResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -10543,13 +10545,14 @@ type ContainerRegistryResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -12823,13 +12826,14 @@ type ContainerResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -18232,13 +18236,14 @@ type DotnetToolResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -22586,13 +22591,14 @@ type ExecutableResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -25518,13 +25524,14 @@ type ExternalServiceResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -29386,13 +29393,14 @@ type ParameterResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -32458,13 +32466,14 @@ type ProjectResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -37684,13 +37693,14 @@ type TestDatabaseResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.
@@ -41484,13 +41494,14 @@ type TestRedisResource interface {
 	// WithLaunchGroup adds a resource to a launch group.
 	//
 	// Membership is additive. Select one group with the Aspire:LaunchGroup
-	// configuration setting. Selecting a group marks every resource without that
-	// membership for explicit start, including ungrouped resources. Dependencies
-	// and children must be assigned membership explicitly; selection does not
-	// change lifecycle commands. Valid group names are inferred from membership
-	// unless explicitly defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup
-	// environment variable or dotnet run -- Aspire:LaunchGroup=catalog to select a
-	// group. No selection preserves normal startup, and publishing is unaffected.
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
 	//
 	// Parameters:
 	//   - launchGroupName: The case-insensitive launch group name.

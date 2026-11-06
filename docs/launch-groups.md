@@ -75,10 +75,10 @@ Omit the selection to preserve the existing full-application run.
 ## Startup behavior
 
 Selecting a launch group only mutates the application model before startup.
-Every resource without explicit membership in the selected group is marked with
-`WithExplicitStart`, including resources in other groups and resources with no
-group membership. Existing explicit-start settings are preserved, even for
-members of the selected group.
+Unless opted out as described below, every resource without explicit membership
+in the selected group is marked with `WithExplicitStart`, including resources in
+other groups and resources with no group membership. Existing explicit-start
+settings are preserved, even for members of the selected group.
 
 Membership is not inherited from parents or inferred from dependencies,
 references, or connection strings. Assign every resource that should start to the
@@ -95,10 +95,14 @@ Start, stop, restart, health monitoring, persistent-resource reuse, and project
 builds behave exactly as they do with ordinary `WithExplicitStart` resources.
 Starting an excluded resource does not start its dependencies or other group
 members. Launch groups do not introduce build deferral or build serialization.
-Support resources already present in the model, such as a shared .NET build
-resource, are also marked for explicit start unless assigned to the selected
-group. Projects waiting on such a build remain waiting until it is started
-manually.
+
+Resources marked with `ExcludeFromLaunchGroupSelectionAnnotation` keep their
+existing startup configuration regardless of group membership. The annotation
+does not remove an existing `WithExplicitStart` setting. It is currently applied
+only to the internal .NET coordinated build resources, so builds still run
+automatically before selected projects launch. The existing shared build plan may
+also build projects that are not selected to run; launch groups do not change
+which projects the build coordinator builds.
 
 The selection lasts for the AppHost session. Watch/rebuild of a running resource
 retains the selection; restarting/reloading the AppHost recomputes it. Editing the
@@ -115,12 +119,7 @@ service. The `frontend` group includes the frontend and gateway, both services,
 and their database/cache/messaging dependencies, but not the order processor.
 The `orders` group contains messaging and the order processor.
 
-The shared .NET build resource has no group membership, so it requires an explicit
-start before the selected projects can run:
-
-```powershell
-aspire resource __dotnet-project-build start --include-hidden --non-interactive
-```
+The shared .NET build runs automatically before the selected projects launch.
 
 To start `basketservice` after a catalog-only run, manually start its dependencies
 (`basketcache` and `messaging`) as well. Stop and clear `Aspire:LaunchGroup` (or choose

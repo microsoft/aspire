@@ -78,7 +78,8 @@ internal sealed class LaunchGroupService(
 
         foreach (var resource in model.Resources)
         {
-            if (!resource.HasAnnotationOfType<ExplicitStartupAnnotation>() &&
+            if (!resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>() &&
+                !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() &&
                 !resource.Annotations.OfType<LaunchGroupAnnotation>()
                     .Any(annotation => StringComparer.OrdinalIgnoreCase.Equals(annotation.LaunchGroupName, selectedGroup)))
             {
@@ -87,7 +88,7 @@ internal sealed class LaunchGroupService(
         }
 
         logger.LogInformation(
-            "Launch group '{LaunchGroup}' is selected. All other resources are marked for explicit start.",
+            "Launch group '{LaunchGroup}' is selected. Other resources are marked for explicit start unless excluded from selection.",
             selectedGroup);
     }
 }

@@ -4,6 +4,7 @@
 extern alias HostingDotnet;
 
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Verifies launch-group selection preserves coordinated builds.
 
 using System.IO.Compression;
 using System.Reflection;
@@ -36,6 +37,54 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     static DotnetProjectBuildCoordinatorTests()
     {
         EmptyFiles.FileExtensions.AddTextExtension("proj");
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task LaunchGroupSelectionPreservesAutomaticCoordinatedBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sharedProject = CreateSharedProject(workspace.Path);
+        var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
+        var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var apiSentinel = Path.Combine(workspace.Path, "api-ran.txt");
+        var workerSentinel = Path.Combine(workspace.Path, "worker-ran.txt");
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(apiSentinel).WithLaunchGroup("catalog");
+        var worker = builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
+            .WithArgs(workerSentinel).WithLaunchGroup("basket");
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
+        {
+            var build = Assert.Single(context.Model.Resources.OfType<DotnetProjectBuildResource>());
+            Assert.False(build.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.True(worker.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.All(context.Model.Resources.Where(resource => resource is not DotnetProjectBuildResource),
+                resource => Assert.False(resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>()));
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+
+        using (var startup = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StartAsync(startup.Token);
+        }
+        using (var completion = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.ResourceNotifications.WaitForResourceAsync("api", KnownResourceStates.Finished, completion.Token);
+        }
+        using (var shutdown = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan))
+        {
+            await app.StopAsync(shutdown.Token);
+        }
+
+        Assert.Equal("shared", File.ReadAllText(apiSentinel));
+        Assert.False(File.Exists(workerSentinel));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(sharedProject)));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(apiProject)));
+        Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
     }
 
     [Fact]

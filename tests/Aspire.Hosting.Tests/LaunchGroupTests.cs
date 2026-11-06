@@ -21,7 +21,7 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     [Fact]
     public void PublicLaunchGroupApisUseSharedExperimentalDiagnostic()
     {
-        var types = new[] { typeof(LaunchGroupExtensions), typeof(LaunchGroupAnnotation) };
+        var types = new[] { typeof(LaunchGroupExtensions), typeof(LaunchGroupAnnotation), typeof(ExcludeFromLaunchGroupSelectionAnnotation) };
         var methods = typeof(LaunchGroupExtensions).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
         Assert.Equal(
             [nameof(LaunchGroupExtensions.WithLaunchGroup), nameof(LaunchGroupExtensions.WithLaunchGroups)],
@@ -223,6 +223,33 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
         Assert.Equal(selection is "catalog" or "CATALOG", basket.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.False(shared.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
         Assert.Equal(!string.IsNullOrEmpty(selection), ungrouped.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
+    [Fact]
+    public async Task SelectionDoesNotModifyOptedOutResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.AddExecutable("catalog", "unused", ".").WithLaunchGroup("catalog");
+        var automatic = builder.AddExecutable("automatic", "unused", ".")
+            .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
+        var manual = builder.AddExecutable("manual", "unused", ".").WithExplicitStart()
+            .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
+        var differentGroup = builder.AddExecutable("different-group", "unused", ".").WithLaunchGroup("basket")
+            .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation());
+        var ungrouped = builder.AddExecutable("ungrouped", "unused", ".");
+        await using var app = builder.Build();
+        var originalAnnotations = new[] { automatic.Resource, manual.Resource, differentGroup.Resource }
+            .ToDictionary(resource => resource, resource => resource.Annotations.ToArray());
+
+        app.Services.GetRequiredService<LaunchGroupService>()
+            .Configure(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        foreach (var (resource, annotations) in originalAnnotations)
+        {
+            Assert.Equal(annotations, resource.Annotations);
+        }
+        Assert.True(ungrouped.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
     }
 
     [Fact]

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Shared build resources retain their normal startup during selection.
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -107,6 +108,7 @@ internal static partial class DotnetProjectBuildCoordinator
         buildResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         builder.AddResource(buildResource)
+            .WithAnnotation(new ExcludeFromLaunchGroupSelectionAnnotation())
             .WithArgs(async context =>
             {
                 var buildTargetPath = await buildResource.GetBuildTargetPathAsync(
