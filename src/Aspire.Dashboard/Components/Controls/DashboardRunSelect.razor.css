@@ -1,6 +1,13 @@
+.application-run-select {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
 .application-run-icon {
     position: relative;
     display: inline-flex;
+    flex-shrink: 0;
 }
 
 /* Sit the dot on the icon's bottom-right corner, like a status badge. */
@@ -8,4 +15,62 @@
     position: absolute;
     right: -2px;
     bottom: -1px;
+}
+
+/* On narrower windows the button stays icon-only (the dot still shows a recording is displayed, and the tooltip and
+   accessible label name it). Otherwise the date would squeeze the page's tabs in the header until even their compact
+   picker no longer fits and overlaps the header buttons. */
+.application-run-select ::deep .application-run-select-text {
+    display: none;
+}
+
+/* 1200px fits the logo, the longest (truncated) application name, the full row of page tabs, the button with the
+   recording's date and the other header buttons. When a user profile button is shown too, the page tabs absorb the
+   difference by moving their last tab into their overflow menu. */
+@media (min-width: 1200px) {
+    /* The button grows from the header's square icon button into a warning-tinted pill that names the recording.
+       These selectors are more specific than the layout's fixed 32px header-button rules. */
+    .application-run-select ::deep .application-run-select-button.with-run-text {
+        --aspire-button-background: color-mix(in srgb, var(--aspire-status-warning) 16%, var(--aspire-page-background));
+        flex: 0 0 auto;
+        width: auto;
+        max-width: 260px;
+        height: 28px;
+        border: 1px solid color-mix(in srgb, var(--aspire-status-warning) 45%, transparent);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .application-run-select ::deep .application-run-select-button.with-run-text:hover {
+        background: color-mix(in srgb, var(--aspire-status-warning) 26%, var(--aspire-page-background));
+    }
+
+    .application-run-select ::deep fluent-button.application-run-select-button.with-run-text::part(control) {
+        justify-content: flex-start;
+        width: 100%;
+        min-width: 0;
+        height: 26px;
+        padding: 0 12px 0 6px;
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .application-run-select ::deep fluent-button.application-run-select-button.with-run-text::part(content) {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .application-run-select ::deep .application-run-select-text {
+        display: inline;
+        min-width: 0;
+        overflow: hidden;
+        color: var(--colorNeutralForeground1);
+        font-size: var(--fontSizeBase300);
+        font-weight: var(--fontWeightRegular);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }

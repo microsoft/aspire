@@ -429,7 +429,6 @@ public partial class MainLayoutTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardRunMenu>()));
         Assert.Empty(cut.FindComponents<DashboardRunSelect>());
-        Assert.Empty(cut.FindComponents<DashboardRunPill>());
         var menuButton = Assert.Single(cut.FindComponent<DashboardRunMenu>().FindComponents<AspireMenuButton>());
         Assert.Equal("Live run", menuButton.Instance.Text);
         Assert.Equal(["Live run", "Learn about runs"], menuButton.Instance.ItemsProvider().Where(item => !item.IsDivider).Select(item => item.Text));
@@ -461,7 +460,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal("Recordings", button.GetAttribute("data-tooltip"));
         Assert.Equal("dialog", button.GetAttribute("aria-haspopup"));
         Assert.Single(cut.FindAll($"#{MainLayout.RunSelectButtonId} .dashboard-run-indicator.live"));
-        Assert.Empty(cut.FindAll(".dashboard-run-pill"));
+        Assert.Empty(cut.FindAll(".application-run-select-text"));
 
         await cut.InvokeAsync(() => button.Click());
 
@@ -544,22 +543,21 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.False(navigationOccurred);
         Assert.Equal(2, initializedCount);
         Assert.Equal(1, disposedCount);
-        var pill = cut.Find(".dashboard-run-pill");
-        Assert.Equal(expectedHistoricalRunText, pill.QuerySelector(".dashboard-run-pill-text")!.TextContent);
-        Assert.Equal($"Recordings, viewing {expectedHistoricalRunText}", pill.GetAttribute("aria-label"));
-        Assert.Single(pill.QuerySelectorAll(".dashboard-run-indicator.recording"));
+        // The header button names the displayed recording next to its icon on wide windows, and in its tooltip for
+        // narrower ones, where the stylesheet hides the name.
         var historicalRunButton = cut.Find($"#{MainLayout.RunSelectButtonId}");
+        Assert.Equal(expectedHistoricalRunText, historicalRunButton.QuerySelector(".application-run-select-text")!.TextContent);
         Assert.Equal($"Recordings, viewing {expectedHistoricalRunText}", historicalRunButton.GetAttribute("aria-label"));
+        Assert.Equal(expectedHistoricalRunText, historicalRunButton.GetAttribute("data-tooltip"));
         Assert.Single(historicalRunButton.QuerySelectorAll(".dashboard-run-indicator.recording"));
 
-        // The pill opens the same recordings panel as the header button. The panel closes itself when a run is
-        // selected; the test dialog service doesn't render it, so close it here.
+        // The panel closes itself when a run is selected; the test dialog service doesn't render it, so close it here.
         await cut.InvokeAsync(() => dialogService.LastInstance!.CloseAsync());
         content = null;
         // The layout sees the first panel as closed once its result completes asynchronously.
         cut.WaitForAssertion(() =>
         {
-            cut.Find(".dashboard-run-pill").Click();
+            cut.Find($"#{MainLayout.RunSelectButtonId}").Click();
             Assert.NotNull(content);
         });
         Assert.NotNull(content);
@@ -571,7 +569,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.False(navigationOccurred);
         Assert.Equal(3, initializedCount);
         Assert.Equal(2, disposedCount);
-        Assert.Empty(cut.FindAll(".dashboard-run-pill"));
+        Assert.Empty(cut.FindAll(".application-run-select-text"));
         Assert.Single(cut.FindAll($"#{MainLayout.RunSelectButtonId} .dashboard-run-indicator.live"));
     }
 
@@ -628,7 +626,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.NotNull(cut.Find("#body-content"));
         Assert.True(runSelection.SelectedRun.IsCurrent);
         Assert.Equal(string.Empty, storedRunId);
-        Assert.Empty(cut.FindAll(".dashboard-run-pill"));
+        Assert.Empty(cut.FindAll(".application-run-select-text"));
         var errorLog = Assert.Single(testSink.Writes);
         Assert.Equal(LogLevel.Error, errorLog.LogLevel);
         Assert.Equal("Failed to switch to dashboard run 'historical'. Keeping dashboard run 'current' selected.", errorLog.Message);
@@ -774,7 +772,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.NotNull(cut.Find("#body-content"));
         Assert.True(runSelection.SelectedRun.IsCurrent);
         Assert.Single(cut.FindComponents<DashboardRunSelect>());
-        Assert.Empty(cut.FindAll(".dashboard-run-pill"));
+        Assert.Empty(cut.FindAll(".application-run-select-text"));
         // Runs are listed by the recordings panel, so rendering the header button doesn't load them.
         Assert.Equal(getRunsCallCount, runStore.GetRunsCallCount);
 
@@ -822,7 +820,7 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.Add(p => p.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
         });
 
-        Assert.Empty(cut.FindAll(".dashboard-run-pill"));
+        Assert.Empty(cut.FindAll(".application-run-select-text"));
 
         await cut.InvokeAsync(() => runSelectionSource.SetResult((true, "historical")));
 
@@ -831,7 +829,7 @@ public partial class MainLayoutTests : DashboardTestContext
             historicalRun.StartedAtUtc.UtcDateTime);
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal(expectedHistoricalRunDate, cut.Find(".dashboard-run-pill-text").TextContent);
+            Assert.Equal(expectedHistoricalRunDate, cut.Find(".application-run-select-text").TextContent);
         });
     }
 
@@ -891,7 +889,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.True(runSelection.SelectedRun.IsCurrent);
         Assert.Null(runSelection.SelectedRunId);
         Assert.Equal(string.Empty, storedRunId);
-        Assert.Empty(cut.FindAll(".dashboard-run-pill"));
+        Assert.Empty(cut.FindAll(".application-run-select-text"));
         var errorLog = Assert.Single(testSink.Writes);
         Assert.Equal(LogLevel.Error, errorLog.LogLevel);
         Assert.Equal("Failed to restore dashboard run 'historical'. Falling back to the current run.", errorLog.Message);
@@ -946,7 +944,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         Assert.True(runSelection.SelectedRun.IsCurrent);
-        Assert.Empty(cut.FindAll(".dashboard-run-pill"));
+        Assert.Empty(cut.FindAll(".application-run-select-text"));
     }
 
     [Theory]
