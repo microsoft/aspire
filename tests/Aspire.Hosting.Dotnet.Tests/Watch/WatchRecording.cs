@@ -2,24 +2,42 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.Dotnet.Watch;
 
 namespace Aspire.Hosting.Dotnet.Tests.Watch;
 
 /// <summary>Replays real watch server observations (live or recorded) through <see cref="DotnetWatchEventInterpreter"/>.</summary>
-internal static class WatchRecording
+internal static partial class WatchRecording
 {
     public static IReadOnlyList<WatchObservation> Load(string name, string root)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Watch", "Recordings", name + ".log");
         return File.ReadAllLines(path)
             .Where(line => line.Length > 0)
-            .Select(line => line.Replace(WatchServerHarness.RootPlaceholder, line.StartsWith("status ", StringComparison.Ordinal) ? JsonEncodedText.Encode(root).ToString() : root, StringComparison.Ordinal))
+            .Select(line => ExpandRoot(line, root))
             .Select(line => line.StartsWith("status ", StringComparison.Ordinal)
                 ? new WatchObservation(WatchObservationKind.Status, line["status ".Length..])
                 : new WatchObservation(WatchObservationKind.Output, line.StartsWith("out ", StringComparison.Ordinal) ? line["out ".Length..] : line))
             .ToArray();
     }
+
+    /// <summary>
+    /// Recordings are captured with '/' separators; rebuild each <see cref="WatchServerHarness.RootPlaceholder"/> path with
+    /// native separators so it matches the project paths the interpreter is given (the real watcher reports native paths).
+    /// </summary>
+    private static string ExpandRoot(string line, string root)
+    {
+        var json = line.StartsWith("status ", StringComparison.Ordinal);
+        return RootedPath().Replace(line, m =>
+        {
+            var path = root + m.Value[WatchServerHarness.RootPlaceholder.Length..].Replace('/', Path.DirectorySeparatorChar);
+            return json ? JsonEncodedText.Encode(path).ToString() : path;
+        });
+    }
+
+    [GeneratedRegex(@"\$ROOT\$[^\s""\[\]]*")]
+    private static partial Regex RootedPath();
 
     /// <summary>
     /// Feeds observations in arrival order, the way the coordinator does (status pipe and server console), and flushes

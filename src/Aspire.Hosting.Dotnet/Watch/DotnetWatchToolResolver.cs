@@ -286,11 +286,14 @@ internal static class DotnetWatchToolResolver
             UseShellExecute = false,
         }) ?? throw new InvalidOperationException("Failed to start dotnet.");
 
+        var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
         var output = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        var error = await errorTask.ConfigureAwait(false);
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         if (process.ExitCode != 0)
         {
-            throw new DistributedApplicationException($"'dotnet {argument}' failed in '{workingDirectory}' with exit code {process.ExitCode}.");
+            var detail = string.IsNullOrWhiteSpace(error) ? "" : $" {error.Trim()}";
+            throw new DistributedApplicationException($"'dotnet {argument}' failed in '{workingDirectory}' with exit code {process.ExitCode}.{detail}");
         }
 
         return output;

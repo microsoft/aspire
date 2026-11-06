@@ -41,7 +41,7 @@ public static partial class DotnetProjectHostingExtensions
     ///     .WithWatch(false);
     ///
     /// builder.AddDotnetProject("api", "../Api/Api.csproj")
-    ///     .WaitFor(migrator);
+    ///     .WaitForCompletion(migrator);
     /// </code>
     /// </example>
     [AspireExport]
