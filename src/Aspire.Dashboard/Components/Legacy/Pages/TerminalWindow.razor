@@ -1,5 +1,6 @@
 ﻿@page "/legacy/terminal-window/apphost/{TerminalId}"
 @page "/legacy/terminal-window/resource/{ResourceName}"
+@attribute [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
 @layout Aspire.Dashboard.Components.Legacy.Layout.LegacyEmptyLayout
 @namespace Aspire.Dashboard.Components.Legacy.Pages
 @using Aspire.Dashboard.Components.Controls

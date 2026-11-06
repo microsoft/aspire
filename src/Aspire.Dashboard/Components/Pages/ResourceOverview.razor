@@ -1,5 +1,6 @@
 ﻿@page "/resources"
 @page "/resources/{ResourceName}"
+@attribute [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
 @layout ResourcesLayout
 @using Aspire.Dashboard.Extensions
 @using Aspire.Dashboard.Components.Layout

@@ -29,5 +29,6 @@
 @using Microsoft.Extensions.Localization
 @using System.Globalization
 
-@* Require authorization for all pages of the web app *@
-@attribute [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
+@* Do not add an @attribute [Authorize] here. Directives in this file are applied to every component, including the
+   anonymous Login and Error pages, and a component that has both [Authorize] and [AllowAnonymous] is contradictory.
+   Each routable page declares its own authorization attribute and RoutedComponentAuthorizationTests enforces it. *@
