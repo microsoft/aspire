@@ -1,0 +1,7 @@
+﻿[?25lSelect:
+
+[1m  [0m[1;32mTeam [templates] (https://example.te…[0m
+[94m  > Same[0m
+
+[90m(Type to search)[0m
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect: Same

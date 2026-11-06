@@ -455,7 +455,7 @@ aspire new
 
 Only `templateSources` participates in this runtime overlay. Other remote settings retain their existing allowlisted project-materialization behavior. Project-level `templateSources` are not used. Sources must satisfy the same complete-definition validation as global template discovery; malformed or inaccessible init configuration fails explicitly. Template repository discovery failures retain the normal per-source warnings.
 
-The optional `displayName` supplies the terminal selector's source heading. Missing or blank values use the alias; aliases remain the source and group identity even when headings match.
+The optional `displayName` supplies the friendly name in the terminal selector's source heading. Missing or blank values use the alias. Git headings also show the configured repository and ref (`default branch` when omitted); directory headings show the local path instead. Aliases remain the source and group identity even when headings match.
 
 Merge source names case-insensitively with global `templateSources`. The user's entire global definition wins on a collision: do not retain an inherited `repository`, `ref`, `path`, or `displayName` when the user replaces that source with a local directory or a different repository. Non-colliding global and inherited sources are both searchable and listed, including their branch refs.
 
