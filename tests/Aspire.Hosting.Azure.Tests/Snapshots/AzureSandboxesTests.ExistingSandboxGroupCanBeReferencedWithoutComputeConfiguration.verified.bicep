@@ -1,7 +1,7 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource sandboxes 'Microsoft.App/sandboxGroups@2026-02-01-preview' existing = {
+resource sandboxes 'Microsoft.App/sandboxGroups@2026-07-01' existing = {
   name: 'existing-sandboxes'
 }
 

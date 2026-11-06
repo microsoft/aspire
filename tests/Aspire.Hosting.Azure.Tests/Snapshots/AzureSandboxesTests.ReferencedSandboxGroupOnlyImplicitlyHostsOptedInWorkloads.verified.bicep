@@ -12,8 +12,8 @@ resource sandboxes_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-
   location: location
 }
 
-resource sandboxes 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
-  name: take('sandboxes-${uniqueString(resourceGroup().id)}', 63)
+resource sandboxes 'Microsoft.App/sandboxGroups@2026-07-01' = {
+  name: take('sandboxes-${uniqueString(resourceGroup().id)}', 24)
   tags: {
     'aspire-resource-name': 'sandboxes'
   }
@@ -63,7 +63,5 @@ output subscriptionId string = subscription().subscriptionId
 output resourceGroup string = resourceGroup().name
 
 output connectionString string = 'Endpoint=https://management.${sandboxes.location}.azuredevcompute.io;SubscriptionId=${subscription().subscriptionId};ResourceGroup=${resourceGroup().name};SandboxGroupName=${sandboxes.name}'
-
-output imagePullIdentityClientId string = sandboxes_mi.properties.clientId
 
 output imagePullIdentityResourceId string = sandboxes_mi.id
