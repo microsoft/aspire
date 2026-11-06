@@ -15,7 +15,7 @@ The deployment tests require an Azure subscription with sufficient quota for the
 | Resource | Quota Required | Current Setting | Notes |
 |----------|---------------|-----------------|-------|
 | Managed Environments | 150+ | 150 | Each test run creates a new environment. High quota allows concurrent runs and handles cleanup delays. |
-| Express Managed Environments | 1 | 1 | Separate from Managed Environments and tracked per subscription and region. Azure rejects the deployment with `MaxNumberOfRegionalExpressEnvironmentsInSubExceeded` once the limit is reached (observed limit: 1 in `westus3`). Only `AcaExpressDeploymentTests` calls `AsExpress()`; don't use Express in other tests, which run concurrently with it. |
+| Express Managed Environments | 1+ | 1 | Separate from Managed Environments and tracked per subscription and region. Azure rejects the deployment with `MaxNumberOfRegionalExpressEnvironmentsInSubExceeded` once the limit is reached (observed limit: 1 in `westus3`). Only `AcaExpressDeploymentTests` calls `AsExpress()`; don't use Express in other tests, which run concurrently with it. An Express environment created outside the tests, for example in a resource group that isn't named `e2e-*` and so is ignored by the cleanup workflow, also counts against the limit: delete stale ones or request more quota when the test hits it. |
 | Standard Public IP Addresses (`Microsoft.Network`) | 150+ | 50 | Public Container Apps environments consume this regional quota. Request manually in `westus3`; Microsoft.Quota exposes the limit but rejects CLI create/update requests. |
 | Container App Instances | Default | - | Standard quota is typically sufficient |
 
