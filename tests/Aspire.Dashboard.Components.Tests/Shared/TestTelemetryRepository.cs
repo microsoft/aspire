@@ -26,7 +26,7 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public OtlpResource? GetResourceByCompositeName(string compositeName) => inner.GetResourceByCompositeName(compositeName);
     public OtlpResource? GetResource(ResourceKey key) => inner.GetResource(key);
     public List<OtlpResource> GetResources(ResourceKey key, bool includeUninstrumentedPeers = false) => inner.GetResources(key, includeUninstrumentedPeers);
-    public HashSet<ResourceKey> GetTracePeerResourceKeys() => inner.GetTracePeerResourceKeys();
+    public Dictionary<ResourceKey, ResourceSignalAvailability> GetResourceSignalAvailability() => inner.GetResourceSignalAvailability();
     public Dictionary<ResourceKey, int> GetResourceUnviewedErrorLogsCount() => inner.GetResourceUnviewedErrorLogsCount();
     public void MarkViewedErrorLogs(ResourceKey? key) => inner.MarkViewedErrorLogs(key);
 

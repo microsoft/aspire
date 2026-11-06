@@ -649,6 +649,12 @@
     .resource-row.selected ::deep .resource-relationship-trigger {
         color: HighlightText;
     }
+
+    .resource-row.selected .resource-row-availability {
+        background: Highlight;
+        color: HighlightText;
+        border-color: HighlightText;
+    }
 }
 
 .resource-dragging {

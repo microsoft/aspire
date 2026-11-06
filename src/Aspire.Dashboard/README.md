@@ -32,7 +32,7 @@ telemetry. A visible **No logs**, **No traces**, **No metrics**, or **Not applic
 reason without relying on color. Hover or focus the row for a fuller explanation of what is unsupported
 or which telemetry is currently missing, and what selecting the resource will open. Muted rows remain selectable with the mouse
 or keyboard; opening a telemetry view without data shows its existing empty state. Availability
-updates as telemetry arrives or is cleared, without changing the selection. If a selected resource
+updates as telemetry arrives, is cleared, or leaves the retention window, without changing the selection. If a selected resource
 sends its first telemetry after its view is opened, that view stays scoped to the selected resource.
 Trace availability includes client spans targeting a resource, even if that resource reports only
 logs or metrics rather than spans of its own.

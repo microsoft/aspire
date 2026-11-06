@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
@@ -13,6 +14,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Trace.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -126,6 +128,62 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
         Assert.Equal(selectedUrl.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Equal(1, client.ResourceSubscriptionCount);
+    }
+
+    [Theory]
+    [InlineData(AspireDataType.StructuredLogs, "/structuredlogs", "No logs")]
+    [InlineData(AspireDataType.Traces, "/traces", "No traces")]
+    public async Task RetentionEvictsLastItem_RestoresBadgeWithoutChangingSelection(AspireDataType signal, string url, string label)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test-TestId")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions
+            {
+                TelemetryLimits = { MaxLogCount = 1, MaxTraceCount = 1 }
+            })));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, signal);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(url);
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.Empty(cut.FindAll("[data-resource-name='test-TestId'] .resource-row-availability"));
+        await cut.Find("[data-resource-name='test-TestId'] .resource-row-link").ClickAsync();
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames));
+        var selectedUri = navigation.Uri;
+
+        if (signal == AspireDataType.StructuredLogs)
+        {
+            await repository.AddLogsAsync(new(),
+            [
+                new ResourceLogs
+                {
+                    Resource = CreateResource("other"),
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(time: DateTime.UtcNow.AddDays(1)) } } }
+                }
+            ]);
+        }
+        else
+        {
+            await repository.AddTracesAsync(new(),
+            [
+                new ResourceSpans
+                {
+                    Resource = CreateResource("other"),
+                    ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan("other-trace", "other-span", DateTime.UnixEpoch.AddDays(1), DateTime.UnixEpoch.AddDays(1).AddSeconds(1)) } } }
+                }
+            ]);
+        }
+
+        cut.WaitForAssertion(() => Assert.Equal(label,
+            cut.Find("[data-resource-name='test-TestId'] .resource-row-availability").TextContent));
+        Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
+        Assert.Equal(selectedUri, navigation.Uri);
+        var resource = repository.GetResourceByCompositeName("test-TestId")!;
+        Assert.True(signal == AspireDataType.StructuredLogs ? resource.HasLogs : resource.HasTraces);
     }
 
     [Theory]

@@ -26,22 +26,25 @@ public sealed partial class SqliteTelemetryRepository
             : GetResources(includeUninstrumentedPeers).Where(resource => resource.ResourceKey == key).ToList();
     }
 
-    public HashSet<ResourceKey> GetTracePeerResourceKeys()
+    internal const string ResourceSignalAvailabilitySql = """
+        SELECT resource_name AS ResourceName, instance_id AS InstanceId,
+            EXISTS (SELECT 1 FROM telemetry_logs WHERE resource_id = r.resource_id) AS HasLogs,
+            (EXISTS (SELECT 1 FROM telemetry_spans WHERE resource_id = r.resource_id)
+                OR EXISTS (SELECT 1 FROM telemetry_spans WHERE uninstrumented_peer_resource_id = r.resource_id)) AS HasTraces,
+            EXISTS (SELECT 1 FROM telemetry_metric_instruments WHERE resource_id = r.resource_id) AS HasMetrics
+        FROM telemetry_resources r;
+        """;
+
+    public Dictionary<ResourceKey, ResourceSignalAvailability> GetResourceSignalAvailability()
     {
         using var connection = _database.OpenConnection();
-        // Query all peer participation once for the layout snapshot, not once per sidebar row.
-        // Reporting logs or metrics upgrades a synthetic peer but doesn't remove its incoming client spans.
-        return connection.Query<TelemetryResourceRecord>("""
-            SELECT resource_name AS ResourceName, instance_id AS InstanceId
-            FROM telemetry_resources
-            WHERE resource_id IN (
-                SELECT uninstrumented_peer_resource_id
-                FROM telemetry_spans
-                WHERE uninstrumented_peer_resource_id IS NOT NULL
-            );
-            """)
-            .Select(resource => new ResourceKey(resource.ResourceName, resource.InstanceId))
-            .ToHashSet();
+        // Resource flags record signals received, even after retention evicts their last item.
+        // Indexed existence probes reflect retained data (including incoming client spans) without
+        // scanning the telemetry tables, and are shared by every row in the layout snapshot.
+        return connection.Query<ResourceSignalAvailabilityRecord>(ResourceSignalAvailabilitySql)
+            .ToDictionary(
+                resource => new ResourceKey(resource.ResourceName, resource.InstanceId),
+                resource => new ResourceSignalAvailability(resource.HasLogs, resource.HasTraces, resource.HasMetrics));
     }
 
     private async Task DeleteTelemetryResourceFromDatabaseAsync(ResourceKey resourceKey)
@@ -133,6 +136,13 @@ public sealed partial class SqliteTelemetryRepository
                 .OrderBy(resource => resource.ResourceKey)
                 .ToList();
         }
+    }
+
+    private sealed class ResourceSignalAvailabilityRecord : TelemetryResourceRecord
+    {
+        public bool HasLogs { get; init; }
+        public bool HasTraces { get; init; }
+        public bool HasMetrics { get; init; }
     }
 
     private sealed class ResourceViewPropertiesComparer : IEqualityComparer<KeyValuePair<string, string>[]>

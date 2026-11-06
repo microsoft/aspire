@@ -57,7 +57,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private Subscription? _telemetryResourcesSubscription;
     private Dictionary<ResourceKey, int>? _unviewedErrorCounts;
     private Dictionary<string, OtlpResource> _telemetryResourcesByName = new(StringComparers.ResourceName);
-    private HashSet<ResourceKey> _tracePeerResourceKeys = [];
+    private Dictionary<ResourceKey, ResourceSignalAvailability> _resourceSignalAvailability = [];
     private List<TelemetryOnlyResource> _telemetryOnlyResources = [];
     private string? _collapsedResourceNamesKey;
     private bool _isLoaded;
@@ -1173,7 +1173,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .GroupBy(r => r.ResourceKey.GetCompositeName(), StringComparers.ResourceName)
             .Where(group => group.Count() == 1)
             .ToDictionary(group => group.Key, group => group.Single(), StringComparers.ResourceName);
-        _tracePeerResourceKeys = TelemetryRepository.GetTracePeerResourceKeys();
+        _resourceSignalAvailability = TelemetryRepository.GetResourceSignalAvailability();
         // Resources that send telemetry but aren't part of the app model (for example a browser app) are listed
         // in their own pane so they don't appear in Resources or Tags.
         var telemetryResources = allTelemetryResources.Where(r => !r.UninstrumentedPeer).ToList();
@@ -1891,14 +1891,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         };
     }
 
-    private string? GetTelemetryUnavailableReason(OtlpResource? resource) => CurrentTab switch
+    private string? GetTelemetryUnavailableReason(OtlpResource? resource)
     {
-        ResourceTab.StructuredLogs when resource is not { HasLogs: true } => Loc[nameof(Resources.Layout.ResourcePaneNoStructuredLogs)].Value,
-        // Peers can report logs or metrics without spans of their own and still participate in client traces.
-        ResourceTab.Traces when resource is null || !resource.HasTraces && !_tracePeerResourceKeys.Contains(resource.ResourceKey) => Loc[nameof(Resources.Layout.ResourcePaneNoTraces)].Value,
-        ResourceTab.Metrics when resource is not { HasMetrics: true } => Loc[nameof(Resources.Layout.ResourcePaneNoMetrics)].Value,
-        _ => null
-    };
+        var availability = resource is not null ? _resourceSignalAvailability.GetValueOrDefault(resource.ResourceKey) : default;
+
+        return CurrentTab switch
+        {
+            ResourceTab.StructuredLogs when !availability.HasLogs => Loc[nameof(Resources.Layout.ResourcePaneNoStructuredLogs)].Value,
+            ResourceTab.Traces when !availability.HasTraces => Loc[nameof(Resources.Layout.ResourcePaneNoTraces)].Value,
+            ResourceTab.Metrics when !availability.HasMetrics => Loc[nameof(Resources.Layout.ResourcePaneNoMetrics)].Value,
+            _ => null
+        };
+    }
 
     private string GetResourceUnavailableLabel(bool isParameter) => CurrentTab switch
     {
