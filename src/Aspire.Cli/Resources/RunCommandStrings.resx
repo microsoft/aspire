@@ -265,6 +265,24 @@
     <value>Do not build or restore the project before running</value>
   </data>
   <data name="NoBuildNotSupportedWithWatchMode" xml:space="preserve">
-    <value>The --no-build option cannot be used when watch mode is enabled.</value>
+    <value>The --no-build option cannot be used for a VS Code run session: VS Code builds and watches the services it launches.</value>
+  </data>
+  <data name="WatchOptionDescription" xml:space="preserve">
+    <value>(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service. Defaults to the defaultWatchEnabled feature; use --watch false to turn it off.</value>
+  </data>
+  <data name="Watch" xml:space="preserve">
+    <value>Watch</value>
+  </data>
+  <data name="WatchEnabledSummary" xml:space="preserve">
+    <value>Hot reload is on for C# services (preview). Save a file to apply changes.</value>
+  </data>
+  <data name="NoBuildNotSupportedWithWatchOption" xml:space="preserve">
+    <value>--no-build can't be used with --watch: hot reload builds C# services whenever they change. Remove --no-build, or remove --watch.</value>
+  </data>
+  <data name="NoBuildNotSupportedWithDefaultWatch" xml:space="preserve">
+    <value>--no-build can't be used while watch is on by default (the defaultWatchEnabled feature): hot reload builds C# services whenever they change. Remove --no-build, or pass --watch false to run without watch.</value>
+  </data>
+  <data name="WatchHandledByIde" xml:space="preserve">
+    <value>The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</value>
   </data>
 </root>

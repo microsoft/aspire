@@ -129,6 +129,39 @@ internal sealed class RunCommand : BaseCommand
     {
         Description = RunCommandStrings.NoBuildArgumentDescription
     };
+    private static readonly Option<bool> s_watchOption = new("--watch")
+    {
+        Description = RunCommandStrings.WatchOptionDescription
+    };
+
+    /// <summary>
+    /// Resolves whether a run uses watch. An explicit <c>--watch</c> (or <c>--watch false</c>) wins; otherwise the
+    /// <c>defaultWatchEnabled</c> feature supplies the default.
+    /// </summary>
+    internal static bool ResolveWatch(ParseResult parseResult, IFeatures features, out bool explicitlySet)
+    {
+        if (parseResult.GetResult(s_watchOption) is { Implicit: false })
+        {
+            explicitlySet = true;
+            return parseResult.GetValue(s_watchOption);
+        }
+
+        explicitlySet = false;
+        return features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+    }
+
+    /// <summary>
+    /// Whether an IDE owns this run: the CLI was started by a VS Code Aspire session, or DCP is handed an IDE session
+    /// endpoint. The IDE then launches services and handles their change tracking and restarts.
+    /// </summary>
+    internal static bool IsIdeOwnedRun(IConfiguration configuration) =>
+        !string.IsNullOrEmpty(configuration[KnownConfigNames.ExtensionDebugSessionId]) ||
+        !string.IsNullOrEmpty(configuration["DEBUG_SESSION_PORT"]);
+
+    /// <summary>AppHost logger category (and prefix) for the concise notices of <c>aspire run --watch</c>.</summary>
+    internal const string WatchNoticeCategory = "Aspire.Hosting.Dotnet.Watch";
+
+    private bool _watchRequested;
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -167,6 +200,7 @@ internal sealed class RunCommand : BaseCommand
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
+        Options.Add(s_watchOption);
         AppHostLauncher.AddLaunchOptions(this);
 
         TreatUnmatchedTokensAsErrors = false;
@@ -194,18 +228,43 @@ internal sealed class RunCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
         }
 
-        // Validate that --no-build is not used when watch mode would be enabled.
-        // The extension terminal path enables watch mode by delegating to VS Code
-        // before an Aspire debug session exists. Once VS Code starts the session,
-        // the child CLI has ASPIRE_EXTENSION_DEBUG_SESSION_ID and can honor
-        // forwarded options from the original terminal command without recursing.
+        // Watch selection: an explicit --watch / --watch false wins; otherwise the defaultWatchEnabled feature
+        // supplies the default. Watch means Aspire-controlled hot reload of C# services; the AppHost itself runs normally.
+        var watch = ResolveWatch(parseResult, _features, out var watchExplicit);
+
+        // IDE-owned runs (a VS Code debug/run session, or any launch that hands DCP an IDE session endpoint) keep the
+        // IDE's own service launch, change tracking and restart protocol, so the CLI never starts its watcher there.
+        var ideOwnsRun = IsIdeOwnedRun(_configuration);
+
+        // The extension terminal path delegates to VS Code before an Aspire debug session exists. Once VS Code
+        // starts the session, the child CLI has ASPIRE_EXTENSION_DEBUG_SESSION_ID and can honor forwarded options
+        // from the original terminal command without recursing.
         var extensionTerminalRunWithoutDebugSession = isExtensionHost
             && !startDebugSession
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
-        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession;
-        if (noBuild && watchModeEnabled)
+
+        // An interactive `aspire run` in a VS Code Aspire terminal is handed to VS Code (see below).
+        var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
+        var delegatesToExtension = !nonInteractive
+            && isExtensionHost
+            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
+        var serviceWatch = watch && !ideOwnsRun && !delegatesToExtension;
+
+        if (noBuild)
         {
-            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
+            // Hot reload builds services whenever they change, so it can't honor --no-build.
+            if (serviceWatch)
+            {
+                return CommandResult.Failure(
+                    CliExitCodes.InvalidCommand,
+                    watchExplicit ? RunCommandStrings.NoBuildNotSupportedWithWatchOption : RunCommandStrings.NoBuildNotSupportedWithDefaultWatch);
+            }
+
+            // A VS Code run session (no debugger) launches services with the IDE's own watch.
+            if (extensionTerminalRunWithoutDebugSession)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
+            }
         }
 
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
@@ -223,20 +282,25 @@ internal sealed class RunCommand : BaseCommand
         // VS Code to start a debug session using the current directory.
         // Skip this when running in non-interactive mode (e.g. as a child of `aspire start`)
         // to avoid delegating back to the extension instead of launching the AppHost directly.
-        var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
-        if (!nonInteractive
-            && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
-            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
+        if (delegatesToExtension
+            && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
+            // VS Code owns service launch, change tracking and restarts for the session it starts, so --watch isn't
+            // forwarded and the CLI watcher doesn't run there. Say so in the terminal rather than dropping it silently.
             var debugSessionArguments = ParseResultHelper.GetForwardedArguments(
                 parseResult,
                 AppHostLauncher.s_appHostOption.InnerOption,
                 AppHostLauncher.s_appHostOption.LegacyOption,
                 AppHostLauncher.s_formatOption,
                 s_detachOption,
+                s_watchOption,
                 RootCommand.StartDebugSessionOption,
                 RootCommand.NonInteractiveOption);
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
+            if (watch && watchExplicit)
+            {
+                extensionInteractionService.DisplayConsolePlainText(RunCommandStrings.WatchHandledByIde);
+            }
             await extensionInteractionService.StartDebugSessionAsync(
                 ExecutionContext.WorkingDirectory.FullName,
                 passedAppHostProjectFile?.FullName,
@@ -359,7 +423,7 @@ internal sealed class RunCommand : BaseCommand
             context = new AppHostProjectContext
             {
                 AppHostFile = effectiveAppHostFile,
-                Watch = false,
+                Watch = serviceWatch,
                 Debug = parseResult.GetValue(RootCommand.DebugOption),
                 NoBuild = noBuild,
                 NoRestore = noBuild, // --no-build implies --no-restore
@@ -382,6 +446,15 @@ internal sealed class RunCommand : BaseCommand
             // environment-specific file, so Hosting selects secrets after the final environment is known.
             context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
                 await _aspireSecretsStoreResolver.ResolveAppHostIdAsync(effectiveAppHostFile, project, cancellationToken);
+
+            if (watch && ideOwnsRun && watchExplicit)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, RunCommandStrings.WatchHandledByIde);
+            }
+
+            // The AppHost project projects AppHost:Run:WatchEnabled into the process that hosts Aspire.Hosting
+            // (the C# AppHost, or the AppHost server for polyglot AppHosts).
+            _watchRequested = serviceWatch;
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -499,7 +572,8 @@ internal sealed class RunCommand : BaseCommand
                     dashboardUrls.BaseUrlWithLoginToken,
                     dashboardUrls.CodespacesUrlWithLoginToken,
                     _fileLoggerProvider.LogFilePath,
-                    isExtensionHost);
+                    isExtensionHost,
+                    watchEnabled: _watchRequested);
 
                 if (ExtensionHelper.IsExtensionHost(InteractionService, out var extInteractionService, out _))
                 {
@@ -1010,7 +1084,17 @@ internal sealed class RunCommand : BaseCommand
         // Start log capture early so any output produced while we wait for dashboard URLs is
         // routed into the unified CLI log file. The task is returned to the caller so the run
         // command can await/cancel it during teardown.
-        var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, InteractionService, logCaptureCancellationSource.Token);
+        // In watch runs, hot reload/build/restart notices from the AppHost are shown in the terminal as they happen.
+        Action<BackchannelLogEntry>? onAppHostLogEntry = _watchRequested && !ExtensionHelper.IsExtensionHost(InteractionService, out _, out _)
+            ? entry =>
+            {
+                if (FormatWatchNotice(entry) is { } markup)
+                {
+                    InteractionService.DisplayMarkupLine(markup);
+                }
+            }
+            : null;
+        var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, InteractionService, logCaptureCancellationSource.Token, onAppHostLogEntry);
         // Observe faults in case the caller never gets to await it - e.g., if a subsequent
         // step in this method throws, the local task goes out of scope without being returned
         // through AppHostStartupResult. CaptureAppHostLogsAsync already handles OCE and
@@ -1125,6 +1209,7 @@ internal sealed class RunCommand : BaseCommand
     /// <param name="codespacesUrl">The codespaces URL with login token, or null if not in codespaces.</param>
     /// <param name="logFilePath">The full path to the log file.</param>
     /// <param name="pid">The process ID to display, or null to omit the PID row.</param>
+    /// <param name="watchEnabled">Whether to show the hot reload (<c>--watch</c>) row.</param>
     /// <param name="isExtensionHost">Whether the AppHost is running in the Aspire extension.</param>
     /// <returns>The column width used, for subsequent grid additions.</returns>
     internal static int RenderAppHostSummary(
@@ -1134,7 +1219,8 @@ internal sealed class RunCommand : BaseCommand
         string? codespacesUrl,
         string logFilePath,
         bool isExtensionHost,
-        int? pid = null)
+        int? pid = null,
+        bool watchEnabled = false)
     {
         console.DisplayEmptyLine();
         var grid = new Grid();
@@ -1145,6 +1231,7 @@ internal sealed class RunCommand : BaseCommand
         var dashboardLabel = RunCommandStrings.Dashboard;
         var logsLabel = RunCommandStrings.Logs;
         var pidLabel = RunCommandStrings.ProcessId;
+        var watchLabel = RunCommandStrings.Watch;
 
         // Calculate column width based on labels that will actually be displayed
         var labels = new List<string> { appHostLabel, logsLabel };
@@ -1155,6 +1242,10 @@ internal sealed class RunCommand : BaseCommand
         if (pid.HasValue)
         {
             labels.Add(pidLabel);
+        }
+        if (watchEnabled)
+        {
+            labels.Add(watchLabel);
         }
         var longestLabelLength = labels.Max(s => s.Length) + 1; // +1 for colon
 
@@ -1204,6 +1295,16 @@ internal sealed class RunCommand : BaseCommand
         // Logs row
         grid.AddRow(LabelMarkup(logsLabel), new Markup(MarkupHelpers.SafeFileLink(console, logFilePath)));
 
+        // Watch row
+        if (watchEnabled)
+        {
+            if (!isExtensionHost)
+            {
+                grid.AddRow(Text.Empty, Text.Empty);
+            }
+            grid.AddRow(LabelMarkup(watchLabel), new Markup($"🔥 {RunCommandStrings.WatchEnabledSummary.EscapeMarkup()}"));
+        }
+
         // PID row (if provided)
         if (pid.HasValue)
         {
@@ -1220,7 +1321,30 @@ internal sealed class RunCommand : BaseCommand
         return longestLabelLength;
     }
 
-    internal static async Task CaptureAppHostLogsAsync(FileLoggerProvider fileLoggerProvider, IAppHostCliBackchannel backchannel, IInteractionService interactionService, CancellationToken cancellationToken)
+    /// <summary>
+    /// Formats an AppHost log entry from the watch notice category as a terminal line, or returns <see langword="null"/>
+    /// for every other entry.
+    /// </summary>
+    internal static string? FormatWatchNotice(BackchannelLogEntry entry)
+    {
+        if (entry.LogLevel < LogLevel.Information ||
+            !(entry.CategoryName == WatchNoticeCategory || entry.CategoryName.StartsWith(WatchNoticeCategory + ".", StringComparison.Ordinal)))
+        {
+            return null;
+        }
+
+        var time = entry.Timestamp.ToLocalTime().ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        var message = entry.Message.EscapeMarkup();
+        var styled = entry.LogLevel switch
+        {
+            >= LogLevel.Error => $"[red]{message}[/]",
+            LogLevel.Warning => $"[yellow]{message}[/]",
+            _ => message
+        };
+        return $"[grey]{time}[/] {styled}";
+    }
+
+    internal static async Task CaptureAppHostLogsAsync(FileLoggerProvider fileLoggerProvider, IAppHostCliBackchannel backchannel, IInteractionService interactionService, CancellationToken cancellationToken, Action<BackchannelLogEntry>? onEntry = null)
     {
         try
         {
@@ -1301,6 +1425,7 @@ internal sealed class RunCommand : BaseCommand
                             ? entry.Message
                             : $"{entry.Message}{Environment.NewLine}{entry.Exception}";
                         fileLoggerProvider.WriteLog(entry.Timestamp, entry.LogLevel, $"AppHost/{shortCategory}", message);
+                        onEntry?.Invoke(entry);
 
                         // Preserve the previous RPC volume. Trace and Debug still arrive through the
                         // AppHost console provider and are styled by the extension.
@@ -1501,6 +1626,13 @@ internal sealed class RunCommand : BaseCommand
         if (noBuild)
         {
             additionalArgs.Add("--no-build");
+        }
+
+        // Forward an explicit choice either way so the child resolves watch exactly like this command did,
+        // even if its configuration has a different defaultWatchEnabled.
+        if (parseResult.GetResult(s_watchOption) is { Implicit: false })
+        {
+            additionalArgs.Add(parseResult.GetValue(s_watchOption) ? "--watch" : "--watch=false");
         }
 
         if (!string.IsNullOrEmpty(launchProfile))

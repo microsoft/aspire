@@ -147,9 +147,19 @@
         <target state="translated">Před spuštěním nevytvářejte ani neobnovujte projekt.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoBuildNotSupportedWithDefaultWatch">
+        <source>--no-build can't be used while watch is on by default (the defaultWatchEnabled feature): hot reload builds C# services whenever they change. Remove --no-build, or pass --watch false to run without watch.</source>
+        <target state="new">--no-build can't be used while watch is on by default (the defaultWatchEnabled feature): hot reload builds C# services whenever they change. Remove --no-build, or pass --watch false to run without watch.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
-        <source>The --no-build option cannot be used when watch mode is enabled.</source>
-        <target state="translated">Možnost --no-build nelze použít, pokud je povolen režim sldování.</target>
+        <source>The --no-build option cannot be used for a VS Code run session: VS Code builds and watches the services it launches.</source>
+        <target state="needs-review-translation">Možnost --no-build nelze použít, pokud je povolen režim sldování.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoBuildNotSupportedWithWatchOption">
+        <source>--no-build can't be used with --watch: hot reload builds C# services whenever they change. Remove --no-build, or remove --watch.</source>
+        <target state="new">--no-build can't be used with --watch: hot reload builds C# services whenever they change. Remove --no-build, or remove --watch.</target>
         <note />
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
@@ -237,9 +247,29 @@
         <target state="translated">Čeká se na spuštění AppHostu...</target>
         <note />
       </trans-unit>
+      <trans-unit id="Watch">
+        <source>Watch</source>
+        <target state="new">Watch</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WatchArgumentDescription">
         <source>Start project resources in watch mode</source>
         <target state="translated">Umožňuje spustit prostředky projektu v režimu kukátka.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchEnabledSummary">
+        <source>Hot reload is on for C# services (preview). Save a file to apply changes.</source>
+        <target state="new">Hot reload is on for C# services (preview). Save a file to apply changes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchHandledByIde">
+        <source>The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</source>
+        <target state="new">The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchOptionDescription">
+        <source>(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service. Defaults to the defaultWatchEnabled feature; use --watch false to turn it off.</source>
+        <target state="new">(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service. Defaults to the defaultWatchEnabled feature; use --watch false to turn it off.</target>
         <note />
       </trans-unit>
     </body>

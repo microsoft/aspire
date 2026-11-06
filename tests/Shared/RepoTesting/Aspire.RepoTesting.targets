@@ -209,6 +209,8 @@
   <ImportGroup Condition="'$(RepoRoot)' != 'null' and '$(TestsRunningOutsideOfRepo)' != 'true' and '$(IsAspireHost)' == 'true'">
     <Import Project="$(RepoRoot)src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets" Condition="Exists('$(RepoRoot)src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets')" />
     <Import Project="$(RepoRoot)src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets" Condition="Exists('$(RepoRoot)src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets')" />
+    <!-- Mirrors the Aspire.Hosting.Dotnet package's buildTransitive targets (hot reload watch tool location). -->
+    <Import Project="$(RepoRoot)src\Aspire.Hosting.Dotnet\build\Aspire.Hosting.Dotnet.targets" Condition="Exists('$(RepoRoot)src\Aspire.Hosting.Dotnet\build\Aspire.Hosting.Dotnet.targets')" />
   </ImportGroup>
 
   <PropertyGroup Condition="'$(RepoRoot)' != 'null' and '$(TestsRunningOutsideOfRepo)' != 'true' and '$(IsAspireHost)' == 'true'">

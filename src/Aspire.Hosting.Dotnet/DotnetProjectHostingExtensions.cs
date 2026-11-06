@@ -14,7 +14,7 @@ namespace Aspire.Hosting;
 /// Provides extension methods for adding SDK-style .NET projects and file-based C# apps (by path) to an
 /// <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class DotnetProjectHostingExtensions
+public static partial class DotnetProjectHostingExtensions
 {
     /// <summary>
     /// Adds an environment variable to the build process for a .NET project.
@@ -161,6 +161,9 @@ public static class DotnetProjectHostingExtensions
         }
 
         builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+
+        // SPIKE: in `aspire run --watch` the watcher builds the project, so it needs a watcher of its own.
+        Dotnet.Watch.DotnetWatchCoordinator.OnBuildEnvironmentAdded(builder);
         return builder.WithDotnetProgramBuildEnvironment(callback);
     }
 
@@ -355,6 +358,11 @@ public static class DotnetProjectHostingExtensions
         // so process and IDE launchers resolve the output produced by the coordinated build.
         var configuration = builder.Configuration["AppHost:BuildConfiguration"];
         var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
+        // In `aspire run --watch` a watched project's initial build is the watcher's, but whether the project ends up
+        // watched is only known once the model is final (WithWatch(false), WaitForCompletion, ...). So every project
+        // joins the coordinated build here, and the watch coordinator takes the watched ones out before the build plan
+        // is created; excluded projects keep the normal coordinated build, build environment included.
+        var watch = Dotnet.Watch.DotnetWatchCoordinator.ShouldWatch(builder, name);
         var buildCoordinator = DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
@@ -501,6 +509,12 @@ public static class DotnetProjectHostingExtensions
             // The minimum-SDK check for file-based apps is applied by WithProjectDefaults.
             return Task.CompletedTask;
         });
+
+        // SPIKE: `aspire run --watch` routes the launch through the package-owned watch server.
+        if (watch)
+        {
+            Dotnet.Watch.DotnetWatchCoordinator.Configure(builder, resource, projectMetadata, buildCoordinator);
+        }
 
         return resource;
     }

@@ -12,6 +12,7 @@ using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
@@ -653,6 +654,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Check if hot reload (watch mode) is enabled
             var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+
+            // Watch runs (aspire run --watch, or the defaultWatchEnabled feature) hot reload C# services through
+            // Aspire.Hosting.Dotnet, which runs in the AppHost server, so the watch switch goes on its environment.
+            if (context.Watch)
+            {
+                DotnetWatchRunEnvironment.Apply(launchSettingsEnvVars);
+            }
 
             var environmentVariables = CreateGuestEnvironmentVariables(
                 context.EnvironmentVariables,

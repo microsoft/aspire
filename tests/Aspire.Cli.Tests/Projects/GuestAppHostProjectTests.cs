@@ -9,6 +9,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
@@ -2094,6 +2095,50 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
         Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_ProjectsWatchSignalIntoAppHostServerEnvironment(bool watch)
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var serverSession = new FakeAppHostServerSession
+        {
+            GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                new InvalidOperationException("Stop after the server launch environment has been captured."))
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory { Session = serverSession };
+        var project = CreateGuestAppHostProject(appHostServerProjectFactory: projectFactory, serverSessionFactory: sessionFactory);
+
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>(),
+            Watch = watch
+        };
+
+        await project.RunAsync(context, CancellationToken.None);
+
+        // Aspire.Hosting runs in the AppHost server, so the server (not only the guest) must see the watch signal.
+        var serverEnvironment = sessionFactory.CapturedEnvironmentVariables;
+        Assert.NotNull(serverEnvironment);
+        if (watch)
+        {
+            Assert.Equal("true", serverEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        }
+        else
+        {
+            Assert.False(serverEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        }
     }
 
     [Fact]

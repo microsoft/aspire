@@ -111,7 +111,9 @@ public static class BlazorGatewayExtensions
         var gatewayPath = GetScriptPath("Gateway.cs");
         var gateway = builder.AddDotnetProject(name, gatewayPath)
             .WithHttpEndpoint()
-            .WithHttpsEndpoint();
+            .WithHttpsEndpoint()
+            // The gateway runs the Gateway CLI tool, which `aspire run --watch` can't launch through its watcher.
+            .WithWatch(false);
 
         ConfigureGatewayToolForRunMode(gateway, builder.AppHostDirectory, builder.Environment.EnvironmentName);
 

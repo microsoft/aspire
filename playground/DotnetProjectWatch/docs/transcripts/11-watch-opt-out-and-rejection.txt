@@ -1,0 +1,31 @@
+# aspire run --watch with ticker opted out (WithWatch(false)): api/worker watched, ticker runs plain dotnet run --file
+🛠️ Building AppHost... DotnetProjectWatch.AppHost.csproj
+Connecting to AppHost...
+Starting dashboard...
+01:07:06 'ticker' runs without hot reload (WithWatch(false)).
+     AppHost:  DotnetProjectWatch.AppHost.csproj                                              
+   Dashboard:  http://localhost:15850/login?t=<redacted>                
+        Logs:  /root/.aspire/logs/cli_20261106T010656_86cdba90.log                            
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to apply changes.   
+               Press CTRL+C to stop the AppHost and exit.   
+01:07:18 👀 Watching api, worker for changes. Edits are hot reloaded; changes that need a restart restart only the affected service.
+01:08:43 🔥 Hot reload applied to api in 3803 ms (Program.cs).
+01:08:47 🔥 Hot reload applied to api in 204 ms (Program.cs).
+🛑 Stopping Aspire.
+
+$ aspire logs ticker   (head)
+[ticker] [watch] 'ticker' runs without hot reload (WithWatch(false)).
+[ticker] [sys] Starting process...: Cmd = .../dotnet, Args = ["run", "--file", ".../services/Scripts/ticker.cs", "--no-cache", ...]
+
+$ curl localhost:5380   (after editing api v1 -> v2; api PID unchanged 26257 -> 26257)
+api v2 | Hello from Shared v1
+
+# Same AppHost without WithWatch(false) on ticker: the run fails before any resource starts
+🛠️ Building AppHost... DotnetProjectWatch.AppHost.csproj
+Connecting to AppHost...
+ℹ️ Recent AppHost startup output:
+Unhandled exception. System.AggregateException: One or more errors occurred. ('aspire run --watch' can't hot reload these .NET projects:
+ ---> Aspire.Hosting.DistributedApplicationException: 'aspire run --watch' can't hot reload these .NET projects:
+  - 'ticker' is a file-based C# app (ticker.cs), which hot reload doesn't support yet.
+Call WithWatch(false) on a project to run it without hot reload.
+   at ... (stack trace trimmed)

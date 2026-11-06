@@ -18,7 +18,8 @@ internal sealed class AppHostProjectContext
     public required FileInfo AppHostFile { get; init; }
 
     /// <summary>
-    /// Gets whether to run in watch mode (hot reload).
+    /// Gets whether the CLI hot reloads C# services for this run (<c>aspire run --watch</c> or the
+    /// <c>defaultWatchEnabled</c> feature, outside IDE-owned runs). The AppHost itself is never watched.
     /// </summary>
     public bool Watch { get; init; }
 

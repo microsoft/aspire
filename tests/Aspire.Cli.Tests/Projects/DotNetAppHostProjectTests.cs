@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
@@ -1730,17 +1731,51 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(77, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_ProjectAppHostUsesSdkPathWhenWatchIsEnabled()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_ProjectAppHostWatchLaunchesDirectlyAndProjectsServiceWatch(bool watch)
     {
+        var appHostFile = CreateProjectAppHost();
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        IDictionary<string, string>? launchEnvironment = null;
 
-        var exitCode = await AssertProjectAppHostFallsBackToDotNetRunAsync(
-            () => CreateAppHostInfoJson(runCommand: appHostCommand.FullName),
-            expectedWatch: true,
-            configureServices: options => options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled]);
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("The AppHost must not run under dotnet run/watch; only its services are watched.")
+        };
+        // The defaultWatchEnabled feature is resolved by RunCommand into context.Watch; the project must not reinterpret it.
+        var project = CreateDotNetAppHostProject(runner, configureServices: options => options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled]);
 
-        Assert.Equal(77, exitCode);
+        runner.RunAppHostCommandAsyncCallback = (_, command, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(appHostCommand.FullName, command);
+            launchEnvironment = env;
+            return Task.FromResult(124);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            Watch = watch,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(124, exitCode);
+        Assert.NotNull(launchEnvironment);
+        if (watch)
+        {
+            Assert.Equal("true", launchEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        }
+        else
+        {
+            Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+        }
     }
 
     [Fact]
@@ -3038,7 +3073,6 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     private async Task<int> AssertProjectAppHostFallsBackToDotNetRunAsync(
         Func<JsonDocument> createAppHostInfo,
-        bool expectedWatch = false,
         Action<CliServiceCollectionTestOptions>? configureServices = null)
     {
         var appHostFile = CreateProjectAppHost();
@@ -3054,8 +3088,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, _, _) =>
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
-            Assert.Equal(expectedWatch, watch);
-            Assert.Equal(!expectedWatch, noBuild);
+            Assert.False(watch);
+            Assert.True(noBuild);
             Assert.False(noRestore);
             Assert.Empty(args);
             Assert.NotNull(env);

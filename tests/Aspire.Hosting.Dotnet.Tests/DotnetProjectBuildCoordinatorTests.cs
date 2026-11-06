@@ -947,7 +947,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var buildProjectPath = await buildResource.WriteBuildProjectAsync(
             NullLogger.Instance,
             TestContext.Current.CancellationToken);
-        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        var (completion, process) = new DefaultProcessRunner().Run(new ProcessSpec("dotnet")
         {
             WorkingDirectory = workspace.Path,
             ArgumentList =
@@ -1001,7 +1001,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             NullLogger.Instance,
             TestContext.Current.CancellationToken);
         var missingTargetsPath = Path.Combine(workspace.Path, "missing", "NuGet.targets");
-        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        var (completion, process) = new DefaultProcessRunner().Run(new ProcessSpec("dotnet")
         {
             WorkingDirectory = workspace.Path,
             ArgumentList =
@@ -4612,7 +4612,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
     private async Task<ProcessResult> BuildTraversalAsync(DotnetProjectBuildResource resource, bool restoreLockedMode)
     {
         var path = await resource.GetBuildTargetPathAsync(NullLogger.Instance, TestContext.Current.CancellationToken);
-        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        var (completion, process) = new DefaultProcessRunner().Run(new ProcessSpec("dotnet")
         {
             WorkingDirectory = resource.WorkingDirectory,
             ArgumentList =

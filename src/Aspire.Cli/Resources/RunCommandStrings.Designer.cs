@@ -340,6 +340,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to (Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can&apos;t be hot reloaded restart only the affected service..
+        /// </summary>
+        internal static string WatchOptionDescription {
+            get {
+                return ResourceManager.GetString("WatchOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Watch.
+        /// </summary>
+        internal static string Watch {
+            get {
+                return ResourceManager.GetString("Watch", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Hot reload is on for C# services (preview). Save a file to apply changes..
+        /// </summary>
+        internal static string WatchEnabledSummary {
+            get {
+                return ResourceManager.GetString("WatchEnabledSummary", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to PID.
         /// </summary>
         internal static string ProcessId {
@@ -489,6 +516,24 @@ namespace Aspire.Cli.Resources {
         internal static string WatchArgumentDescription {
             get {
                 return ResourceManager.GetString("WatchArgumentDescription", resourceCulture);
+            }
+        }
+        
+        internal static string NoBuildNotSupportedWithWatchOption {
+            get {
+                return ResourceManager.GetString("NoBuildNotSupportedWithWatchOption", resourceCulture);
+            }
+        }
+        
+        internal static string NoBuildNotSupportedWithDefaultWatch {
+            get {
+                return ResourceManager.GetString("NoBuildNotSupportedWithDefaultWatch", resourceCulture);
+            }
+        }
+        
+        internal static string WatchHandledByIde {
+            get {
+                return ResourceManager.GetString("WatchHandledByIde", resourceCulture);
             }
         }
     }

@@ -62,7 +62,7 @@ internal static class KnownFeatures
 
         [DefaultWatchEnabled] = new(
             DefaultWatchEnabled,
-            "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
+            "Enable or disable hot reload of C# services by default for 'aspire run' (the same as passing --watch); an explicit --watch or --watch false wins",
             DefaultValue: false),
 
         [ShowAllTemplates] = new(

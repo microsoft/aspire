@@ -11,6 +11,7 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -1497,7 +1498,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // the Hosting version so a temporary compatibility path cannot become an override.
         ConfigureCliBundleBuildEnvironment(env, cliBundleLease);
 
-        var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+        // Watch runs (aspire run --watch, or the defaultWatchEnabled feature) hot reload C# services through
+        // Aspire.Hosting.Dotnet. The AppHost itself launches normally and is never watched.
+        if (context.Watch)
+        {
+            DotnetWatchRunEnvironment.Apply(env);
+        }
         var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
             context,
             effectiveAppHostFile,
@@ -1587,24 +1593,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 
-        var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
+        var directRun = !isSingleFileAppHost && !isExtensionHost
             ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, runOptions.LaunchProfile, cancellationToken)
             : null;
 
         // Start the apphost - the runner will signal the backchannel when ready
         try
         {
-            // The AppHost may already have been built above, but watch mode intentionally still
-            // runs with builds enabled. Passing --no-build through to dotnet watch breaks hot reload
-            // because watch owns the incremental build loop and its environment setup.
-            //
-            // This means watch mode can do a second no-op build after the CLI pre-build succeeds.
-            // That tradeoff is intentional: the pre-build makes initial compiler errors terminate
-            // aspire run instead of leaving dotnet watch idle waiting for edits before a backchannel
-            // ever becomes available.
-            //
+            // The AppHost was built above, so dotnet run doesn't build it again.
             // noRestore is only relevant when noBuild is false because --no-build implies --no-restore.
-            var noBuild = !watch || context.NoBuild;
+            var noBuild = true;
             var noRestore = context.NoRestore;
             if (isSingleFileAppHost && !builtByCli)
             {
@@ -1615,7 +1613,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 noRestore = false;
             }
 
-            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, noRestore);
+            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(context.Watch, noBuild, noRestore);
             var appHostDirectory = effectiveAppHostFile.Directory ?? _executionContext.WorkingDirectory;
             if (directRun is not null)
             {
@@ -1643,7 +1641,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             return await _runner.RunAsync(
                 effectiveAppHostFile,
-                watch,
+                watch: false,
                 noBuild,
                 noRestore,
                 context.UnmatchedTokens,
