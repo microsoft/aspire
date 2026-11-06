@@ -508,6 +508,134 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_ParameterArgsAreRenderedAsHelmValueExpressions()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/15789: NATS passes its
+        // user name (a single-value ReferenceExpression) and password (a secret ParameterResource)
+        // as top-level container args, which previously failed with "Command line args must be strings".
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var user = builder.AddParameter("user", "nats", publishValueAsDefault: true);
+        var password = builder.AddParameter("password", secret: true);
+        var logLevel = builder.AddParameter("loglevel");
+
+        builder.AddContainer("myapp", "nats", "2.11")
+            .WithArgs(context =>
+            {
+                context.Args.Add("--user");
+                context.Args.Add(ReferenceExpression.Create($"{user.Resource}"));
+                context.Args.Add("--pass");
+                context.Args.Add(password.Resource);
+                context.Args.Add("--log");
+                context.Args.Add(logLevel.Resource);
+                context.Args.Add(ReferenceExpression.Create($"literal-{"value"}"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        // Helm substitutes values without YAML escaping, so expression args are emitted as plain
+        // `tpl ... | quote` scalars that Helm quotes after evaluation (values may contain quotes or backslashes).
+        // The template is therefore not valid YAML until Helm renders it, so assert on the emitted lines.
+        var deployment = await File.ReadAllLinesAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml"));
+        var argsIndex = Array.FindIndex(deployment, l => l.Trim() == "args:");
+        Assert.True(argsIndex >= 0);
+        var args = deployment
+            .Skip(argsIndex + 1)
+            .TakeWhile(l => l.TrimStart().StartsWith("- ", StringComparison.Ordinal))
+            .Select(l => l.TrimStart()[2..])
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "\"--user\"",
+                """{{ tpl "{{ .Values.config.myapp.user }}" . | quote }}""",
+                "\"--pass\"",
+                """{{ tpl "{{ .Values.secrets.myapp.password }}" . | quote }}""",
+                "\"--log\"",
+                """{{ tpl "{{ .Values.config.myapp.loglevel }}" . | quote }}""",
+                "\"literal-value\"",
+            ],
+            args);
+
+        // The parameters referenced by args must have entries in values.yaml so the templates render.
+        var values = new DeserializerBuilder().Build().Deserialize<Dictionary<object, object>>(
+            await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")));
+        var config = (Dictionary<object, object>)((Dictionary<object, object>)values["config"])["myapp"];
+        var secrets = (Dictionary<object, object>)((Dictionary<object, object>)values["secrets"])["myapp"];
+
+        Assert.Equal("nats", config["user"]);
+        Assert.True(config.ContainsKey("loglevel"));
+        Assert.True(secrets.ContainsKey("password"));
+
+        // Args-only parameters must not leak into the generated ConfigMap or Secret as environment variables.
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "templates/myapp/config.yaml")));
+        Assert.False(File.Exists(Path.Combine(workspace.Path, "templates/myapp/secrets.yaml")));
+    }
+
+    [Fact]
+    public void PublishAsync_SingleUnsupportedProviderArgIsRejected()
+    {
+        // Wrapping an unsupported manifest provider in a single-value ReferenceExpression must not
+        // turn it into its unresolved placeholder (for example "{test-value}") in the container args.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "nats", "2.11")
+            .WithArgs(context => context.Args.Add(ReferenceExpression.Create($"{new TestValueProvider("resolved-value")}")));
+
+        var app = builder.Build();
+
+        var error = Assert.Throws<AggregateException>(app.Run);
+        var exception = Assert.IsType<NotSupportedException>(error.InnerException?.InnerException);
+        Assert.Equal("Command line args must be strings", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishAsync_CompositeArgsUseGoCompatibleStringLiterals()
+    {
+        // Go template string literals reject the UTF-16 surrogate escapes JSON emits for supplementary
+        // characters, so those are written as raw UTF-8. Escaped backslashes must be left alone.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var name = builder.AddParameter("name");
+
+        builder.AddContainer("myapp", "nats", "2.11")
+            .WithArgs(context =>
+            {
+                context.Args.Add(ReferenceExpression.Create($"\U0001F600-{name.Resource}"));
+                context.Args.Add(ReferenceExpression.Create($@"\uD83D\uDE00-{name.Resource}"));
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var deployment = await File.ReadAllLinesAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml"));
+        var argsIndex = Array.FindIndex(deployment, l => l.Trim() == "args:");
+        Assert.True(argsIndex >= 0);
+        var args = deployment
+            .Skip(argsIndex + 1)
+            .TakeWhile(l => l.TrimStart().StartsWith("- ", StringComparison.Ordinal))
+            .Select(l => l.TrimStart()[2..])
+            .ToArray();
+
+        Assert.Equal(
+            [
+                "{{ tpl \"\U0001F600-{{ .Values.config.myapp.name }}\" . | quote }}",
+                """{{ tpl "\\uD83D\\uDE00-{{ .Values.config.myapp.name }}" . | quote }}""",
+            ],
+            args);
+    }
+
+    [Fact]
     public async Task PublishAppliesServiceCustomizations()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
