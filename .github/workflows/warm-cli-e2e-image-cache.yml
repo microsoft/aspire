@@ -16,6 +16,7 @@ on:
       - '.dockerignore'
       - 'eng/scripts/get-aspire-cli.sh'
       - 'eng/scripts/get-aspire-cli-pr.sh'
+      - 'eng/scripts/build-cli-e2e-images.sh'
       - 'tests/Shared/Docker/Dockerfile.e2e'
       - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-base'
       - 'tests/Shared/Docker/Dockerfile.e2e-polyglot-go'
