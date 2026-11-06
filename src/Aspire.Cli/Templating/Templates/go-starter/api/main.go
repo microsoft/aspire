@@ -59,7 +59,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/weatherforecast", weatherHandler(cache, cacheRequests))
 	mux.HandleFunc("/health", healthHandler(cache))
-	mux.HandleFunc("/", healthHandler(cache))
+	mux.Handle("/", http.FileServer(http.Dir("./static")))
 
 	addr := listenAddress()
 	srv := &http.Server{

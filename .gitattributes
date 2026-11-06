@@ -70,3 +70,4 @@ src/Components/**/ConfigurationSchema.json text eol=lf
 # gofmt rewrites CRLF, and the go-starter files are scaffolded exactly as they are checked out.
 *.go text eol=lf
 src/Aspire.Cli/Templating/Templates/go-starter/** text eol=lf
+src/Aspire.Cli/Templating/Templates/go-starter/**/*.png -text
