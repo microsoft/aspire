@@ -25,46 +25,7 @@
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed && !_isPaneFullCanvas;
 
-    <div class="resources-layout @(showCollapsedPane ? "pane-collapsed" : string.Empty) @(_isPaneFullCanvas ? "pane-full-canvas" : string.Empty) @(_animatePaneTransition ? "pane-motion-enabled" : string.Empty) @(_isPaneSelectionReveal ? "pane-selection-reveal" : string.Empty) @(!isDesktop && _isDrawerOpen ? "drawer-open" : string.Empty)"
-         data-pane-location="@_lastLocation"
-         data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
-         style="@GetLayoutStyle()"
-         @ref="_layoutElement">
-        @* A single header keeps section subscriptions stable across viewport changes. *@
-        <header class="resource-header resource-context-header">
-            @if (isDesktop)
-            {
-                <StableSectionContent SectionName="@MainLayout.HeaderContextSectionName">
-                    @((RenderFragment)(builder => RenderTabNavigation(builder, isDesktop: true)))
-                </StableSectionContent>
-            }
-            else
-            {
-                <div class="resource-tabs" @key="typeof(ResourcesLayout)">
-                    @((RenderFragment)(builder => RenderTabNavigation(builder, isDesktop: false)))
-                </div>
-            }
-            @if (!_isPaneFullCanvas && (isDesktop || !_isDrawerOpen))
-            {
-                RenderHeaderRow(__builder, isDesktop);
-                <div class="resource-header-controls">
-                    <div class="resource-header-actions">
-                        <SectionOutlet SectionName="@HeaderActionsSectionName" />
-                    </div>
-                    @if (isDesktop)
-                    {
-                        <div class="resource-tab-toolbar">
-                            <SectionOutlet SectionName="@TabToolbarSectionName" />
-                        </div>
-                    }
-                    @if (isDesktop && DetailParentUrl is { } parentUrl)
-                    {
-                        <DetailPageCloseButton ParentUrl="@parentUrl" OnClose="@(() => CloseDetailAsync(parentUrl))" />
-                    }
-                </div>
-            }
-        </header>
-        <aside class="resource-pane" aria-label="@Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneLandmark) : nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]" inert="@showCollapsedPane" aria-hidden="@(showCollapsedPane ? "true" : null)" hidden="@(!isDesktop && !_isDrawerOpen && !_isPaneFullCanvas)">
+    RenderFragment resourcePane = @<aside class="resource-pane @(showCollapsedPane ? "resource-pane-popup" : null)" aria-label="@Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneLandmark) : nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]" hidden="@(!isDesktop && !_isDrawerOpen && !_isPaneFullCanvas)">
             <div class="resource-pane-contents">
             <div class="resource-pane-head">
                 <FluentTextInput TextInputType="TextInputType.Search"
@@ -75,13 +36,14 @@
                                  ImmediateDelay="@FluentUIExtensions.InputDelay"
                                  Name="resource-pane-search"
                                  AutoComplete="off"
+                                 @ref="_resourcePaneSearch"
                                  @bind-Value="_filter.TextFilter">
                     <StartTemplate>
                         <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                     </StartTemplate>
                 </FluentTextInput>
 
-                @if (DashboardClient.IsEnabled)
+                @if (DashboardClient.IsEnabled && !showCollapsedPane)
                 {
                     var filterTitle = ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)];
                     <ResourcePaneFilter ButtonId="@FilterButtonId"
@@ -413,7 +375,63 @@
                      aria-valuemax="@MaximumPaneWidthPx"
                      aria-valuenow="@(_paneWidth ?? DefaultPaneWidthPx)"></div>
             }
-        </aside>
+        </aside>;
+
+    <div class="resources-layout @(showCollapsedPane ? "pane-collapsed" : string.Empty) @(_isPaneFullCanvas ? "pane-full-canvas" : string.Empty) @(_animatePaneTransition ? "pane-motion-enabled" : string.Empty) @(_isPaneSelectionReveal ? "pane-selection-reveal" : string.Empty) @(!isDesktop && _isDrawerOpen ? "drawer-open" : string.Empty)"
+         data-pane-location="@_lastLocation"
+         data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
+         style="@GetLayoutStyle()"
+         @ref="_layoutElement">
+        @* A single header keeps section subscriptions stable across viewport changes. *@
+        <header class="resource-header resource-context-header">
+            @if (isDesktop)
+            {
+                <StableSectionContent SectionName="@MainLayout.HeaderContextSectionName">
+                    @((RenderFragment)(builder => RenderTabNavigation(builder, isDesktop: true)))
+                </StableSectionContent>
+            }
+            else
+            {
+                <div class="resource-tabs" @key="typeof(ResourcesLayout)">
+                    @((RenderFragment)(builder => RenderTabNavigation(builder, isDesktop: false)))
+                </div>
+            }
+            @if (!_isPaneFullCanvas && (isDesktop || !_isDrawerOpen))
+            {
+                RenderHeaderRow(__builder, isDesktop);
+                <div class="resource-header-controls">
+                    <div class="resource-header-actions">
+                        <SectionOutlet SectionName="@HeaderActionsSectionName" />
+                    </div>
+                    @if (isDesktop)
+                    {
+                        <div class="resource-tab-toolbar">
+                            <SectionOutlet SectionName="@TabToolbarSectionName" />
+                        </div>
+                    }
+                    @if (isDesktop && DetailParentUrl is { } parentUrl)
+                    {
+                        <DetailPageCloseButton ParentUrl="@parentUrl" OnClose="@(() => CloseDetailAsync(parentUrl))" />
+                    }
+                </div>
+            }
+        </header>
+        @if (showCollapsedPane)
+        {
+            <div class="resource-picker-popover"
+                 popover="auto"
+                 role="dialog"
+                 aria-labelledby="@ResourcePickerButtonId">
+                @if (_isResourcePickerOpen)
+                {
+                    @resourcePane
+                }
+            </div>
+        }
+        else
+        {
+            @resourcePane
+        }
 
         @* Keep the page mounted during expansion; navigation stays outside the hidden content region. *@
         <section class="resource-content"
@@ -674,15 +692,30 @@
     private static string GetResourceRowActionClass(int actionIndex) =>
         $"resource-row-action resource-row-action-priority-{Math.Min(actionIndex, 3)}";
 
-    // On desktop the title is a heading. On mobile it also opens the resource list, which is a full-screen sheet, so it
-    // is drawn as a select, with the list icon and a chevron, to show that it can be changed. The button is inside the
-    // heading rather than replacing it, so the page keeps its heading. A raw button gives the start-aligned
-    // layout that a FluentButton can't without styling its shadow parts.
+    // Keep the heading when its title opens the resource list: a popover on collapsed desktop layouts, or a full-screen
+    // sheet on mobile. The mobile picker uses a raw button for its full-width, start-aligned layout.
     private void RenderTitle(RenderTreeBuilder __builder, string text, bool isDesktop)
     {
-        if (isDesktop)
+        if (isDesktop && !_isPaneCollapsed)
         {
     <h1 class="resource-title">@text</h1>
+        }
+        else if (isDesktop)
+        {
+    <h1 class="resource-title">
+        <FluentButton Id="@ResourcePickerButtonId"
+                      Class="resource-picker-button"
+                      Style="anchor-name: --resource-picker"
+                      Appearance="ButtonAppearance.Default"
+                      IconEnd="@(new Icons.Regular.Size16.ChevronDown())"
+                      OnClick="ToggleResourcePicker"
+                      aria-haspopup="dialog"
+                      aria-expanded="@(_isResourcePickerOpen ? "true" : "false")"
+                      aria-description="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneOpen)]">
+            <span slot="start">@((RenderFragment)RenderHeaderIcon)</span>
+            <span class="resource-picker-text">@text</span>
+        </FluentButton>
+    </h1>
         }
         else
         {
@@ -701,6 +734,60 @@
         }
     }
 
+    private void RenderHeaderIcon(RenderTreeBuilder __builder)
+    {
+        if (CurrentTab == ResourceTab.Parameters)
+        {
+            <span class="resource-header-icon neutral">
+                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
+            </span>
+        }
+        else if (SelectedResource is { } selected)
+        {
+            <span class="resource-header-icon">
+                <FluentIcon Width="20px"
+                            Color="Color.Custom"
+                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(selected))"
+                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
+                <PersistentContainerBadge Resource="@selected" />
+            </span>
+        }
+        else if (SelectedTelemetryOnlyResource is { } telemetryOnly)
+        {
+            <span class="resource-header-icon">
+                <FluentIcon Width="20px"
+                            Color="Color.Custom"
+                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.Name)"
+                            Value="@(new Icons.Regular.Size20.DataUsage())" />
+            </span>
+        }
+        else if (IsMultiSelection)
+        {
+            <span class="resource-header-icon">
+                @if (_selectedItems.All(item => item.Resource is { IsParameter: true }))
+                {
+                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
+                }
+                else
+                {
+                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
+                }
+            </span>
+        }
+        else if (SelectedResourceName is not null && _isLoaded)
+        {
+            <span class="resource-header-icon neutral">
+                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
+            </span>
+        }
+        else
+        {
+            <span class="resource-header-icon scope">
+                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
+            </span>
+        }
+    }
+
     private void RenderHeaderRow(RenderTreeBuilder __builder, bool isDesktop)
     {
     <div class="resource-header-row">
@@ -715,11 +802,12 @@
                           aria-label="@Loc[_isPaneCollapsed && !_isPaneFullCanvas ? nameof(Dashboard.Resources.Layout.ResourcePaneExpand) : nameof(Dashboard.Resources.Layout.ResourcePaneCollapse)]"
                           aria-expanded="@((!_isPaneCollapsed || _isPaneFullCanvas).ToString().ToLowerInvariant())" />
         }
+        @if (!isDesktop || !_isPaneCollapsed)
+        {
+            RenderHeaderIcon(__builder);
+        }
         @if (CurrentTab == ResourceTab.Parameters)
         {
-            <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Default" />
-            </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)], isDesktop); }
@@ -729,13 +817,6 @@
         else if (SelectedResource is { } selected)
         {
             var selectedName = GetResourceName(selected);
-            <span class="resource-header-icon">
-                <FluentIcon Width="20px"
-                            Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(selectedName)"
-                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, selected, IconSize.Size20)" />
-                <PersistentContainerBadge Resource="@selected" />
-            </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, selectedName, isDesktop); }
@@ -744,12 +825,6 @@
         }
         else if (SelectedTelemetryOnlyResource is { } telemetryOnly)
         {
-            <span class="resource-header-icon">
-                <FluentIcon Width="20px"
-                            Color="Color.Custom"
-                            CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(telemetryOnly.Name)"
-                            Value="@(new Icons.Regular.Size20.DataUsage())" />
-            </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, telemetryOnly.Name, isDesktop); }
@@ -759,16 +834,6 @@
         else if (IsMultiSelection)
         {
             var selectedItemsAreParameters = _selectedItems.All(item => item.Resource is { IsParameter: true });
-            <span class="resource-header-icon">
-                @if (selectedItemsAreParameters)
-                {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Key())" Color="Color.Primary" />
-                }
-                else
-                {
-                    <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.Stack())" Color="Color.Primary" />
-                }
-            </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
                     @{
@@ -785,9 +850,6 @@
         }
         else if (SelectedResourceName is not null && _isLoaded)
         {
-            <span class="resource-header-icon neutral">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.QuestionCircle())" Color="Color.Default" />
-            </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, SelectedResourceName, isDesktop); }
@@ -797,9 +859,6 @@
         }
         else
         {
-            <span class="resource-header-icon scope">
-                <FluentIcon Width="20px" Value="@(new Icons.Regular.Size20.AppsList())" Color="Color.Default" />
-            </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, GetScopeTitle(), isDesktop); }
