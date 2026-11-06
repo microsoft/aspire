@@ -16,8 +16,8 @@ namespace Aspire.Hosting.Dotnet.Watch;
 /// AppHost assembly as <see cref="ToolsDirectoryMetadataKey"/> metadata, the way DCP's location reaches the AppHost.
 /// The watcher loads MSBuild from the selected SDK, so the payload's major version must match the SDK's. There is no
 /// download and no fallback: a missing payload is an error that says how to fix it.
-/// TODO(spike): package-backed polyglot AppHosts (prebuilt AppHost server) don't run the package's MSBuild targets and
-/// so have no metadata; they need <see cref="ToolPathConfigurationKey"/> until the CLI bundle carries the tool.
+/// Package-backed polyglot AppHosts (prebuilt AppHost server) don't run the package's MSBuild targets, so they have no
+/// metadata; they load this assembly straight from the restored package, so the payload is found next to it instead.
 /// </remarks>
 internal static class DotnetWatchToolResolver
 {
@@ -46,12 +46,27 @@ internal static class DotnetWatchToolResolver
     public static string? GetToolsDirectory(DistributedApplicationOptions options) =>
         GetToolsDirectory(string.IsNullOrEmpty(options.AssemblyName) ? Assembly.GetEntryAssembly() : Assembly.Load(options.AssemblyName));
 
-    /// <summary>Reads the shipped payload directory from <paramref name="appHostAssembly"/>'s metadata.</summary>
+    /// <summary>
+    /// Reads the shipped payload directory from <paramref name="appHostAssembly"/>'s metadata, or else from the package this
+    /// assembly was loaded from (prebuilt polyglot AppHost servers).
+    /// </summary>
     public static string? GetToolsDirectory(Assembly? appHostAssembly) =>
         appHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => string.Equals(a.Key, ToolsDirectoryMetadataKey, StringComparison.OrdinalIgnoreCase))?.Value is { Length: > 0 } value
             ? value
-            : null;
+            : GetPackageToolsDirectory(typeof(DotnetWatchToolResolver).Assembly.Location);
+
+    /// <summary>Maps <c>&lt;package&gt;/lib/&lt;tfm&gt;/Aspire.Hosting.Dotnet.dll</c> to <c>&lt;package&gt;/tools/dotnet-watch/</c> when that exists.</summary>
+    public static string? GetPackageToolsDirectory(string? hostingDotnetAssemblyPath)
+    {
+        if (string.IsNullOrEmpty(hostingDotnetAssemblyPath) || Path.GetDirectoryName(hostingDotnetAssemblyPath) is not { Length: > 0 } libDirectory)
+        {
+            return null;
+        }
+
+        var candidate = Path.GetFullPath(Path.Combine(libDirectory, "..", "..", "tools", "dotnet-watch"));
+        return Directory.Exists(candidate) ? candidate + Path.DirectorySeparatorChar : null;
+    }
 
     /// <summary>
     /// Returns the watch tool DLL for <paramref name="sdkVersion"/>: <paramref name="overridePath"/> when set, otherwise the

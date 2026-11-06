@@ -164,6 +164,21 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PackageToolsDirectoryIsFoundNextToTheLoadedAssembly()
+    {
+        // Prebuilt polyglot AppHost servers load lib/<tfm>/Aspire.Hosting.Dotnet.dll from the restored package.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var package = Path.Combine(workspace.Path, "aspire.hosting.dotnet", "13.4.0");
+        var dll = Path.Combine(Directory.CreateDirectory(Path.Combine(package, "lib", "net10.0")).FullName, "Aspire.Hosting.Dotnet.dll");
+
+        Assert.Null(DotnetWatchToolResolver.GetPackageToolsDirectory(dll));
+        Assert.Null(DotnetWatchToolResolver.GetPackageToolsDirectory(null));
+
+        Directory.CreateDirectory(Path.Combine(package, "tools", "dotnet-watch", "10"));
+        Assert.Equal(Path.Combine(package, "tools", "dotnet-watch") + Path.DirectorySeparatorChar, DotnetWatchToolResolver.GetPackageToolsDirectory(dll));
+    }
+
+    [Fact]
     public void ExplicitToolPathWins()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
