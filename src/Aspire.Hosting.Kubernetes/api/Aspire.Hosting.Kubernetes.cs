@@ -1700,19 +1700,19 @@ namespace Aspire.Hosting.Kubernetes.Resources
     public sealed partial class MetricSpecV2
     {
         [YamlDotNet.Serialization.YamlMember(Alias = "containerResource")]
-        public ContainerResourceMetricSourceV2 ContainerResource { get { throw null; } set { } }
+        public ContainerResourceMetricSourceV2? ContainerResource { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "external")]
-        public ExternalMetricSourceV2 External { get { throw null; } set { } }
+        public ExternalMetricSourceV2? External { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "object")]
-        public ObjectMetricSourceV2 Object { get { throw null; } set { } }
+        public ObjectMetricSourceV2? Object { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "pods")]
-        public PodsMetricSourceV2 Pods { get { throw null; } set { } }
+        public PodsMetricSourceV2? Pods { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "resource")]
-        public ResourceMetricSourceV2 Resource { get { throw null; } set { } }
+        public ResourceMetricSourceV2? Resource { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "type")]
         public string Type { get { throw null; } set { } }
