@@ -455,8 +455,9 @@ path_rules:
   - paths:
       - src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs
       - src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs
+      - src/Aspire.Hosting.Go/GoVersionDetector.cs
     targets: [test:Aspire.Cli.Tests]
-    reason: GoAppHostToolingCheckTests reads the go.mod templates to guard the minimum Go version.
+    reason: GoAppHostToolingCheckTests reads the go.mod templates and hosting fallback to guard the minimum Go version.
   - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
