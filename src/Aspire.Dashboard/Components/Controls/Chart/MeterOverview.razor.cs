@@ -136,7 +136,7 @@ public partial class MeterOverview : LiveSparklinesBase
     private MetricPinResourceKey ResolvePinResourceKey(OtlpInstrumentSummary instrument) =>
         GroupPinResourceKey ??
         GetPinResourceKey?.Invoke(instrument) ??
-        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository, Resources);
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository);
 
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch
     {

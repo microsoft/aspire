@@ -339,8 +339,7 @@ public readonly record struct MetricPinResourceKey(string Name, int? ReplicaInde
 
     public static MetricPinResourceKey Resolve(
         ResourceKey resourceKey,
-        IResourceRepository resourceRepository,
-        IReadOnlyList<OtlpResource>? telemetryResources = null)
+        IResourceRepository resourceRepository)
     {
         var resource = resourceRepository.GetResources().FirstOrDefault(resource =>
             resourceKey.EqualsCompositeName(resource.Name));
@@ -349,26 +348,8 @@ public readonly record struct MetricPinResourceKey(string Name, int? ReplicaInde
             return new MetricPinResourceKey(resource.DisplayName, resource.ReplicaIndex);
         }
 
-        if (telemetryResources is not null)
-        {
-            var replicaIndex = 0;
-            foreach (var telemetryResource in telemetryResources)
-            {
-                if (!string.Equals(telemetryResource.ResourceName, resourceKey.Name, StringComparisons.ResourceName))
-                {
-                    continue;
-                }
-
-                replicaIndex++;
-                if (telemetryResource.ResourceKey == resourceKey)
-                {
-                    // Telemetry-only resources have no app-model identity. Their position among same-name resources
-                    // remains usable when a process reports a new service.instance.id after the dashboard restarts.
-                    return new MetricPinResourceKey(resourceKey.Name, replicaIndex);
-                }
-            }
-        }
-
+        // Telemetry-only resources have no stable replica index. List positions can change as instances arrive,
+        // so retain the instance ID rather than transferring a pin to another process.
         return new MetricPinResourceKey(resourceKey.Name, ReplicaIndex: null, resourceKey.InstanceId);
     }
 }

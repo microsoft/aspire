@@ -206,17 +206,17 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     }
 
     [Fact]
-    public void Resolve_TelemetryOnlyResourceMatchesPositionAfterInstanceIdChanges()
+    public void Resolve_TelemetryOnlyResourceKeepsInstanceIdentity()
     {
         var resourceRepository = new TestDashboardClient(initialResources: []);
         var firstRunResource = CreateTelemetryResource(new ResourceKey("external-api", "first-run"));
         var secondRunResource = CreateTelemetryResource(new ResourceKey("external-api", "second-run"));
 
-        var firstRunKey = MetricPinResourceKey.Resolve(firstRunResource.ResourceKey, resourceRepository, [firstRunResource]);
-        var secondRunKey = MetricPinResourceKey.Resolve(secondRunResource.ResourceKey, resourceRepository, [secondRunResource]);
+        var firstRunKey = MetricPinResourceKey.Resolve(firstRunResource.ResourceKey, resourceRepository);
+        var secondRunKey = MetricPinResourceKey.Resolve(secondRunResource.ResourceKey, resourceRepository);
 
-        Assert.Equal(new MetricPinResourceKey("external-api", ReplicaIndex: 1), firstRunKey);
-        Assert.Equal(firstRunKey, secondRunKey);
+        Assert.Equal(new MetricPinResourceKey("external-api", ReplicaIndex: null, InstanceId: "first-run"), firstRunKey);
+        Assert.Equal(new MetricPinResourceKey("external-api", ReplicaIndex: null, InstanceId: "second-run"), secondRunKey);
     }
 
     [Theory]

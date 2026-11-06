@@ -1405,7 +1405,7 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Equal("true", pinButton.Find("fluent-button").GetAttribute("aria-pressed"));
         });
         Assert.Equal(
-            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: 1), new OtlpInstrumentKey("test-meter", "test-instrument-b"))],
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null, InstanceId: "TestId"), new OtlpInstrumentKey("test-meter", "test-instrument-b"))],
             Services.GetRequiredService<MetricPinStore>().GetPins());
 
         // Selecting the pinned group shows the pinned instruments as cards, grouped by their meter.
@@ -1789,7 +1789,7 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         Assert.Equal(
-            [new MetricPin(new MetricPinResourceKey("SecondApp", ReplicaIndex: 1), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
+            [new MetricPin(new MetricPinResourceKey("SecondApp", ReplicaIndex: null, InstanceId: "TestId"), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
             Services.GetRequiredService<MetricPinStore>().GetPins());
 
         List<IRenderedComponent<MetricPinButton>> GetPinButtons() =>
@@ -1810,13 +1810,12 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task TelemetryOnlyReplicas_PinIndependently()
+    public async Task TelemetryOnlyReplicas_EarlierSortingInstanceArrives_PinStaysOnOriginalInstance()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
-            CreateReplicaResourceMetrics("first"),
             CreateReplicaResourceMetrics("second")
         });
         var resources = telemetryRepository.GetResources();
@@ -1836,18 +1835,30 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.GetInstrumentUrl, _ => "/metrics");
         });
 
-        var pinButtons = cut.FindComponents<MetricPinButton>()
-            .OrderBy(button => button.Instance.ResourceKey.ReplicaIndex)
-            .ToList();
-        pinButtons[0].Find("fluent-button").Click();
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first")
+        });
+        resources = telemetryRepository.GetResources();
+        Assert.Equal(["first", "second"], resources.Select(resource => resource.ResourceKey.InstanceId));
+        instruments = resources.SelectMany(resource => telemetryRepository.GetInstrumentSummaries(resource.ResourceKey)).ToList();
+        cut.Render(builder =>
+        {
+            builder.Add(component => component.Instruments, instruments);
+            builder.Add(component => component.Resources, resources);
+        });
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal("true", pinButtons[0].Find("fluent-button").GetAttribute("aria-pressed"));
-            Assert.Equal("false", pinButtons[1].Find("fluent-button").GetAttribute("aria-pressed"));
+            var cards = cut.FindAll(".meter-card")
+                .ToDictionary(card => card.QuerySelector(".meter-card-resource-name")!.TextContent);
+            Assert.Equal("false", cards["first"].QuerySelector("fluent-button")!.GetAttribute("aria-pressed"));
+            Assert.Equal("true", cards["second"].QuerySelector("fluent-button")!.GetAttribute("aria-pressed"));
         });
         Assert.Equal(
-            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: 1), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null, InstanceId: "second"), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
             Services.GetRequiredService<MetricPinStore>().GetPins());
     }
 

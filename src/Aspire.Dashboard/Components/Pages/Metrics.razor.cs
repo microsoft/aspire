@@ -411,7 +411,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         GetPinResourceKey(instrument.ResourceView.ResourceKey);
 
     private MetricPinResourceKey GetPinResourceKey(ResourceKey resourceKey) =>
-        MetricPinResourceKey.Resolve(resourceKey, DataSource.ResourceRepository, _resources);
+        MetricPinResourceKey.Resolve(resourceKey, DataSource.ResourceRepository);
 
     private readonly HashSet<string> _collapsedSections = new(StringComparer.OrdinalIgnoreCase);
     private bool _organizeStateLoaded;
