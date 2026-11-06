@@ -26,6 +26,24 @@ public sealed partial class SqliteTelemetryRepository
             : GetResources(includeUninstrumentedPeers).Where(resource => resource.ResourceKey == key).ToList();
     }
 
+    public HashSet<ResourceKey> GetTracePeerResourceKeys()
+    {
+        using var connection = _database.OpenConnection();
+        // Query all peer participation once for the layout snapshot, not once per sidebar row.
+        // Reporting logs or metrics upgrades a synthetic peer but doesn't remove its incoming client spans.
+        return connection.Query<TelemetryResourceRecord>("""
+            SELECT resource_name AS ResourceName, instance_id AS InstanceId
+            FROM telemetry_resources
+            WHERE resource_id IN (
+                SELECT uninstrumented_peer_resource_id
+                FROM telemetry_spans
+                WHERE uninstrumented_peer_resource_id IS NOT NULL
+            );
+            """)
+            .Select(resource => new ResourceKey(resource.ResourceName, resource.InstanceId))
+            .ToHashSet();
+    }
+
     private async Task DeleteTelemetryResourceFromDatabaseAsync(ResourceKey resourceKey)
     {
         using (await _database.WriteLock.LockAsync().ConfigureAwait(false))

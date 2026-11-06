@@ -14,6 +14,8 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Proto.Trace.V1;
+using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
@@ -126,8 +128,13 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Equal(1, client.ResourceSubscriptionCount);
     }
 
-    [Fact]
-    public async Task UninstrumentedPeer_IsAvailableForTracesFromItsOutgoingSpan()
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(AspireDataType.StructuredLogs, false)]
+    [InlineData(AspireDataType.Metrics, false)]
+    [InlineData(AspireDataType.StructuredLogs, true)]
+    [InlineData(AspireDataType.Metrics, true)]
+    public async Task Peer_IsAvailableForTracesUntilItsOutgoingSpanIsCleared(AspireDataType? reportedSignal, bool reportAfterSpan)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
@@ -140,6 +147,10 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         var resolver = Services.GetRequiredService<IOutgoingPeerResolver>();
         await AsyncTestHelpers.AssertIsTrueRetryAsync(() => Task.FromResult(resolver.TryResolvePeer(attributes, out _, out _)),
             "The resource peer resolver did not receive its initial resource snapshot.");
+        if (reportedSignal is not null && !reportAfterSpan)
+        {
+            await AddPeerSignalAsync();
+        }
         await repository.AddTracesAsync(new(),
         [
             new ResourceSpans
@@ -163,11 +174,105 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
-        Assert.True(repository.GetResourceByCompositeName("cache")!.UninstrumentedPeer);
+        Assert.Equal(reportedSignal is null || reportAfterSpan, repository.GetResourceByCompositeName("cache")!.UninstrumentedPeer);
         Assert.False(cut.Find("[data-resource-name='cache']").ClassList.Contains("resource-row-unavailable"));
         Assert.Empty(cut.FindAll("[data-resource-name='cache'] .resource-row-availability"));
         Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
         Assert.Equal(["cache"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+
+        if (reportedSignal is not null && reportAfterSpan)
+        {
+            await AddPeerSignalAsync();
+            cut.WaitForAssertion(() =>
+            {
+                Assert.False(repository.GetResourceByCompositeName("cache")!.UninstrumentedPeer);
+                Assert.False(cut.Find("[data-resource-name='cache']").ClassList.Contains("resource-row-unavailable"));
+                Assert.Empty(cut.FindAll("[data-resource-name='cache'] .resource-row-availability"));
+            });
+        }
+
+        var traces = await repository.GetTracesAsync(GetTracesRequest.ForResourceKey(new("cache", null)), CancellationToken.None);
+        Assert.Single(traces.PagedResult.Items);
+        await repository.ClearSelectedSignalsAsync(new() { ["api-TestId"] = [AspireDataType.Traces] });
+        cut.WaitForAssertion(() => Assert.Equal(Resources.Layout.ResourcePaneNoTracesLabel,
+            cut.Find("[data-resource-name='cache'] .resource-row-availability").TextContent));
+        Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
+
+        Task AddPeerSignalAsync()
+        {
+            var peer = CreateResource("cache");
+            peer.Attributes.Remove(peer.Attributes.Single(attribute => attribute.Key == "service.instance.id"));
+            return reportedSignal switch
+            {
+                AspireDataType.StructuredLogs => repository.AddLogsAsync(new(),
+                [
+                    new ResourceLogs
+                    {
+                        Resource = peer,
+                        ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(message: "Peer log") } } }
+                    }
+                ]),
+                AspireDataType.Metrics => repository.AddMetricsAsync(new(),
+                [
+                    new ResourceMetrics
+                    {
+                        Resource = peer,
+                        ScopeMetrics = { new ScopeMetrics { Scope = CreateScope(), Metrics = { CreateSumMetric("peer.requests", DateTime.UnixEpoch) } } }
+                    }
+                ]),
+                _ => throw new InvalidOperationException("The test must specify a peer signal.")
+            };
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AmbiguousCompositeNames_DoNotBreakLayoutOrAssociateAnArbitrarySource(bool appModelEnabled, bool addCollisionAfterRender)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appModelEnabled,
+            initialResources: [ModelTestHelpers.CreateResource("api-a-1")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddSourceAsync("api-a", "1");
+        if (!addCollisionAfterRender)
+        {
+            await AddSourceAsync("api", "a-1");
+        }
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/structuredlogs");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        if (appModelEnabled)
+        {
+            await cut.Find(".resource-kind-toggle[aria-label='Telemetry sources']").ClickAsync();
+        }
+        if (addCollisionAfterRender)
+        {
+            await AddSourceAsync("api", "a-1");
+        }
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, repository.GetResources().Count);
+            Assert.Equal(2, cut.FindAll(".resource-row-kind-telemetry").Count);
+            if (appModelEnabled)
+            {
+                Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogsLabel,
+                    cut.Find(".resource-row-kind-resource[data-resource-name='api-a-1'] .resource-row-availability").TextContent);
+                Assert.Empty(cut.Instance.GetSelectionTelemetryKeys(["api-a-1"])!);
+            }
+        });
+
+        Task AddSourceAsync(string name, string instanceId) => repository.AddLogsAsync(new(),
+        [
+            new ResourceLogs
+            {
+                Resource = CreateResource(name, instanceId),
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(message: name) } } }
+            }
+        ]);
     }
 
     [Fact]

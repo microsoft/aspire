@@ -57,6 +57,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private Subscription? _telemetryResourcesSubscription;
     private Dictionary<ResourceKey, int>? _unviewedErrorCounts;
     private Dictionary<string, OtlpResource> _telemetryResourcesByName = new(StringComparers.ResourceName);
+    private HashSet<ResourceKey> _tracePeerResourceKeys = [];
     private List<TelemetryOnlyResource> _telemetryOnlyResources = [];
     private string? _collapsedResourceNamesKey;
     private bool _isLoaded;
@@ -1166,7 +1167,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Reuse the resource subscription's snapshot for signal availability and row lookups.
         // Looking up every row through GetResourceByCompositeName repeatedly scans all sources.
         var allTelemetryResources = TelemetryRepository.GetResources(includeUninstrumentedPeers: true);
-        _telemetryResourcesByName = allTelemetryResources.ToDictionary(r => r.ResourceKey.GetCompositeName(), StringComparers.ResourceName);
+        // Composite names aren't unique: ("api-a", "1") and ("api", "a-1") both map to "api-a-1".
+        // Leave ambiguous names unmapped rather than attributing another source's signals to an app resource.
+        _telemetryResourcesByName = allTelemetryResources
+            .GroupBy(r => r.ResourceKey.GetCompositeName(), StringComparers.ResourceName)
+            .Where(group => group.Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single(), StringComparers.ResourceName);
+        _tracePeerResourceKeys = TelemetryRepository.GetTracePeerResourceKeys();
         // Resources that send telemetry but aren't part of the app model (for example a browser app) are listed
         // in their own pane so they don't appear in Resources or Tags.
         var telemetryResources = allTelemetryResources.Where(r => !r.UninstrumentedPeer).ToList();
@@ -1887,8 +1894,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? GetTelemetryUnavailableReason(OtlpResource? resource) => CurrentTab switch
     {
         ResourceTab.StructuredLogs when resource is not { HasLogs: true } => Loc[nameof(Resources.Layout.ResourcePaneNoStructuredLogs)].Value,
-        // Uninstrumented peers appear in traces through the outgoing spans that identify them.
-        ResourceTab.Traces when resource is not ({ HasTraces: true } or { UninstrumentedPeer: true }) => Loc[nameof(Resources.Layout.ResourcePaneNoTraces)].Value,
+        // Peers can report logs or metrics without spans of their own and still participate in client traces.
+        ResourceTab.Traces when resource is null || !resource.HasTraces && !_tracePeerResourceKeys.Contains(resource.ResourceKey) => Loc[nameof(Resources.Layout.ResourcePaneNoTraces)].Value,
         ResourceTab.Metrics when resource is not { HasMetrics: true } => Loc[nameof(Resources.Layout.ResourcePaneNoMetrics)].Value,
         _ => null
     };

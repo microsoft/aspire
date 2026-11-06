@@ -34,6 +34,8 @@ or which telemetry is currently missing, and what selecting the resource will op
 or keyboard; opening a telemetry view without data shows its existing empty state. Availability
 updates as telemetry arrives or is cleared, without changing the selection. If a selected resource
 sends its first telemetry after its view is opened, that view stays scoped to the selected resource.
+Trace availability includes client spans targeting a resource, even if that resource reports only
+logs or metrics rather than spans of its own.
 
 When all resources are selected, **Select all** has a filled accent background instead of
 highlighting every row. Selecting individual resources restores their row highlights and clears
