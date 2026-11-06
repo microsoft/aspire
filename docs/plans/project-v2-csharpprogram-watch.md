@@ -62,12 +62,12 @@ remaining work are recorded once, under their coding sessions.
 | D2 | **Project V2 uses `DotnetProjectResource : ExecutableResource`.** Core retains `ProjectResource`, `AddProject<T>`, and the path-based legacy APIs. `CSharpAppResource : ProjectResource` remains; `AddCSharpApp` / `addCSharpApp` are obsolete in favor of the new package. Existing calls are not silently redirected to V2. |
 | D3 | **Activation is `aspire run --watch`**, a local-run sub-mode, not a new `aspire watch` command. The target includes C# service watching and C# AppHost watching through the tool's `host` command, with the latter gated as described in Session 8. |
 | D4 | **Implement only C# service watch here.** Retain a general language-package seam. For polyglot AppHosts, keep the guest runtime's native AppHost watching and separately watch its C# services; do not wrap a native AppHost server or guest program in the .NET `host` command. |
-| D5 | **Core exposes run configuration as state, not watch mechanics.** Integrations consume `ExecutionContext.RunConfiguration.WatchEnabled`. The .NET package owns service-watch coordination and tool acquisition; the CLI owns command UX, the infrastructure proxy command, and invocation of the AppHost wrapper. Shared core project defaults, publishing, and executable launch infrastructure remain reusable. |
+| D5 | **Core exposes run configuration as state, not watch mechanics.** Integrations consume `ExecutionContext.RunConfiguration.WatchEnabled`. The .NET package owns service-watch coordination, tool acquisition and the watch host (resource proxy and watch server); the CLI owns only command UX and setting `AppHost__Run__WatchEnabled`. Shared core project defaults, publishing, and executable launch infrastructure remain reusable. |
 | D6 | **Ship the pinned watcher inside `Aspire.Hosting.Dotnet` (like DCP), never download it at run time.** One payload, `10.0.403`, so watch mode supports .NET 10 SDKs only; the AppHost finds it through `aspiredotnetwatchtoolsdir` assembly metadata. No fallback: a missing payload or a non-.NET 10 SDK is an actionable error. Session 4 records the implementation. |
 | D7 | **Retain Aspire's coordinated initial-build barrier and accept the watcher's additional build for now.** Avoiding duplicate work through upstream `--no-build` support is a future improvement, not a prerequisite or an available option. |
 | D8 | **AppHost watch is a separate session.** Earlier service-watch work runs the AppHost normally. Package-based watching is for the CLI path, not IDE-owned runs; preserve IDE-native change tracking, service launch, and session-restart behavior. |
 | D9 | **Non-watch F5 parity is required and implemented.** Preserve capability negotiation and older-launcher behavior rather than forcing every IDE onto the coordinated-build path. |
-| D10 | **Aspire owns a hidden service proxy command in the CLI**, using private-pipe environment delivery rather than sensitive `-e` arguments. Session 6a defines its runtime and wire-contract responsibilities. |
+| D10 | **Aspire owns the service proxy in a small watch host exe shipped by Aspire.Hosting.Dotnet** (`tools/dotnet-watch-host/`, run with `dotnet exec`), using private-pipe environment delivery rather than sensitive `-e` arguments. The CLI doesn't know about it, so `aspire run --watch`, `dotnet run` of the AppHost and polyglot AppHost servers behave the same. Session 6a defines its runtime and wire-contract responsibilities. |
 
 **API maturity is not uniform.** `DotnetProjectResource`, `AddDotnetProject`, and the package's ordinary
 consumer APIs no longer carry the original `ASPIREDOTNETPROJECT001` experimental diagnostic. Starting
@@ -468,19 +468,32 @@ code or `rebuild` control request supplies Aspire's lifecycle semantics.
 service and a shared-library edit updates both consumers. Verify server failure, initial-build failure,
 restart/rebuild behavior, cleanup, and unsupported-context diagnostics, not only successful edits.
 
-### Session 6a - Hidden Aspire CLI service proxy
+### Session 6a - Aspire service proxy (watch host)
 
-**Not implemented; requester-approved addition to the work breakdown.**
+**Implemented in the spike as `src/Aspire.Hosting.Dotnet.WatchHost`** (owner decision: ship the proxy as an exe in
+Aspire.Hosting.Dotnet; the CLI no longer knows about it). A net10.0 framework-dependent dll (`RollForward=Major`, no
+apphost, so the nupkg stays RID-neutral) with two commands:
 
-Implement a hidden, infrastructure-only CLI command for D10. DCP launches it per instance with the
+- `proxy --server <pipe> --entrypoint <project> --launch-gate <file> [--working-directory <dir>] -- <args>`: what DCP
+  runs for each watched replica, with the project's own `dotnet` (`dotnet exec <host> proxy ...`).
+- `server -- <muxer> exec <watch tool> server ...`: the hidden `dotnet-watch` resource's process. It supervises the
+  watcher with the shared `ProcessSupervisor` (Windows job object / Unix process group, kill when the owner exits)
+  and stops it gracefully, then forcefully after a grace period.
+
+Aspire.Hosting.Dotnet packs the host's build output under `tools/dotnet-watch-host/`; its `buildTransitive` targets
+stamp that directory on the AppHost as `aspiredotnetwatchhostdir` metadata (in-repo AppHosts use
+`artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch-host/`), and prebuilt AppHost servers fall back to the package's
+own `tools/` folder. A missing host fails the run with an error naming the fix. The wire constants shared by hosting
+and the host are source-linked from `src/Shared/DotnetWatch/DotnetWatchHostProtocol.cs`; there is no CLI/hosting
+protocol handshake.
+
+Original scope: implement a hidden, infrastructure-only proxy for D10. DCP launches it per instance with the
 intended service environment delivered through process environment/private local transport; it sends
 that environment in the watcher resource-pipe request. Do not indiscriminately forward every ambient
 CLI variable or put values into `-e` arguments, logs, dashboard command lines, or persisted payloads.
 
-Pass the **exact invoking CLI launch specification** to the integration, including any managed/dogfood
-host prefix; do not resolve an arbitrary `aspire` from `PATH`. Build-time `AspireCliPath` metadata alone
-is not this runtime contract. The infrastructure command must avoid banners, prompts, first-run/update
-UX, and payload dumps.
+The proxy ships next to the watch tool, so no CLI launch specification is passed to the integration; do not
+resolve an arbitrary `aspire` from `PATH`. The proxy must avoid banners, prompts and payload dumps.
 
 Own the pinned binary framing, serialization/profile states, output forwarding, disconnect cleanup,
 cancellation, bounds checking, and failure handling. Version-byte acceptance alone does not prove full
@@ -497,18 +510,18 @@ owns one launched instance, and failures/cancellation never look like successful
 **Implemented in the spike.** Effective watch is the explicit `--watch[=true|false]` when given and otherwise
 the `defaultWatchEnabled` feature; both mean this per-service watch. The legacy whole-AppHost `dotnet watch`
 for project-based C# AppHosts is **retired** rather than kept under a second meaning of the same setting:
-the C# AppHost is built once by the CLI and launched normally, and `AppHost__Run__WatchEnabled` plus the
-proxy CLI invocation go into its environment. For guest (TypeScript, Python, ...) AppHosts the same signal
-goes into the **AppHost server's** environment, and `context.Watch` still drives the guest's native AppHost
-watch (D4), so C# services referenced from a polyglot AppHost hot reload too; the "C# AppHost only"
-warning is gone.
+the C# AppHost is built once by the CLI and launched normally, and only `AppHost__Run__WatchEnabled` goes into
+its environment. For guest (TypeScript, Python, ...) AppHosts the same switch goes into the **AppHost server's**
+environment, so C# services referenced from a polyglot AppHost hot reload too; the "C# AppHost only" warning is
+gone. Watch applies only to running C# project resources (owner decision): `--watch` never watches, hot reloads or
+restarts the AppHost, and a guest AppHost's native watch follows only the `defaultWatchEnabled` feature, as on main.
+The CLI hosts neither the proxy nor the watch server (Session 6a).
 
 - `--no-build` with effective watch fails with a clear error that names the cause: an explicit `--watch`,
   or the `defaultWatchEnabled` feature (with `--watch false` as the way out).
 - IDE-owned runs (`ASPIRE_EXTENSION_DEBUG_SESSION_ID` or `DEBUG_SESSION_PORT`) never start the CLI
   watcher; the IDE's own watch/debug protocol applies, `--no-build` stays allowed, and an explicit
-  `--watch` prints a notice saying the IDE owns hot reload. A guest AppHost keeps its native AppHost watch
-  there (`AppHostProjectContext.WatchAppHost`), as before.
+  `--watch` prints a notice saying the IDE owns hot reload.
 - `aspire run` typed in the VS Code extension terminal delegates to a VS Code run session: `--watch` is
   not forwarded, an explicit `--watch` prints the same notice in the terminal, and `--no-build` is rejected
   because that session builds and watches services itself.
@@ -517,7 +530,7 @@ warning is gone.
 Add the option, with explicit `--watch` enabling watch and `DefaultWatchEnabled` supplying the default.
 Project `AppHost:Run:WatchEnabled` into the process that actually hosts `Aspire.Hosting`.
 For polyglot runs that means the **AppHost server's environment**, not only the guest application's
-environment. Enable runtime acquisition and provide the exact proxy CLI invocation for that run.
+environment. Hosting finds the watch tool and the watch host itself; nothing else is passed.
 Initially keep normal C# AppHost launch; service watch must work before Session 8 replaces its wrapper.
 
 Preserve IDE ownership: VS Code/Visual Studio launches use their existing watch/debug/session-restart
@@ -529,6 +542,8 @@ watch implementations active under the same effective setting.
 in non-watch runs, correct C#/guest signal delivery, existing option validation, and service hot reload.
 
 ### Session 8 - C# AppHost watch through `host`
+
+**Out of scope for this spike** (owner decision: watch only running C# service resources, never the AppHost).
 
 **Not implemented; composition gate remains open.** Use the package-owned prelaunch ensure operation
 from Session 4, then launch the C# AppHost with the resolved tool's `host` command.

@@ -5,8 +5,13 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
 
 ## How it works
 
-- `aspire run --watch` sets `AppHost__Run__WatchEnabled=true` and `ASPIRE_DOTNET_WATCH_PROXY_PATH=<this CLI>` for the AppHost
-  (plus `ASPIRE_DOTNET_WATCH_PROXY_HOST=<dotnet muxer>` when the CLI is a framework-dependent `aspire.dll`).
+- `aspire run --watch` only sets `AppHost__Run__WatchEnabled=true` for the AppHost (or the polyglot AppHost server). The
+  CLI hosts neither the proxy nor the watch server, so a plain `dotnet run` of the AppHost with that variable set behaves
+  the same. Only C# services are watched; the AppHost itself is never watched or restarted.
+- The proxy and the watch server live in a small watch host (`src/Aspire.Hosting.Dotnet.WatchHost`) that
+  `Aspire.Hosting.Dotnet` ships under `tools/dotnet-watch-host/` next to the watch tool, found the same way (AppHost
+  `aspiredotnetwatchhostdir` metadata; in-repo `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch-host/`) and run with
+  `dotnet exec`.
 - In watch runs, `AddDotnetProject` skips Aspire's coordinated build and registers every service with one
   `dotnet-watch` executable resource (`Aspire.Hosting.Dotnet/Watch/DotnetWatchCoordinator.cs`). The watcher's build is the only build. That resource:
   - resolves the SDK the services use (their `global.json`) and runs the `Microsoft.DotNet.HotReload.Watch.Aspire` 10.0.403
@@ -16,13 +21,14 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
     assembly metadata (in-repo AppHosts use `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/`). A missing tool, missing
     metadata, or a selected SDK that isn't .NET 10 fails with an error that says how to fix it; there is no fallback.
     `ASPIRE_DOTNET_WATCH_TOOL_PATH` points at an explicit tool directory instead (for testing a different watcher build).
-  - runs `dotnet exec <tool> server --sdk <sdk> --server <pipe> --status-pipe <pipe> --resource <each project>` from a
+  - runs `dotnet exec <host> server -- dotnet exec <tool> server --sdk <sdk> --server <pipe> --status-pipe <pipe> --resource <each project>`
+    (the host supervises the watcher's process tree and stops it when the AppHost goes away) from a
     per-run directory `/tmp/aspw-<id>`, which is deleted on shutdown. The directory is created `0700` (an existing or
     symlinked one is rejected) and every pipe/socket is `CurrentUserOnly` (`0600` sockets, peer UID checked).
   - reads the status pipe and the watcher's output, becomes healthy after the first successful build, and turns
     build/hot-reload/restart/exit events into short notices (`DotnetWatchEventInterpreter`). Notices go to the affected
     service's console log (prefixed `[watch]`) and to the `aspire run` terminal. Raw status JSON is debug-level only.
-- Each service waits for `dotnet-watch`, then DCP launches `aspire __dotnet-watch-proxy --server <pipe> --entrypoint <project> -- <args>`
+- Each service waits for `dotnet-watch`, then DCP launches `dotnet exec <host> proxy --server <pipe> --entrypoint <project> -- <args>`
   instead of `dotnet run`. The proxy reads the service environment from its own process environment
   (only the names listed in `ASPIRE_DOTNET_WATCH_FORWARD_ENV`; values never go on the command line), sends the
   launch request over the watcher's resource pipe (30 s connect timeout, with an actionable error), and forwards stdout/stderr. Stopping or restarting the
@@ -37,7 +43,6 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
     `ProjectLaunchArgsOverrideAnnotation`) fail the run unless they call `.WithWatch(false)`.
   - Under an IDE debug session (`DEBUG_SESSION_PORT` set) the IDE owns hot reload: nothing is watched, and the terminal and
     each service's log say so.
-  - `AppHost:Run:WatchEnabled=true` without the CLI (a plain `dotnet run` of the AppHost) fails the run.
 
 ## What you see
 
@@ -103,7 +108,7 @@ re-run on the shipped 10.0.403 tool.
 | `WithReplicas(2)` | works | Shared edit reaches both replicas (same PIDs); rude edit restarts both. The watcher races concurrent first launches of the same web project ("Server not started" from its browser refresh server, unfixed in dotnet/sdk main), so the proxies launch a project's replicas one at a time until it has launched once (`--launch-gate`). [transcript](docs/transcripts/03-replicas-csproj-static.txt) | #13738 |
 | File-based C# app (`AddDotnetProject("x", "app.cs")`) | not supported | The watch server runs `dotnet run` without `--file` ("Couldn't find a project to run"), so `aspire run --watch` fails until the app calls `.WithWatch(false)`, then it runs plain. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | |
 | Watch tool acquisition | fixed | Shipped in `Aspire.Hosting.Dotnet` (no download); a missing tool or non-.NET 10 SDK is an actionable terminal error. | |
-| Plain `dotnet run` of the AppHost / IDE debug | fixed | IDE: notice, the IDE owns hot reload. `WatchEnabled` without the CLI: error | #15710 |
+| Plain `dotnet run` of the AppHost / IDE debug | works | IDE: notice, the IDE owns hot reload. `AppHost__Run__WatchEnabled=true` without the CLI: services are watched and hot reloaded the same as with `aspire run --watch` | #15710 |
 | Per-resource opt-out | fixed | `.WithWatch(false)`: terminal and resource-log notice, plain `dotnet run`. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | #20702 |
 | Run-to-completion / persistent | fixed | `WaitForCompletion` targets run once unwatched (notice); persistent lifetime is an error (unit-tested) | #9756 |
 | AppHost edits (Session 8) | not supported | Restart `aspire run` | #13839 |
