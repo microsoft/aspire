@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Maui;
+using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 
 namespace Aspire.Hosting;
@@ -198,6 +199,8 @@ public static class MauiAndroidExtensions
             () => true, // Allow on all platforms, validation happens at dotnet run time
             "PhoneLaptop",
             additionalArgs.ToArray());
+
+        AddAndroidDeviceSelection(resourceBuilder, msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]);
 
         resourceBuilder.WithMauiIdeLaunchConfiguration(
             projectPath,
@@ -404,6 +407,8 @@ public static class MauiAndroidExtensions
             "PhoneLaptop",
             additionalArgs.ToArray());
 
+        AddAndroidDeviceSelection(resourceBuilder, msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]);
+
         resourceBuilder.WithMauiIdeLaunchConfiguration(
             projectPath,
             targetFramework,
@@ -413,5 +418,21 @@ public static class MauiAndroidExtensions
             msBuildProperties: msBuildProperties);
 
         return resourceBuilder;
+    }
+
+    // 'dotnet run' asks which device to use when the Android SDK lists more than one, and fails without a
+    // terminal. The build queue resolves the device before each launch and this passes it as Device.
+    // Added after the platform arguments so the leading 'run' argument stays first.
+    private static void AddAndroidDeviceSelection<T>(IResourceBuilder<T> resourceBuilder, string adbTarget) where T : ProjectResource
+    {
+        var deviceSelection = new MauiAndroidDeviceSelectionAnnotation(adbTarget);
+        resourceBuilder.WithAnnotation(deviceSelection);
+        resourceBuilder.WithArgs(context =>
+        {
+            if (deviceSelection.SelectedDevice is { } device)
+            {
+                context.Args.Add($"-p:{KnownMauiMSBuildProperties.Device}={MauiEnvironmentHelper.EscapeMSBuildLiteral(device)}");
+            }
+        });
     }
 }

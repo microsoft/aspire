@@ -25,13 +25,15 @@ internal static class MauiEnvironmentHelper
     /// <param name="resource">The resource to collect environment variables from.</param>
     /// <param name="executionContext">The execution context.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
+    /// <param name="launchSignalFilePath">The file to write after <c>ComputeRunArguments</c>, or null to skip the launch signal.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The path to the generated targets file, or null if no environment variables are present.</returns>
+    /// <returns>The path to the generated targets file, or null if there are no environment variables and no launch signal.</returns>
     public static async Task<string?> CreateAndroidEnvironmentTargetsFileAsync(
         string tempDirectory,
         IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
+        string? launchSignalFilePath,
         CancellationToken cancellationToken)
     {
         var environmentVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -50,8 +52,7 @@ internal static class MauiEnvironmentHelper
             environmentVariables[normalizedKey] = envVar.Value;
         }
 
-        // If no environment variables, return null
-        if (environmentVariables.Count == 0)
+        if (environmentVariables.Count == 0 && launchSignalFilePath is null)
         {
             return null;
         }
@@ -60,7 +61,7 @@ internal static class MauiEnvironmentHelper
         var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}.targets");
 
         // Generate the targets file content
-        var targetsContent = GenerateAndroidTargetsFileContent(environmentVariables);
+        var targetsContent = GenerateAndroidTargetsFileContent(environmentVariables, launchSignalFilePath);
 
         // Write the file
         await File.WriteAllTextAsync(targetsFilePath, targetsContent, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
@@ -69,9 +70,10 @@ internal static class MauiEnvironmentHelper
     }
 
     /// <summary>
-    /// Generates the content of an MSBuild targets file for Android environment variables.
+    /// Generates the content of an MSBuild targets file for Android environment variables and, optionally,
+    /// the launch signal written after <c>ComputeRunArguments</c>.
     /// </summary>
-    internal static string GenerateAndroidTargetsFileContent(Dictionary<string, string> environmentVariables)
+    internal static string GenerateAndroidTargetsFileContent(Dictionary<string, string> environmentVariables, string? launchSignalFilePath = null)
     {
         var projectElement = new XElement("Project");
 
@@ -128,11 +130,60 @@ internal static class MauiEnvironmentHelper
 
         projectElement.Add(targetElement);
 
+        if (launchSignalFilePath is not null)
+        {
+            projectElement.Add(CreateAndroidLaunchSignalTarget(launchSignalFilePath));
+        }
+
         var document = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), projectElement);
 
         using var stringWriter = new StringWriter();
         document.Save(stringWriter);
         return stringWriter.ToString();
+    }
+
+    /// <summary>
+    /// Creates the target that writes the Android launch signal. <c>dotnet run</c> runs <c>ComputeRunArguments</c>
+    /// after building and deploying the app and before starting the long-running <c>Microsoft.Android.Run</c>
+    /// process, so the signal marks the end of the launch's MSBuild work.
+    /// </summary>
+    private static XElement CreateAndroidLaunchSignalTarget(string launchSignalFilePath)
+    {
+        // _AndroidPackage is the package name the Android SDK passes to Microsoft.Android.Run.
+        // ApplicationId covers SDKs that resolve it in a different target.
+        var packageProperties = new XElement(
+            "PropertyGroup",
+            new XElement("_AspireAndroidPackage", "$(_AndroidPackage)"),
+            new XElement("_AspireAndroidPackage", new XAttribute("Condition", "'$(_AspireAndroidPackage)' == ''"), "$(ApplicationId)"));
+
+        return new XElement(
+            "Target",
+            new XAttribute("Name", "AspireWriteAndroidLaunchSignal"),
+            new XAttribute("AfterTargets", "ComputeRunArguments"),
+            packageProperties,
+            new XElement(
+                "WriteLinesToFile",
+                new XAttribute("File", EscapeMSBuildLiteral(launchSignalFilePath)),
+                new XAttribute("Lines", MauiAndroidLaunchSignal.MSBuildLines),
+                new XAttribute("Overwrite", "True")));
+    }
+
+    internal static string EscapeMSBuildLiteral(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            if (c is '%' or '$' or '@' or '\'' or ';' or '?' or '*')
+            {
+                builder.Append('%').Append(((int)c).ToString("X2", System.Globalization.CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                builder.Append(c);
+            }
+        }
+
+        return builder.ToString();
     }
 
     internal static string SanitizeFileName(string name)

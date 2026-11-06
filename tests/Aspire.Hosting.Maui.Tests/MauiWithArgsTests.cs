@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -89,6 +90,29 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AndroidEmulator_SelectedDevice_PassesDeviceAfterPlatformArgs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var emulator = maui.AddAndroidEmulator();
+
+        var deviceSelection = emulator.Resource.Annotations.OfType<MauiAndroidDeviceSelectionAnnotation>().Single();
+        Assert.Equal("-e", deviceSelection.AdbTarget);
+
+        // The build queue selects the device before DCP evaluates the launch arguments.
+        deviceSelection.SelectedDevice = "emulator-5554";
+        var args = await ArgumentEvaluator.GetArgumentListAsync(emulator.Resource).DefaultTimeout();
+
+        // The launch override drops the leading "run", so it must stay the first resource argument.
+        Assert.Equal("run", args[0]);
+        Assert.Equal("-p:Device=emulator-5554", args[^1]);
+    }
+
+    [Fact]
     public async Task AndroidEmulator_DefaultArgs_ContainAdbTargetEmulator()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -104,6 +128,7 @@ public class MauiWithArgsTests(ITestOutputHelper outputHelper)
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
         Assert.Contains("net10.0-android", args);
+        Assert.DoesNotContain(args, arg => arg.StartsWith("-p:Device=", StringComparison.Ordinal));
         // Default (no emulator ID) should use -e flag for "only running emulator"
         Assert.Contains("-p:AdbTarget=-e", args);
     }
