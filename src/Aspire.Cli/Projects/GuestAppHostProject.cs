@@ -652,11 +652,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchSettingsEnvVars[KnownConfigNames.AspireSecretsFile] = aspireSecretsFile;
             }
 
-            // Watch runs (aspire run --watch, or the defaultWatchEnabled feature) keep the guest runtime's native
-            // AppHost watch and hot reload C# services through Aspire.Hosting.Dotnet. The AppHost server is the
-            // process that hosts Aspire.Hosting, so the watch signal and proxy invocation go on its environment.
-            // In IDE-owned runs only the guest's native AppHost watch applies (WatchAppHost); the IDE owns service watch.
-            var enableHotReload = context.Watch || context.WatchAppHost;
+            // Check if hot reload (watch mode) is enabled
+            var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+
+            // Watch runs (aspire run --watch, or the defaultWatchEnabled feature) hot reload C# services through
+            // Aspire.Hosting.Dotnet, which runs in the AppHost server, so the watch switch goes on its environment.
             if (context.Watch)
             {
                 DotnetWatchRunEnvironment.Apply(launchSettingsEnvVars);

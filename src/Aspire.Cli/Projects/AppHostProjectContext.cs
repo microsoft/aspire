@@ -19,15 +19,9 @@ internal sealed class AppHostProjectContext
 
     /// <summary>
     /// Gets whether the CLI hot reloads C# services for this run (<c>aspire run --watch</c> or the
-    /// <c>defaultWatchEnabled</c> feature, outside IDE-owned runs). Implies <see cref="WatchAppHost"/> for guest AppHosts.
+    /// <c>defaultWatchEnabled</c> feature, outside IDE-owned runs). The AppHost itself is never watched.
     /// </summary>
     public bool Watch { get; init; }
-
-    /// <summary>
-    /// Gets whether a guest (polyglot) AppHost runs under its runtime's native AppHost watch. Unlike <see cref="Watch"/>,
-    /// this stays on in IDE-owned runs: the IDE owns C# service watch there, not the guest AppHost's own restarts.
-    /// </summary>
-    public bool WatchAppHost { get; init; }
 
     /// <summary>
     /// Gets whether to run in debug mode.

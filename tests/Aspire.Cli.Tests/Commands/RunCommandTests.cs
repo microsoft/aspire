@@ -3666,7 +3666,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var context = await RunWithTestAppHostProjectAsync(commandLine, "csharp", defaultWatchEnabled);
 
         Assert.Equal(expectWatch, context.Watch);
-        Assert.Equal(expectWatch, context.WatchAppHost);
     }
 
     [Theory]
@@ -3698,7 +3697,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             configuration: config => config["DEBUG_SESSION_PORT"] = "12345");
 
         Assert.False(context.Watch);
-        Assert.True(context.WatchAppHost, "A guest AppHost keeps its native AppHost watch under an IDE.");
         Assert.Contains(RunCommandStrings.WatchHandledByIde, messages);
     }
 
@@ -3714,7 +3712,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             configuration: config => config["DEBUG_SESSION_PORT"] = "12345");
 
         Assert.False(context.Watch);
-        Assert.True(context.WatchAppHost);
         Assert.True(context.NoBuild);
         Assert.DoesNotContain(RunCommandStrings.WatchHandledByIde, messages);
     }
@@ -3821,12 +3818,11 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
 
         // The legacy whole-AppHost `dotnet watch` is retired: the AppHost runs from the CLI's build and its C# services
-        // are hot reloaded by Aspire.Hosting.Dotnet through the CLI proxy.
+        // are hot reloaded by Aspire.Hosting.Dotnet through its watch host.
         Assert.False(dotnetWatchUsed, "The C# AppHost must not run under dotnet watch.");
         Assert.True(appHostNoBuild, "The AppHost was already built by the CLI.");
         Assert.NotNull(appHostEnvironment);
         Assert.Equal("true", appHostEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-        Assert.Equal(DotnetWatchRunEnvironment.GetCurrentCliPath(), appHostEnvironment[DotnetWatchRunEnvironment.ProxyPathVariable]);
     }
 
     [Fact]
@@ -3943,7 +3939,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(watchModeUsed, "Expected watch mode to be disabled when defaultWatchEnabled feature flag is false");
         Assert.NotNull(appHostEnvironment);
         Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
-        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.ProxyPathVariable));
     }
 
     [Fact]
@@ -4007,7 +4002,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.False(watchModeUsed, "Expected watch mode to be disabled by default when defaultWatchEnabled feature flag is not set");
         Assert.NotNull(appHostEnvironment);
         Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
-        Assert.False(appHostEnvironment.ContainsKey(DotnetWatchRunEnvironment.ProxyPathVariable));
     }
 
     [Fact]

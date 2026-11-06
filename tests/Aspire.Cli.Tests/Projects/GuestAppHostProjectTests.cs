@@ -2098,10 +2098,9 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    public async Task RunAsync_ProjectsWatchSignalIntoAppHostServerEnvironment(bool watch, bool watchAppHostOnly)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_ProjectsWatchSignalIntoAppHostServerEnvironment(bool watch)
     {
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
@@ -2124,25 +2123,21 @@ public class GuestAppHostProjectTests : IDisposable
             AppHostFile = new FileInfo(appHostPath),
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>(),
-            Watch = watch,
-            WatchAppHost = watch || watchAppHostOnly
+            Watch = watch
         };
 
         await project.RunAsync(context, CancellationToken.None);
 
-        // Aspire.Hosting runs in the AppHost server, so the server (not only the guest) must see the watch signal
-        // and the exact CLI that implements the service proxy. An IDE-owned run (guest AppHost watch only) must not.
+        // Aspire.Hosting runs in the AppHost server, so the server (not only the guest) must see the watch signal.
         var serverEnvironment = sessionFactory.CapturedEnvironmentVariables;
         Assert.NotNull(serverEnvironment);
         if (watch)
         {
             Assert.Equal("true", serverEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-            Assert.Equal(DotnetWatchRunEnvironment.GetCurrentCliPath(), serverEnvironment[DotnetWatchRunEnvironment.ProxyPathVariable]);
         }
         else
         {
             Assert.False(serverEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
-            Assert.False(serverEnvironment.ContainsKey(DotnetWatchRunEnvironment.ProxyPathVariable));
         }
     }
 

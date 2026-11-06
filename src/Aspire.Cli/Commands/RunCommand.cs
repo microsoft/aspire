@@ -229,8 +229,7 @@ internal sealed class RunCommand : BaseCommand
         }
 
         // Watch selection: an explicit --watch / --watch false wins; otherwise the defaultWatchEnabled feature
-        // supplies the default. Watch means Aspire-controlled hot reload of C# services (plus the guest runtime's
-        // native AppHost watch for polyglot AppHosts); the C# AppHost itself runs normally.
+        // supplies the default. Watch means Aspire-controlled hot reload of C# services; the AppHost itself runs normally.
         var watch = ResolveWatch(parseResult, _features, out var watchExplicit);
 
         // IDE-owned runs (a VS Code debug/run session, or any launch that hands DCP an IDE session endpoint) keep the
@@ -425,7 +424,6 @@ internal sealed class RunCommand : BaseCommand
             {
                 AppHostFile = effectiveAppHostFile,
                 Watch = serviceWatch,
-                WatchAppHost = watch,
                 Debug = parseResult.GetValue(RootCommand.DebugOption),
                 NoBuild = noBuild,
                 NoRestore = noBuild, // --no-build implies --no-restore

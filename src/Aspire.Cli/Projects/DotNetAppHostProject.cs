@@ -1499,9 +1499,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         ConfigureCliBundleBuildEnvironment(env, cliBundleLease);
 
         // Watch runs (aspire run --watch, or the defaultWatchEnabled feature) hot reload C# services through
-        // Aspire.Hosting.Dotnet. The AppHost itself launches normally: whole-AppHost `dotnet watch` is retired
-        // because it would run a second, unrelated watch implementation under the same setting, and AppHost
-        // watch belongs to the watcher's `host` command (plan Session 8).
+        // Aspire.Hosting.Dotnet. The AppHost itself launches normally and is never watched.
         if (context.Watch)
         {
             DotnetWatchRunEnvironment.Apply(env);

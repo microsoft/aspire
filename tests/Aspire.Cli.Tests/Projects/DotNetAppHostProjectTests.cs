@@ -1771,12 +1771,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         if (watch)
         {
             Assert.Equal("true", launchEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-            Assert.Equal(DotnetWatchRunEnvironment.GetCurrentCliPath(), launchEnvironment[DotnetWatchRunEnvironment.ProxyPathVariable]);
         }
         else
         {
             Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
-            Assert.False(launchEnvironment.ContainsKey(DotnetWatchRunEnvironment.ProxyPathVariable));
         }
     }
 
