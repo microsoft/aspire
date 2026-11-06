@@ -1,0 +1,80 @@
+{
+  "run_id": 42277617360,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42277617360",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-06T19:54:48Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21565,
+    "title": "Dismiss VS Code E2E notifications without depending on hover",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-e2e-notification-dismiss-hover-race",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21565",
+    "merged_at": "2026-11-06T19:12:41Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "5138b2a86ab20b3834b01983382a8b478d6b6a39",
+    "failed_sha": "af4527806f2e09424b40e72ab80895fffe82b02f",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3",
+        "message": "Add dashboard resource-selector dropdown (#21861) ## Description Make resource switching available while the dashboard sidebar is collapsed, without reopening the full sidebar. This extracts only the resource-selector dropdown from #21793. ### User-facing usage Click the resource-name button to open the searchable resource list. Normal selection closes it; Ctrl/Cmd/Shift selection keeps it open. Selecting all closes it. Mobile retains the existing drawer. ### Validation - Passed: **1,394 compone",
+        "html_url": "https://github.com/microsoft/aspire/commit/52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3",
+        "pull_request": {
+          "number": 21861,
+          "title": "Add dashboard resource-selector dropdown",
+          "url": "https://github.com/microsoft/aspire/pull/21861",
+          "merged_at": "2026-11-06T16:34:49Z"
+        }
+      },
+      {
+        "sha": "af4527806f2e09424b40e72ab80895fffe82b02f",
+        "message": "Dismiss VS Code E2E notifications without depending on hover (#21565) ## Description Fixes an intermittent failure in the VS Code extension tests, not a bug in Aspire itself. The tests close notifications to clear the screen. Previously, they moved the mouse over a notification and clicked its close button. If another notification appeared or expired, the notification could move away from the mouse and hide the button before the click. The test would then fail with `ElementNotInteractableError`,",
+        "html_url": "https://github.com/microsoft/aspire/commit/af4527806f2e09424b40e72ab80895fffe82b02f",
+        "pull_request": {
+          "number": 21565,
+          "title": "Dismiss VS Code E2E notifications without depending on hover",
+          "url": "https://github.com/microsoft/aspire/pull/21565",
+          "merged_at": "2026-11-06T19:12:41Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "id": 128099063309,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42277617360/job/128099063309",
+      "classification": "flaky-test",
+      "reason": "Single test failed with TaskCanceledException; same mechanism recurred in earlier main runs with unrelated changes.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 118\n   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 130\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same TaskCanceledException at TerminalHostSignalTests.cs line 118 recorded intermittently in prior runs; other 16 tests passed.",
+      "job_id": 128099063309,
+      "execution_id": "90d31005-a4cb-422c-93be-8e0c7060001f",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "aspire-managed-tests-terminalhostcontrolshutdownunlinkssockets-canceled"
+  ]
+}
