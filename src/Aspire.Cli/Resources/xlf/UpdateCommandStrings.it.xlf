@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="it" original="../UpdateCommandStrings.resx">
     <body>
       <trans-unit id="AddedFeedFormat">
-        <source>Added: {0}</source>
-        <target state="translated">Aggiunto: {0}</target>
+        <source>Add: {0}</source>
+        <target state="needs-review-translation">Aggiunto: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AnalyzeAppHost">
@@ -163,13 +163,13 @@
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
-        <source>   Mapping: {0} (added)</source>
-        <target state="translated">   Mapping: {0} (aggiunto)</target>
+        <source>   Mapping: {0} (add)</source>
+        <target state="needs-review-translation">   Mapping: {0} (aggiunto)</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingRemovedFormat">
-        <source>   Mapping: {0} (removed)</source>
-        <target state="translated">   Mapping: {0} (rimosso)</target>
+        <source>   Mapping: {0} (remove)</source>
+        <target state="needs-review-translation">   Mapping: {0} (rimosso)</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingRetainedFormat">
@@ -313,8 +313,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RemovedFeedFormat">
-        <source>Removed: {0}</source>
-        <target state="translated">Rimosso: {0}</target>
+        <source>Remove: {0}</source>
+        <target state="needs-review-translation">Rimosso: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="RemovedObsoleteAppHostPackage">
@@ -353,8 +353,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RetainedFeedFormat">
-        <source>Retained: {0}</source>
-        <target state="translated">Mantenuto: {0}</target>
+        <source>Keep: {0}</source>
+        <target state="needs-review-translation">Mantenuto: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkVersionUnknownPlaceholder">
