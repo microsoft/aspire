@@ -1074,7 +1074,10 @@
                         @if (IsSpacious && !_isPaneFullCanvas && !resource.IsParameter)
                         {
                             @* The third line of a spacious row: whatever needs attention first, an unhealthy status, then
-                               where to reach the resource, then where it comes from. The full canvas has columns for these. *@
+                               where to reach the resource, then where it comes from. The full canvas has columns for these.
+                               The endpoint and source can be cut short, so like the start time above and the full canvas's
+                               columns, they take keyboard focus to show their complete value in a tooltip. The health status
+                               is short and is already in the link's accessible description. *@
                             @if (resource.HealthStatus is { } healthStatus &&
                                  healthStatus != Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy)
                             {
@@ -1082,16 +1085,26 @@
                                     <span>@healthStatus.Humanize()</span>
                                 </span>
                             }
-                            else if (primaryUrl is not null)
+                            else if ((primaryUrl ?? urls.FirstOrDefault()) is { } detailUrl)
                             {
-                                var maskedPrimaryAddress = DashboardUIHelpers.MaskQueryStringValues(primaryUrl.OriginalUrlString);
-                                <span class="resource-row-detail" data-tooltip="@maskedPrimaryAddress">
-                                    <span>@(primaryUrl.DisplayName is { Length: > 0 } primaryUrlName ? primaryUrlName : maskedPrimaryAddress)</span>
+                                @* Like the full canvas's endpoint column, this falls back to endpoints that can't be opened
+                                   as links, such as tcp:// ones: the line shows the address as text, not as a link. *@
+                                var maskedDetailAddress = DashboardUIHelpers.MaskQueryStringValues(detailUrl.OriginalUrlString);
+                                <span class="resource-row-detail"
+                                      tabindex="0"
+                                      data-tooltip="@maskedDetailAddress"
+                                      data-tooltip-positioning="above"
+                                      aria-label="@($"{detailUrl.DisplayName ?? detailUrl.Name}: {maskedDetailAddress}")">
+                                    <span>@(detailUrl.DisplayName is { Length: > 0 } detailUrlName ? detailUrlName : maskedDetailAddress)</span>
                                 </span>
                             }
                             else if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } detailSource)
                             {
-                                <span class="resource-row-detail" data-tooltip="@detailSource.Tooltip">
+                                <span class="resource-row-detail"
+                                      tabindex="0"
+                                      data-tooltip="@detailSource.Tooltip"
+                                      data-tooltip-positioning="above"
+                                      aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {detailSource.Tooltip}")">
                                     <span>@detailSource.Value</span>
                                 </span>
                             }

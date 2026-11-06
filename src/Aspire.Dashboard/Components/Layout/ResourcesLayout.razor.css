@@ -38,7 +38,11 @@
     --resource-row-meta-type-width: 64px;
     /* The full canvas's identity column holds only the name in the other densities. A compact row also puts its type
        and state columns there, so the column grows by their width (type + 8px gap + 10px state + 8px gap) rather
-       than taking it from the name. */
+       than taking it from the name. Only where the tracks can afford it, though: from the 1440px breakpoint the
+       identity track is fixed and the sum still fits, but below that the extra goes into the track's maximum, never
+       its minimum. Below 960px the identity track is flexible and has no maximum to raise. Adding it to the
+       minimums made the row wider than the pane at 540-584px, 720-730px and 960-998px, which pushed the actions out
+       of view. */
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
     --resource-row-font-size: var(--fontSizeBase200);
     --resource-row-line-height: var(--lineHeightBase200);
@@ -2283,7 +2287,7 @@
 
 @container resource-pane (min-width: 540px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(calc(160px + var(--resource-row-identity-extra, 0px)), 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
+        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
     }
 
     .resource-row-endpoints {
@@ -2446,7 +2450,7 @@
 
 @container resource-pane (min-width: 720px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(calc(200px + var(--resource-row-identity-extra, 0px)), 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 180px [end];
+        --resource-row-tracks: [identity] minmax(200px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 180px [end];
         column-gap: var(--spacingHorizontalM);
     }
 
@@ -2483,7 +2487,7 @@
 
 @container resource-pane (min-width: 960px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(calc(220px + var(--resource-row-identity-extra, 0px)), calc(320px + var(--resource-row-identity-extra, 0px))) [status] 180px [endpoint] minmax(96px, 1fr) [source] 112px [insights actions] 244px [end];
+        --resource-row-tracks: [identity] minmax(220px, calc(320px + var(--resource-row-identity-extra, 0px))) [status] 180px [endpoint] minmax(96px, 1fr) [source] 112px [insights actions] 244px [end];
         column-gap: var(--spacingHorizontalS);
     }
 
@@ -2627,6 +2631,12 @@
     height: var(--resource-secondary-line-height);
     font-size: var(--resource-secondary-font-size);
     line-height: var(--resource-secondary-line-height);
+}
+
+/* The endpoint and source details take keyboard focus to show their full value, like .resource-row-source-value. */
+.resource-row-detail:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions {

@@ -1151,6 +1151,70 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task SpaciousSidebarDetail_PrefersUnhealthyStatusThenEndpointThenSource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        const string address = "https://example.test/api?token=synthetic-secret&mode=preview";
+        const string tcpAddress = "tcp://example.test:5432?password=synthetic-secret";
+        var projectPath = Path.Combine("workspace", "MyFrontend.csproj");
+        UrlViewModel Url(string name, string url, string? displayName = null) =>
+            new(name, new Uri(url), false, false, displayName is null ? UrlDisplayPropertiesViewModel.Empty : new(displayName, 0));
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("unhealthy", state: KnownResourceState.Running, reportHealthStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+                    urls: [Url("https", address, "Friendly API")]),
+                ModelTestHelpers.CreateResource("named", state: KnownResourceState.Running, urls: [Url("https", address, "Friendly API")]),
+                ModelTestHelpers.CreateResource("unnamed", state: KnownResourceState.Running, urls: [Url("https", address)]),
+                // tcp:// can't be opened as a link, so it isn't the row's primary URL, but it's still the endpoint to show.
+                ModelTestHelpers.CreateResource("tcp", state: KnownResourceState.Running, urls: [Url("tcp", tcpAddress)]),
+                ModelTestHelpers.CreateResource("project", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, properties: new()
+                {
+                    [KnownProperties.Project.Path] = new(KnownProperties.Project.Path, Value.ForString(projectPath), false, null, 0, null, false)
+                }),
+                ModelTestHelpers.CreateResource("key", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: () => channel));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.Empty(cut.FindAll(".resource-row-detail"));
+
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Spacious));
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-spacious")));
+        // Query values can carry secrets, so the detail shows them masked, as the expanded list's endpoint column does.
+        const string maskedAddress = "https://example.test/api?token=●●●●●●●●&mode=●●●●●●●●";
+        const string maskedTcpAddress = "tcp://example.test:5432?password=●●●●●●●●";
+
+        // An unhealthy status needs attention first, so it wins over the endpoint. It's short and already in the link's
+        // accessible description, so it doesn't take focus.
+        var unhealthy = GetDetail("unhealthy");
+        Assert.Equal("Unhealthy", unhealthy.TextContent.Trim());
+        Assert.Null(unhealthy.GetAttribute("tabindex"));
+
+        AssertFocusableDetail(GetDetail("named"), "Friendly API", maskedAddress, $"Friendly API: {maskedAddress}");
+        AssertFocusableDetail(GetDetail("unnamed"), maskedAddress, maskedAddress, $"https: {maskedAddress}");
+        AssertFocusableDetail(GetDetail("tcp"), maskedTcpAddress, maskedTcpAddress, $"tcp: {maskedTcpAddress}");
+        AssertFocusableDetail(GetDetail("project"), "MyFrontend.csproj", projectPath, $"Source: {projectPath}");
+        Assert.Empty(cut.FindAll("[data-resource-name='key'] .resource-row-detail"));
+
+        // The expanded list has endpoint and source columns instead.
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        Assert.Empty(cut.FindAll(".resource-row-detail"));
+
+        AngleSharp.Dom.IElement GetDetail(string resourceName) =>
+            Assert.Single(cut.FindAll($"[data-resource-name='{resourceName}'] .resource-row-detail"));
+
+        static void AssertFocusableDetail(AngleSharp.Dom.IElement detail, string text, string tooltip, string label)
+        {
+            Assert.Equal(text, detail.TextContent.Trim());
+            Assert.Equal(tooltip, detail.GetAttribute("data-tooltip"));
+            Assert.Equal(label, detail.GetAttribute("aria-label"));
+            Assert.Equal("0", detail.GetAttribute("tabindex"));
+        }
+    }
+
+    [Fact]
     public async Task TerminalTab_NavigatesWithinTheSelectionAndFallsBackForNonTerminalResources()
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
