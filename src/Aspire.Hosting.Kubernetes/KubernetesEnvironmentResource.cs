@@ -153,6 +153,31 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();
 
     /// <summary>
+    /// Gets the generated Helm chart and its deferred value mappings, or <c>null</c> before publishing completes.
+    /// </summary>
+    /// <remarks>
+    /// Read this property from a pipeline step that depends on <c>publish-{Name}</c>.
+    /// A successful publish replaces the result with a new read-only snapshot. Starting another
+    /// publish clears the property, and a failed publish does not expose a successful result.
+    /// Previously obtained snapshots remain unchanged, but their referenced resources and chart files
+    /// are not copied.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var environment = builder.AddKubernetesEnvironment("k8s");
+    /// builder.Pipeline.AddStep("consume-chart", context =>
+    /// {
+    ///     var result = environment.Resource.HelmChartPublishingResult
+    ///         ?? throw new InvalidOperationException("The Helm chart has not been published.");
+    ///     // Consume result.OutputPath and its deferred value mappings.
+    ///     return Task.CompletedTask;
+    /// }, dependsOn: $"publish-{environment.Resource.Name}", requiredBy: "publish");
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Publishing results are consumed by C# deployment pipeline extensions, not AppHost authoring APIs.")]
+    public HelmChartPublishingResult? HelmChartPublishingResult { get; internal set; }
+
+    /// <summary>
     /// Captured parameter-to-values.yaml mappings populated during publish, consumed during deploy
     /// to resolve parameter values and composite references into the environment values file.
     /// </summary>
