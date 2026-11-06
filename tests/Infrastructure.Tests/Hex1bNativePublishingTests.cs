@@ -205,6 +205,8 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [InlineData("win-arm64", "arm64/OpenConsole.exe")]
     public async Task BundlePreservesPtyLayoutAndRejectsMissingSidecars(string rid, string? missingSidecar)
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows() && (rid is "linux-x64" or "linux-arm64"),
+            "Linux tray bundles must be assembled on Unix to preserve executable permissions.");
         var artifacts = Path.Combine(_workspace.Path, "artifacts");
         var publish = Path.Combine(artifacts, "bin", "Aspire.Managed", "Release", "net10.0", rid, "publish");
         var executable = rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-managed.exe" : "aspire-managed";
@@ -284,6 +286,12 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         else if (rid.StartsWith("osx-", StringComparison.Ordinal))
         {
             arguments.AddRange(["--tray-app", MacTrayTestPayload.Create(_workspace.Path)]);
+        }
+        else if (rid is "linux-x64" or "linux-arm64")
+        {
+            var tray = Path.Combine(_workspace.Path, "linux-tray");
+            LinuxTrayTestPayload.Create(tray, rid);
+            arguments.AddRange(["--tray-linux", tray]);
         }
 
         var result = await RunDotNetAsync(
