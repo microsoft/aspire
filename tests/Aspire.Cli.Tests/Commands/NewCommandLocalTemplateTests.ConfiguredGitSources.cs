@@ -14,12 +14,52 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
 
 public partial class NewCommandLocalTemplateTests
 {
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("release/templates", null)]
+    [InlineData("refs/heads/release/templates", "Company [templates]")]
+    [InlineData(TestGitCommandRunner.DefaultCommitSha, "Company [templates]")]
+    public async Task ConfiguredGitSources_PickerShowsConfiguredRepositoryAndRef(string? reference, string? displayName)
+    {
+        const string repository = "https://example.test/templates.git";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().Last()
+        };
+        interaction.SetupStringPromptResponse("Hello");
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
+            CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.AddSingleton<IGitCommandRunner>(git);
+        using var provider = services.BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new()
+        {
+            ["company"] = new { repository, @ref = reference, displayName }
+        });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var choice = Assert.Single(interaction.GroupedSelectionPromptCalls)[^1];
+        Assert.Equal(new SelectionChoiceGroup("source:company",
+            $"{displayName ?? "company"} ({repository} @ {reference ?? ConfigSourceStrings.DefaultBranch})")
+        {
+            Style = new Style(Color.Green)
+        }, choice.Group);
+        Assert.Equal("Sample template", choice.DisplayLabel);
+        Assert.Equal("Remote: Hello", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
+        Assert.Single(GetGitFetches(git));
+    }
+
     [Fact]
     public async Task ConfiguredGitSources_WarnsOnEachInvocationWithCachedTemplates()
     {
