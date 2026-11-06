@@ -1075,7 +1075,9 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
     public async Task NextJsStandaloneCheckFailsInPipelineWhenMissing()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithResourceCleanUp(true);
+        // Select only validation and its prerequisites; running the full pipeline also builds
+        // and pushes an unrelated image from this intentionally incomplete Next.js fixture.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "nextjs-standalone-check-nextjs").WithResourceCleanUp(true);
         builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
 
         var nextDir = Path.Combine(workspace.Path, "nextjs");
@@ -1094,7 +1096,6 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
             app.Services.GetRequiredService<ILogger<AddViteAppTests>>(),
             CancellationToken.None);
 
-        // Pipeline throws AggregateException when multiple steps fail
         var ex = await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context));
         // Verify our standalone check step fired with the right message
         Assert.Contains("output: \"standalone\"", ex.ToString());
