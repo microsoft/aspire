@@ -3,11 +3,10 @@ param location string = resourceGroup().location
 
 resource sandboxes 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
   name: take('sandboxes-${uniqueString(resourceGroup().id)}', 63)
-  location: location
-  properties: { }
   tags: {
     'aspire-resource-name': 'sandboxes'
   }
+  location: location
 }
 
 output id string = sandboxes.id
