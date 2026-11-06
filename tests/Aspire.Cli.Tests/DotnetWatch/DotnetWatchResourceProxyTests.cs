@@ -115,14 +115,14 @@ public class DotnetWatchResourceProxyTests
     [Fact]
     public void RunOptionsCarryWorkingDirectoryAndReplicaMarkerBeforeApplicationArguments()
     {
-        var options = DotnetWatchResourceProxy.GetRunOptions("/data/a;b,c%d", "api-abcd1234");
+        var options = DotnetWatchResourceProxy.GetRunOptions("/src/Api/Api.csproj", "/data/a;b,c%d", "api-abcd1234");
 
-        Assert.Equal(["-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d", "-e", "ASPIRE_DOTNET_WATCH_INSTANCE=api-abcd1234"], options);
+        Assert.Equal(["--project", "/src/Api/Api.csproj", "-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d", "-e", "ASPIRE_DOTNET_WATCH_INSTANCE=api-abcd1234"], options);
 
         var json = DotnetWatchResourceProxy.CreateRequestJson("/src/Api/Api.csproj", options, ["--urls", "x"], new Dictionary<string, string>());
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d", "-e", "ASPIRE_DOTNET_WATCH_INSTANCE=api-abcd1234", "--", "--urls", "x"],
+            ["--project", "/src/Api/Api.csproj", "-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d", "-e", "ASPIRE_DOTNET_WATCH_INSTANCE=api-abcd1234", "--", "--urls", "x"],
             document.RootElement.GetProperty("ApplicationArguments").EnumerateArray().Select(e => e.GetString()));
     }
 
@@ -132,7 +132,26 @@ public class DotnetWatchResourceProxyTests
     [InlineData("api-{{- index .Annotations \"otel-service-instance-id\" -}}")]
     public void UnexpandedOrMissingReplicaMarkerIsOmitted(string? instance)
     {
-        Assert.Empty(DotnetWatchResourceProxy.GetRunOptions(null, instance));
+        Assert.Equal(["--project", "/src/Api/Api.csproj"], DotnetWatchResourceProxy.GetRunOptions("/src/Api/Api.csproj", null, instance));
+    }
+
+    [Theory]
+    [InlineData("/src/Api/Api.csproj")]
+    [InlineData("/src/Api/Api.FSPROJ")]
+    [InlineData("/src/Api/Api.vbproj")]
+    public void RunOptionsSelectTheProjectExplicitly(string entryPoint)
+    {
+        // The watcher runs `dotnet run --no-build` in the project's directory; without --project a directory with a
+        // second project fails with "Specify which project file to use".
+        var options = DotnetWatchResourceProxy.GetRunOptions(entryPoint, null, null);
+
+        Assert.Equal(["--project", entryPoint], options);
+    }
+
+    [Fact]
+    public void RunOptionsDoNotSelectANonProjectEntryPoint()
+    {
+        Assert.Empty(DotnetWatchResourceProxy.GetRunOptions("/src/App/app.cs", null, null));
     }
 
     [Fact]
@@ -271,7 +290,7 @@ public class DotnetWatchResourceProxyTests
         DotnetWatchRunEnvironment.Apply(environment);
 
         Assert.Equal("true", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-        Assert.Equal("2", environment[DotnetWatchRunEnvironment.ProxyProtocolVariable]);
+        Assert.Equal("3", environment[DotnetWatchRunEnvironment.ProxyProtocolVariable]);
         var path = environment[DotnetWatchRunEnvironment.ProxyPathVariable];
         Assert.True(File.Exists(path), path);
         if (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
@@ -305,7 +324,8 @@ public class DotnetWatchResourceProxyTests
     [Fact]
     public async Task RetriesWhenTheServerClosesTheConnectionBeforeTheApplicationStarts()
     {
-        var pipeName = $"aspire-proxy-test-{Guid.NewGuid():N}";
+        using var testPipe = TestPipe.Create();
+        var pipeName = testPipe.Name;
         var requests = new List<string>();
         var server = Task.Run(async () =>
         {
@@ -339,7 +359,8 @@ public class DotnetWatchResourceProxyTests
     [Fact]
     public async Task DoesNotRetryWhenTheServerRejectsTheRequest()
     {
-        var pipeName = $"aspire-proxy-test-{Guid.NewGuid():N}";
+        using var testPipe = TestPipe.Create();
+        var pipeName = testPipe.Name;
         var server = Task.Run(async () =>
         {
             await using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
@@ -354,6 +375,30 @@ public class DotnetWatchResourceProxyTests
         await server.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(DotnetWatchResourceProxy.ExitRejected, exitCode);
+    }
+
+    /// <summary>
+    /// A pipe name the server and the proxy agree on. On Unix a named pipe is a socket file, and a bare name is placed
+    /// under <c>$TMPDIR</c>, which on macOS is long enough to exceed the socket path limit (104 bytes); like the watch
+    /// server's own pipes, use a short absolute socket path there.
+    /// </summary>
+    private sealed class TestPipe : IDisposable
+    {
+        private TestPipe(string name) => Name = name;
+
+        public string Name { get; }
+
+        public static TestPipe Create() => new(OperatingSystem.IsWindows()
+            ? $"aspire-proxy-test-{Guid.NewGuid():N}"
+            : Path.Combine("/tmp", $"apx-{Guid.NewGuid().ToString("N")[..12]}.sock"));
+
+        public void Dispose()
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                File.Delete(Name);
+            }
+        }
     }
 
     private static BackchannelLogEntry CreateEntry(string category, LogLevel level, string message) => new()

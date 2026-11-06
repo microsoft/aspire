@@ -60,8 +60,11 @@ internal static partial class DotnetWatchCoordinator
     /// <summary>Proxy/host protocol the CLI implements. Must match <c>DotnetWatchRunEnvironment</c> in the CLI.</summary>
     internal const string ProxyProtocolConfigurationKey = "ASPIRE_DOTNET_WATCH_PROXY_PROTOCOL";
 
-    /// <summary>2: <c>__dotnet-watch-server</c> host and proxy <c>--working-directory</c>, instance marker and restore list.</summary>
-    internal const int RequiredProxyProtocol = 2;
+    /// <summary>
+    /// 2: <c>__dotnet-watch-server</c> host and proxy <c>--working-directory</c>, instance marker and restore list.
+    /// 3: the proxy selects the project with <c>dotnet run --project</c> (a directory can hold several projects).
+    /// </summary>
+    internal const int RequiredProxyProtocol = 3;
 
     /// <summary>Process-environment variable naming the variables the proxy forwards to the service.</summary>
     internal const string ForwardedEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_FORWARD_ENV";

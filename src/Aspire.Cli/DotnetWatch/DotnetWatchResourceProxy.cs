@@ -18,7 +18,8 @@ namespace Aspire.Cli.DotnetWatch;
 /// </para>
 /// <para>
 /// The watcher launches every service as <c>dotnet run</c> from the project directory, with the watcher's own process
-/// environment plus the request's variables. So the proxy also asks <c>dotnet run</c> for the working directory
+/// environment plus the request's variables. So the proxy also asks <c>dotnet run</c> for the project (<c>--project</c>,
+/// since that directory can hold several), the working directory
 /// (<c>-p:RunWorkingDirectory</c>) and a replica marker (<c>-e ASPIRE_DOTNET_WATCH_INSTANCE</c>, which lets hosting
 /// attribute launches and exits to one replica), and resets the variables set only for the watcher
 /// (<c>ASPIRE_DOTNET_WATCH_RESTORE_ENV</c>, for example its temp directory or build configuration) to the proxy's own
@@ -90,7 +91,7 @@ internal static class DotnetWatchResourceProxy
             Environment.GetEnvironmentVariable,
             Environment.GetEnvironmentVariables().Keys.Cast<string>());
         AddRestoredEnvironment(environment, Environment.GetEnvironmentVariable(RestoreEnvironmentNamesVariable), Environment.GetEnvironmentVariable);
-        var runOptions = GetRunOptions(workingDirectory, Environment.GetEnvironmentVariable(InstanceVariable));
+        var runOptions = GetRunOptions(entryPoint, workingDirectory, Environment.GetEnvironmentVariable(InstanceVariable));
 
         var timeout = TimeSpan.FromSeconds(
             int.TryParse(Environment.GetEnvironmentVariable(ConnectTimeoutVariable), out var seconds) && seconds > 0 ? seconds : DefaultConnectTimeoutSeconds);
@@ -278,9 +279,19 @@ internal static class DotnetWatchResourceProxy
     }
 
     /// <summary><c>dotnet run</c> options that precede the application arguments.</summary>
-    internal static List<string> GetRunOptions(string? workingDirectory, string? instance)
+    /// <remarks>
+    /// The watcher runs <c>dotnet run --no-build</c> in the project's directory without selecting the project, which
+    /// fails when that directory holds more than one project. <c>--project</c> selects the requested one explicitly.
+    /// </remarks>
+    internal static List<string> GetRunOptions(string entryPoint, string? workingDirectory, string? instance)
     {
         var options = new List<string>();
+        if (IsProjectFile(entryPoint))
+        {
+            options.Add("--project");
+            options.Add(entryPoint);
+        }
+
         if (!string.IsNullOrEmpty(workingDirectory))
         {
             options.Add($"-p:RunWorkingDirectory={EscapeMSBuildPropertyValue(workingDirectory)}");
@@ -295,6 +306,12 @@ internal static class DotnetWatchResourceProxy
 
         return options;
     }
+
+    private static bool IsProjectFile(string path) =>
+        Path.GetExtension(path) is { } extension
+        && (extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".fsproj", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".vbproj", StringComparison.OrdinalIgnoreCase));
 
     // MSBuild splits -p values on ';' and ',' and unescapes %XX.
     internal static string EscapeMSBuildPropertyValue(string value) =>

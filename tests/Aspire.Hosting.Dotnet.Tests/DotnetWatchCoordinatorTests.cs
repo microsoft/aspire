@@ -243,7 +243,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.True(DotnetWatchCoordinator.HasCustomLaunch(other.Resource));
     }
 
-    private const string Protocol = $"{DotnetWatchCoordinator.ProxyProtocolConfigurationKey}=2";
+    private const string Protocol = $"{DotnetWatchCoordinator.ProxyProtocolConfigurationKey}=3";
 
     private static string[] WatchArgs(params string[] extra) =>
         ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire", Protocol, .. extra];
@@ -251,6 +251,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(null)]
     [InlineData("1")]
+    [InlineData("2")]
     public async Task OlderCliProtocolFailsTheRun(string? protocol)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

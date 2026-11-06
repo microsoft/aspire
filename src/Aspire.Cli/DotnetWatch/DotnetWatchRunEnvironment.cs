@@ -22,7 +22,8 @@ internal static class DotnetWatchRunEnvironment
     public const string ProxyProtocolVariable = "ASPIRE_DOTNET_WATCH_PROXY_PROTOCOL";
 
     // 2: __dotnet-watch-server host, proxy --working-directory/--instance/--restore-env.
-    public const int ProxyProtocolVersion = 2;
+    // 3: the proxy selects the project with `dotnet run --project`.
+    public const int ProxyProtocolVersion = 3;
 
     public static void Apply(IDictionary<string, string> environment)
     {
