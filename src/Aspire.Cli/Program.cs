@@ -162,10 +162,6 @@ public class Program
             {
                 return args[i + 1];
             }
-            if (args[i].StartsWith("--log-file=", StringComparison.Ordinal))
-            {
-                return args[i]["--log-file=".Length..];
-            }
         }
 
         return null;
@@ -251,7 +247,7 @@ public class Program
                 logging.IncludeScopes = true;
             });
 
-            // Always capture CLI session details to disk for diagnostics.
+            // Always capture complete CLI session details to disk for diagnostics
             builder.AddProvider(fileLoggerProvider);
 
             // Configure log-level filters based on --log-level or --debug

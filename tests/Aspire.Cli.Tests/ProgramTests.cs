@@ -109,12 +109,6 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ParseLogFileOption_ReturnsEqualsValue_WhenOptionAppearsBeforeDelimiter()
-    {
-        Assert.Equal("cli.log", Program.ParseLogFileOption(["ps", "--log-file=cli.log", "--", "--log-file=app.log"]));
-    }
-
-    [Fact]
     public void ParseLogFileOption_IgnoresValue_WhenOptionAppearsAfterDelimiter()
     {
         var result = Program.ParseLogFileOption(["run", "--", "--log-file", "app.log"]);
