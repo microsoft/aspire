@@ -653,6 +653,47 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(".fsproj", "F#", null)]
+    [InlineData(".fsproj", "F#", "ASPIRE010")]
+    [InlineData(".fsproj", "F#", "ASPIRE013")]
+    [InlineData(".vbproj", "VB", null)]
+    [InlineData(".vbproj", "VB", "ASPIRE010")]
+    [InlineData(".vbproj", "VB", "ASPIRE013")]
+    public async Task NonCSharpAppHostsDefaultToDisabledCliBundle(string projectExtension, string expectedLanguage, string? noWarn)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: null, projectExtension: projectExtension);
+        var arguments = new List<string>
+        {
+            "msbuild",
+            "-nologo",
+            "-restore",
+            "-t:PrepareForBuild",
+            "-getProperty:Language,AspireUseCliBundle",
+            project.ProjectFile
+        };
+        if (noWarn is not null)
+        {
+            arguments.Add($"-p:NoWarn={noWarn}");
+        }
+
+        var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory, [.. arguments]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var jsonStart = result.StandardOutput.IndexOf('{');
+        var jsonEnd = result.StandardOutput.LastIndexOf('}');
+        Assert.True(jsonStart >= 0 && jsonEnd > jsonStart, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput[jsonStart..(jsonEnd + 1)]);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(expectedLanguage, properties.GetProperty("Language").GetString());
+        Assert.Equal("false", properties.GetProperty("AspireUseCliBundle").GetString());
+
+        // MSBuild prefixes warnings before the property JSON, for example "warning ASPIRE010: ... [AppHost.fsproj]".
+        string[] expectedDiagnostics = noWarn is "ASPIRE010" ? [] : ["warning ASPIRE010"];
+        Assert.Equal(expectedDiagnostics, Regex.Matches(result.Output, @"\b(?:warning|error) ASPIRE\d+:").Select(match => match.Value.TrimEnd(':')));
+    }
+
+    [Theory]
     [InlineData(SuppressCliRunHookEnvironmentVariable, "true")]
     [InlineData(SuppressCliRunHookEnvironmentVariable, "1")]
     [InlineData("_AspireSuppressCliRunHook", "true")]
@@ -1530,9 +1571,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
     private static async Task<RunHookProject> CreateRunHookProjectAsync(
         string workspace,
-        bool aspireUseCliBundle,
+        bool? aspireUseCliBundle,
         string? extraProjectXml = null,
-        bool includeBundlePaths = true)
+        bool includeBundlePaths = true,
+        string projectExtension = ".csproj")
     {
         var repoRoot = GetRepoRoot();
         var projectDirectory = Path.Combine(workspace, "AppHost");
@@ -1543,7 +1585,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var appHostTargets = await File.ReadAllTextAsync(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"));
         await File.WriteAllTextAsync(appHostTargetsFile, appHostTargets.Replace("@VERSION@", AspireCliVersion));
         var appHostTargetsPath = SecurityElement.Escape(appHostTargetsFile);
-        var projectFile = Path.Combine(projectDirectory, "AppHost.csproj");
+        var projectFile = Path.Combine(projectDirectory, $"AppHost{projectExtension}");
+        var cliBundleXml = aspireUseCliBundle is { } useCliBundle
+            ? $"<AspireUseCliBundle>{useCliBundle.ToString().ToLowerInvariant()}</AspireUseCliBundle>"
+            : string.Empty;
         var bundlePathsXml = includeBundlePaths
             ? """
                 <AspireDashboardPath>$(MSBuildProjectDirectory)/Aspire.Dashboard.dll</AspireDashboardPath>
@@ -1561,7 +1606,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 <OutputType>Exe</OutputType>
                 <TargetFramework>net10.0</TargetFramework>
                 <AspireHostingSDKVersion>{{AspireCliVersion}}</AspireHostingSDKVersion>
-                <AspireUseCliBundle>{{aspireUseCliBundle.ToString().ToLowerInvariant()}}</AspireUseCliBundle>
+                {{cliBundleXml}}
             {{bundlePathsXml}}
                 <_AspireTasksAssembly>{{SecurityElement.Escape(GetAspireHostingTasksAssemblyPath())}}</_AspireTasksAssembly>
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
