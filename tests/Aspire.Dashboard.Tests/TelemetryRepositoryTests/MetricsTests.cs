@@ -96,6 +96,24 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetInstrumentAsync_Rollup_DoubleDeltaSumBeyondDoubleRangeStaysFinite()
+    {
+        var start = s_testTime.AddMinutes(1);
+        var points = new[] { 1e308, 1e308 }.Select((value, i) => new NumberDataPoint
+        {
+            AsDouble = value,
+            StartTimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i)),
+            TimeUnixNano = DateTimeToUnixNanoseconds(start.AddSeconds(i + 1))
+        });
+
+        // SQLite's SUM of these is infinity.
+        var instrument = await GetDeltaInstrumentAsync(points, start, start.AddMinutes(1), TimeSpan.FromMinutes(1), includeExemplars: false);
+
+        var value = Assert.IsType<MetricValue<double>>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(double.MaxValue, value.Value);
+    }
+
+    [Fact]
     public async Task GetInstrumentAsync_Rollup_DeltaSumInRangeStaysExact()
     {
         // Above 2^53, where a double can't represent this sum exactly.
@@ -182,6 +200,28 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         Assert.True(ChartDataCalculator.TryCalculateDeltaPoint(instrument.Dimensions, new DateTimeOffset(start, TimeSpan.Zero), new DateTimeOffset(windowEnd, TimeSpan.Zero), out var total));
         Assert.Equal(10, total);
+    }
+
+    [Fact]
+    public async Task GetInstrumentAsync_Rollup_OutOfOrderDeltaIsSelectedByItsEnd()
+    {
+        var start = s_testTime.AddMinutes(1);
+        var late = CreateDeltaPoint(4, start, start.AddSeconds(10));
+        late.Exemplars.Add(CreateExemplar(start.AddSeconds(10), 4));
+
+        // The export at 10s arrives after the one at 20s, so its stored start is the 20s export's end: [20s, 10s].
+        // A paused chart's window ending at 15s still has it.
+        var instrument = await GetDeltaInstrumentAsync(
+            [
+                CreateDeltaPoint(6, start.AddSeconds(10), start.AddSeconds(20)),
+                late
+            ],
+            start, start.AddSeconds(15), TimeSpan.FromSeconds(1), includeExemplars: true);
+
+        var value = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(4, value.Value);
+        Assert.Equal(DateTimeToUnixNanoseconds(start.AddSeconds(10)), value.EndTimeUnixNano);
+        Assert.Equal(DateTimeToUnixNanoseconds(start.AddSeconds(10)), Assert.Single(value.Exemplars).TimeUnixNano);
     }
 
     [Fact]

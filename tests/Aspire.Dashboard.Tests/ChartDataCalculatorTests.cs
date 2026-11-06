@@ -504,6 +504,39 @@ public class ChartDataCalculatorTests
         Assert.Equal(double.MinValue, value);
     }
 
+    [Theory]
+    [InlineData(double.MaxValue, double.MaxValue, double.MinValue)]
+    [InlineData(double.MinValue, double.MaxValue, double.MaxValue)]
+    [InlineData(double.MaxValue, double.MinValue, double.MaxValue)]
+    public void TryCalculatePoint_LargeOpposingDimensions_TotalDoesNotDependOnOrder(double first, double second, double third)
+    {
+        var start = s_startTime.UtcDateTime;
+        var dimensions = new[] { first, second, third }.Select(value =>
+        {
+            var dimension = new DimensionScope(capacity: 100, []);
+            dimension.Values.Add(new MetricValue<double>(value, start, start.AddSeconds(1)));
+            return dimension;
+        }).ToList();
+
+        Assert.True(ChartDataCalculator.TryCalculatePoint(dimensions, s_startTime, s_startTime.AddSeconds(10), out var level));
+        Assert.Equal(double.MaxValue, level);
+    }
+
+    [Theory]
+    [InlineData(double.MaxValue, double.MaxValue, double.MinValue)]
+    [InlineData(double.MinValue, double.MaxValue, double.MaxValue)]
+    public void TryCalculateDeltaPoint_LargeOpposingValues_TotalDoesNotDependOnOrder(double first, double second, double third)
+    {
+        var dimension = new DimensionScope(capacity: 100, []);
+        var start = s_startTime.UtcDateTime;
+        dimension.Values.Add(new MetricValue<double>(first, start, start.AddSeconds(1)));
+        dimension.Values.Add(new MetricValue<double>(second, start.AddSeconds(1), start.AddSeconds(2)));
+        dimension.Values.Add(new MetricValue<double>(third, start.AddSeconds(2), start.AddSeconds(3)));
+
+        Assert.True(ChartDataCalculator.TryCalculateDeltaPoint([dimension], s_startTime, s_startTime.AddSeconds(10), out var delta));
+        Assert.Equal(double.MaxValue, delta);
+    }
+
     [Fact]
     public void CalculateCounterIncreases_DifferenceOverflows_StaysFinite()
     {

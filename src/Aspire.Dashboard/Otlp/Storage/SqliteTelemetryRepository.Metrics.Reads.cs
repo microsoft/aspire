@@ -13,9 +13,8 @@ namespace Aspire.Dashboard.Otlp.Storage;
 public sealed partial class SqliteTelemetryRepository
 {
     private const int MaxMetricReadBatchSize = 500;
-    // Buckets are only an index prefilter. Keep exact interval checks for windows within a bucket.
-    private static readonly string s_metricPointRangeFilterSql = string.Create(CultureInfo.InvariantCulture, $"p.start_time_unix_nano <= @EndUnixNano AND p.end_time_unix_nano >= r.start_time_unix_nano AND p.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}");
-    private static readonly string s_metricSourcePointRangeFilterSql = string.Create(CultureInfo.InvariantCulture, $"source.start_time_unix_nano <= @EndUnixNano AND source.end_time_unix_nano >= r.start_time_unix_nano AND source.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}");
+    private static readonly string s_metricPointRangeFilterSql = GetMetricPointRangeFilterSql(point: "p", instrument: "i");
+    private static readonly string s_metricSourcePointRangeFilterSql = GetMetricPointRangeFilterSql(point: "source", instrument: "i");
     private static readonly string s_selectedMetricPointsCteSql = $"""
         selected_metric_points AS (
             SELECT
@@ -37,12 +36,6 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = p.dimension_id
             WHERE {s_metricPointRangeFilterSql}
-              -- A level or histogram interval overlapping the window is part of it, but a delta number is observed at its
-              -- end, which belongs to (start, end], like a chart interval. One after the window would otherwise join a
-              -- rollup in the window and move its sum out of it. One at the start belongs to the interval before, which
-              -- a refreshing chart keeps from its previous read.
-              AND (p.point_type = {HistogramPointType} OR i.aggregation_temporality <> {(int)OtlpAggregationTemporality.Delta} OR
-                  (p.end_time_unix_nano > r.start_time_unix_nano AND p.end_time_unix_nano <= @EndUnixNano))
         )
         """;
     private static readonly string s_effectiveMetricPointsCteSql = $"""
@@ -63,6 +56,25 @@ public sealed partial class SqliteTelemetryRepository
         """;
     // Below long.MaxValue (about 9.22e18) by more than the rounding in a floating point total.
     private const string MaxSafeRollupIntegerMagnitude = "9.0e18";
+
+    /// <summary>
+    /// Gets the filter for the points of a dimension in its query range, joined to the range as <c>r</c>.
+    /// </summary>
+    private static string GetMetricPointRangeFilterSql(string point, string instrument) => string.Create(CultureInfo.InvariantCulture, $"""
+        {point}.end_time_unix_nano >= r.start_time_unix_nano
+        -- Buckets are only an index prefilter. The exact checks still apply to windows within a bucket.
+        AND {point}.end_time_bucket >= r.start_time_unix_nano / {MetricTimeBucketWidthUnixNano}
+        -- A level or histogram interval overlapping the window is part of it, but a delta number is observed at its end,
+        -- which belongs to (start, end], like a chart interval. One after the window would otherwise join a rollup in the
+        -- window and move its sum out of it. One at the start belongs to the interval before, which a refreshing chart
+        -- keeps from its previous read. Its start isn't checked: a delta's stored start is the previous export's end,
+        -- which is after its own end when it arrives out of order, e.g. [20s, 10s] for an export at 10s after one at 20s.
+        AND CASE
+            WHEN {point}.point_type <> {HistogramPointType} AND {instrument}.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
+                THEN {point}.end_time_unix_nano > r.start_time_unix_nano AND {point}.end_time_unix_nano <= @EndUnixNano
+            ELSE {point}.start_time_unix_nano <= @EndUnixNano
+        END
+        """);
 
     // An aggregation identity separates cumulative resets within one rollup. Delta points each
     // have their own identity and retain their interval start, so no delta observations are discarded.
@@ -340,7 +352,10 @@ public sealed partial class SqliteTelemetryRepository
                 MetricValueBase value = point.PointType switch
                 {
                     LongPointType => new MetricValue<long>(point.IntegerValue!.Value, checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
-                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
+                    // Stored values are finite, but SQLite's SUM of a delta rollup overflows to infinity when the values add
+                    // up to more than a double can hold, e.g. two exports of 1e308. Infinity isn't a usable metric value:
+                    // tables would show it and chart serialization can't. The largest finite value still reads as off the scale.
+                    DoublePointType => new MetricValue<double>(Math.Clamp(point.DoubleValue!.Value, double.MinValue, double.MaxValue), checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
                     HistogramPointType => CreateHistogramValue(point),
                     _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
                 };
@@ -551,6 +566,8 @@ public sealed partial class SqliteTelemetryRepository
                 e.trace_id AS TraceId
             FROM telemetry_metric_exemplars e
             JOIN telemetry_metric_points source INDEXED BY ix_telemetry_metric_points_time ON source.point_id = e.point_id
+            JOIN telemetry_metric_dimensions d ON d.dimension_id = source.dimension_id
+            JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = source.dimension_id
             WHERE {s_metricSourcePointRangeFilterSql}
               AND e.time_unix_nano >= r.start_time_unix_nano
