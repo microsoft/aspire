@@ -63,14 +63,31 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
+    public async Task ExplicitZeroDisplayOrder_KeepsStoredOrderLikeUnsetOrder()
+    {
+        var store = await CreateLoadedStoreAsync();
+        // worker is stored after api. Treating its explicit 0 differently from api's unset order would move it first.
+        ResourceViewModel[] resources =
+        [
+            ModelTestHelpers.CreateResource("api"),
+            CreateResourceWithDisplayOrder("worker", 0),
+            CreateResourceWithDisplayOrder("cache", 10),
+            CreateResourceWithDisplayOrder("db", -10)
+        ];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
+
+        Assert.Equal(["cache_0", "api_0", "worker_0", "db_0"], GetOrderedKeys(store, resources));
+    }
+
+    [Fact]
     public async Task TryMove_EqualDisplayOrders_UsesDisplayedOrder()
     {
         var store = await CreateLoadedStoreAsync();
         // Inserted out of name order, with b and a sharing a position. The pane displays a, b, c.
         ResourceViewModel[] resources =
         [
-            CreateResourceWithDisplayOrder("b", 0, "Container"),
-            CreateResourceWithDisplayOrder("a", 0, "Project"),
+            CreateResourceWithDisplayOrder("b", 5, "Container"),
+            CreateResourceWithDisplayOrder("a", 5, "Project"),
             CreateResourceWithDisplayOrder("c", -10, "Project")
         ];
         store.EnsureResources(resources.Select(r => r.PersistentKey));

@@ -211,7 +211,9 @@ public sealed class ResourceOrderStore
         var orders = new Dictionary<string, int>(StringComparers.ResourceName);
         foreach (var resource in resources)
         {
-            if (resource.DisplayOrder is { } order)
+            // An explicit 0 is the same as no order. Recording it would give the resource a shared, name-sorted
+            // position ahead of resources without an order, so merely adding WithDisplayOrder(0) would move it.
+            if (resource.DisplayOrder is { } order and not 0)
             {
                 orders[resource.PersistentKey] = order;
             }
@@ -231,8 +233,9 @@ public sealed class ResourceOrderStore
         // effect until the user explicitly reorders, including after restarting the dashboard.
         //
         // Display orders are relative sort keys like ResourceUrlAnnotation.DisplayOrder: higher values
-        // come first and resources without one count as 0. Resources declaring the same order share a
-        // position so they're displayed by name; undeclared resources keep their stored order.
+        // come first and resources without one count as 0. Resources declaring the same nonzero order
+        // share a position so they're displayed by name; resources at 0 keep their stored order, so
+        // declaring an order on one resource doesn't reshuffle all the others.
         var positions = new Dictionary<string, long>(StringComparers.ResourceName);
         var nextPosition = 0L;
         var groups = order.Resources.GroupBy(key => displayOrders.GetValueOrDefault(key)).OrderByDescending(group => group.Key);

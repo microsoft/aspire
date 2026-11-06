@@ -84,7 +84,8 @@ as the `resource.displayOrder` resource property; repeated calls replace the pre
 value. It isn't specific to the dashboard, so other UIs can use it too. Like
 `ResourceUrlAnnotation.DisplayOrder`, it's a relative sort key: higher values appear first,
 and resources without one are treated as 0, so a negative value moves a resource after them.
-Resources with the same order are displayed by name. Orders can change between runs until
+Resources with the same nonzero order are displayed by name; resources with an order of 0,
+whether declared or not, keep their existing order. Orders can change between runs until
 the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
 per application, independently of the run database.
 
