@@ -39,7 +39,7 @@ internal sealed class ConfigSourceService(
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
-    private readonly List<(string Message, string? GitOutput)> _notifications = [];
+    private readonly List<string> _notifications = [];
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
@@ -114,7 +114,7 @@ internal sealed class ConfigSourceService(
 
     public void NotifyIfUpdateAvailable()
     {
-        (string Message, string? GitOutput)[] notifications;
+        string[] notifications;
         lock (_checksLock)
         {
             notifications = _notifications.ToArray();
@@ -122,17 +122,7 @@ internal sealed class ConfigSourceService(
         }
         foreach (var pending in notifications)
         {
-            interaction.DisplayMessage(KnownEmojis.PoliceCarLight, pending.Message, consoleOverride: ConsoleOutput.Error);
-            DisplayGitTimeoutOutput(interaction, pending.GitOutput);
-        }
-    }
-
-    internal static void DisplayGitTimeoutOutput(IInteractionService interaction, string? output)
-    {
-        const int outputLimit = 64 * 1024;
-        if (output is { Length: > 0 })
-        {
-            interaction.DisplayRawText(output.Length > outputLimit ? output[^outputLimit..] : output, ConsoleOutput.Error);
+            interaction.DisplayMessage(KnownEmojis.PoliceCarLight, pending, consoleOverride: ConsoleOutput.Error);
         }
     }
 
@@ -490,7 +480,7 @@ internal sealed class ConfigSourceService(
         var message = exception is ConfigSourceException
             ? string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.CheckFailed, exception.Message)
             : ConfigSourceStrings.CheckFailedWithoutDetails;
-        ReportOnce(message, (exception as ConfigSourceException)?.GitOutput);
+        ReportOnce(message);
     }
 
     internal async Task<ConfigSource?> ReadBindingAsync(string configPath, CancellationToken cancellationToken)
@@ -741,12 +731,9 @@ internal sealed class ConfigSourceService(
         {
             throw TranslateGitFailure(ex);
         }
-        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new ConfigSourceException(ConfigSourceStrings.GitTimeout)
-            {
-                GitOutput = (ex as GitProcessCanceledException)?.Output
-            };
+            throw new ConfigSourceException(ConfigSourceStrings.GitTimeout);
         }
     }
 
@@ -763,12 +750,9 @@ internal sealed class ConfigSourceService(
         {
             throw TranslateGitFailure(ex);
         }
-        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new ConfigSourceException(ConfigSourceStrings.GitTimeout)
-            {
-                GitOutput = (ex as GitProcessCanceledException)?.Output
-            };
+            throw new ConfigSourceException(ConfigSourceStrings.GitTimeout);
         }
     }
 
@@ -823,13 +807,13 @@ internal sealed class ConfigSourceService(
         return ConfigurationHelper.WriteSettingsFileAtomicallyAsync(Path.Combine(directory, "check.json"), json, cancellationToken);
     }
 
-    private void ReportOnce(string message, string? gitOutput = null)
+    private void ReportOnce(string message)
     {
         lock (_checksLock)
         {
-            if (!_notifications.Contains((message, gitOutput)))
+            if (!_notifications.Contains(message))
             {
-                _notifications.Add((message, gitOutput));
+                _notifications.Add(message);
             }
         }
     }

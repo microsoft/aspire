@@ -325,7 +325,7 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(path, RealGitTemplateSourceConfiguration);
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "commit", "-am", "Add proof template sources");
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "checkout", "main");
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), NullLogger<GitCommandRunner>.Instance);
+        var runner = new GitCommandRunner(NullLogger<GitCommandRunner>.Instance);
         var commit = await runner.RunAsync(repository, ["rev-parse", source.Ref!], GitCommandMode.Captured, TestContext.Current.CancellationToken);
         var version = await runner.RunAsync(repository, ["rev-parse", $"{source.Ref}:{source.Path}"], GitCommandMode.Captured, TestContext.Current.CancellationToken);
 

@@ -193,7 +193,6 @@ internal abstract class BaseCommand : Command
         }
         catch (ConfigSourceException ex)
         {
-            ConfigSourceService.DisplayGitTimeoutOutput(InteractionService, ex.GitOutput);
             result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
         }
         catch (NonInteractiveException)

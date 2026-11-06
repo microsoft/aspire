@@ -27,8 +27,8 @@ internal sealed record GitTreeEntry(string Mode, string Type, string ObjectId)
 
 internal enum GitCommandMode
 {
-    // Preserve template acquisition's existing credential-helper behavior: disable terminal
-    // prompts without overriding GCM_INTERACTIVE or configured askpass/SSH launchers.
+    // Template acquisition uses stronger environment isolation. All modes require
+    // preauthenticated Git access and capture output without interactive authentication.
     Captured,
     Interactive,
     Unattended

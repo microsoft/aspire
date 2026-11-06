@@ -188,8 +188,8 @@
         <note />
       </trans-unit>
       <trans-unit id="GitUnattendedSshUnsupported">
-        <source>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</source>
-        <target state="new">Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</target>
+        <source>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</source>
+        <target state="new">Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnavailable">
