@@ -67,11 +67,28 @@ export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
     };
     const reconnectModal = document.getElementById('components-reconnect-modal');
     const resize = new ResizeObserver(() => schedule());
-    const presentation = new MutationObserver(() => schedule());
-    // The collapsed picker can unmount the pane. Observe its stable workspace so
-    // expanding it can resume activity without retaining the previous pane node.
+    let observedPane = null;
+    const observePane = () => {
+        const pane = layoutElement.querySelector(':scope > .resource-pane');
+        if (pane !== observedPane) {
+            if (observedPane) {
+                resize.unobserve(observedPane);
+            }
+            observedPane = pane;
+            if (pane) {
+                resize.observe(pane);
+            }
+        }
+    };
+    const presentation = new MutationObserver(() => {
+        observePane();
+        schedule();
+    });
+    // Grid-track animations resize the pane without resizing its workspace.
+    // Collapse can remove the pane, so rebind its observation when it is remounted.
     resize.observe(layoutElement);
-    presentation.observe(layoutElement, { attributes: true, attributeFilter: ['class'] });
+    observePane();
+    presentation.observe(layoutElement, { attributes: true, attributeFilter: ['class'], childList: true });
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('pageshow', resume);
     window.addEventListener('focus', resume);

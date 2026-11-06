@@ -64,6 +64,40 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Activity_ResumesAfterAnimatedExpansion(bool remountPane)
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.SeedActivityAsync();
+            await page.SetViewportSizeAsync(2000, 1000);
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.NoPreference });
+            await page.GotoAsync("/resources/cache?pane=tags");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='cache']").First).ToBeVisibleAsync();
+            if (remountPane)
+            {
+                var toggle = page.Locator(".resource-header-row .resource-pane-toggle-button");
+                await toggle.ClickAsync();
+                await Assertions.Expect(page.Locator(".resources-layout > .resource-pane")).ToHaveCountAsync(0);
+                var picker = page.Locator("#resourcePanePickerButton");
+                await picker.ClickAsync();
+                await Assertions.Expect(page.Locator(".resource-picker-popover .resource-pane")).ToBeVisibleAsync();
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(picker).ToHaveAttributeAsync("aria-expanded", "false");
+                await toggle.ClickAsync();
+                await Assertions.Expect(page.Locator(".resources-layout > .resource-pane")).ToBeVisibleAsync();
+            }
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='api'] .resource-row-insight-requests").First)
+                .ToHaveTextAsync("20 incoming");
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".resource-row-insight")).ToHaveCountAsync(0);
+        });
+    }
+
+    [Theory]
     [InlineData(390, false)]
     [InlineData(390, true)]
     [InlineData(768, false)]
