@@ -31,7 +31,7 @@ public sealed class MetricPinStore
     public MetricPinStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
         _setting = new(localStorage, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger,
-            NormalizePins, () => Changed?.Invoke());
+            NormalizePins, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
     }
 
     /// <summary>

@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Serialization;
 using Aspire.Tests.Shared;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.DataProtection;
@@ -45,6 +46,25 @@ internal sealed class InMemoryBrowserLocalStorage
     public bool FailReads { get; set; }
 
     public ILocalStorage Storage { get; }
+
+    /// <summary>
+    /// Waits until a key has a value, for saves that are retried after a delay.
+    /// </summary>
+    public async Task WaitForItemAsync(string key, string expectedJson)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        while (true)
+        {
+            lock (Items)
+            {
+                if (Items.TryGetValue(key, out var json) && json == expectedJson)
+                {
+                    return;
+                }
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
+        }
+    }
 
     private object? HandleLocalStorageCall((string Identifier, object?[]? Args) call)
     {

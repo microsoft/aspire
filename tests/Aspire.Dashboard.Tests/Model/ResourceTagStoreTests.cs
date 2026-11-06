@@ -173,11 +173,26 @@ public sealed class ResourceTagStoreTests
         Assert.Equal(["core"], reloadedStore.GetTags("worker"));
         Assert.Equal("""{"api":["backend"]}""", _browser.Items[s_storageKey]);
 
-        // Once storage can be read, loading again saves the change along with the stored tags.
+        // Once storage can be read, loading again reads the stored tags, and the change is saved along with them.
         _browser.FailReads = false;
         await reloadedStore.EnsureLoadedAsync().DefaultTimeout();
-        Assert.Equal("""{"api":["backend"],"worker":["core"]}""", _browser.Items[s_storageKey]);
         Assert.Equal(["backend"], reloadedStore.GetTags("api"));
+        await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend"],"worker":["core"]}""");
+    }
+
+    [Fact]
+    public async Task Tags_SaveIsRetriedAfterStorageIsUnavailable()
+    {
+        var store = await CreateLoadedStoreAsync();
+        store.AddTag("api", "backend");
+
+        // A brief disconnect while the only change is made: the change is saved once storage is back, with no other change.
+        _browser.FailReads = true;
+        store.AddTag("api", "core");
+        Assert.Equal("""{"api":["backend"]}""", _browser.Items[s_storageKey]);
+
+        _browser.FailReads = false;
+        await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend","core"]}""");
     }
 
     [Fact]
@@ -194,7 +209,7 @@ public sealed class ResourceTagStoreTests
     }
 
     [Fact]
-    public async Task Tags_InvalidStoredValueIsNotOverwritten()
+    public async Task Tags_InvalidStoredValueIsKeptAndReplaced()
     {
         const string invalidValue = """{"api":"backend"}""";
         _browser.Items[s_storageKey] = invalidValue;
@@ -203,9 +218,11 @@ public sealed class ResourceTagStoreTests
         await store.EnsureLoadedAsync().DefaultTimeout();
         Assert.Empty(store.GetAllTags());
 
+        // A value that can't be read never will be, so it's kept aside rather than preventing tags from being saved.
         store.AddTag("api", "core");
         Assert.Equal(["core"], store.GetTags("api"));
-        Assert.Equal(invalidValue, _browser.Items[s_storageKey]);
+        Assert.Equal("""{"api":["core"]}""", _browser.Items[s_storageKey]);
+        Assert.Equal(invalidValue, _browser.Items[$"{s_storageKey}_Unreadable"]);
     }
 
     [Theory]

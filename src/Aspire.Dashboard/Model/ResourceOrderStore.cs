@@ -33,7 +33,7 @@ public sealed class ResourceOrderStore
     public ResourceOrderStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
     {
         _setting = new(localStorage, BrowserStorageKeys.ResourceOrderKey(options.Value.GetApplicationNameOrDefault()), logger,
-            Normalize, () => Changed?.Invoke());
+            Normalize, OrderEqual, () => Changed?.Invoke());
     }
 
     public event Action? Changed;
@@ -144,20 +144,33 @@ public sealed class ResourceOrderStore
         return keys;
     }
 
+    // EnsureResources runs for every resource update, almost always with keys that already have a position. A linear
+    // search of the few dozen keys of an app doesn't allocate, unlike building a set of them on every call.
     private static bool AppendMissing(List<string> keys, IEnumerable<string?> newKeys)
     {
-        var existingKeys = keys.ToHashSet(StringComparers.ResourceName);
         var count = keys.Count;
         foreach (var key in newKeys)
         {
             // Group keys can be empty, so only skip missing keys from an edited or corrupted value.
-            if (key is not null && existingKeys.Add(key))
+            if (key is not null && !Contains(keys, key))
             {
                 keys.Add(key);
             }
         }
 
         return keys.Count > count;
+
+        static bool Contains(List<string> keys, string key)
+        {
+            foreach (var existingKey in keys)
+            {
+                if (StringComparers.ResourceName.Equals(existingKey, key))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     private static Dictionary<string, long> ToPositions(List<string> keys)
@@ -192,6 +205,13 @@ public sealed class ResourceOrderStore
             return positions;
         }
     }
+
+    // Groupings aren't ordered, but the keys in each scope are.
+    private static bool OrderEqual(ResourceOrderSettings x, ResourceOrderSettings y) =>
+        x.CustomOrder == y.CustomOrder &&
+        x.Resources.SequenceEqual(y.Resources, StringComparer.Ordinal) &&
+        x.Groups.Count == y.Groups.Count &&
+        x.Groups.All(pair => y.Groups.TryGetValue(pair.Key, out var keys) && pair.Value.SequenceEqual(keys, StringComparer.Ordinal));
 
     // Stored order can be edited in the browser, so rebuild it without repeated or missing keys.
     private static ResourceOrderSettings Normalize(ResourceOrderSettings? stored)

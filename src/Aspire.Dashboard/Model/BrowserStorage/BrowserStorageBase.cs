@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.JSInterop;
 
@@ -45,6 +46,12 @@ public abstract class BrowserStorageBase : IBrowserStorage
         {
             // A disconnected circuit cannot read browser storage; avoid recording it as a storage error.
             return new StorageResult<TValue>(false, default) { ReadFailed = true };
+        }
+        catch (JsonException ex)
+        {
+            Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+
+            return new StorageResult<TValue>(false, default) { InvalidValue = true };
         }
         catch (Exception ex)
         {

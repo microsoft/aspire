@@ -2,9 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
-using Aspire.Dashboard.Serialization;
-using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Model.BrowserStorage;
 
@@ -22,9 +19,11 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 /// to every value read before they're saved.
 /// </para>
 /// <para>
-/// A stored value that can't be read, for example because the circuit is disconnected or the value can't be
-/// deserialized, is never overwritten. Changes stay in memory and are saved with a later change once the value can
-/// be read.
+/// When storage can't be read, for example while the circuit is disconnected, nothing is written: writing then would
+/// replace the stored value with one missing everything it contained. Writes are retried a few times with increasing
+/// delays, and again with the next change or when a view loads the setting. A stored value that can't be
+/// deserialized, for example because it was saved by another version of the dashboard, can't become readable, so it's
+/// copied to <c>{key}_Unreadable</c> and then replaced, rather than preventing the setting from being saved again.
 /// </para>
 /// <para>
 /// Settings are stored unprotected. Protected values are encrypted with the dashboard's data protection key, which
@@ -39,33 +38,42 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 /// <typeparam name="TValue">The stored value. It must be registered with the dashboard's JSON serializer context.</typeparam>
 internal sealed class LocalStorageSetting<TValue> where TValue : class
 {
+    // Retries cover a reconnecting circuit: delays of 1, 2, 4 and 8 seconds wait about 15 seconds in all.
+    private const int MaxWriteAttempts = 5;
+    private static readonly TimeSpan s_firstRetryDelay = TimeSpan.FromSeconds(1);
+
     private readonly ILocalStorage _localStorage;
     private readonly ILogger _logger;
     private readonly Func<TValue?, TValue> _normalize;
+    private readonly Func<TValue, TValue, bool> _equals;
     private readonly Action _onChanged;
-    private readonly JsonTypeInfo<TValue> _typeInfo;
     private readonly Lock _lock = new();
     private readonly List<Func<TValue, bool>> _pendingChanges = [];
     private TValue _value;
     private Task? _loadTask;
     private bool _isWriting;
 
+    // Incremented after each save. A load that read storage before a save completed has an older value than the one
+    // the save adopted, so it must not replace it.
+    private long _saveCount;
+
     /// <param name="localStorage">The browser's local storage.</param>
     /// <param name="key">The local storage key.</param>
-    /// <param name="logger">Logs values that can't be saved.</param>
+    /// <param name="logger">Logs values that can't be read or saved.</param>
     /// <param name="normalize">
     /// Creates a value that changes can be applied to from a stored value, or from <see langword="null"/> when nothing
     /// is stored. Stored values can be edited in the browser, so this also drops invalid entries.
     /// </param>
+    /// <param name="equals">Returns whether two normalized values have the same content, to only notify real changes.</param>
     /// <param name="onChanged">Invoked, on any thread, after the in-memory value changes.</param>
-    public LocalStorageSetting(ILocalStorage localStorage, string key, ILogger logger, Func<TValue?, TValue> normalize, Action onChanged)
+    public LocalStorageSetting(ILocalStorage localStorage, string key, ILogger logger, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
     {
         _localStorage = localStorage;
         Key = key;
         _logger = logger;
         _normalize = normalize;
+        _equals = equals;
         _onChanged = onChanged;
-        _typeInfo = (JsonTypeInfo<TValue>)DashboardJsonSerializerContext.Default.GetTypeInfo(typeof(TValue))!;
         _value = normalize(null);
     }
 
@@ -83,7 +91,8 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     }
 
     /// <summary>
-    /// Reads the stored value into memory, once per circuit, or again after a read failed.
+    /// Reads the stored value into memory, once per circuit, or again after storage couldn't be read. Also saves
+    /// changes that earlier writes couldn't save.
     /// </summary>
     public Task EnsureLoadedAsync()
     {
@@ -106,6 +115,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         if (loaded is not null)
         {
             _ = LoadAsync(loaded);
+        }
+        else if (loadTask.IsCompleted)
+        {
+            StartWritingIfPending();
         }
 
         return loadTask;
@@ -143,6 +156,12 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     {
         try
         {
+            long saveCount;
+            lock (_lock)
+            {
+                saveCount = _saveCount;
+            }
+
             var result = await _localStorage.GetUnprotectedAsync<TValue>(Key).ConfigureAwait(false);
             if (result.ReadFailed)
             {
@@ -153,8 +172,18 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
                 }
                 return;
             }
+            if (result.InvalidValue)
+            {
+                _logger.LogWarning("'{Key}' in browser local storage can't be read by this version of the dashboard. It's replaced with the next change and kept as '{Key}_Unreadable'.", Key, Key);
+            }
 
-            Adopt(result.Success ? result.Value : null, savedChangeCount: 0);
+            Adopt(result.Success ? result.Value : null, savedChangeCount: 0, loadedAfterSaveCount: saveCount);
+        }
+        catch (Exception ex)
+        {
+            // The setting stays as it is in memory. Not retried: an error here comes from the stored value, which
+            // would fail the same way again.
+            _logger.LogWarning(ex, "Unable to load '{Key}' from browser local storage.", Key);
         }
         finally
         {
@@ -162,6 +191,11 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         }
 
         // Changes made while the stored value couldn't be read are saved now that it can be.
+        StartWritingIfPending();
+    }
+
+    private void StartWritingIfPending()
+    {
         bool startWriting;
         lock (_lock)
         {
@@ -176,6 +210,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
 
     private async Task WriteAsync()
     {
+        var failedAttempts = 0;
         while (true)
         {
             Func<TValue, bool>[] changes;
@@ -189,58 +224,93 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
                 changes = [.. _pendingChanges];
             }
 
+            Exception? error = null;
             try
             {
-                var result = await _localStorage.GetUnprotectedAsync<TValue>(Key).ConfigureAwait(false);
-                if (result.ReadFailed)
+                if (await TryWriteAsync(changes).ConfigureAwait(false))
                 {
-                    _logger.LogDebug("Unable to read '{Key}' from browser local storage. Changes are kept in memory and saved with the next change.", Key);
-                    StopWriting();
-                    return;
+                    failedAttempts = 0;
+                    continue;
                 }
-
-                var value = _normalize(result.Success ? result.Value : null);
-                foreach (var change in changes)
-                {
-                    change(value);
-                }
-
-                await _localStorage.SetUnprotectedAsync(Key, value).ConfigureAwait(false);
-                Adopt(value, changes.Length);
-            }
-            catch (JSDisconnectedException)
-            {
-                // The browser is gone, so there's nowhere to save to. The next circuit reads what was saved before.
-                StopWriting();
-                return;
             }
             catch (Exception ex)
             {
-                // Settings are a convenience: a change that can't be saved is still applied for the rest of the circuit,
-                // and saved with the next change if possible.
-                _logger.LogWarning(ex, "Unable to save '{Key}' to browser local storage.", Key);
-                StopWriting();
+                // Includes a disconnected circuit, which can reconnect.
+                error = ex;
+            }
+
+            failedAttempts++;
+            if (failedAttempts == MaxWriteAttempts)
+            {
+                // Settings are a convenience: changes stay applied for the rest of the circuit, and are saved with the
+                // next change or when a view loads the setting, if storage can be used again by then.
+                _logger.LogWarning(error, "Unable to save '{Key}' to browser local storage.", Key);
+                lock (_lock)
+                {
+                    _isWriting = false;
+                }
                 return;
             }
+
+            await Task.Delay(s_firstRetryDelay * Math.Pow(2, failedAttempts - 1)).ConfigureAwait(false);
         }
     }
 
-    private void StopWriting()
+    /// <returns><see langword="false"/> when storage couldn't be read, so nothing was written.</returns>
+    private async Task<bool> TryWriteAsync(Func<TValue, bool>[] changes)
     {
-        lock (_lock)
+        var result = await _localStorage.GetUnprotectedAsync<TValue>(Key).ConfigureAwait(false);
+        if (result.ReadFailed)
         {
-            _isWriting = false;
+            return false;
         }
+        if (result.InvalidValue)
+        {
+            // Keep the value for the version of the dashboard that saved it, or for someone to recover it by hand.
+            // A value that isn't even JSON can't be copied, and can't be recovered either.
+            var unreadable = await _localStorage.GetUnprotectedAsync<JsonElement>(Key).ConfigureAwait(false);
+            if (unreadable.ReadFailed)
+            {
+                return false;
+            }
+            if (unreadable.Success)
+            {
+                await _localStorage.SetUnprotectedAsync($"{Key}_Unreadable", unreadable.Value).ConfigureAwait(false);
+            }
+        }
+
+        var value = _normalize(result.Success ? result.Value : null);
+        foreach (var change in changes)
+        {
+            change(value);
+        }
+
+        await _localStorage.SetUnprotectedAsync(Key, value).ConfigureAwait(false);
+        Adopt(value, changes.Length, loadedAfterSaveCount: null);
+        return true;
     }
 
     /// <summary>
     /// Makes a value read from storage, or just saved, the in-memory value, with changes that aren't saved yet applied.
     /// </summary>
-    private void Adopt(TValue? stored, int savedChangeCount)
+    /// <param name="stored">The stored value, or <see langword="null"/> when nothing is stored.</param>
+    /// <param name="savedChangeCount">The number of queued changes that <paramref name="stored"/> includes.</param>
+    /// <param name="loadedAfterSaveCount">For a load, the number of saves completed when it read storage.</param>
+    private void Adopt(TValue? stored, int savedChangeCount, long? loadedAfterSaveCount)
     {
         bool changed;
         lock (_lock)
         {
+            if (loadedAfterSaveCount is { } count && count != _saveCount)
+            {
+                // A save completed after this load read storage, and adopted a value read later.
+                return;
+            }
+            if (loadedAfterSaveCount is null)
+            {
+                _saveCount++;
+            }
+
             // Only the writer removes changes, and they're always the oldest ones, so the first ones are those it saved.
             _pendingChanges.RemoveRange(0, savedChangeCount);
             var value = _normalize(stored);
@@ -249,9 +319,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
                 change(value);
             }
 
-            // Another tab might not have changed anything. Comparing serialized values avoids notifying views, and
-            // re-rendering them, after every save.
-            changed = JsonSerializer.Serialize(value, _typeInfo) != JsonSerializer.Serialize(_value, _typeInfo);
+            changed = !_equals(_value, value);
             _value = value;
         }
 

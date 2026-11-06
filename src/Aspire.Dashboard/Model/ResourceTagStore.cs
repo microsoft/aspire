@@ -33,7 +33,7 @@ public sealed class ResourceTagStore
     public ResourceTagStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
     {
         _setting = new(localStorage, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger,
-            NormalizeTags, () => Changed?.Invoke());
+            NormalizeTags, TagsEqual, () => Changed?.Invoke());
     }
 
     /// <summary>
@@ -185,6 +185,10 @@ public sealed class ResourceTagStore
         tags.Add(normalizedTag);
         return true;
     }
+
+    // Resources aren't ordered, but each resource's tags are listed in the order they were added.
+    private static bool TagsEqual(Dictionary<string, List<string>> x, Dictionary<string, List<string>> y) =>
+        x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var tags) && pair.Value.SequenceEqual(tags, StringComparer.Ordinal));
 
     // Stored tags can be edited in the browser, so they go through the same rules as tags added in the dashboard.
     private static Dictionary<string, List<string>> NormalizeTags(Dictionary<string, List<string>>? stored)

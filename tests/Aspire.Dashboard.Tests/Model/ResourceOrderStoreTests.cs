@@ -156,14 +156,15 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
-    public async Task Order_InvalidStoredValueIsNotOverwritten()
+    public async Task Order_InvalidStoredValueIsKeptAndReplaced()
     {
         _browser.Items[s_storageKey] = "[1, 2]";
         var store = await CreateLoadedStoreAsync();
         store.EnsureResources(["api_0"]);
 
         Assert.Equal(["api_0"], GetOrderedKeys(store));
-        Assert.Equal("[1, 2]", _browser.Items[s_storageKey]);
+        Assert.Equal("""{"resources":["api_0"],"groups":{},"customOrder":false}""", _browser.Items[s_storageKey]);
+        Assert.Equal("[1,2]", _browser.Items[$"{s_storageKey}_Unreadable"]);
     }
 
     [Fact]

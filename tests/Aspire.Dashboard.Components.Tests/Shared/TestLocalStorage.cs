@@ -14,6 +14,11 @@ public sealed class TestLocalStorage : ILocalStorage
     public Action<string, object?>? OnSetUnprotectedAsync { get; set; }
     public Func<string, (bool Success, object? Value)>? OnGetAsync { get; set; }
 
+    /// <summary>
+    /// Gets or sets a function that returns whether reading a key fails, as when the circuit is disconnected.
+    /// </summary>
+    public Func<string, bool>? IsUnprotectedReadFailed { get; set; }
+
     public Task<StorageResult<T>> GetAsync<T>(string key)
     {
         if (OnGetAsync is { } callback)
@@ -31,6 +36,13 @@ public sealed class TestLocalStorage : ILocalStorage
             await beforeCallback(key);
         }
 
+        if (IsUnprotectedReadFailed?.Invoke(key) == true)
+        {
+            return new StorageResult<T>(success: false, value: default) { ReadFailed = true };
+        }
+
+        // Callbacks return (false, null) for keys they don't provide, so those keys fall back to saved values. Use
+        // RemoveUnprotected to simulate a missing key, and IsUnprotectedReadFailed to simulate a failed read.
         if (OnGetUnprotectedAsync is { } callback)
         {
             var (success, value) = callback(key);
@@ -51,6 +63,17 @@ public sealed class TestLocalStorage : ILocalStorage
         }
 
         return new StorageResult<T>(success: false, value: default);
+    }
+
+    /// <summary>
+    /// Removes a saved value, as if it had never been saved or was removed from the browser.
+    /// </summary>
+    public void RemoveUnprotected(string key)
+    {
+        lock (_unprotectedValues)
+        {
+            _unprotectedValues.Remove(key);
+        }
     }
 
     public Task SetAsync<T>(string key, T value)
