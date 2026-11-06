@@ -115,8 +115,9 @@ Measured on Linux (2 cores) with SDK 11.0.100-rc.2 and the playground; latency i
 - **Crashed** is a custom state, so the dashboard summary counts it as "Inactive" rather than "needs attention".
 - Session 8 (AppHost watch) isn't implemented; the TMPDIR/global.json multi-root workaround is still a `HACK(spike)`.
 - Only Linux was tested. One payload is shipped per SDK major (10.0.403, 11.0.100-rc.2); other SDKs of the same major use it unverified.
-- Package-backed polyglot AppHosts (no MSBuild targets run for the server) have no `aspiredotnetwatchtoolsdir` metadata and fail
-  with the actionable error unless `ASPIRE_DOTNET_WATCH_TOOL_PATH` is set; the tool should move into the CLI bundle for them.
+- Package-backed polyglot AppHosts (no MSBuild targets run for the prebuilt server) have no `aspiredotnetwatchtoolsdir`
+  metadata; they find `tools/dotnet-watch/` next to `Aspire.Hosting.Dotnet.dll` in the restored package instead (unit-tested,
+  not yet run end to end against a published package).
 - The watcher builds and launches with its default configuration and from the project directory: `AppHost:BuildConfiguration`,
   `WithBuildEnvironment` and `WithWorkingDirectory` aren't honored in watch mode yet (the launch protocol has no fields
   for them).

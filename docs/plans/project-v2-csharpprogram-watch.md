@@ -323,8 +323,11 @@ does not make .NET services watch.
   Missing metadata, a missing payload, or an SDK major without a payload throws an actionable error (no fallback, no
   network). `ASPIRE_DOTNET_WATCH_TOOL_PATH` is an explicit override only.
 
-**Open:** package-backed polyglot AppHosts don't run the package's MSBuild targets, so they need the tool in the CLI bundle
-(or the override). Payload signing in the official build and other SDK patch/preview versions of a major are unverified.
+- Package-backed polyglot AppHosts (prebuilt server) don't run the package's MSBuild targets, so there's no metadata; the
+  resolver then looks for `tools/dotnet-watch/` next to the loaded `Aspire.Hosting.Dotnet.dll`, which the prebuilt server
+  loads from the restored package (`<package>/lib/<tfm>/`).
+
+**Open:** the prebuilt-server path is unit-tested but not yet run against a published package. Payload signing in the official build and other SDK patch/preview versions of a major are unverified.
 
 **Evidence:** `DotnetWatchCoordinatorTests` (resolution, errors, shipped payload runtimeconfig matches its major) and the
 contract tests, which run against the shipped payload.
