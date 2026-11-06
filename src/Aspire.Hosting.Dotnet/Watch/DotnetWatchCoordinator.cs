@@ -908,6 +908,7 @@ internal static partial class DotnetWatchCoordinator
                 DotnetWatchToolResolver.GetToolsDirectory(services.GetRequiredService<DistributedApplicationOptions>()),
                 sdk.SdkVersion,
                 logger);
+            await DotnetWatchToolResolver.EnsureRuntimeAvailableAsync(toolDll, sdk.Muxer, sdk.SdkVersion, cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Watching {Count} root(s) with SDK {SdkDirectory}: {Roots}", roots.Length, sdk.SdkDirectory, string.Join(", ", roots));
 
             var environment = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
