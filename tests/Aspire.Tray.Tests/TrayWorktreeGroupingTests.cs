@@ -69,6 +69,120 @@ public class TrayWorktreeGroupingTests
     }
 
     [Fact]
+    public async Task StalledCheckoutDoesNotBlockOtherRefreshesOrAccumulateReads()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var blockedPath = TrayAppHostPath.Normalize(repo.CreateHost("main", "main"));
+        var healthyPath = TrayAppHostPath.Normalize(repo.CreateHost("cart", "feature/cart"));
+        var time = new FakeTimeProvider();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blockedReads = 0;
+        var client = new TestAppHostClient();
+        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time, path =>
+        {
+            if (!TrayAppHostPath.Comparer.Equals(path, blockedPath))
+            {
+                return TrayGitCheckout.Read(path);
+            }
+            Interlocked.Increment(ref blockedReads);
+            started.TrySetResult();
+            try
+            {
+                release.Task.GetAwaiter().GetResult();
+                return TrayGitCheckout.Read(path);
+            }
+            finally
+            {
+                finished.TrySetResult();
+            }
+        });
+        var blocked = new AppHostInfo(blockedPath, 1, null) { ProcessStartTimeUnixMilliseconds = 1001 };
+        var healthy = new AppHostInfo(healthyPath, 2, null) { ProcessStartTimeUnixMilliseconds = 1002 };
+        controller.Start();
+        client.Publish(new([blocked, healthy], DiscoveryState.Live));
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await TestAppHostClient.WaitForStateAsync(controller,
+                state => state.AppHosts.FirstOrDefault(host => host.Id == healthy.Id)?.Checkout?.Label == "feature/cart");
+            for (var index = 0; index < 3; index++)
+            {
+                var branch = $"feature/cart-{index}";
+                File.WriteAllText(Path.Combine(repo.CommonDirectory, "worktrees", "cart", "HEAD"), "ref: refs/heads/" + branch);
+                time.Advance(TrayController.CheckoutRefreshInterval);
+                await TestAppHostClient.WaitForStateAsync(controller,
+                    state => state.AppHosts.FirstOrDefault(host => host.Id == healthy.Id)?.Checkout?.Label == branch);
+            }
+            // Remove the path from both discovery and saved history, then re-add it.
+            // The outstanding read still owns its slot until that read actually finishes.
+            client.Publish(new([healthy], DiscoveryState.Live));
+            await TestAppHostClient.WaitForStateAsync(controller, state => state.AppHosts.Count == 1);
+            controller.RemoveRecent(blockedPath);
+            client.Publish(new([blocked, healthy], DiscoveryState.Live));
+            await TestAppHostClient.WaitForStateAsync(controller, state => state.AppHosts.Count == 2);
+            Assert.Equal(1, Volatile.Read(ref blockedReads));
+            Assert.Null(controller.State.AppHosts.Single(host => host.Id == blocked.Id).Checkout);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void AnOldCardDoesNotScrollFocusAwayFromAnotherRow(bool mouseActivation, bool deferred)
+    {
+        var state = TrayPanelSamples.Many();
+        var panel = new TrayPanel(state, TrayPanelPalette.Light) { MaxHeight = 250 };
+        var first = state.AppHosts[0];
+        var later = new PanelTargetKey(PanelTargetKind.Row, PanelSection.Running, state.AppHosts[1].Id);
+        if (mouseActivation)
+        {
+            panel.Focus(later);
+            var more = panel.Scene.Targets.Single(target => target.Kind == PanelTargetKind.More && target.Key.Host == first.Id);
+            panel.PointerDown(more.HitBounds.CenterX, more.HitBounds.CenterY);
+            panel.PointerUp(more.HitBounds.CenterX, more.HitBounds.CenterY);
+            var laterBounds = panel.Scene.Targets.Single(target => target.Key == later).Bounds;
+            panel.Scroll(-Math.Max(0, laterBounds.Bottom - panel.Viewport.Bottom));
+        }
+        else
+        {
+            panel.Invoke(new(PanelTargetKind.More, PanelSection.Running, first.Id));
+            panel.Key(PanelKey.Home);
+            for (var step = 0; step < 20 && panel.FocusedTarget != later; step++)
+            {
+                panel.Key(PanelKey.Down);
+            }
+        }
+        Assert.Equal(later, panel.FocusedTarget);
+        var row = panel.Scene.Targets.Single(target => target.Key == later);
+        Assert.True(panel.Viewport.Contains(row.Bounds));
+        Assert.Equal(first.Id, panel.ActionsRow!.Value.Host);
+        var scroll = panel.ScrollOffset;
+        var update = state with { Status = "Updated" };
+        if (deferred)
+        {
+            panel.PointerDown(row.HitBounds.CenterX, row.HitBounds.CenterY);
+            Assert.False(panel.Update(update));
+            panel.PointerUp(-1, -1);
+        }
+        else
+        {
+            panel.Update(update);
+        }
+        Assert.Equal(later, panel.FocusedTarget);
+        Assert.Equal(scroll, panel.ScrollOffset);
+        Assert.True(panel.Viewport.Contains(panel.Scene.Targets.Single(target => target.Key == later).Bounds));
+    }
+
+    [Fact]
     public async Task GitCacheRefreshesBranchesWithoutRereadingOnUiActions()
     {
         using var repo = new TrayWorktreeRepository();
