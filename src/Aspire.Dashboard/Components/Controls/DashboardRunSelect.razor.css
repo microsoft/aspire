@@ -35,9 +35,15 @@
     .application-run-select ::deep .application-run-select-button.with-run-text {
         --aspire-button-background: color-mix(in srgb, var(--aspire-status-warning) 16%, var(--aspire-page-background));
         flex: 0 0 auto;
+        justify-content: flex-start;
         width: auto;
         max-width: 260px;
         height: 28px;
+        /* fluent-button has no inner control element: the host is the button and its content part fills it, so the
+           padding goes on the host. The layout's header-button rule zeroes it for the square icon buttons. The icon
+           side is tighter because the icon's own box already has some whitespace around the glyph. */
+        padding-block: 0;
+        padding-inline: 6px 12px;
         border: 1px solid color-mix(in srgb, var(--aspire-status-warning) 45%, transparent);
         border-radius: 14px;
         overflow: hidden;
@@ -45,17 +51,6 @@
 
     .application-run-select ::deep .application-run-select-button.with-run-text:hover {
         background: color-mix(in srgb, var(--aspire-status-warning) 26%, var(--aspire-page-background));
-    }
-
-    .application-run-select ::deep fluent-button.application-run-select-button.with-run-text::part(control) {
-        justify-content: flex-start;
-        width: 100%;
-        min-width: 0;
-        height: 26px;
-        padding-block: 0;
-        padding-inline: 6px 12px;
-        border-radius: 14px;
-        overflow: hidden;
     }
 
     .application-run-select ::deep fluent-button.application-run-select-button.with-run-text::part(content) {
