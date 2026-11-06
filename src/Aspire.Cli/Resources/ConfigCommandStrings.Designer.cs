@@ -70,6 +70,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Configuration key &apos;{0}&apos; requires a non-negative integer array index..
+        /// </summary>
+        internal static string ConfigurationArrayIndexInvalid {
+            get {
+                return ResourceManager.GetString("ConfigurationArrayIndexInvalid", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Array index {0} in configuration key &apos;{1}&apos; is out of range. Edit an existing element or append at index {2}..
+        /// </summary>
+        internal static string ConfigurationArrayIndexOutOfRange {
+            get {
+                return ResourceManager.GetString("ConfigurationArrayIndexOutOfRange", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration key &apos;{0}&apos; requires an array, but the existing value is not an array..
+        /// </summary>
+        internal static string ConfigurationArrayRequired {
+            get {
+                return ResourceManager.GetString("ConfigurationArrayRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Configuration &apos;{0}&apos; deleted globally..
         /// </summary>
         internal static string ConfigurationKeyDeletedGlobally {
@@ -84,6 +111,15 @@ namespace Aspire.Cli.Resources {
         internal static string ConfigurationKeyDeletedLocally {
             get {
                 return ResourceManager.GetString("ConfigurationKeyDeletedLocally", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration key &apos;{0}&apos; is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices..
+        /// </summary>
+        internal static string ConfigurationKeyInvalid {
+            get {
+                return ResourceManager.GetString("ConfigurationKeyInvalid", resourceCulture);
             }
         }
 
@@ -124,7 +160,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The configuration key to delete.
+        ///   Looks up a localized string similar to The configuration key to delete. Use dots for nested properties and [index] for array elements..
         /// </summary>
         internal static string DeleteCommand_KeyArgumentDescription {
             get {
@@ -178,7 +214,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The configuration key to retrieve.
+        ///   Looks up a localized string similar to The configuration key to retrieve. Use dots for nested properties and [index] for array elements..
         /// </summary>
         internal static string GetCommand_KeyArgumentDescription {
             get {
@@ -358,7 +394,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The configuration key to set.
+        ///   Looks up a localized string similar to The configuration key to set. Use dots for nested properties and [index] to create or edit array elements..
         /// </summary>
         internal static string SetCommand_KeyArgumentDescription {
             get {

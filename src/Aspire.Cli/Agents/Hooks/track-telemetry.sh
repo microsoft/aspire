@@ -71,9 +71,9 @@ trap emit_continue EXIT
 # github.com/microsoft/aspire-skills). A shared .agents/skills directory can also contain
 # third-party skills (dotnet-inspect, playwright, ...), so a path/name is only treated as
 # Aspire when its skill segment is one of these.
-ASPIRE_SKILLS="aspire aspire-init aspireify aspire-project-v2-migration aspire-orchestration aspire-deployment aspire-monitoring"
+ASPIRE_SKILLS="aspire aspire-init aspireify aspire-project-v2-migration aspire-orchestration aspire-deployment aspire-monitoring aspire-terminals"
 
-ASPIRE_MCP_TOOLS="doctor execute_resource_command get_doc list_apphosts list_console_logs list_docs list_integrations list_resources list_structured_logs list_trace_structured_logs list_traces refresh_tools search_docs select_apphost"
+ASPIRE_MCP_TOOLS="doctor execute_resource_command get_doc list_apphosts list_console_logs list_docs list_integrations list_resources list_structured_logs list_trace_structured_logs list_traces refresh_tools search_docs select_apphost wait_for_resources"
 
 # Only paths shipped by this repository are safe telemetry dimensions. Project-local skill
 # overrides can add arbitrary filenames beneath an Aspire skill directory, so a path is not
@@ -100,6 +100,10 @@ aspire-orchestration/references/resource-management.md
 aspire-orchestration/references/safety-guardrails.md
 aspire-project-v2-migration/references/compatibility-and-validation.md
 aspire-project-v2-migration/references/migration-patterns.md
+aspire-terminals/references/apphost-terminals.md
+aspire-terminals/references/automation-and-cli.md
+aspire-terminals/references/resource-terminals.md
+aspire-terminals/references/tapes.md
 aspire/references/aspire-13-3-breaking-changes.md
 aspire/references/aspire-13-5-breaking-changes.md
 aspireify/references/apphost-wiring.md

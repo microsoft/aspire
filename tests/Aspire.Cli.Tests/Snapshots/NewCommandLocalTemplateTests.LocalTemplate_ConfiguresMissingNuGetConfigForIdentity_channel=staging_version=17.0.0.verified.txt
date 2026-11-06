@@ -6,15 +6,6 @@
   <packageSources>
     <add key="aspire-apphost-source" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json" />
   </packageSources>
-  <packageSourceMapping>
-    <clear />
-    <packageSource key="default">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="aspire-apphost-source">
-      <package pattern="Aspire*" />
-    </packageSource>
-  </packageSourceMapping>
   <config>
     <add key="globalPackagesFolder" value=".nugetpackages" />
   </config>

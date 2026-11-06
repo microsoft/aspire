@@ -9,11 +9,14 @@
 using Aspire.Hosting.ApplicationModel;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.Azure.EntraId.Provisioning;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Tests.Utils;
 using Azure.Provisioning;
+using Azure.Provisioning.KeyVault;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -24,6 +27,234 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 {
     private const string TenantId = "aaaabbbb-0000-cccc-1111-dddd2222eeee";
     private const string ClientId = "00001111-aaaa-2222-bbbb-3333cccc4444";
+
+    public static IEnumerable<object[]> RegistrationOnlyApiCases()
+    {
+        string[] apis =
+        [
+            "redirect-literal", "redirect-parameter", "redirect-endpoint", "redirect-host",
+            "redirect-export-literal", "redirect-export-parameter", "redirect-export-endpoint", "redirect-export-host",
+            "application-owner-literal", "application-owner-parameter", "application-owner-export-literal", "application-owner-export-parameter",
+            "service-principal-owner-literal", "service-principal-owner-parameter", "service-principal-owner-export-literal", "service-principal-owner-export-parameter",
+            "owners-literal", "owners-parameter", "owners-export-literal", "owners-export-parameter",
+            "id-token", "role", "role-export", "default-uri", "default-uri-export", "local-certificate",
+            "federation-consumer", "federation-compute", "federation-identity",
+            "federation-export-consumer", "federation-export-compute", "federation-export-identity",
+            "pre-authorization", "consent-api", "consent-external", "consent-external-export"
+        ];
+        foreach (var operation in new[] { DistributedApplicationOperation.Run, DistributedApplicationOperation.Publish })
+        {
+            foreach (var api in apis)
+            {
+                yield return [operation, api];
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(RegistrationOnlyApiCases))]
+    public void RegistrationOnlyApis_RejectExistingReceiversWithoutMutation(DistributedApplicationOperation operation, string api)
+    {
+        foreach (var fluent in new[] { false, true })
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(operation);
+            var entra = fluent
+                ? builder.AddEntraIdApplication("entra").AsExistingApplication(TenantId, ClientId)
+                : builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+            var configure = PrepareRegistrationOnlyApi(builder, entra, api);
+            var annotations = entra.Resource.Annotations.ToArray();
+            var templateParameters = entra.Resource.Parameters.ToArray();
+            var permissions = entra.Resource.ApiAccess.SelectMany(a => a.Declared).ToArray();
+
+            var exception = Assert.Throws<InvalidOperationException>(configure);
+
+            Assert.StartsWith("Entra ID application 'entra' is an existing registration, and Aspire does not modify existing registrations. ", exception.Message);
+            var remediation = api switch
+            {
+                var name when name.StartsWith("redirect", StringComparison.Ordinal) => "Configure web redirect URIs",
+                var name when name.Contains("owner", StringComparison.Ordinal) => "owners",
+                "id-token" => "Enable 'ID tokens",
+                "role" or "role-export" => "Configure application roles",
+                "default-uri" or "default-uri-export" => "Call WithApplicationIdUri with the URI",
+                "local-certificate" => "Configure a certificate",
+                var name when name.StartsWith("federation", StringComparison.Ordinal) => "then call WithFederatedManagedIdentityCredential with the identity's client ID",
+                "pre-authorization" => "Configure pre-authorized client applications",
+                _ => "Grant admin consent"
+            };
+            Assert.Contains(remediation, exception.Message);
+            Assert.Equal(annotations, entra.Resource.Annotations);
+            Assert.Equal(templateParameters, entra.Resource.Parameters);
+            Assert.Equal(permissions, entra.Resource.ApiAccess.SelectMany(a => a.Declared));
+            Assert.Empty(entra.Resource.RedirectUris);
+            Assert.Empty(entra.Resource.RedirectUriParameters);
+            Assert.Empty(entra.Resource.ApplicationOwners);
+            Assert.Empty(entra.Resource.ServicePrincipalOwners);
+            Assert.Empty(entra.Resource.AppRoles);
+            Assert.Empty(entra.Resource.PreAuthorizedClients);
+            Assert.Empty(entra.Resource.ApiAccess.SelectMany(a => a.Consented));
+            Assert.Empty(entra.Resource.ClientCredentials);
+            Assert.False(entra.Resource.EnableIdTokenIssuance);
+            Assert.False(entra.Resource.UsesDefaultApplicationIdUri);
+            Assert.False(entra.Resource.HasLocalDeveloperCertificateConfiguration);
+            Assert.False(entra.Resource.HasPublishFederationConfiguration);
+            Assert.Equal("api://existing", entra.Resource.ApplicationIdUri);
+            Assert.True(entra.Resource.IsExistingApplication);
+            Assert.Null(entra.Resource.ProvisioningTaskCompletionSource);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(RegistrationOnlyApiCases))]
+    public void AsExistingApplication_RejectsRegistrationOnlySettingsBeforeMutation(DistributedApplicationOperation operation, string api)
+    {
+        foreach (var conversion in new[] { "literal", "parameter", "export" })
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(operation);
+            var entra = builder.AddEntraIdApplication("entra");
+            PrepareRegistrationOnlyApi(builder, entra, api)();
+            var tenant = builder.AddParameter("tenant", TenantId);
+            var client = builder.AddParameter("client", ClientId);
+            var annotations = entra.Resource.Annotations.ToArray();
+            var task = entra.Resource.ProvisioningTaskCompletionSource;
+            entra.Resource.TenantId = "original.onmicrosoft.com";
+            entra.Resource.ClientId = ClientId;
+
+            var exception = Assert.Throws<InvalidOperationException>(() =>
+            {
+                _ = conversion switch
+                {
+                    "literal" => entra.AsExistingApplication(TenantId, ClientId),
+                    "parameter" => entra.AsExistingApplication(tenant, client),
+                    _ => entra.AsExistingApplicationForExport(tenant, ClientId)
+                };
+            });
+
+            Assert.StartsWith("Entra ID application 'entra' cannot be converted to an existing registration", exception.Message);
+            Assert.Contains("before calling AsExistingApplication", exception.Message);
+            Assert.False(entra.Resource.IsExistingApplication);
+            Assert.Same(task, entra.Resource.ProvisioningTaskCompletionSource);
+            Assert.Equal(annotations, entra.Resource.Annotations);
+            Assert.Equal("original.onmicrosoft.com", entra.Resource.TenantId);
+            Assert.Equal(ClientId, entra.Resource.ClientId);
+            Assert.Null(entra.Resource.TenantIdParameter);
+            Assert.Null(entra.Resource.ClientIdParameter);
+        }
+    }
+
+    private static Action PrepareRegistrationOnlyApi(
+        IDistributedApplicationBuilder builder,
+        IResourceBuilder<EntraIdApplicationResource> entra,
+        string api)
+    {
+        var parameter = builder.AddParameter("value", ClientId);
+        var targetApi = builder.AddExistingEntraApplication("target-api", TenantId, ClientId)
+            .WithApplicationIdUri("api://target")
+            .WithScope("read", "Read data.", scope => scope.Id = Guid.Parse(ClientId));
+        entra.WithApplicationIdUri("api://existing")
+            .WithScope("read", "Read data.", scope => scope.Id = Guid.Parse(ClientId))
+            .WithApiPermissions(targetApi, "read")
+            .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"));
+        var consumer = builder.AddContainer("consumer", "image").WithHttpsEndpoint(targetPort: 8080).WithReference(entra);
+        var endpoint = consumer.GetEndpoint("https");
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+
+        return () =>
+        {
+            _ = api switch
+            {
+                "redirect-literal" => entra.WithRedirectUris("https://example.com/signin"),
+                "redirect-parameter" => entra.WithRedirectUris(parameter),
+                "redirect-endpoint" => entra.WithRedirectUris(endpoint, "/signin"),
+                "redirect-host" => entra.WithRedirectUris(parameter, "/signin"),
+                "redirect-export-literal" => entra.WithRedirectUrisForExport("https://example.com/signin"),
+                "redirect-export-parameter" => entra.WithRedirectUrisForExport(parameter),
+                "redirect-export-endpoint" => entra.WithRedirectUrisForExport(endpoint, ["/signin"]),
+                "redirect-export-host" => entra.WithRedirectUrisForExport(parameter, ["/signin"]),
+                "application-owner-literal" => entra.WithApplicationOwners(ClientId),
+                "application-owner-parameter" => entra.WithApplicationOwners(parameter),
+                "application-owner-export-literal" => entra.WithApplicationOwnersForExport(ClientId),
+                "application-owner-export-parameter" => entra.WithApplicationOwnersForExport(parameter),
+                "service-principal-owner-literal" => entra.WithServicePrincipalOwners(ClientId),
+                "service-principal-owner-parameter" => entra.WithServicePrincipalOwners(parameter),
+                "service-principal-owner-export-literal" => entra.WithServicePrincipalOwnersForExport(ClientId),
+                "service-principal-owner-export-parameter" => entra.WithServicePrincipalOwnersForExport(parameter),
+                "owners-literal" => entra.WithOwners(ClientId),
+                "owners-parameter" => entra.WithOwners(parameter),
+                "owners-export-literal" => entra.WithOwnersForExport(ClientId),
+                "owners-export-parameter" => entra.WithOwnersForExport(parameter),
+                "id-token" => entra.WithIdTokenIssuance(),
+                "role" => entra.WithAppRole(new EntraIdAppRole("Reader", "Reader", "Read data.")),
+                "role-export" => entra.WithAppRoleForExport("Reader", "Reader", "Read data."),
+                "default-uri" => entra.WithApplicationIdUri(),
+                "default-uri-export" => entra.WithApplicationIdUriForExport(),
+                "local-certificate" => entra.RunWithLocalDeveloperCertificateCredential(),
+                "federation-consumer" => entra.PublishWithFederatedManagedIdentityCredential(),
+                "federation-compute" => entra.PublishWithFederatedManagedIdentityCredential(consumer),
+                "federation-identity" => entra.PublishWithFederatedManagedIdentityCredential(identity),
+                "federation-export-consumer" => entra.PublishWithFederatedManagedIdentityCredentialForExport(),
+                "federation-export-compute" => entra.PublishWithFederatedManagedIdentityCredentialForExport(consumer),
+                "federation-export-identity" => entra.PublishWithFederatedManagedIdentityCredentialForExport(identity),
+                "pre-authorization" => entra.WithPreAuthorizedApplication(targetApi, "read"),
+                "consent-api" => entra.WithAdminConsent(targetApi, "read"),
+                "consent-external" => entra.WithAdminConsent(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read")),
+                "consent-external-export" => entra.WithExternalApiAdminConsentForExport(EntraIdWellKnownApi.MicrosoftGraph, [new() { Name = "User.Read" }]),
+                _ => throw new ArgumentOutOfRangeException(nameof(api))
+            };
+        };
+    }
+
+    [Fact]
+    public async Task KeyVaultCertificate_RunAssignsDeveloperCertificateAccess()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var vault = builder.AddAzureKeyVault("vault");
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+            .WithCertificateFromKeyVault(vault, "web-certificate");
+        builder.AddContainer("web", "image").WithReference(entra);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var assignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            r => r.TargetAzureResource == vault.Resource);
+        await Verify(assignment.GetBicepTemplateString(), "bicep");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task KeyVaultCertificate_PublishAssignsConsumerIdentityAndCertificateAccess(bool configureCredentialAfterReference)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var vault = builder.AddAzureKeyVault("vault").PublishAsExisting("existing-vault", resourceGroup: null);
+        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var web = builder.AddContainer("web", "image");
+        if (configureCredentialAfterReference)
+        {
+            web.WithReference(entra);
+            entra.WithCertificateFromKeyVault(vault, "web-certificate");
+        }
+        else
+        {
+            entra.WithCertificateFromKeyVault(vault, "web-certificate");
+            web.WithReference(entra);
+        }
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var identity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>());
+        Assert.Equal("web-identity", identity.Name);
+        var roles = web.Resource.Annotations.OfType<RoleAssignmentAnnotation>()
+            .Where(a => a.Target == vault.Resource).SelectMany(a => a.Roles);
+        Assert.Contains(roles, role => role.Id == KeyVaultBuiltInRole.KeyVaultCertificateUser.ToString());
+        var assignment = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            r => r.TargetAzureResource == vault.Resource);
+        await Verify(assignment.GetBicepTemplateString(), "bicep").UseParameters(configureCredentialAfterReference);
+    }
 
     [Fact]
     public async Task WithOwners_GeneratesOwnerRelationships()
@@ -201,14 +432,23 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
     }
 
-    [Fact]
-    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_EmitsClientIdOutputInPublishMode()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WithFederatedManagedIdentityCredential_ConsumerIdentity_EmitsClientIdOutputInPublishMode(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var identity = builder.AddAzureUserAssignedIdentity("web-identity");
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential();
-        var web = builder.AddResource(new ProjectResource("web")).WithAzureUserAssignedIdentity(identity).WithReference(entra);
+#pragma warning disable CS0618 // Federated credentials must use the assigned consumer identity through either factory.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithAzureUserAssignedIdentity(identity)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithAzureUserAssignedIdentity(identity);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             web.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
@@ -217,14 +457,21 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal("SignedAssertionFromManagedIdentity", env["AzureAd__ClientCredentials__0__SourceType"]);
     }
 
-    [Fact]
-    public void ValidateManagedIdentities_RejectsResourceWithoutIdentity()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ValidateManagedIdentities_RejectsResourceWithoutIdentity(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var identity = builder.AddAzureUserAssignedIdentity("web-identity");
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential(identity);
-        builder.AddResource(new ProjectResource("web")).WithReference(entra);
+#pragma warning disable CS0618 // Identity validation must not silently skip either project resource type.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         var exception = Assert.Throws<InvalidOperationException>(entra.Resource.ValidateManagedIdentities);
         Assert.Contains("no user-assigned managed identity", exception.Message);
@@ -247,13 +494,20 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         Assert.Equal("{trusted-identity.outputs.clientId}", env["AzureAd__ClientCredentials__0__ManagedIdentityClientId"]);
     }
 
-    [Fact]
-    public async Task PublishWithFederatedManagedIdentityCredential_EnvironmentCallbackRunBeforeIdentityExists_StillResolvesIt()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishWithFederatedManagedIdentityCredential_EnvironmentCallbackRunBeforeIdentityExists_StillResolvesIt(bool useDotnetProject)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var entra = builder.AddEntraIdApplication("entra-web")
             .PublishWithFederatedManagedIdentityCredential();
-        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+#pragma warning disable CS0618 // Cached dependency discovery must preserve late identity resolution for both factories.
+        IResourceBuilder<IResourceWithEnvironment> web = useDotnetProject
+            ? builder.AddDotnetProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject("web", "web.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        web.WithReference(entra);
 
         // The Azure resource preparer runs the environment callbacks to discover dependencies before it attaches
         // identities, and a callback's result is cached, so the value must not need the identity at that point.
@@ -548,6 +802,37 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(firstContents, secondContents);
         Assert.Equal(firstContents, entra.Resource.GetBicepTemplateString());
+    }
+
+    [Fact]
+    public async Task ConfigureInfrastructure_CustomizesApplicationMetadata()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var serviceReference = builder.AddParameter("service-reference");
+        var entra = builder.AddEntraIdApplication("entra-api")
+            .WithScope("read", "Read data.")
+            .ConfigureInfrastructure(infrastructure =>
+            {
+                var application = infrastructure.GetProvisionableResources().OfType<MicrosoftGraphApplication>()
+                    .Single(r => r.BicepIdentifier == "application");
+                application.Tags.Add("department:engineering");
+                application.Tags.Add(serviceReference.AsProvisioningParameter(infrastructure));
+                application.ServiceManagementReference = serviceReference.AsProvisioningParameter(infrastructure);
+                application.Description = "Orders API";
+                application.GroupMembershipClaims = "SecurityGroup";
+                application.HomePageUrl = "https://contoso.example";
+                application.SpaRedirectUris.Add("https://contoso.example/spa");
+
+                var servicePrincipal = Assert.Single(infrastructure.GetProvisionableResources().OfType<MicrosoftGraphServicePrincipal>());
+                servicePrincipal.Tags.Add("department:engineering");
+                servicePrincipal.AppRoleAssignmentRequired = true;
+                servicePrincipal.NotificationEmailAddresses.Add("owners@contoso.example");
+            });
+
+        var bicep = entra.Resource.GetBicepTemplateString();
+        Assert.Same(serviceReference.Resource, entra.Resource.Parameters["service_reference"]);
+        Assert.Equal(bicep, entra.Resource.GetBicepTemplateString());
+        await Verify(bicep, "bicep");
     }
 
     [Theory]
@@ -850,12 +1135,78 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WithRedirectUris_Endpoint_PreservesDeferredValues()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddResource(new TestComputeEnvironment("env"));
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080).WithComputeEnvironment(environment);
+        var endpoint = web.GetEndpoint("https");
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(endpoint, "/signin-oidc", "/signout-callback-oidc");
+
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+        Assert.All(new[] { "redirectUri0", "redirectUri1" }, name =>
+        {
+            var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters[name]);
+            Assert.Equal("https://{0}", expression.Format);
+        });
+        Assert.Equal("https://web.contoso.example",
+            await Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]).GetValueAsync(default));
+        Assert.Equal("https://web.contoso.example",
+            await Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri1"]).GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task WithRedirectUris_Endpoint_ResolvesSharedBrowserOrigin()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var endpoint = web.GetEndpoint("https");
+        var entra = builder.AddEntraIdApplication("entra-web").WithRedirectUris(endpoint, "/signin-oidc", "/signout-callback-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "https://web.dev.localhost:7081/swagger?x=1#top");
+        _ = entra.Resource.GetBicepTemplateString();
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
+
+        var signIn = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        var signOut = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri1"]);
+        Assert.Equal("https://web.dev.localhost:7081", await signIn.GetValueAsync(CancellationToken.None));
+        Assert.Equal("https://web.dev.localhost:7081", await signOut.GetValueAsync(CancellationToken.None));
+        var provider = Assert.IsType<EntraIdRunModeBrowserOrigin>(Assert.Single(signIn.ValueProviders));
+        Assert.Equal(endpoint.PrimaryBrowserOrigin.ValueExpression, provider.ValueExpression);
+        Assert.Same(endpoint, Assert.Single(provider.References));
+    }
+
+    [Fact]
+    public void WithRedirectUris_Endpoint_ValidatesBeforeAddingValues()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var entra = builder.AddEntraIdApplication("entra-web");
+        var endpoint = builder.AddContainer("web", "image").GetEndpoint("https");
+
+        Assert.Throws<ArgumentNullException>("builder", () => EntraIdResourceExtensions.WithRedirectUris(null!, endpoint, "/signin-oidc"));
+        Assert.Throws<ArgumentNullException>("endpoint", () => entra.WithRedirectUris((EndpointReference)null!, "/signin-oidc"));
+        Assert.Throws<ArgumentNullException>("callbackPaths", () => entra.WithRedirectUris(endpoint, (string[])null!));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(endpoint));
+        Assert.Throws<ArgumentNullException>("callbackPaths", () => entra.WithRedirectUris(endpoint, "/valid", null!));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(endpoint, "/valid", ""));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(endpoint, "/valid", " "));
+        Assert.Throws<ArgumentException>("callbackPaths", () => entra.WithRedirectUris(endpoint, "/valid", "signin-oidc"));
+        _ = entra.Resource.GetBicepTemplateString();
+        Assert.Equal(["tenantResourceSuffix"], entra.Resource.Parameters.Keys);
+    }
+
+    [Fact]
     public async Task WithRedirectUris_Endpoint_RunMode_UsesAllocatedEndpointUrl()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080, name: "https");
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
+        Assert.Empty(web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
 
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
         Assert.Equal(new[] { "tenantResourceSuffix", "redirectUri0", "redirectUri1" }, entra.Resource.Parameters.Keys);
@@ -870,12 +1221,48 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddResource(new TestComputeEnvironment("env"));
         var web = builder.AddContainer("web", "image")
-            .WithHttpsEndpoint(targetPort: 8080, name: "https")
-            .WithComputeEnvironment(environment);
+            .WithHttpsEndpoint(targetPort: 8080, name: "https");
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithComputeEnvironment(environment);
 
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public void WithRedirectUris_Endpoint_PublishMode_RequiresDeployedTls(bool appService, bool upgrade, bool https)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        IResourceBuilder<IComputeEnvironmentResource> environment = appService
+            ? builder.AddAzureAppServiceEnvironment("env").WithHttpsUpgrade(upgrade)
+            : builder.AddAzureContainerAppEnvironment("env").WithHttpsUpgrade(upgrade);
+        var web = builder.AddContainer("web", "image")
+            .WithEndpoint(name: "web", scheme: https ? "https" : "http", targetPort: 8080, isExternal: true);
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("web"), "/signin-oidc");
+        web.WithComputeEnvironment(environment);
+
+        if (!upgrade && !https)
+        {
+            var error = Assert.Throws<InvalidOperationException>(entra.Resource.GetBicepTemplateString);
+            Assert.Equal(
+                "Endpoint 'web' on resource 'web' cannot be used for an Entra redirect URI because TLS is disabled in compute environment 'env'. " +
+                "Use an HTTPS endpoint, enable HTTPS upgrade, or supply an explicit HTTPS redirect URI.", error.Message);
+        }
+        else
+        {
+            _ = entra.Resource.GetBicepTemplateString();
+            var origin = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+            Assert.Equal("https://{0}", origin.Format);
+        }
     }
 
     [Fact]
@@ -887,31 +1274,134 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithEndpoint("https", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 7081));
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "https://web-hashr.dev.localhost:7081");
 
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
         var resolveTask = expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask();
         Assert.False(resolveTask.IsCompleted);
 
-        // Mimics the orchestrator: when the dashboard uses a *.dev.localhost name the friendly URL is primary and
-        // the plain localhost URL is only shown in the details.
-        var endpoint = web.GetEndpoint("https");
-        var urls = new List<ResourceUrlAnnotation>
-        {
-            new() { Url = "https://web-hashr.dev.localhost:7081", Endpoint = endpoint, DisplayLocation = UrlDisplayLocation.SummaryAndDetails },
-            new() { Url = "https://localhost:7081", Endpoint = endpoint, DisplayLocation = UrlDisplayLocation.DetailsOnly }
-        };
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, urls);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://web-hashr.dev.localhost:7081/signin-oidc", await resolveTask.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("https://web-hashr.dev.localhost:7081", await resolveTask.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public async Task WithRedirectUris_Endpoint_RunMode_UsesHighestRankedFinalOrigin()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "https://web.dev.localhost:7081/swagger")
+            .WithUrlForEndpoint("https", _ => new ResourceUrlAnnotation
+            {
+                Url = "https://public.example:9443/home",
+                DisplayOrder = 100
+            });
+        _ = entra.Resource.GetBicepTemplateString();
+        var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
+
+        Assert.Equal("https://public.example:9443", await expression.GetValueAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task WithRedirectUris_Endpoint_RunMode_IndirectProvisioningCycleFallsBackWithWarning()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        web.WithUrls(async context =>
+        {
+            callbackEntered.SetResult();
+            await entra.Resource.ClientIdOutputReference.GetValueAsync(context.CancellationToken);
+            context.Urls[0].Url = "https://web.example/home";
+        });
+        _ = entra.Resource.GetBicepTemplateString();
+        var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        var publish = builder.Eventing.PublishResourceEndpointsAllocatedAsync(new(web.Resource, app.Services), cts.Token);
+        try
+        {
+            await callbackEntered.Task.WaitAsync(cts.Token);
+            Assert.Equal("https://localhost:7081", await expression.GetValueAsync(cts.Token));
+            Assert.False(publish.IsCompleted);
+            var pendingOrigin = web.GetEndpoint("https").BrowserOrigins.GetValueAsync(cts.Token).AsTask();
+            Assert.False(pendingOrigin.IsCompleted);
+            await using var logs = app.Services.GetRequiredService<ResourceLoggerService>()
+                .WatchAsync(web.Resource).GetAsyncEnumerator(cts.Token);
+            Assert.True(await logs.MoveNextAsync());
+            Assert.Contains(logs.Current, line => line.Content.Contains(
+                "Using allocated origin 'https://localhost:7081' for the Entra redirect URI.", StringComparison.Ordinal));
+            entra.Resource.Outputs["clientId"] = ClientId;
+            entra.Resource.ProvisioningTaskCompletionSource!.TrySetResult();
+            await publish.WaitAsync(cts.Token);
+            Assert.Equal("https://web.example,https://localhost:7081", await pendingOrigin);
+            Assert.Equal("https://web.example", await expression.GetValueAsync(cts.Token));
+        }
+        finally
+        {
+            cts.Cancel();
+            await publish;
+        }
+    }
+
+    [Fact]
+    public async Task WithRedirectUris_Endpoint_RunMode_CancellationDoesNotFaultBrowserSnapshot()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        _ = entra.Resource.GetBicepTemplateString();
+        var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        using var cts = new CancellationTokenSource();
+        var pending = expression.GetValueAsync(cts.Token).AsTask();
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new(web.Resource, app.Services), CancellationToken.None);
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task WithRedirectUris_Endpoint_RunMode_PropagatesUrlCustomizationFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var web = builder.AddContainer("web", "image").WithHttpsEndpoint(targetPort: 8080)
+            .WithEndpoint("https", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 7081));
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrls(_ => throw new InvalidOperationException("URL customization failed."));
+        _ = entra.Resource.GetBicepTemplateString();
+        var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await expression.GetValueAsync(CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("URL customization failed.", exception.Message);
+    }
 
     [Fact]
     public async Task WithRedirectUris_Host_WritesHostParameterWithPaths()
@@ -957,19 +1447,16 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithEndpoint("https", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 7081));
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrlForEndpoint("https", url => url.Url = "/swagger");
 
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
 
-        // The orchestrator only makes relative URLs absolute after all callbacks have run.
-        var urls = new List<ResourceUrlAnnotation> { new() { Url = "/swagger", Endpoint = web.GetEndpoint("https") } };
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, urls);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
@@ -988,23 +1475,25 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         _ = entra.Resource.GetBicepTemplateString();
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
 
-        // web's own https URL is details-only; the other resource's same-named endpoint link is summary-visible.
-        var urls = new List<ResourceUrlAnnotation>
+        web.WithUrls(context =>
         {
-            new() { Url = "https://localhost:7081", Endpoint = web.GetEndpoint("https"), DisplayLocation = UrlDisplayLocation.DetailsOnly },
-            new() { Url = "https://other.dev.localhost:7082", Endpoint = other.GetEndpoint("https"), DisplayLocation = UrlDisplayLocation.SummaryAndDetails }
-        };
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, urls);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+            context.Urls[0].DisplayLocation = UrlDisplayLocation.DetailsOnly;
+            context.Urls.Add(new()
+            {
+                Url = "https://other.dev.localhost:7082",
+                Endpoint = other.GetEndpoint("https"),
+                DisplayLocation = UrlDisplayLocation.SummaryAndDetails
+            });
+        });
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
     [Fact]
-    public async Task WithRedirectUris_Endpoint_RunMode_ClearedUrlsFallBackToAllocatedUrlWithoutWaiting()
+    public async Task WithRedirectUris_Endpoint_RunMode_ClearedDisplayUrlsUseAllocatedOrigin()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var web = builder.AddContainer("web", "image")
@@ -1012,19 +1501,17 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             .WithEndpoint("https", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 7081));
         var entra = builder.AddEntraIdApplication("entra-web")
             .WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc");
+        web.WithUrls(context => context.Urls.Clear());
 
-        _ = entra.Resource.GetBicepTemplateString();
+        await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
         var expression = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
 
-        // An earlier WithUrls callback removed every displayed URL.
-        var context = new ResourceUrlsCallbackContext(builder.ExecutionContext, web.Resource, []);
-        foreach (var callback in web.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
-        {
-            await callback.Callback(context);
-        }
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<ApplicationOrchestratorProxy>();
+        await builder.Eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(web.Resource, app.Services), CancellationToken.None);
 
-        // Far below the 30 second fallback timeout.
-        Assert.Equal("https://localhost:7081/signin-oidc", await expression.GetValueAsync(new ValueProviderContext(), CancellationToken.None).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("https://localhost:7081", await expression.GetValueAsync(CancellationToken.None));
+        Assert.Empty(web.Resource.Annotations.OfType<ResourceUrlAnnotation>());
     }
 
     [Fact]
@@ -1072,6 +1559,17 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     {
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
             ReferenceExpression.Create($"{endpointReference.Resource.Name}.contoso.example");
+
+        public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+        {
+            if (endpointReferenceExpression.Property is EndpointProperty.TlsEnabled)
+            {
+                return ReferenceExpression.Create($"{bool.TrueString}");
+            }
+
+            Assert.Equal(EndpointProperty.PrimaryBrowserOrigin, endpointReferenceExpression.Property);
+            return ReferenceExpression.Create($"https://{GetHostAddressExpression(endpointReferenceExpression.Endpoint)}");
+        }
     }
 #pragma warning restore ASPIRECOMPUTE002
 
@@ -1098,11 +1596,18 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
     [InlineData(DistributedApplicationOperation.Publish)]
-    public async Task WithIdTokenIssuance_DoesNotProvisionExistingApplication(DistributedApplicationOperation operation)
+    public async Task WithIdTokenIssuance_ThrowsWithoutProvisioningExistingApplication(DistributedApplicationOperation operation)
     {
         using var builder = TestDistributedApplicationBuilder.Create(operation);
-        var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
-            .WithIdTokenIssuance();
+        var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId);
+
+        var exception = Assert.Throws<InvalidOperationException>(entra.WithIdTokenIssuance);
+
+        Assert.Equal(
+            "Entra ID application 'entra-web' is an existing registration, and Aspire does not modify existing registrations. " +
+            "Enable 'ID tokens (used for implicit and hybrid flows)' in the registration's Authentication settings in the Microsoft Entra admin center.",
+            exception.Message);
+        Assert.False(entra.Resource.EnableIdTokenIssuance);
 
         Assert.True(entra.Resource.IsExistingApplication);
         Assert.Equal(TenantId, entra.Resource.TenantId);
@@ -1384,9 +1889,11 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
     [InlineData(nameof(ProjectResource), false)]
     [InlineData(nameof(ExecutableResource), false)]
     [InlineData(nameof(ContainerResource), false)]
+    [InlineData(nameof(DotnetProjectResource), false)]
     [InlineData(nameof(ProjectResource), true)]
     [InlineData(nameof(ExecutableResource), true)]
     [InlineData(nameof(ContainerResource), true)]
+    [InlineData(nameof(DotnetProjectResource), true)]
     public void WithReference_DoesNotAddImplicitWaits(string resourceType, bool existing)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -1399,13 +1906,16 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
             nameof(ProjectResource) => builder.AddResource(new ProjectResource("consumer")),
             nameof(ExecutableResource) => builder.AddExecutable("consumer", "node", "."),
             nameof(ContainerResource) => builder.AddContainer("consumer", "test-image"),
+            nameof(DotnetProjectResource) => builder.AddDotnetProject("consumer", "consumer.csproj", options => options.ExcludeLaunchProfile = true),
             _ => throw new ArgumentOutOfRangeException(nameof(resourceType))
         };
 
+        // Modern projects already wait for their build resource; authentication references must preserve those waits.
+        var initialWaits = consumer.Resource.Annotations.OfType<WaitAnnotation>().ToArray();
         Assert.Same(consumer, consumer.WithReference(entra));
         consumer.WithReference(entra, connectionName: "OTHER");
 
-        Assert.Empty(consumer.Resource.Annotations.OfType<WaitAnnotation>());
+        Assert.Equal(initialWaits, consumer.Resource.Annotations.OfType<WaitAnnotation>());
     }
 
     [Fact]

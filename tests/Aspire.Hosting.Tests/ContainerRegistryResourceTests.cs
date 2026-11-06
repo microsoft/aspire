@@ -10,8 +10,16 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
+public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper) : ContainerRegistryResourceTests<ProjectResource>
 {
+    protected override IResourceBuilder<ProjectResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name)
+    {
+#pragma warning disable CS0618 // Exercise the legacy factory through the same consumer contracts as V2.
+        return builder.AddProject<TProject>(name);
+#pragma warning restore CS0618
+    }
+
     [Fact]
     public void AddContainerRegistryWithStrings()
     {
@@ -348,45 +356,6 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ProjectResourceHasPushStepAndConfigurationAnnotations()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project = builder.AddProject<Projects.ServiceA>("api");
-
-        var pipelineStepAnnotations = project.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
-        var pipelineConfigAnnotations = project.Resource.Annotations.OfType<PipelineConfigurationAnnotation>().ToList();
-
-        Assert.NotEmpty(pipelineStepAnnotations);
-        Assert.NotEmpty(pipelineConfigAnnotations);
-    }
-
-    [Fact]
-    public async Task ProjectResourcePushStepHasPushContainerImageTag()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project = builder.AddProject<Projects.ServiceA>("api");
-
-        var pipelineStepAnnotation = Assert.Single(project.Resource.Annotations.OfType<PipelineStepAnnotation>());
-
-        var factoryContext = new PipelineStepFactoryContext
-        {
-            PipelineContext = null!,
-            Resource = project.Resource
-        };
-
-        var steps = (await pipelineStepAnnotation.CreateStepsAsync(factoryContext)).ToList();
-
-        var pushStep = steps.FirstOrDefault(s => s.Name == "push-api");
-        Assert.NotNull(pushStep);
-        Assert.Contains(WellKnownPipelineTags.PushContainerImage, pushStep.Tags);
-        Assert.Contains(WellKnownPipelineSteps.Push, pushStep.RequiredBySteps);
-    }
-
-    [Fact]
     public async Task ContainerWithDockerfilePushStepHasPushContainerImageTag()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -435,12 +404,92 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void ContainerRegistryReferenceAnnotationHoldsCorrectRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddContainerRegistry("acr", "myregistry.azurecr.io");
+
+        var annotation = new ContainerRegistryReferenceAnnotation(registry.Resource);
+
+        Assert.Same(registry.Resource, annotation.Registry);
+    }
+
+    [Fact]
+    public async Task AzureContainerRegistry_GetContainerRegistryPrefersContainerRegistryReferenceAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var acr = builder.AddAzureContainerRegistry("acr");
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(acr);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Simulate BeforeStartEvent to add RegistryTargetAnnotations
+        var beforeStartEvent = new BeforeStartEvent(app.Services, appModel);
+        await builder.Eventing.PublishAsync(beforeStartEvent);
+
+        // GetContainerRegistry should return acr (from ContainerRegistryReferenceAnnotation)
+        var containerRegistry = env.Resource.GetContainerRegistry();
+        Assert.Same(acr.Resource, containerRegistry);
+    }
+}
+
+public abstract class ContainerRegistryResourceTests<TResource>
+    where TResource : class, IResource
+{
+    protected abstract IResourceBuilder<TResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name)
+        where TProject : IProjectMetadata, new();
+
+    [Fact]
+    public void ProjectResourceHasPushStepAndConfigurationAnnotations()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
+
+        var pipelineStepAnnotations = project.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
+        var pipelineConfigAnnotations = project.Resource.Annotations.OfType<PipelineConfigurationAnnotation>().ToList();
+
+        Assert.NotEmpty(pipelineStepAnnotations);
+        Assert.NotEmpty(pipelineConfigAnnotations);
+    }
+
+    [Fact]
+    public async Task ProjectResourcePushStepHasPushContainerImageTag()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
+
+        var pipelineStepAnnotation = Assert.Single(project.Resource.Annotations.OfType<PipelineStepAnnotation>());
+
+        var factoryContext = new PipelineStepFactoryContext
+        {
+            PipelineContext = null!,
+            Resource = project.Resource
+        };
+
+        var steps = (await pipelineStepAnnotation.CreateStepsAsync(factoryContext)).ToList();
+
+        var pushStep = steps.FirstOrDefault(s => s.Name == "push-api");
+        Assert.NotNull(pushStep);
+        Assert.Contains(WellKnownPipelineTags.PushContainerImage, pushStep.Tags);
+        Assert.Contains(WellKnownPipelineSteps.Push, pushStep.RequiredBySteps);
+    }
+
+    [Fact]
     public async Task ProjectResourcePushStepDependsOnBuildStep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
 
         var pipelineStepAnnotation = Assert.Single(project.Resource.Annotations.OfType<PipelineStepAnnotation>());
 
@@ -467,7 +516,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var registry = builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project = builder.AddProject<Projects.ServiceA>("api")
+        var project = AddProject<Projects.ServiceA>(builder, "api")
             .WithContainerRegistry(registry);
 
         var annotation = project.Resource.Annotations.OfType<ContainerRegistryReferenceAnnotation>().FirstOrDefault();
@@ -483,7 +532,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         var registry1 = builder.AddContainerRegistry("docker-hub", "docker.io", "user1");
         var registry2 = builder.AddContainerRegistry("ghcr", "ghcr.io", "user2");
 
-        var project = builder.AddProject<Projects.ServiceA>("api")
+        var project = AddProject<Projects.ServiceA>(builder, "api")
             .WithContainerRegistry(registry1);
 
         var annotations = project.Resource.Annotations.OfType<ContainerRegistryReferenceAnnotation>().ToList();
@@ -492,24 +541,12 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ContainerRegistryReferenceAnnotationHoldsCorrectRegistry()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var registry = builder.AddContainerRegistry("acr", "myregistry.azurecr.io");
-
-        var annotation = new ContainerRegistryReferenceAnnotation(registry.Resource);
-
-        Assert.Same(registry.Resource, annotation.Registry);
-    }
-
-    [Fact]
     public async Task RegistryTargetAnnotationIsAddedToResourcesOnBeforeStartEvent()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var registry = builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -533,7 +570,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
 
         var registry1 = builder.AddContainerRegistry("docker-hub", "docker.io", "user1");
         var registry2 = builder.AddContainerRegistry("ghcr", "ghcr.io", "user2");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -557,7 +594,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var registry = builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -578,7 +615,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
 
         var registry1 = builder.AddContainerRegistry("docker-hub", "docker.io", "user1");
         var registry2 = builder.AddContainerRegistry("ghcr", "ghcr.io", "user2");
-        var project = builder.AddProject<Projects.ServiceA>("api")
+        var project = AddProject<Projects.ServiceA>(builder, "api")
             .WithContainerRegistry(registry2); // Explicit preference for registry2
 
         using var app = builder.Build();
@@ -601,7 +638,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
 
         var registry1 = builder.AddContainerRegistry("docker-hub", "docker.io", "user1");
         var registry2 = builder.AddContainerRegistry("ghcr", "ghcr.io", "user2");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
         // No explicit WithContainerRegistry call
 
         using var app = builder.Build();
@@ -622,7 +659,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
         // No container registry added
 
         // GetContainerRegistry should throw because there's no registry available
@@ -636,8 +673,8 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var registry = builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project1 = builder.AddProject<Projects.ServiceA>("api1");
-        var project2 = builder.AddProject<Projects.ServiceB>("api2");
+        var project1 = AddProject<Projects.ServiceA>(builder, "api1");
+        var project2 = AddProject<Projects.ServiceB>(builder, "api2");
         var container = builder.AddContainer("redis", "redis:latest");
 
         using var app = builder.Build();
@@ -661,7 +698,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         var defaultRegistry = builder.AddContainerRegistry("docker-hub", "docker.io", "default");
         var specificRegistry = builder.AddContainerRegistry("acr", "myregistry.azurecr.io", "specific");
 
-        var project = builder.AddProject<Projects.ServiceA>("api")
+        var project = AddProject<Projects.ServiceA>(builder, "api")
             .WithContainerRegistry(specificRegistry);
 
         using var app = builder.Build();
@@ -689,7 +726,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var acr = builder.AddAzureContainerRegistry("acr");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -712,7 +749,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var acr = builder.AddAzureContainerRegistry("acr");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
         var container = builder.AddContainer("redis", "redis:latest");
 
         using var app = builder.Build();
@@ -733,7 +770,7 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var acr = builder.AddAzureContainerRegistry("acr");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -748,34 +785,13 @@ public class ContainerRegistryResourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task AzureContainerRegistry_GetContainerRegistryPrefersContainerRegistryReferenceAnnotation()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-
-        var acr = builder.AddAzureContainerRegistry("acr");
-        var env = builder.AddAzureContainerAppEnvironment("env")
-            .WithAzureContainerRegistry(acr);
-
-        using var app = builder.Build();
-        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-
-        // Simulate BeforeStartEvent to add RegistryTargetAnnotations
-        var beforeStartEvent = new BeforeStartEvent(app.Services, appModel);
-        await builder.Eventing.PublishAsync(beforeStartEvent);
-
-        // GetContainerRegistry should return acr (from ContainerRegistryReferenceAnnotation)
-        var containerRegistry = env.Resource.GetContainerRegistry();
-        Assert.Same(acr.Resource, containerRegistry);
-    }
-
-    [Fact]
     public async Task AzureContainerRegistryAndContainerRegistry_MultipleRegistriesAddMultipleRegistryTargetAnnotations()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var acr = builder.AddAzureContainerRegistry("acr");
         var dockerHub = builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
-        var project = builder.AddProject<Projects.ServiceA>("api");
+        var project = AddProject<Projects.ServiceA>(builder, "api");
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();

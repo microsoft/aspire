@@ -17,6 +17,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.CognitiveServices" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <ProjectReference Include="..\AzureOpenAIEndToEnd.WebStory\AzureOpenAIEndToEnd.WebStory.csproj" />
   </ItemGroup>
 

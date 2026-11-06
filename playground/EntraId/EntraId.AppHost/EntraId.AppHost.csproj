@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.EntraId" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.JavaScript" />
     <ProjectReference Include="..\EntraId.Web\EntraId.Web.csproj" />

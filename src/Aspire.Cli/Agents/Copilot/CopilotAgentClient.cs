@@ -50,8 +50,8 @@ internal sealed class CopilotAgentClient(
     }
 
     public bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
-        => AspireSkillsRemoteConfiguration.HasPluginRegistration(GetSettingsFiles(workspaceRoot, scope), cancellationToken);
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
+        => AspireSkillsRemoteConfiguration.HasPluginRegistration(GetSettingsFiles(workspaceRoot, scope), sources);
 
     public string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
@@ -63,9 +63,9 @@ internal sealed class CopilotAgentClient(
 
     public Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
         => AspireSkillsRemoteConfiguration.ApplyPluginAsync(config, GetSettingsFiles(workspaceRoot, scope),
-            GetIntegrationConfigPath(scope, workspaceRoot), edit, cancellationToken);
+            GetIntegrationConfigPath(scope, workspaceRoot), edit, sources, cancellationToken);
 
     public string GetMcpConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
         => scope is AgentConfigurationScope.Project ? Path.Combine(workspaceRoot.FullName, ".mcp.json")

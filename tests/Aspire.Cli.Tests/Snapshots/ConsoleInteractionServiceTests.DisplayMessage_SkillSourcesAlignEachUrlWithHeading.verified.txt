@@ -1,0 +1,3 @@
+﻿ℹ️ Skill sources:
+   https://example.com/skills-a
+   https://example.com/skills-b

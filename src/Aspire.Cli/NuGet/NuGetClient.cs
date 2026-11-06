@@ -66,7 +66,7 @@ internal interface INuGetClient
         string? runtimeIdentifier,
         CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
+    Task<PackageSearchResult<NuGetSearchResult>> SearchAsync(
         string query,
         bool prerelease,
         int take,
@@ -156,6 +156,12 @@ internal sealed class NuGetClient(
     internal Func<string, IMachineWideSettings, ISettings> AmbientSettingsLoader { get; init; }
         = static (workingDirectory, machineWideSettings) =>
             Settings.LoadDefaultSettings(workingDirectory, configFileName: null, machineWideSettings);
+
+    /// <summary>
+    /// Creates the repository used to query a package source, allowing tests to supply in-memory protocol resources.
+    /// </summary>
+    internal Func<PackageSource, SourceRepository> SourceRepositoryFactory { get; init; }
+        = static source => Repository.Factory.GetCoreV3(source);
 
     public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
@@ -505,7 +511,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    public async Task<IReadOnlyList<NuGetSearchResult>> SearchAsync(
+    public async Task<PackageSearchResult<NuGetSearchResult>> SearchAsync(
         string query,
         bool prerelease,
         int take,
@@ -539,16 +545,21 @@ internal sealed class NuGetClient(
 
             // Shape the results exactly as the helper did, including its comparers. Versions are compared as strings
             // rather than as NuGet versions because that is what decided which source's entry survived deduplication.
-            return searchResults
+            var packages = searchResults
                 // Filter each source's results before deduplication, otherwise an ineligible
                 // feed's higher version can discard the package that restore is allowed to use.
-                .SelectMany((packages, index) => packages.Where(package =>
+                .SelectMany((result, index) => result.Packages.Where(package =>
                     sourceFilter(package.Id, packageSources[index].Name)))
                 .GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.OrderByDescending(package => package.Version).First())
                 .OrderBy(package => package.Id)
                 .Take(take)
                 .ToArray();
+
+            return new(
+                packages,
+                searchResults.Any(result => result.LimitReached),
+                searchResults.SelectMany(result => result.FailedSources).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -562,7 +573,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceSafelyAsync(
+    private async Task<PackageSearchResult<NuGetSearchResult>> SearchSourceSafelyAsync(
         PackageSource source,
         string query,
         global::NuGet.Protocol.Core.Types.SearchFilter filter,
@@ -580,7 +591,10 @@ internal sealed class NuGetClient(
             // exception message, but NuGet protocol failures format the feed URL into it -- often a derived resource
             // URL rather than the configured source -- which would leak UserInfo/SAS credentials into ~/.aspire/logs.
             output.WriteLine($"Warning: Failed to search {PackageSourceRedactor.RedactForDisplay(source.Name)}: {ex.GetType().Name}");
-            return [];
+            return new(
+                [],
+                LimitReached: false,
+                FailedSources: [PackageSourceRedactor.RedactForDisplay(source.Name)]);
         }
     }
 
@@ -664,7 +678,7 @@ internal sealed class NuGetClient(
         }
     }
 
-    private static async Task<IReadOnlyList<NuGetSearchResult>> SearchSourceAsync(
+    private async Task<PackageSearchResult<NuGetSearchResult>> SearchSourceAsync(
         PackageSource source,
         string query,
         global::NuGet.Protocol.Core.Types.SearchFilter filter,
@@ -672,34 +686,46 @@ internal sealed class NuGetClient(
         INuGetLogger nuGetLogger,
         CancellationToken cancellationToken)
     {
-        var repository = Repository.Factory.GetCoreV3(source);
+        var repository = SourceRepositoryFactory(source);
         var searchResource = await repository.GetResourceAsync<PackageSearchResource>(cancellationToken).ConfigureAwait(false);
         if (searchResource is null)
         {
-            return [];
+            return new([], LimitReached: false, FailedSources: []);
         }
-
-        // The helper requested a single page starting at the first result; it never paged further.
-        var results = await searchResource.SearchAsync(
-            query,
-            filter,
-            skip: 0,
-            take,
-            nuGetLogger,
-            cancellationToken).ConfigureAwait(false);
 
         var packages = new List<NuGetSearchResult>();
-        foreach (var result in results)
+        var skip = 0;
+        while (skip < take && skip <= NuGetSearchLimits.MaxSkip)
         {
-            var versions = await result.GetVersionsAsync().ConfigureAwait(false);
-            packages.Add(new NuGetSearchResult(
-                result.Identity.Id,
-                result.Identity.Version.ToString(),
-                source.Source,
-                versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
+            // Unrestricted integration sources can require an empty search term. Follow pagination
+            // so matching packages are not limited to the first page.
+            var pageSize = Math.Min(NuGetSearchLimits.PageSize, take - skip);
+            var results = (await searchResource.SearchAsync(
+                query, filter, skip, pageSize, nuGetLogger, cancellationToken).ConfigureAwait(false)).ToArray();
+            logger.LogTrace(
+                "NuGet search page from '{SourceName}' ({Source}) for query '{Query}': skip {Skip}, take {Take}, returned {PackageCount} packages.",
+                PackageSourceRedactor.RedactForDisplay(source.Name),
+                PackageSourceRedactor.RedactForDisplay(source.Source),
+                PackageSourceRedactor.RedactForDisplay(query),
+                skip, pageSize, results.Length);
+
+            foreach (var result in results)
+            {
+                var versions = await result.GetVersionsAsync().ConfigureAwait(false);
+                packages.Add(new NuGetSearchResult(
+                    result.Identity.Id,
+                    result.Identity.Version.ToString(),
+                    source.Source,
+                    versions?.Select(version => version.Version.ToString()).ToArray() ?? []));
+            }
+            if (results.Length < pageSize)
+            {
+                break;
+            }
+            skip += results.Length;
         }
 
-        return packages;
+        return new(packages, LimitReached: skip > NuGetSearchLimits.MaxSkip && skip < take, FailedSources: []);
     }
 
     internal static List<PackageSource> LoadPackageSources(

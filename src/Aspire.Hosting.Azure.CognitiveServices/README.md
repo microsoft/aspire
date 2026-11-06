@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.CognitiveServices` in
 
 ```bash
 aspire add Aspire.Hosting.Azure.CognitiveServices
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add an Azure OpenAI service and reference it from another resour
 ```csharp
 var openai = builder.AddAzureOpenAI("openai");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(openai);
 ```
 

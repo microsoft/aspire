@@ -83,6 +83,9 @@ public sealed class AzureEnvironmentResource : Resource
                     var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
                     await preparer.PrepareResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
                 },
+                // Preparation adds resources to the model, so it must not run concurrently with
+                // compute environment validation, which enumerates the model's resources.
+                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
             steps.Add(prepareResourcesStep);

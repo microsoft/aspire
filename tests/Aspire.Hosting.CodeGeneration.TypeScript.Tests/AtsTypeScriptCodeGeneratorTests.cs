@@ -636,6 +636,25 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_BrowserUrlReferences()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var endpointOrigins = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins");
+        Assert.Equal("browserOrigins", endpointOrigins.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", endpointOrigins.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").BrowserOrigins);
+        var primaryOrigin = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin");
+        Assert.Equal("primaryBrowserOrigin", primaryOrigin.MethodName);
+        Assert.Equal(endpointOrigins.ReturnType.TypeId, primaryOrigin.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").PrimaryBrowserOrigin);
+    }
+
+    [Fact]
     public async Task Scanner_HostingAssembly_AddContainerCapability()
     {
         // Verify the addContainer capability from the real Aspire.Hosting assembly
@@ -1958,6 +1977,29 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("asExistingInTenant", aspireTs);
     }
 
+    [Fact]
+    public async Task GenerateDistributedApplication_InternalLoadBalancerUsesNetworkCapability()
+    {
+#pragma warning disable ASPIREAZURE003
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [.. LoadAzureAssemblies(), typeof(AzureInternalLoadBalancerExtensions).Assembly]);
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting.Azure.Network/withNetworkInternalLoadBalancer");
+        Assert.Equal("withInternalLoadBalancer", capability.MethodName);
+        Assert.Equal(GetAtsTypeId(typeof(IAzureInternalIngressResource)), capability.TargetTypeId);
+#pragma warning restore ASPIREAZURE003
+
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
+        // Exercise Windows line endings even when this test runs on Linux.
+        var generatedCode = files["aspire.mts"].ReplaceLineEndings("\r\n");
+        // Split without retaining CR characters: a final CR becomes an extra newline in Verify on Windows.
+        var lines = generatedCode.ReplaceLineEndings("\n").Split('\n')
+            .Where(line => line.Contains("withInternalLoadBalancer", StringComparison.Ordinal) ||
+                line.Contains("withNetworkInternalLoadBalancer", StringComparison.Ordinal));
+
+        await Verify(string.Join('\n', lines), "ts");
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
@@ -2470,6 +2512,30 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     // ===== DTO Generation Tests =====
+
+    [Fact]
+    public async Task Generate_LegacyAddProject_RetainsDeprecatedBuilderMethod()
+    {
+        var context = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(DotnetProjectHostingExtensions).Assembly]).ToAtsContext();
+        var capability = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addProject");
+
+        Assert.True(capability.IsObsolete);
+        Assert.False(capability.IsExperimental);
+        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", capability.ObsoleteMessage);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", capability.ReturnType.TypeId);
+        Assert.Equal(["name", "projectPath", "launchProfileOrOptions"], capability.Parameters.Select(parameter => parameter.Name));
+        Assert.True(capability.Parameters[^1].IsOptional);
+
+        var code = _generator.GenerateDistributedApplication(context)["aspire.mts"];
+        var lines = code.Split('\n');
+        var methodIndex = Array.FindIndex(lines, line => line.TrimStart().StartsWith("addProject(", StringComparison.Ordinal));
+        Assert.True(methodIndex >= 0);
+        var commentIndex = Array.FindLastIndex(lines, methodIndex, line => line.Trim() == "/**");
+        Assert.True(commentIndex >= 0);
+
+        await Verify(string.Join('\n', lines[commentIndex..(methodIndex + 1)]).Trim(), extension: "ts");
+    }
 
     [Fact]
     public async Task Generate_DotnetProjectOptions_UsesDtoWithoutChangingLegacyOptions()

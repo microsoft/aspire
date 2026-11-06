@@ -18,6 +18,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Sandboxes` integratio
 
 ```bash
 aspire add Aspire.Hosting.Azure.Sandboxes
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -26,8 +27,11 @@ Then, in the AppHost, add an Azure sandbox group. When it is the only compute en
 
 ```csharp
 builder.AddAzureSandboxGroup("sandboxes");
-var api = builder.AddProject<Projects.ApiService>("api");
+var api = builder.AddDotnetProject("api", "../ApiService/ApiService.csproj");
 ```
+
+Browser-origin endpoint properties resolve from the exposed endpoint's deployed proxy URL, excluding navigation paths, queries, and fragments.
+Like the sandbox URL itself, the origin is unavailable until the producing sandbox has been deployed.
 
 Use `PublishAsAzureSandbox` only to customize sandbox runtime options:
 

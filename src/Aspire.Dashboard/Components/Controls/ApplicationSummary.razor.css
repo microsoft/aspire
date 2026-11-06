@@ -54,6 +54,10 @@
 /* Condense to the key icon and the count when the header row is short on room, so the notice stays readable and the
    title and layout switcher keep their space. */
 @container (max-width: 700px) {
+    .overview-header-actions:has(.missing-parameters-link) ::deep .icon-toggle-label {
+        display: none;
+    }
+
     .missing-parameters-label {
         display: none;
     }
@@ -69,257 +73,9 @@
     }
 }
 
-.resource-card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
-    grid-auto-rows: 236px;
-    gap: 14px;
-}
-
-.resource-card-grid-spacious {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
-    grid-auto-rows: 268px;
-    gap: 18px;
-}
-
-.resource-card-grid-compact {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
-    grid-auto-rows: 216px;
-    gap: 10px;
-}
-
-.resource-card {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    min-width: 0;
-    height: 100%;
-    overflow: hidden;
-    border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 12px;
-    background: var(--aspire-control-background);
-}
-
-.resource-card-clickable {
-    cursor: pointer;
-    transition: border-color 120ms ease, background-color 120ms ease;
-}
-
-.resource-card-clickable:hover:not(:has(.resource-card-footer:hover)) {
-    border-color: var(--colorNeutralStroke1);
-    background: light-dark(
-        var(--colorNeutralBackground1Hover),
-        color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
-}
-
-.resource-card-clickable:focus-visible {
-    outline: 2px solid var(--colorStrokeFocus2);
-    outline-offset: 2px;
-}
-
-.resource-card-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 16px 16px 12px;
-    border-bottom: 1px solid var(--colorNeutralStroke3);
-}
-
-.resource-card-title {
-    display: inline-flex;
-    flex: 1 1 auto;
-    min-width: 0;
-    align-items: center;
-    gap: 8px;
-    overflow: hidden;
-    color: var(--colorNeutralForeground1);
-    font-size: 15px;
-    font-weight: 600;
-    text-decoration: none;
-    white-space: nowrap;
-}
-
-.resource-card-title ::deep .resource-name-container {
-    display: inline-flex;
-    width: 100%;
-    min-width: 0;
-    align-items: center;
-    gap: 8px;
-    overflow: hidden;
-}
-
-.resource-card-title ::deep .resource-icon {
-    flex: 0 0 auto;
-}
-
-.resource-card-title ::deep .resource-name-text {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.resource-card-type {
-    flex: 0 0 auto;
-    max-width: 45%;
-    overflow: hidden;
-    color: var(--colorNeutralForeground2);
-    font-size: 12px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.resource-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    min-width: 0;
-    padding: 14px 16px 18px;
-    overflow: hidden;
-}
-
-.resource-card-field {
-    display: grid;
-    gap: 5px;
-    min-width: 0;
-}
-
-.resource-card-label {
-    color: var(--colorNeutralForeground2);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-}
-
-.resource-card-value {
-    flex: 1 1 auto;
-}
-
-.resource-card-parameter .resource-card-body {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: 16px;
-}
-
-.resource-card-source {
-    display: block;
-    overflow: hidden;
-    color: var(--colorNeutralForeground1);
-    line-height: 20px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.resource-card-unset-value {
-    flex: 0 0 auto;
-    color: var(--colorNeutralForeground2);
-    font-size: 12px;
-}
-
-.resource-card-footer {
-    display: flex;
-    min-height: 48px;
-    min-width: 0;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 12px;
-    padding: 7px 8px 7px 16px;
-    border-top: 1px solid var(--colorNeutralStroke1);
-    background: var(--colorNeutralBackground3);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--colorNeutralForeground1) 5%, transparent);
-}
-
-.resource-card-primary-endpoint {
-    display: inline-flex;
-    flex: 0 0 28px;
-    min-width: 0;
-    width: 28px;
-    height: 28px;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    color: var(--colorBrandForegroundLink);
-    text-decoration: none;
-}
-
-.resource-card-start-time {
-    display: inline-flex;
-    min-width: 0;
-    align-items: center;
-    gap: 6px;
-    overflow: hidden;
-    color: var(--colorNeutralForeground2);
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-.resource-card-primary-endpoint:hover {
-    color: var(--colorBrandForegroundLinkHover);
-    background: var(--colorNeutralBackground1Hover);
-}
-
-.resource-card-footer-actions {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 2px;
-    margin-left: auto;
-}
-
-.resource-card-footer-actions ::deep .resource-card-copy-value {
-    width: 28px;
-    min-width: 28px;
-    height: 32px;
-    padding-inline: 0;
-}
-
-.resource-card-grid-spacious .resource-card-header {
-    padding: 20px 20px 16px;
-}
-
-.resource-card-grid-spacious .resource-card-body {
-    gap: 18px;
-    padding: 18px 20px 22px;
-}
-
-.resource-card-grid-spacious .resource-card-footer {
-    min-height: 52px;
-    padding: 9px 12px 9px 20px;
-}
-
-.resource-card-grid-compact .resource-card-header {
-    padding: 10px 12px 8px;
-}
-
-.resource-card-grid-compact .resource-card-type {
-    display: none;
-}
-
-.resource-card-grid-compact .resource-card-body {
-    gap: 8px;
-    padding: 8px 12px 10px;
-}
-
-.resource-card-grid-compact .resource-card-parameter .resource-card-body {
-    gap: 10px;
-}
-
-.resource-card-grid-compact .resource-card-value ::deep .container {
-    align-items: start;
-}
-
-.resource-card-grid-compact .resource-card-footer {
-    min-height: 40px;
-    gap: 8px;
-    padding: 3px 6px 3px 12px;
-}
-
-@container (max-width: 520px) {
-    .resource-card-grid {
-        grid-template-columns: 1fr;
+@media (max-width: 480px) {
+    .overview-header-actions ::deep .icon-toggle-label {
+        display: none;
     }
 }
 
@@ -348,6 +104,11 @@
     bottom: 24px;
     display: flex;
     column-gap: 10px;
+}
+
+.resource-graph-controls.resource-graph-game-launch {
+    left: 30px;
+    right: auto;
 }
 
 .resource-graph-controls fluent-button {
@@ -1009,16 +770,6 @@
     line-height: 20px;
 }
 
-.home-section-count {
-    padding: 0 7px;
-    border-radius: 9px;
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    font-size: 11.5px;
-    line-height: 18px;
-    font-variant-numeric: tabular-nums;
-}
-
 .home-section-link {
     margin-inline-start: auto;
     color: var(--colorBrandForegroundLink);
@@ -1122,73 +873,4 @@
     .home-problems {
         grid-template-columns: minmax(0, 1fr);
     }
-}
-
-.home-table-resource:focus-visible {
-    outline: 2px solid var(--colorStrokeFocus2);
-    outline-offset: 1px;
-    border-radius: 2px;
-}
-
-.home-table-resource {
-    display: inline-flex;
-    min-width: 0;
-    align-items: center;
-    gap: 6px;
-    color: var(--colorNeutralForeground1);
-    font-size: 13px;
-    text-decoration: none;
-}
-
-/* Table of the summarized resources with their state, endpoints and actions. */
-.home-resource-table {
-    overflow-x: auto;
-}
-
-.home-resource-table table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-}
-
-.home-resource-table th {
-    padding: 0 10px 6px;
-    color: var(--colorNeutralForeground3);
-    font-size: 11.5px;
-    font-weight: 600;
-    text-align: start;
-    white-space: nowrap;
-}
-
-.home-resource-table td {
-    padding: 6px 10px;
-    border-top: 1px solid var(--colorNeutralStroke3);
-    vertical-align: middle;
-}
-
-.home-resource-table th:first-child,
-.home-resource-table td:first-child {
-    padding-inline-start: 0;
-}
-
-.home-resource-table th:last-child,
-.home-resource-table td:last-child {
-    width: 1%;
-    padding-inline-end: 0;
-}
-
-.home-resource-table tbody tr:hover td {
-    background: var(--datagrid-hover-color);
-}
-
-.home-table-type {
-    color: var(--colorNeutralForeground3);
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-
-/* Names stay on one line next to their icon, like in the resources grid. */
-.home-resource-table td:first-child {
-    white-space: nowrap;
 }

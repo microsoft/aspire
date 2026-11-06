@@ -40,7 +40,8 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        // The CLI installs the newest @playwright/cli release by exact version, which a release-age cutoff would reject.
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, useSettledNpmReleases: false);
         await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create .claude folder so agent init detects a Claude Code environment.

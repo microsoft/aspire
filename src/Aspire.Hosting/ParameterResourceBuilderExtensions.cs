@@ -507,8 +507,37 @@ public static class ParameterResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
 
-        var parameterResource = new ParameterResource(name, defaultValue => GetParameterValue(builder.Configuration, name, defaultValue), secret);
+        return CreateParameter(builder.Configuration, name, secret);
+    }
 
-        return parameterResource;
+    /// <summary>
+    /// Creates a parameter whose value is read from the supplied configuration.
+    /// </summary>
+    /// <param name="configuration">The configuration containing the parameter value.</param>
+    /// <param name="name">The parameter resource name. Values are read from <c>Parameters:{name}</c>.</param>
+    /// <param name="secret">Whether the parameter contains a secret.</param>
+    /// <returns>A parameter resource that can be referenced without adding it to the application model.</returns>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+    public static ParameterResource CreateParameter(IConfiguration configuration, string name, bool secret)
+        => CreateParameter(configuration, name, secret, defaultValue: null);
+
+    /// <summary>
+    /// Creates a configurable parameter with a literal default when no value is supplied.
+    /// </summary>
+    /// <param name="configuration">The configuration containing the parameter value.</param>
+    /// <param name="name">The parameter resource name.</param>
+    /// <param name="secret">Whether the parameter contains a secret.</param>
+    /// <param name="defaultValue">The published default, or <see langword="null"/> to require an input.</param>
+    /// <returns>A parameter resource using the standard parameter configuration lookup.</returns>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+    public static ParameterResource CreateParameter(IConfiguration configuration, string name, bool secret, string? defaultValue)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(name);
+
+        return new ParameterResource(name, parameterDefault => GetParameterValue(configuration, name, parameterDefault), secret)
+        {
+            Default = defaultValue is null ? null : new ConstantParameterDefault(() => defaultValue)
+        };
     }
 }

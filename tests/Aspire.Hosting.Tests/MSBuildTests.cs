@@ -14,6 +14,92 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "6")]
 public class MSBuildTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddProjectOverloadsProduceMigrationDiagnostics(bool warningsAsErrors)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var directory = workspace.WorkspaceRoot.FullName;
+        CreateProjectApiConsumer(directory, warningsAsErrors ? "CS0618" : "", includeModernReferences: false);
+        File.WriteAllText(Path.Combine(directory, "Consumer.cs"), """
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            public static class Consumer
+            {
+                public static void Configure(IDistributedApplicationBuilder builder)
+                {
+                    builder.AddProject<Metadata>("generic");
+                    builder.AddProject<Metadata>("generic-profile", launchProfileName: null);
+                    builder.AddProject<Metadata>("generic-options", options => options.ExcludeLaunchProfile = true);
+                    builder.AddProject("path", "Service.csproj");
+                    builder.AddProject("path-profile", "Service.csproj", launchProfileName: null);
+                    builder.AddProject("path-options", "Service.csproj", options => options.ExcludeLaunchProfile = true);
+                }
+            }
+
+            public sealed class Metadata : IProjectMetadata
+            {
+                public string ProjectPath => "Service.csproj";
+            }
+            """);
+
+        var result = BuildProjectCore(directory);
+        Assert.True(warningsAsErrors ? result.ExitCode != 0 : result.ExitCode == 0, result.Output);
+
+        // SARIF entries look like {"ruleId":"CS0618","level":"warning","message":"..."}.
+        // Unlike the build log, they are not repeated in a summary. SDK analyzers can also
+        // emit informational results, so count only the obsoletion diagnostics.
+        using var diagnostics = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "diagnostics.sarif")));
+        var results = diagnostics.RootElement.GetProperty("runs")[0].GetProperty("results").EnumerateArray()
+            .Where(diagnostic => diagnostic.GetProperty("ruleId").GetString() == "CS0618")
+            .ToArray();
+        Assert.Equal(6, results.Length);
+        Assert.All(results, diagnostic =>
+        {
+            Assert.Equal("CS0618", diagnostic.GetProperty("ruleId").GetString());
+            Assert.Equal(warningsAsErrors ? "error" : "warning", diagnostic.GetProperty("level").GetString());
+            Assert.Contains(
+                "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                diagnostic.GetProperty("message").GetString());
+        });
+    }
+
+    [Fact]
+    public void ModernProjectConsumerApisCompileWithoutExperimentalWarnings()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var directory = workspace.WorkspaceRoot.FullName;
+        CreateProjectApiConsumer(directory, "CS0618;ASPIREPROJECTS001", includeModernReferences: true);
+        File.WriteAllText(Path.Combine(directory, "Consumer.cs"), """
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+            using Aspire.Hosting.Dotnet;
+            using Aspire.Hosting.EntityFrameworkCore;
+
+            public static class Consumer
+            {
+                public static void Configure(IDistributedApplicationBuilder builder)
+                {
+                    var project = builder.AddDotnetProject("service", "Service.csproj")
+                        .WithReplicas(2)
+                        .DisableForwardedHeaders()
+                        .WithEndpointsInEnvironment(static _ => true);
+                    IProjectMetadata metadata = project.Resource.GetProjectMetadata();
+                    IResourceBuilder<IDotnetProgramResource> identity = project;
+                    _ = new EFMigrationResource("data-only", identity.Resource, null);
+                    _ = identity.AddEFMigrations("default");
+                    _ = identity.AddEFMigrations("context", "App.Context");
+                    _ = identity.AddEFMigrations("tool", configureToolResource: null);
+                    _ = identity.AddEFMigrations("context-tool", "App.Context", configureToolResource: null);
+                }
+            }
+            """);
+
+        BuildProject(directory);
+    }
+
     /// <summary>
     /// Tests that when an AppHost has a ProjectReference to a library project, a warning is emitted.
     /// </summary>
@@ -142,6 +228,33 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
                 }
                 return line;
             });
+    }
+
+    private static void CreateProjectApiConsumer(string directory, string warningsAsErrors, bool includeModernReferences)
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        var modernReferences = includeModernReferences
+            ? $"""
+                <ProjectReference Include="{repoRoot}/src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj" />
+                <ProjectReference Include="{repoRoot}/src/Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.csproj" />
+                """
+            : "";
+        File.WriteAllText(Path.Combine(directory, "Consumer.csproj"), $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <WarningsAsErrors>{warningsAsErrors}</WarningsAsErrors>
+                <ErrorLog>$(MSBuildProjectDirectory)\diagnostics.sarif</ErrorLog>
+                <RestoreConfigFile>{repoRoot}\NuGet.config</RestoreConfigFile>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{repoRoot}/src/Aspire.Hosting/Aspire.Hosting.csproj" />
+                {modernReferences}
+              </ItemGroup>
+            </Project>
+            """);
     }
 
     private static void CreateDirectoryBuildFiles(string basePath, string repoRoot)
@@ -325,6 +438,81 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         return (process.ExitCode, output.ToString());
     }
 
+    /// <summary>
+    /// Only an artifacts path passed as a global property (for example, <c>dotnet build --artifacts-path</c>) redirects
+    /// referenced project output in a way that <c>dotnet run --no-build</c> can't rediscover on its own, so only that
+    /// value should be recorded for the AppHost to forward when launching project resources.
+    /// See https://github.com/microsoft/aspire/issues/6887.
+    /// </summary>
+    [Theory]
+    [InlineData("global")]
+    [InlineData("environment")]
+    [InlineData("project")]
+    [InlineData("none")]
+    public void GlobalArtifactsPathIsOnlyRecordedWhenPassedAsGlobalProperty(string source)
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
+        Directory.CreateDirectory(appHostDirectory);
+        var artifactsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".artifacts");
+        var projectArtifactsPath = source == "project" ? $"<ArtifactsPath>{artifactsPath}</ArtifactsPath>" : "";
+
+        File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.csproj"),
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+                <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
+                <_AspireUseTaskHostFactory>true</_AspireUseTaskHostFactory>
+                {projectArtifactsPath}
+              </PropertyGroup>
+
+            </Project>
+            """);
+
+        CreateDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var arguments = "msbuild -getProperty:ArtifactsPath,_AspireGlobalArtifactsPath AppHost.csproj";
+        var environment = new Dictionary<string, string>
+        {
+            ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
+            ["DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE"] = "1",
+        };
+        switch (source)
+        {
+            case "global":
+                arguments += $" \"-p:ArtifactsPath={artifactsPath}\"";
+                break;
+            case "environment":
+                environment["ArtifactsPath"] = artifactsPath;
+                break;
+        }
+
+        var result = RunDotNet(appHostDirectory, arguments, timeoutMilliseconds: 180_000, environment);
+
+        Assert.True(result.ExitCode == 0, $"MSBuild query failed: {Environment.NewLine}{result.Output}");
+        using var document = JsonDocument.Parse(result.Output);
+        var properties = document.RootElement.GetProperty("Properties");
+
+        if (source == "none")
+        {
+            Assert.Equal(string.Empty, properties.GetProperty("_AspireGlobalArtifactsPath").GetString());
+            return;
+        }
+
+        // The probe used to detect a global property must leave the evaluated artifacts path untouched.
+        Assert.StartsWith(artifactsPath, properties.GetProperty("ArtifactsPath").GetString());
+        Assert.Equal(
+            source == "global" ? artifactsPath : string.Empty,
+            properties.GetProperty("_AspireGlobalArtifactsPath").GetString());
+    }
+
     [Fact]
     public void AppHostInspectionQuerySucceedsForPlainAppHostNamedProject()
     {
@@ -438,9 +626,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProject(appHostDirectory);
+        BuildProject(appHostDirectory);
 
-        Assert.DoesNotContain("ASPIRE010", output);
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
         Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);

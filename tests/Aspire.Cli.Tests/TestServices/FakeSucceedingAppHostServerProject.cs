@@ -22,6 +22,8 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
 
     public string? PackageSourceOverridePattern { get; private set; }
 
+    public IReadOnlyList<IntegrationReference> Integrations { get; private set; } = [];
+
     public Func<Task<AppHostServerRunResult>>? RunAsyncCallback { get; init; }
 
     public string GetInstanceIdentifier() => AppDirectoryPath;
@@ -34,6 +36,7 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
         string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
     {
+        Integrations = integrations.ToList();
         RequestedChannel = requestedChannel;
         PackageSourceOverride = packageSourceOverride;
         PackageSourceOverridePattern = packageSourceOverridePattern;

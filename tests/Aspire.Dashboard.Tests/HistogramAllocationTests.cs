@@ -25,7 +25,7 @@ public class HistogramAllocationTests
         }
 
         var current = previous;
-        var before = GC.GetAllocatedBytesForCurrentThread();
+        var before = GetAllocatedBytesWithEmptyAllocationContext();
         for (var i = 0; i < 1_000; i++)
         {
             point.TimeUnixNano += 1_000;
@@ -56,7 +56,7 @@ public class HistogramAllocationTests
         }
 
         var added = false;
-        var before = GC.GetAllocatedBytesForCurrentThread();
+        var before = GetAllocatedBytesWithEmptyAllocationContext();
         for (var i = 0; i < 1_000; i++)
         {
             added = HistogramBuckets.Add(ref counts, ref bounds, incoming, originalBounds, previous);
@@ -84,7 +84,7 @@ public class HistogramAllocationTests
             HistogramBuckets.Add(ref counts, ref bounds, incoming, incomingBounds, []);
         }
 
-        var before = GC.GetAllocatedBytesForCurrentThread();
+        var before = GetAllocatedBytesWithEmptyAllocationContext();
         for (var i = 0; i < 1_000; i++)
         {
             HistogramBuckets.Add(ref counts, ref bounds, incoming, incomingBounds, []);
@@ -110,7 +110,7 @@ public class HistogramAllocationTests
         }
 
         var added = true;
-        var before = GC.GetAllocatedBytesForCurrentThread();
+        var before = GetAllocatedBytesWithEmptyAllocationContext();
         for (var i = 0; i < 1_000; i++)
         {
             added = HistogramBuckets.Add(ref counts, ref bounds, incoming, incomingBounds, incoming);
@@ -139,7 +139,7 @@ public class HistogramAllocationTests
         }
 
         var added = false;
-        var before = GC.GetAllocatedBytesForCurrentThread();
+        var before = GetAllocatedBytesWithEmptyAllocationContext();
         for (var i = 0; i < 1_000; i++)
         {
             added = HistogramBuckets.AddBounds(ref bounds, incoming, incomingBounds, previous);
@@ -149,5 +149,79 @@ public class HistogramAllocationTests
         Assert.Equal(0, allocated);
         Assert.True(added);
         Assert.Same(originalBounds, bounds);
+    }
+
+    [Fact]
+    public void AllocationMeasurement_IgnoresAllocationContextVoidedByBackgroundGC()
+    {
+        // Starts a background GC, gives this thread a partially used allocation context while
+        // the GC is marking, and then waits inside a non-allocating window for the background
+        // GC to void that context. Without emptying the context first, nearly every attempt
+        // reports the unused remainder (up to one allocation quantum) as allocated.
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var collector = new BlockingCollectionWorker();
+            collector.Start();
+
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: false, compacting: false);
+            GC.KeepAlive(new object());
+
+            var before = GetAllocatedBytesWithEmptyAllocationContext();
+            // A blocking full GC cannot start until the background GC, including the end of
+            // its mark phase, has finished.
+            collector.CollectAndWait();
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+            collector.Join();
+            Assert.Equal(0, allocated);
+        }
+    }
+
+    // A background GC voids every thread's allocation context at the end of its mark phase
+    // without crediting the unused remainder back to that thread, so a thread holding a partially
+    // used context observes up to one allocation quantum of "allocation" it never made. Every GC
+    // starts by retiring allocation contexts with correct accounting, so after a GC this thread has
+    // no context left to void until it allocates again.
+    private static long GetAllocatedBytesWithEmptyAllocationContext()
+    {
+        GC.Collect(0, GCCollectionMode.Forced, blocking: true);
+        return GC.GetAllocatedBytesForCurrentThread();
+    }
+
+    private sealed class BlockingCollectionWorker
+    {
+        private readonly Thread _thread;
+        private volatile bool _collect;
+        private volatile bool _collected;
+
+        public BlockingCollectionWorker()
+        {
+            _thread = new Thread(Run) { IsBackground = true };
+        }
+
+        public void Start() => _thread.Start();
+
+        // Spins rather than blocking on a wait handle so the waiting thread does not allocate.
+        public void CollectAndWait()
+        {
+            _collect = true;
+            while (!_collected)
+            {
+                Thread.SpinWait(1);
+            }
+        }
+
+        public void Join() => _thread.Join();
+
+        private void Run()
+        {
+            while (!_collect)
+            {
+                Thread.SpinWait(1);
+            }
+
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+            _collected = true;
+        }
     }
 }

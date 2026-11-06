@@ -43,12 +43,32 @@ internal static class BrowserStorageKeys
     public const string LastSelectedResources = "Aspire_ResourcePane_LastSelectedResources";
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
+    public const string ResourceTagsKeyPrefix = "Aspire_Resources_Tags_";
+    public const string ResourceOrderKeyPrefix = "Aspire_Resources_Order_";
+    public const string MetricPinsKeyPrefix = "Aspire_Metrics_Pins_";
     public const string SplitterOrientationKeyPrefix = "Aspire_SplitterOrientation_";
     public const string SplitterSizeKeyPrefix = "Aspire_SplitterSize_";
 
     public static string CollapsedResourceNamesKey(string applicationName)
     {
         return $"{CollapsedResourceNamesKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
+
+    // Tags, order and pins describe the application, so each application has its own key. Different apps can be served
+    // from the same dashboard origin, for example the standalone dashboard's default port.
+    public static string ResourceTagsKey(string applicationName)
+    {
+        return $"{ResourceTagsKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
+
+    public static string ResourceOrderKey(string applicationName)
+    {
+        return $"{ResourceOrderKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
+
+    public static string MetricPinsKey(string applicationName)
+    {
+        return $"{MetricPinsKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
     }
 
     public static string SplitterOrientationKey(string viewKey)

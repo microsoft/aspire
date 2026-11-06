@@ -1,3 +1,5 @@
+import type { AspireExtensionE2EControlCommand } from '../../types/extensionApi';
+import { applyE2eControl } from './assertions';
 import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 import { error as webDriverError } from 'selenium-webdriver';
 
@@ -666,7 +668,9 @@ export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> 
                 return true;
             }
 
-            await notifications[0].dismiss();
+            // Clicking a toast's clear action needs the toast hovered, and toasts re-layout as others
+            // arrive or expire. VS Code's own command clears every notification without the DOM.
+            await applyE2eControl({ command: { name: 'clearAllNotifications' } satisfies AspireExtensionE2EControlCommand });
             return false;
         }
         catch (error) {

@@ -80,6 +80,11 @@ Just as `AddAzureContainerAppEnvironment("aca")` creates a single resource that 
 
 ### Integration Points
 
+The .NET service examples require `Aspire.Hosting.Dotnet` in the AppHost
+(`aspire add Aspire.Hosting.Dotnet`). Use actual AppHost-relative project paths; see the
+[project migration guide](../migrate-from-addproject.md). The AKS-specific APIs in this
+section remain the proposed architecture described by this spec.
+
 ```text
 ┌─────────────────────────────────────────────────────────────┐
 │                     User's AppHost                          │
@@ -95,7 +100,7 @@ Just as `AddAzureContainerAppEnvironment("aca")` creates a single resource that 
 │  var db = builder.AddAzureSqlServer("sql")                  │
 │      .WithPrivateEndpoint(subnet);  ← existing pattern      │
 │                                                             │
-│  builder.AddProject<MyApi>()                                │
+│  builder.AddDotnetProject("api", "../Api/Api.csproj")         │
 │      .WithReference(db)                                     │
 │      .WithAzureWorkloadIdentity(identity);  ← new           │
 └─────────────────────────────────────────────────────────────┘
@@ -305,13 +310,13 @@ Workload identity enables pods to authenticate to Azure services using federated
 **User API** (same as ACA):
 ```csharp
 // Automatic — identity auto-created when referencing Azure resources
-builder.AddProject<MyApi>()
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithComputeEnvironment(aks)
     .WithReference(blobStorage);  // gets identity + workload identity + role assignments
 
 // Explicit — bring your own identity
 var identity = builder.AddAzureUserAssignedIdentity("api-identity");
-builder.AddProject<MyApi>()
+builder.AddDotnetProject("api", "../Api/Api.csproj")
     .WithComputeEnvironment(aks)
     .WithAzureUserAssignedIdentity(identity);
 ```

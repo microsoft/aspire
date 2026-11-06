@@ -95,6 +95,12 @@ builder.AddOpenAIClient("openaiConnectionName", configureOptions: options => opt
 
 ## AppHost extensions
 
+The .NET service example requires `Aspire.Hosting.Dotnet` in the AppHost:
+
+```dotnetcli
+dotnet add package Aspire.Hosting.Dotnet
+```
+
 There is no specific AppHost extension corresponding to the OpenAI integration. Instead a connection string resource can be registered:
 
 In the _AppHost.cs_ file of `AppHost`, add an OpenAI REST API connection string name:
@@ -102,7 +108,7 @@ In the _AppHost.cs_ file of `AppHost`, add an OpenAI REST API connection string 
 ```csharp
 var openai = builder.AddConnectionString("openai");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(openai);
 ```
 

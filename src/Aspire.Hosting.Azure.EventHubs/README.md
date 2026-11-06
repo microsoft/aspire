@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.EventHubs` integratio
 
 ```bash
 aspire add Aspire.Hosting.Azure.EventHubs
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add an Event Hubs connection and reference it from another resou
 ```csharp
 var eventHubs = builder.AddAzureEventHubs("eh");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(eventHubs);
 ```
 

@@ -51,11 +51,12 @@ public class ResourceOverviewPersistenceTests : DashboardTestContext
             Assert.Equal(stateText, values["State"].TextContent.Trim());
             Assert.Equal("Container", values["Type"].TextContent.Trim());
             Assert.Equal(hasPersistentLifetime, values.ContainsKey("Container lifetime"));
-            var row = cut.Find("[data-resource-name='cache']");
+            var row = cut.Find(".resource-row[data-resource-name='cache']");
             var expectedType = hasPersistentLifetime ? "Container (persistent)" : "Container";
-            Assert.Equal(expectedType, row.QuerySelector(".resource-row-type")!.TextContent);
+            Assert.Equal("cache", row.QuerySelector(".resource-row-name")!.TextContent);
             Assert.All(cut.FindAll(".resource-status-type"), type => Assert.Equal(expectedType, type.TextContent));
-            Assert.Equal($"{stateText}; {expectedType}", row.QuerySelector(".resource-row-link")!.GetAttribute("aria-description"));
+            Assert.Equal($"{stateText}; {expectedType}{(state == KnownResourceState.Running ? "; Health state: Healthy" : "")}",
+                row.QuerySelector(".resource-row-link")!.GetAttribute("aria-description"));
             Assert.Equal(hasPersistentLifetime ? 1 : 0, row.QuerySelectorAll(".resource-row-icon .persistent-container-badge").Length);
             Assert.Equal(hasPersistentLifetime ? 1 : 0, cut.FindAll(".resource-header-icon .persistent-container-badge").Count);
             Assert.Empty(cut.FindAll(".persistent-container-icon"));

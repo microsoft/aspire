@@ -21,17 +21,20 @@
                         @foreach (var link in section.Links)
                         {
                             <li>
-                                <a class="help-link" href="@link.Url" target="_blank" rel="noreferrer noopener">
-                                    <span class="help-link-icon">
-                                        <FluentIcon Value="@link.Icon" Color="Color.Primary" />
-                                    </span>
-                                    <span class="help-link-text">
-                                        <span class="help-link-title">@link.Title</span>
-                                        <span class="help-link-description">@link.Description</span>
-                                    </span>
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Default" />
-                                    <span class="visually-hidden">@Loc[nameof(Resources.Dialogs.HelpDialogOpensInNewTab)]</span>
-                                </a>
+                                @if (link.OnClick is { } onClick)
+                                {
+                                    <a class="help-link" href="@link.Url" @onclick="onClick" @onclick:preventDefault="true">
+                                        @HelpLinkContent(link)
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a class="help-link" href="@link.Url" target="_blank" rel="noreferrer noopener">
+                                        @HelpLinkContent(link)
+                                        <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Default" />
+                                        <span class="visually-hidden">@Loc[nameof(Resources.Dialogs.HelpDialogOpensInNewTab)]</span>
+                                    </a>
+                                }
                             </li>
                         }
                     </ul>
@@ -61,3 +64,16 @@
     </FluentTabs>
     </div>
 </FluentDialogBody>
+
+@code {
+    private static RenderFragment HelpLinkContent(HelpLink link) =>
+        @<text>
+            <span class="help-link-icon">
+                <FluentIcon Value="@link.Icon" Color="Color.Primary" />
+            </span>
+            <span class="help-link-text">
+                <span class="help-link-title">@link.Title</span>
+                <span class="help-link-description">@link.Description</span>
+            </span>
+        </text>;
+}

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.Dashboard;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -105,6 +106,30 @@ public class DashboardTestingBuilderTests
         Assert.Equal(
             WaitBehavior.StopOnResourceUnavailable,
             app.Services.GetRequiredService<IOptions<ResourceNotificationServiceOptions>>().Value.DefaultWaitBehavior);
+    }
+
+    [Theory]
+    [InlineData(CreationSurface.Generic)]
+    [InlineData(CreationSurface.Type)]
+    public async Task DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface)
+    {
+        await using var builder = await CreateDashboardBuilderAsync(creationSurface, []);
+        builder.Configuration[InteractivityEnabled] = "true";
+        builder.Resources.Clear();
+
+        var beforeStartCount = 0;
+        builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) =>
+        {
+            Assert.False(e.Services.GetRequiredService<IInteractionService>().IsAvailable);
+            Interlocked.Increment(ref beforeStartCount);
+            return Task.CompletedTask;
+        });
+
+        await using var app = await builder.BuildAsync();
+        await app.StartAsync().DefaultTimeout(TimeSpan.FromSeconds(60));
+
+        Assert.Equal(1, beforeStartCount);
+        Assert.True(app.Services.GetRequiredService<IInteractionService>().IsAvailable);
     }
 
     [Fact]
