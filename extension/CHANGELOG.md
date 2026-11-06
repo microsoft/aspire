@@ -2,8 +2,28 @@
 
 ## v1.25.0
 
-<!-- aspire-ext-changelog from=92a66a541b19c5b6347d551ab76053177b7b1217 to=52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3 base=1.24.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=92a66a541b19c5b6347d551ab76053177b7b1217 to=52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3 base=1.24.0 -->
+
+### Features
+
+- Add Go AppHost support in VS Code, including editor support, launching and debugging from the extension, and debugger readiness handling. The Go AppHost experimental feature flag has been removed ([#21826](https://github.com/microsoft/aspire/pull/21826), [#21187](https://github.com/microsoft/aspire/pull/21187), [#21183](https://github.com/microsoft/aspire/pull/21183)).
+- Add VS Code resource debugging for .NET and Go resources ([#18602](https://github.com/microsoft/aspire/pull/18602)).
+- Add VS Code debugging for Node Azure Functions ([#20943](https://github.com/microsoft/aspire/pull/20943)).
+- Support configurable named integration sources ([#21366](https://github.com/microsoft/aspire/pull/21366)).
+- Support configurable named skill sources ([#21364](https://github.com/microsoft/aspire/pull/21364)).
+
+### Fixes
+
+- Honor nested AppHost launch profiles when the C# extension is not installed ([#20765](https://github.com/microsoft/aspire/pull/20765)).
+- Give the Deno AppHost inspector attach the full AppHost startup budget ([#21604](https://github.com/microsoft/aspire/pull/21604)).
+- Harden the browser launch used for dashboard debugging ([#21274](https://github.com/microsoft/aspire/pull/21274)).
+- Fix stale AppHost telemetry context in the extension ([#20318](https://github.com/microsoft/aspire/pull/20318)).
+- Guard native Blazor WebAssembly debugging against abandoned connections ([#20404](https://github.com/microsoft/aspire/pull/20404)).
+- Fix the version shown in the CLI update warning ([#21155](https://github.com/microsoft/aspire/pull/21155)).
+- Select CLI terminal replicas by resource instance ID ([#21120](https://github.com/microsoft/aspire/pull/21120)).
+- Fix the extension re-adding a configured AppHost path that no longer exists ([#20112](https://github.com/microsoft/aspire/pull/20112)).
+- Fix AppHost watcher lifecycle issues and duplicate startup RPCs ([#20763](https://github.com/microsoft/aspire/pull/20763)).
+- Update localized strings ([#21352](https://github.com/microsoft/aspire/pull/21352)).
 
 ## v1.24.0
 
