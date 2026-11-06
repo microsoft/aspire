@@ -14,6 +14,7 @@ internal sealed class TrayController : IAsyncDisposable
     private readonly TimeProvider _timeProvider;
     private readonly Func<string, TrayGitCheckout?> _readCheckout;
     private readonly Dictionary<string, TrayGitCheckout?> _checkouts = new(TrayAppHostPath.Comparer);
+    private readonly HashSet<string> _checkoutReads = new(TrayAppHostPath.Comparer);
     private HashSet<string> _checkoutPaths = new(TrayAppHostPath.Comparer);
     private readonly Channel<byte> _checkoutRefresh = Channel.CreateBounded<byte>(new BoundedChannelOptions(1)
     {
@@ -749,32 +750,6 @@ internal sealed class TrayController : IAsyncDisposable
                 string[] paths;
                 lock (_gate)
                 {
-                    paths = _checkoutPaths.ToArray();
-                }
-                var refreshed = new Dictionary<string, TrayGitCheckout?>(TrayAppHostPath.Comparer);
-                foreach (var path in paths)
-                {
-                    // Filesystem metadata is optional. A stalled share must neither hold the
-                    // controller gate nor prevent shutdown; abandon only the in-flight read.
-                    try
-                    {
-                        refreshed[path] = await Task.Run(() => _readCheckout(path), cancellationToken)
-                            .WaitAsync(cancellationToken).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        // Optional enrichment must not terminate discovery or expose local paths.
-                        Console.Error.WriteLine($"Git metadata refresh failed ({ex.GetType().Name}).");
-                        refreshed[path] = null;
-                    }
-                }
-                var changed = false;
-                lock (_gate)
-                {
                     if (_disposed)
                     {
                         return;
@@ -783,28 +758,48 @@ internal sealed class TrayController : IAsyncDisposable
                     {
                         _checkouts.Remove(path);
                     }
-                    foreach (var (path, checkout) in refreshed)
-                    {
-                        if (_checkoutPaths.Contains(path) && _checkouts.GetValueOrDefault(path) != checkout)
-                        {
-                            _checkouts[path] = checkout;
-                            changed = true;
-                        }
-                    }
-                    if (changed)
-                    {
-                        PublishLocked();
-                    }
+                    // At most one in-flight read per path, including paths removed and re-added
+                    // while their storage is stalled. Refresh ticks cannot duplicate blocked IO.
+                    paths = _checkoutPaths.Where(_checkoutReads.Add).ToArray();
                 }
-                if (changed)
+                foreach (var path in paths)
                 {
-                    Changed?.Invoke();
+                    // Each result publishes independently; a stalled share cannot hold up
+                    // another checkout. These optional reads may outlive shutdown, but never
+                    // hold the controller gate during IO or publish after disposal.
+                    _ = Task.Run(() => RefreshCheckout(path, cancellationToken));
                 }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
+    }
+
+    private void RefreshCheckout(string path, CancellationToken cancellationToken)
+    {
+        TrayGitCheckout? checkout;
+        try
+        {
+            checkout = cancellationToken.IsCancellationRequested ? null : _readCheckout(path);
+        }
+        catch (Exception ex)
+        {
+            // Optional enrichment must not terminate discovery or expose local paths.
+            Console.Error.WriteLine($"Git metadata refresh failed ({ex.GetType().Name}).");
+            checkout = null;
+        }
+        lock (_gate)
+        {
+            _checkoutReads.Remove(path);
+            if (_disposed || !_checkoutPaths.Contains(path) || _checkouts.GetValueOrDefault(path) == checkout)
+            {
+                return;
+            }
+            _checkouts[path] = checkout;
+            PublishLocked();
+        }
+        Changed?.Invoke();
     }
 
     public ValueTask DisposeAsync()
