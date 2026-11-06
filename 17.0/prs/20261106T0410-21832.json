@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Test-only CI stabilization",
+  "mergedAt": "2026-11-06T04:10:51Z",
+  "number": 21832,
+  "runDate": "2026-11-06T06:05:00Z",
+  "status": "excluded",
+  "title": "Serve NuGet search paging test from memory to unblock macOS CLI CI"
+}

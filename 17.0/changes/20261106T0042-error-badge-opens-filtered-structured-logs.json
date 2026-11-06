@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Selecting a resource's error badge now opens structured logs filtered to errors.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd34",
+  "firstMergedAt": "2026-11-06T00:42:14Z",
+  "lastMergedAt": "2026-11-06T00:42:14Z",
+  "name": "Error badge opens filtered structured logs",
+  "owner": "sebastienros",
+  "prs": [
+    21834
+  ]
+}

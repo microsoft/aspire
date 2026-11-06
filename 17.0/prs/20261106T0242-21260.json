@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Included in changelog",
+  "mergedAt": "2026-11-06T02:42:46Z",
+  "number": 21260,
+  "runDate": "2026-11-06T06:05:00Z",
+  "status": "included",
+  "title": "Add browser-facing origin references for CORS and redirect configuration"
+}

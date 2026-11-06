@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "E2E test coverage only",
+  "mergedAt": "2026-11-06T04:44:02Z",
+  "number": 21806,
+  "runDate": "2026-11-06T06:05:00Z",
+  "status": "excluded",
+  "title": "Add Go AppHost initialization and stable restore E2E coverage"
+}

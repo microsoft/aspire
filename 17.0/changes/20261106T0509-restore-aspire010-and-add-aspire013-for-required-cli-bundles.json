@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "ASPIRE010 keeps its original suppressible warning for non-C# AppHosts, while the required-bundle error for C# AppHosts now uses the new ASPIRE013 diagnostic.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udea6",
+  "firstMergedAt": "2026-11-06T05:09:39Z",
+  "lastMergedAt": "2026-11-06T05:09:39Z",
+  "name": "Restore ASPIRE010 and add ASPIRE013 for required CLI bundles",
+  "owner": "IEvangelist",
+  "prs": [
+    21288
+  ]
+}

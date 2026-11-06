@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Adds close buttons to detail pages, shows contextual resource availability in the sidebar, and collapses the full-width sidebar when navigating between tabs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\ude9f",
+  "firstMergedAt": "2026-11-06T00:23:21Z",
+  "lastMergedAt": "2026-11-06T04:28:08Z",
+  "name": "Refined dashboard resource sidebar",
+  "owner": "IEvangelist",
+  "prs": [
+    21792,
+    21819,
+    21836
+  ]
+}

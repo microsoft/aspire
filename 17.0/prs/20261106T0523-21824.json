@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Included in changelog",
+  "mergedAt": "2026-11-06T05:23:54Z",
+  "number": 21824,
+  "runDate": "2026-11-06T06:05:00Z",
+  "status": "included",
+  "title": "Allow structured Kubernetes manifest field values"
+}

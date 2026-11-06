@@ -1,0 +1,9 @@
+{
+  "author": "MrZakos",
+  "comment": "Included in changelog",
+  "mergedAt": "2026-11-06T04:15:42Z",
+  "number": 21101,
+  "runDate": "2026-11-06T06:05:00Z",
+  "status": "included",
+  "title": "Keep service.instance.id when a resource sets OTEL_RESOURCE_ATTRIBUTES"
+}

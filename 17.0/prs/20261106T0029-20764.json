@@ -1,0 +1,9 @@
+{
+  "author": "tommasodotNET",
+  "comment": "Included in changelog",
+  "mergedAt": "2026-11-06T00:29:44Z",
+  "number": 20764,
+  "runDate": "2026-11-06T06:05:00Z",
+  "status": "included",
+  "title": "Add native Linux tray support with StatusNotifierItem menus"
+}

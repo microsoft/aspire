@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds CodeLens and gutter indicators for Go AppHost resources and offers debugger setup before debugging Go, Java, or Rust AppHosts that lack the debugger extension.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc39",
+  "firstMergedAt": "2026-11-06T04:44:42Z",
+  "lastMergedAt": "2026-11-06T04:44:42Z",
+  "name": "Go AppHost editor support",
+  "owner": "IEvangelist",
+  "prs": [
+    21826
+  ]
+}

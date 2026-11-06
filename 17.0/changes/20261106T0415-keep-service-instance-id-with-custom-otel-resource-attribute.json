@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@MrZakos"
+  ],
+  "description": "Setting OTEL_RESOURCE_ATTRIBUTES on a resource no longer drops service.instance.id, which the dashboard needs to match telemetry to resources and replicas.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udd94",
+  "firstMergedAt": "2026-11-06T04:15:42Z",
+  "lastMergedAt": "2026-11-06T04:15:42Z",
+  "name": "Keep service.instance.id with custom OTEL_RESOURCE_ATTRIBUTES",
+  "owner": "mitchdenny",
+  "prs": [
+    21101
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": true,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds PrimaryBrowserOrigin and BrowserOrigins endpoint references so CORS and redirect configuration can match the origin the browser actually uses, including dev.localhost and Codespaces URLs.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-11-06T02:42:46Z",
+  "lastMergedAt": "2026-11-06T02:42:46Z",
+  "name": "Browser-facing origin references",
+  "owner": "danegsta",
+  "prs": [
+    21260
+  ]
+}
