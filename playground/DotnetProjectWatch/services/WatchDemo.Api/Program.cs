@@ -18,6 +18,31 @@ app.MapGet("/", () => $"api v1 | {Greeter.Message}");
 app.MapGet("/config", (IConfiguration config) => config["Demo:Greeting"] ?? "(not set)");
 
 // Exits with code 3 to try the crash flow: the resource shows Crashed; the next save (or Restart) relaunches it.
+// What the watcher built and how it launched this process (build configuration, build env, working directory, replica).
+app.MapGet("/diag", () =>
+{
+    var assembly = typeof(Program).Assembly;
+    string? Env(string name) => Environment.GetEnvironmentVariable(name);
+    return Results.Json(new
+    {
+        pid = Environment.ProcessId,
+        replica = Env("OTEL_SERVICE_INSTANCE_ID") ?? Env("ASPIRE_DOTNET_WATCH_INSTANCE"),
+        workingDirectory = Environment.CurrentDirectory,
+        assemblyConfiguration = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyConfigurationAttribute), false)
+            .OfType<System.Reflection.AssemblyConfigurationAttribute>().FirstOrDefault()?.Configuration,
+        buildMarker = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "BuildMarker")?.Value,
+        tempPath = Path.GetTempPath(),
+        env = new
+        {
+            TMPDIR = Env("TMPDIR"),
+            Configuration = Env("Configuration"),
+            WATCHDEMO_BUILD_MARKER = Env("WATCHDEMO_BUILD_MARKER"),
+            GREETING_SOURCE = Env("GREETING_SOURCE"),
+        },
+    });
+});
+
 app.MapGet("/crash", () => { Environment.Exit(3); return ""; });
 
 app.Run();
