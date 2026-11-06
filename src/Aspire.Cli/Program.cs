@@ -76,10 +76,7 @@ public class Program
     /// <param name="DebugMode">Whether --debug or -d was specified.</param>
     /// <param name="LogsDirectory">The directory where log files are stored.</param>
     /// <param name="LogFilePath">The full path to the current session's log file.</param>
-    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath)
-    {
-        internal bool AutomaticLogFile { get; init; }
-    }
+    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath);
 
     /// <summary>
     /// Holds the objects created during early CLI startup, before DI is available.
@@ -138,15 +135,9 @@ public class Program
         }
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
-        var explicitLogFilePath = ParseLogFileOption(args);
-        var logFilePath = explicitLogFilePath ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
-        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath)
-        {
-            AutomaticLogFile = explicitLogFilePath is null
-                || (string.Equals(Environment.GetEnvironmentVariable(KnownConfigNames.CliRunDetached), "true", StringComparison.OrdinalIgnoreCase)
-                    && RollingLogFile.IsManagedLogFile(logFilePath, logsDirectory))
-        };
+        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
     }
 
     /// <summary>
@@ -250,7 +241,7 @@ public class Program
 
         // Create file logger provider from pre-computed path info
         var fileLoggerProvider = new FileLoggerProvider(
-            loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter, loggingOptions.AutomaticLogFile);
+            loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
 
         var factory = LoggerFactory.Create(builder =>
         {

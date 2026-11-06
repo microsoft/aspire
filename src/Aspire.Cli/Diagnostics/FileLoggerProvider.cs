@@ -62,7 +62,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     /// <param name="timeProvider">The time provider for timestamp generation.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     public FileLoggerProvider(string logsDirectory, TimeProvider timeProvider, IStartupErrorWriter errorWriter)
-        : this(GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter, automaticLogFile: true)
+        : this(GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter)
     {
     }
 
@@ -72,14 +72,14 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     /// <param name="logFilePath">The full path to the log file.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     internal FileLoggerProvider(string logFilePath, IStartupErrorWriter errorWriter)
-        : this(logFilePath, logsDirectory: null, errorWriter, automaticLogFile: false)
+        : this(logFilePath, logsDirectory: null, errorWriter)
     {
     }
 
     /// <summary>
     /// Creates a file logger and repairs permissions when its parent is the dedicated logs directory.
     /// </summary>
-    internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter, bool automaticLogFile)
+    internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter)
     {
         _logFilePath = logFilePath;
 
@@ -104,7 +104,9 @@ internal sealed class FileLoggerProvider : ILoggerProvider
                 }
             }
 
-            _writer = automaticLogFile ? new RollingLogFile(logFilePath) : RollingLogFile.CreateWriter(logFilePath);
+            _writer = logsDirectory is not null && RollingLogFile.IsManagedLogFile(logFilePath, logsDirectory)
+                ? new RollingLogFile(logFilePath)
+                : RollingLogFile.CreateWriter(logFilePath);
 
             _channel = CreateChannel();
             _writerTask = Task.Run(() => ProcessLogQueueAsync(errorWriter));

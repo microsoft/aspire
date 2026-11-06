@@ -32,23 +32,50 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
             Assert.InRange(new FileInfo(file).Length, 0, RollingLogFile.FileSizeLimit));
     }
 
-    [Fact]
-    public void ExplicitLogFile_RemainsUnboundedAndDoesNotPruneOtherFiles()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WriteLog_AppliesRetentionToGeneratedFiles(bool detached)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = detached
+            ? Aspire.Cli.Commands.AppHostLauncher.GenerateChildLogFilePath(workspace.Path, TimeProvider.System)
+            : FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+        var errorWriter = new TestStartupErrorWriter();
+        using (var provider = new FileLoggerProvider(path, workspace.Path, errorWriter))
+        {
+            provider.WriteLog(new string('x', RollingLogFile.FileSizeLimit + 1));
+            provider.WriteLog("Current log");
+        }
+
+        var archive = Path.ChangeExtension(path, "1.log");
+        Assert.Equal(new[] { path, archive }.Order(), Directory.GetFiles(workspace.Path, "*.log").Order());
+        Assert.Equal(RollingLogFile.FileSizeLimit, new FileInfo(archive).Length);
+        Assert.Equal("Current log" + Environment.NewLine, File.ReadAllText(path));
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CustomLogFile_RemainsUnboundedAndDoesNotPruneOtherFiles(bool customDirectory)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var oldPath = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
         File.WriteAllText(oldPath, "Previous log");
-        var customPath = Path.Combine(workspace.Path, "custom.log");
+        var customPath = customDirectory
+            ? FileLoggerProvider.GenerateLogFilePath(workspace.CreateDirectory("custom").FullName, TimeProvider.System)
+            : Path.Combine(workspace.Path, "custom.log");
         var message = new string('x', RollingLogFile.FileSizeLimit + 1);
         var errorWriter = new TestStartupErrorWriter();
-        using (var provider = new FileLoggerProvider(customPath, workspace.Path, errorWriter, automaticLogFile: false))
+        using (var provider = new FileLoggerProvider(customPath, workspace.Path, errorWriter))
         {
             provider.WriteLog(message);
         }
 
         Assert.Equal(message + Environment.NewLine, File.ReadAllText(customPath));
         Assert.Equal("Previous log", File.ReadAllText(oldPath));
-        Assert.Equal(new[] { oldPath, customPath }.Order(), Directory.GetFiles(workspace.Path, "*.log").Order());
+        Assert.Equal(new[] { oldPath, customPath }.Order(), Directory.GetFiles(workspace.Path, "*.log", SearchOption.AllDirectories).Order());
         Assert.Empty(errorWriter.MarkupLines);
     }
 
