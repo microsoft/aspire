@@ -556,6 +556,24 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to If this failure is caused by an unavailable npm audit service, set the environment variable npm_config_audit=false only for a break-glass retry of the Aspire command. This disables vulnerability auditing. Remove the variable and run &apos;npm audit&apos; once the service recovers. Other npm errors still need to be fixed..
+        /// </summary>
+        internal static string NpmAuditRetryHint {
+            get {
+                return ResourceManager.GetString("NpmAuditRetryHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to &apos;npm {0}&apos; did not complete within {1} minutes and was stopped. Check the npm output for package download, lifecycle script, or audit service problems..
+        /// </summary>
+        internal static string NpmInstallTimedOut {
+            get {
+                return ResourceManager.GetString("NpmInstallTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to NuGet source key &apos;{0}&apos; is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually..
         /// </summary>
         internal static string NuGetSourceKeyAlreadyInUse {

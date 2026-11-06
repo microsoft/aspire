@@ -19,6 +19,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
@@ -81,7 +82,7 @@ public class GuestAppHostProjectTests : IDisposable
             },
             serverSessionFactory: sessionFactory);
 
-        Assert.True(await project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.True(await project.BuildAndGenerateSdkAsync(root, updateDependencies: false, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Collection(sessionFactory.CreatedSessionEnvironments,
             environment => Assert.Equal("true", environment![KnownConfigNames.IntegrationHostBootstrap]));
     }
@@ -111,7 +112,7 @@ public class GuestAppHostProjectTests : IDisposable
             });
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
+            project.BuildAndGenerateSdkAsync(root, updateDependencies: false, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(ErrorStrings.HostingIntegrationsFeatureNotEnabled, exception.Message);
     }
@@ -139,7 +140,7 @@ public class GuestAppHostProjectTests : IDisposable
             });
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
+            project.BuildAndGenerateSdkAsync(root, updateDependencies: false, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("Project opt-in accepted.", exception.Message);
     }
@@ -269,7 +270,7 @@ public class GuestAppHostProjectTests : IDisposable
         int result;
         if (operation == "restore")
         {
-            result = await project.BuildAndGenerateSdkAsync(appDirectory, cancellationToken: cancellationToken).DefaultTimeout() ? 0 : 1;
+            result = await project.BuildAndGenerateSdkAsync(appDirectory, updateDependencies: false, cancellationToken: cancellationToken).DefaultTimeout() ? 0 : 1;
         }
         else if (operation == "run")
         {
@@ -1086,6 +1087,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         var success = await project.BuildAndGenerateSdkAsync(
             new FileInfo(legacyAppHostPath),
+            updateDependencies: false,
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(success);
@@ -2094,6 +2096,76 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
         Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
+    }
+
+    [Theory]
+    [InlineData(false, 0, true)]
+    [InlineData(true, 0, true)]
+    [InlineData(false, 23, false)]
+    [InlineData(true, 23, false)]
+    public async Task BuildAndGenerateSdkAsync_UsesInstallIntentAndPropagatesFailure(bool updateDependencies, int npmExitCode, bool expectedSuccess)
+    {
+        await File.WriteAllTextAsync(Path.Combine(_workspace.Path, "package-lock.json"), "{}");
+        var toolsDirectory = _workspace.CreateDirectory("tools");
+        var npmPath = Path.Combine(toolsDirectory.FullName, OperatingSystem.IsWindows() ? "npm.cmd" : "npm");
+        var expectedCommand = updateDependencies ? "install" : "ci";
+        var script = OperatingSystem.IsWindows()
+            ? $"""
+              @echo off
+              echo npm %1
+              if not "%1"=="{expectedCommand}" exit /b 99
+              exit /b {npmExitCode}
+              """
+            : $"""
+              #!/bin/sh
+              echo "npm $1"
+              [ "$1" = "{expectedCommand}" ] || exit 99
+              exit {npmExitCode}
+              """;
+        await File.WriteAllTextAsync(npmPath, script);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(npmPath, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        var runtimeSpec = new RuntimeSpec
+        {
+            Language = KnownLanguageId.TypeScript,
+            DisplayName = "TypeScript (Node.js)",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec { Command = "node", Args = ["apphost.js"] },
+            InstallDependencies = new CommandSpec
+            {
+                Command = "npm",
+                Args = ["install"],
+                EnvironmentVariables = new Dictionary<string, string> { ["PATH"] = toolsDirectory.FullName }
+            }
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtimeSpec })
+        };
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var interactionService = new TestInteractionService();
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory);
+
+        var success = await project.BuildAndGenerateSdkAsync(_workspace.WorkspaceRoot, updateDependencies, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(expectedSuccess, success);
+        if (!expectedSuccess)
+        {
+            Assert.Equal(
+                [(OutputLineStream.StdOut, $"npm {expectedCommand}"), (OutputLineStream.StdErr, ErrorStrings.NpmAuditRetryHint)],
+                interactionService.DisplayedLines);
+        }
     }
 
     [Fact]
