@@ -14,6 +14,9 @@ internal sealed class TestAppHostServerProjectFactory : IAppHostServerProjectFac
     public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
         => CreateAsync(appPath, restoreRootConfigDirectory: null, cancellationToken);
 
+    public Task<IAppHostServerProject> CreateForSdkCommandsAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
+        => CreateAsync(appPath, restoreRootConfigDirectory, cancellationToken);
+
     public Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
     {
         RestoreRootConfigDirectory = restoreRootConfigDirectory;

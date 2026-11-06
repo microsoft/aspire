@@ -580,6 +580,8 @@ The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--i
 
 ### `aspire sdk dump`
 
+The SDK commands (`sdk generate`, `sdk dump`, and `sdk export`) create their scanner working directories under `<ASPIRE_HOME>/tmp/sdk/<unique-id>`, not the OS temporary directory. Scanner configuration and build artifacts stay inside that directory, isolated from ancestor workspace settings. Each invocation removes its working directory on completion, including preparation failures. Normal AppHost integration caches remain workspace-local.
+
 `aspire sdk dump --format json` is a hidden SDK-generation command that emits Aspire type-system capabilities:
 
 ```json

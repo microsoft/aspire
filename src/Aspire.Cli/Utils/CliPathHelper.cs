@@ -57,6 +57,39 @@ internal static class CliPathHelper
         return AspireHomeDirectory.GetDefault(configuredAspireHome, userProfileDirectory);
     }
 
+    // Accept the execution context's already-resolved Aspire home rather than resolving it
+    // from process state again, so tests using an isolated home never write to the user's home.
+    internal static DirectoryInfo CreateSdkWorkingDirectory(DirectoryInfo aspireHomeDirectory)
+    {
+        // Keep generated scanner projects out of the shared OS temp hierarchy, where
+        // ancestor build configuration can affect restore and build.
+        var tempRoot = DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.Combine(aspireHomeDirectory.FullName, "tmp"));
+        var sdkRoot = DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.Combine(tempRoot.FullName, "sdk"));
+        var directory = DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.Combine(sdkRoot.FullName, Guid.NewGuid().ToString("N")));
+        try
+        {
+            // Anchor configuration discovery here so global or ancestor settings cannot move
+            // integration caches outside this invocation's cleanup boundary.
+            File.WriteAllText(Path.Combine(directory.FullName, Configuration.AspireConfigFile.FileName), "{}");
+            return directory;
+        }
+        catch (Exception initializationException) when (initializationException is IOException or UnauthorizedAccessException)
+        {
+            // The caller cannot enter its cleanup scope until this method returns.
+            try
+            {
+                directory.Delete(recursive: true);
+            }
+            catch (Exception cleanupException) when (cleanupException is IOException or UnauthorizedAccessException)
+            {
+                throw new AggregateException("SDK working directory initialization and cleanup both failed.",
+                    initializationException, cleanupException);
+            }
+
+            throw;
+        }
+    }
+
     /// <summary>
     /// Returns the absolute path to the staging NuGet package cache root
     /// (<c>&lt;ASPIRE_HOME&gt;/.nugetpackages</c>). Producers (the

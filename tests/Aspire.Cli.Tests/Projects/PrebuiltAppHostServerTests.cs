@@ -2007,8 +2007,9 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         };
         var dotNetCliRunner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            BuildAsyncCallback = (projectFilePath, _, options, _) =>
             {
+                Assert.True(options.NoAutoResponse);
                 generatedProject = XDocument.Load(projectFilePath.FullName);
                 WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
                 return 0;
