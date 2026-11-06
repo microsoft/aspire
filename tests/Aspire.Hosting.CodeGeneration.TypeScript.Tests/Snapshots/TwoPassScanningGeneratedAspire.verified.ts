@@ -1841,6 +1841,11 @@ export interface WithExecutableDebugSupportOptions {
     launchMethod?: string;
 }
 
+export interface WithExecutableVolumeOptions {
+    /** Whether the published volume is read-only. */
+    isReadOnly?: boolean;
+}
+
 export interface WithHiddenOnCompletionOptions {
     /** The completion exit code to treat as successful. Defaults to `0`. */
     exitCode?: number | null;
@@ -1972,6 +1977,11 @@ export interface WithPipelineStepFactoryOptions {
     description?: string;
 }
 
+export interface WithProjectVolumeOptions {
+    /** Whether the published volume is read-only. */
+    isReadOnly?: boolean;
+}
+
 export interface WithReferenceOptions {
     connectionName?: string;
     optional?: boolean;
@@ -2003,10 +2013,10 @@ export interface WithUrlOptions {
 }
 
 export interface WithVolumeOptions {
-    /** Whether the published volume is read-only. */
-    isReadOnly?: boolean;
     /** The volume name. If null, an anonymous volume is created. */
     name?: string;
+    /** Whether the volume is read-only. */
+    isReadOnly?: boolean;
 }
 
 // ============================================================================
@@ -20716,7 +20726,7 @@ export interface CSharpAppResource {
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithProjectVolumeOptions): CSharpAppResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -21424,7 +21434,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): CSharpAppResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithProjectVolumeOptions): CSharpAppResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -23437,7 +23447,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): CSharpAppResourcePromise {
+    withVolume(target: string, name: string, env: string, options?: WithProjectVolumeOptions): CSharpAppResourcePromise {
         const isReadOnly = options?.isReadOnly;
         return new CSharpAppResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
@@ -24795,7 +24805,7 @@ export interface DotnetToolResource {
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithExecutableVolumeOptions): DotnetToolResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -25539,7 +25549,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): DotnetToolResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithExecutableVolumeOptions): DotnetToolResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -27667,7 +27677,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): DotnetToolResourcePromise {
+    withVolume(target: string, name: string, env: string, options?: WithExecutableVolumeOptions): DotnetToolResourcePromise {
         const isReadOnly = options?.isReadOnly;
         return new DotnetToolResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
@@ -28979,7 +28989,7 @@ export interface ExecutableResource {
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ExecutableResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithExecutableVolumeOptions): ExecutableResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -29684,7 +29694,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ExecutableResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithExecutableVolumeOptions): ExecutableResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -31702,7 +31712,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param options Additional options.
      * @returns The same executable resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ExecutableResourcePromise {
+    withVolume(target: string, name: string, env: string, options?: WithExecutableVolumeOptions): ExecutableResourcePromise {
         const isReadOnly = options?.isReadOnly;
         return new ExecutableResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
@@ -37711,7 +37721,7 @@ export interface ProjectResource {
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ProjectResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithProjectVolumeOptions): ProjectResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -38419,7 +38429,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ProjectResourcePromise;
+    withVolume(target: string, name: string, env: string, options?: WithProjectVolumeOptions): ProjectResourcePromise;
     /**
      * Gets the name of the resource from a builder.
      *
@@ -40433,7 +40443,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param options Additional options.
      * @returns The same project resource builder handle for chaining.
      */
-    withVolume(target: string, name: string, env: string, options?: WithVolumeOptions): ProjectResourcePromise {
+    withVolume(target: string, name: string, env: string, options?: WithProjectVolumeOptions): ProjectResourcePromise {
         const isReadOnly = options?.isReadOnly;
         return new ProjectResourcePromiseImpl(this._withVolumeInternal(target, name, env, isReadOnly), this._client);
     }
