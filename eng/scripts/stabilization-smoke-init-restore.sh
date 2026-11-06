@@ -124,9 +124,11 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 echo "Work dir:      $WORK_DIR"
 
 # Pin the driver and generated projects to the SDK that the stabilized pack produced.
-APPHOST_SDK_NUPKG=$(ls "$LOCAL_FEED"/Aspire.AppHost.Sdk.[0-9]*.[0-9]*.[0-9]*.nupkg 2>/dev/null | head -1)
+APPHOST_SDK_NUPKG=$(ls "$LOCAL_FEED"/Aspire.AppHost.Sdk.*.nupkg 2>/dev/null \
+    | grep -E '/Aspire\.AppHost\.Sdk\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$' \
+    | head -1 || true)
 if [ -z "$APPHOST_SDK_NUPKG" ]; then
-    echo "❌ No Aspire.AppHost.Sdk.*.nupkg in $LOCAL_FEED — can't pin the template SDK version."
+    echo "❌ No stable Aspire.AppHost.Sdk.MAJOR.MINOR.PATCH.nupkg in $LOCAL_FEED — can't pin the template SDK version."
     exit 1
 fi
 # For example, Aspire.AppHost.Sdk.17.0.0.nupkg becomes 17.0.0.
