@@ -107,12 +107,17 @@
         <target state="translated">是否針對選取的代理程式環境設定 Aspire MCP 伺服器?</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_ConfiguredSourceList">
+        <source>Sources: {0}</source>
+        <target state="new">Sources: {0}</target>
+        <note>{0} lists the configured repository and catalog URLs separated by commas.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
-        <source>Configured Aspire plugin:
+        <source>Configured sources:
   {0}</source>
-        <target state="new">Configured Aspire plugin:
+        <target state="new">Configured sources:
   {0}</target>
-        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
+        <note>{0} contains the source URLs and configuration locations, each on its own labeled line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
@@ -162,8 +167,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
-        <source>Installed Aspire agent skills:</source>
-        <target state="translated">已安裝的 Aspire 代理程式技能:</target>
+        <source>Installed skills:</source>
+        <target state="needs-review-translation">已安裝的 Aspire 代理程式技能:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -197,6 +202,11 @@
         <target state="new">Local Aspire skill files may override plugin skills
 {0}</target>
         <note>{0} lists the local skill entry-point paths, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_LocationWithAgents">
+        <source>{0} ({1})</source>
+        <target state="new">{0} ({1})</target>
+        <note>{0} is a location, and {1} lists the agents that use it, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>

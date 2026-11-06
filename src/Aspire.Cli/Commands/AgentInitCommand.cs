@@ -514,10 +514,6 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             selectedSkills.Add(SkillDefinition.DotnetInspect);
         }
-        if (selectedSkills.Count > 0 || configureMcp)
-        {
-            DisplayInstallationLocations(selectedClients, scope, workspaceRoot, selectedSkills.Count > 0, configureMcp);
-        }
 
         // The selected clients determine destinations; defaults never fabricate detection.
         var selectedSkillDirs = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -532,7 +528,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
-            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
+            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, skillSources, workspaceRoot);
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -552,18 +548,15 @@ internal sealed class AgentInitCommand : BaseCommand
 
                 var installResult = await InstallSkillAsync(
                     skillDirectory,
-                    AgentPath.GetDisplayPath(skillDirectory, scope, workspaceRoot, ExecutionContext),
                     skill,
                     cancellationToken);
                 hasErrors |= !installResult.Succeeded;
-                if (installResult.UpdatedSkill is not null)
+                if (installResult.InstalledSkill is not null)
                 {
-                    installedSkills.Add(installResult.UpdatedSkill);
+                    installedSkills.Add(installResult.InstalledSkill);
                 }
             }
         }
-
-        DisplayInstalledSkillsSummary(installedSkills);
 
         // --- Phase 4: Handle Playwright CLI (installs binary + mirrors skill files to registered directories) ---
         if (selectedSkills.Contains(SkillDefinition.PlaywrightCli))
@@ -575,6 +568,8 @@ internal sealed class AgentInitCommand : BaseCommand
                 {
                     case PlaywrightInstallStatus.Installed:
                         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
+                        installedSkills.AddRange(selectedSkillDirs.Select(directory =>
+                            new InstalledSkillSummaryItem(SkillDefinition.PlaywrightCli.Name, directory)));
                         break;
                     case PlaywrightInstallStatus.InstalledWithWarnings:
                         InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, message!);
@@ -596,7 +591,11 @@ internal sealed class AgentInitCommand : BaseCommand
                 InteractionService.DisplayError(ex.Message);
                 hasErrors = true;
             }
+
+            InteractionService.DisplayEmptyLine();
         }
+
+        DisplayInstalledSkillsSummary(installedSkills, scope, workspaceRoot);
 
         // --- Phase 5: Apply MCP server configuration if the user confirmed ---
         if (configureMcp)
@@ -805,10 +804,9 @@ internal sealed class AgentInitCommand : BaseCommand
     /// <summary>
     /// Installs the files for a skill at the specified location, creating or updating them as needed.
     /// </summary>
-    /// <returns>The install result, including the skill/location pair when files were updated.</returns>
+    /// <returns>The install result, including the skill/location pair when installation succeeded.</returns>
     private async Task<SkillInstallResult> InstallSkillAsync(
         string skillBaseDirectory,
-        string displayLocation,
         SkillDefinition skill,
         CancellationToken cancellationToken)
     {
@@ -830,55 +828,58 @@ internal sealed class AgentInitCommand : BaseCommand
                 var existingContent = await File.ReadAllTextAsync(fullPath, cancellationToken);
                 if (string.Equals(existingContent.ReplaceLineEndings("\n"), skillContent.ReplaceLineEndings("\n"), StringComparison.Ordinal))
                 {
-                    return new(Succeeded: true, UpdatedSkill: null);
+                    return new(Succeeded: true, new InstalledSkillSummaryItem(skill.Name, skillBaseDirectory));
                 }
             }
 
             await File.WriteAllTextAsync(fullPath, skillContent, cancellationToken);
-            return new(Succeeded: true, new InstalledSkillSummaryItem(skill.Name, displayLocation));
+            return new(Succeeded: true, new InstalledSkillSummaryItem(skill.Name, skillBaseDirectory));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             InteractionService.DisplayError(
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullSkillDirectoryPath, ex.Message));
-            return new(Succeeded: false, UpdatedSkill: null);
+            return new(Succeeded: false, InstalledSkill: null);
         }
     }
 
-    private void DisplayInstalledSkillsSummary(IReadOnlyList<InstalledSkillSummaryItem> installedSkills)
+    private void DisplayInstalledSkillsSummary(IReadOnlyList<InstalledSkillSummaryItem> installedSkills, AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
         if (installedSkills.Count == 0)
         {
             return;
         }
 
-        var skillNames = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.SkillName)));
-        var locations = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.DisplayLocation)));
-        var message = string.Join(Environment.NewLine,
-            AgentCommandStrings.InitCommand_InstalledSkillsSummary,
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, skillNames)}",
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, locations)}");
-
-        InteractionService.DisplayMessage(KnownEmojis.Robot, message);
-    }
-
-    private static IReadOnlyList<string> GetUniqueValues(IEnumerable<string> values)
-    {
-        var uniqueValues = new List<string>();
-        var seenValues = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var value in values)
+        var lines = new List<string> { AgentCommandStrings.InitCommand_InstalledSkillsSummary };
+        lines.Add($"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
+            string.Join(", ", installedSkills.Select(static skill => skill.SkillName).Distinct(StringComparer.Ordinal)))}");
+        var locations = new List<string>();
+        var hasSharedLocation = false;
+        foreach (var location in installedSkills.GroupBy(static skill => skill.Directory, StringComparers.FileSystemPath))
         {
-            if (seenValues.Add(value))
-            {
-                uniqueValues.Add(value);
-            }
+            var clients = _clients.Where(client =>
+                StringComparers.FileSystemPath.Equals(location.Key, client.GetSkillBaseDirectory(scope, workspaceRoot)))
+                .ToArray();
+            hasSharedLocation |= clients.Length > 1;
+            locations.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                AgentPath.GetDisplayPath(location.Key, scope, workspaceRoot, ExecutionContext),
+                string.Join(", ", clients.Select(static client => client.DisplayName))));
         }
 
-        return uniqueValues;
+        lines.Add($"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations,
+            string.Join(", ", locations))}");
+
+        var message = string.Join(Environment.NewLine, lines.Select(static line => line.EscapeMarkup()));
+        if (hasSharedLocation)
+        {
+            message += $"{Environment.NewLine}  [dim]{AgentCommandStrings.InitCommand_SharedLocationNotice.EscapeMarkup()}[/]";
+        }
+
+        InteractionService.DisplayMessage(KnownEmojis.Robot, message, allowMarkup: true);
+        InteractionService.DisplayEmptyLine();
     }
 
-    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot)
+    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, IReadOnlyList<SkillSource> sources, DirectoryInfo workspaceRoot)
     {
         var hasErrors = false;
         foreach (var resultGroup in results.GroupBy(result => result.Status switch
@@ -897,13 +898,43 @@ internal sealed class AgentInitCommand : BaseCommand
 
                     return entry.Result.Message is null ? target : $"{target}{Environment.NewLine}  {entry.Result.Message}";
                 })
-                : entries.GroupBy(entry => entry.Client.Id, StringComparers.AgentClientId).Select(agent =>
-                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
-                        agent.First().Client.DisplayName,
-                        string.Join(", ", agent.Select(entry => entry.Result.TargetPath).Distinct(StringComparers.FileSystemPath)
-                            .Select(path => AgentPath.GetDisplayPath(path, workspaceRoot, ExecutionContext)))));
+                : resultGroup.GroupBy(result => result.TargetPath, StringComparers.FileSystemPath).Select(location =>
+                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                        AgentPath.GetDisplayPath(location.Key, workspaceRoot, ExecutionContext),
+                        string.Join(", ", location.SelectMany(static result => result.Clients)
+                            .DistinctBy(static client => client.Id, StringComparers.AgentClientId)
+                            .Select(static client => client.DisplayName))));
             var format = resultGroup.Key ? AgentCommandStrings.InitCommand_FailedTarget : AgentCommandStrings.InitCommand_ConfiguredTargets;
-            var message = string.Format(CultureInfo.CurrentCulture, format, string.Join($"{Environment.NewLine}  ", targets));
+            var targetLines = resultGroup.Key
+                ? string.Join($"{Environment.NewLine}  ", targets)
+                : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations,
+                    string.Join(", ", targets));
+            if (!resultGroup.Key)
+            {
+                var sourceUrls = new List<string>();
+                foreach (var result in resultGroup)
+                {
+                    foreach (var client in result.Clients)
+                    {
+                        if (client.Id == OpenCodeAgentClient.ClientId)
+                        {
+                            // Report the catalog URLs actually retained in the target, including
+                            // existing release pins and the client's V1 or V2 representation.
+                            var catalogs = AspireSkillsRemoteConfiguration.ReadOpenCodeSkills(result.Configuration!);
+                            sourceUrls.AddRange((catalogs ?? []).Select(static value => value!.GetValue<string>())
+                                .Where(url => sources.Any(source => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(url, source))));
+                        }
+                        else
+                        {
+                            sourceUrls.AddRange(sources.Select(static source => source.GetRepositoryUrl()));
+                        }
+                    }
+                }
+
+                targetLines = $"{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredSourceList,
+                    string.Join(", ", sourceUrls.Distinct(StringComparer.Ordinal)))}{Environment.NewLine}  {targetLines}";
+            }
+            var message = string.Format(CultureInfo.CurrentCulture, format, targetLines);
             if (resultGroup.Key)
             {
                 InteractionService.DisplayError(message);
@@ -913,64 +944,16 @@ internal sealed class AgentInitCommand : BaseCommand
             {
                 InteractionService.DisplayMessage(KnownEmojis.Robot, message);
             }
+
+            InteractionService.DisplayEmptyLine();
         }
 
         return hasErrors;
     }
 
-    private void DisplayInstallationLocations(IReadOnlyList<IAgentClient> clients, AgentConfigurationScope scope, DirectoryInfo workspaceRoot, bool installSkills, bool configureMcp)
-    {
-        var lines = new List<string> { AgentCommandStrings.InitCommand_InstallationLocations };
-        var pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var hasSharedLocation = false;
-        if (installSkills)
-        {
-            var directories = clients.Select(client => client.GetSkillBaseDirectory(scope, workspaceRoot))
-                .Distinct(pathComparer);
-            foreach (var directory in directories)
-            {
-                AddLocation(AgentCommandStrings.InitCommand_SkillsLocationHint, directory,
-                    [.. _clients.Where(client => pathComparer.Equals(directory,
-                        client.GetSkillBaseDirectory(scope, workspaceRoot)))]);
-            }
-        }
+    private sealed record InstalledSkillSummaryItem(string SkillName, string Directory);
 
-        if (configureMcp)
-        {
-            var paths = clients.Select(client => client.GetMcpConfigPath(scope, workspaceRoot))
-                .Distinct(pathComparer);
-            foreach (var path in paths)
-            {
-                AddLocation(AgentCommandStrings.InitCommand_McpLocationHint, path,
-                    [.. _clients.Where(client => pathComparer.Equals(path,
-                        client.GetMcpConfigPath(scope, workspaceRoot)))]);
-            }
-        }
-
-        if (hasSharedLocation)
-        {
-            lines.Add(AgentCommandStrings.InitCommand_SharedLocationNotice);
-        }
-
-        InteractionService.DisplaySubtleMessage(string.Join(Environment.NewLine, lines));
-
-        void AddLocation(string format, string path, IReadOnlyList<IAgentClient> sharedClients)
-        {
-            var location = AgentPath.GetDisplayPath(path, scope, workspaceRoot, ExecutionContext);
-            if (sharedClients.Count > 1)
-            {
-                hasSharedLocation = true;
-                location = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SharedLocation,
-                    location, string.Join(", ", sharedClients.Select(static client => client.DisplayName)));
-            }
-
-            lines.Add($"  {string.Format(CultureInfo.CurrentCulture, format, location)}");
-        }
-    }
-
-    private sealed record InstalledSkillSummaryItem(string SkillName, string DisplayLocation);
-
-    private readonly record struct SkillInstallResult(bool Succeeded, InstalledSkillSummaryItem? UpdatedSkill);
+    private readonly record struct SkillInstallResult(bool Succeeded, InstalledSkillSummaryItem? InstalledSkill);
 }
 
 internal readonly record struct AgentInitExecutionResult(
