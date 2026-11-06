@@ -890,21 +890,9 @@ internal static partial class DotnetWatchCoordinator
 
             var environment = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-            // The watcher has no per-project build arguments (it hardcodes none), so build settings travel in its
-            // process environment, which MSBuild reads as properties for its builds, its in-process evaluation and
-            // the `dotnet run --no-build` launches. Environment properties have the lowest precedence: a project
-            // that sets the property unconditionally wins, unlike the global properties of the normal build.
-            // Debug is MSBuild's default, so it's left unset: anything set here is restored to the proxy's own value
-            // for the services, and a variable that was originally unset comes back empty rather than unset.
-            if (Projects.Select(p => p.Metadata.BuildConfiguration).FirstOrDefault(c => !string.IsNullOrEmpty(c)) is { } buildConfiguration &&
-                !string.Equals(buildConfiguration, "Debug", StringComparison.OrdinalIgnoreCase))
+            foreach (var (name, value) in GetBuildProperties(Projects.Select(p => p.Metadata)))
             {
-                environment["Configuration"] = buildConfiguration;
-
-                // The watcher only attaches its hot reload agent to unoptimized builds, and the agent is what
-                // applies the service environment (endpoints, connection strings) to the launched app. Release
-                // defaults Optimize only when it's empty, so this keeps Release's output paths and constants.
-                environment["Optimize"] = "false";
+                environment[name] = value;
             }
 
             if (DedicatedTo is { } owner)
@@ -1441,6 +1429,42 @@ internal static partial class DotnetWatchCoordinator
     {
         public DateTime At { get; } = DateTime.UtcNow;
         public bool Consumed { get; set; }
+    }
+
+    /// <summary>MSBuild properties the watcher's process environment carries for a server's projects.</summary>
+    /// <remarks>
+    /// The watcher has no per-project build arguments (it hardcodes none), so build settings travel in its process
+    /// environment, which MSBuild reads as properties for its builds, its in-process evaluation and the
+    /// <c>dotnet run --no-build</c> launches. Environment properties have the lowest precedence: a project that sets the
+    /// property unconditionally wins, unlike the global properties of the normal build. Debug is MSBuild's default, so
+    /// it's left unset: anything set here is restored to the proxy's own value for the services, and a variable that was
+    /// originally unset comes back empty rather than unset.
+    /// </remarks>
+    internal static Dictionary<string, string> GetBuildProperties(IEnumerable<DotnetProjectMetadata> projects)
+    {
+        var properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var metadata = projects.ToList();
+        if (metadata.Select(m => m.BuildConfiguration).FirstOrDefault(c => !string.IsNullOrEmpty(c)) is { } buildConfiguration &&
+            !string.Equals(buildConfiguration, "Debug", StringComparison.OrdinalIgnoreCase))
+        {
+            properties["Configuration"] = buildConfiguration;
+
+            // The watcher only attaches its hot reload agent to unoptimized builds, and the agent is what applies the
+            // service environment (endpoints, connection strings) to the launched app. Release defaults Optimize only
+            // when it's empty, so this keeps Release's output paths and constants.
+            properties["Optimize"] = "false";
+        }
+
+        if (metadata.Any(m => ((IProjectMetadata)m).IsFileBasedApp))
+        {
+            // File-based apps default to PublishAot, whose trimming defaults turn off startup hooks and metadata updates
+            // in the runtimeconfig. The watcher's agent is a startup hook, so on .NET 10 every edit fails with ENC0097
+            // (.NET 11 turns both back on for Debug through runtimeconfig.dev.json).
+            properties["StartupHookSupport"] = "true";
+            properties["MetadataUpdaterSupport"] = "true";
+        }
+
+        return properties;
     }
 
     /// <param name="Muxer">The <c>dotnet</c> that runs the watcher and the watch host's server command.</param>

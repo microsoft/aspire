@@ -315,6 +315,35 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void FileBasedAppBuildsWithStartupHooksAndMetadataUpdates()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var scriptPath = Path.Combine(workspace.Path, "ticker.cs");
+        File.WriteAllText(scriptPath, "Console.WriteLine(1);");
+
+        var properties = DotnetWatchCoordinator.GetBuildProperties([new DotnetProjectMetadata(scriptPath, null, "ticker")]);
+
+        Assert.Equal("true", properties["StartupHookSupport"]);
+        Assert.Equal("true", properties["MetadataUpdaterSupport"]);
+        Assert.False(properties.ContainsKey("Configuration"));
+    }
+
+    [Fact]
+    public void ProjectBuildPropertiesFollowTheBuildConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path);
+
+        Assert.Empty(DotnetWatchCoordinator.GetBuildProperties([new DotnetProjectMetadata(projectPath, null, "service")]));
+        Assert.Empty(DotnetWatchCoordinator.GetBuildProperties([new DotnetProjectMetadata(projectPath, "Debug", "service")]));
+
+        var release = DotnetWatchCoordinator.GetBuildProperties([new DotnetProjectMetadata(projectPath, "Release", "service")]);
+        Assert.Equal("Release", release["Configuration"]);
+        Assert.Equal("false", release["Optimize"]);
+        Assert.False(release.ContainsKey("StartupHookSupport"));
+    }
+
+    [Fact]
     public async Task UnusedSharedServerIsRemovedWhenEveryProjectHasItsOwn()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
