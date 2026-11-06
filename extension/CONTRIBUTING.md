@@ -135,6 +135,8 @@ The runner retries external VS Code and ChromeDriver downloads five times by def
 
 Some extension E2E tests intentionally cover bugs fixed by the current repo-built CLI. When running the extension suite against an older published CLI to check backward compatibility, set `ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` so those current-CLI-only regressions are skipped instead of failing on the older CLI bug.
 
+The AppHost serves the Dashboard and HTTPS resource endpoints with the ASP.NET Core development certificate, which clean machines and hosted runners do not trust. The runner exports the public half of that certificate with `dotnet dev-certs https --export-path ... --format Pem` (creating it if the machine has none, without trusting it) and passes the file to the tests as `ASPIRE_EXTENSION_E2E_DEV_CERT_PATH`. The HTTPS probes in `src/test-e2e/helpers/assertions.ts` trust exactly that certificate, so chain and host name validation stay on. Do not disable certificate validation in E2E helpers; if the export fails, the runner warns and probes fall back to the default trust store.
+
 The suite can be sharded by running separate VS Code windows/processes, which is how CI keeps the long UI paths parallel instead of relying on Mocha-level parallelism inside one extension host:
 
 ```bash
