@@ -1,0 +1,156 @@
+{
+  "run_id": 42168906963,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42168906963",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-06T06:41:47Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21850,
+    "title": "Bump main to Aspire 17.1 and align release milestones",
+    "author": "joperezr",
+    "state": "closed",
+    "head_branch": "joperezr-17-1-version-bump",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21850",
+    "merged_at": "2026-11-06T05:31:18Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "a8f33564e1f01c9399efd67b1563be317e68353d",
+    "failed_sha": "cb221bf06b88c2eaf664eb03e78ffce22083d500",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "6d45477ddc755b541d70738ecbb0759d16798b8e",
+        "message": "Keep service.instance.id when a resource sets OTEL_RESOURCE_ATTRIBUTES (#21101) ## Description In run mode the OTLP exporter callback assigned `OTEL_RESOURCE_ATTRIBUTES = service.instance.id=<DCP template>`. Environment callbacks run in registration order, and `AddProject` registers that callback before any call the AppHost makes, so: - a later `WithEnvironment(\"OTEL_RESOURCE_ATTRIBUTES\", ...)` replaced the value and dropped `service.instance.id`. The dashboard needs that id to match telemetry t",
+        "html_url": "https://github.com/microsoft/aspire/commit/6d45477ddc755b541d70738ecbb0759d16798b8e",
+        "pull_request": {
+          "number": 21101,
+          "title": "Keep service.instance.id when a resource sets OTEL_RESOURCE_ATTRIBUTES",
+          "url": "https://github.com/microsoft/aspire/pull/21101",
+          "merged_at": "2026-11-06T04:15:42Z"
+        }
+      },
+      {
+        "sha": "6a39bcfadc0a6ede45485745e9f530c31f0bb808",
+        "message": "Collapse full-width dashboard sidebar on tab navigation (#21836) ## Description Switching views while the resource sidebar is fully expanded should reveal the destination instead of leaving it covered by the full-width resource list. Tab navigation now immediately returns the pane to its normal narrow sidebar width, preserving the user's saved width and resource selection rather than waiting for the destination page to render. The tab strip, overflow menu, and compact navigation menu share the s",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a39bcfadc0a6ede45485745e9f530c31f0bb808",
+        "pull_request": {
+          "number": 21836,
+          "title": "Collapse full-width dashboard sidebar on tab navigation",
+          "url": "https://github.com/microsoft/aspire/pull/21836",
+          "merged_at": "2026-11-06T04:28:08Z"
+        }
+      },
+      {
+        "sha": "89188d0ea7733a5901636d691b10b147f02e80c3",
+        "message": "Fix responsive dashboard recording badge and navigation overflow (#21835) ## Description The recording timestamp badge was absolutely centered over the dashboard header, covering navigation tabs while viewing a past recording. At narrower widths, navigation labels such as **Metrics** and **Structured logs** could also be clipped instead of moving into the overflow menu. Keep the badge in the header's flex layout, right-aligned with the header actions immediately **to the left of the Recordings i",
+        "html_url": "https://github.com/microsoft/aspire/commit/89188d0ea7733a5901636d691b10b147f02e80c3",
+        "pull_request": {
+          "number": 21835,
+          "title": "Fix responsive dashboard recording badge and navigation overflow",
+          "url": "https://github.com/microsoft/aspire/pull/21835",
+          "merged_at": "2026-11-06T04:30:49Z"
+        }
+      },
+      {
+        "sha": "1b946a70114eaf152778109bd0b86df19ae47006",
+        "message": "Add Go AppHost initialization and stable restore E2E coverage (#21806) ## Description Adds focused Go AppHost E2E coverage for the initialization and package-resolution gaps identified while reviewing the Preview flag-removal PR. - Extends SDK-refresh coverage to interactive init, non-interactive `init --language go` in an empty directory, and non-interactive init alongside an existing Go application. The brownfield case verifies source preservation and wires the existing application through the",
+        "html_url": "https://github.com/microsoft/aspire/commit/1b946a70114eaf152778109bd0b86df19ae47006",
+        "pull_request": {
+          "number": 21806,
+          "title": "Add Go AppHost initialization and stable restore E2E coverage",
+          "url": "https://github.com/microsoft/aspire/pull/21806",
+          "merged_at": "2026-11-06T04:44:02Z"
+        }
+      },
+      {
+        "sha": "54b4929a235f9684a1dab460bbcd59f4f08412e1",
+        "message": "Add Go AppHost editor support and debugger readiness coverage (#21826) ## Description Adds Go AppHost resource parsing for CodeLens and gutter indicators, and offers the existing debugger setup flow before debugging a Go, Java, or Rust AppHost with missing debugger extensions. Selecting Set Up or dismissing the prompt cancels this launch without a duplicate launch-failure notification/history entry. Run Without Debugging remains available. Nested and parenthesized Go resource expressions retain ",
+        "html_url": "https://github.com/microsoft/aspire/commit/54b4929a235f9684a1dab460bbcd59f4f08412e1",
+        "pull_request": {
+          "number": 21826,
+          "title": "Add Go AppHost editor support and debugger readiness coverage",
+          "url": "https://github.com/microsoft/aspire/pull/21826",
+          "merged_at": "2026-11-06T04:44:42Z"
+        }
+      },
+      {
+        "sha": "ba43a210a8c6d202891f71d86dd100f54d60fa88",
+        "message": "Preserve ASPIRE010 and add ASPIRE013 for required CLI bundles (#21288) ## Description Diagnostic IDs must keep their meaning across releases. #20867 changed ASPIRE010 from a suppressible warning about optional CLI bundle features into an unsuppressible error requiring the bundle. Existing suppression settings and the published diagnostic reference therefore describe a different contract. Restore ASPIRE010's original warning text, severity, and help link for non-C# AppHosts, where opting out rema",
+        "html_url": "https://github.com/microsoft/aspire/commit/ba43a210a8c6d202891f71d86dd100f54d60fa88",
+        "pull_request": {
+          "number": 21288,
+          "title": "Preserve ASPIRE010 and add ASPIRE013 for required CLI bundles",
+          "url": "https://github.com/microsoft/aspire/pull/21288",
+          "merged_at": "2026-11-06T05:09:39Z"
+        }
+      },
+      {
+        "sha": "dea22b13453b1703ace03f23c06bfd013017edb6",
+        "message": "Allow structured Kubernetes manifest field values (#21824) ## Description Polyglot AppHosts can now author custom Kubernetes manifests with nested objects and arrays, including CiliumNetworkPolicy ingress rules and selectors whose label keys contain dots and slashes. Remove the scalar-only `AspireUnion` restriction from `KubernetesManifestResource.WithField`. The CLR signature remains `WithField(string, object)` and the existing normalization/YAML paths handle the structured values. JSON numbers",
+        "html_url": "https://github.com/microsoft/aspire/commit/dea22b13453b1703ace03f23c06bfd013017edb6",
+        "pull_request": {
+          "number": 21824,
+          "title": "Allow structured Kubernetes manifest field values",
+          "url": "https://github.com/microsoft/aspire/pull/21824",
+          "merged_at": "2026-11-06T05:23:54Z"
+        }
+      },
+      {
+        "sha": "8e264bfdae2931bd41a485f908887db997127984",
+        "message": "Close Go AppHost CLI preview readiness gaps (#21823) ## Description Go AppHost initialization should work in an existing Go repository without replacing its module or requiring edits to its workspace. This creates a separate `aspire-apphost/` module/workspace when the root already contains `go.mod`, preserves the application's files, and records the nested AppHost path in configuration. Contributes to #21115, #21201, #21207 and #21208. These are umbrella issues; this PR does not close their rema",
+        "html_url": "https://github.com/microsoft/aspire/commit/8e264bfdae2931bd41a485f908887db997127984",
+        "pull_request": {
+          "number": 21823,
+          "title": "Close Go AppHost CLI preview readiness gaps",
+          "url": "https://github.com/microsoft/aspire/pull/21823",
+          "merged_at": "2026-11-06T05:30:21Z"
+        }
+      },
+      {
+        "sha": "cb221bf06b88c2eaf664eb03e78ffce22083d500",
+        "message": "Bump main to Aspire 17.1 and align release milestones (#21850) ## Description With `release/17.0` branched for the upcoming release, `main` now represents the 17.1 development cycle. This PR advances the product version from 17.0.0 to 17.1.0 and aligns automatic milestone assignment with those branches. - Bump `MinorVersion` to `1` in `eng/Versions.props`, preserving `preview.1` and `StabilizePackageVersion=false`. - Assign milestone `17.1` to PRs merged into `main`. - Add a merged-only rule for",
+        "html_url": "https://github.com/microsoft/aspire/commit/cb221bf06b88c2eaf664eb03e78ffce22083d500",
+        "pull_request": {
+          "number": 21850,
+          "title": "Bump main to Aspire 17.1 and align release milestones",
+          "url": "https://github.com/microsoft/aspire/pull/21850",
+          "merged_at": "2026-11-06T05:31:18Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 127748554660,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42168906963/job/127748554660",
+      "classification": "flaky-test",
+      "reason": "Test ran and failed with intermittent missing endpoint URL for e2e-worker; matches recorded flaky mechanism.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:326:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same assertion 'Expected e2e-worker to expose an endpoint URL' recurs intermittently on Windows tree-actions E2E.",
+      "job_id": 127748554660,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing"
+  ]
+}
