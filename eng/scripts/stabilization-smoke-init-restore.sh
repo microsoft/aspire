@@ -24,23 +24,19 @@
 # This script (the smoke) handles the end-to-end consumer flow specifically. It exercises:
 #   * Template integrity — that `aspire new aspire-empty` produces a buildable project shape
 #     using the stably-built Aspire.ProjectTemplates package.
-#   * Template version-pinning — that the SDK reference (Aspire.AppHost.Sdk) and any
-#     PackageReferences emitted by the template resolve against the stable feed for
-#     Aspire.* packages.
+#   * Template version-pinning — that the hosting package references emitted by the
+#     templates resolve against the stable feed for Aspire.* packages.
 #   * Restore wiring — that `aspire restore` succeeds end-to-end for the generated project tree.
 #
-# Coverage NOTE: `aspire new aspire-empty` resolves to a single-file `apphost.cs` shape
-# whose only NuGet dependency is `Aspire.AppHost.Sdk` (which transitively pulls
-# Aspire.Hosting.AppHost / Aspire.Hosting). So this smoke validates that the SDK reference path
-# is wired correctly through to the local stable feed. Go and Java starters additionally validate
-# the hosting package versions emitted by guest-language templates, not every integration.
+# Coverage NOTE: `aspire new aspire-empty` resolves to a single-file `apphost.cs` with
+# Aspire.Hosting.AppHost and Aspire.Hosting.Dotnet package directives. Go and Java starters
+# additionally validate their hosting package versions, not every integration.
 # Per-integration NU5104 (stable depends on preview) detection comes from the
 # previous step in the stabilization_check job (the stabilized pack). The two are complementary.
 #
-# Aspire.* packages MUST come from the local stable feed (so missing/preview-only Aspire packages
-# fail restore here, exactly as they would on a real stabilization branch). Non-Aspire deps
-# pulled in by the template (Microsoft.Extensions.*, OpenTelemetry.*, etc.) are routed to the
-# normal public dotnet feeds via packageSourceMapping — they're not the surface we're validating.
+# Aspire.* packages MUST come from the local stable feed, selected by ASPIRE_CLI_PACKAGES
+# (so missing/preview-only Aspire packages fail restore here). Non-Aspire dependencies
+# (Microsoft.Extensions.*, OpenTelemetry.*, etc.) use nuget.org.
 #
 # The pack-time NU5104 check (the primary detector for the Foo.Lib scenario above) is the
 # previous step in the stabilization_check job in ci.yml — this script complements it by
@@ -63,6 +59,10 @@
 #   STABILIZATION_SMOKE_CONFIGURATION  Build configuration the pack step used (default: Debug)
 #   STABILIZATION_SMOKE_FEED           Absolute path to the local NuGet feed
 #                                      (default: $REPO_ROOT/artifacts/packages/$CONFIG/Shipping)
+#
+# The driver is always a Release bundled CLI published outside the checkout, regardless of
+# the pack configuration. Java is enabled only for its subprocess. Its preview-only hosting
+# package is deliberately not substituted for the stable version emitted by the starter.
 
 set -euo pipefail
 
@@ -73,7 +73,7 @@ LOCAL_FEED="${STABILIZATION_SMOKE_FEED:-$REPO_ROOT/artifacts/packages/$CONFIGURA
 ASPIRE_CLI_PROJECT="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj"
 # Use the repo-local SDK that restore.sh / build.sh install under .dotnet/. The wrapper script
 # also sets DOTNET_SKIP_FIRST_TIME_EXPERIENCE and resolves the SDK version from global.json,
-# which is what we need on CI runners that don't have a system-wide .NET 10 SDK.
+# which is what we need on CI runners without the repository's pinned SDK.
 DOTNET="$REPO_ROOT/dotnet.sh"
 
 echo "=== Stabilization smoke: aspire new aspire-empty + restore ==="
@@ -123,58 +123,85 @@ WORK_DIR="$(mktemp -d -t aspire-stab-smoke-XXXXXXXX)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 echo "Work dir:      $WORK_DIR"
 
-# Do not let a previously extracted Aspire package hide a missing package in the stable feed.
-# The CLI's package override also applies to the guest AppHost server/codegen restore, whose
-# temporary project is outside WORK_DIR and therefore cannot discover its NuGet.config.
-export NUGET_PACKAGES="$WORK_DIR/.nuget/packages"
-export ASPIRE_CLI_PACKAGES="$LOCAL_FEED"
+# Pin the driver and generated projects to the SDK that the stabilized pack produced.
+APPHOST_SDK_NUPKG=$(ls "$LOCAL_FEED"/Aspire.AppHost.Sdk.[0-9]*.[0-9]*.[0-9]*.nupkg 2>/dev/null | head -1)
+if [ -z "$APPHOST_SDK_NUPKG" ]; then
+    echo "❌ No Aspire.AppHost.Sdk.*.nupkg in $LOCAL_FEED — can't pin the template SDK version."
+    exit 1
+fi
+# For example, Aspire.AppHost.Sdk.17.0.0.nupkg becomes 17.0.0.
+APPHOST_SDK_VERSION=$(basename "$APPHOST_SDK_NUPKG" .nupkg)
+APPHOST_SDK_VERSION="${APPHOST_SDK_VERSION#Aspire.AppHost.Sdk.}"
+echo "  ✓ Pinned Aspire.AppHost.Sdk version: $APPHOST_SDK_VERSION (from $(basename "$APPHOST_SDK_NUPKG"))"
 
-# Build the CLI project up-front (under stabilization) so subsequent `dotnet run` invocations
-# from inside the temp dir don't trigger a build in the test working directory (which would
-# pull in the temp dir's NuGet.config and try to restore the CLI's own dependencies against
-# our local-only feed).
+# dotnet --info prints a line such as " RID: linux-x64". Use the SDK's host RID
+# rather than assuming x64 when the smoke is run locally on another architecture.
+RUNTIME_IDENTIFIER=$(DOTNET_CLI_UI_LANGUAGE=en-US "$DOTNET" --info | awk '/^[[:space:]]*RID:/ { print $2; exit }')
+if [ -z "$RUNTIME_IDENTIFIER" ]; then
+    echo "❌ Could not determine the .NET runtime identifier."
+    exit 1
+fi
+
+# Debug checkout drivers select the development server and replace package references
+# with source projects. A Release driver with its real bundled server must instead
+# resolve the guest template's pins from LOCAL_FEED.
 echo ""
-echo "→ Building Aspire.Cli (stabilized) for use as the smoke driver"
+echo "→ Building a stabilized Release CLI bundle for use as the smoke driver"
 (
     cd "$REPO_ROOT"
-    "$DOTNET" build "$ASPIRE_CLI_PROJECT" \
-        -c "$CONFIGURATION" \
+    # Bundle.proj invokes child dotnet processes, so the stabilization setting must
+    # also be inherited by those processes, not only passed to the outer MSBuild.
+    export StabilizePackageVersion=true
+    "$DOTNET" build "$REPO_ROOT/eng/Bundle.proj" \
+        -c Release \
         -p:StabilizePackageVersion=true \
+        "-p:BundleVersion=$APPHOST_SDK_VERSION" \
+        "-p:TargetRid=$RUNTIME_IDENTIFIER" \
+        -p:SkipNativeBuild=true \
+        --nologo -v quiet
+    "$DOTNET" publish "$ASPIRE_CLI_PROJECT" \
+        -c Release -r "$RUNTIME_IDENTIFIER" --self-contained \
+        -p:PublishAot=false -p:PublishSingleFile=true \
+        -p:StabilizePackageVersion=true \
+        "-p:VersionPrefix=$APPHOST_SDK_VERSION" \
+        "-p:BundlePayloadPath=$REPO_ROOT/artifacts/bundle/aspire-$APPHOST_SDK_VERSION-$RUNTIME_IDENTIFIER.tar.gz" \
+        --output "$WORK_DIR/cli" \
         --nologo -v quiet
 )
 
-# Helper: invoke the CLI via the repo-local SDK. Intentionally does NOT change directory —
+# Keep consumer restores cold, independently of the packages needed to build the driver.
+# The package override also reaches the server's temporary integration project, which
+# cannot discover the consumer workspace's NuGet.config.
+export NUGET_PACKAGES="$WORK_DIR/.nuget/packages"
+export ASPIRE_CLI_PACKAGES="$LOCAL_FEED"
+# The standalone driver no longer inherits dotnet.sh's SDK environment.
+export DOTNET_ROOT="$REPO_ROOT/.dotnet"
+export PATH="$DOTNET_ROOT:$PATH"
+
+# Helper: invoke the bundled CLI outside the checkout. Intentionally does NOT change directory —
 # the caller's CWD is what propagates to the spawned aspire process. That matters because:
 #   * aspire's --output (and other path-based) flags resolve relative paths against
 #     Environment.CurrentDirectory.
-#   * NuGet config-walk starts from CWD, so we want the temp-dir NuGet.config (with the
-#     Aspire* -> local-stable source mapping) to be the one found, not the repo's own
+#   * NuGet config-walk starts from CWD, so we want the temp-dir NuGet.config
+#     to be the one found, not the repo's own
 #     NuGet.config which points at dnceng-internal feeds.
-# (`./dotnet.sh` resolves the local SDK via $scriptroot — independent of CWD — so we don't
-# need to be in $REPO_ROOT for the SDK lookup.)
-# --no-build because we just built above; --no-launch-profile keeps src/Aspire.Cli/Properties/
-# launchSettings.json from interfering with our explicit args. --non-interactive (a recursive
+# --non-interactive (a recursive
 # root-level option, see Aspire.Cli/Commands/RootCommand.cs: NonInteractiveOption with
 # Recursive = true) is the canonical "I'm in CI, never prompt" flag. The explicit suppression
 # flags below (--language, --suppress-agent-init, --localhost-tld) supply the actual *values*
 # we want for the known prompts; --non-interactive guards against any future prompt being
 # added without a matching suppression flag, and against ambient prompts like the certificate
 # trust check.
-run_aspire() {
-    "$DOTNET" run --project "$ASPIRE_CLI_PROJECT" \
-        -c "$CONFIGURATION" \
-        --no-build \
-        --no-launch-profile \
-        -p:StabilizePackageVersion=true \
-        -- --non-interactive "$@"
-}
+run_aspire() (
+    # Release normally avoids repository discovery, but an inherited explicit
+    # developer override would still select source references.
+    unset ASPIRE_REPO_ROOT
+    "$WORK_DIR/cli/aspire" --non-interactive "$@"
+)
 
-# Stage a NuGet.config in the work dir BEFORE running `aspire new`. The CLI itself fetches
-# the templates package via NuGet, and the subsequent restore needs both Aspire.* (from local
-# stable) and any non-Aspire transitives. packageSourceMapping pins Aspire.* to our feed so
-# a missing/preview Aspire dep fails fast rather than silently falling back to nuget.org for
-# an older stable release. Everything else flows from nuget.org — matches what an end user
-# running `aspire new` would have configured by default.
+# Isolate ambient feeds without pre-owning the CLI's channel mapping. ASPIRE_CLI_PACKAGES
+# supplies the authoritative Aspire* policy; Go and C# scaffold their project-local mappings.
+# An inherited user-owned mapping for that same feed cannot safely be rewritten by scaffolding.
 cat > "$WORK_DIR/NuGet.config" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -183,13 +210,9 @@ cat > "$WORK_DIR/NuGet.config" <<EOF
   </fallbackPackageFolders>
   <packageSources>
     <clear />
-    <add key="local-stable" value="$LOCAL_FEED" />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
-    <packageSource key="local-stable">
-      <package pattern="Aspire*" />
-    </packageSource>
     <packageSource key="nuget.org">
       <package pattern="*" />
     </packageSource>
@@ -199,28 +222,11 @@ cat > "$WORK_DIR/NuGet.config" <<EOF
   </disabledPackageSources>
 </configuration>
 EOF
-echo "  ✓ Source-mapped NuGet.config written (Aspire* -> local-stable; everything else -> nuget.org)"
+echo "  ✓ Isolated NuGet.config written (Aspire* uses the CLI's local stable-feed override)"
 
 PROJECT_NAME="MyAspireApp"
 # Absolute path so `--output` is unambiguous regardless of CWD.
 PROJECT_DIR="$WORK_DIR/$PROJECT_NAME"
-
-# Derive the exact Aspire.AppHost.Sdk version from the local feed. We pass this via
-# `aspire new --version` AND assert later that the generated apphost.cs references this
-# exact version (rather than whatever the CLI's own template-version resolution would
-# pick). This makes the smoke test the precise contract — "the AppHost SDK this stable
-# build packed is what the generated app restores from $LOCAL_FEED" — instead of
-# leaving room for the CLI to silently pick a different version that then fails restore
-# with a confusing "not found in local feed" message.
-APPHOST_SDK_NUPKG=$(ls "$LOCAL_FEED"/Aspire.AppHost.Sdk.[0-9]*.[0-9]*.[0-9]*.nupkg 2>/dev/null | head -1)
-if [ -z "$APPHOST_SDK_NUPKG" ]; then
-    echo "❌ No Aspire.AppHost.Sdk.*.nupkg in $LOCAL_FEED — can't pin the template SDK version."
-    exit 1
-fi
-# Strip the leading 'Aspire.AppHost.Sdk.' prefix and trailing '.nupkg' to get the version.
-APPHOST_SDK_VERSION=$(basename "$APPHOST_SDK_NUPKG" .nupkg)
-APPHOST_SDK_VERSION="${APPHOST_SDK_VERSION#Aspire.AppHost.Sdk.}"
-echo "  ✓ Pinned Aspire.AppHost.Sdk version: $APPHOST_SDK_VERSION (from $(basename "$APPHOST_SDK_NUPKG"))"
 
 # Exercise both guest starters even if one fails, so a preview-only hosting package does not
 # hide the other language's result. Keep the template's actual pins: rewriting them to whatever
@@ -231,16 +237,37 @@ for language in go java; do
     echo ""
     echo "→ Scaffolding and restoring $language starter against the stable feed"
     if ! (
-        cd "$WORK_DIR"
+        if [ "$language" = java ]; then
+            # Java is opt-in. Enable it only in this smoke subprocess so template
+            # filtering cannot hide the stable-package restore being tested.
+            export features__experimentalPolyglotJava=true
+        fi
+        cd "$WORK_DIR" || exit $?
         run_aspire new "aspire-${language}-starter" \
             --name "Stable${language}Starter" \
             --output "$guest_dir" \
             --source "$LOCAL_FEED" \
             --version "$APPHOST_SDK_VERSION" \
             --suppress-agent-init \
-            --localhost-tld false < /dev/null &&
-        cd "$guest_dir" &&
-        run_aspire restore < /dev/null
+            --localhost-tld false < /dev/null || exit $?
+        cd "$guest_dir" || exit $?
+        run_aspire restore < /dev/null || exit $?
+        # A development server can succeed with source references instead. Require cold
+        # NuGet extraction of the pinned hosting packages and retain their provenance in CI.
+        packages=("aspire.hosting.$language")
+        if [ "$language" = go ]; then
+            packages+=(aspire.hosting.redis)
+        fi
+        for package in "${packages[@]}"; do
+            metadata="$NUGET_PACKAGES/$package/$APPHOST_SDK_VERSION/.nupkg.metadata"
+            if [ ! -f "$metadata" ]; then
+                echo "❌ Restore did not extract $package/$APPHOST_SDK_VERSION from NuGet."
+                exit 1
+            fi
+            echo "  ✓ Restored $package/$APPHOST_SDK_VERSION; NuGet provenance:"
+            cat "$metadata" || exit $?
+            echo ""
+        done
     ); then
         GUEST_FAILURES+=("$language")
         echo "❌ $language starter could not restore its emitted package pins from the stable feed."
@@ -256,11 +283,10 @@ echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_DIR --v
 #   --localhost-tld false    suppresses the localhost-tld prompt
 # --source pins the templates-package fetch to our local-stable feed, so we test the templates
 # we just packed (not whatever's on nuget.org).
-# --version pins the Aspire.AppHost.Sdk version emitted into the generated AppHost; without
+# --version pins the hosting package versions emitted into the generated AppHost; without
 # it, the CLI's own template-version resolution decides. We want this smoke to test the exact
-# version we just packed.
-# CWD is $WORK_DIR so the temp NuGet.config (with Aspire* source-mapped to local-stable) is
-# the one NuGet finds via its config walk.
+# product version we just packed.
+# CWD is $WORK_DIR so NuGet discovers the isolated consumer configuration.
 (
     cd "$WORK_DIR"
     run_aspire new aspire-empty \
@@ -282,17 +308,18 @@ if [ ! -d "$PROJECT_DIR" ]; then
     echo "❌ aspire new did not create the project directory $PROJECT_DIR"
     exit 1
 fi
-APPHOST_SDK_REF_FILE=""
+APPHOST_REF_FILE=""
 if [ -f "$PROJECT_DIR/apphost.cs" ] && [ -f "$PROJECT_DIR/aspire.config.json" ]; then
     echo "  ✓ Single-file AppHost detected (apphost.cs + aspire.config.json)"
-    # Single-file AppHosts reference the SDK as `#:sdk Aspire.AppHost.Sdk@<version>`.
-    APPHOST_SDK_REF_FILE="$PROJECT_DIR/apphost.cs"
-    EXPECTED_SDK_REF="#:sdk Aspire.AppHost.Sdk@$APPHOST_SDK_VERSION"
+    # File-based AppHosts use "#:package Aspire.Hosting.AppHost@17.0.0", not #:sdk.
+    APPHOST_REF_FILE="$PROJECT_DIR/apphost.cs"
+    EXPECTED_APPHOST_REF="#:package Aspire.Hosting.AppHost@$APPHOST_SDK_VERSION"
+    REFERENCE_MATCH=(-qxF)
 elif [ -f "$PROJECT_DIR/$PROJECT_NAME.AppHost/$PROJECT_NAME.AppHost.csproj" ]; then
     echo "  ✓ Project-based AppHost detected ($PROJECT_NAME.AppHost.csproj)"
-    # Project-based AppHosts reference the SDK as `Sdk="Aspire.AppHost.Sdk/<version>"`.
-    APPHOST_SDK_REF_FILE="$PROJECT_DIR/$PROJECT_NAME.AppHost/$PROJECT_NAME.AppHost.csproj"
-    EXPECTED_SDK_REF="Aspire.AppHost.Sdk/$APPHOST_SDK_VERSION"
+    APPHOST_REF_FILE="$PROJECT_DIR/$PROJECT_NAME.AppHost/$PROJECT_NAME.AppHost.csproj"
+    EXPECTED_APPHOST_REF="Include=\"Aspire.Hosting.AppHost\" Version=\"$APPHOST_SDK_VERSION\""
+    REFERENCE_MATCH=(-qF)
 else
     echo "❌ aspire new produced an unrecognized layout in $PROJECT_DIR"
     echo "   Contents (depth 3):"
@@ -300,23 +327,23 @@ else
     exit 1
 fi
 
-# Assert the AppHost references the exact SDK version we pinned. Catches the failure mode
+# Assert the AppHost references the exact hosting version we pinned. Catches the failure mode
 # where `--version` is ignored / overridden by CLI template-version resolution. Without
 # this assertion, a mismatch would later surface as a confusing "package not found in
-# local-stable feed" restore error instead of a clear "wrong SDK version emitted."
-if ! grep -qF "$EXPECTED_SDK_REF" "$APPHOST_SDK_REF_FILE"; then
-    echo "❌ Expected AppHost SDK reference not found in $APPHOST_SDK_REF_FILE:"
-    echo "   Expected: $EXPECTED_SDK_REF"
-    echo "   Actual SDK references in file:"
-    grep -E '(#:sdk|Sdk=)' "$APPHOST_SDK_REF_FILE" || true
+# local stable feed" restore error instead of a clear "wrong hosting version emitted."
+if ! grep "${REFERENCE_MATCH[@]}" "$EXPECTED_APPHOST_REF" "$APPHOST_REF_FILE"; then
+    echo "❌ Expected AppHost package reference not found in $APPHOST_REF_FILE:"
+    echo "   Expected: $EXPECTED_APPHOST_REF"
+    echo "   Actual package references in file:"
+    grep -E '(#:package|PackageReference)' "$APPHOST_REF_FILE" || true
     exit 1
 fi
-echo "  ✓ AppHost references the pinned SDK ($EXPECTED_SDK_REF)"
+echo "  ✓ AppHost references the pinned hosting package ($EXPECTED_APPHOST_REF)"
 
 echo ""
 echo "→ aspire restore (against local stable feed for Aspire packages, nuget.org for everything else)"
 # Run from $PROJECT_DIR so aspire restore discovers aspire.config.json there AND so the
-# nearest NuGet.config (the one we wrote at $WORK_DIR) is the one used.
+# NuGet discovers both the CLI's project-local source policy and our isolated parent defaults.
 (cd "$PROJECT_DIR" && run_aspire restore < /dev/null)
 
 if [ ${#GUEST_FAILURES[@]} -gt 0 ]; then
