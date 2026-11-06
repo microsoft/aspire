@@ -477,6 +477,12 @@ Upgrade the IDE integration or run outside the IDE for Aspire-owned builds. Ordi
 `project-with-external-build.v1` support alone does not enable the Functions contract.
 Explicit unrelated IDE capabilities retain a full process fallback.
 
+For local V2 Functions replicas, `WithReplicas(2)` / `withReplicas(2)` treats the selected
+launch profile's `--port` as the public proxy port. Each Functions host receives its own
+allocated listener port, with the remaining profile arguments and environment preserved.
+A final replica count of one retains the direct, fixed-port behavior. Legacy Functions
+resources and the restriction on persistent replicas are unchanged.
+
 SDK container publishing, host-storage references and role assignments, binding settings,
 and Azure Container Apps `functionapp` metadata are preserved. .NET Functions target port
 `8080`; Node Functions retain their own port and image behavior. Functions cannot be

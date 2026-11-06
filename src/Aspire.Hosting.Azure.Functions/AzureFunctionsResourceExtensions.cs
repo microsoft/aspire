@@ -95,6 +95,7 @@ public static partial class AzureFunctionsProjectResourceExtensions
                 if (builder.ExecutionContext.IsRunMode)
                 {
                     functionsBuilder.WithRequiredCommand("func", AzureFunctionsCoreToolsHelpLink);
+                    AzureFunctionsHostOptions.ConfigureReplicas(functionsBuilder);
                     ConfigureFunctionsDebugSupport(functionsBuilder);
                 }
             },
@@ -212,6 +213,12 @@ public static partial class AzureFunctionsProjectResourceExtensions
     /// <param name="replicas">The number of replicas.</param>
     /// <returns>The same Azure Functions resource builder.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// During local execution, multiple replicas use the launch profile's port as the public proxy port
+    /// and receive independently allocated listener ports. A final replica count of one retains the
+    /// direct profile port. Other profile arguments and environment settings are preserved.
+    /// Persistent resources do not support multiple replicas.
+    /// </remarks>
     [AspireExport("withAzureFunctionsReplicas", MethodName = "withReplicas")]
     public static IResourceBuilder<AzureFunctionsResource> WithReplicas(this IResourceBuilder<AzureFunctionsResource> builder, int replicas)
     {
@@ -386,7 +393,8 @@ public static partial class AzureFunctionsProjectResourceExtensions
             ProjectPath = metadata.ProjectPath,
             BuildConfiguration = configuration,
             BuildEnvironment = metadata.BuildEnvironment.Count == 0 ? null : metadata.BuildEnvironment.ToDictionary(),
-            BuildWorkingDirectory = metadata.BuildWorkingDirectory
+            BuildWorkingDirectory = metadata.BuildWorkingDirectory,
+            LaunchProfilePort = AzureFunctionsHostOptions.GetReplicatedProfilePort(resource)
         };
 
         InvalidOperationException InvalidBuildMetadata() => new(
@@ -417,5 +425,9 @@ public static partial class AzureFunctionsProjectResourceExtensions
 
         [JsonPropertyName("suppress_build")]
         public bool SuppressBuild { get; } = true;
+
+        [JsonPropertyName("launch_profile_port")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? LaunchProfilePort { get; init; }
     }
 }

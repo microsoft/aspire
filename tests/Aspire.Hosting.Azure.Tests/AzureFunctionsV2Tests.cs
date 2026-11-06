@@ -551,6 +551,224 @@ public class AzureFunctionsV2Tests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedArguments, actualArguments);
     }
 
+    [Theory]
+    [InlineData("--port 7071 --label profile", "http", 7071, "--label profile")]
+    [InlineData("-p=7071 --label profile", "http", 7071, "--label profile")]
+    [InlineData("--port:7071 --label profile", "http", 7071, "--label profile")]
+    [InlineData("-p 7072 --port=7071 --label profile", "http", 7072, "--label profile")]
+    [InlineData("--port 7071 --useHttps --cert certificate.pfx --password secret", "https", 7071, "--useHttps --cert certificate.pfx --password secret")]
+    public async Task AddDotnetAzureFunction_ReplicasReplaceProfilePortsAndPreserveOptions(
+        string arguments, string scheme, int publicPort, string remainingArguments)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path, arguments);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        AzureFunctionsTestHelpers.ConfigureDebugSession(builder, ["azure-functions-with-external-build.v1"]);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(1).WithReplicas(2);
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+
+        var endpoint = Assert.Single(functions.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal(scheme, endpoint.Name);
+        Assert.Equal(scheme, endpoint.UriScheme);
+        Assert.Equal(publicPort, endpoint.Port);
+        Assert.Null(endpoint.TargetPort);
+        Assert.True(endpoint.IsProxied);
+        Assert.Equal(publicPort, AzureFunctionsHostOptions.GetReplicatedProfilePort(functions.Resource));
+        Assert.True(functions.Resource.HasAnnotationOfType<ExcludeLaunchProfileAnnotation>());
+        endpoint.TargetPort = 9876;
+        var expectedArguments = new List<string> { "--port", "9876" };
+        expectedArguments.AddRange(CommandLineArgsParser.Parse(remainingArguments));
+        Assert.Equal(expectedArguments, await ArgumentEvaluator.GetArgumentListAsync(functions.Resource, app.Services));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddDotnetAzureFunction_ReplicasPreserveIdeFallbackProfileSettings(bool projectFallback)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path);
+        AzureFunctionsTestHelpers.WriteLaunchSettings(path, new LaunchSettings
+        {
+            Profiles = new Dictionary<string, LaunchProfile>
+            {
+                ["Functions"] = new()
+                {
+                    CommandName = "Project",
+                    CommandLineArgs = "--port 7071 --useHttps --cert certificate.pfx",
+                    EnvironmentVariables = new() { ["PROFILE_SETTING"] = "profile" }
+                }
+            }
+        });
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        AzureFunctionsTestHelpers.ConfigureDebugSession(builder, projectFallback ? null : ["azure-functions"]);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(2);
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+
+        var endpoint = Assert.Single(functions.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.True(endpoint.IsProxied);
+        Assert.Null(endpoint.TargetPort);
+        endpoint.TargetPort = 9876;
+        Assert.Equal(
+            ["--port", "9876", "--useHttps", "--cert", "certificate.pfx"],
+            await ArgumentEvaluator.GetArgumentListAsync(functions.Resource, app.Services));
+        var environment = await AzureFunctionsTestHelpers.GetEnvironmentAsync(builder, functions.Resource);
+        Assert.Equal("profile", environment["PROFILE_SETTING"]);
+        Assert.Equal("Functions", environment["DOTNET_LAUNCH_PROFILE"]);
+        Assert.False(functions.Resource.GetProjectMetadata().SuppressBuild);
+        if (projectFallback)
+        {
+            var launch = Assert.IsType<ProjectLaunchConfiguration>(await functions.Resource.CreateLaunchConfigurationAsync("NoDebug"));
+            Assert.True(launch.DisableLaunchProfile);
+            Assert.Equal(string.Empty, launch.LaunchProfile);
+        }
+    }
+
+    [Fact]
+    public async Task AddDotnetAzureFunction_FinalSingleReplicaRetainsDirectProfilePort()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path, "--port 7071 --useHttps");
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        AzureFunctionsTestHelpers.ConfigureDebugSession(builder, ["azure-functions-with-external-build.v1"]);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(2).WithReplicas(1);
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+
+        var endpoint = Assert.Single(functions.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.False(endpoint.IsProxied);
+        Assert.Equal(7071, endpoint.Port);
+        Assert.Equal(7071, endpoint.TargetPort);
+        Assert.Null(AzureFunctionsHostOptions.GetReplicatedProfilePort(functions.Resource));
+        Assert.False(functions.Resource.HasAnnotationOfType<ExcludeLaunchProfileAnnotation>());
+        Assert.Equal(
+            ["--port", "7071", "--useHttps"],
+            await ArgumentEvaluator.GetArgumentListAsync(functions.Resource, app.Services));
+    }
+
+    [Fact]
+    public async Task AddDotnetAzureFunction_ReplicasUseRenamedFunctionsEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path, "--port 7071 --useHttps");
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        AzureFunctionsTestHelpers.ConfigureDebugSession(builder, ["azure-functions-with-external-build.v1"]);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(2)
+            .WithEndpoint("https", endpoint => endpoint.Name = "functions");
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+
+        var endpoint = Assert.Single(functions.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal("functions", endpoint.Name);
+        Assert.Equal(7071, endpoint.Port);
+        Assert.True(endpoint.IsProxied);
+        Assert.Null(endpoint.TargetPort);
+        endpoint.TargetPort = 9876;
+        Assert.Equal(
+            ["--port", "9876", "--useHttps"],
+            await ArgumentEvaluator.GetArgumentListAsync(functions.Resource, app.Services));
+        Assert.Equal(
+            ["start"],
+            AzureFunctionsHostOptions.NormalizeSdkRunArguments(functions.Resource, "func", ["start", "--port", "7071", "--useHttps"]));
+    }
+
+    [Fact]
+    public async Task AddDotnetAzureFunction_ReplicasRejectRemovedFunctionsEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path, "--port 7071");
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(2);
+        functions.Resource.Annotations.Remove(Assert.Single(functions.Resource.Annotations.OfType<EndpointAnnotation>()));
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            "Azure Functions resource 'functions' cannot replicate a fixed-port launch profile after its Functions endpoint has been removed.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AddDotnetAzureFunction_ReplicasDoNotRewriteExplicitTargets()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path, "--port 7071");
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(2)
+            .WithEndpoint("http", endpoint => endpoint.TargetPort = 9090);
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+
+        var endpoint = Assert.Single(functions.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.False(endpoint.IsProxied);
+        Assert.Equal(7071, endpoint.Port);
+        Assert.Equal(9090, endpoint.TargetPort);
+        Assert.Null(AzureFunctionsHostOptions.GetReplicatedProfilePort(functions.Resource));
+        Assert.False(functions.Resource.HasAnnotationOfType<ExcludeLaunchProfileAnnotation>());
+    }
+
+    [Fact]
+    public async Task AddDotnetAzureFunction_ReplicasReconcileSdkOptionsAgainstDeclaredProfile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(
+            workspace.Path, "--port 7071 --useHttps --cert certificate.pfx --password secret");
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(2);
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            ["start", "--label", "sdk"],
+            AzureFunctionsHostOptions.NormalizeSdkRunArguments(
+                functions.Resource, "func",
+                ["start", "-p=7071", "--useHttps", "--cert", "certificate.pfx", "--password", "secret", "--label", "sdk"]));
+        var exception = Assert.Throws<DistributedApplicationException>(() =>
+            AzureFunctionsHostOptions.NormalizeSdkRunArguments(functions.Resource, "func", ["start", "--port", "7072"]));
+        Assert.Equal(
+            "Azure Functions SDK RunArguments define endpoint settings that do not match the Aspire endpoint. " +
+            "Configure port, HTTPS, certificate, and password options in the launch profile or AppHost instead.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AddDotnetAzureFunction_ReplicatedLaunchMetadataRetainsProfilePort()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = AzureFunctionsTestHelpers.CreateProject(workspace.Path, "--port 7071");
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        AzureFunctionsTestHelpers.ConfigureDebugSession(builder, ["azure-functions-with-external-build.v1"]);
+        var functions = builder.AddDotnetAzureFunction("functions", path).WithReplicas(2);
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, TestContext.Current.CancellationToken);
+        var build = Assert.Single(functions.Resource.Annotations.OfType<WaitAnnotation>()).Resource;
+        await AzureFunctionsTestHelpers.GetEnvironmentAsync(builder, Assert.IsAssignableFrom<IResourceWithEnvironment>(build));
+        await app.ResourceNotifications.PublishUpdateAsync(build, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        });
+
+        var payload = await functions.Resource.CreateLaunchConfigurationAsync("NoDebug", TestContext.Current.CancellationToken);
+
+        var configuration = builder.Configuration["AppHost:BuildConfiguration"];
+        await Verify(JsonSerializer.Serialize(payload), "json")
+            .AddScrubber(text => text
+                .Replace(JsonEncodedText.Encode(path).ToString(), "Functions.csproj")
+                .Replace(JsonEncodedText.Encode(functions.Resource.GetProjectMetadata().BuildWorkingDirectory!).ToString(), "Functions")
+                .Replace($"\"build_configuration\":\"{configuration}\"", "\"build_configuration\":\"Configuration\""));
+    }
+
     [Fact]
     public void AddDotnetAzureFunction_NormalizesEquivalentSdkEndpointArguments()
     {

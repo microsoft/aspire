@@ -1014,6 +1014,7 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             assert.strictEqual(appHost.includes('typeof(Program).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()'), includeAzureFunctions && !legacyFunctions);
             assert.strictEqual(appHost.includes('File.WriteAllText(Path.Combine(builder.AppHostDirectory, "apphost-build-configuration.txt"), appHostConfiguration)'), includeAzureFunctions && !legacyFunctions);
             assert.strictEqual(appHost.includes('.WithBuildEnvironment("ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR", "custom")'), includeAzureFunctions && !legacyFunctions);
+            assert.strictEqual(appHost.includes('.WithReplicas(1)'), includeAzureFunctions && !legacyFunctions);
             assert.strictEqual(appHost.includes('builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")'), includeResourceDebug);
         });
     }
@@ -2352,6 +2353,35 @@ builder.Build().Run();
         assert.ok(runner.includes('Patching ExTester VS Code launch arguments by exact argument match.'));
         assert.ok(runner.includes('source.replace(target, () => replacement)'));
         assert.ok(runner.includes('source.replace(argsDeclarationPattern, () => replacement)'));
+    });
+
+    test('disables updates in the actual ExTester launch patch before pinned cache artifacts can change', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+        const patcher = source.statements.find(statement =>
+            ts.isFunctionDeclaration(statement) && statement.name?.text === 'patchExtesterLaunchLocale');
+        assert.ok(patcher);
+        let browserSource = "const args = ['--no-sandbox', '--disable-dev-shm-usage', `--user-data-dir=${path.join(this.storagePath, 'settings')}`];";
+        const workspaceRoot = '/workspace/$&/fixture';
+        const context = {
+            path,
+            workspaceRoot,
+            extesterModule: path.join(extensionRoot, 'node_modules', 'vscode-extension-tester'),
+            fs: {
+                readFileSync: () => browserSource,
+                writeFileSync: (_file: string, value: string) => { browserSource = value; },
+            },
+            console: { log: () => { } },
+        };
+        runInNewContext(`${patcher.getText(source)}; patchExtesterLaunchLocale();`, context);
+        const args: string[] = runInNewContext(`${browserSource}\nargs`, { path, storagePath: '/storage' });
+        assert.ok(args.includes('--disable-updates'));
+        assert.ok(args.includes('--disable-telemetry'));
+        assert.ok(args.includes(workspaceRoot));
+        const firstPatch = browserSource;
+        runInNewContext(`${patcher.getText(source)}; patchExtesterLaunchLocale();`, context);
+        assert.strictEqual(browserSource, firstPatch);
     });
 
     test('keeps the slow zero-to-running shard timeout above its composed wait budgets', () => {

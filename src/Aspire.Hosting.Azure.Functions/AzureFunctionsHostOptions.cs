@@ -27,9 +27,11 @@ internal static class AzureFunctionsHostOptions
             if (TryParseOptionValue(arguments, index, argument, ["--port", "-p"], out var port))
             {
                 result.TokenIndexes.Add(index);
+                result.PortTokenIndexes.Add(index);
                 if (port.ConsumedNext)
                 {
                     result.TokenIndexes.Add(++index);
+                    result.PortTokenIndexes.Add(index);
                 }
 
                 if (!result.PortSpecified)
@@ -124,6 +126,79 @@ internal static class AzureFunctionsHostOptions
         return result;
     }
 
+    internal static void ConfigureReplicas(IResourceBuilder<AzureFunctionsResource> builder)
+    {
+        var resource = builder.Resource;
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single();
+        builder.ApplicationBuilder.OnBeforeStart((context, _) =>
+        {
+            if (!context.Model.Resources.Contains(resource) || resource.GetReplicaCount() <= 1)
+            {
+                return Task.CompletedTask;
+            }
+
+            var arguments = CommandLineArgsParser.Parse(
+                resource.GetEffectiveLaunchProfile()?.LaunchProfile.CommandLineArgs ?? string.Empty);
+            var options = Parse(arguments);
+            if (options.Port is not int port)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (!resource.Annotations.Contains(endpoint))
+            {
+                throw new DistributedApplicationException(
+                    $"Azure Functions resource '{resource.Name}' cannot replicate a fixed-port launch profile after its Functions endpoint has been removed.");
+            }
+            if (!endpoint.IsProxied)
+            {
+                // Only replace the fixed listener inferred from the profile, not a
+                // different target port explicitly configured by the application.
+                if (endpoint.Port != port || endpoint.TargetPort != port)
+                {
+                    return Task.CompletedTask;
+                }
+
+                endpoint.IsProxied = true;
+                endpoint.TargetPort = null;
+            }
+
+            if (endpoint.TargetPort is not null)
+            {
+                return Task.CompletedTask;
+            }
+
+            // A profile such as "--port 7071 --useHttps" now describes the public
+            // proxy port. Supply "--port <replica target> --useHttps" ourselves and
+            // suppress the SDK/IDE's second application of the original profile.
+            // Base .NET defaults have already captured its environment variables.
+            builder.WithAnnotation(new ReplicatedLaunchProfileAnnotation(arguments, endpoint.Name, options), ResourceAnnotationMutationBehavior.Replace);
+            builder.WithAnnotation(new ExcludeLaunchProfileAnnotation(), ResourceAnnotationMutationBehavior.Replace);
+            return Task.CompletedTask;
+        });
+
+        builder.WithArgs(context =>
+        {
+            if (!resource.TryGetLastAnnotation<ReplicatedLaunchProfileAnnotation>(out var profile))
+            {
+                return;
+            }
+
+            context.Args.Add("--port");
+            context.Args.Add(resource.GetEndpoint(profile.EndpointName).Property(EndpointProperty.TargetPort));
+            for (var index = 0; index < profile.Arguments.Count; index++)
+            {
+                if (!profile.Options.PortTokenIndexes.Contains(index))
+                {
+                    context.Args.Add(profile.Arguments[index]);
+                }
+            }
+        });
+    }
+
+    internal static int? GetReplicatedProfilePort(AzureFunctionsResource resource) =>
+        resource.TryGetLastAnnotation<ReplicatedLaunchProfileAnnotation>(out var profile) ? profile.Options.Port : null;
+
     internal static IReadOnlyList<string> NormalizeSdkRunArguments(
         AzureFunctionsResource resource,
         string runCommand,
@@ -142,14 +217,15 @@ internal static class AzureFunctionsHostOptions
             return runArguments;
         }
 
-        var launchProfileArguments = CommandLineArgsParser.Parse(
-            resource.GetEffectiveLaunchProfile()?.LaunchProfile.CommandLineArgs ?? string.Empty);
+        var launchProfileArguments = resource.TryGetLastAnnotation<ReplicatedLaunchProfileAnnotation>(out var profile)
+            ? profile.Arguments
+            : CommandLineArgsParser.Parse(resource.GetEffectiveLaunchProfile()?.LaunchProfile.CommandLineArgs ?? string.Empty);
         var launchProfileOptions = Parse(launchProfileArguments);
-        var endpointName = launchProfileOptions.UseHttps ? "https" : "http";
+        var endpointName = profile?.EndpointName ?? (launchProfileOptions.UseHttps ? "https" : "http");
         var endpoint = resource.Annotations
             .OfType<EndpointAnnotation>()
             .LastOrDefault(annotation => annotation.Name == endpointName);
-        var endpointPort = endpoint?.TargetPort ?? endpoint?.Port;
+        var endpointPort = GetReplicatedProfilePort(resource) ?? endpoint?.TargetPort ?? endpoint?.Port;
         var useHttps = string.Equals(endpoint?.UriScheme, "https", StringComparison.Ordinal);
 
         var conflicts =
@@ -323,5 +399,19 @@ internal static class AzureFunctionsHostOptions
         public bool Invalid { get; set; }
 
         public HashSet<int> TokenIndexes { get; } = [];
+
+        public HashSet<int> PortTokenIndexes { get; } = [];
+    }
+
+    private sealed class ReplicatedLaunchProfileAnnotation(
+        IReadOnlyList<string> arguments,
+        string endpointName,
+        ParsedEndpointOptions options) : IResourceAnnotation
+    {
+        public IReadOnlyList<string> Arguments { get; } = arguments;
+
+        public string EndpointName { get; } = endpointName;
+
+        public ParsedEndpointOptions Options { get; } = options;
     }
 }

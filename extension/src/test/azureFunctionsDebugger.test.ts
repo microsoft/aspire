@@ -275,6 +275,63 @@ suite('Azure Functions Debugger Extension Tests', () => {
             });
         }
 
+        for (const { sdkPort, modelArgs, accepted } of [
+            { sdkPort: 7071, modelArgs: ['--port', '8123'], accepted: true },
+            { sdkPort: 7072, modelArgs: ['--port', '8123'], accepted: false },
+            { sdkPort: 7071, modelArgs: [], accepted: false },
+            { sdkPort: 7071, modelArgs: ['--port', 'invalid'], accepted: false },
+        ]) {
+            test(`reconciles SDK ports against the replicated profile declaration (${sdkPort}, ${modelArgs.join(' ') || 'missing listener'})`, async () => {
+                sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                    targetPath,
+                    runCommand: 'func',
+                    runArguments: `start --port ${sdkPort} --label sdk`,
+                    runWorkingDirectory: hostDirectory,
+                });
+                sinon.stub(fs, 'existsSync').returns(true);
+                fsMkdtempSync.returns(path.join(hostDirectory, 'aspire-functions-worker-test'));
+                const launchConfiguration: AzureFunctionsExternalBuildLaunchConfiguration = {
+                    ...createExternalBuildLaunchConfiguration(projectPath),
+                    launch_profile_port: 7071,
+                };
+                const launch = externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    launchConfiguration, modelArgs, [], createLaunchOptions(true), createDebugConfiguration(projectPath));
+                if (!accepted) {
+                    await assert.rejects(launch, { message: azureFunctionsSdkEndpointConflict });
+                    sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
+                    return;
+                }
+
+                try {
+                    await launch;
+                    assert.deepStrictEqual(taskHarness.getExecutedTask()!.definition.args, [
+                        '--label', 'sdk', '--port', '8123', '--dotnet-isolated-debug', '--enable-json-output',
+                        '--json-output-file', defaultWorkerPidArgument,
+                    ]);
+                } finally {
+                    cleanupRun('azure-functions-test-run');
+                    if (taskHarness.getExecutedTask()) {
+                        taskHarness.end(0);
+                    }
+                }
+            });
+        }
+
+        test('requires an allocated replica listener even when SDK options do not contain a port', async () => {
+            sinon.stub(DotNetService.prototype, 'getDotNetProjectRunProperties').resolves({
+                targetPath, runCommand: 'func', runArguments: 'start --label sdk', runWorkingDirectory: hostDirectory,
+            });
+            const launchConfiguration: AzureFunctionsExternalBuildLaunchConfiguration = {
+                ...createExternalBuildLaunchConfiguration(projectPath),
+                launch_profile_port: 7071,
+            };
+            await assert.rejects(
+                externalBuildAzureFunctionsDebuggerExtension.createDebugSessionConfigurationCallback!(
+                    launchConfiguration, [], [], createLaunchOptions(true), createDebugConfiguration(projectPath)),
+                { message: azureFunctionsSdkEndpointConflict });
+            sinon.assert.notCalled(vscode.tasks.executeTask as sinon.SinonStub);
+        });
+
         for (const [runCommand, runArguments] of [
             ['dotnet', 'exec "private-sdk-value.dll" host start'],
             ['func', '--version --password private-sdk-value'],
@@ -473,6 +530,12 @@ suite('Azure Functions Debugger Extension Tests', () => {
             ['empty build configuration', { build_configuration: '' }],
             ['non-string build configuration', { build_configuration: 17 }],
             ['newline build configuration', { build_configuration: 'Release\nDebug' }],
+            ['null profile port', { launch_profile_port: null }],
+            ['non-numeric profile port', { launch_profile_port: '7071' }],
+            ['zero profile port', { launch_profile_port: 0 }],
+            ['negative profile port', { launch_profile_port: -1 }],
+            ['fractional profile port', { launch_profile_port: 7071.5 }],
+            ['out-of-range profile port', { launch_profile_port: 65536 }],
             ['null build environment', { build_environment: null }],
             ['non-object build environment', { build_environment: 'private-build-value' }],
             ['array build environment', { build_environment: [] }],
@@ -885,6 +948,11 @@ suite('Azure Functions Debugger Extension Tests', () => {
                             '--delimiters', 'x"\u2019; & echo INJECTED; \u2018"y',
                             '--empty', '',
                             '--following', 'value after empty',
+                            '--cors', '*',
+                            '--functions', 'App*',
+                            '--question', '?',
+                            '--bracket', '[ab]',
+                            '--home', '~/functions.pfx',
                             ...(shim !== 'cmd' ? ['--expansion', 'literal%PATH%!value!'] : []),
                         ];
                         const debuggerExtension = externalBuild ? externalBuildAzureFunctionsDebuggerExtension : azureFunctionsDebuggerExtension;
@@ -893,6 +961,9 @@ suite('Azure Functions Debugger Extension Tests', () => {
                         const exitCode = shim === 'ps1-local' ? 23 : 0;
 
                         try {
+                            for (const file of ['App.dll', 'appsettings.json', 'host.json', 'a', 'b']) {
+                                await fs.promises.writeFile(path.join(native.cwd, file), '');
+                            }
                             await debuggerExtension.createDebugSessionConfigurationCallback!(
                                 configuration, args, [], createLaunchOptions(true), createDebugConfiguration(projectPath));
                             const task = taskHarness.getExecutedTask()!;
@@ -906,6 +977,7 @@ suite('Azure Functions Debugger Extension Tests', () => {
                             // Match VS Code's outer native -Command boundary as well as PowerShell's
                             // inner call to the actual executable (or a batch shim forwarding %*).
                             const result = spawnSync(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], {
+                                cwd: native.cwd,
                                 encoding: 'utf8',
                                 timeout: 20000,
                                 windowsVerbatimArguments: true,
@@ -1946,13 +2018,14 @@ function createLaunchConfiguration(projectPath: string): AzureFunctionsLaunchCon
 
 async function createNativeArgvFixture(shim: 'native' | 'cmd' | 'ps1' | 'ps1-local'): Promise<{
     command: string;
+    cwd: string;
     env: NodeJS.ProcessEnv;
     dispose: () => Promise<void>;
 }> {
     const node = spawnSync('node', ['--print', 'process.execPath'], { encoding: 'utf8' });
     assert.strictEqual(node.status, 0, String(node.error ?? node.stderr));
     const nodePath = node.stdout.trim();
-    const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aspire-functions-argv-'));
+    const directory = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'aspire-functions argv-'));
     const preload = path.join(directory, 'argv.cjs');
     // Node resolves its first script argument ("host") to an absolute path before preloading.
     // Normalize only that known command token; retain the complete following native argv.
@@ -2012,6 +2085,7 @@ exit $ret
 
     return {
         command,
+        cwd: directory,
         env: { NODE_OPTIONS: `--require="${preload.replaceAll('\\', '/')}"` },
         dispose: () => fs.promises.rm(directory, { recursive: true, force: true }),
     };

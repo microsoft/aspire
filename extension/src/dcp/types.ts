@@ -240,6 +240,8 @@ export interface AzureFunctionsExternalBuildLaunchConfiguration extends Executab
     build_environment?: Record<string, string>;
     build_working_directory: string;
     suppress_build: true;
+    // SDK options use the declared public port, not a replica's allocated listener port.
+    launch_profile_port?: number;
 }
 
 export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunctionsLaunchConfiguration | AzureFunctionsExternalBuildLaunchConfiguration {

@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES003 // Exercise SDK container publication against the local runtime.
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Inspect and clean up the test-owned image.
 
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
@@ -93,6 +94,88 @@ public class AzureFunctionsV2RuntimeTests(ITestOutputHelper outputHelper)
                     .Replace(JsonEncodedText.Encode(projectPath).ToString(), "Functions.csproj")
                     .Replace(JsonEncodedText.Encode(metadata.BuildWorkingDirectory!).ToString(), "Functions")
                     .Replace($"\"build_configuration\":\"{configuration}\"", "\"build_configuration\":\"Configuration\""));
+        }
+        catch
+        {
+            workspace.Preserve();
+            throw;
+        }
+        finally
+        {
+            using var stop = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            await app.StopAsync(stop.Token);
+        }
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    [RequiresTools(["func"])]
+    public async Task CSharpFunctionsReplicasUseDistinctPortsAndSharedPublicEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = AzureFunctionsTestHelpers.CreateRuntimeProject(workspace.Path);
+        AzureFunctionsTestHelpers.WriteLaunchSettings(projectPath, new LaunchSettings
+        {
+            Profiles = new Dictionary<string, LaunchProfile>
+            {
+                ["Functions"] = new() { CommandName = "Project", CommandLineArgs = "--port 7071" }
+            }
+        });
+        // Keep the testing host's port randomization enabled. The fixed profile port
+        // still exercises reconciliation, without binding a shared development port.
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path, outputHelper);
+        var storage = builder.AddAzureStorage("storage").RunAsEmulator();
+        var functions = builder.AddDotnetAzureFunction("functions", projectPath)
+            .WithBuildEnvironment("BUILD_FLAVOR", "replicas")
+            .WithHostStorage(storage)
+            .WithReplicas(2)
+            .WaitFor(storage)
+            .WithHttpHealthCheck("/api/health");
+        using var app = builder.Build();
+
+        try
+        {
+            using (var startup = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
+            {
+                await app.StartAsync(startup.Token);
+            }
+
+            var notifications = app.ResourceNotifications;
+            using var ready = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+            await notifications.WaitForResourceHealthyAsync(functions.Resource.Name, ready.Token);
+            var first = await notifications.WaitForResourceAsync(functions.Resource.Name,
+                resourceEvent => resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running
+                    && resourceEvent.Snapshot.Properties.Any(property => property.Name == "executable.pid" && property.Value is int),
+                ready.Token);
+            var second = await notifications.WaitForResourceAsync(functions.Resource.Name,
+                resourceEvent => resourceEvent.ResourceId != first.ResourceId
+                    && resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running
+                    && resourceEvent.Snapshot.Properties.Any(property => property.Name == "executable.pid" && property.Value is int),
+                ready.Token);
+            var instances = new[] { first, second };
+            Assert.Equal(2, instances.Select(instance =>
+                Assert.Single(instance.Snapshot.Properties, property => property.Name == "executable.pid").Value).Distinct().Count());
+            var ports = instances.Select(instance =>
+            {
+                // Core Tools receives ["start", "--port", "<allocated port>", ...].
+                // Inspect resolved DCP argv rather than the shared endpoint template.
+                var arguments = Assert.IsAssignableFrom<IEnumerable<string>>(
+                    Assert.Single(instance.Snapshot.Properties, property => property.Name == "executable.args").Value).ToArray();
+                Assert.Equal(1, arguments.Count(argument => argument == "--port"));
+                return int.Parse(arguments[Array.IndexOf(arguments, "--port") + 1], CultureInfo.InvariantCulture);
+            }).ToArray();
+            Assert.Equal(2, ports.Distinct().Count());
+            using var requests = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            using var proxyClient = app.CreateHttpClient(functions.Resource.Name);
+            Assert.Equal("replicas|", await proxyClient.GetStringAsync("/api/health", requests.Token));
+            foreach (var port in ports)
+            {
+                Assert.NotEqual(proxyClient.BaseAddress!.Port, port);
+                using var directClient = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+                Assert.Equal("replicas|", await directClient.GetStringAsync("/api/health", requests.Token));
+            }
+            Assert.Equal(["built"], File.ReadAllLines(Path.Combine(Path.GetDirectoryName(projectPath)!, "build-count.txt")));
         }
         catch
         {

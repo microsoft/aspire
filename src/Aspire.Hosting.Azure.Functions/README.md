@@ -62,6 +62,12 @@ await builder.addDotnetAzureFunction("functions", "../Functions/Functions.csproj
 await builder.build().run();
 ```
 
+For .NET Functions projects, `WithReplicas(2)` / `withReplicas(2)` keeps a launch profile's
+`--port` as the public proxy port and assigns a separate listener port to each Functions
+host. HTTPS, certificate settings, and other profile arguments are preserved. A single
+replica retains the direct, fixed-port behavior. This does not change legacy Functions
+resources or published container ports.
+
 In publish mode, `WithEndpointsInEnvironment` / `withEndpointsInEnvironment` controls automatic
 `ASPNETCORE_URLS` configuration. C# predicates compose; the generated API takes endpoint names,
 with an empty list excluding all endpoints. Filters do not remove endpoints, change ingress or

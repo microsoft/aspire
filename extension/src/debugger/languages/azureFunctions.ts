@@ -495,9 +495,14 @@ function isCommandLineOption(value: string): boolean {
     return value.startsWith('-');
 }
 
-function normalizeSdkFunctionsHostArguments(sdkArgs: string[], modelArgs: string[]): string[] {
+function normalizeSdkFunctionsHostArguments(sdkArgs: string[], modelArgs: string[], launchProfilePort: number | undefined): string[] {
     const sdk = parseFuncHostEndpointOptions(sdkArgs);
     if (sdk.invalid) {
+        throw new Error(azureFunctionsSdkEndpointConflict);
+    }
+
+    const model = parseFuncHostEndpointOptions(modelArgs);
+    if (launchProfilePort !== undefined && (model.invalid || model.port === undefined)) {
         throw new Error(azureFunctionsSdkEndpointConflict);
     }
 
@@ -505,9 +510,11 @@ function normalizeSdkFunctionsHostArguments(sdkArgs: string[], modelArgs: string
         return sdkArgs;
     }
 
-    const model = parseFuncHostEndpointOptions(modelArgs);
+    // Replicated hosts listen on allocated target ports, not the profile's public
+    // port. Validate SDK settings against the declaration before removing them.
+    const expectedPort = launchProfilePort ?? model.port;
     const conflicts =
-        (sdk.portSpecified && (!model.portSpecified || sdk.port !== model.port)) ||
+        (sdk.portSpecified && (model.port === undefined || sdk.port !== expectedPort)) ||
         (sdk.useHttpsSpecified && sdk.useHttps !== model.useHttps) ||
         (sdk.certSpecified && (!model.certSpecified || sdk.cert !== model.cert)) ||
         (sdk.passwordSpecified && (!model.passwordSpecified || sdk.password !== model.password));
@@ -778,11 +785,13 @@ function getPowerShellFuncHostCommandLine(command: string, args: string[]): stri
     // quotes, whereas Standard passing requires the original strings. Resolve aliases
     // before choosing so a func.cmd shim gets cmd/CRT quoting even in PowerShell 7.
     // https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_parsing#passing-arguments-that-contain-quote-characters
-    const literalArgs = args.map(quotePowerShellLiteral).join(', ');
-    const legacyArgs = args.map(argument => quotePowerShellLiteral(quoteCmdArgument(argument))).join(', ');
-    // npm's func.ps1 is an ExternalScript, but forwards its arguments unchanged to
-    // native Node. Match its complete token stream, ignoring only comments/newlines,
-    // so custom func scripts and functions still receive the original strings.
+    // Inline quoted tokens suppress Unix wildcard/tilde expansion; splatting loses
+    // that protection even when the array was constructed from quoted literals.
+    const literalArgs = args.map(quotePowerShellLiteral).join(' ');
+    const legacyArgs = args.map(argument => quotePowerShellLiteral(quoteCmdArgument(argument))).join(' ');
+    // npm's func.ps1 forwards $args to Node, reintroducing Unix expansion. Bypass
+    // only its complete known token stream when Node is native; custom scripts
+    // and functions must continue receiving their original arguments.
     // https://github.com/npm/cmd-shim/blob/main/lib/index.js
     const npmShimSource = String.raw`$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent
 $exe=""
@@ -830,11 +839,17 @@ exit $ret`.split('\n').map(quotePowerShellLiteral).join(' + [char]10 + ');
         "while ($node.CommandType -eq 'Alias') { $node = $node.ResolvedCommand };",
         "$native = $node.CommandType -eq 'Application';",
         '};',
-        `$arguments = if ($native -and ($shim -or !$passing -or $passing -eq 'Legacy')) { @(${legacyArgs}) } else { @(${literalArgs}) };`,
         // A batch shim needs an already-serialized cmd command line, including in Standard
         // mode. Scope the preference to this invocation; never change the terminal profile.
         "if ($shim) { $PSNativeCommandArgumentPassing = 'Legacy' };",
-        '& $command @arguments;',
+        'if ($npmShim -and $native) {',
+        "$entryPoint = Join-Path ([IO.Path]::GetDirectoryName($command.Path)) 'node_modules/azure-functions-core-tools/lib/main.js';",
+        `if (!$passing -or $passing -eq 'Legacy') { & $node "$entryPoint" ${legacyArgs} } else { & $node "$entryPoint" ${literalArgs} }`,
+        "} elseif ($native -and ($shim -or !$passing -or $passing -eq 'Legacy')) {",
+        `& $command ${legacyArgs}`,
+        '} else {',
+        `& $command ${literalArgs}`,
+        '};',
         // Even a following type test resets $?, hiding a custom script/function failure.
         '$succeeded = $?;',
         "if ($command.CommandType -eq 'Application' -or $npmShim) { exit $LASTEXITCODE };",
@@ -1225,7 +1240,7 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
             const sdkInvocation = getSdkFunctionsHostInvocation(properties.runCommand, properties.runArguments);
             funcHostInvocation = { command: sdkInvocation.command };
             getFuncHostCommandLine(funcHostInvocation, sdkInvocation.args);
-            rawArgs.unshift(...normalizeSdkFunctionsHostArguments(sdkInvocation.args, rawArgs));
+            rawArgs.unshift(...normalizeSdkFunctionsHostArguments(sdkInvocation.args, rawArgs, launchConfig.launch_profile_port));
             getFuncHostCommandLine(funcHostInvocation, rawArgs);
             if (!fs.existsSync(properties.targetPath)) {
                 throw new Error(prebuiltProjectOutputMissing(projectPath, properties.targetPath));
@@ -1468,6 +1483,9 @@ function validateFunctionsExternalBuildMetadata(configuration: AzureFunctionsExt
     if (configuration.suppress_build !== true ||
         !isAbsoluteFunctionsPath(configuration.project_path) ||
         !isAbsoluteFunctionsPath(configuration.build_working_directory) ||
+        (configuration.launch_profile_port !== undefined &&
+            (!Number.isInteger(configuration.launch_profile_port) ||
+                configuration.launch_profile_port <= 0 || configuration.launch_profile_port > 65535)) ||
         (configuration.mode !== undefined && configuration.mode !== 'Debug' && configuration.mode !== 'NoDebug') ||
         (configuration.build_configuration !== undefined &&
             (typeof configuration.build_configuration !== 'string' ||

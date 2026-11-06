@@ -1535,7 +1535,9 @@ function patchExtesterLaunchLocale() {
     "const args = ['--no-sandbox', '--disable-dev-shm-usage', '--lang=en-US', `--user-data-dir=${path.join(this.storagePath, 'settings')}`];",
     "const args = ['--no-sandbox', '--disable-dev-shm-usage', `--user-data-dir=${path.join(this.storagePath, 'settings')}`];",
   ];
-  const replacement = `const args = ['--no-sandbox', '--disable-dev-shm-usage', '--disable-telemetry', '--lang=en-US', '--disable-keytar', '--use-inmemory-secretstorage', '--password-store=basic', '--disable-extension', 'vscode.github-authentication', '--disable-extension', 'vscode.microsoft-authentication', \`--user-data-dir=\${path.join(this.storagePath, 'settings')}\`, ${workspaceArgument}];`;
+  // Disable updates before startup: the macOS updater can replace the app behind
+  // the cache projection before ExTester applies update.mode=none from settings.
+  const replacement = `const args = ['--no-sandbox', '--disable-dev-shm-usage', '--disable-telemetry', '--disable-updates', '--lang=en-US', '--disable-keytar', '--use-inmemory-secretstorage', '--password-store=basic', '--disable-extension', 'vscode.github-authentication', '--disable-extension', 'vscode.microsoft-authentication', \`--user-data-dir=\${path.join(this.storagePath, 'settings')}\`, ${workspaceArgument}];`;
 
   if (source.includes(replacement)) {
     return;
@@ -1849,6 +1851,7 @@ ${goPackageReference}  </ItemGroup>
     ? legacyFunctions
       ? `builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj");\n\n`
       : `builder.AddDotnetAzureFunction("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")
+    .WithReplicas(1)
     .WithBuildEnvironment("ASPIRE_FUNCTIONS_E2E_BUILD_FLAVOR", "custom")
     .WithEnvironment("ASPIRE_FUNCTIONS_E2E_RUNTIME_ONLY", "runtime-value");
 
