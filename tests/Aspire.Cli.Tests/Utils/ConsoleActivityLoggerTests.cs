@@ -45,6 +45,41 @@ public class ConsoleActivityLoggerTests
         Assert.Contains("[DBG] already escaped", result);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Info_WithAzureDevOpsLoggingCommandWiderThanConsole_WritesCommandOnOnePhysicalLine(bool dim, bool color)
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: color, width: 80);
+        const string command = "##vso[task.setvariable variable=CHILD_PUBLISH_COMPLETED_MARKER_FOR_DOWNSTREAM_COLLECTION]true";
+
+        logger.StartTask("publish", "Publish");
+        // Pipeline log activities arrive escaped, the same way PipelineCommandBase forwards them.
+        logger.Info("publish", $"[[DBG]] dotnet publish /agent/_work/1/s/src/Example.Web/Example.Web.csproj (stdout):   {command.EscapeMarkup()}", dim);
+
+        var lines = output.ToString().Split(Environment.NewLine);
+
+        var commandLine = Assert.Single(lines, line => line.Contains("##vso[", StringComparison.Ordinal));
+        Assert.EndsWith($"(publish) i [DBG] dotnet publish /agent/_work/1/s/src/Example.Web/Example.Web.csproj (stdout):   {command}", commandLine);
+    }
+
+    [Fact]
+    public void Info_WithLongMessageWithoutCiLoggingCommand_StillWrapsAtConsoleWidth()
+    {
+        var output = new StringBuilder();
+        var logger = CreateLogger(output, interactive: false, color: false, width: 80);
+
+        logger.StartTask("publish", "Publish");
+        logger.Info("publish", "[[DBG]] " + string.Join(' ', Enumerable.Repeat("ordinary-output", 12)));
+
+        var lines = output.ToString().Split(Environment.NewLine);
+
+        Assert.All(lines, line => Assert.True(line.Length <= 80, $"Line exceeded the console width: '{line}'"));
+        Assert.Contains(lines, line => line.StartsWith("ordinary-output", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Info_WithValidSpectreMarkup_PreservesFormattingMarkup()
     {
