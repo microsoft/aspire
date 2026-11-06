@@ -14,7 +14,7 @@ namespace Aspire.Hosting;
 /// Provides extension methods for adding SDK-style .NET projects and file-based C# apps (by path) to an
 /// <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class DotnetProjectHostingExtensions
+public static partial class DotnetProjectHostingExtensions
 {
     /// <summary>
     /// Adds an environment variable to the build process for a .NET project.
@@ -356,7 +356,7 @@ public static class DotnetProjectHostingExtensions
         var configuration = builder.Configuration["AppHost:BuildConfiguration"];
         var projectMetadata = new DotnetProjectMetadata(path, configuration, name);
         // SPIKE: in `aspire run --watch` the watcher performs the (only) initial build, so the coordinated build is skipped.
-        var watch = Dotnet.Watch.DotnetWatchCoordinator.ShouldWatch(builder, name, projectMetadata);
+        var watch = Dotnet.Watch.DotnetWatchCoordinator.ShouldWatch(builder, name);
         var buildCoordinator = watch ? null : DotnetProjectBuildCoordinator.Prepare(builder, projectMetadata);
 
         // ExecutableResource requires a working directory. Use the project/app directory so the process
