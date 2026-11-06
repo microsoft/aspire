@@ -15,6 +15,49 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceCommandAnnotationTests
 {
+    [Fact]
+    public async Task LifecycleOverrideChangesOnlyTheSelectedBuiltInCommand()
+    {
+        var watched = new ProjectResource("watched");
+        var ordinary = new ProjectResource("ordinary");
+        const string explanation = "Automatic watch builds own this resource. Restart the watch run for a fresh build.";
+        var replacement = new ResourceCommandAnnotation(
+            KnownResourceCommands.RebuildCommand, "Rebuild",
+            _ => ResourceCommandState.Disabled,
+            _ => Task.FromResult(new ExecuteCommandResult { Success = false, Message = explanation }),
+            displayDescription: explanation, arguments: null, confirmationMessage: null,
+            iconName: null, iconVariant: null, isHighlighted: false);
+#pragma warning disable ASPIREWATCH001
+        watched.Annotations.Add(new ResourceLifecycleCommandOverrideAnnotation(KnownResourceCommands.RebuildCommand, _ => replacement));
+#pragma warning restore ASPIREWATCH001
+        watched.AddLifeCycleCommands();
+        ordinary.AddLifeCycleCommands();
+        var commands = watched.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
+        Assert.Equal(["start", "stop", "restart", "rebuild"], commands.Select(command => command.Name));
+        Assert.Same(replacement, commands[^1]);
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var stateContext = new UpdateCommandStateContext
+        {
+            Services = services,
+            ResourceSnapshot = new CustomResourceSnapshot { ResourceType = "test", Properties = [], State = KnownResourceStates.Running }
+        };
+        Assert.Equal(ResourceCommandState.Disabled, replacement.UpdateState(stateContext));
+        Assert.Equal(ResourceCommandState.Enabled,
+            ordinary.Annotations.OfType<ResourceCommandAnnotation>().Single(command => command.Name == "rebuild").UpdateState(stateContext));
+
+        var result = await replacement.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = services,
+            ResourceName = watched.Name,
+            CancellationToken = TestContext.Current.CancellationToken,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        Assert.False(result.Success);
+        Assert.Equal(explanation, result.Message);
+    }
+
     [Theory]
     [InlineData("start", "Starting", ResourceCommandState.Disabled)]
     [InlineData("start", "Stopping", ResourceCommandState.Hidden)]

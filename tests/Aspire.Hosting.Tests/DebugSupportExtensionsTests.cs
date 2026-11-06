@@ -10,6 +10,7 @@ using System.Text.Json.Serialization;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Tests;
@@ -17,6 +18,24 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(null, false, true)]
+    [InlineData(null, true, true)]
+    [InlineData("aspire", false, true)]
+    [InlineData("aspire", true, false)]
+    public void ExplicitWatchOwnershipDoesNotConfuseTheInjectedServiceWithARealIde(
+        string? owner, bool watchEnabled, bool expectedDebugging)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("app", "go", ".")
+            .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
+        var configuration = CreateConfiguration(debugSessionInfo: CreateDebugSessionInfo(["go"]));
+        configuration[DotnetWatchConfiguration.LaunchOwner] = owner;
+        configuration[DotnetWatchConfiguration.WatchEnabled] = watchEnabled.ToString();
+
+        Assert.Equal(expectedDebugging, executable.Resource.SupportsDebugging(configuration, out _));
+    }
+
     [Fact]
     public void LaunchConfigurationCallbackContextExposesOnlyLaunchProducerInputs()
     {

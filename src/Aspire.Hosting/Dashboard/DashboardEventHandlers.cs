@@ -544,7 +544,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         context.EnvironmentVariables["LOGGING__CONSOLE__FORMATTERNAME"] = "json";
 
         // Details for contacting AspireServer in an IDE debug session.
-        if (configuration["DEBUG_SESSION_PORT"] is { Length: > 0 } sessionPort)
+        var externalLauncherActive = !Aspire.Shared.DotnetWatchConfiguration.IsCliOwned(configuration);
+        if (externalLauncherActive && configuration["DEBUG_SESSION_PORT"] is { Length: > 0 } sessionPort)
         {
             // DEBUG_SESSION_PORT env var is in the format localhost:port.
             // We assume the address is localhost and only want the port value.
@@ -558,7 +559,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 throw new InvalidOperationException($"Unexpected DEBUG_SESSION_PORT value. Expected localhost:port, got '{sessionPort}'.");
             }
         }
-        if (configuration["DEBUG_SESSION_TOKEN"] is { Length: > 0 } sessionToken)
+        if (externalLauncherActive && configuration["DEBUG_SESSION_TOKEN"] is { Length: > 0 } sessionToken)
         {
             context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName] = sessionToken;
         }
@@ -570,7 +571,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             var separator = sessionDcpInstanceIdPrefix.EndsWith('-') ? string.Empty : "-";
             context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
         }
-        if (configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
+        if (externalLauncherActive && configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
         {
             context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
         }

@@ -16,6 +16,7 @@ using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Watch;
 using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -23,6 +24,7 @@ using Aspire.Hosting;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.TypeSystem;
+using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,7 +85,12 @@ public class GuestAppHostProjectTests : IDisposable
 
         Assert.True(await project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Collection(sessionFactory.CreatedSessionEnvironments,
-            environment => Assert.Equal("true", environment![KnownConfigNames.IntegrationHostBootstrap]));
+            environment =>
+            {
+                Assert.Equal("true", environment![KnownConfigNames.IntegrationHostBootstrap]);
+                Assert.Equal("false", environment[DotnetWatchLaunchEnvironment.WatchEnabledVariable]);
+                Assert.Equal("", environment[DotnetWatchConfiguration.LaunchOwner]);
+            });
     }
 
     [Theory]
@@ -2094,6 +2101,75 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
         Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunAsync_ExplicitWatchIsProjectedIntoOnlyTheFinalManagedServer(bool watch, bool native)
+    {
+        var root = _workspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(root.FullName, "apphost.mts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        var executable = Path.Combine(root.FullName, "native-server");
+        await File.WriteAllTextAsync(executable, "");
+        var interaction = new TestInteractionService();
+        var session = new FakeAppHostServerSession
+        {
+            GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                new InvalidOperationException("Stop after capturing the final server environment."))
+        };
+        var sessions = new FakeAppHostServerSessionFactory { Session = session };
+        var project = CreateGuestAppHostProject(
+            interactionService: interaction,
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(native
+                    ? new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance)
+                    : new FakeSucceedingAppHostServerProject(path))
+            },
+            serverSessionFactory: sessions,
+            configuration: new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["features:defaultWatchEnabled"] = "true"
+            }).Build());
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = root,
+            Watch = watch,
+            EnvironmentVariables = new Dictionary<string, string> { ["guest-only"] = "value" }
+        };
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await project.RunAsync(context, TestContext.Current.CancellationToken));
+
+        Assert.Collection(sessions.CreatedSessionEnvironments, environment =>
+        {
+            Assert.NotNull(environment);
+            Assert.False(environment.ContainsKey("guest-only"));
+            if (watch && !native)
+            {
+                Assert.Equal("true", environment[DotnetWatchLaunchEnvironment.WatchEnabledVariable]);
+                Assert.Equal("aspire", environment[DotnetWatchConfiguration.LaunchOwner]);
+                Assert.NotEmpty(environment[DotnetWatchConfiguration.CliExecutable]);
+                Assert.NotNull(System.Text.Json.JsonSerializer.Deserialize(
+                    environment[DotnetWatchConfiguration.CliArguments], DotnetWatchJsonContext.Default.StringArray));
+                Assert.Equal("", environment[DotnetWatchConfiguration.HostControlPipe]);
+                Assert.Equal("", environment[DotnetWatchConfiguration.HostSession]);
+            }
+            else if (watch)
+            {
+                Assert.Equal("false", environment[DotnetWatchLaunchEnvironment.WatchEnabledVariable]);
+                Assert.Equal("", environment[DotnetWatchConfiguration.LaunchOwner]);
+            }
+            else
+            {
+                Assert.False(environment.ContainsKey(DotnetWatchConfiguration.LaunchOwner));
+            }
+        });
+        Assert.Equal(new Dictionary<string, string> { ["guest-only"] = "value" }, context.EnvironmentVariables);
+        Assert.Equal(native && watch, interaction.DisplayedMessages.Any(message => message.Message == RunCommandStrings.WatchNativeServerUnsupported));
     }
 
     [Fact]

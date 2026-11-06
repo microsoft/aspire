@@ -467,6 +467,8 @@ public static class DotnetProjectHostingExtensions
             ownedByLaunchConfigurationType: projectLaunchConfigurationType,
             showInCommandLine: true);
 
+        Dotnet.Watch.DotnetWatchCoordinator.Register(resource, projectMetadata, buildCoordinator);
+
         // Launch-profile command-line arguments belong to the program, not the replaceable tool invocation.
         // Keeping them in the ordinary segment preserves them when a caller supplies a custom launch tool.
         resource.WithArgs(ctx =>

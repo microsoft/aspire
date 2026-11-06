@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+#pragma warning disable ASPIREWATCH001
 
 using System.Globalization;
 using System.Text;
@@ -23,7 +24,7 @@ internal static class CommandsConfigurationExtensions
             return;
         }
 
-        resource.Annotations.Add(new ResourceCommandAnnotation(
+        AddLifecycleCommand(resource, new ResourceCommandAnnotation(
             name: KnownResourceCommands.StartCommand,
             displayName: CommandStrings.StartName,
             executeCommand: async context =>
@@ -56,7 +57,7 @@ internal static class CommandsConfigurationExtensions
             iconVariant: IconVariant.Filled,
             isHighlighted: true));
 
-        resource.Annotations.Add(new ResourceCommandAnnotation(
+        AddLifecycleCommand(resource, new ResourceCommandAnnotation(
             name: KnownResourceCommands.StopCommand,
             displayName: CommandStrings.StopName,
             executeCommand: async context =>
@@ -95,7 +96,7 @@ internal static class CommandsConfigurationExtensions
             ? CommandStrings.RestartProjectDescription
             : CommandStrings.RestartDescription;
 
-        resource.Annotations.Add(new ResourceCommandAnnotation(
+        AddLifecycleCommand(resource, new ResourceCommandAnnotation(
             name: KnownResourceCommands.RestartCommand,
             displayName: CommandStrings.RestartName,
             executeCommand: async context =>
@@ -150,7 +151,7 @@ internal static class CommandsConfigurationExtensions
         Task<ExecuteCommandResult>? activeRebuildTask = null;
         var rebuildLock = new object();
 
-        projectResource.Annotations.Add(new ResourceCommandAnnotation(
+        AddLifecycleCommand(projectResource, new ResourceCommandAnnotation(
             name: KnownResourceCommands.RebuildCommand,
             displayName: CommandStrings.RebuildName,
             executeCommand: context =>
@@ -189,6 +190,13 @@ internal static class CommandsConfigurationExtensions
                 }
             }
         }
+    }
+
+    private static void AddLifecycleCommand(IResource resource, ResourceCommandAnnotation command)
+    {
+        var replacement = resource.Annotations.OfType<ResourceLifecycleCommandOverrideAnnotation>()
+            .LastOrDefault(annotation => string.Equals(annotation.CommandName, command.Name, StringComparison.Ordinal));
+        resource.Annotations.Add(replacement is null ? command : replacement.Factory(command));
     }
 
     private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, IResource projectResource)

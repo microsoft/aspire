@@ -1,0 +1,16 @@
+﻿[
+  exec,
+  watch.dll,
+  host,
+  --sdk,
+  selected-sdk,
+  --entrypoint,
+  AppHost.csproj,
+  --,
+  --,
+  --environment,
+  two words,
+  ,
+  --project,
+  app-input
+]

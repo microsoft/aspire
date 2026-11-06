@@ -1,8 +1,11 @@
 # Project V2 stage 1 - .NET language integration and `aspire run --watch`
 
-Implementation reviewed against repository commit `ef092af06f` on **2026-10-27**.
+The foundation review used repository commit `ef092af06f` on **2026-10-27**.
 Session status below describes implementation and coverage present in source, not a fresh execution of
-every historical manual check or deployment test. Watch integration is still future work.
+every historical manual check or deployment test. Watcher acquisition, explicit MSBuild bootstrap,
+service coordination, the private proxy, explicit preview activation, and C# AppHost generations are
+implemented and verified with Linux terminal E2E, TypeScript first and project-based C# second.
+Windows execution has not been run.
 
 Earlier session records report successful C# playground and VS Code F5 checks, TypeScript-first/C#-second
 coordinated-build runs, and package-backed TypeScript Blazor gateway validation. Those remain historical
@@ -43,7 +46,7 @@ This plan delivers the initial vertical slice:
 2. **Coordinated initial builds**, independent of the watch signal, followed by launches from the
    selected build output. This is implemented, subject to the IDE capability negotiation in Session 2.
 3. **`aspire run --watch`**, with Aspire-controlled C# service watching and a separately scoped C#
-   AppHost-watch integration. These are not implemented. Non-C# service packages need not implement watch
+   AppHost-watch integration. These are implemented as an explicitly limited preview. Non-C# service packages need not implement watch
    in this slice; polyglot AppHost code keeps its language-native watching.
 
 Partial-run selection, complete persistent/container-execution support, watch-under-debugger, and an
@@ -68,6 +71,20 @@ remaining work are recorded once, under their coding sessions.
 | D8 | **AppHost watch is a separate session.** Earlier service-watch work runs the AppHost normally. Package-based watching is for the CLI path, not IDE-owned runs; preserve IDE-native change tracking, service launch, and session-restart behavior. |
 | D9 | **Non-watch F5 parity is required and implemented.** Preserve capability negotiation and older-launcher behavior rather than forcing every IDE onto the coordinated-build path. |
 | D10 | **Aspire owns a hidden service proxy command in the CLI**, using private-pipe environment delivery rather than sensitive `-e` arguments. Session 6a defines its runtime and wire-contract responsibilities. |
+| D11 | **Only explicit experimental `aspire run --watch` selects the new implementation.** Keep `defaultWatchEnabled` and ordinary/IDE behavior unchanged when the option is absent. |
+| D12 | **Use small experimental opt-in core hooks for command customization and logical snapshot projection.** Do not replace executable resources with synthetic service facades. |
+| D13 | **Partition by provably isolated build/output components and compatible SDK contexts.** Multiple watch servers are allowed. Unsupported components run normally with per-resource explanations; unknown isolation leaves all C# services ordinary rather than blocking application startup. |
+| D14 | **Disable manual Rebuild only for actually watched resources.** Automatic watcher builds remain responsible for edits; restart the watch run for a forced fresh build. Do not reinterpret upstream restart control as a build. |
+| D15 | **Classified pre-start watcher infrastructure failures warn, clean up, and use ordinary execution.** Cancellation remains cancellation. Fatal failures after a watch group becomes active fail and clean up that group without stopping unrelated resources or silently downgrading it. |
+| D16 | **Overrides are experimental environment variables, with path taking precedence over exact version.** Use `ASPIRE_DOTNET_WATCH_TOOL_PATH` and `ASPIRE_DOTNET_WATCH_TOOL_VERSION`; do not add persisted CLI settings or silently replace an explicit installation. |
+| D17 | **C# topology changes use typed private model invalidation and CLI-controlled generation replacement.** Do not assume metadata updates rerun model construction or introduce a second AppHost file watcher. |
+
+After the original service-lifetime question was presented, the requester explicitly delegated
+remaining decisions and asked implementation to continue autonomously. The resulting preview
+contract reports only observed application state, excludes completion-sensitive/duplicate/replicated
+contexts, and disables Start after manual Stop until the watch run is restarted. This is not a claim
+that the requester explicitly selected one of the original lifetime options or that ordinary
+application-completion semantics have been established.
 
 **API maturity is not uniform.** `DotnetProjectResource`, `AddDotnetProject`, and the package's ordinary
 consumer APIs no longer carry the original `ASPIREDOTNETPROJECT001` experimental diagnostic. Starting
@@ -77,6 +94,8 @@ stabilized builds. Package stabilization does not graduate integration-authoring
 `ASPIREPROJECTS001`. Package validation remains enabled; baseline comparisons skip releases before
 17.0.0 because the package had no stable version in those releases.
 Run configuration retains `ASPIREWATCH001`; other features such as Blazor have their own maturity.
+New watch-specific public APIs and user-facing options remain experimental; that does not make
+stabilized non-watch APIs experimental again.
 Do not impose a blanket "all new APIs experimental" requirement or hand-edit generated release
 `api/*.cs`, ATS, or capability baselines. Update codegen test snapshots when behavior requires it.
 
@@ -173,6 +192,17 @@ Important semantics for the integration:
   return zero. Proxy startup or exit code must not become a false application-success signal.
 - The server owns the actual service process. Disconnecting its proxy terminates the associated
   process, but application completion/exit code is not faithfully represented by proxy completion.
+
+An executable contract probe confirmed the completion gap: a service exited with code zero, its
+application PID was no longer alive, and the resource pipe remained open without an exit status.
+The pinned launcher reports only nonzero exits outside cancellation/restart. It also has no
+per-connection generation identifier or acknowledgement that cleanup after a proxy disconnect has
+finished. The inspected public .NET 11 RC3 source retains these conditions. Accurate completion and
+settled Stop/Start sequencing cannot be established by the core projection hook. The preview therefore
+does not advertise application PIDs or successful completion, excludes `WaitForCompletion` targets,
+replicas and duplicate entrypoints, and blocks Start after a manual Stop until a new watch run.
+It does not parse verbose logs to invent lifecycle observations or treat proxy lifetime as
+application lifetime.
 
 The [status schema and control implementation][watch-status] use project paths, not resource names,
 instance IDs, or PIDs. Status types include `building`, `build_complete`, `hot_reload_applied`,
@@ -309,28 +339,38 @@ does not make .NET services watch.
 
 ### Session 4 - Runtime-only watcher acquisition and resolution
 
-**Not implemented.** There is no watcher pin/reference, acquisition implementation, tool-path target,
-or runtime resolver in `Aspire.Hosting.Dotnet`.
+**Acquisition and explicit bootstrap implemented; automatic watch activation remains pending.**
+`DotnetWatchToolManager` is source-shared by the integration and its thin
+`Aspire.Hosting.Dotnet.Tasks` adapter. It uses standard `dotnet tool install`, never a global tool,
+project manifest, ordinary watcher PackageReference, or handwritten package downloader.
 
-Implement D6 using the verified package contract in section 3:
+- The default `10.0.403` pin is embedded from `eng/Versions.props`. An existing payload path wins over
+  an arbitrary exact-version override; malformed selections fail without downloading another tool.
+- Versioned, host-RID-specific entries live below the resolved Aspire home. Installation is locked,
+  staged on the cache filesystem, validated, and atomically published. Published entries are immutable;
+  incomplete entries produce an actionable error rather than being repaired beneath active runs.
+- Complete cache hits and explicit payloads use filesystem checks only. They do not invoke an
+  installer, query feeds, check for updates, or execute help. The guarantee does not cover application
+  restore/build or unrelated CLI networking.
+- The explicitly invoked `EnsureAspireDotnetWatchTool` target returns an `AspireDotnetWatchTool` item
+  with `Version`, `RuntimeMajor`, `SdkDirectory`, and `DotnetPath` metadata. It has no ordinary
+  Restore/Build/Run/Publish acquisition hook. The target and task DLL are packed with the integration.
+- Unit tests cover concurrent callers, cancellation/retry, malformed/incomplete cache entries,
+  side-by-side exact versions, explicit-path precedence, and runtime/dependency/agent validation.
+  SDK behavior tests execute the target from its packaged layout and verify ordinary operations
+  ignore invalid watcher overrides. Actual nupkg/task checks exercised cold installation from approved
+  repository feeds and warm resolution with an intentionally unusable installer path.
 
-- Pin the verified `10.0.403` baseline and acquire its complete payload from approved/configured sources only when
-  an effective CLI watch run needs it. Reuse a compatible cache entry; handle concurrent ensure requests,
-  interrupted acquisition, version mismatch, and missing runtimes with explicit diagnostics.
-- Keep acquisition logic owned by `Aspire.Hosting.Dotnet`, usable during AppHost startup before the
-  service-watch server starts. Do not add a build/restore/publish or ordinary-run download prerequisite.
-- Expose a package-owned **launch-time ensure/resolution entry point** that the CLI can invoke from the
-  already-restored C# AppHost project **before** launching the AppHost through `host`. Otherwise there is
-  a circular dependency: AppHost startup cannot acquire the tool needed to start that AppHost.
-- Establish path/configuration precedence and pass the same resolved installation to both launch paths.
-  C# MSBuild metadata may expose information where useful, but cannot be the sole runtime contract for
-  direct-loaded polyglot packages. The exact ensure entry point, cache layout, and tool-compatible
-  acquisition primitive remain implementation work, not an assumed ordinary `PackageReference`.
+The pinned tool's root/host/server help commands fail. Requester-approved acceptance uses positive
+functional checks instead: the actual SDK 10 server delivered intended environment values, separate
+stdout/stderr, and SDK-like application options behind a request-level `--` separator. A successful
+acquisition is not proof of runtime, SDK, profile, or lifecycle compatibility. The default package
+cannot load the repository SDK 11 MSBuild runtime dependencies, and its file-app launch omission
+requires explicit compatibility handling.
 
-**Acceptance:** watch-only acquisition and cache reuse work for C# and package-backed TypeScript
-AppHosts; non-watch/build/restore/publish do not acquire the tool; the resolved installation executes
-`--help` and meets runtime requirements. Cover failures, cancellation, concurrent callers, and approved
-feed selection without modifying repository `NuGet.config`.
+**Remaining acceptance:** wire one resolved descriptor into the CLI prelaunch and package-backed
+TypeScript runtime paths, then complete their watch-mode tests with Sessions 6-9. Preserve the
+no-acquisition behavior outside explicit watch and do not modify repository `NuGet.config`.
 
 ### Session 5 - Coordinated initial builds and output-bound launches
 
@@ -436,10 +476,18 @@ polyglot AppHosts add the .NET integration explicitly when they need C# services
 
 ### Session 6 - Aspire-controlled C# service watch
 
-**Not implemented.** No `DotnetWatchServerResource` or V2 watch launch rewrite exists.
+**Implemented as an experimental, limited-lifecycle path.** `DotnetWatchCoordinator` evaluates the
+final project graph and physical output directories, partitions compatible isolated components, and
+adds hidden executable system servers. `DotnetWatchGroup` owns bounded status/control readiness,
+the coordinated-build barrier, diagnostic forwarding, cleanup and classified fallback.
+Servers run through the exact CLI's existing owned-process guardian: a server/owner crash tears
+down its process group/job, including service descendants, without inferring application PIDs
+from the upstream protocol.
+`DotnetWatchMember` replaces only the integration-owned launch tool with the exact CLI proxy
+invocation and projects application observations separately from raw transport diagnostics.
 
 When a supported CLI watch run is requested, ensure the tool, collect eligible project roots, add
-**one hidden system watch server per AppHost run**, and launch one **Aspire-owned proxy per resource
+**hidden system watch servers for isolated compatible SDK/build groups**, and launch one **Aspire-owned proxy per resource
 instance**. Keep infrastructure out of manifests and inappropriate user lifecycle commands; define
 intentional startup and shutdown ordering, rather than adding an explicit-start server with no owner to start it.
 
@@ -452,6 +500,9 @@ Implement the applicable compatibility/lifecycle gates in section 5, including m
 status reporting. A bare `WaitForStart(server)` is not the complete readiness design, and the status
 monitor is not optional where correctness depends on it. Do not assume the stock proxy's zero exit
 code or `rebuild` control request supplies Aspire's lifecycle semantics.
+The limitations in section 3.3 remain explicit; this preview does not claim complete lifecycle semantics.
+Disable manual Rebuild only on effective watched resources, preserving ordinary Rebuild on excluded
+components. Pre-start infrastructure fallback and active-group failure follow D15.
 
 **Acceptance:** from the TypeScript playground first, then C#, a service edit updates the intended
 service and a shared-library edit updates both consumers. Verify server failure, initial-build failure,
@@ -459,7 +510,12 @@ restart/rebuild behavior, cleanup, and unsupported-context diagnostics, not only
 
 ### Session 6a - Hidden Aspire CLI service proxy
 
-**Not implemented; requester-approved addition to the work breakdown.**
+**Implemented, including service launch integration.**
+The early CLI dispatcher, exact self-invocation specification, bounded binary framing,
+source-generated JSON, intended-environment inventory, separate output streams, and cancellation/error
+paths have focused tests. Actual pinned SDK 10.0.403 project and managed file-app probes verified
+the explicit `--project`/`--file` adapter, intended environment, separate streams, and literal
+SDK-shaped application options. Those probes do not establish the missing lifetime observations.
 
 Implement a hidden, infrastructure-only CLI command for D10. DCP launches it per instance with the
 intended service environment delivered through process environment/private local transport; it sends
@@ -483,12 +539,15 @@ owns one launched instance, and failures/cancellation never look like successful
 
 ### Session 7 - `aspire run --watch` CLI wiring
 
-**Not implemented.** `RunCommand` currently has no `--watch` option and does not project the V2 signal.
+**Implemented.** `RunCommand` exposes the explicit experimental option, forwards it for detached runs,
+validates incompatible options, and projects the owner/tool/CLI specification to the actual Hosting
+process. Managed guest servers receive the signal; discovery/code-generation sessions do not.
 The existing `defaultWatchEnabled` feature still selects whole-AppHost `dotnet watch` for project-based
 C# AppHosts and the guest runtime's watch path for polyglot hosts. It is not the new service-watch mode.
 Current `--no-build` validation already accounts for legacy watch and extension-terminal launches.
 
-Add the option, with explicit `--watch` enabling watch and `DefaultWatchEnabled` supplying the default.
+Add the option, with only explicit `--watch` enabling this preview. Do not use
+`DefaultWatchEnabled` as a default for the package-backed path.
 Project `AppHost:Run:WatchEnabled` into the process that actually hosts `Aspire.Hosting`.
 For polyglot runs that means the **AppHost server's environment**, not only the guest application's
 environment. Enable runtime acquisition and provide the exact proxy CLI invocation for that run.
@@ -499,12 +558,22 @@ protocol, not this package-backed CLI watcher. Reconcile flags, diagnostics, hel
 backchannel reconnect/cancellation, and existing `--no-build` behavior rather than leaving two unrelated
 watch implementations active under the same effective setting.
 
-**Acceptance:** CLI tests plus terminal E2E prove explicit/default watch selection, absence of acquisition
+**Acceptance:** CLI tests plus terminal E2E prove explicit preview selection and unchanged legacy defaults, absence of acquisition
 in non-watch runs, correct C#/guest signal delivery, existing option validation, and service hot reload.
 
 ### Session 8 - C# AppHost watch through `host`
 
-**Not implemented; composition gate remains open.** Use the package-owned prelaunch ensure operation
+**Implemented and functionally verified on Linux for project-based C# AppHosts.** The CLI uses the
+package-owned ensure target and actual returned SDK/muxer. Explicit ownership prevents the injected
+execution-service settings from bypassing Aspire's build/proxy path without stripping those settings.
+The run hook is suppressed. A private typed metadata-update/start-instance notification triggers
+coalesced teardown and a fresh CLI/AppHost generation, backchannel and resource-state consumers.
+An incompatible AppHost wrapper can remain ordinary while independent compatible services watch.
+This preview wraps `.csproj` AppHosts. File-based C# AppHosts remain ordinary with an explicit
+coverage warning; their compatible services can still watch, but AppHost source edits do not
+reconstruct the model automatically.
+
+Use the package-owned prelaunch ensure operation
 from Session 4, then launch the C# AppHost with the resolved tool's `host` command.
 Keep language-native AppHost watching for polyglot runs, including native-server configurations.
 
@@ -512,9 +581,9 @@ The requester chose **Aspire-controlled service launch**, not adoption of the pa
 execution service as a replacement backend. Establish a supported composition that prevents the
 automatically injected external-launch settings from bypassing the proxy path or disabling coordinated
 build ownership. CLI-only invocation is a boundary requirement, but does not suppress the package's
-automatic service. An Aspire-side integration or upstream enhancement must be demonstrated; do not
-silently assume an AppHost-only switch, strip protocol settings as an unexplained workaround, or mark
-this gate resolved.
+automatic service. The Linux composition scenario demonstrates this Aspire-side ownership, including
+topology additions/removals and old-generation cleanup. Do not replace it with an assumed AppHost-only
+switch or strip protocol settings as an unexplained workaround.
 
 Also account for the AppHost package's `dotnet run` -> `aspire run` hook: watcher launches must not
 recursively re-enter the CLI. Preserve the AppHost configuration/profile, forwarded arguments,
@@ -527,8 +596,22 @@ method-body hot reload with topology reevaluation.
 
 ### Session 9 - Watch end-to-end coverage, playground extension, and documentation
 
-**Not implemented for the new watcher.** Existing package/build/publish/debug and legacy-watch coverage
-is not end-to-end coverage of Sessions 6-8.
+**Implemented and verified with Linux terminal scenarios, TypeScript first and C# second.**
+Both scenarios passed against the rebuilt portable CLI/package layout, including real hot reload,
+invalid-edit recovery, restart controls, abrupt owner failure, isolation and final process cleanup.
+The C# scenario also passed model-environment changes, topology additions/removals, backchannel
+replacement and complete old-generation cleanup.
+Hosting tests cover graph/output/context partitions, readiness and failure classification,
+command isolation, logical/transport snapshots, cancellation, diagnostic forwarding and final-model
+removal. CLI tests cover explicit selection, bootstrap, self-invocation, environment projection,
+generation replacement and regressions. The Linux terminal scenarios exercise TypeScript first,
+then C#, shared-library edits, invalid-edit recovery, rude edits, command restrictions, topology
+addition/removal, cleanup and isolated active-group failure. macOS pinned-tool/pipe checks and a
+Native AOT CLI publish/owned-scope smoke have also passed; Windows has not been run. The Linux
+verification bundle used a self-contained managed Dashboard because Native AOT compilation exceeded
+the available VM memory; Dashboard Native AOT and source-only component-schema generation were not validated.
+The playground has a watch exercise guide, including SDK and managed file-app prerequisites.
+Existing package/build/publish/debug and legacy-watch coverage alone is not end-to-end coverage.
 
 Extend the Session 1b playground and add hosting/proxy contract tests, CLI unit tests, and CLI terminal
 E2E using the repository's `cli-e2e-testing` guidance. Verify **TypeScript first, C# second**, and cover
@@ -559,21 +642,23 @@ as a routine coding-session completion step.
 | 8 | 4, 7, and supported composition of `host` with Aspire-owned service launch |
 | 9 | Extend coverage alongside 6/6a/7; complete the full slice after 8 |
 
-Session 1b remains the reusable dogfood target. Sessions 4 and 6a can advance independently of the
-remaining AppHost composition investigation; service-watch delivery must not imply that Session 8 passed.
+Session 1b remains the reusable dogfood target. Session 4 acquisition evidence, service protocol
+evidence, and full Session 8 composition evidence are distinct; success in one does not prove the others.
 
 ## 5. Remaining compatibility gates and roadmap boundaries
 
-Start with **verified compatible watch contexts and explicit, actionable rejections** for unsupported
-ones. Preserve broad support where semantics are established; do not impose an arbitrary blanket
-single-instance-only restriction or silently fall back to non-watch behavior.
+Start with **verified compatible watch contexts and explicit coverage diagnostics** for unsupported
+ones. Preserve application startup through D13's diagnosed component-level fallback. Preserve broad
+support where semantics are established. The preview's single-instance restriction follows the
+verified path-only attribution limit, not a permanent resource-model restriction. Do not silently
+advertise an ordinary resource as watched.
 
 | Gate | Required investigation/verification | Owner |
 |---|---|---|
-| Build/launch fidelity | The watcher takes one SDK per server and has no per-resource build-property/configuration/RID fields or precomputed run-command input. Establish which existing V2 build contexts round-trip correctly, including custom inputs, working directories, and solution properties introduced by its `.slnx` build. Multiple servers alone do not solve shared-output races or property precedence. Reject unsupported cases rather than launch a different output. | 4, 6 |
+| Build/launch fidelity | The watcher takes one SDK per server and has no per-resource build-property/configuration/RID fields or precomputed run-command input. Establish which existing V2 build contexts round-trip correctly, including custom inputs, working directories, and solution properties introduced by its `.slnx` build. Multiple servers alone do not solve shared-output races or property precedence. Run unsupported sharing components normally with clear warnings rather than launch a different output. | 4, 6 |
 | Exact entry point, arguments, profiles | Server graph lookup uses the requested path, but the standalone resource-launch construction does not explicitly pass `--project` or `--file`. Verify `.cs` apps and directories with multiple projects instead of inferring support from successful builds. Verify application-option forwarding and the three-state profile field across the actual wire serialization; parser-level tests alone are insufficient. | 6, 6a |
-| Per-instance control and completion | One proxy maps to one service instance, but status/control events identify project paths only. Verify replicas and duplicate paths without losing attribution or independently requested lifecycle actions. Reject known ambiguous independently controlled registrations and completion-sensitive cases when the contract cannot represent their outcome; do not claim proxy completion is `WaitForCompletion` parity. | 6, 6a |
-| Custom launches and framework resources | Resource type/metadata alone does not authorize replacing an integration's launch tool. Cover or explicitly reject custom invocation, persistent lifetime, and other unsupported combinations without taking back their normal non-watch behavior. | 6, 7 |
+| Per-instance control and completion | One proxy maps to one service instance, but status/control events identify project paths only. Clean exits and settled disconnect cleanup remain unobservable. The preview excludes completion-sensitive, replica and duplicate-path components and disables post-Stop Start. Future parity requires additional supported observations; do not claim proxy completion is `WaitForCompletion` parity. | 6, 6a |
+| Custom launches and framework resources | Resource type/metadata alone does not authorize replacing an integration's launch tool. Cover or diagnose custom invocation, persistent lifetime, and other unsupported combinations, retaining ordinary execution for affected sharing components. | 6, 7 |
 | Pipe security, environment, startup, cleanup | Verify current-user-only pipe behavior on each OS, intended environment versus server inheritance, startup-only environment semantics, connection/readiness timeouts, concurrent instances, disconnects, and server/AppHost restarts. A successful connection/ACK is not application health. | 6, 6a, 9 |
 | C# AppHost composition/topology | Resolve the automatic execution-service overlap and run-hook recursion described in Session 8. Rebuild/start/reconnect ownership must remain explicit when an AppHost restarts or the model changes. | 8 |
 | Future tool upgrades | Reverify version, approved-feed availability, runtime, protocol, and build/launch semantics before changing the pin, including any new prebuilt-output contract for D7. | 4, 6, 8 |

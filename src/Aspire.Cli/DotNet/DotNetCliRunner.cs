@@ -79,6 +79,10 @@ internal sealed class ProcessInvocationOptions
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
 
+    public bool DisableExtensionLaunch { get; set; }
+
+    public string? DotNetExecutablePath { get; set; }
+
     /// <summary>
     /// When true, suppresses logging of process output to the logger.
     /// Useful for background operations like NuGet package cache refreshes.
@@ -185,6 +189,8 @@ internal sealed class ProcessInvocationOptions
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
+        DisableExtensionLaunch = DisableExtensionLaunch,
+        DotNetExecutablePath = DotNetExecutablePath,
         SuppressLogging = SuppressLogging,
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
@@ -263,7 +269,21 @@ internal sealed class DotNetCliRunner(
         if (command is null || IsDotNetMuxerCommand(command))
         {
             // Resolve the dotnet executable path, preferring the private SDK installation if available.
-            processFileName = ResolveDotNetPath(finalEnv);
+            if (options.DotNetExecutablePath is { } exactDotnetPath)
+            {
+                // The watch bootstrap returns the muxer that actually selected this AppHost's SDK.
+                // Replacing it with the CLI's private muxer can select another SDK/runtime installation.
+                processFileName = exactDotnetPath;
+                var dotnetDirectory = Path.GetDirectoryName(PathNormalizer.ResolveSymlinks(exactDotnetPath))!;
+                finalEnv["DOTNET_ROOT"] = dotnetDirectory;
+                finalEnv["DOTNET_MULTILEVEL_LOOKUP"] = "0";
+                var currentPath = finalEnv.TryGetValue("PATH", out var path) ? path : environment.GetEnvironmentVariable("PATH");
+                finalEnv["PATH"] = $"{dotnetDirectory}{Path.PathSeparator}{currentPath}";
+            }
+            else
+            {
+                processFileName = ResolveDotNetPath(finalEnv);
+            }
             effectiveArgs = AddBinlogArgumentIfConfigured(args, dotnetCommand, projectFile, workingDirectory, processActivity);
         }
         else
@@ -304,7 +324,8 @@ internal sealed class DotNetCliRunner(
         // Handle extension-based launch for app hosts with backchannel
         if (backchannelCompletionSource is not null)
         {
-            if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
+            if (!options.DisableExtensionLaunch &&
+                ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
                 && projectFile is not null
                 && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.Project, cancellationToken))
             {

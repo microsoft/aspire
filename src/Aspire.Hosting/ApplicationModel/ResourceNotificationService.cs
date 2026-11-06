@@ -896,6 +896,12 @@ public class ResourceNotificationService : IDisposable
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
             var newState = stateFactory(previousState);
+#pragma warning disable ASPIREWATCH001
+            if (resource.TryGetLastAnnotation<ResourceSnapshotProjectionAnnotation>(out var projection))
+            {
+                newState = projection.Projection(resourceId, newState);
+            }
+#pragma warning restore ASPIREWATCH001
 
             if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
             {

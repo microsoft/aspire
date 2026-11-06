@@ -186,6 +186,9 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)CliExitCodes.cs" Link="CliExitCodes.cs" />
+    <Compile Include="$(SharedDir)DotnetWatchConfiguration.cs" Link="Utils\DotnetWatchConfiguration.cs" />
+    <Compile Include="$(SharedDir)DotnetWatchProtocol.cs" Link="Utils\DotnetWatchProtocol.cs" />
+    <Compile Include="$(SharedDir)DotnetWatchHostProtocol.cs" Link="Utils\DotnetWatchHostProtocol.cs" />
     <Compile Include="$(SharedDir)DcpKubeconfigData.cs" Link="Utils\DcpKubeconfigData.cs" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="TrayCliProtocol.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />

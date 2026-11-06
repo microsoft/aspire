@@ -31,6 +31,128 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     ];
 
     [Fact]
+    public async Task DotnetWatchEnsureTargetReturnsStructuredMetadataWithoutInvokingTheInstallerForAnExplicitPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateDotnetWatchTargetProjectAsync(workspace, useSdk: false);
+        var entryPoint = DotnetWatchToolTestPayload.Create(Path.Combine(Path.GetDirectoryName(project)!, "payload"));
+        var resultPath = Path.Combine(workspace.Path, "result.json");
+        var home = Path.Combine(workspace.Path, "aspire-home");
+        var result = await RunDotNetWithArgumentsAsync(GetRepoRoot(),
+            [
+                "msbuild", project, "-nologo", "-target:EnsureAspireDotnetWatchTool",
+                "-property:DOTNET_HOST_PATH=/must-not-be-executed/dotnet",
+                "-getItem:AspireDotnetWatchTool", $"-getResultOutputFile:{resultPath}"
+            ],
+            new Dictionary<string, string>
+            {
+                ["ASPIRE_HOME"] = home,
+                ["ASPIRE_DOTNET_WATCH_TOOL_PATH"] = "payload",
+                ["ASPIRE_DOTNET_WATCH_TOOL_VERSION"] = "not a version"
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultPath, TestContext.Current.CancellationToken));
+        var item = Assert.Single(document.RootElement.GetProperty("Items").GetProperty("AspireDotnetWatchTool").EnumerateArray());
+        Assert.Equal(entryPoint, item.GetProperty("Identity").GetString());
+        Assert.Equal("custom", item.GetProperty("Version").GetString());
+        Assert.Equal("10", item.GetProperty("RuntimeMajor").GetString());
+        Assert.Equal("/must-not-be-executed/dotnet", item.GetProperty("DotnetPath").GetString());
+        Assert.True(File.Exists(Path.Combine(item.GetProperty("SdkDirectory").GetString()!, "MSBuild.dll")));
+        Assert.False(Directory.Exists(home));
+    }
+
+    [Fact]
+    public async Task DotnetWatchEnsureTargetReportsInvalidExplicitPayloadWithoutAcquiringAnotherTool()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateDotnetWatchTargetProjectAsync(workspace, useSdk: false);
+        var home = Path.Combine(workspace.Path, "aspire-home");
+        var result = await RunDotNetWithArgumentsAsync(GetRepoRoot(),
+            ["msbuild", project, "-nologo", "-target:EnsureAspireDotnetWatchTool", "-property:DOTNET_HOST_PATH=/must-not-be-executed/dotnet"],
+            new Dictionary<string, string>
+            {
+                ["ASPIRE_HOME"] = home,
+                ["ASPIRE_DOTNET_WATCH_TOOL_PATH"] = "missing",
+                ["ASPIRE_DOTNET_WATCH_TOOL_VERSION"] = "10.0.403"
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Experimental .NET watch tool acquisition failed:", result.Output);
+        Assert.Contains("does not exist", result.Output);
+        Assert.False(Directory.Exists(home));
+    }
+
+    [Fact]
+    public async Task DotnetWatchAcquisitionDoesNotRunDuringRestoreBuildRunOrPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateDotnetWatchTargetProjectAsync(workspace, useSdk: true);
+        var home = Path.Combine(workspace.Path, "aspire-home");
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = home,
+            ["ASPIRE_DOTNET_WATCH_TOOL_PATH"] = "missing",
+            ["ASPIRE_DOTNET_WATCH_TOOL_VERSION"] = "not a version"
+        };
+        var source = workspace.CreateDirectory("empty-source").FullName;
+        var restore = await RunDotNetWithArgumentsAsync(GetRepoRoot(),
+            ["restore", project, "--source", source], environment);
+        Assert.True(restore.ExitCode == 0, restore.Output);
+        var build = await RunDotNetWithArgumentsAsync(GetRepoRoot(),
+            ["build", project, "--no-restore", "-nologo"], environment);
+        Assert.True(build.ExitCode == 0, build.Output);
+        var run = await RunDotNetWithArgumentsAsync(GetRepoRoot(),
+            ["run", "--project", project, "--no-build", "--no-restore"], environment);
+        Assert.True(run.ExitCode == 0, run.Output);
+        Assert.Contains("No watcher acquisition.", run.StandardOutput);
+        var publishDirectory = Path.Combine(workspace.Path, "publish");
+        var publish = await RunDotNetWithArgumentsAsync(GetRepoRoot(),
+            ["publish", project, "--no-restore", "-nologo", "-o", publishDirectory], environment);
+        Assert.True(publish.ExitCode == 0, publish.Output);
+
+        Assert.True(File.Exists(Path.Combine(publishDirectory, "AppHost.dll")));
+        Assert.False(Directory.Exists(home));
+    }
+
+    private static async Task<string> CreateDotnetWatchTargetProjectAsync(TemporaryWorkspace workspace, bool useSdk)
+    {
+        var packageDirectory = workspace.CreateDirectory("package").FullName;
+        var targetDirectory = Directory.CreateDirectory(Path.Combine(packageDirectory, "buildTransitive")).FullName;
+        var toolsDirectory = Directory.CreateDirectory(Path.Combine(packageDirectory, "tools", "net10.0")).FullName;
+        var sourceTarget = Path.Combine(GetRepoRoot(), "src", "Aspire.Hosting.Dotnet", "buildTransitive", "Aspire.Hosting.Dotnet.targets");
+        File.Copy(sourceTarget, Path.Combine(targetDirectory, Path.GetFileName(sourceTarget)));
+        var taskAssembly = typeof(AppHostSdkTargetsTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "AspireDotnetWatchTasksAssemblyPath").Value!;
+        File.Copy(taskAssembly, Path.Combine(toolsDirectory, Path.GetFileName(taskAssembly)));
+        var projectDirectory = workspace.CreateDirectory("apphost").FullName;
+        var project = Path.Combine(projectDirectory, useSdk ? "AppHost.csproj" : "AppHost.proj");
+        // global.json can resolve a newer SDK outside the invoking muxer's installation.
+        // Match the test host runtime so "dotnet run" does not need another runtime there.
+        var targetFramework = new System.Runtime.Versioning.FrameworkName(
+            typeof(AppHostSdkTargetsTests).Assembly.GetCustomAttribute<System.Runtime.Versioning.TargetFrameworkAttribute>()!.FrameworkName).Version;
+        var sdk = useSdk ? """ Sdk="Microsoft.NET.Sdk" """ : "";
+        var import = SecurityElement.Escape(Path.Combine(targetDirectory, "Aspire.Hosting.Dotnet.targets"));
+        await File.WriteAllTextAsync(project, $$"""
+            <Project{{sdk}}>
+              <PropertyGroup>
+                <TargetFramework>net{{targetFramework.Major}}.{{targetFramework.Minor}}</TargetFramework>
+                <OutputType>Exe</OutputType>
+                <UseAppHost>false</UseAppHost>
+              </PropertyGroup>
+              <Import Project="{{import}}" />
+            </Project>
+            """, TestContext.Current.CancellationToken);
+        if (useSdk)
+        {
+            await File.WriteAllTextAsync(Path.Combine(projectDirectory, "Program.cs"),
+                """System.Console.WriteLine("No watcher acquisition.");""", TestContext.Current.CancellationToken);
+        }
+
+        return project;
+    }
+
+    [Fact]
     public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsDefaulted()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
