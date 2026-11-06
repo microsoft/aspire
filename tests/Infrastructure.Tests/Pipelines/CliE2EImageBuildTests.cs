@@ -16,6 +16,7 @@ public sealed class CliE2EImageBuildTests(ITestOutputHelper output)
     [InlineData("stall")]
     [InlineData("forced-kill")]
     [InlineData("cancelled")]
+    [InlineData("external-cancel")]
     [InlineData("all-images")]
     [InlineData("dotnet-only")]
     [RequiresTools(["node", "bash", "timeout"])]
@@ -26,6 +27,18 @@ public sealed class CliE2EImageBuildTests(ITestOutputHelper output)
         var result = await command.ExecuteScriptAsync(
             Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "Pipelines", "cli-e2e-image-build.harness.ts"),
             RepoRoot.Path, scenario);
+
+        result.EnsureSuccessful();
+    }
+
+    [Fact]
+    [RequiresTools(["node", "docker"])]
+    public async Task DerivedImageFallbackRestoresOriginalAptSources()
+    {
+        using var command = new NodeCommand(output).WithTimeout(TimeSpan.FromMinutes(2));
+        var result = await command.ExecuteScriptAsync(
+            Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "Pipelines", "cli-e2e-image-build.harness.ts"),
+            RepoRoot.Path, "inherited-sources");
 
         result.EnsureSuccessful();
     }

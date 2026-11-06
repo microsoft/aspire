@@ -50,6 +50,12 @@ script fails without fallback: a forced kill cannot establish that the remote
 build acknowledged cancellation. Interrupts, termination and timeout execution
 errors also fail without retrying.
 
+The mirror configuration script preserves the base image's original Ubuntu
+sources before replacing them. An empty mirror restores those files, including
+in derived Java/Go images, without changing third-party repositories. A
+supervising shell preserves external cancellation as a signal exit even when
+the Docker client handles the signal and exits with an ordinary failure code.
+
 ## Cross-PR BuildKit cache
 
 The image build workflow exports BuildKit layers to the GitHub Actions cache with stable scopes:

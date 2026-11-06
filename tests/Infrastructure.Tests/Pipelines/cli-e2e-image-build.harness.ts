@@ -52,6 +52,18 @@ function stubDocker(): void {
         case 'cancelled':
             process.kill(process.pid, 'SIGTERM');
             return;
+        case 'external-cancel': {
+            process.on('SIGTERM', () => {
+                console.error('Client handled external TERM and exited 1');
+                process.exit(1);
+            });
+            // Signal the real timeout supervisor, not the client or its wrapper.
+            // /proc/PID/stat starts "123 (bash) S 456 ...", where 456 is PPID.
+            const timeoutPid = Number(fs.readFileSync(`/proc/${process.ppid}/stat`, 'utf8').split(') ')[1].split(' ')[1]);
+            process.kill(timeoutPid, 'SIGTERM');
+            setInterval(() => {}, 1000);
+            return;
+        }
         case 'stall':
         case 'slow-success':
         case 'forced-kill': {
@@ -100,7 +112,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
         const started = Date.now();
         const result = spawnSync('bash', orchestration
             ? [script]
-            : ['-c', 'source "$1"; build_with_mirror_retry 2s "test image" docker build -f "Dockerfile with spaces" -t test:primary', 'bash', script], {
+            : ['-c', 'source "$1"; build_with_mirror_retry 5s "test image" docker build -f "Dockerfile with spaces" -t test:primary', 'bash', script], {
             env: {
                 ...process.env,
                 PATH: `${bin}${path.delimiter}${process.env.PATH}`,
@@ -123,7 +135,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
         const output = result.stdout + result.stderr;
         const expectedStatus = scenario === 'fallback-failure' ? 42
             : scenario === 'forced-kill' ? 137
-            : scenario === 'cancelled' ? 143 : 0;
+            : scenario === 'cancelled' || scenario === 'external-cancel' ? 143 : 0;
         assert.equal(result.status, expectedStatus, output);
         const trace = fs.readFileSync(path.join(workspace, 'trace'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
         if (orchestration) {
@@ -152,7 +164,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
             ]);
         } else {
             const expectedArgs = ['build', '-f', 'Dockerfile with spaces', '-t', 'test:primary'];
-            const noFallback = ['success', 'forced-kill', 'cancelled'].includes(scenario);
+            const noFallback = ['success', 'forced-kill', 'cancelled', 'external-cancel'].includes(scenario);
             assert.deepEqual(trace.map(entry => entry.args), [
                 [...expectedArgs, '--build-arg', mirrorArg, '.'],
                 ...(noFallback ? [] : [[...expectedArgs, '.']])
@@ -164,11 +176,14 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
                 assert.ok(output.includes('default sources diagnostic'), output);
             }
             if (scenario === 'stall' || scenario === 'slow-success') {
-                assert.match(output, /exceeded 2s; retrying with default Ubuntu apt sources/);
+                assert.match(output, /exceeded 5s; retrying with default Ubuntu apt sources/);
                 assert.ok(Date.now() - started < 15000, output);
             }
-            if (scenario === 'forced-kill' || scenario === 'cancelled') {
+            if (scenario === 'forced-kill' || scenario === 'cancelled' || scenario === 'external-cancel') {
                 assert.match(output, /not retrying after cancellation or timeout execution failure/);
+            }
+            if (scenario === 'external-cancel') {
+                assert.match(output, /Client handled external TERM and exited 1/);
             }
         }
         const childPath = path.join(workspace, 'child-pid');
@@ -192,8 +207,47 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
     }
 }
 
+function testInheritedSources(repo: string): void {
+    const script = path.join(repo, 'tests', 'Shared', 'Docker', 'configure-ubuntu-apt-mirror.sh');
+    const result = spawnSync('docker', [
+        'run', '--rm', '--interactive',
+        'mcr.microsoft.com/mirror/docker/library/ubuntu:24.04', 'sh', '-ec', `
+            cat > /configure-mirror.sh
+            cp /etc/apt/sources.list.d/ubuntu.sources /tmp/original.sources
+            echo 'deb https://packages.example.invalid stable main' > /etc/apt/sources.list.d/third-party.list
+            for legacy in absent present; do
+                rm -rf /etc/apt/aspire-default-ubuntu-sources
+                if [ "$legacy" = present ]; then
+                    echo '# original legacy sources' > /etc/apt/sources.list
+                else
+                    rm -f /etc/apt/sources.list
+                fi
+                sh /configure-mirror.sh http://azure.archive.ubuntu.com/ubuntu/
+                grep -q 'http://azure.archive.ubuntu.com/ubuntu' /etc/apt/sources.list.d/ubuntu.sources
+                # The derived layer must not overwrite the base layer's snapshot.
+                sh /configure-mirror.sh https://different.example.invalid/ubuntu
+                sh /configure-mirror.sh ""
+                cmp /tmp/original.sources /etc/apt/sources.list.d/ubuntu.sources
+                if [ "$legacy" = present ]; then
+                    test "$(cat /etc/apt/sources.list)" = '# original legacy sources'
+                else
+                    test ! -f /etc/apt/sources.list
+                fi
+                test "$(cat /etc/apt/sources.list.d/third-party.list)" = 'deb https://packages.example.invalid stable main'
+                sh /configure-mirror.sh ""
+                cmp /tmp/original.sources /etc/apt/sources.list.d/ubuntu.sources
+            done
+        `
+    ], { encoding: 'utf8', timeout: 90000, input: fs.readFileSync(script) });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    console.log('Passed: inherited-sources (base/derived configuration, original legacy absence/presence and third-party sources)');
+}
+
 if (process.argv[2] === '--stub') {
     stubDocker();
+} else if (process.argv[3] === 'inherited-sources') {
+    testInheritedSources(process.argv[2]);
 } else {
     testBuild(process.argv[2], process.argv[3]);
 }
