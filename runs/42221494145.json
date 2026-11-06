@@ -1,0 +1,68 @@
+{
+  "run_id": 42221494145,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42221494145",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-06T13:36:02Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21461,
+    "title": "Align JavaScript Dockerfile run-script validator with Go and Python pipeline registration",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "agent/js-dockerfile-validator-pipeline",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21461",
+    "merged_at": "2026-11-06T12:56:19Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "cfda6e1cddc0f34383ef879f3bfcc34e8a4d8132",
+    "failed_sha": "059be63c471dda28c4c9066429b0bbbbaf273bb3",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "059be63c471dda28c4c9066429b0bbbbaf273bb3",
+        "message": "Align JavaScript Dockerfile run-script validator with Go and Python pipeline registration (#21461) ## Description Part of #21205. Aligns the JavaScript existing-Dockerfile run-script validator (`validate-javascript-dockerfile-run-script-{name}`) with the Go and Python validators fixed in #21186. ### Bugs on `main`, each reproduced by a new test 1. **Excluded resources still fail publish.** A JavaScript app with an existing Dockerfile and an explicit run script that is marked `ExcludeFromManifest",
+        "html_url": "https://github.com/microsoft/aspire/commit/059be63c471dda28c4c9066429b0bbbbaf273bb3",
+        "pull_request": {
+          "number": 21461,
+          "title": "Align JavaScript Dockerfile run-script validator with Go and Python pipeline registration",
+          "url": "https://github.com/microsoft/aspire/pull/21461",
+          "merged_at": "2026-11-06T12:56:19Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 127911154506,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42221494145/job/127911154506",
+      "classification": "flaky-test",
+      "reason": "Single VS Code E2E tree-actions assertion failed intermittently; identical diagnostic recurs across prior main runs without related changes.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:326:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same assertion 'Expected e2e-worker to expose an endpoint URL' recurred in multiple prior runs on this Windows shard.",
+      "job_id": 127911154506,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing"
+  ]
+}

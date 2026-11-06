@@ -83,6 +83,26 @@
           "result_format": "mocha"
         }
       ]
+    },
+    {
+      "run_id": 42221494145,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42221494145",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "observed_at": "2026-11-06T13:36:02Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+          "job_id": 127911154506,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+          "error": "Expected e2e-worker to expose an endpoint URL.",
+          "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:326:16)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21796"
