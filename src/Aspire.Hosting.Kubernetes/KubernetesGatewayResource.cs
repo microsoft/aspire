@@ -7,18 +7,16 @@ namespace Aspire.Hosting.Kubernetes;
 
 /// <summary>
 /// Represents a Kubernetes Gateway API Gateway as a first-class resource in the Aspire application model.
-/// A Gateway defines listeners (ports, protocols, TLS) and HTTPRoutes attach to it for routing.
+/// A Gateway defines listeners (ports, protocols, TLS) and HTTPRoutes and GRPCRoutes attach to it for routing.
 /// </summary>
 /// <param name="name">The name of the gateway resource.</param>
 /// <param name="environment">The parent Kubernetes environment resource.</param>
 /// <remarks>
 /// <para>
-/// Create a gateway using <see cref="KubernetesGatewayExtensions.AddGateway"/> and configure
-/// routes using <see cref="KubernetesGatewayExtensions.WithRoute(IResourceBuilder{KubernetesGatewayResource}, string, EndpointReference, GatewayPathMatchType)"/>.
+/// Create a gateway using <see cref="KubernetesGatewayExtensions.AddGateway"/> and configure routes using <see cref="KubernetesGatewayExtensions.WithRoute(IResourceBuilder{KubernetesGatewayResource}, string, EndpointReference, GatewayPathMatchType)"/> for HTTP traffic or <see cref="KubernetesGatewayExtensions.WithGrpcRoute(IResourceBuilder{KubernetesGatewayResource}, EndpointReference, string?, string?, GrpcMethodMatchType)"/> for gRPC traffic.
 /// </para>
 /// <para>
-/// At publish time, the gateway generates a <c>gateway.networking.k8s.io/v1 Gateway</c> resource
-/// with auto-inferred listeners and one or more <c>HTTPRoute</c> resources in the Helm chart output.
+/// At publish time, the gateway generates a <c>gateway.networking.k8s.io/v1 Gateway</c> resource with auto-inferred listeners and one or more <c>HTTPRoute</c> and <c>GRPCRoute</c> resources in the Helm chart output.
 /// </para>
 /// </remarks>
 /// <ats-remarks />
@@ -63,6 +61,11 @@ public class KubernetesGatewayResource(
     internal List<GatewayRouteConfig> Routes { get; } = [];
 
     /// <summary>
+    /// Gets the list of gRPC routing rules configured for this gateway.
+    /// </summary>
+    internal List<GatewayGrpcRouteConfig> GrpcRoutes { get; } = [];
+
+    /// <summary>
     /// Gets the list of TLS configurations. Each creates an HTTPS listener on the gateway.
     /// </summary>
     internal List<GatewayTlsConfig> TlsConfigs { get; } = [];
@@ -83,12 +86,15 @@ public class KubernetesGatewayResource(
     internal List<Resources.HttpRouteV1> GeneratedHttpRoutes { get; } = [];
 
     /// <summary>
-    /// Gets a value indicating whether this gateway is emitted into the deployment artifacts.
-    /// A gateway with no routes is skipped, so nothing downstream (TLS bootstrap, FQDN discovery,
-    /// field-manager cleanup, cert-manager solver parentRefs) may select it — those steps would
-    /// otherwise act on a Gateway that never exists in the cluster.
+    /// Gets the generated K8S GRPCRoute objects, populated during infrastructure processing.
     /// </summary>
-    internal bool ShouldMaterialize => Routes.Count > 0;
+    internal List<Resources.GrpcRouteV1> GeneratedGrpcRoutes { get; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether this gateway is emitted into the deployment artifacts.
+    /// A gateway with no HTTP or gRPC routes is skipped, so nothing downstream (TLS bootstrap, FQDN discovery, field-manager cleanup, cert-manager solver parentRefs) may select it — those steps would otherwise act on a Gateway that never exists in the cluster.
+    /// </summary>
+    internal bool ShouldMaterialize => Routes.Count > 0 || GrpcRoutes.Count > 0;
 }
 
 /// <summary>
@@ -99,6 +105,35 @@ internal sealed record GatewayRouteConfig(
     string Path,
     GatewayPathMatchType PathType,
     EndpointReference Endpoint);
+
+/// <summary>
+/// Stores a single gRPC routing rule for a <see cref="KubernetesGatewayResource"/>.
+/// A <see langword="null"/> <paramref name="Service"/> and <paramref name="Method"/> matches every gRPC request.
+/// </summary>
+internal sealed record GatewayGrpcRouteConfig(
+    string? Host,
+    string? Service,
+    string? Method,
+    GrpcMethodMatchType MatchType,
+    EndpointReference Endpoint);
+
+/// <summary>
+/// Specifies how the gRPC service and method are compared in a Kubernetes Gateway API <c>GRPCRoute</c> rule.
+/// The values map directly to the <c>matches[].method.type</c> field defined by the Gateway API (see <see href="https://gateway-api.sigs.k8s.io/reference/api-types/grpcroute/#matches"/>).
+/// </summary>
+public enum GrpcMethodMatchType
+{
+    /// <summary>
+    /// Matches the gRPC service and/or method exactly and with case sensitivity.
+    /// </summary>
+    Exact,
+
+    /// <summary>
+    /// Matches the gRPC service and/or method against an implementation-defined regular expression.
+    /// Support is implementation-specific in the Gateway API spec; check your controller's documentation before using it.
+    /// </summary>
+    RegularExpression
+}
 
 /// <summary>
 /// Specifies the type of path matching used in a Kubernetes Gateway API <c>HTTPRoute</c> rule.
