@@ -660,7 +660,6 @@ public class ResourceDetailsTests : DashboardTestContext
         {
             Trait("Owner", "Finance", "Platform"),
             Trait(KnownResourceTraits.DashboardTag, "Backend", "API"),
-            Trait(KnownResourceTraits.DashboardPosition, "10"),
             new ResourcePropertyViewModel("provider.diagnostic", Value.ForString("hidden"), false, null, int.MaxValue, null, false)
         }.ToDictionary(p => p.Name);
 
@@ -673,7 +672,6 @@ public class ResourceDetailsTests : DashboardTestContext
         });
 
         Assert.Collection(cut.Instance.FilteredResourceProperties.Select(p => (p.DisplayName, ((IPropertyGridItem)p).Value)),
-            p => Assert.Equal(("Dashboard position", "10"), p),
             p => Assert.Equal(("Dashboard tags", "Backend, API"), p),
             p => Assert.Equal(("Owner", "Finance, Platform"), p));
     }

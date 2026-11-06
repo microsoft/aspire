@@ -2381,6 +2381,30 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ModifierClickAfterSelectAll_DoesNotAddDisabledTelemetrySources()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: "Project", state: KnownResourceState.Running),
+                ModelTestHelpers.CreateResource("worker", resourceType: "Project", state: KnownResourceState.Running)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        await AddTelemetryAsync("browser");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.MetricsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-link").Count));
+        Assert.False(cut.Instance.IsKindShown(ResourcePaneKind.TelemetrySources));
+
+        cut.FindAll(".resource-row-link").Single(link => link.TextContent.Contains("api", StringComparison.Ordinal))
+            .Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { CtrlKey = true });
+        cut.Render();
+
+        Assert.Equal(["worker"], cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
     public async Task Standalone_ModifierClickAfterSelectAll_DeselectsOnlyThatResource()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

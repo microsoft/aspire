@@ -253,6 +253,8 @@
     private RenderFragment ActivitySection() => __builder =>
     {
         var activity = _telemetry?.Activity;
+        // A recording's window ends at its last request rather than now, and nothing in it is live.
+        var isRecording = TelemetryRepository.IsReadOnly;
         var max = activity is null ? 0 : Enumerable.Range(0, ActivityBucketCount).Max(i => activity.OkBuckets[i] + activity.ErrorBuckets[i]);
         var slot = ChartWidth / ActivityBucketCount;
         var barWidth = slot * 0.72;
@@ -260,9 +262,12 @@
         <section class="home-activity" aria-labelledby="home-activity-title">
             <div class="home-activity-header">
                 <div class="home-activity-title">
-                    <span class="home-live-dot" aria-hidden="true"></span>
-                    <h2 id="home-activity-title">@Loc[nameof(Dashboard.Resources.Resources.HomeLiveActivity)]</h2>
-                    <span class="home-activity-window">@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindow)]</span>
+                    @if (!isRecording)
+                    {
+                        <span class="home-live-dot" aria-hidden="true"></span>
+                    }
+                    <h2 id="home-activity-title">@Loc[isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityHistoricalTitle) : nameof(Dashboard.Resources.Resources.HomeLiveActivity)]</h2>
+                    <span class="home-activity-window">@Loc[isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityHistoricalCaption) : nameof(Dashboard.Resources.Resources.HomeActivityWindow)]</span>
                 </div>
                 <div class="home-activity-totals">
                     <a href="@DashboardUrls.StructuredLogsUrl()"><strong>@(_telemetry is { } t1 ? FormatCount(t1.LogCount) : "–")</strong> @Loc[nameof(Dashboard.Resources.Resources.HomeLogsLabel)]</a>
@@ -323,12 +328,23 @@
                     }
                     else
                     {
-                        <div class="home-chart-empty">@Loc[activity is null ? nameof(Dashboard.Resources.Resources.HomeActivityLoading) : nameof(Dashboard.Resources.Resources.HomeActivityWaiting)]</div>
+                        <div class="home-chart-empty">@Loc[activity is null ? nameof(Dashboard.Resources.Resources.HomeActivityLoading) : isRecording ? nameof(Dashboard.Resources.Resources.HomeActivityNoRecordedRequests) : nameof(Dashboard.Resources.Resources.HomeActivityWaiting)]</div>
                     }
-                    <div class="home-chart-axis" aria-hidden="true">
-                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowStart)]</span>
-                        <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowEnd)]</span>
-                    </div>
+                    @* A recording without requests has no times worth showing. Its window isn't related to the recording. *@
+                    @if (!isRecording)
+                    {
+                        <div class="home-chart-axis" aria-hidden="true">
+                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowStart)]</span>
+                            <span>@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindowEnd)]</span>
+                        </div>
+                    }
+                    else if (activity is not null && max > 0)
+                    {
+                        <div class="home-chart-axis" aria-hidden="true">
+                            <span>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, activity.WindowStart)</span>
+                            <span>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, activity.WindowEnd)</span>
+                        </div>
+                    }
                 </div>
             </div>
         </section>

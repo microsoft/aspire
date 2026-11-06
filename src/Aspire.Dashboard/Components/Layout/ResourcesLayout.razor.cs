@@ -381,7 +381,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             UpsertResource(resource);
         }
         OrderStore.EnsureResources(snapshot.Where(r => !r.IsParameter)
-            .OrderBy(r => r.ResourceType).ThenBy(r => r, ResourceViewModelNameComparer.Instance));
+            .OrderBy(r => r.ResourceType).ThenBy(r => r, ResourceViewModelNameComparer.Instance)
+            .Select(r => r.PersistentKey));
         UpdateResourceTagFilters();
         EnsureGroupOrder();
 
@@ -403,7 +404,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                         UpsertResource(resource);
                         if (!resource.IsParameter)
                         {
-                            OrderStore.EnsureResources([resource]);
+                            OrderStore.EnsureResources([resource.PersistentKey]);
                         }
                     }
                     else if (changeType == ResourceViewModelChangeType.Delete)
@@ -1237,7 +1238,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return [];
         }
 
-        var positions = OrderStore.GetPositions();
+        var positions = OrderStore.GetPositions(_resourceByName.Values.Where(r => !r.IsParameter));
         var filteredResources = _resourceByName.Values
             .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
             .Select(r => new ResourceGridViewModel { Resource = r })
@@ -1524,7 +1525,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
             return false;
         }
-        if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after))
+        if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after, _resourceByName.Values.Where(r => !r.IsParameter)))
         {
             Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because a resource has no position.", resourceName, targetName);
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
@@ -2478,11 +2479,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return _selectedResourceNames.ToList();
         }
 
-        // Resources that only send telemetry are listed in their own section, and are part of everything too.
+        // "Select all" covers the kinds the pane lists, as its telemetry scope does. Deselecting one resource must not
+        // expand the selection to a kind that's switched off.
         var names = GetAllResourceNames();
         if (DashboardClient.IsEnabled)
         {
-            names.AddRange(_telemetryOnlyResources.Select(r => r.Name).Where(n => !names.Contains(n, StringComparers.ResourceName)));
+            names.RemoveAll(name => !IsKindShown(GetKind(name)));
+
+            // Resources that only send telemetry are listed in their own section.
+            if (_showTelemetryOnlyResources)
+            {
+                names.AddRange(_telemetryOnlyResources.Select(r => r.Name).Where(n => !names.Contains(n, StringComparers.ResourceName)));
+            }
         }
 
         return names;

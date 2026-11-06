@@ -35,6 +35,7 @@ internal static class KnownProperties
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
         public const string TraitPrefix = "resource.trait.";
+        public const string DisplayOrder = "resource.displayOrder";
     }
 
     public static class Container
@@ -112,5 +113,4 @@ internal static class KnownResourcePropertySortOrder
 internal static class KnownResourceTraits
 {
     public const string DashboardTag = "Aspire_Dashboard_Tag";
-    public const string DashboardPosition = "Aspire_Dashboard_Position";
 }

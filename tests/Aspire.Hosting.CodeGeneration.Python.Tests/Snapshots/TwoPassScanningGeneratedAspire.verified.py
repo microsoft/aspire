@@ -7717,8 +7717,8 @@ class AbstractResource(abc.ABC):
         """Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags."""
 
     @abc.abstractmethod
-    def with_dashboard_position(self, position: int) -> typing.Self:
-        """Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence."""
+    def with_display_order(self, order: int) -> typing.Self:
+        """Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order."""
 
     @abc.abstractmethod
     def with_terminal(self, *, configure: typing.Callable[[TerminalOptions], None] | None = None) -> typing.Self:
@@ -8132,7 +8132,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
     trait: tuple[str, str]
     tags: typing.Iterable[str]
-    dashboard_position: int
+    display_order: int
     terminal: typing.Callable[[TerminalOptions], None] | typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
@@ -8534,12 +8534,12 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_dashboard_position(self, position: int) -> typing.Self:
-        """Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence."""
+    def with_display_order(self, order: int) -> typing.Self:
+        """Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['position'] = position
+        rpc_args['order'] = order
         result = self._client.invoke_capability(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9127,13 +9127,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTags', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'tags'. Expected: Iterable[str]")
-        if (_dashboard_position := kwargs.pop("dashboard_position", None)) is not None:
-            if _validate_type(_dashboard_position, int):
+        if (_display_order := kwargs.pop("display_order", None)) is not None:
+            if _validate_type(_display_order, int):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["position"] = typing.cast(int, _dashboard_position)
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDashboardPosition', rpc_args))
+                rpc_args["order"] = typing.cast(int, _display_order)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDisplayOrder', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'dashboard_position'. Expected: int")
+                raise TypeError("Invalid type for option 'display_order'. Expected: int")
         if (_terminal := kwargs.pop("terminal", None)) is not None and _terminal is not False:
             if _validate_type(_terminal, typing.Callable[[TerminalOptions], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
