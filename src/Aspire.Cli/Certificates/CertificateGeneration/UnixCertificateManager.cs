@@ -247,6 +247,14 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             {
                 using var publicCertificate = X509CertificateLoader.LoadCertificate(certificate.Export(X509ContentType.Cert));
                 // FriendlyName is Windows-only, so we don't set it here.
+
+                // Browsers and HTTP clients only accept the localhost HTTPS endpoints served during local development
+                // if the development certificate is trusted, the same as `dotnet dev-certs https --trust` (this code is
+                // derived from that tool). The trust is deliberately narrow: only the public part of the ASP.NET Core
+                // HTTPS development certificate is added (never a private key), and only to the CurrentUser store (never
+                // LocalMachine). On Unix that is .NET's per-user certificate store, not the system trust store (see the
+                // class remarks: all trust locations are per-user), so no other user or system-wide trust is changed.
+                // CodeQL [SM02730] Trusts only the public localhost HTTPS development certificate in .NET's per-user CurrentUser store (never LocalMachine or the system trust store); required for the localhost HTTPS developer workflow, same as dotnet dev-certs https --trust.
                 store.Add(publicCertificate);
                 Log.UnixDotnetTrustSucceeded();
                 sawTrustSuccess = true;
