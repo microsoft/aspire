@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Text;
 using System.Threading.Channels;
 using Aspire.Cli.Interaction;
 using Aspire.Shared;
@@ -22,7 +21,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
     private const int MaxQueuedMessages = 1024;
 
     private readonly string _logFilePath;
-    private readonly StreamWriter? _writer;
+    private readonly TextWriter? _writer;
     private readonly Channel<string>? _channel;
     private readonly Task? _writerTask;
     private bool _disposed;
@@ -105,53 +104,18 @@ internal sealed class FileLoggerProvider : ILoggerProvider
                 }
             }
 
-            _writer = CreateWriter(logFilePath);
+            _writer = logsDirectory is not null && RollingLogFile.IsManagedLogFile(logFilePath, logsDirectory)
+                ? new RollingLogFile(logFilePath)
+                : RollingLogFile.CreateWriter(logFilePath);
 
             _channel = CreateChannel();
-            _writerTask = Task.Run(ProcessLogQueueAsync);
+            _writerTask = Task.Run(() => ProcessLogQueueAsync(errorWriter));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TimeoutException)
         {
             WriteWarning(errorWriter, logFilePath, ex.Message);
             _writer = null;
             _channel = null;
-        }
-    }
-
-    private static StreamWriter CreateWriter(string logFilePath)
-    {
-        var options = new FileStreamOptions
-        {
-            Mode = OperatingSystem.IsWindows() ? FileMode.Create : FileMode.OpenOrCreate,
-            Access = FileAccess.Write,
-            Share = FileShare.Read
-        };
-        if (!OperatingSystem.IsWindows())
-        {
-            // Restrict access at creation so no log contents are ever written with broader permissions.
-            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-        }
-
-        var stream = new FileStream(logFilePath, options);
-        try
-        {
-            if (!OperatingSystem.IsWindows())
-            {
-                // UnixCreateMode does not change existing files. Harden the opened file before
-                // truncating or writing, using its handle to avoid a path-replacement race.
-                File.SetUnixFileMode(stream.SafeFileHandle, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-                stream.SetLength(0);
-            }
-
-            return new StreamWriter(stream, Encoding.UTF8)
-            {
-                AutoFlush = true
-            };
-        }
-        catch
-        {
-            stream.Dispose();
-            throw;
         }
     }
 
@@ -168,7 +132,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         errorWriter.WriteMarkup($"Could not create log file at [blue]{path.EscapeMarkup()}[/]: {message.EscapeMarkup()}", KnownEmojis.PoliceCarLight);
     }
 
-    private async Task ProcessLogQueueAsync()
+    private async Task ProcessLogQueueAsync(IStartupErrorWriter errorWriter)
     {
         if (_channel is null || _writer is null)
         {
@@ -189,6 +153,12 @@ internal sealed class FileLoggerProvider : ILoggerProvider
         catch (ObjectDisposedException)
         {
             // Writer was disposed while writing - expected during shutdown
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or TimeoutException)
+        {
+            // A failed writer must release producers waiting on the bounded queue.
+            _channel.Writer.TryComplete();
+            errorWriter.WriteMarkup($"Could not write log file at [blue]{_logFilePath.EscapeMarkup()}[/]: {ex.Message.EscapeMarkup()}", KnownEmojis.Warning);
         }
     }
 

@@ -4,11 +4,77 @@
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Diagnostics;
 
 public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task WriteLog_RotationFailureWarnsAndUnblocksQueuedProducers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var errorWriter = new TestStartupErrorWriter();
+        using (var provider = new FileLoggerProvider(workspace.Path, TimeProvider.System, errorWriter))
+        {
+            Directory.CreateDirectory(Path.ChangeExtension(provider.LogFilePath, "1.log"));
+            await Task.Run(() =>
+            {
+                for (var index = 0; index < 3000; index++)
+                {
+                    provider.WriteLog(new string('x', 1000));
+                }
+            }).DefaultTimeout();
+        }
+
+        Assert.Single(errorWriter.MarkupLines);
+        Assert.All(Directory.GetFiles(workspace.Path, "*.log"), file =>
+            Assert.InRange(new FileInfo(file).Length, 0, RollingLogFile.FileSizeLimit));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WriteLog_AppliesRetentionToGeneratedFiles(bool detached)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = detached
+            ? Aspire.Cli.Commands.AppHostLauncher.GenerateChildLogFilePath(workspace.Path, TimeProvider.System)
+            : FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+        var errorWriter = new TestStartupErrorWriter();
+        using (var provider = new FileLoggerProvider(path, workspace.Path, errorWriter))
+        {
+            provider.WriteLog(new string('x', RollingLogFile.FileSizeLimit + 1));
+        }
+
+        Assert.InRange(new FileInfo(path).Length, 1, RollingLogFile.FileSizeLimit);
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CustomLogFile_RemainsUnboundedAndDoesNotPruneOtherFiles(bool customDirectory)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var oldPath = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+        File.WriteAllText(oldPath, "Previous log");
+        var customPath = customDirectory
+            ? FileLoggerProvider.GenerateLogFilePath(workspace.CreateDirectory("custom").FullName, TimeProvider.System)
+            : Path.Combine(workspace.Path, "custom.log");
+        var message = new string('x', RollingLogFile.FileSizeLimit + 1);
+        var errorWriter = new TestStartupErrorWriter();
+        using (var provider = new FileLoggerProvider(customPath, workspace.Path, errorWriter))
+        {
+            provider.WriteLog(message);
+        }
+
+        Assert.Equal(message + Environment.NewLine, File.ReadAllText(customPath));
+        Assert.Equal("Previous log", File.ReadAllText(oldPath));
+        Assert.Equal(new[] { oldPath, customPath }.Order(), Directory.GetFiles(workspace.Path, "*.log", SearchOption.AllDirectories).Order());
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
     [Fact]
     public void Constructor_AccessDenied_WarnsAndDisablesLogging()
     {
