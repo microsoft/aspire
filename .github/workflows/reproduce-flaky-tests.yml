@@ -10,6 +10,10 @@
 # who modify the env vars below and push to trigger a run.
 
 name: Reproduce Flaky Tests
+run-name: "21499 pilot fixed"
+
+permissions:
+  contents: read
 
 on:
   workflow_dispatch: {}
@@ -18,9 +22,14 @@ on:
 # CONFIGURATION — Edit these values to customize the test run
 # ============================================================
 env:
+  TEST_ARM: "fixed"
+  TEST_SOURCE_SHA: "1731b6ea7b9ae230765f6444e3b5e2edf05b6308"
+  TEST_SOURCE_TREE: "e6eadec099f3a6f91956ab5bfdede5f02085fc46"
+  MSBUILDTERMINALLOGGER: "false"
+  ASPIRE_CLI_NUGET_SERVICE_INDEX: "https://packagefeedproxy.microsoft.io/nuget/v3/index.json"
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Cli"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +37,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "windows-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "2"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -47,6 +56,7 @@ jobs:
     name: Generate matrix
     if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       is_cli_e2e: ${{ steps.detect_cli_e2e.outputs.is_cli_e2e }}
@@ -55,6 +65,13 @@ jobs:
         shell: bash
         run: |
           ERRORS=0
+          if [[ "${{ env.TEST_PROJECT }}" != "Cli" ||
+                "${{ env.TARGET_OSES }}" != "windows-latest" ||
+                "${{ env.RUNNERS_PER_OS }}" != "2" ||
+                "${{ env.ITERATIONS_PER_RUNNER }}" != "1" ]]; then
+            echo "::error::This ref authorizes only two single-invocation Windows CLI slots."
+            exit 1
+          fi
 
           # Validate RUNNERS_PER_OS is a positive integer
           if ! [[ "${{ env.RUNNERS_PER_OS }}" =~ ^[1-9][0-9]*$ ]]; then
@@ -163,9 +180,49 @@ jobs:
           echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
           echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
           echo "${{ github.workspace }}\.dotnet" >> $env:GITHUB_PATH
+          "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
+          "PILOT_RECEIPTS=${{ runner.temp }}/validation-21499" >> $env:GITHUB_ENV
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_SOURCE_SHA }}
+          persist-credentials: false
+
+      - name: Bind exact test source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Path $env:PILOT_RECEIPTS -Force | Out-Null
+          $head = (git --no-pager rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read checkout SHA.' }
+          $tree = (git --no-pager rev-parse 'HEAD^{tree}').Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read checkout tree.' }
+          $status = @(git --no-pager status --porcelain)
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect checkout status.' }
+          $receipt = [ordered]@{
+            schema = 1
+            arm = $env:TEST_ARM
+            repository = $env:GITHUB_REPOSITORY
+            run = $env:GITHUB_RUN_ID
+            attempt = $env:GITHUB_RUN_ATTEMPT
+            slot = '${{ matrix.index }}'
+            publication = $env:GITHUB_SHA
+            checkout = $head
+            tree = $tree
+            status = $status
+            imageOS = $env:ImageOS
+            imageVersion = $env:ImageVersion
+            processors = [Environment]::ProcessorCount
+            os = [Environment]::OSVersion.VersionString
+            project = 'tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj'
+            invocations = 1
+          }
+          $receipt | ConvertTo-Json -Depth 5 |
+            Set-Content (Join-Path $env:PILOT_RECEIPTS 'source.json') -Encoding utf8
+          if ($head -ne $env:TEST_SOURCE_SHA -or $tree -ne $env:TEST_SOURCE_TREE -or $status.Count -ne 0) {
+            throw 'Test source does not match the admitted clean source/tree.'
+          }
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -252,7 +309,33 @@ jobs:
           -restore -ci -build
           -projects ${{ env.TEST_PROJECT_PATH }}
           /p:InstallBrowsersForPlaywright=false
-          /p:RunQuarantinedTests=true
+
+      - name: Bind runtime and original diagnostic arguments
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ${{ env.DOTNET_SCRIPT }} --info |
+            Set-Content (Join-Path $env:PILOT_RECEIPTS 'dotnet-info.txt') -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot record restored .NET environment.' }
+          $evaluated = @(& ${{ env.DOTNET_SCRIPT }} msbuild "${{ env.TEST_PROJECT_PATH }}" `
+            -nologo -getProperty:MtpBaseArgs /p:ContinuousIntegrationBuild=true)
+          if ($LASTEXITCODE -ne 0 -or $evaluated.Count -ne 1) {
+            throw 'Cannot evaluate one unambiguous repository MTP argument value.'
+          }
+          $mtpArgs = $evaluated[0].Trim()
+          if ($mtpArgs -notmatch '--timeout 20m(?:\s|$)') {
+            throw 'Repository MTP arguments do not match the original twenty-minute session.'
+          }
+          "EFFECTIVE_MTP_BASE_ARGS=$mtpArgs" >> $env:GITHUB_ENV
+          $mtpArgs | Set-Content (Join-Path $env:PILOT_RECEIPTS 'mtp-args.txt') -Encoding utf8
+          git --no-pager diff --exit-code HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Build modified tracked test source.' }
+
+      - name: Shutdown MSBuild server (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & ${{ env.DOTNET_SCRIPT }} build-server shutdown
 
       - name: Run test iterations (Linux/macOS)
         if: runner.os != 'Windows'
@@ -327,7 +410,9 @@ jobs:
         shell: pwsh
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
+          NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+          PLAYWRIGHT_INSTALLED: "false"
+          UseSharedCompilation: "false"
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Skip default quarantine/outerloop exclusion filters so the target test can run
           SkipDefaultTestFilters: true
@@ -339,21 +424,32 @@ jobs:
           for ($i = 1; $i -le $iterations; $i++) {
             Write-Host "::group::Iteration $i/$iterations"
 
-            # Cleanup between iterations
-            Remove-Item -Recurse -Force "${{ github.workspace }}/testresults" -ErrorAction SilentlyContinue
-            Get-Process | Where-Object { $_.ProcessName -match '^dcp' } | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
-
             # Run test (capture output for zero-test detection)
             $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
-            & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
-              --no-restore `
-              --no-build `
-              -- `
-              --timeout 10m `
-              --results-directory "${{ github.workspace }}/testresults" `
-              ${{ env.TEST_FILTER }} *> $iterOutput
-            $result = $LASTEXITCODE
+            $mtpArgs = $env:EFFECTIVE_MTP_BASE_ARGS -split '\s+'
+            $heartbeatProcess = Start-Process -FilePath "${{ env.DOTNET_SCRIPT }}" `
+              -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
+              -NoNewWindow -PassThru
+            try {
+              [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+              & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
+                /p:ContinuousIntegrationBuild=true `
+                /p:TrxFileNamePrefix="Cli" `
+                -bl:${{ github.workspace }}/testresults/test.binlog `
+                --no-launch-profile `
+                --no-restore `
+                --no-build `
+                -- `
+                @mtpArgs `
+                --report-trx `
+                --results-directory "${{ github.workspace }}/testresults" `
+                ${{ env.TEST_FILTER }} *> $iterOutput
+              $result = $LASTEXITCODE
+            } finally {
+              if ($heartbeatProcess -and !$heartbeatProcess.HasExited) {
+                Stop-Process -Id $heartbeatProcess.Id -Force -ErrorAction SilentlyContinue
+              }
+            }
             Get-Content $iterOutput
 
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
@@ -364,7 +460,10 @@ jobs:
                 $result = 8
               }
             }
-            Remove-Item $iterOutput -ErrorAction SilentlyContinue
+            Copy-Item $iterOutput (Join-Path $env:PILOT_RECEIPTS 'test-output.log')
+            [ordered]@{ exitCode = $result; invocations = 1 } |
+              ConvertTo-Json |
+              Set-Content (Join-Path $env:PILOT_RECEIPTS 'test-result.json') -Encoding utf8
 
             if ($result -eq 0) {
               Write-Host "✅ Iteration ${i}: PASS"
@@ -389,17 +488,22 @@ jobs:
 
           if ($fail -gt 0) { exit 1 }
 
-      - name: Upload failure logs
-        if: failure()
+      - name: Retain every pilot outcome
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
-          path: all-results/
-          if-no-files-found: ignore
+          name: 21499-${{ env.TEST_ARM }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.index }}
+          path: |
+            ${{ env.PILOT_RECEIPTS }}/
+            testresults/
+            artifacts/log/**/*.binlog
+          if-no-files-found: error
+          retention-days: 7
 
   results:
     if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     name: Reproduce Results
     needs: [reproduce]
     permissions: {}
