@@ -5,7 +5,6 @@ using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Xunit;
-using Aspire.TestUtilities;
 
 namespace Aspire.Cli.EndToEnd.Tests;
 
@@ -108,7 +107,6 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/17485")]
     public async Task ResourceCommand_FailsWhenInteractionServiceIsRequired()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

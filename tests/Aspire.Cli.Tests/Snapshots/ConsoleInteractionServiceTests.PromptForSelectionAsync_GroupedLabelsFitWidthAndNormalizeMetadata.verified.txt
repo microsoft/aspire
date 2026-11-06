@@ -1,0 +1,7 @@
+﻿[?25lSelect:
+
+[1m  Company [source] with a long heading…[0m
+  > Same (Observable [services] with …
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect: Same (Observable [services] wit…

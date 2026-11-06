@@ -6,7 +6,6 @@
 #pragma warning disable ASPIREPROJECTS001 // WithProjectDefaults is experimental.
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Utils;
@@ -555,8 +554,7 @@ public static class ProjectResourceBuilderExtensions
                 $"Pass {nameof(ProjectResourceOptions)} to the method that adds the resource instead.");
         }
 
-        launchDefaults.BuildConfiguration =
-            builder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        launchDefaults.BuildConfiguration = builder.ApplicationBuilder.Configuration["AppHost:BuildConfiguration"];
 
         var launchConfigurationType = ProjectLaunchConfigurationFactory.GetLaunchConfigurationType(
             builder.Resource,
@@ -1159,6 +1157,15 @@ public static class ProjectResourceBuilderExtensions
                 {
                     context.Args.Add("--configuration");
                     context.Args.Add(launchDefaults.BuildConfiguration);
+                }
+
+                // Rebuild into the same artifacts path the project is launched from. Only legacy ProjectResource
+                // launches forward the AppHost's global artifacts path, see ExecutableLaunchRecipe.
+                var options = context.ExecutionContext.Services.GetRequiredService<DistributedApplicationOptions>();
+                if (projectResource is ProjectResource && !string.IsNullOrEmpty(options.GlobalArtifactsPath))
+                {
+                    context.Args.Add("--artifacts-path");
+                    context.Args.Add(options.GlobalArtifactsPath);
                 }
             })
             .WithAnnotation(new ExplicitStartupAnnotation())

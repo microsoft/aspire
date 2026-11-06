@@ -38,6 +38,12 @@ public partial class KeyboardShortcutsHelp
                 new KeyboardShortcut(AspireKeyboardShortcut.GoToTraces, ["t"], Loc[nameof(Resources.Dialogs.HelpDialogGoToTraces)]),
                 new KeyboardShortcut(AspireKeyboardShortcut.GoToMetrics, ["m"], Loc[nameof(Resources.Dialogs.HelpDialogGoToMetrics)]),
             ]),
+            new(Loc[nameof(Resources.Dialogs.HelpDialogCategoryResourceGraph)],
+            [
+                // Handled by the graph rather than ShortcutManager, so it has no shortcut of its own. It's available wherever
+                // the graph is, which is what GoToGraph's availability says.
+                new KeyboardShortcut(AspireKeyboardShortcut.GoToGraph, ["o"], Loc[nameof(Resources.Dialogs.HelpDialogPlayGame)]),
+            ]),
             new(Loc[nameof(Resources.Dialogs.HelpDialogCategoryPanels)],
             [
                 new KeyboardShortcut(AspireKeyboardShortcut.IncreasePanelSize, ["+"], Loc[nameof(Resources.Dialogs.HelpDialogIncreasePanelSize)]),

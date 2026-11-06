@@ -397,6 +397,17 @@ async function terminateWindowsCliProcess(
         extensionLogOutputChannel.warn(
             `Failed to terminate ${description} with taskkill; falling back to the CLI leader process: ${String(taskkillError)}`);
         if (!childProcess.kill('SIGKILL')) {
+            // Windows denies TerminateProcess for a process that is already exiting, so taskkill fails
+            // when it races a short-lived command finishing on its own. Node then reports the leader as
+            // already gone before it has observed the exit. A successful exit that taskkill did not cause
+            // (forced termination exits with 1) is the same outcome as the leader exiting before
+            // termination started, which needs no process-tree cleanup.
+            if (remainingTime() > 0
+                && await waitForClose()
+                && childProcess.signalCode === null
+                && childProcess.exitCode === 0) {
+                return;
+            }
             throw taskkillError;
         }
         if (remainingTime() === 0) {

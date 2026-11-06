@@ -1114,6 +1114,9 @@
     <trans-unit id="aspire-vscode.strings.denoAppHostRunCommandMissing">
       <source xml:lang="en">The Deno AppHost command does not contain the required &apos;run&apos; subcommand.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.denoAppHostInspectorNotReady">
+      <source xml:lang="en">The Deno AppHost inspector at {0} did not become ready within {1} seconds, so the debugger could not attach: {2}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.goAppHostCommandNotRecognized">
       <source xml:lang="en">The Go AppHost launch command was not recognized and cannot be debugged.</source>
     </trans-unit>
@@ -1278,6 +1281,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.registerMcpServerInWorkspace">
       <source xml:lang="en">Whether to register the Aspire MCP server when a workspace is open. Enabled by default; set this to false to opt out.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostLifecycleDisableLaunchProfileNotSupported">
+      <source xml:lang="en">Without the C# extension, disableLaunchProfile has no effect: the Aspire CLI still applies the default AppHost launch profile. Install or enable the C# extension to disable launch profiles.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.workspaceAppHostLabel">
       <source xml:lang="en">Workspace AppHost</source>

@@ -3,10 +3,8 @@
     "path": "apphost.go",
     "language": "go"
   },
-  "features": {
-    "experimentalPolyglotGo": true
-  },
   "packages": {
-    "Aspire.Hosting.Azure.EntraId": ""
+    "Aspire.Hosting.Azure.EntraId": "",
+    "Aspire.Hosting.Azure.Provisioning.EntraId": ""
   }
 }

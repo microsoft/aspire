@@ -1076,5 +1076,128 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to Child of {0}.
+        /// </summary>
+        public static string ResourcePaneChildOf {
+            get {
+                return ResourceManager.GetString("ResourcePaneChildOf", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Depends on {0}.
+        /// </summary>
+        public static string ResourcePaneDependsOn {
+            get {
+                return ResourceManager.GetString("ResourcePaneDependsOn", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to References {0}.
+        /// </summary>
+        public static string ResourcePaneReferences {
+            get {
+                return ResourceManager.GetString("ResourcePaneReferences", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionAddHint {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionAddHint", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionRangeHint {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionRangeHint", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionControlChord {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionControlChord", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionCommandChord {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionCommandChord", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionRangeChord {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionRangeChord", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionControlDescription {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionControlDescription", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneSelectionCommandDescription {
+            get {
+                return ResourceManager.GetString("ResourcePaneSelectionCommandDescription", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityCount {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityCount", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityFailures {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityFailures", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityP95 {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityP95", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampledCount {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampledCount", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampledFailures {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampledFailures", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampledP95 {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampledP95", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivityContext {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivityContext", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySampled {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySampled", resourceCulture);
+            }
+        }
+
+        public static string ResourcePaneActivitySamples {
+            get {
+                return ResourceManager.GetString("ResourcePaneActivitySamples", resourceCulture);
+            }
+        }
+
     }
 }

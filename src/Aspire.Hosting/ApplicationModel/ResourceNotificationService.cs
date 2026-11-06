@@ -519,8 +519,16 @@ public class ResourceNotificationService : IDisposable
 
         try
         {
+            // WaitFor on a child resource also adds a wait for its parent, so waiting on several children
+            // of the same parent (or calling WaitFor repeatedly) produces equivalent annotations. Waiting on
+            // each of them again only duplicates the wait and its log messages, so collapse them first.
             var waitAnnotationsToProcess = waitAnnotationList
                 .Where(static waitAnnotation => waitAnnotation.Resource is not IResourceWithoutLifetime)
+                .DistinctBy(waitAnnotation => (
+                    waitAnnotation.Resource,
+                    waitAnnotation.WaitType,
+                    waitAnnotation.WaitType == WaitType.WaitForCompletion ? waitAnnotation.ExitCode : 0,
+                    waitAnnotation.WaitType == WaitType.WaitForCompletion ? (WaitBehavior?)null : waitAnnotation.WaitBehavior ?? DefaultWaitBehavior))
                 .ToArray();
 
             if (waitAnnotationsToProcess.Length == 0)
@@ -585,9 +593,19 @@ public class ResourceNotificationService : IDisposable
                     WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken, OnDependencyReadyAsync),
                     WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken, OnDependencyReadyAsync),
                     _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
-                });
+                })
+                .ToArray();
 
-            await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+            var allDependencies = Task.WhenAll(pendingDependencies);
+            try
+            {
+                await allDependencies.ConfigureAwait(false);
+            }
+            catch (Exception) when (GetDependencyFailures(allDependencies) is { Length: > 1 } failures)
+            {
+                // Awaiting Task.WhenAll only rethrows the first failure, so report every failed dependency.
+                throw new AggregateException($"Resource '{resource.Name}' failed waiting for {failures.Length} dependencies.", failures);
+            }
 
             var clearRemainingDependencies = false;
             await pendingDependencyLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
@@ -622,6 +640,9 @@ public class ResourceNotificationService : IDisposable
             throw;
         }
     }
+
+    private static Exception[] GetDependencyFailures(Task allDependencies) =>
+        allDependencies.Exception?.InnerExceptions.Where(static ex => ex is not OperationCanceledException).ToArray() ?? [];
 
     private Task PublishWaitingForDependenciesAsync(IResource resource, IEnumerable<string> dependencyNames)
     {
@@ -887,6 +908,17 @@ public class ResourceNotificationService : IDisposable
             newState = UpdateCommands(resource, newState);
 
             newState = UpdateIcons(resource, newState);
+
+            if (resource.TryGetLastAnnotation<ResourceTypeDisplayNameAnnotation>(out var resourceTypeDisplayNameAnnotation))
+            {
+                newState = newState with { ResourceTypeDisplayName = resourceTypeDisplayNameAnnotation.ResourceTypeDisplayName };
+            }
+            else if (!newState.HasResourceTypeDisplayName() && resource is Resource modelResource &&
+                modelResource.ResourceTypeDisplayName != resource.GetResourceType())
+            {
+                // Keep the snapshot's own resource type as the fallback for custom snapshot producers.
+                newState = newState with { ResourceTypeDisplayName = modelResource.ResourceTypeDisplayName };
+            }
 
             newState = UpdateDashboardVisibility(resource, newState);
 

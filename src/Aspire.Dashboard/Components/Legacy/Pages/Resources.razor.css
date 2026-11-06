@@ -218,6 +218,11 @@
     column-gap: 10px;
 }
 
+::deep .resource-graph-controls.resource-graph-game-launch {
+    left: 30px;
+    right: auto;
+}
+
 ::deep .resource-graph-controls fluent-button {
     --aspire-button-background: var(--aspire-page-background);
     --aspire-button-border-color: transparent;

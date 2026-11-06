@@ -1,29 +1,37 @@
 # Aspire CLI config sources
 
-**Status:** Configuration acquisition and allowlisted app-file materialization are implemented in the CLI. Content-acquisition customizations remain proposed.
+**Status:** Configuration acquisition, allowlisted app-file materialization, named agent skill sources, runtime named template-source inheritance, and named integration sources are implemented in the CLI. Other content-acquisition customizations remain proposed.
 
 For example developer journeys, see [Microsoft first-party config-source scenarios](cli-config-sources-1p-scenarios.md).
+
+**Configuration sources provide optional defaults, not policy enforcement.** A source
+configured on a machine, including through organization-managed environment variables,
+or proposed by employee detection is a suggestion, not a requirement for new applications.
+Developers may decline it, choose another source, or edit the resulting application
+configuration. Opting out or overriding these defaults is supported, not a security
+bypass. This feature does not let administrators restrict which configuration,
+templates, or packages developers may use, and it does not establish a security boundary.
 
 Config sources let organizations provide shared Aspire CLI configuration through a Git-hosted `aspire.config.json`. There are two separate phases:
 
 1. **Acquire configuration:** select a remote source, obtain consent, acquire the file using Git, and merge allowlisted values into the application's `aspire.config.json`. Retain the fetched source and metadata in Aspire home for tracking.
 2. **Acquire content:** use the application's saved configuration to acquire skills, templates, and integrations.
 
-This specification focuses on the first phase. Content acquisition is summarized at the end; its detailed schema and behavior are deferred.
+This specification covers the first phase, named agent skill sources, and runtime template-source inheritance. Other content acquisition is summarized at the end; its detailed schema and behavior are deferred.
 
-The application's `aspire.config.json` is the runtime configuration, including values previously copied from a source. Normal CLI configuration precedence and explicit parent-setting inheritance continue to apply. The source is not an additional runtime configuration provider, and ordinary commands never load the cached source JSON to supply settings.
+The application's `aspire.config.json` is the runtime configuration, including values previously copied from a source. Normal CLI configuration precedence and explicit parent-setting inheritance continue to apply. The source is not an additional general-purpose runtime configuration provider. Named template sources have a separate, runtime-only inheritance path described below.
 
-The `configSource` binding itself is not copied or inherited into a child configuration. Source checks and explicit refresh inspect the nearest local settings file found from the selected project's directory and the global settings file, matching normal configuration loading. Existing local-file discovery determines the nearest file; do not continue to farther ancestors when that file has no binding. Each binding belongs to the file that declares it, and refresh updates that file only. Global and local settings remain separate, with local values taking precedence at runtime.
+The `configSource` binding itself is not copied or inherited into a child configuration. Source checks and explicit refresh inspect only the nearest local settings file found from the selected project's directory. Existing local-file discovery determines the nearest file; do not continue to farther ancestors when that file has no binding. Each binding belongs to the file that declares it, and refresh updates that file only. Global configuration does not support `configSource`: adding a binding there has no effect, even when the binding is invalid. Other global settings retain their normal runtime precedence.
 
-Configuration sources are supported in modern `aspire.config.json` files, not legacy configurations such as `.aspire/settings.json`. This feature does not add legacy migration or compatibility handling. Existing shared discovery behavior is unchanged; incidental behavior with legacy files is not a supported contract.
+Configuration sources are supported in project-local modern `aspire.config.json` files, not global configuration or legacy configurations such as `.aspire/settings.json`. This feature does not add legacy migration or compatibility handling. Existing shared discovery behavior is unchanged; incidental behavior with legacy files is not a supported contract.
 
-Source-driven writes to the app configuration and the user-directory tracking copy happen only during initial materialization by `aspire new` or `aspire init`, or an explicit `aspire update --config-source`. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
+Source-driven writes to app configuration happen only during initial materialization by `aspire new` or `aspire init`, consented adoption by `aspire update`, or an explicit `aspire update --config-source`. Configuration sources never refresh global configuration. Runtime template discovery and consented template-source listing can also acquire configuration and publish the user-directory tracking snapshot, but use only the `templateSources` overlay without saving inherited values into app or global configuration. Other commands may check for updates and report their availability, but must not apply them. This restriction does not prohibit explicit local configuration edits or a command's unrelated project bookkeeping.
 
 ## Phase 1: Acquire remote configuration
 
 ### Select a source
 
-During `aspire new` or `aspire init`, resolve a candidate source:
+During `aspire new`, `aspire init`, or adoption by `aspire update`, resolve a candidate source:
 
 | Priority | Source |
 |---|---|
@@ -78,33 +86,83 @@ Configuration file: aspire.config.json
 Configuration ref: default branch
 Source origin: Microsoft employee default
 
+Only use sources you trust. Content from these sources can run code on your machine.
+
 Use configuration from this source?
   Yes
   No, use standard Aspire configuration
 ```
 
 - **Accept:** acquire and validate the remote file, then materialize allowlisted values and a `configSource` binding in the created or initialized project's `aspire.config.json`.
-- **Decline:** continue normally, without Git acquisition or a `configSource` entry.
+- **Decline:** continue normally without Git acquisition or template-source inheritance from that source for the rest of the command, and save `"configSource": { "optOut": true }` after successful project creation or initialization. Independently configured global template sources remain available.
 - **Cancel:** stop without creating the application.
 
-The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` without repeating the prompt. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
+The choice applies to the project being created or initialized, not every project beneath the invoking directory. Existing projects use their saved `configSource` or opt-out without repeating the prompt. An opt-out does not require repository, path, ref, or applied-version fields, and source checks and refresh skip that file without falling back to ancestor or global bindings. Initialization checks the target directory's `aspire.config.json`; it does not reuse an ancestor's binding. An environment variable or employee detection alone never enables a source.
 
 Initialization selects and materializes the source in the configuration file used by the AppHost. In C# solution mode, a new AppHost template creates `aspire.config.json` inside `<solution>.AppHost`, so that file receives the binding and source values rather than the solution-root configuration. An existing AppHost uses its nearest configuration; the solution-root file remains the target when there is no nearer AppHost configuration. An existing binding in the selected file is reused without renewed consent or reapplying source values, even when the initialization environment proposes another source. A parent binding hidden by the AppHost's own configuration is not reused or changed. File-based and polyglot initialization use the working-directory configuration. Agent setup still uses the solution/workspace root independently of the AppHost configuration.
 
-Whether selected implicitly or with an explicit AppHost file or directory, `aspire update --config-source` finds the nearest local settings file from the selected AppHost directory and refreshes its binding and the global settings file's binding, when present. A solution-root binding is selected only when that file is the nearest local configuration. The declaring configuration does not need to identify the AppHost through `appHost.path`.
+Whether selected implicitly or with an explicit AppHost file or directory, `aspire update --config-source` finds the nearest local settings file from the selected AppHost directory and refreshes its binding, when present. A solution-root binding is selected only when that file is the nearest local configuration. The declaring configuration does not need to identify the AppHost through `appHost.path`. Global bindings are ignored.
 
-An explicit AppHost path must exist as a file or directory. A nonexistent target fails before Git acquisition or changes to local or global settings. An existing directory without an AppHost can still refresh its nearest local and global configuration bindings.
+An explicit AppHost path must exist as a file or directory. A nonexistent target fails before Git acquisition or changes to local settings. An existing directory without an AppHost can still refresh its nearest local configuration binding.
 
-If neither settings file has a saved binding, report that there is no configuration source to update and exit successfully without Git acquisition or configuration changes. Do not enable a source from initialization environment variables or employee detection during refresh.
+If the nearest local settings file has no saved binding, report that there is no configuration source to update and exit successfully without Git acquisition or configuration changes, even when global configuration contains a binding. Do not enable a source from initialization environment variables or employee detection during refresh.
 
-Other commands, including standalone `aspire agent init` and `aspire add`, do not prompt to enable a source. Without a saved project `configSource`, they ignore the initialization-source environment variables and employee default.
+Other project commands, including standalone `aspire agent init` and `aspire add`, do not prompt to enable a source. Without a saved project `configSource`, they ignore the initialization-source environment variables and employee default. Template search and source listing have the separate runtime-only inheritance contract below.
 
-Non-interactive creation requires `--use-config-source true` to accept the candidate or `--use-config-source false` to decline it. When a candidate is available and neither value is supplied, fail with instructions rather than waiting for input or silently treating employee detection as consent. The same option can bypass the source prompt during interactive creation:
+Non-interactive creation requires `--use-config-source` to accept the candidate or `--use-config-source false` to decline it. The bare flag means `true`; an explicit `--use-config-source true` is also accepted for compatibility. Omitting the option retains unspecified consent. When a candidate is available and the option is omitted, fail with instructions rather than waiting for input or silently treating employee detection as consent. The same option can bypass the source prompt during interactive creation:
 
 ```shell
-aspire new aspire-starter --use-config-source true
+aspire new aspire-starter --use-config-source
 aspire init --use-config-source false
 ```
+
+### Adopt a source in an existing project
+
+Plain `aspire update` also offers the candidate source when the selected AppHost's nearest local configuration has neither a `configSource` binding nor an explicit opt-out. It uses the same environment-variable and employee-detection precedence and the same consent prompt as project creation. If no candidate is available, nothing is saved.
+
+Accepting acquires and validates the source, then merges allowlisted settings and a binding with its applied version into that nearest configuration file. If no local configuration exists, create `aspire.config.json` beside the AppHost. Declining saves only the opt-out alongside existing settings:
+
+```json
+{
+  "configSource": {
+    "optOut": true
+  }
+}
+```
+
+Both choices prevent subsequent adoption prompts. Saved bindings are not retargeted or reapplied by plain `aspire update`; their existing advisory checks remain unchanged. Remove the `configSource` entry to allow a later adoption prompt. CLI self-update and repository-tool-only updates do not offer project configuration sources.
+
+Unattended package updates do not introduce a new consent requirement: without `--use-config-source`, skip adoption entirely, without recording an opt-out. `--yes` alone does not consent to source adoption. To accept or decline explicitly:
+
+```shell
+aspire update --yes --non-interactive --use-config-source
+aspire update --yes --non-interactive --use-config-source false
+```
+
+These options affect only initial adoption; an existing binding or opt-out remains authoritative. Adoption failure leaves the existing configuration unchanged and fails the command rather than silently continuing with another source. `aspire update --config-source` remains a refresh-only operation and never discovers or adopts a source.
+
+### Source trust
+
+Only use sources you trust. Review the configuration and the template repositories,
+package feeds, and documentation it references before accepting it. Source content
+can run code on your machine, and documentation can influence AI agents. The CLI's
+correctness checks do not establish that a source or its content is trustworthy.
+
+Optional defaults do not remove the need to trust a source that is used. Explicit source
+settings must still be valid, and failures acquiring a selected source are reported
+rather than silently falling back to other defaults.
+
+The CLI uses one shared localized warning when offering a configuration source in
+`aspire new` or `aspire init`, refreshing it with `aspire update --config-source`,
+or acquiring configuration for runtime template inheritance. Explicit consent flags
+do not suppress the warning. Repeated configuration acquisition in the same command
+does not repeat it, and background update checks remain silent until their ordinary
+advisory notification.
+
+The same warning is used for Git-backed templates, `aspire template source add`,
+and explicit package sources supplied through `aspire new --source` or
+`aspire add --source`. Warnings go to stderr to preserve machine-readable stdout.
+They do not introduce new confirmation prompts or change existing automation flags.
 
 ### Acquire using Git
 
@@ -112,44 +170,48 @@ Use the user's Git installation and normal credential helpers or SSH authenticat
 
 Configuration sources and repository templates share [GitClient](../../src/Aspire.Cli/Git/GitClient.cs) for repository initialization, shallow fetches, commit identification, and Git object access. [GitCommandRunner](../../src/Aspire.Cli/Git/GitCommandRunner.cs) owns process capture, environment isolation, failure classification, and lifecycle diagnostics. It reuses the existing tree-aware process-capture infrastructure; lifecycle logs contain no repository addresses, command arguments, or captured output. Callers retain their operation-wide timeout budgets and explicitly select interaction policy. Configuration sources use bare repositories and validate blobs without checkout; templates retain their ref-resolution rules, detached checkouts, and immutable cache publication. Template acquisition continues disabling terminal prompts without changing its existing credential-helper policy.
 
-[ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation has a 30-second budget, versions are blob IDs, and acquisition validates regular-file modes, the 4 MiB size limit, and configuration content before publishing a snapshot.
+[ConfigSourceService](../../src/Aspire.Cli/Configuration/ConfigSourceService.cs) owns configuration acquisition and version-check policy directly: each operation has a 30-second budget, versions are blob IDs, and acquisition validates Git blobs and configuration content before publishing a snapshot.
 
 Resolve the configured selector before initializing the bare acquisition repository, and explicitly select SHA-1 or SHA-256 from the resolved commit ID. This also supports SHA-256 repositories selected by branch or default ref, rather than only by a pinned commit. Ref resolution shares the operation's timeout and interactive or unattended authentication policy. Interactive ref resolution captures the advertised refs on stdout but inherits stderr so Git authentication instructions remain visible immediately.
 
 When the CLI host supports interactive input, fetch with inherited terminal input and output so Git and credential helpers can display instructions immediately and handle credentials directly. Keep local Git queries captured, including configuration-file contents. Do not copy interactive Git diagnostics into Aspire logs or telemetry; report a failed interactive fetch as an inaccessible repository after Git displays its own diagnostics.
 
-Disable terminal prompts and Git Credential Manager interaction for `--non-interactive`, `ASPIRE_NON_INTERACTIVE`, and CI environments where the host disables input; those invocations need authentication configured beforehand. Other credential helpers must also be configured for unattended use. Keep the existing acquisition timeout and cancellation behavior, including while waiting for credentials.
+Unattended configuration-source Git operations (including opted-in JSON listing, non-interactive `new`/`init`, and advisory checks) override `core.askPass` only for the child process and disable `GIT_ASKPASS`, `SSH_ASKPASS`, terminal prompts and Git Credential Manager interaction. Standard input receives EOF. This also applies when `--non-interactive`, `ASPIRE_NON_INTERACTIVE`, or CI disables host input. Credential helpers remain enabled for cached credentials; custom credential helpers must themselves run without prompting. Interactive Git acquisition and captured template-repository acquisition retain their existing authentication behavior.
 
-These settings do not disable SSH launcher prompts. Preserve configured SSH launchers rather than rewriting their commands or options. If a non-interactive fetch blocks waiting for authentication, the 30-second timeout terminates its process tree and reports the timeout. Capture output without truncation, including prompts without a terminating newline, and display the last 64 Ki characters of the combined fetch output on stderr so the user can diagnose and correct authentication. Local query results remain complete. Do not display captured configuration-file contents or copy these diagnostics into exception messages, logs, or telemetry. User cancellation and shutdown cancellation do not display captured output. Advisory timeout output is deferred with the warning until command exit and does not change the foreground command's exit code.
+Unattended SSH resolves the selected executable through Git's effective child `PATH`, including Git for Windows' bundled executable directories, rather than substituting an OpenSSH client found on the CLI's own `PATH`. It verifies that executable and supplies `BatchMode=yes`, preserving configured identity files, known hosts and agent authentication. The version probe allows slow process startup within a 30-second limit and honors the enclosing operation's cancellation budget. Unknown host keys and unavailable credentials fail rather than prompt. Bare OpenSSH executable selections through `GIT_SSH`, `GIT_SSH_COMMAND` or `core.sshCommand` are supported, but custom command strings with arguments, shell expansions or wrappers fail with an actionable diagnostic instead of being silently overwritten or receiving potentially incompatible OpenSSH options. Move identity/host options into OpenSSH configuration or use interactive acquisition for those commands. Custom credential helpers, SSH agents and proxy commands are not sandboxed and must already be unattended. Git URL rewrites are resolved before selecting this SSH policy, so HTTPS selectors rewritten to SSH receive the same protection. No user Git configuration is modified.
+
+If a non-interactive fetch blocks waiting for a custom authentication helper, the 30-second timeout terminates its process tree and reports the timeout. Capture output without truncation, including prompts without a terminating newline, and display the last 64 Ki characters of the combined fetch output on stderr so the user can diagnose and correct authentication. Local query results remain complete. Do not display captured configuration-file contents or copy these diagnostics into exception messages, logs, or telemetry. User cancellation and shutdown cancellation do not display captured output. Advisory timeout output is deferred with the warning until command exit and does not change the foreground command's exit code.
 
 For creation, initialization, and explicit updates, acquire the selected branch or exact commit, using the current default branch only when no ref was selected. Resolve a branch to one commit and read the selected configuration file from that snapshot. Validate it before applying values to the project or publishing a tracking copy. Record the configured selector, source-file version, and resolved commit separately; a branch name is not the immutable commit actually fetched. Do not turn the tracking copy into runtime configuration.
 
-Git acquisition and advisory checks support cancellation and have a 30-second timeout. Cancellation terminates the running Git process tree, with bounded waits for exit and output draining. Captured output is also drained with a bounded wait after normal process exit, so descendants holding output pipes cannot block indefinitely; incomplete capture fails rather than returning successful empty output. Read the Git blob without checking out the repository, reject symlink configuration entries, and validate the JSON object and known Aspire settings before use. Configuration files are limited to 4 MiB and cannot declare another configuration source. Normalization must scale with the input's property count and key lengths, rather than repeatedly scanning sibling keys or shifting root entries for each flat key. Report missing Git, inaccessible repositories, missing files, and invalid configuration distinctly; classify authentication failures separately when diagnostics are captured non-interactively. Do not silently substitute standard configuration after the user accepts a source.
+Git acquisition and advisory checks support cancellation and have a 30-second timeout. Cancellation terminates the running Git process tree, with bounded waits for exit and output draining. Captured output is also drained with a bounded wait after normal process exit, so descendants holding output pipes cannot block indefinitely. That bound only gives up once the CLI can promptly schedule the reads, so a saturated thread pool does not discard complete output from a process that already exited; that extension still ends at the operation timeout or cancellation, which is reported as such. Incomplete capture fails rather than returning successful empty output. Read the Git blob without checking out the repository or interpreting file modes, and validate the JSON object and known Aspire settings before use. Symlink blobs contain their target path as text; they are read as content, not followed, and must pass the same JSON validation as other blobs. There is no configuration-file size limit. These checks ensure correctness, not security enforcement. Reject declarations of another configuration source to reserve recursive sources for future support, rather than silently activating previously ignored declarations after an upgrade. Normalization must scale with the input's property count and key lengths, rather than repeatedly scanning sibling keys or shifting root entries for each flat key. Report missing Git, inaccessible repositories, missing files, and invalid configuration distinctly; classify authentication failures separately when diagnostics are captured non-interactively. Do not silently substitute standard configuration after the user accepts a source.
+
+Once the thread pool responds promptly, allow one additional two-second drain for pending reads to finish reaching EOF. A responsive probe can finish before earlier reads complete; it is not evidence that a descendant is holding the pipe open. The recovery drain still observes the operation timeout and cancellation, and gives up when its bound expires.
 
 ### Materialize an allowlist into the app configuration
 
-Only explicitly allowlisted leaf settings may be copied. The initial allowlist is:
+Only explicitly allowlisted top-level settings may be copied. Each supplied section is copied in full, including all nested properties. The allowlist is:
 
 | Setting | Purpose |
 |---|---|
-| `docs.llmsTxtUrl` | General documentation source URL |
-| `docs.api.sitemapUrl` | API documentation sitemap URL |
+| `skillSources` | Named agent skill sources and all their settings |
+| `integrationSources` | Named NuGet integration feeds and allowed package patterns |
 
-Use the same root-only normalization for local settings and source files before matching the allowlist, and match keys case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Resolve collisions against the complete existing path across those sections, preserving its spelling, preferring an existing non-null nested value, and filling null leaves in their declaring section. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and partially flattened documentation keys such as `{"docs":{"api:sitemapUrl":"..."}}`. Those partially flattened keys are not expanded or matched to the source allowlist. There is no source-specific normalization.
+Use the same root-only normalization for local settings and source files before matching the allowlist, and match top-level names case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and custom skill-source keys such as `{"skillSources":{"team":{"custom:key":"..."}}}`. These keys are copied unchanged when their top-level section is allowed. There is no source-specific normalization.
 
-Resolve each allowed leaf across all case-equivalent sections, so `DOCS.llmsTxtUrl` and `docs.api.sitemapUrl` can both supply values. When updating an existing leaf, write to its declaring section rather than adding a duplicate path under a different casing. Reject a merge that would introduce duplicate configuration paths, leaving the saved file unchanged rather than rewriting literal keys. Allowing a leaf does not allow its entire parent object. Everything else is excluded unless a later specification change explicitly adds it to this list.
+Replace every local case-equivalent section when an allowed top-level setting is supplied. Preserve all source sections, including disjoint `SKILLSOURCES` and `skillSources` objects that `IConfiguration` combines. Do not filter or merge individual nested properties. Validate the complete resulting configuration before writing it. Other top-level settings remain excluded unless explicitly added to the allowlist.
 
-In particular, do not copy `$schema`, `configSource`, AppHost identity or paths, SDK/channel selection, language, package references, launch profiles, or arbitrary feature/content settings. The CLI creates and maintains its own source binding; the remote file cannot supply or replace it. The proposed content schema does not implicitly extend this allowlist.
+In particular, do not copy `docs`, `$schema`, `configSource`, AppHost identity or paths, SDK/channel selection, language, package references, launch profiles, or arbitrary feature/content settings. Documentation settings remain configurable locally but are not imported from a configuration source. The CLI creates and maintains its own source binding; the remote file cannot supply or replace it. The proposed content schema does not implicitly extend this allowlist.
 
 Merge the allowed values into the selected application's file, not a configuration file in the CLI's launch directory when a different app is selected:
 
 - On initial creation or initialization, combine generated project settings with the supplied allowlisted source values and save the result in the application's `aspire.config.json`.
-- On explicit update, a supplied allowlisted value replaces the existing app value at that leaf, including a locally edited value. The explicit update/confirmation is the authorization to apply these changes.
-- Preserve unrelated app settings and allowlisted keys omitted by the new source. Omission does not delete a previously materialized value.
+- On explicit update, a supplied allowlisted section replaces the entire existing app section, including locally edited or omitted nested properties. The explicit update/confirmation is the authorization to apply these changes.
+- Preserve unrelated top-level app settings and allowlisted sections omitted by the new source. Omitting an entire section does not delete a previously materialized value.
 - An explicit null is a supplied value and replaces the existing value where valid for that setting. Future allowlisted arrays replace the whole value rather than appending.
 - Do not merge a runtime view of global settings into the app file. Global settings remain separate.
 
-For example, after applying a source that supplies documentation URLs:
+For example, after applying a source that supplies named skill sources:
 
 ```json
 {
@@ -159,16 +221,16 @@ For example, after applying a source that supplies documentation URLs:
     "ref": "main",
     "appliedVersion": "<source-file-version>"
   },
-  "docs": {
-    "llmsTxtUrl": "https://docs.acme.example/llms-full.txt",
-    "api": {
-      "sitemapUrl": "https://docs.acme.example/sitemap.xml"
+  "skillSources": {
+    "platform": {
+      "repository": "https://git.acme.example/platform-skills",
+      "ref": "main"
     }
   }
 }
 ```
 
-This is an excerpt; other generated or existing app settings remain in the same file. Once saved, these documentation settings are ordinary project settings. Editing them locally changes subsequent command behavior without editing the source or its tracking copy. A later explicit source update may overwrite them according to the rules above.
+This is an excerpt; other generated or existing app settings remain in the same file. Once saved, these skill sources are ordinary project settings. Editing them locally changes subsequent agent initialization without editing the configuration source or its tracking copy. A later explicit source update may overwrite them according to the rules above.
 
 Stage and validate an update before replacing the project file. Write the settings and their applied version together so the file cannot claim a version whose values were not saved. If neither the supplied settings nor the saved binding change, report that the app configuration is already up to date and leave the project file untouched. Acquisition, validation, or project-write failure must be reported, without claiming a successful update or leaving a partially written app file.
 
@@ -191,7 +253,7 @@ Retain fetched configuration centrally using the resolved Aspire home, including
 
 The usual home is `<user-profile>\.aspire`. The source key distinguishes repository, upstream file path, and configured ref (or an explicit default-branch marker when omitted). Different branch/commit selections have separate tracking and check records, even when they currently resolve to the same commit. The retained filename remains `aspire.config.json`, even for another upstream filename.
 
-The retained JSON and `metadata.json` describe the last successfully fetched source: its identity, selected-file version, resolved commit, and fetch time. They are tracking data, not defaults for command execution. Only initial materialization and explicit config-source updates publish a new fetched snapshot or replace `current`; normal commands must not read this JSON to configure themselves or rewrite it while checking for updates. After successful publication, remove older snapshots under the source cache lock, retaining only the latest snapshot. Failed acquisition leaves the previous snapshot intact; cleanup failures are logged without failing the command.
+The retained JSON and `metadata.json` describe the last successfully fetched source: its identity, selected-file version, resolved commit, and fetch time. They are tracking data, not general defaults for command execution. Initial materialization, explicit config-source updates, runtime template discovery, and consented template-source listing can publish a new fetched snapshot or replace `current`. Runtime template operations read only the selected source's `templateSources` section from their acquired snapshot; they do not apply source values to app or global configuration or fall back to a prior invocation's stale snapshot. Other normal commands must not read this JSON to configure themselves or rewrite it while checking for updates. After successful publication, remove older snapshots under the source cache lock, retaining only the latest snapshot. Failed acquisition leaves the previous snapshot intact; cleanup failures are logged without failing the command.
 
 Keep advisory check state separate in `check.json`: the last successful check time and last observed source-file version. A check is not a fetch-and-apply operation, and must not advance the fetched snapshot's timestamp or a project's applied version. Tracking records must distinguish an actually fetched source from one whose version was only checked.
 
@@ -199,29 +261,49 @@ Use locks and atomic publication to prevent partially written tracking records. 
 
 Publish fetched tracking data before changing the app file. A tracking-publication failure leaves the app unchanged. If a later app read or write fails, report the operation as failed: tracking can record the successfully fetched source, but the app's settings and applied version remain unchanged. Apply settings and their version together using an atomic sibling-file replacement under the workspace configuration lock, re-reading the app file after acquisition to preserve concurrent edits. Create the temporary file with owner-only Unix permissions or the existing destination's Windows access rules. Preserve the destination's Unix mode or Windows DACL when replacing it; new Unix configuration files remain owner-only.
 
-Global source refresh uses the same path-based configuration lock as local refresh. Both local and global `aspire config set` and `aspire config delete` operations acquire that lock so they cannot overwrite a refresh with a stale read or lose an unrelated edit to the refresh.
+Configuration-source refresh uses the same path-based configuration lock as local `aspire config set` and `aspire config delete` operations so they cannot overwrite a refresh with a stale read or lose an unrelated edit to the refresh.
 
-A tracking copy is shared by source identity, not a record of what every application has applied. An ordinary command must work from its app file even when this directory is missing, another app refreshed the same source, or the retained JSON is unreadable. Problems with the tracking/version check are reported separately; they do not make cached values a fallback runtime provider.
+A tracking copy is shared by source identity, not a record of what every application has applied. Outside the separately acquired runtime template overlay, an ordinary command must work from its app file even when this directory is missing, another app refreshed the same source, or the retained JSON is unreadable. Problems with the tracking/version check are reported separately; they do not make cached values a fallback runtime provider.
 
 Missing `configSource.repository` or `configSource.path` must not prevent general configuration loading or discard the app's saved settings. Validate these fields when the binding is used: an advisory check reports the invalid binding without failing the project operation, while an explicit configuration-source refresh fails before Git acquisition or application-file changes.
 
+### Edit array-valued settings
+
+Configuration keys use dots (or colons) for object properties and bracketed indices for arrays:
+
+```shell
+aspire config set "skillSources.team.plugins[0]" deployment
+aspire config get "skillSources.team.plugins[0]"
+aspire config delete "skillSources.team.plugins[0]"
+```
+
+Quote bracketed keys to prevent shell glob expansion. Brackets are reserved for non-negative integer indices, including nested arrays such as `matrix[0][1]`.
+
+Setting an existing index replaces only that element. An index equal to the array length appends an element; larger indices and negative indices are rejected without changing the file. If the array property is missing or null, `[0]` creates it. Explicit bracket syntax never replaces an existing object or scalar with an array.
+
+Numeric dot or colon segments can also address an existing array, so `skillSources.team.plugins.0` edits element zero when `plugins` is already an array. Otherwise numeric segments remain object property names: creating `custom.0` creates an object with a `"0"` property. Use brackets when creating an array rather than relying on numeric property names.
+
+Deleting an array element shifts subsequent elements down by one index. Deleting the final element leaves an empty array, and deleting a property within an array element preserves the element even if it becomes an empty object. `aspire config list` displays individual array entries using bracketed indices, including `null` for null array elements, while empty arrays and objects remain visible.
+
 ### Check for updates without applying them
 
-Operations that resolve an Aspire project or select a running AppHost check saved sources in the nearest local settings file and the global settings file for newer versions. Initialization of an already-bound project uses the same discovery from the resolved project directory. Commands that do not resolve a project, such as agent setup, configuration inspection, and documentation lookup, do not perform an ambient source check. Agent setup targets an agent workspace, which is not necessarily the AppHost directory. The check is advisory: the requested operation uses saved configuration whether a source is newer, unavailable, or has never been fetched on this machine.
+Operations that resolve an Aspire project or select a running AppHost check the saved source in the nearest local settings file for newer versions. Global bindings are not read, validated, checked, or acquired. Initialization of an already-bound project uses the same discovery from the resolved project directory. Configuration inspection and documentation lookup do not perform an ambient source check. Agent setup may discover an AppHost to locate saved skill-source settings, but does not check the configuration source. It targets an agent workspace, which is not necessarily the AppHost directory. The check is advisory: the requested operation uses saved configuration whether a source is newer, unavailable, or has never been fetched on this machine.
 
 Advisory checks run in the background without delaying project operations or prompting for Git credentials. At command exit, unfinished checks are cancelled and their child processes are cleaned up. Completed update notices and advisory warnings are displayed after the CLI version update notification, never concurrently with command output; machine-readable invocations suppress these notices. A fast command may exit before a check produces a result, in which case no notice is shown. Explicit `aspire update --config-source` remains a synchronous fetch-and-apply operation, including its normal credential prompts and failure reporting.
 
-Each configuration-source service instance handles one project's nearest local and global sources. Repeated calls for the same project reuse a single background check; attempting to reuse the instance for another project is an error. Sources are processed serially, local before global, never in parallel, so Git terminal output and authentication input cannot compete between sources. If the local and global paths identify the same file, process it only once. Bindings with identical repository, file path, and ref share one version check or acquisition per invocation, regardless of their applied versions. Compare the shared observation against each binding's applied version; reuse cached check metadata only when it is valid for all those versions.
+Each configuration-source service instance handles one project's nearest local source. Repeated calls for the same project reuse a single background check; attempting to reuse the instance for another project is an error. Different projects with identical repository, file path, and ref share cached check metadata. Compare that shared observation against the current project's applied version; reuse cached metadata only when it is valid for that version.
 
 Directory cleanup failures are logged at debug level without displaying a UI warning or replacing the check's notification.
 
 | Command scope | Source behavior |
 |---|---|
 | `aspire new` / `aspire init` initially creating source-bound app configuration | After consent, fetch, validate, and materialize allowed values; save the binding, applied version, and tracking copy |
-| `aspire update --config-source` | Fetch and explicitly apply allowed values to the nearest local and global configurations with saved bindings, regardless of check age |
+| `aspire update --config-source` | Fetch and explicitly apply allowed values to the nearest local configuration with a saved binding, regardless of check age |
 | Other commands scoped to an existing source-bound app, including re-running initialization on an already-bound app | Check for updates when due; never apply source values or rewrite the fetched tracking copy |
-| Commands scoped to an app without a `configSource` in either the nearest local or global configuration | No source check or acquisition |
-| Global commands not scoped to an app, help, and completion | No source check or acquisition |
+| Runtime template discovery in `aspire new` | With an explicit `ASPIRE_INIT_SOURCE_URL` and no decline during creation consent, acquire the source and publish its tracking snapshot; use only `templateSources` at runtime without saving inherited settings |
+| `aspire template source list` | After shared consent (or explicit `--use-config-source` opt-in for JSON), acquire the selected source and publish its tracking snapshot; overlay only `templateSources`, without materializing project files or saving inherited settings |
+| Commands scoped to an app without a `configSource` in the nearest local configuration, excluding the runtime template operations above | No source check or acquisition, regardless of global bindings |
+| Other global commands not scoped to an app, help, and completion | No source check or acquisition |
 
 Compare the selected-file version at the binding's branch or commit with the application's `configSource.appliedVersion`, not with another app's latest fetch. The version identifies the selected file's contents, such as its Git blob identity; unrelated commits to other files do not constitute a configuration update.
 
@@ -263,13 +345,13 @@ aspire update --config-source --apphost MyApp.AppHost.csproj
 
 This is a configuration-update mode of `aspire update`, separate from its package-update workflow:
 
-- Resolve the project using the existing project-selection behavior, including `--apphost`, and process saved bindings in its nearest local settings file and the global settings file, local first. Do not select a source from environment variables or employee detection. If neither configuration has a saved source, report an error and exit nonzero without Git acquisition.
-- When `--apphost` names a directory, discover and select an AppHost within that directory before considering a configuration-only fallback in the requested directory. If discovery finds no AppHost, use the nearest local settings file from that fallback directory plus global settings; discovery ambiguity or unsupported-project errors must not silently select another binding.
-- Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into each declaring configuration file, and save its applied version with those values. Reuse one acquisition for identical repository/path/ref bindings, preserving each file's unrelated settings independently.
-- Never process sources in parallel. On the first acquisition, validation, or write failure, stop and exit nonzero; preserve earlier successful updates without rolling them back.
+- Resolve the project using the existing project-selection behavior, including `--apphost`, and process the saved binding in its nearest local settings file. Ignore global bindings and do not select a source from environment variables or employee detection. If the local configuration has no saved source, report that there is no configuration source to update and exit successfully without Git acquisition.
+- When `--apphost` names a directory, discover and select an AppHost within that directory before considering a configuration-only fallback in the requested directory. If discovery finds no AppHost, use the nearest local settings file from that fallback directory; discovery ambiguity or unsupported-project errors must not silently select another binding.
+- Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into the declaring configuration file, and save its applied version with those values, preserving unrelated settings.
+- On acquisition, validation, or write failure, stop and exit nonzero without changing the app configuration or its applied version.
 - Publish the fetched source JSON and fetch metadata in Aspire home as tracking data. Record a successful fetch/check time even if the selected file's version is unchanged. If tracking publication fails, report it explicitly; do not use shared tracking as proof that an app was updated.
 - Report the source, resolved commit, and whether the app configuration changed. Make clear that supplied allowlisted values can replace local edits.
-- Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and only performs an advisory source check.
+- Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and performs an advisory source check for saved bindings; unbound projects can explicitly adopt a source as described above.
 - Follow `aspire update`'s existing non-interactive confirmation contract: automation uses `aspire update --config-source --yes --non-interactive`. The saved binding supplies source consent; this command does not establish a new binding or prompt to enable one.
 
 Failed or cancelled acquisition or validation must not replace the app settings, applied version, or last valid fetched tracking copy, and must not report success. Unlike an advisory check failure, failure of this explicit update is an operation failure with a nonzero exit code.
@@ -307,24 +389,142 @@ Cover the renamed environment variables and default/explicit ref selection when 
 
 Verify non-default and slash-containing branch names, full commit IDs, acquisition of a commit absent from a shallow default-branch snapshot, and explicit errors for invalid/missing refs or server-denied commits without fallback. Verify persisted ref portability, separate tracking for different selectors, branch movement, default-branch changes, and commit pins remaining unchanged during checks and explicit updates. Initialization environment variables must not retarget a saved binding.
 
-Verify overwrite behavior for supplied allowlisted values, preservation of omitted and unrelated settings, valid null replacement, and no accidental copying of a parent section or normalized-key bypass. Verify atomic app-file updates and unchanged app/fetch state after failed or cancelled acquisition.
+Verify whole-section replacement, copying of arbitrary nested properties, preservation of omitted sections and unrelated top-level settings, valid null replacement, case-insensitive section matching, and no normalized-key bypass. Verify atomic app-file updates and unchanged app/fetch state after failed or cancelled acquisition.
 
 For ordinary commands, verify the exact 24-hour check boundary, cached availability notices, file-version comparison instead of unrelated repository commits, and actionable stderr output. Confirm no source-driven app writes, fetched-JSON writes, or loading cached JSON as configuration. Cover missing/corrupt tracking, unavailable Git/authentication/network, and continued command execution with saved app values after a reported check failure.
 
 For explicit updates, cover fresh/missing tracking, unchanged source versions, `--apphost` selection, non-interactive confirmation, incompatible options, missing bindings, and bindings without an applied version. Verify that updating one app does not alter another app's settings or applied-version comparison, including on another machine with no tracking copy. Confirm no CLI/SDK/package updates, code regeneration, or content reinstallation.
 
-Cover nearest-local and global bindings independently and together, including no local file, an unbound nearest modern file that hides a farther ancestor binding, a nonstandard global file path, and local/global paths identifying the same file. Verify serial acquisition, shared-source deduplication and cache freshness across differing applied versions, preservation of unrelated files, and failure/cancellation after an earlier successful refresh.
+Verify that global bindings are ignored during advisory checks and explicit refresh, including valid, malformed, and unavailable sources, no local file, and an unbound nearest modern file that hides a farther ancestor binding. With a saved local binding, verify that only that source is checked or refreshed and that global and unrelated files remain unchanged. Preserve shared-cache freshness coverage across different projects' applied versions.
 
-Keep no-source, declined-source, global-command, help, and completion paths free of source acquisition/checks. Verify plain `aspire update` does not implicitly materialize configuration-source changes.
+Keep no-source, declined-source materialization, unrelated global-command, help, and completion paths free of source acquisition/checks. Verify that both an interactive decline and `--use-config-source false` suppress runtime template inheritance while preserving independently configured global template sources. Template search and source listing can acquire accepted runtime template sources as described below. Verify plain `aspire update` does not implicitly materialize changes to saved bindings. Cover consented brownfield adoption from environment and employee candidates, persisted opt-outs, repeat invocations, selected AppHost configuration scope, failure preservation, and unattended updates that skip adoption unless explicit consent is supplied.
+
+## Runtime template sources
+
+When `ASPIRE_INIT_SOURCE_URL` is explicitly set, template discovery/search in interactive `aspire new` also reads the remote file's `templateSources` section, unless the developer declined that source during creation consent. An interactive decline or `--use-config-source false` disables its runtime template inheritance for the rest of the command, not just project-file materialization. Discovery does not repeat the consent prompt. Employee detection alone does not enable runtime template discovery inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire an accepted source again rather than silently falling back to stale cached configuration.
+
+`aspire template source list` uses the same candidate selection and consent prompt as `aspire new`, including the detected employee candidate when no explicit URL is set. Accepting includes the selected source's template definitions; declining lists only explicit global definitions. In a non-interactive host, an available candidate requires `--use-config-source` or `--use-config-source false`, just as for `aspire new`.
+
+With `--format json`, listing never prompts. Without `--use-config-source` (or its explicit `true` form), it does not select, validate, or fetch an init source, and returns only explicit global template definitions. Explicit opt-in includes inherited sources and disables interactive Git authentication; diagnostics stay on stderr and stdout contains only JSON. All commands expose the same nullable Boolean option: bare means `true`, explicit `true`/`false` are accepted, and omission remains unspecified. No listing mode materializes project files.
+
+The shared [unattended Git authentication policy](#acquire-using-git) applies to opted-in JSON listing as well as non-interactive initialization and advisory checks.
+
+For example, the remote file can supply:
+
+```json
+{
+  "templateSources": {
+    "enterprise": {
+      "repository": "https://git.acme.example/platform/templates",
+      "ref": "template-preview",
+      "path": "templates",
+      "displayName": "Enterprise templates"
+    }
+  }
+}
+```
+
+```shell
+export ASPIRE_INIT_SOURCE_URL=https://git.acme.example/platform/aspire-init
+export ASPIRE_INIT_SOURCE_REF=config-preview
+aspire template source list --format json
+aspire template source list --format json --use-config-source
+aspire new
+```
+
+Only `templateSources` participates in this runtime overlay. Other remote settings retain their existing allowlisted project-materialization behavior. Project-level `templateSources` are not used. Sources must satisfy the same complete-definition validation as global template discovery; malformed or inaccessible init configuration fails explicitly. Template repository discovery failures retain the normal per-source warnings.
+
+The optional `displayName` supplies the terminal selector's source heading. Missing or blank values use the alias; aliases remain the source and group identity even when headings match.
+
+Merge source names case-insensitively with global `templateSources`. The user's entire global definition wins on a collision: do not retain an inherited `repository`, `ref`, `path`, or `displayName` when the user replaces that source with a local directory or a different repository. Non-colliding global and inherited sources are both searchable and listed, including their branch refs.
+
+`aspire template source add` and `remove` edit only explicit global definitions. Adding an alias supplied by the init source creates a global override; removing that override reveals the inherited source again. Removing an inherited-only alias reports that no global source was found. Listing preserves inherited fields without discovering templates or fetching template repositories; acquiring the init configuration itself can require Git/network access.
+
+Never save inherited template sources into the user's global configuration or the generated project's configuration. Unsetting `ASPIRE_INIT_SOURCE_URL` removes the explicit runtime source from subsequent search/list invocations; human-readable listing can still offer an employee-detected candidate through its normal consent flow. On `aspire new`, the creation consent decision controls both project configuration materialization and use of the source for runtime template inheritance. Accepted initialization and runtime discovery share the invocation's acquired snapshot.
 
 ## Phase 2: Acquire content from configuration
 
-Skills, templates, and integrations are acquired according to the application's saved configuration and normal CLI precedence. These are separate operations from fetching or materializing a configuration source, and must not load source settings from the user-directory tracking copy.
+Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the explicit environment-selected runtime overlay. Content acquisition is separate from fetching or materializing a configuration source, and must not treat previously retained tracking copies as runtime configuration providers. Runtime template inheritance uses its separately acquired snapshot as described above.
+
+Keys in `integrationSources`, `templateSources`, and `skillSources` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. Dots remain path separators in `aspire config` edit commands, so edit dotted source keys directly in the JSON file or use the template source management commands. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
+
+### Named agent skill sources
+
+`aspire agent init`, including its chained use from `aspire new` and `aspire init`, registers all enabled sources when the `aspire` skill choice and remote mode are selected. Configure sources in `aspire.config.json` or global settings:
+
+```json
+{
+  "skillSources": {
+    "aspire1p": {
+      "repository": "https://git.example.com/platform/skills.git",
+      "marketplace": "aspire1p",
+      "plugins": ["aspire", "deployment"],
+      "ref": "main",
+      "openCodeV1Catalog": "https://skills.example.com/opencode/v1/",
+      "openCodeV2Catalog": "https://skills.example.com/opencode/v2/"
+    }
+  }
+}
+```
+
+Sources and their fields merge by name across configuration layers, case-insensitively. Agent initialization reads fresh global settings and the selected app's nearest local settings file; it does not retain local settings from a different launch directory. Additional sources do not replace the built-in `default` source, which registers `aspire@aspire-skills` from `microsoft/aspire-skills` and the official OpenCode catalogs. Override its fields to change that source, or set `"default": { "enabled": false }` to omit it. Setting `enabled` to false does not remove previously installed registrations.
+
+`aspire init` recommends `aspireify` only after successful or already-current registration of an enabled official Aspire plugin or OpenCode catalog. Disabled sources, arbitrary plugins, and sources without an applicable OpenCode catalog do not trigger this guidance.
+
+Standalone agent initialization honors the configured AppHost or discovers one from the working directory using SDK-independent file inspection, prompting when multiple AppHosts are available. It does not require a usable .NET SDK or run MSBuild to find the AppHost's saved settings. It reads the selected AppHost's configuration independently of the agent workspace destination, without fetching or checking the configuration source. When there is no AppHost, it uses the working directory's nearest local settings file.
+
+Each additional source requires a GitHub `owner/repository` or Git repository address. The marketplace identifier defaults to the source name; marketplace identifiers must be unique. The `plugins` array selects one or more plugin names within that marketplace and defaults to `["aspire"]` when omitted. Empty lists and invalid plugin identifiers are rejected. Like other configuration arrays, plugin entries merge by index across configuration layers. An optional `ref` selects a branch or full commit for newly registered marketplaces. Copilot and Claude register each marketplace once and enable each selected plugin (for example, `aspire@aspire1p` and `deployment@aspire1p`). OpenCode uses the catalog for its existing settings format, falling back to the other catalog when only one is supplied; sources without catalog URLs are not registered with OpenCode. Plugin selections do not filter OpenCode catalogs. Catalog URLs must use HTTPS. The CLI registers sources without acquiring their content; agent clients perform acquisition and authentication.
+
+Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. HTTPS and SSH URL schemes and hostnames match case-insensitively; non-GitHub repository paths and SSH usernames remain case-sensitive. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged. Before registering sources, a separate list identifies repository URLs for selected plugin clients and configured V1/V2 catalog URLs for OpenCode across all enabled sources. Each URL appears on its own line below the "Skill sources" heading, aligned with the heading text. Duplicate URLs are shown once; disabled sources are omitted. The shared source-trust warning is displayed once on stderr, using the same wording as Git templates and configuration sources.
+
+The allowlist copies the entire supplied `skillSources` section, including arbitrary nested properties, replacing the existing local section. If `skillSources` is omitted, the local section remains untouched. Sources still merge by name across runtime configuration layers such as global and local settings. Refreshing `configSource` updates configuration only, not agent registrations. Run `aspire agent init` to register newly configured sources. `--skills none` and suppressed agent initialization do not register remote sources. Aspire does not acquire or install bundled Aspire skill files.
 
 | Content | Acquisition today | Possible configuration customizations |
 |---|---|---|
-| Skills | `aspire agent init` registers remote Aspire agent assets by default; `--aspire-source embedded` installs bundled skill files | Additional validated bundles, selected/default skills, and workspace installation destinations |
-| Templates | .NET templates are installed from NuGet; CLI-native starters use embedded files or scaffolding | Template catalogs, package identities, versions, and feeds; external starter content could follow later |
-| Integrations | Templates declare dependencies; `aspire add` and integration list/search discover NuGet packages | Additional catalog entries, package versions, feeds, and package-source mappings |
+| Skills | `aspire agent init` registers all configured native sources; independently selected CLI-defined skills are installed into the chosen client destinations | Additional validated remote catalogs, selected/default CLI-defined skills, and workspace installation destinations |
+| Templates | Built-in templates and named global/runtime-inherited sources support local directories and Git repositories | Additional catalogs, package identities, versions, and feeds |
+| Integrations | Templates declare dependencies; `aspire add` and integration list/search discover packages from all configured NuGet integration sources | Additional catalog metadata and package-version constraints |
 
-Keep standard content available initially and preserve explicit user selections and suppression options. Future source-driven content settings must be explicitly added to the allowlist and materialized before they affect acquisition choices. An availability notice never changes those choices. An explicit configuration update does not automatically regenerate applications or reinstall skills. Git access does not grant access to private package feeds, and all acquired content must retain its existing validation and authentication requirements.
+### Named integration sources
+
+Configure integration discovery independently of the AppHost's SDK channel:
+
+```json
+{
+  "integrationSources": {
+    "default": {},
+    "team": {
+      "source": "https://packages.example.com/v3/index.json",
+      "patterns": ["Contoso.Hosting.*", "Contoso.SpecialIntegration"]
+    }
+  }
+}
+```
+
+The implicit `default` entry retains existing channel and ambient NuGet discovery, including official and Community Toolkit packages. Set `default.enabled` to `false` to search only explicitly configured sources. An entry with a `source` can omit `patterns` to discover all packages from that feed, equivalent to `["*"]`; an explicitly supplied array, including `default.patterns`, must be non-empty. Override `default.source` to replace built-in discovery with a different feed, optionally specifying `default.patterns` to restrict its packages.
+
+Each enabled source is searched for matching package IDs, regardless of their namespace. Patterns use case-insensitive NuGet matching: an exact ID, a prefix ending in `*`, or `*` for every package. Other wildcard positions are invalid. Sources may be HTTP(S) NuGet service indexes or local package directories; relative directories resolve against the selected AppHost directory. Embedded credentials are rejected. Configure private-feed credentials using NuGet's existing credential mechanisms.
+
+Named entries referring to the same feed identity are combined before discovery. Their allowed patterns are unioned case-insensitively, disabled entries do not contribute patterns, and the first entry supplies the display name and source spelling. Integration discovery searches each distinct prefix or exact ID separately, following pagination for each query, then filters results against the merged patterns and deduplicates matching package IDs and versions case-insensitively. An empty query searches all packages only when the patterns include `*`, including when patterns are omitted. Local feeds are likewise enumerated once. The implicit built-in discovery entry remains separate.
+
+Paginated searches apply [nuget.org's limits](https://learn.microsoft.com/nuget/api/search-query-service-resource#request-parameters) to every feed: pages of at most 1,000 packages with offsets up to 3,000, yielding at most 4,000 packages per feed and query before filtering. Search results carry a limit-reached flag that is preserved when filtering and combining feeds, queries, and channels. A full final permitted page sets this flag because results may be incomplete; use narrower source patterns to reduce each query's result set. CLI integration discovery displays this warning on stderr at most once per operation, after the search status finishes and before the results. MCP listings instead include a plain-text `warning` property in the tool's JSON response when the limit is reached, even if filtering leaves no matching integrations; the property is omitted otherwise. A caller-requested result limit at or below 4,000 does not produce this warning.
+
+`aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration discovery use the same configured sources. MCP listings resolve sources from the single in-scope AppHost's directory when available; otherwise, they use the MCP working directory. Stable and prerelease packages are included for custom sources, and the existing deprecated-package and optional polyglot-compatibility filters still apply. The selected source is used for version lookup. Adding a package reuses existing effective routing or persists an exact package-to-feed mapping in the AppHost's NuGet configuration, preserving ambient SDK and dependency feeds so subsequent restores can resolve the package. The target directory is selected using the same logic as `aspire update`: reuse the nearest effective non-global NuGet configuration, falling back to the AppHost directory when none exists. This does not change the AppHost's SDK channel. An explicit `aspire add --source` continues to override discovery.
+
+If a NuGet source fails during discovery, `aspire add`, `aspire integration list`, and `aspire integration search` retain results from successful sources and display a warning on stderr for each failed source after the search completes. This includes missing or unreadable local package directories, both during package discovery and polyglot compatibility scans. Cancellation still cancels the operation rather than reporting a failed source. Source names are redacted and escaped for display, and repeated failures across queries or channels produce only one warning per source. Warnings are displayed even if no packages remain; JSON listings keep stdout valid JSON.
+
+Without an integration argument, interactive `aspire add` always asks the user to select a package, even when discovery returns only one package. An exact package ID or friendly name on the command line can bypass that selection. Non-interactive `aspire add` requires an integration argument and never installs an unnamed discovery result.
+
+Sources and their fields merge case-insensitively across global and selected-app settings. As with `skillSources`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
+
+When adding an integration from a new feed, the NuGet package-source key is `aspire-integration-<name>` (for example, `aspire-integration-team`). This prefix identifies CLI-created integration aliases separately from SDK/channel aliases. If the feed already has a NuGet alias, that alias is retained, including unprefixed aliases and previously generated `aspire-integration-add` aliases, so credentials and other source settings remain attached. Existing user-owned mappings are left unchanged when NuGet's effective mapping precedence already routes the selected package exclusively to that feed, including through inherited mappings or multiple aliases for the same feed. Otherwise, an exact package mapping can be appended to a local alias while preserving its existing patterns and credentials. Explicitly selecting the same package from a different configured feed replaces its previous local exact integration mapping, while retaining the previous feed and all unrelated patterns. Extending or replacing an inherited mapping, including deleting a local entry that would expose inherited policy, requires a manual configuration change rather than silently shadowing or modifying that policy. Disabled sources and channel-source ownership checks remain enforced. When a new alias is required, a generated key reserved by another feed or its settings is an error, not permission to overwrite the feed or silently generate a suffixed key.
+
+Named integration adds prepare the NuGet configuration change without writing it, then stop any running AppHost before temporarily applying the candidate for installation and restore. Successful installation commits that configuration. A failed installation, exception, or cancellation restores the original bytes or removes a newly created configuration file. The transaction rejects changed baselines and refuses to roll back over detected external edits, reporting the conflict instead. This transaction covers the NuGet configuration, not generated SDK or dependency files.
+
+Directory-based integration sources use the same named-source persistence path as HTTP feeds, rather than CLI/PR hive setup. Discovery patterns are not copied into restore mappings when adding a named integration.
+
+Adding an exact integration package preserves existing SDK/channel feeds, including unmapped feeds and feeds with only catch-all mappings. If package-source mapping is disabled, adding an integration keeps it disabled rather than introducing a new mapping policy.
+
+Feeds explicitly configured in `integrationSources` are protected from automatic feed retirement, including during channel changes and when package-source mapping is disabled. Protection matches feed locations, not NuGet aliases, and applies to both persistent configuration and temporary restore policy. Setting `enabled` to `false` disables discovery but retains that protection. An implicit `default` entry without a `source` does not protect ambient feeds. Removing an entry entirely ends its protection; this does not prove that previously installed packages no longer need the feed. Returning to the stable channel removes obsolete CLI-owned SDK mappings from unprotected channel aliases while retaining integration feeds, their credentials and disabled state, and exact or narrower integration mappings. If a shared SDK/integration alias still has broad routing (`Aspire*` or `*`) that cleanup would remove, the update requires manual NuGet configuration. Surviving narrower mappings, including on equivalent feed aliases, do not establish that all private dependencies remain routed correctly. Resolve that ambiguity manually before retrying rather than deriving restore policy from discovery filters. Dedicated `aspire-integration-<name>` aliases retain their mappings, and inherited mapping changes still require manual configuration. An exact-package source override or exact package selection can still replace the selected package's routing while preserving unrelated integration mappings, including when a daily/staging channel supplies broad `Aspire*` mappings. Broad source overrides retain their existing override behavior.
+
+Keep standard content available initially and preserve explicit user selections and suppression options. Future source-driven content settings must be explicitly added to the materialization allowlist or have a separately defined runtime inheritance contract before they affect acquisition choices. An availability notice never changes those choices. An explicit configuration update does not automatically regenerate applications or reinstall skills. Git access does not grant access to private package feeds, and all acquired content must retain its existing validation and authentication requirements.

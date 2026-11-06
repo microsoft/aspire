@@ -165,4 +165,17 @@ else
         .WithTerminal();
 }
 
+// The dashboard isn't running yet during BeforeStartEvent, so the interaction service reports itself
+// as unavailable. Without that guard, awaiting this prompt would block the app host from starting.
+builder.Eventing.Subscribe<BeforeStartEvent>(async (e, ct) =>
+{
+    var interactionService = e.Services.GetRequiredService<IInteractionService>();
+    if (!interactionService.IsAvailable)
+    {
+        return;
+    }
+
+    await interactionService.PromptMessageBoxAsync("Before start", "This prompt should never be shown before the app host starts.", cancellationToken: ct);
+});
+
 builder.Build().Run();

@@ -1572,6 +1572,7 @@ internal sealed class TrayPanel
             _ when !live => "Status unavailable",
             { Health: AppHostHealth.Warning } => "Needs attention",
             { Health: AppHostHealth.Unhealthy } => "Unhealthy",
+            { Health: AppHostHealth.NoResources } => "No resources",
             _ => "Running"
         };
         var detail = $"{status} · {AppHostPresentation.GetLocation(host.Id.AppHostPath)}";

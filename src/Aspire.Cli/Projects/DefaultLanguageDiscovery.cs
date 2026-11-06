@@ -12,7 +12,7 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 /// <remarks>
 /// This implementation provides a static list of supported languages.
-/// Experimental languages (Go, Java, Rust) are filtered based on per-language feature flags.
+/// Experimental languages (Python, Java, Rust) are filtered based on per-language feature flags.
 /// </remarks>
 internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDiscovery
 {
@@ -21,8 +21,15 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     /// </summary>
     internal static IReadOnlyList<LanguageInfo> AllLanguages => s_allLanguages;
 
+    // A language lists DefaultHostingPackages only when its hosting package ships stable. A package marked
+    // SuppressFinalPackageVersion publishes only X.Y.Z-preview.* versions, which never satisfy the stable
+    // CLI version X.Y.Z that the scaffolder pins, so restoring it would fail.
     private static readonly LanguageInfo[] s_allLanguages =
     [
+        // C# AppHosts reference their hosting packages as `#:package` directives in apphost.cs (or as
+        // PackageReference items in a project), never in aspire.config.json, so it gets no default packages
+        // here. Its defaults come from CliTemplateFactory.GetCSharpAppHostDirectives, which `aspire new`
+        // and `aspire init` share.
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.CSharp),
             DisplayName: KnownLanguageId.CSharpDisplayName,
@@ -36,7 +43,10 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             PackageName: "Aspire.Hosting.CodeGeneration.TypeScript",
             DetectionPatterns: ["apphost.mts", "apphost.ts"],
             CodeGenerator: "TypeScript", // Matches ICodeGenerator.Language
-            AppHostFileName: "apphost.mts"),
+            AppHostFileName: "apphost.mts")
+        {
+            DefaultHostingPackages = ["Aspire.Hosting.JavaScript"]
+        },
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Python),
             DisplayName: KnownLanguageId.PythonDisplayName,
@@ -44,15 +54,20 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
             DetectionPatterns: ["apphost.py"],
             CodeGenerator: "Python",
             AppHostFileName: "apphost.py",
-            IsExperimental: true),
+            IsExperimental: true)
+        {
+            DefaultHostingPackages = ["Aspire.Hosting.Python"]
+        },
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Go),
             DisplayName: KnownLanguageId.GoDisplayName,
             PackageName: "Aspire.Hosting.CodeGeneration.Go",
             DetectionPatterns: ["apphost.go"],
             CodeGenerator: "Go",
-            AppHostFileName: "apphost.go",
-            IsExperimental: true),
+            AppHostFileName: "apphost.go")
+        {
+            DefaultHostingPackages = ["Aspire.Hosting.Go"]
+        },
         new LanguageInfo(
             LanguageId: new LanguageId(KnownLanguageId.Java),
             DisplayName: KnownLanguageId.JavaDisplayName,
@@ -75,7 +90,6 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     private static readonly Dictionary<string, string> s_experimentalFeatureFlags = new(StringComparer.OrdinalIgnoreCase)
     {
         [KnownLanguageId.Python] = KnownFeatures.ExperimentalPolyglotPython,
-        [KnownLanguageId.Go] = KnownFeatures.ExperimentalPolyglotGo,
         [KnownLanguageId.Java] = KnownFeatures.ExperimentalPolyglotJava,
         [KnownLanguageId.Rust] = KnownFeatures.ExperimentalPolyglotRust,
     };

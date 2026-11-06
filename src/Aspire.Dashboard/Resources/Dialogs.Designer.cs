@@ -246,6 +246,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Aspire Outage.
+        /// </summary>
+        public static string HelpDialogGameTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogGameTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph..
+        /// </summary>
+        public static string HelpDialogGameDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogGameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         public static string DialogCloseButtonText {
@@ -849,6 +867,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Resource graph.
+        /// </summary>
+        public static string HelpDialogCategoryResourceGraph {
+            get {
+                return ResourceManager.GetString("HelpDialogCategoryResourceGraph", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Play Aspire Outage, when the graph has focus.
+        /// </summary>
+        public static string HelpDialogPlayGame {
+            get {
+                return ResourceManager.GetString("HelpDialogPlayGame", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Logs &amp; telemetry.
         /// </summary>
         public static string HelpDialogCategoryTelemetry {
@@ -1335,7 +1371,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available..
+        ///   Looks up a localized string similar to We'd love your feedback on the new experience..
         /// </summary>
         public static string DashboardFeedbackPromptMessage {
             get {
@@ -1353,7 +1389,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Help shape the new dashboard.
+        ///   Looks up a localized string similar to Welcome to the new Aspire dashboard!.
         /// </summary>
         public static string DashboardFeedbackPromptTitle {
             get {
@@ -1871,15 +1907,6 @@ namespace Aspire.Dashboard.Resources {
         public static string SettingsDialogGroupOverviewSummary {
             get {
                 return ResourceManager.GetString("SettingsDialogGroupOverviewSummary", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Cards.
-        /// </summary>
-        public static string SettingsDialogGroupOverviewCards {
-            get {
-                return ResourceManager.GetString("SettingsDialogGroupOverviewCards", resourceCulture);
             }
         }
 

@@ -49,9 +49,9 @@ Source origin: {3}</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsentRequired">
-        <source>A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
-        <target state="new">A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
-        <note>Do not translate "--use-config-source", "true", or "false".</note>
+        <source>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
+        <target state="new">A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
+        <note>Do not translate "--use-config-source" or "false".</note>
       </trans-unit>
       <trans-unit id="Decline">
         <source>No, use standard Aspire configuration</source>
@@ -94,8 +94,8 @@ Source origin: {3}</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidConfiguration">
-        <source>The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</source>
-        <target state="new">The source configuration must be a valid Aspire JSON object no larger than 4 MiB.</target>
+        <source>The source configuration must be a valid Aspire JSON object.</source>
+        <target state="new">The source configuration must be a valid Aspire JSON object.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidPath">
@@ -114,8 +114,8 @@ Source origin: {3}</target>
         <note />
       </trans-unit>
       <trans-unit id="MissingFile">
-        <source>The configuration file is missing or is not a regular file at the selected Git branch or commit.</source>
-        <target state="new">The configuration file is missing or is not a regular file at the selected Git branch or commit.</target>
+        <source>The configuration file is missing or is not a Git blob at the selected Git branch or commit.</source>
+        <target state="new">The configuration file is missing or is not a Git blob at the selected Git branch or commit.</target>
         <note />
       </trans-unit>
       <trans-unit id="NestedSource">
@@ -134,8 +134,8 @@ Source origin: {3}</target>
         <note>{0} is the environment variable name.</note>
       </trans-unit>
       <trans-unit id="RefreshOptionDescription">
-        <source>Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</source>
-        <target state="new">Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI.</target>
+        <source>Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</source>
+        <target state="new">Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="Refreshed">
@@ -166,8 +166,8 @@ Settings file: {4}</target>
         <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
-        <source>Accept or decline the proposed Git configuration source for this project.</source>
-        <target state="new">Accept or decline the proposed Git configuration source for this project.</target>
+        <source>Use the proposed Git configuration source. Specify false to decline it.</source>
+        <target state="new">Use the proposed Git configuration source. Specify false to decline it.</target>
         <note />
       </trans-unit>
       <trans-unit id="UseSourcePrompt">

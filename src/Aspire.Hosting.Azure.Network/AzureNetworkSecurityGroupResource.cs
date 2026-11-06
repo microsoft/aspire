@@ -31,7 +31,16 @@ public class AzureNetworkSecurityGroupResource(string name, Action<AzureResource
 
     internal bool IsImplicitlyCreated { get; set; }
 
-    internal List<AzureSecurityRule> SecurityRules { get; } = [];
+    internal List<AzureSecurityRule> Rules { get; } = [];
+
+    /// <summary>
+    /// Gets the modeled security rules, including rules added through subnet shorthand methods.
+    /// </summary>
+    /// <remarks>
+    /// Rules are evaluated in ascending priority order. Use <c>WithSecurityRule</c> or the subnet
+    /// allow/deny methods to add rules.
+    /// </remarks>
+    public IReadOnlyList<AzureSecurityRule> SecurityRules => Rules;
 
     /// <inheritdoc/>
     public override ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra)

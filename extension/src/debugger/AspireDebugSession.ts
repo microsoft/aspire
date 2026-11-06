@@ -212,9 +212,14 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
   // Publish debug-session start ownership before preparing or invoking VS Code. Start events can
   // arrive after the ordinary session snapshot, so shutdown must wait for every accepted resource
   // start to either register normally or enqueue its late stop before the final drain can complete.
+  // Cleanup that a failed or cancelled start still has to finish (see trackPendingResourceCleanup) is
+  // awaited the same way, with its own timeout message.
   private readonly _pendingDebugSessionStarts = new Set<{
     name: string;
     completion: Promise<void>;
+    timeoutMessage?: (sessionName: string, seconds: number) => string;
+    // Set when tracked cleanup failed. The entry stays tracked, and the next shutdown runs the cleanup again.
+    retry?: () => void;
   }>();
   // Set once the AppHost stop has been confirmed, so a retry after a failed shutdown does not stop
   // it a second time. Kept separate from _appHostDebugSession, which the terminate handler still
@@ -499,6 +504,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
    * instead of throwing, so the caller can finish the shutdown before surfacing them.
    */
   private async stopAllSessions(): Promise<unknown[]> {
+    this.retryFailedResourceCleanups();
     // One deadline for the whole shutdown rather than one per stop, so the worst case does not grow
     // with the number of resources. See _stopSessionsTimeoutMs for why this has to be bounded.
     const deadline = Date.now() + AspireDebugSession._stopSessionsTimeoutMs;
@@ -607,7 +613,7 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
           pendingStart.name,
           deadline,
           undefined,
-          debugSessionStartTimedOut)));
+          pendingStart.timeoutMessage ?? debugSessionStartTimedOut)));
       const failures = results
         .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
         .map(result => result.reason);
@@ -639,6 +645,41 @@ export class AspireDebugSession implements vscode.DebugAdapter, DashboardLaunche
         }
       },
     };
+  }
+
+  /**
+   * Makes shutdown wait, within its resource budget, for cleanup that a resource start still has to
+   * finish after its launch failed or was cancelled (for example stopping a runtime the debugger never
+   * attached to). A rejection or a timeout is reported as a stop failure instead of a successful shutdown,
+   * and a cleanup that failed is run again by the next shutdown until it succeeds.
+   */
+  trackPendingResourceCleanup(name: string, cleanup: () => Promise<void>): void {
+    if (this._disposed) {
+      // No shutdown is left to wait for it; the caller reports its own failures.
+      void cleanup().catch(() => { });
+      return;
+    }
+
+    const pendingCleanup: { name: string; completion: Promise<void>; timeoutMessage: typeof debugSessionStopTimedOut; retry?: () => void } =
+      { name, completion: Promise.resolve(), timeoutMessage: debugSessionStopTimedOut };
+    const run = () => {
+      pendingCleanup.retry = undefined;
+      pendingCleanup.completion = cleanup();
+      void pendingCleanup.completion.then(
+        () => {
+          this._pendingDebugSessionStarts.delete(pendingCleanup);
+        },
+        () => {
+          // Keep ownership until the process is confirmed gone, so a later shutdown cannot report success.
+          pendingCleanup.retry = run;
+        });
+    };
+    this._pendingDebugSessionStarts.add(pendingCleanup);
+    run();
+  }
+
+  private retryFailedResourceCleanups(): void {
+    [...this._pendingDebugSessionStarts].forEach(pendingStart => pendingStart.retry?.());
   }
 
   private trackEditorResourceSession(debugConfig: AspireResourceExtendedDebugConfiguration, state: EditorResourceSessionState): void {

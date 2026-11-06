@@ -25,7 +25,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         File.WriteAllText(Path.Combine(symbolDirectory, "symbols"), "symbols");
         var output = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(output, workspace.Path, rid, "Debug", "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null);
+            trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         builder.CopyAppHostServer();
 
@@ -53,7 +53,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
             File.WriteAllText(Path.Combine(source, "ats-contract.json"), contract);
         }
         var output = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(output, workspace.Path, "linux-x64", "Debug", "1.0.0", false, null, null);
+        using var builder = new LayoutBuilder(output, workspace.Path, "linux-x64", "Debug", "1.0.0", false, null, null, null);
 
         var failure = Assert.Throws<InvalidOperationException>(builder.CopyAppHostServer);
 
@@ -81,7 +81,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
             File.WriteAllText(path, file);
         }
         File.WriteAllText(Path.Combine(publish, "Aspire.TerminalHost.pdb"), "symbols");
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, rid, "Debug", "1.0", false, null, null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, rid, "Debug", "1.0", false, null, null, null);
         builder.CopyTerminalHost();
         var target = Path.Combine(workspace.Path, "layout", "terminalhost");
         Assert.Equal(files.Order(StringComparer.Ordinal), Directory.GetFiles(target, "*", SearchOption.AllDirectories)
@@ -122,7 +122,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
     public void FindPublishPath_UsesOnlyRequestedConfiguration(string configuration, string otherConfiguration)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", configuration, "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", configuration, "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
         var expectedPaths = GetPublishPaths(workspace.Path, configuration);
 
         foreach (var path in expectedPaths.Concat(GetPublishPaths(workspace.Path, otherConfiguration)))
@@ -143,7 +143,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
     public void FindPublishPath_RequireRidSpecific_IgnoresNonRidPublish()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
         var nonRidPath = GetPublishPaths(workspace.Path, "Debug")[^1];
         Directory.CreateDirectory(nonRidPath);
 
@@ -207,7 +207,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
 
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         builder.CopyDashboard();
 
@@ -229,7 +229,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         var wwwrootPath = Path.Combine(publishPath, "wwwroot");
         Directory.Delete(wwwrootPath, recursive: true);
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -255,7 +255,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
 
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -285,7 +285,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
 
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 

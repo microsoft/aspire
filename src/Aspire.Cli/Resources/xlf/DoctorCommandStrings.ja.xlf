@@ -27,6 +27,16 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsFix">
+        <source>Delete these files, then run 'aspire agent init --skills aspire'.</source>
+        <target state="new">Delete these files, then run 'aspire agent init --skills aspire'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInspectionFailedMessage">
+        <source>Could not inspect local Aspire skills</source>
+        <target state="new">Could not inspect local Aspire skills</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
         <target state="translated"> (チャネル: {0})</target>
@@ -527,6 +537,11 @@
         <target state="translated">環境チェックは {0} 秒後にタイムアウトしました。</target>
         <note>{0} is the total timeout in seconds.</note>
       </trans-unit>
+      <trans-unit id="FilesHeader">
+        <source>Files:</source>
+        <target state="new">Files:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
         <target state="translated">Aspire CLI のインストール</target>
@@ -570,9 +585,8 @@ The legacy file continues to work — this is a non-blocking warning.</source>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
-        <source>Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</source>
-        <target state="translated">'aspire update --migrate' を実行して推奨される移行を適用します。
+        <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
+        <target state="needs-review-translation">'aspire update --migrate' を実行して推奨される移行を適用します。
 現在のレイアウトは引き続き機能。これは非ブロッキング警告です。</target>
         <note />
       </trans-unit>

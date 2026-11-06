@@ -77,10 +77,8 @@ internal sealed class AzureAppServiceEnvironmentContext(
             await context.ProcessAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var provisioningResource = new AzureAppServiceWebSiteResource(resource.Name + "-website", context.BuildWebSite, resource)
-        {
-            ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions
-        };
+        var provisioningResource = environment.GetOrCreateWebsite(resource);
+        provisioningResource.ProvisioningBuildOptions = provisioningOptions.ProvisioningBuildOptions;
 
         // Add references to any prerequisite resources to ensure they are provisioned first
         if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var prereqs))

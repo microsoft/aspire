@@ -9,6 +9,7 @@ class AspireTooltipProvider extends HTMLElement {
     #observer = null;
     #visibilityObserver = null;
     #keyboardModality = false;
+    #focusDismissed = false;
 
     connectedCallback() {
         this.#controller = new AbortController();
@@ -19,6 +20,7 @@ class AspireTooltipProvider extends HTMLElement {
         // pointer isn't on it. Track the last input in the capture phase, before focus moves.
         document.addEventListener("focusin", event => {
             if (this.#keyboardModality) {
+                this.#focusDismissed = false;
                 this.#show(event.target, 0);
             }
         }, options);
@@ -34,10 +36,20 @@ class AspireTooltipProvider extends HTMLElement {
                 this.#keyboardModality = true;
             }
             if (event.key === "Escape") {
+                this.#focusDismissed = true;
                 this.#clear();
             }
         }, { ...options, capture: true });
-        document.addEventListener("scroll", () => this.#clear(), { ...options, capture: true });
+        document.addEventListener("scroll", () => {
+            const focused = this.#keyboardModality && !this.#focusDismissed ? document.activeElement : null;
+            this.#clear();
+            // Tabbing can scroll an overflow container after focusin. Recreate the focused tooltip
+            // at its new position even if scrolling also moved the hovered element under the pointer.
+            // Pointer tooltips and Escape-dismissed focus tooltips must stay dismissed.
+            if (focused) {
+                this.#show(focused, 0);
+            }
+        }, { ...options, capture: true });
     }
 
     disconnectedCallback() {

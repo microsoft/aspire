@@ -21,17 +21,26 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource, IAzureCdnPrivateLinkTarget
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalIngressResource, IAzureCdnPrivateLinkTarget
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Container Apps Environment";
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Id => ContainerAppEnvironmentId;
+    ReferenceExpression IAzureInternalIngressResource.DefaultDomain => ReferenceExpression.Create($"{ContainerAppDomain}");
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Location => ContainerAppLocation;
+    ReferenceExpression IAzureInternalIngressResource.StaticIp => ReferenceExpression.Create($"{ContainerAppStaticIp}");
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(IResource origin) => ContainerAppEnvironmentId;
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(IResource origin) => ContainerAppLocation;
 
     /// <inheritdoc />
     string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "managedEnvironments";
@@ -299,6 +308,11 @@ public class AzureContainerAppEnvironmentResource :
     /// Gets the default domain associated with the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppDomain => new("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", this);
+
+    /// <summary>
+    /// Gets the private static IP address associated with an internal Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppStaticIp => new("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", this);
 
     /// <summary>
     /// Gets the Azure region of the Container App Environment.

@@ -90,6 +90,117 @@ public class ResourceNotificationTests
 
         Assert.NotNull(resourceEvent);
         Assert.Equal(expectedResourceType, resourceEvent.Snapshot.ResourceType);
+        Assert.Equal(expectedResourceType, resourceEvent.Snapshot.ResourceTypeDisplayName);
+    }
+
+    [Fact]
+    public async Task ResourceTypeDisplayName_ComesFromResourceClass()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var redis = builder.AddRedis("cache").Resource;
+        var postgres = builder.AddPostgres("postgres");
+        var database = postgres.AddDatabase("database").Resource;
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        foreach (var (resource, expectedType, expectedService) in new (Resource, string, string)[]
+        {
+            (redis, "Container", "Redis"),
+            (postgres.Resource, "Container", "PostgreSQL Server"),
+            (database, "PostgresDatabaseResource", "PostgreSQL Database")
+        })
+        {
+            Assert.Equal(expectedService, resource.ResourceTypeDisplayName);
+            await notificationService.PublishUpdateAsync(resource, snapshot => snapshot).DefaultTimeout();
+            Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
+            Assert.Equal(expectedType, resourceEvent.Snapshot.ResourceType);
+            Assert.Equal(expectedService, resourceEvent.Snapshot.ResourceTypeDisplayName);
+        }
+    }
+
+    [Fact]
+    public async Task ResourceTypeDisplayName_FluentOverrideWinsOverClassAndSnapshot()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddRedis("cache")
+            .WithResourceTypeDisplayName("First label")
+            .WithResourceTypeDisplayName("Shared cache");
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<ResourceTypeDisplayNameAnnotation>());
+        Assert.Equal("Shared cache", annotation.ResourceTypeDisplayName);
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource.Resource, snapshot => snapshot with
+        {
+            ResourceTypeDisplayName = "Snapshot label"
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Resource.Name, out var resourceEvent));
+        Assert.Equal("Container", resourceEvent.Snapshot.ResourceType);
+        Assert.Equal("Shared cache", resourceEvent.Snapshot.ResourceTypeDisplayName);
+    }
+
+    [Fact]
+    public async Task ResourceTypeDisplayName_OverrideCanBeAppliedToProjects()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new ProjectResource("orders")).WithResourceTypeDisplayName("Orders API");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource.Resource, snapshot => snapshot).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Resource.Name, out var resourceEvent));
+        Assert.Equal("Project", resourceEvent.Snapshot.ResourceType);
+        Assert.Equal("Orders API", resourceEvent.Snapshot.ResourceTypeDisplayName);
+    }
+
+    [Fact]
+    public async Task ResourceTypeDisplayName_CustomSnapshotFallsBackToItsOwnResourceType()
+    {
+        var resource = new CustomResource("custom");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            ResourceType = "Custom service"
+        }).DefaultTimeout();
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
+        Assert.Equal("Custom service", resourceEvent.Snapshot.ResourceTypeDisplayName);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            ResourceType = "Updated service"
+        }).DefaultTimeout();
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out resourceEvent));
+        Assert.Equal("Updated service", resourceEvent.Snapshot.ResourceTypeDisplayName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void ResourceTypeDisplayName_RejectsEmptyOverrides(string resourceTypeDisplayName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddResource(new ContainerResource("container"));
+        Assert.Throws<ArgumentException>(() => resource.WithResourceTypeDisplayName(resourceTypeDisplayName));
+        Assert.Throws<ArgumentException>(() => new ResourceTypeDisplayNameAnnotation(resourceTypeDisplayName));
+    }
+
+    [Fact]
+    public async Task ResourceTypeDisplayName_ExplicitLabelMatchingTypeIsPreservedWhenTypeChanges()
+    {
+        var resource = new CustomResource("custom");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            ResourceTypeDisplayName = snapshot.ResourceType
+        }).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            ResourceType = "Updated type"
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
+        Assert.Equal("Updated type", resourceEvent.Snapshot.ResourceType);
+        Assert.Equal("CustomResource", resourceEvent.Snapshot.ResourceTypeDisplayName);
     }
 
     [Fact]
@@ -444,6 +555,62 @@ public class ResourceNotificationTests
 
         Assert.True(notificationService.TryGetCurrentState(resource.Name, out var completedWaitingEvent));
         Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesReportsEveryFailedResourceReadyEvent()
+    {
+        var dependency1 = new CustomResource("dependency1");
+        var dependency2 = new CustomResource("dependency2");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency1, WaitType.WaitUntilHealthy));
+        resource.Annotations.Add(new WaitAnnotation(dependency2, WaitType.WaitUntilHealthy));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        foreach (var (dependency, message) in new[] { (dependency1, "failure 1"), (dependency2, "failure 2") })
+        {
+            await notificationService.PublishUpdateAsync(dependency, s => s with
+            {
+                State = KnownResourceStates.Running,
+                ResourceReadyEvent = new EventSnapshot(Task.FromException(new InvalidOperationException(message)))
+            }).DefaultTimeout();
+        }
+
+        var exception = await Assert.ThrowsAsync<AggregateException>(
+            () => notificationService.WaitForDependenciesAsync(resource, CancellationToken.None)).DefaultTimeout();
+
+        Assert.Collection(exception.InnerExceptions.OrderBy(e => e.Message),
+            e => Assert.Equal("failure 1", Assert.IsType<InvalidOperationException>(e).Message),
+            e => Assert.Equal("failure 2", Assert.IsType<InvalidOperationException>(e).Message));
+        Assert.Contains("Resource 'resource' failed waiting for 2 dependencies.", exception.Message);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesRethrowsSingleFailedResourceReadyEvent()
+    {
+        var dependency1 = new CustomResource("dependency1");
+        var dependency2 = new CustomResource("dependency2");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency1, WaitType.WaitUntilHealthy));
+        resource.Annotations.Add(new WaitAnnotation(dependency2, WaitType.WaitUntilHealthy));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(dependency1, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.FromException(new InvalidOperationException("failure 1")))
+        }).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(dependency2, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        }).DefaultTimeout();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => notificationService.WaitForDependenciesAsync(resource, CancellationToken.None)).DefaultTimeout();
+        Assert.Equal("failure 1", exception.Message);
     }
 
     [Fact]

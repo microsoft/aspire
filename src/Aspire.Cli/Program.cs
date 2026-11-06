@@ -8,7 +8,6 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.OpenCode;
@@ -228,7 +227,7 @@ public class Program
                 globalSettingsFile.FullName,
                 key);
 
-            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.Warning);
+            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.PoliceCarLight);
         }
     }
 
@@ -630,10 +629,6 @@ public class Program
         builder.Services.AddSingleton(serviceProvider =>
             new SigstoreVerifier(serviceProvider.GetRequiredService<ITrustRootProvider>()));
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
-        builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
-        builder.Services.AddSingleton<IAspireSkillsBundleProvider, AspireSkillsBundleProvider>();
-        builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
-        builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
         builder.Services.AddSingleton<PlaywrightCliInstaller>();
         builder.Services.AddSingleton<IAgentClient, CopilotAgentClient>();
@@ -688,6 +683,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, PendingMigrationsCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, VsCodeExtensionCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
@@ -975,7 +971,7 @@ public class Program
             // to stderr (ConsoleOutput.Error) so it never contaminates stdout for callers that
             // parse it. The surrounding blank lines stay on the same stderr stream for spacing.
             consoleEnvironment.Error.WriteLine();
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{notice.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
             consoleEnvironment.Error.WriteLine();
         }
     }

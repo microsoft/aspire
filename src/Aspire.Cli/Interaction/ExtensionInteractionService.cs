@@ -174,8 +174,8 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
                         }
                         else
                         {
-                            // Fallback to regular prompt for older extension versions
-                            result = await Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, _cancellationToken).ConfigureAwait(false);
+                            // Older extensions cannot mask regular input boxes, so keep secret entry in the terminal.
+                            result = await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, cancellationToken).ConfigureAwait(false);
                         }
                     }
                     else
@@ -303,6 +303,16 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         {
             return await _consoleInteractionService.PromptConfirmAsync(promptText, binding, cancellationToken);
         }
+    }
+
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
+        Func<T, SelectionChoiceGroup?> choiceGroup, Func<T, string> groupedChoiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    {
+        // Keep the extension's legacy string[] RPC unchanged. Source-qualified labels
+        // remain sufficient when the client cannot render the optional group headings.
+        return _extensionPromptEnabled
+            ? PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, echoSelected, cancellationToken)
+            : _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, choiceGroup, groupedChoiceFormatter, binding, echoSelected, cancellationToken);
     }
 
     public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,

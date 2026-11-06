@@ -124,11 +124,10 @@ public class DashboardUrlTests
                 var page = await context.NewPageAsync();
                 await page.GotoAsync(dashboardUri.AbsoluteUri);
 
-                var resourceRow = page.Locator("tr.resource-row").Filter(new() { HasText = resourceName });
-                var stateCell = resourceRow.Locator(".state-column-cell");
+                var resourceRow = page.Locator($".resource-row[data-resource-name='{resourceName}']");
 
                 await Assertions.Expect(resourceRow).ToBeVisibleAsync();
-                await Assertions.Expect(stateCell).ToContainTextAsync(initialState);
+                await Assertions.Expect(resourceRow.GetByText(initialState, new() { Exact = true })).ToBeVisibleAsync();
 
                 var updatedResourceTask = app.ResourceNotifications.WaitForResourceAsync(
                     resourceName,
@@ -142,7 +141,7 @@ public class DashboardUrlTests
 
                 // PublishUpdateAsync updates the application notification stream while the AppHost breakpoint remains held.
                 // Dashboard consumption and browser rendering are asynchronous, so wait separately for the rendered change.
-                await Assertions.Expect(stateCell).ToContainTextAsync(updatedState);
+                await Assertions.Expect(resourceRow.GetByText(updatedState, new() { Exact = true })).ToBeVisibleAsync();
             }
             finally
             {

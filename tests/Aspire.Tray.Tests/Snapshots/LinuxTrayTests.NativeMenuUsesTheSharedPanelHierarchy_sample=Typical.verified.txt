@@ -1,0 +1,72 @@
+﻿Aspire · 3 running · 1 needs attention [disabled]
+---
+RUNNING [disabled]
+eShop · Healthy
+  Open dashboard
+  Stop
+  ---
+  Show in file manager
+  Copy path
+  Pin
+  ---
+  Healthy [disabled]
+  src/eShop.AppHost · PID 48213 [disabled]
+orders · Waiting / degraded
+  Open dashboard
+  Stop
+  ---
+  Show in file manager
+  Copy path
+  Pin
+  ---
+  Waiting / degraded [disabled]
+  orders/AppHost · PID 51877 [disabled]
+Redis · Health unknown
+  Open dashboard [disabled]
+  Stop
+  ---
+  Show in file manager
+  Copy path
+  Pin
+  ---
+  Health unknown [disabled]
+  samples/Redis.AppHost · PID 52004 [disabled]
+---
+PINNED [disabled]
+Weather · Stopped
+  Start
+  ---
+  Show in file manager
+  Copy path
+  Unpin
+  ---
+  Stopped [disabled]
+  weather/Weather.AppHost [disabled]
+---
+Recently opened · 2
+  Todo · Stopped
+    Start
+    ---
+    Show in file manager
+    Copy path
+    Pin
+    Remove from recent
+    ---
+    Stopped [disabled]
+    todo/Todo.AppHost [disabled]
+  Legacy · Stopped
+    Start
+    ---
+    Show in file manager
+    Copy path
+    Pin
+    Remove from recent
+    ---
+    Stopped [disabled]
+    old/Legacy.AppHost [disabled]
+  ---
+  Clear recent AppHosts...
+---
+Settings...
+Documentation
+Quit

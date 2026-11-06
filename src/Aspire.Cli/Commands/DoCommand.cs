@@ -113,7 +113,7 @@ internal sealed class DoCommand : PipelineCommandBase
         return [.. baseArgs];
     }
 
-    protected override string GetCanceledMessage() => DoCommandStrings.OperationCanceled;
+    protected override string CancellationMessage => DoCommandStrings.OperationCanceled;
 
     protected override string? GetTargetStepName(ParseResult parseResult) => parseResult.GetValue(_stepArgument);
 

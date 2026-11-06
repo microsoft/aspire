@@ -174,12 +174,12 @@ internal sealed class DoctorCommand : BaseCommand
 
         _ansiConsole.Write(new Padder(grid, new Padding(2, 0)));
 
-        // Secondary grid: details, fix suggestions, and links (indented further than message)
         var hasDetails = !string.IsNullOrEmpty(result.Details);
         var hasFix = !string.IsNullOrEmpty(result.Fix);
         var hasLink = !string.IsNullOrEmpty(result.Link);
+        var files = result.Files ?? [];
 
-        if (hasDetails || hasFix || hasLink)
+        if (hasDetails || hasFix || hasLink || files.Count > 0)
         {
             var detailGrid = new Grid();
             detailGrid.AddColumn();
@@ -204,6 +204,15 @@ internal sealed class DoctorCommand : BaseCommand
                 detailGrid.AddRow(new Markup($"[dim]{result.Details!.EscapeMarkup()}[/]"));
             }
 
+            if (files.Count > 0)
+            {
+                detailGrid.AddRow(new Markup($"[dim]{DoctorCommandStrings.FilesHeader.EscapeMarkup()}[/]"));
+                foreach (var file in files)
+                {
+                    detailGrid.AddRow(new Markup($"[dim]  {file.EscapeMarkup()}[/]"));
+                }
+            }
+
             _ansiConsole.Write(new Padder(detailGrid, new Padding(7, 0)));
         }
     }
@@ -213,7 +222,7 @@ internal sealed class DoctorCommand : BaseCommand
         return status switch
         {
             EnvironmentCheckStatus.Pass => (KnownEmojis.CheckMarkButton, "green"),
-            EnvironmentCheckStatus.Warning => (KnownEmojis.Warning, "yellow"),
+            EnvironmentCheckStatus.Warning => (KnownEmojis.PoliceCarLight, "yellow"),
             EnvironmentCheckStatus.Fail => (KnownEmojis.CrossMark, "red"),
             _ => (KnownEmojis.Information, "grey")
         };

@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.NuGet;
 
@@ -10,6 +14,8 @@ namespace Aspire.Cli.NuGet;
 /// </summary>
 internal static class NuGetConfigurationBuilder
 {
+    internal const string IntegrationSourceKeyPrefix = "aspire-integration-";
+
     public static NuGetConfiguration BuildStableAppHostConfiguration(
         NuGetSettingsInfo settings,
         string workloadId,
@@ -21,29 +27,44 @@ internal static class NuGetConfigurationBuilder
             .ToHashSet(StringComparer.Ordinal);
         // Shared .NET feeds are identified by their CLI aliases, including aliases left
         // behind when an AppHost moves and its path-derived workload identifier changes.
-        var channelSourceKeys = settings.Sources
+        var channelSources = settings.Sources
             .Where(source => !preservedSourceIdentities.Contains(source.Identity) &&
                 IsCliManagedSource(source, workloadId))
-            .Select(static source => source.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(static source => source.Name, StringComparer.OrdinalIgnoreCase);
 
         // Stable returns to existing NuGet policy, not a prescribed public endpoint. Remove
         // channel-owned Aspire mappings while retaining user feeds and unrelated mappings.
-        var mappings = ResolveAmbientMappingAliases(settings)
-            .Select(mapping => channelSourceKeys.Contains(mapping.SourceKey)
+        var ambientMappings = ResolveAmbientMappingAliases(settings);
+        var mappings = ambientMappings
+            .Select(mapping => channelSources.TryGetValue(mapping.SourceKey, out var source)
                 ? mapping with
                 {
-                    Patterns = [.. mapping.Patterns.Where(static pattern =>
-                        pattern != PackageMapping.AllPackages &&
-                        !PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(
-                            pattern, PackageSourceOverrideMappings.DefaultPackagePattern))]
+                    Patterns = [.. mapping.Patterns.Where(pattern =>
+                        !IsObsoleteStableChannelPattern(source, pattern))]
                 }
                 : mapping)
             .Where(static mapping => mapping.Patterns.Count > 0)
             .ToArray();
-        var retiredSourceKeys = channelSourceKeys
-            .Where(key => !mappings.Any(mapping =>
-                string.Equals(mapping.SourceKey, key, StringComparison.OrdinalIgnoreCase)))
+        foreach (var source in channelSources.Values.Where(static source => source.IsIntegrationSource))
+        {
+            if (!ambientMappings.Any(mapping =>
+                string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
+                mapping.Patterns.Any(pattern => IsObsoleteStableChannelPattern(source, pattern))))
+            {
+                continue;
+            }
+
+            // Neither discovery filters nor surviving narrower mappings establish the
+            // full private dependency graph. Require manual cleanup before removing
+            // broad routing from a shared SDK/integration feed.
+            throw new ProjectUpdaterException(string.Format(
+                CultureInfo.CurrentCulture, UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+                string.Join(", ", settings.ConfigPaths), source.Name));
+        }
+        var retiredSourceKeys = channelSources.Values
+            .Where(source => !source.IsIntegrationSource && !mappings.Any(mapping =>
+                string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase)))
+            .Select(static source => source.Name)
             .ToArray();
         var overlay = new NuGetConfigOverlay(
             Sources: [],
@@ -102,8 +123,20 @@ internal static class NuGetConfigurationBuilder
     internal static bool IsCliManagedSource(NuGetSourceInfo source, string workloadId)
         => source.IsCliManaged || IsCliManagedSourceKey(source.Name, workloadId);
 
+    internal static bool IsObsoleteStableChannelPattern(NuGetSourceInfo source, string pattern)
+        // Integration aliases own their mappings, not SDK policy. Shared channel
+        // wildcards require manual cleanup because private dependencies may use them.
+        => source.IsIntegrationSource
+            ? !source.Name.StartsWith(IntegrationSourceKeyPrefix, StringComparison.OrdinalIgnoreCase) &&
+                (pattern == PackageMapping.AllPackages ||
+                 string.Equals(pattern, PackageSourceOverrideMappings.DefaultPackagePattern, StringComparison.OrdinalIgnoreCase))
+            : pattern == PackageMapping.AllPackages ||
+                PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(
+                    pattern, PackageSourceOverrideMappings.DefaultPackagePattern);
+
     internal static bool IsCliManagedSourceKey(string sourceKey, string workloadId)
-        => string.Equals(sourceKey, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
+        => sourceKey.StartsWith(IntegrationSourceKeyPrefix, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sourceKey, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(sourceKey, $"aspire-{PackageChannelNames.Staging}", StringComparison.OrdinalIgnoreCase) ||
             sourceKey.StartsWith("aspire-pr-", StringComparison.OrdinalIgnoreCase) ||
             sourceKey.StartsWith("aspire-apphost-", StringComparison.OrdinalIgnoreCase) ||
@@ -138,6 +171,12 @@ internal static class NuGetConfigurationBuilder
             // Source order still determines the primary source when its ambient alias is reused.
             var isPrimarySource = sourceIndex++ == 0;
             var sourceIdentity = NuGetSourceIdentity.Compute(source, sourceIdentityKey);
+            var configuredKey = mappings.First(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source)).SourceKey;
+            var preferredKey = configuredKey is null ? null : $"{IntegrationSourceKeyPrefix}{configuredKey}";
+            if (configuredKey is not null)
+            {
+                SourceNameValidator.Validate(configuredKey, $"{IntegrationSourceConfiguration.SectionName}.{configuredKey}");
+            }
             var ambientMatches = ambientSources
                 .Where(candidate =>
                     string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal) ||
@@ -165,14 +204,27 @@ internal static class NuGetConfigurationBuilder
                         ambientSource.Name,
                         source,
                         IsAmbient: true,
-                        ambientSource.IsEnabled));
+                        ambientSource.IsEnabled)
+                    {
+                        IsExplicitlyNamed = string.Equals(ambientSource.Name, preferredKey, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(ambientSource.Name, configuredKey, StringComparison.OrdinalIgnoreCase)
+                    });
                 }
 
                 continue;
             }
 
             string key;
-            if (isPrimarySource)
+            if (preferredKey is not null)
+            {
+                key = preferredKey;
+                if (!usedKeys.Add(key))
+                {
+                    throw new InvalidOperationException(string.Format(
+                        CultureInfo.CurrentCulture, ErrorStrings.NuGetSourceKeyAlreadyInUse, key));
+                }
+            }
+            else if (isPrimarySource)
             {
                 key = generatedSourceKeyPrefix;
                 if (!usedKeys.Add(key))
@@ -193,7 +245,10 @@ internal static class NuGetConfigurationBuilder
                 while (!usedKeys.Add(key));
             }
 
-            resolvedSources.Add(new NuGetConfigSource(key, source, IsAmbient: false, IsEnabled: true));
+            resolvedSources.Add(new NuGetConfigSource(key, source, IsAmbient: false, IsEnabled: true)
+            {
+                IsExplicitlyNamed = preferredKey is not null
+            });
         }
 
         return [.. resolvedSources];
@@ -254,8 +309,13 @@ internal static class NuGetConfigurationBuilder
 
         var selectedKeysForPolicy = selectedSources.Select(static source => source.Key)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Selecting an integration package does not replace the AppHost's SDK channel.
+        var isExactPackageSelection = selectedMappings.Length > 0 &&
+            selectedMappings.All(static mapping => PackageSourceOverrideMappings.IsExactPackagePattern(mapping.PackageFilter));
         var retiredSourceKeys = settings.Sources
             .Where(source =>
+                !isExactPackageSelection &&
+                !source.IsIntegrationSource &&
                 !selectedKeysForPolicy.Contains(source.Name) &&
                 !packageSourceMappings.Any(mapping =>
                     string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
@@ -363,12 +423,24 @@ internal static class NuGetConfigurationBuilder
             .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
             .Select(static mapping => mapping.Source)
             .ToHashSet(PackageSourceIdentity.Comparer);
-        foreach (var patterns in patternsBySourceKey.Values)
+        foreach (var (sourceKey, patterns) in patternsBySourceKey)
         {
+            var isIntegrationSource = ambientSources.Any(source =>
+                source.IsIntegrationSource && string.Equals(source.Name, sourceKey, StringComparison.OrdinalIgnoreCase));
+            // Channel changes must not take integration packages away from configured feeds.
+            // An exact package selection can still move that package to a different source.
             patterns.RemoveAll(pattern => authoritativePatterns.Any(
-                authoritativePattern => PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(
-                    pattern,
-                    authoritativePattern)));
+                authoritativePattern =>
+                    (!isIntegrationSource || PackageSourceOverrideMappings.IsExactPackagePattern(authoritativePattern)) &&
+                    PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(pattern, authoritativePattern)));
+            if (isIntegrationSource && ambientMappings.Count == 0)
+            {
+                foreach (var pattern in authoritativePatterns.Where(static pattern =>
+                    !PackageSourceOverrideMappings.IsExactPackagePattern(pattern)))
+                {
+                    AddPattern(patternsBySourceKey, sourceKey, pattern);
+                }
+            }
         }
 
         foreach (var mapping in selectedMappings)

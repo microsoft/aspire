@@ -824,6 +824,8 @@ public class TrayPanelTests
         Assert.Equal(($"Needs attention · {location} · PID 48213", false), TrayPanel.GetRowDetail(host, live: true, showPid: true));
         Assert.Equal(($"Status unavailable · {location}", false), TrayPanel.GetRowDetail(host, live: false, showPid: false));
         Assert.Equal(("Boom.", true), TrayPanel.GetRowDetail(host with { Error = "Boom." }, live: true, showPid: false));
+        Assert.Equal(($"No resources · {location}", false),
+            TrayPanel.GetRowDetail(host with { Health = AppHostHealth.NoResources }, live: true, showPid: false));
 
         var scene = new TrayPanel(TrayPanelSamples.Errors(), TrayPanelPalette.Light).Scene;
         Assert.Contains(scene.Commands.OfType<TextCommand>(), text => text.Text == $"Unhealthy · {location} · PID 48213");
@@ -834,6 +836,7 @@ public class TrayPanelTests
     [InlineData(true, false, false, (int)AppHostHealth.Warning, (int)PanelStatusGlyph.Warning)]
     [InlineData(true, false, false, (int)AppHostHealth.Unhealthy, (int)PanelStatusGlyph.Unhealthy)]
     [InlineData(true, false, false, (int)AppHostHealth.Unknown, (int)PanelStatusGlyph.Unknown)]
+    [InlineData(true, false, false, (int)AppHostHealth.NoResources, (int)PanelStatusGlyph.Unknown)]
     [InlineData(false, false, false, (int)AppHostHealth.Healthy, (int)PanelStatusGlyph.Unknown)]
     [InlineData(true, true, false, (int)AppHostHealth.Healthy, (int)PanelStatusGlyph.Busy)]
     [InlineData(true, false, true, (int)AppHostHealth.Healthy, (int)PanelStatusGlyph.Warning)]

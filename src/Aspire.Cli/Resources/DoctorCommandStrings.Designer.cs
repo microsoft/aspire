@@ -106,6 +106,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Delete these files, then run &apos;aspire agent init --skills aspire&apos;..
+        /// </summary>
+        internal static string AspireSkillsFix {
+            get {
+                return ResourceManager.GetString("AspireSkillsFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not inspect local Aspire skills.
+        /// </summary>
+        internal static string AspireSkillsInspectionFailedMessage {
+            get {
+                return ResourceManager.GetString("AspireSkillsInspectionFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to  (channel: {0}).
         /// </summary>
         internal static string ChannelSuffixFormat {
@@ -1006,6 +1024,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Files:.
+        /// </summary>
+        internal static string FilesHeader {
+            get {
+                return ResourceManager.GetString("FilesHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire CLI Installations.
         /// </summary>
         internal static string HeaderInstallations {
@@ -1079,8 +1106,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Run &apos;aspire update --migrate&apos; to apply the recommended migration.
-        ///The current layout continues to work — this is a non-blocking warning..
+        ///   Looks up a localized string similar to Run &apos;aspire update --migrate&apos; to apply the recommended migration..
         /// </summary>
         internal static string PendingMigrationFix {
             get {
