@@ -19,6 +19,24 @@ public class PublishAsStaticWebsiteOptions
     public string OutputPath { get; set; } = "dist";
 
     /// <summary>
+    /// Gets or sets whether unmatched navigation requests are served the site's <c>index.html</c>.
+    /// Defaults to <see langword="true"/>. Set this to <see langword="false"/> for static sites
+    /// that should return 404 for unmatched paths.
+    /// </summary>
+    /// <remarks>
+    /// The fallback applies to GET and HEAD requests for paths without a file extension. It uses
+    /// YARP's maximum route order, so routes with a lower order take precedence. Routes with the
+    /// same order are resolved using normal route precedence.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddViteApp("frontend", "../frontend")
+    ///     .PublishAsStaticWebsite(options => options.EnableSpaFallback = false);
+    /// </code>
+    /// </example>
+    public bool EnableSpaFallback { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets whether to remove the API path prefix before forwarding to the backend.
     /// For example, with <c>apiPath="/api"</c> and <c>StripPrefix=true</c>, a request to
     /// <c>/api/weatherforecast</c> is forwarded as <c>/weatherforecast</c>.

@@ -1192,6 +1192,9 @@ public static partial class JavaScriptHostingExtensions
     /// <para>
     /// The published container uses a YARP reverse proxy image for static file serving.
     /// To add an API reverse-proxy, use the overload that accepts an <c>apiPath</c> and <c>apiTarget</c>.
+    /// Unmatched GET and HEAD requests for paths without a file extension serve <c>index.html</c>
+    /// by default. Set <see cref="PublishAsStaticWebsiteOptions.EnableSpaFallback"/> to
+    /// <see langword="false"/> to disable this behavior.
     /// </para>
     /// </remarks>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -1231,6 +1234,9 @@ public static partial class JavaScriptHostingExtensions
     /// The published container uses a YARP reverse proxy image for static file serving and API
     /// reverse-proxy. YARP natively supports HTTPS backends and service discovery, so API proxy requests
     /// work correctly across all deployment targets (Docker Compose, Azure App Service, etc.).
+    /// Unmatched GET and HEAD requests for paths without a file extension serve <c>index.html</c>
+    /// by default. Set <see cref="PublishAsStaticWebsiteOptions.EnableSpaFallback"/> to
+    /// <see langword="false"/> to disable this behavior.
     /// </para>
     /// </remarks>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -1261,14 +1267,16 @@ public static partial class JavaScriptHostingExtensions
         IResourceBuilder<IResourceWithServiceDiscovery>? apiTarget = null,
         string outputPath = "dist",
         bool stripPrefix = false,
-        string? targetEndpointName = null)
+        string? targetEndpointName = null,
+        bool enableSpaFallback = true)
         where TResource : JavaScriptAppResource
     {
         var options = new PublishAsStaticWebsiteOptions
         {
             OutputPath = outputPath,
             StripPrefix = stripPrefix,
-            TargetEndpointName = targetEndpointName
+            TargetEndpointName = targetEndpointName,
+            EnableSpaFallback = enableSpaFallback
         };
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
@@ -1317,8 +1325,7 @@ public static partial class JavaScriptHostingExtensions
             return builder;
         }
 
-        // YARP listens on port 5000 by default in the base image, so configure an endpoint for that port
-        // and set ASPNETCORE_URLS to ensure Kestrel listens on the correct port as well for static file serving and API reverse-proxy to work correctly.
+        // YARP listens on port 5000 by default in the base image.
         builder.WithEndpoint("http", e => e.TargetPort = 5000, createIfNotExists: true);
 
         var annotation = new JavaScriptPublishModeAnnotation(JavaScriptPublishMode.StaticWebsite)
@@ -1347,6 +1354,9 @@ public static partial class JavaScriptHostingExtensions
                 }
             }
         });
+
+        Yarp.YarpStaticFileFallback.EnableForStaticFiles(builder);
+        Yarp.YarpStaticFileFallback.SetEnabled(builder, options.EnableSpaFallback);
 
         builder.WithAnnotation(annotation)
                .ClearContainerFilesSources()

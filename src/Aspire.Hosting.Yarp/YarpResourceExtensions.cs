@@ -150,6 +150,9 @@ public static class YarpResourceExtensions
     /// </summary>
     /// <param name="builder">The resource builder for YARP.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Use <see cref="WithSpaFallback"/> to serve <c>index.html</c> for unmatched navigation paths.
+    /// </remarks>
     [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
     public static IResourceBuilder<YarpResource> WithStaticFiles(this IResourceBuilder<YarpResource> builder)
     {
@@ -166,6 +169,9 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="sourcePath">The source path containing static files to serve.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Use <see cref="WithSpaFallback"/> to serve <c>index.html</c> for unmatched navigation paths.
+    /// </remarks>
     [AspireExportIgnore(Reason = "A single internal export with an optional sourcePath parameter provides the polyglot API without changing the public C# overloads.")]
     public static IResourceBuilder<YarpResource> WithStaticFiles(this IResourceBuilder<YarpResource> builder, string sourcePath)
     {
@@ -189,6 +195,7 @@ public static class YarpResourceExtensions
     private static IResourceBuilder<YarpResource> ConfigureStaticFiles(IResourceBuilder<YarpResource> builder, string? sourcePath)
     {
         builder = builder.WithEnvironment("YARP_ENABLE_STATIC_FILES", "true");
+        YarpStaticFileFallback.EnableForStaticFiles(builder);
 
         if (sourcePath is null)
         {
@@ -217,11 +224,42 @@ public static class YarpResourceExtensions
     }
 
     /// <summary>
+    /// Enables or disables the Aspire-configured single-page application fallback for static files.
+    /// </summary>
+    /// <param name="builder">The resource builder for YARP.</param>
+    /// <param name="enabled">Whether to serve <c>index.html</c> for unmatched navigation paths. Defaults to <see langword="true"/>.</param>
+    /// <returns>The updated resource builder.</returns>
+    /// <remarks>
+    /// The fallback applies to GET and HEAD requests for paths without a file extension. It uses
+    /// YARP's maximum route order, so routes with a lower order take precedence. Routes with the
+    /// same order are resolved using normal route precedence. Static file serving must also be
+    /// enabled with <see cref="WithStaticFiles(IResourceBuilder{YarpResource})"/> or <see cref="PublishWithStaticFiles"/>.
+    /// Without this method, no Aspire fallback is configured and the YARP image's defaults apply.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddYarp("gateway")
+    ///     .WithStaticFiles("../static")
+    ///     .WithSpaFallback();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<YarpResource> WithSpaFallback(this IResourceBuilder<YarpResource> builder, bool enabled = true)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        YarpStaticFileFallback.SetEnabled(builder, enabled);
+        return builder;
+    }
+
+    /// <summary>
     /// In publish mode, generates a Dockerfile that copies static files from the specified resource into /app/wwwroot.
     /// </summary>
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="resourceWithFiles">The resource with container files.</param>
     /// <returns>The updated resource builder.</returns>
+    /// <remarks>
+    /// Use <see cref="WithSpaFallback"/> to serve <c>index.html</c> for unmatched navigation paths.
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<YarpResource> PublishWithStaticFiles(this IResourceBuilder<YarpResource> builder, IResourceBuilder<IResourceWithContainerFiles> resourceWithFiles)
     {
