@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
@@ -20,10 +21,11 @@ using NewCommandPrompter = Aspire.Cli.Commands.NewCommandPrompter;
 using System.CommandLine;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Aspire.Cli.Tests.Interaction;
 
-public class ConsoleInteractionServiceTests
+public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
 {
     private static readonly DirectoryInfo s_tempRoot = Directory.CreateTempSubdirectory();
     private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
@@ -37,6 +39,117 @@ public class ConsoleInteractionServiceTests
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigSource_RendersAlignedDetailsAndReadmeLink(bool ansi)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        console.Profile.Capabilities.Links = ansi;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        const string readmeUrl = "https://docs.example/config-source?team=[platform]";
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
+                [CliConfigNames.InitSourcePath] = "teams/[platform].json",
+                [CliConfigNames.InitSourceRef] = "config-preview",
+                [CliConfigNames.InitSourceReadmeUrl] = readmeUrl
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), CancellationToken.None);
+
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        var rendered = output.ToString();
+        if (ansi)
+        {
+            TerminalLinkAssert.ContainsLink(rendered, readmeUrl, ConfigSourceStrings.ReadmeLink);
+        }
+        // OSC 8 links include process-specific IDs, e.g. ESC]8;id=123;urlESC\.
+        rendered = Regex.Replace(rendered, @"(?<=\x1b]8;id=)\d+", "link-id");
+        await Verify(rendered, "txt").UseParameters(ansi).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfigSource_RendersFetchNotice(bool interactive)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction, interactive: interactive,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration"
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source"), CancellationToken.None);
+
+        Assert.False(Assert.IsType<ConfigSource>(source).OptOut);
+        await Verify(output.ToString(), "txt").UseParameters(interactive).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("aspire.config.json", null)]
+    [InlineData("teams/platform.json", null)]
+    [InlineData(null, "config-preview")]
+    [InlineData("aspire.config.json", "config-preview")]
+    [InlineData("teams/platform.json", "config-preview")]
+    public async Task ConfigSource_OmitsDefaultDetails(string? path, string? reference)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        var context = workspace.CreateExecutionContext();
+        var interaction = CreateInteractionService(console, context);
+        using var service = TestConfigSourceServices.Create(context, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
+                [CliConfigNames.InitSourcePath] = path,
+                [CliConfigNames.InitSourceRef] = reference
+            }));
+        var command = new RootCommand();
+        command.Options.Add(ConfigSourceService.s_useSourceOption);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), CancellationToken.None);
+
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        await Verify(output.ToString(), "txt").UseParameters(path, reference).ScrubLinesWithReplace(line => line.TrimEnd());
     }
 
     [Fact]
@@ -197,6 +310,32 @@ public class ConsoleInteractionServiceTests
 
         Assert.Same(templates[0], selected);
         await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, 120)]
+    [InlineData(true, 120)]
+    [InlineData(false, 40)]
+    [InlineData(true, 40)]
+    public async Task PromptForSelectionAsync_TemplateSourceHeadingsAreLiteralAndFitWidth(bool gitSource, int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = width;
+        console.Profile.Capabilities.ColorSystem = ColorSystem.Standard;
+        var interaction = CreateInteractionService(console);
+        var template = CreateSearchableTemplate("first", null);
+        var source = gitSource
+            ? new TemplateSource(".", "https://example.test/organization/[templates]/long-location", "release/[blue]")
+            : new TemplateSource("/work/[templates]/long-directory-location", null, null);
+        var configured = new ConfiguredTemplate("source", template, "Team [templates]", source);
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", new[] { template }, item => item.Name,
+            _ => NewCommand.CreateTemplateSourceGroup(configured),
+            item => NewCommand.FormatTemplateDisplayLabel(item).EscapeMarkup());
+
+        Assert.Same(template, selected);
+        await Verify(output.ToString()).UseParameters(gitSource, width).ScrubLinesWithReplace(line => line.TrimEnd());
     }
 
     [Theory]

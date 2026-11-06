@@ -44,6 +44,7 @@ During `aspire new`, `aspire init`, or adoption by `aspire update`, resolve a ca
 | `ASPIRE_INIT_SOURCE_URL` | Git repository address or absolute local repository path, not a raw JSON URL | Microsoft repository for detected employees; otherwise none |
 | `ASPIRE_INIT_SOURCE_PATH` | Repository-relative configuration file path; only applies when `ASPIRE_INIT_SOURCE_URL` is explicitly set | `aspire.config.json` at the repository root |
 | `ASPIRE_INIT_SOURCE_REF` | Branch name or full commit SHA; only applies when `ASPIRE_INIT_SOURCE_URL` is explicitly set | The repository's current default branch |
+| `ASPIRE_INIT_SOURCE_README_URL` | Absolute HTTP or HTTPS URL explaining the proposed configuration source | `https://msft.ghe.com/coreai/aspire-1p-init/blob/HEAD/README.md` for the Microsoft source; otherwise none |
 
 When `ASPIRE_INIT_SOURCE_URL` is unset, ignore `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF`, including when employee detection selects the Microsoft repository. Do not validate ignored overrides. The inferred Microsoft source always uses the root `aspire.config.json` and the repository's current default branch. To customize its path or ref, explicitly set `ASPIRE_INIT_SOURCE_URL` to the Microsoft repository URL.
 
@@ -53,8 +54,15 @@ For example:
 $env:ASPIRE_INIT_SOURCE_URL = 'https://git.acme.example/aspire-init'
 $env:ASPIRE_INIT_SOURCE_PATH = 'teams/platform.json'
 $env:ASPIRE_INIT_SOURCE_REF = 'main'
+$env:ASPIRE_INIT_SOURCE_README_URL = 'https://git.acme.example/aspire-init/blob/main/README.md'
 aspire new
 ```
+
+The README URL override applies to both explicit and employee-detected candidates.
+It is used only when presenting the source for consent, is not fetched by the CLI,
+and is not saved in the application's configuration or source cache. An explicitly
+empty value, a non-HTTP(S) URL, or a value containing control characters is an error
+when a candidate is available. Without a candidate, the override is ignored.
 
 When enabled by an explicit source URL, repository-relative paths use `/` separators on every platform. Reject empty or absolute paths, `.` or `..` segments, empty segments, backslashes, and control characters. Git addresses may use HTTPS, SSH URLs, or SCP-style SSH syntax. Absolute local repository paths are also supported, including paths with spaces; they use the current platform's path syntax and remain machine-specific when saved in a binding. Relative repository paths and `file://` URLs are not supported. Git remote-helper syntax, control characters, and remote addresses with embedded passwords/tokens, query strings, or fragments are not supported.
 
@@ -78,20 +86,33 @@ Git supports a ref name or a fully spelled object ID as the source of a [fetch r
 
 ### Prompt during project creation
 
-Before acquiring or using the remote configuration, `aspire new` and `aspire init` display the candidate repository, selected file path, branch/commit selector or default-branch behavior, and whether the repository came from the environment or employee detection:
+Before acquiring or using the remote configuration, `aspire new` and `aspire init` display the candidate repository and whether it came from the environment or employee detection. The file path is shown only when it differs from the default `aspire.config.json`, and the branch/commit selector is shown only when explicitly specified:
 
 ```text
-Configuration source: https://msft.ghe.com/coreai/aspire-1p-init
-Configuration file: aspire.config.json
-Configuration ref: default branch
-Source origin: Microsoft employee default
+A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.
+
+   Configuration source:  https://msft.ghe.com/coreai/aspire-1p-init
+          Source origin:  Microsoft employee default
+
+Read more about this configuration source
 
 Only use sources you trust. Content from these sources can run code on your machine.
 
-Use configuration from this source?
-  Yes
-  No, use standard Aspire configuration
+Use configuration from this source? [Y/n]:
 ```
+
+The explanation precedes the source details, which use an aligned two-column
+Spectre.Console grid with bold green labels and plain-text values, matching the
+AppHost and dashboard summaries. When a README URL is available,
+**Read more about this configuration source** is a Spectre.Console hyperlink.
+Terminals without hyperlink support show the label and URL as plain text.
+The standard yes/no confirmation defaults to **Yes** when Enter is pressed.
+
+Before Git acquisition begins, the CLI writes an informational notice to stderr:
+**Fetching configuration source using Git. Git may prompt you to authenticate.**
+Non-interactive acquisitions show **Fetching configuration source using Git...**
+instead, because authentication prompts are disabled. Reusing an in-memory
+snapshot does not repeat the notice, and background version checks remain quiet.
 
 - **Accept:** acquire and validate the remote file, then materialize allowlisted values and a `configSource` binding in the created or initialized project's `aspire.config.json`.
 - **Decline:** continue normally without Git acquisition or template-source inheritance from that source for the rest of the command, and save `"configSource": { "optOut": true }` after successful project creation or initialization. Independently configured global template sources remain available.
@@ -434,7 +455,7 @@ aspire new
 
 Only `templateSources` participates in this runtime overlay. Other remote settings retain their existing allowlisted project-materialization behavior. Project-level `templateSources` are not used. Sources must satisfy the same complete-definition validation as global template discovery; malformed or inaccessible init configuration fails explicitly. Template repository discovery failures retain the normal per-source warnings.
 
-The optional `displayName` supplies the terminal selector's source heading. Missing or blank values use the alias; aliases remain the source and group identity even when headings match.
+The optional `displayName` supplies the friendly name in the terminal selector's source heading. Missing or blank values use the alias. Git headings also show the configured repository and ref (`default branch` when omitted); directory headings show the local path instead. Aliases remain the source and group identity even when headings match.
 
 Merge source names case-insensitively with global `templateSources`. The user's entire global definition wins on a collision: do not retain an inherited `repository`, `ref`, `path`, or `displayName` when the user replaces that source with a local directory or a different repository. Non-colliding global and inherited sources are both searchable and listed, including their branch refs.
 
