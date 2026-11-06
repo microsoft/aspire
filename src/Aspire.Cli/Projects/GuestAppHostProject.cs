@@ -20,6 +20,7 @@ using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Watch;
 using Aspire.Hosting;
 using Aspire.Hosting.Backchannel;
 using Aspire.Shared;
@@ -430,11 +431,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Restart only after those dependencies exist so the hosts can import the
             // transport and contribute their external capabilities.
             _logger.LogDebug("Regenerating SDK after bootstrapping npm integration host dependencies.");
+            var generationEnvironment = new Dictionary<string, string>();
+            DotnetWatchLaunchEnvironment.Disable(generationEnvironment);
+            if (appHostServerProject is NativeAppHostServerProject)
+            {
+                generationEnvironment[KnownConfigNames.IntegrationHostBootstrap] = "true";
+            }
             await using var serverSession = _serverSessionFactory.Create(
                 appHostServerProject,
-                environmentVariables: appHostServerProject is NativeAppHostServerProject
-                    ? new() { [KnownConfigNames.IntegrationHostBootstrap] = "true" }
-                    : null,
+                environmentVariables: generationEnvironment,
                 debug: false,
                 gracefulShutdownSignaler: null,
                 shutdownService: null,
@@ -471,11 +476,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // Integration hosts import the SDK being generated here. Skip them explicitly in this
         // core-only pass instead of treating failed host startup as successful discovery.
         // Keep the caller's environment unchanged for the final server.
-        var bootstrapEnvironment = serverEnvironmentVariables;
+        var bootstrapEnvironment = serverEnvironmentVariables is null
+            ? new Dictionary<string, string>()
+            : new(serverEnvironmentVariables);
+        DotnetWatchLaunchEnvironment.Disable(bootstrapEnvironment);
         if (appHostServerProject is NativeAppHostServerProject ||
             integrations.Any(integration => integration.Source == IntegrationSource.Npm))
         {
-            bootstrapEnvironment = serverEnvironmentVariables is null ? [] : new(serverEnvironmentVariables);
             bootstrapEnvironment[KnownConfigNames.IntegrationHostBootstrap] = "true";
         }
         await using var serverSession = _serverSessionFactory.Create(
@@ -652,7 +659,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             }
 
             // Check if hot reload (watch mode) is enabled
-            var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+            var enableHotReload = context.Watch || _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
             var environmentVariables = CreateGuestEnvironmentVariables(
                 context.EnvironmentVariables,
@@ -687,6 +694,25 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 _interactionService.DisplayError("Failed to restore one or more integration host packages.");
                 context.BuildCompletionSource?.TrySetResult(false);
                 return CliExitCodes.FailedToBuildArtifacts;
+            }
+
+            if (context.Watch)
+            {
+                if (appHostServerProject is NativeAppHostServerProject)
+                {
+                    // The native server cannot load the managed integration's watch coordinator.
+                    // Keep the guest runtime's native watcher; never wrap either process in .NET host.
+                    DotnetWatchLaunchEnvironment.Disable(launchSettingsEnvVars);
+                    _interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.WatchNativeServerUnsupported);
+                }
+                else
+                {
+                    DotnetWatchLaunchEnvironment.Apply(launchSettingsEnvVars, CliSelfInvocation.Current());
+                }
+            }
+            else
+            {
+                DotnetWatchLaunchEnvironment.Disable(launchSettingsEnvVars);
             }
 
             // Step 4: Start the AppHost server process. The linked stop CTS is the only termination

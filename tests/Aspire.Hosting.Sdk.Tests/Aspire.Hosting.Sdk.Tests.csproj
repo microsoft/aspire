@@ -9,6 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
+    <Compile Include="$(TestsSharedDir)DotnetWatchToolTestPayload.cs" Link="shared/DotnetWatchToolTestPayload.cs" />
     <Compile Include="..\..\src\Aspire.AppHost.Sdk\Aspire.RuntimeIdentifier.Tool\NuGetUtils.cs" Link="Product\NuGetUtils.cs" />
     <None Include="$(BundledRuntimeIdentifierGraphFile)" Link="RuntimeIdentifierGraph.json" CopyToOutputDirectory="Always" />
   </ItemGroup>
@@ -27,6 +28,10 @@
                       Private="false"
                       ExcludeAssets="all" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet.Tasks\Aspire.Hosting.Dotnet.Tasks.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      ExcludeAssets="all" />
     <ProjectReference Include="..\Aspire.Hosting.Sdk.Tests.FakeCommand\Aspire.Hosting.Sdk.Tests.FakeCommand.csproj"
                       ReferenceOutputAssembly="false"
                       SkipGetTargetFrameworkProperties="true"
@@ -43,6 +48,7 @@
     <!-- Expose the built RID tool path to tests via assembly metadata so the older-SDK fallback can be exercised. -->
     <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool\$(Configuration)\$(DefaultTargetFramework)\Aspire.RuntimeIdentifier.Tool.dll" />
     <AssemblyMetadata Include="AspireHostingTasksAssemblyPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\net10.0\Aspire.Hosting.Tasks.dll" />
+    <AssemblyMetadata Include="AspireDotnetWatchTasksAssemblyPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Dotnet.Tasks\$(Configuration)\net10.0\Aspire.Hosting.Dotnet.Tasks.dll" />
     <AssemblyMetadata Include="AspireHostingTasksNetFrameworkAssemblyPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Tasks\$(Configuration)\net472\Aspire.Hosting.Tasks.dll" />
     <AssemblyMetadata Include="FakeCommandHostPath" Value="$(ArtifactsBinDir)Aspire.Hosting.Sdk.Tests.FakeCommand\$(Configuration)\$(DefaultTargetFramework)\$(FakeCommandHostFileName)" />
   </ItemGroup>

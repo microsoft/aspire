@@ -14,7 +14,14 @@ internal static class DcpEnvironmentVariables
         "DOTNET_LAUNCH_PROFILE",
         KnownAspNetCoreConfigNames.Environment,
         KnownAspNetCoreConfigNames.DotNetEnvironment,
-        KnownConfigNames.AspireLogLevel
+        KnownConfigNames.AspireLogLevel,
+        // Watch ownership and model invalidation belong to the AppHost generation. DCP's ordinary
+        // children may load Hosting too, but must never announce starts on the parent's control pipe.
+        DotnetWatchConfiguration.WatchEnabled,
+        DotnetWatchConfiguration.WatchEnabled.Replace(":", "__", StringComparison.Ordinal),
+        DotnetWatchConfiguration.LaunchOwner,
+        DotnetWatchConfiguration.HostControlPipe,
+        DotnetWatchConfiguration.HostSession
     ];
 
     public static bool IsExcluded(string name) =>

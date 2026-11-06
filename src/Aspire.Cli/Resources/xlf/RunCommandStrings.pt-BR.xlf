@@ -92,6 +92,11 @@
         <target state="translated">Pontos de Extremidade</target>
         <note />
       </trans-unit>
+      <trans-unit id="ExperimentalWatchNotice">
+        <source>Experimental watch mode is enabled (ASPIREWATCH001). Unsupported .NET resources run normally; see the watch coverage diagnostics for limitations.</source>
+        <target state="new">Experimental watch mode is enabled (ASPIREWATCH001). Unsupported .NET resources run normally; see the watch coverage diagnostics for limitations.</target>
+        <note>ASPIREWATCH001 is a diagnostic identifier and must not be localized.</note>
+      </trans-unit>
       <trans-unit id="FailedToStartAppHost">
         <source>Failed to start the AppHost.</source>
         <target state="translated">Falha ao iniciar o AppHost.</target>
@@ -237,9 +242,89 @@
         <target state="translated">Aguardando o AppHost iniciar...</target>
         <note />
       </trans-unit>
+      <trans-unit id="WatchAppHostDefaultBuildRequired">
+        <source>This preview requires a single-targeted Debug AppHost build because the watcher has no build-configuration or target-framework options.</source>
+        <target state="new">This preview requires a single-targeted Debug AppHost build because the watcher has no build-configuration or target-framework options.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostFallback">
+        <source>C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible .NET service groups can still be watched.</source>
+        <target state="new">C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible .NET service groups can still be watched.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostGenerationRequired">
+        <source>A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</source>
+        <target state="new">A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostInitializationFailed">
+        <source>The watcher host exited during initialization before connecting to the AppHost.</source>
+        <target state="new">The watcher host exited during initialization before connecting to the AppHost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostProfileUnsupported">
+        <source>The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</source>
+        <target state="new">The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostProjectRequired">
+        <source>This preview supports C# AppHost watching for .csproj entry points only.</source>
+        <target state="new">This preview supports C# AppHost watching for .csproj entry points only.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRestarting">
+        <source>The C# AppHost model changed. Replacing the complete watch generation...</source>
+        <target state="new">The C# AppHost model changed. Replacing the complete watch generation...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRuntimeMissing">
+        <source>The watcher requires {0} {1} in the selected dotnet installation '{2}'. Install that runtime without forcing major-version roll-forward.</source>
+        <target state="new">The watcher requires {0} {1} in the selected dotnet installation '{2}'. Install that runtime without forcing major-version roll-forward.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostSdkIncompatible">
+        <source>Watcher {0} uses .NET {1} and cannot load the AppHost's selected SDK {2}. Use a compatible experimental ASPIRE_DOTNET_WATCH_TOOL_VERSION or ASPIRE_DOTNET_WATCH_TOOL_PATH override to enable AppHost watching.</source>
+        <target state="new">Watcher {0} uses .NET {1} and cannot load the AppHost's selected SDK {2}. Use a compatible experimental ASPIRE_DOTNET_WATCH_TOOL_VERSION or ASPIRE_DOTNET_WATCH_TOOL_PATH override to enable AppHost watching.</target>
+        <note>ASPIRE_DOTNET_WATCH_TOOL_VERSION and ASPIRE_DOTNET_WATCH_TOOL_PATH must not be localized.</note>
+      </trans-unit>
       <trans-unit id="WatchArgumentDescription">
-        <source>Start project resources in watch mode</source>
-        <target state="translated">Iniciar recursos do projeto no modo de inspeção</target>
+        <source>Enable experimental package-backed .NET service and C# AppHost watching (preview)</source>
+        <target state="needs-review-translation">Iniciar recursos do projeto no modo de inspeção</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchBootstrapInvalid">
+        <source>The package-owned watch bootstrap returned invalid tool or SDK metadata.</source>
+        <target state="new">The package-owned watch bootstrap returned invalid tool or SDK metadata.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchBootstrapUnavailable">
+        <source>The restored AppHost must reference an Aspire.Hosting.Dotnet version with the EnsureAspireDotnetWatchTool target, and that target must successfully resolve the watcher.</source>
+        <target state="new">The restored AppHost must reference an Aspire.Hosting.Dotnet version with the EnsureAspireDotnetWatchTool target, and that target must successfully resolve the watcher.</target>
+        <note>Aspire.Hosting.Dotnet and EnsureAspireDotnetWatchTool must not be localized.</note>
+      </trans-unit>
+      <trans-unit id="WatchDcpShutdownFailed">
+        <source>DCP did not confirm watcher shutdown. Check the diagnostic logs before starting another AppHost generation.</source>
+        <target state="new">DCP did not confirm watcher shutdown. Check the diagnostic logs before starting another AppHost generation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchDcpUnavailable">
+        <source>C# AppHost watching requires a compatible DCP fork-process with --enable-child-cleanup, --skip-descendants, and application output forwarding. Use a compatible ASPIRE_DCP_PATH override until a supporting DCP release is bundled.</source>
+        <target state="new">C# AppHost watching requires a compatible DCP fork-process with --enable-child-cleanup, --skip-descendants, and application output forwarding. Use a compatible ASPIRE_DCP_PATH override until a supporting DCP release is bundled.</target>
+        <note>DCP, fork-process, --enable-child-cleanup, --skip-descendants, and ASPIRE_DCP_PATH must not be localized.</note>
+      </trans-unit>
+      <trans-unit id="WatchNativeServerUnsupported">
+        <source>The native AppHost server cannot run managed .NET service watching in this preview. The guest AppHost retains its language-native watching.</source>
+        <target state="new">The native AppHost server cannot run managed .NET service watching in this preview. The guest AppHost retains its language-native watching.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchNotSupportedWithDebugger">
+        <source>The experimental --watch option cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</source>
+        <target state="new">The experimental --watch option cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchUnavailable">
+        <source>Experimental watch could not be initialized: {0} The AppHost and its .NET services will run normally.</source>
+        <target state="new">Experimental watch could not be initialized: {0} The AppHost and its .NET services will run normally.</target>
         <note />
       </trans-unit>
     </body>

@@ -21,6 +21,61 @@ namespace Aspire.Hosting.Tests;
 public class ResourceNotificationTests
 {
     [Fact]
+    public async Task OptInSnapshotProjectionPreventsLaterTransportUpdatesFromReplacingLogicalState()
+    {
+#pragma warning disable ASPIREWATCH001
+        var resource = new CustomResource("project");
+        resource.Annotations.Add(new ResourceSnapshotProjectionAnnotation(
+            (resourceId, snapshot) => snapshot with
+            {
+                State = "ApplicationStarting",
+                ExitCode = null,
+                Properties = [new("ProxyInstance", resourceId), new("ProxyState", snapshot.State?.Text)]
+            }));
+#pragma warning restore ASPIREWATCH001
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+
+        await notifications.PublishUpdateAsync(resource, "project-instance", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        });
+        await notifications.PublishUpdateAsync(resource, "project-instance", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Exited,
+            ExitCode = 17
+        });
+
+        Assert.True(notifications.TryGetCurrentState("project-instance", out var current));
+        Assert.Equal("ApplicationStarting", current.Snapshot.State?.Text);
+        Assert.Null(current.Snapshot.ExitCode);
+        Assert.Collection(current.Snapshot.Properties,
+            property => { Assert.Equal("ProxyInstance", property.Name); Assert.Equal("project-instance", property.Value); },
+            property => { Assert.Equal("ProxyState", property.Name); Assert.Equal(KnownResourceStates.Exited, property.Value); });
+    }
+
+    [Fact]
+    public async Task LastSnapshotProjectionWinsAndUnannotatedResourcesRetainTheirState()
+    {
+        var projected = new CustomResource("projected");
+        var ordinary = new CustomResource("ordinary");
+#pragma warning disable ASPIREWATCH001
+        projected.Annotations.Add(new ResourceSnapshotProjectionAnnotation(
+            (_, _) => throw new InvalidOperationException("Superseded projections must not execute.")));
+        projected.Annotations.Add(new ResourceSnapshotProjectionAnnotation(
+            (_, snapshot) => snapshot with { State = "SelectedProjection" }));
+#pragma warning restore ASPIREWATCH001
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+
+        await notifications.PublishUpdateAsync(projected, snapshot => snapshot with { State = KnownResourceStates.Running });
+        await notifications.PublishUpdateAsync(ordinary, snapshot => snapshot with { State = KnownResourceStates.Running });
+
+        Assert.True(notifications.TryGetCurrentState(projected.Name, out var projectedState));
+        Assert.Equal("SelectedProjection", projectedState.Snapshot.State?.Text);
+        Assert.True(notifications.TryGetCurrentState(ordinary.Name, out var ordinaryState));
+        Assert.Equal(KnownResourceStates.Running, ordinaryState.Snapshot.State?.Text);
+    }
+
+    [Fact]
     public void InitialStateCanBeSpecified()
     {
         var builder = DistributedApplication.CreateBuilder();

@@ -59,6 +59,51 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExplicitWatchMuxerIsNotReplacedByTheCliSdkInstallation(bool fork)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var selectedRoot = workspace.CreateDirectory("selected-dotnet");
+        var selectedMuxer = Path.Combine(selectedRoot.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        var processes = new TestProcessExecutionFactory();
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ => processes;
+        }).BuildServiceProvider();
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var configuration = provider.GetRequiredService<IConfiguration>();
+        Directory.CreateDirectory(Path.Combine(executionContext.SdksDirectory.FullName, "dotnet", DotNetSdkInstaller.GetEffectiveMinimumSdkVersion(configuration)));
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var options = new ProcessInvocationOptions
+        {
+            DotNetExecutablePath = selectedMuxer,
+            DisableExtensionLaunch = true,
+            DcpFork = fork ? new DcpForkInvocation("selected-dcp", "10.0.403") : null
+        };
+        var cloned = options.Clone();
+
+        var exitCode = await runner.RunAppHostCommandAsync(
+            new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj")),
+            selectedMuxer,
+            workspace.WorkspaceRoot,
+            ["exec", "watch.dll", "host", "--sdk", "selected-sdk"],
+            new Dictionary<string, string>(),
+            backchannelCompletionSource: null,
+            cloned,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(selectedMuxer, processes.LastFileName);
+        Assert.Equal(selectedMuxer, cloned.DotNetExecutablePath);
+        Assert.True(cloned.DisableExtensionLaunch);
+        Assert.Same(options.DcpFork, processes.LastProcessInvocationOptions!.DcpFork);
+        Assert.Equal(fork ? 1 : 0, Assert.IsType<TestProcessExecution>(Assert.Single(processes.CreatedExecutions)).DisposeCount);
+        Assert.Equal(Aspire.Hosting.Utils.PathNormalizer.ResolveSymlinks(selectedRoot.FullName),
+            processes.LastEnvironmentVariables!["DOTNET_ROOT"]);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]

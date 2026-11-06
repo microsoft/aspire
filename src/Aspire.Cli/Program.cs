@@ -1124,10 +1124,20 @@ public class Program
     {
         Console.OutputEncoding = Encoding.UTF8;
 
+        if (args is [DotnetWatchConfiguration.ProxyCommand, .. var watchArguments])
+        {
+            return await Watch.DotnetWatchResourceProxy.RunAsync(watchArguments).ConfigureAwait(false);
+        }
+
         if (ProcessSupervisor.IsSupervisor)
         {
             await ProcessSupervisor.RunAsync().ConfigureAwait(false);
             return Environment.ExitCode;
+        }
+
+        if (args is [DotnetWatchConfiguration.ServerCommand, .. var serverArguments])
+        {
+            return await Watch.DotnetWatchServer.RunAsync(serverArguments).ConfigureAwait(false);
         }
 
         if (CompletionInvocation.Matches(args))

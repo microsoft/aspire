@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Utilities.Core" />
+    <Compile Include="..\Aspire.Hosting.Dotnet\Watch\DotnetWatchToolManager.cs" Link="DotnetWatchToolManager.cs" />
+    <Compile Include="$(SharedDir)FileLock.cs" Link="FileLock.cs" />
+    <Compile Include="$(SharedDir)AspireHomeDirectory.cs" Link="AspireHomeDirectory.cs" />
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>DotnetWatchToolVersion</_Parameter1>
+      <_Parameter2>$(MicrosoftDotNetHotReloadWatchAspireVersion)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

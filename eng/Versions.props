@@ -14,6 +14,7 @@
     <!-- dotnet versions for running template tests -->
     <DotNetRuntimeNet10VersionForTesting>10.0.14</DotNetRuntimeNet10VersionForTesting>
     <DotNetSdkNet10VersionForTesting>10.0.403</DotNetSdkNet10VersionForTesting>
+    <MicrosoftDotNetHotReloadWatchAspireVersion>10.0.403</MicrosoftDotNetHotReloadWatchAspireVersion>
     <XunitV3Version>4.0.0</XunitV3Version>
     <XUnitAnalyzersVersion>2.0.0</XUnitAnalyzersVersion>
     <XunitRunnerVisualStudioVersion>4.0.0</XunitRunnerVisualStudioVersion>

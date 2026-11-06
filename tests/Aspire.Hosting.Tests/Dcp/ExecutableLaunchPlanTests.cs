@@ -6,6 +6,7 @@
 using System.Text.Json;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -14,6 +15,64 @@ namespace Aspire.Hosting.Tests.Dcp;
 [Trait("Partition", "4")]
 public class ExecutableLaunchPlanTests
 {
+    [Theory]
+    [InlineData("true", "aspire", false)]
+    [InlineData("true", null, true)]
+    [InlineData("true", "ide", true)]
+    [InlineData("false", "aspire", true)]
+    [InlineData(null, "aspire", true)]
+    [InlineData(null, null, true)]
+    public void CompatibilityProjectLaunchIsBypassedOnlyForCliOwnedWatch(string? watch, string? owner, bool useIde)
+    {
+        var resource = new ProjectResource("project");
+        resource.Annotations.Add(new TestProjectMetadata("/tmp/project.csproj"));
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "localhost:12345",
+            [DotnetWatchConfiguration.WatchEnabled] = watch,
+            [DotnetWatchConfiguration.LaunchOwner] = owner
+        }).Build();
+
+        var decision = new ExecutableLaunchPolicy(configuration).Decide(resource);
+
+        Assert.Equal(useIde ? ExecutableLaunchMechanism.Ide : ExecutableLaunchMechanism.Process, decision.Mechanism);
+        Assert.Equal(useIde, decision.UseCompatibilityProjectLaunchConfiguration);
+    }
+
+    [Theory]
+    [InlineData("true", "aspire", true)]
+    [InlineData("true", null, false)]
+    [InlineData("true", "ide", false)]
+    [InlineData("false", "aspire", false)]
+    [InlineData(null, "aspire", false)]
+    [InlineData(null, null, false)]
+    public async Task ProjectRecipeSuppressesLegacyWatcherOnlyForCliOwnedWatch(string? watch, string? owner, bool useRun)
+    {
+        var projectPath = Path.Combine("tmp", "project.csproj");
+        var resource = new ProjectResource("project");
+        resource.Annotations.Add(new TestProjectMetadata(projectPath));
+
+        var plan = await ResolveLaunchPlanAsync(resource, CreateExecutionConfiguration([]),
+            new Dictionary<string, string?>
+            {
+                ["DOTNET_WATCH"] = "true",
+                [DotnetWatchConfiguration.WatchEnabled] = watch,
+                [DotnetWatchConfiguration.LaunchOwner] = owner
+            });
+
+        var expected = useRun
+            ? new List<string> { "run", "--project", projectPath }
+            : new List<string> { "watch", "--non-interactive", "--no-hot-reload", "--project", projectPath };
+        if (new DistributedApplicationOptions().Configuration is { } configuration)
+        {
+            expected.AddRange(["--configuration", configuration]);
+        }
+        expected.Add("--no-launch-profile");
+        Assert.Equal(ExecutableLaunchMechanism.Process, plan.Mechanism);
+        Assert.Equal("dotnet", plan.Command);
+        Assert.Equal(expected, plan.Arguments);
+    }
+
     [Fact]
     public async Task OwnedLaunchToolArgumentsAreSeparatedFromIdeArguments()
     {

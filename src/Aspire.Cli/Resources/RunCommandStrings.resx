@@ -133,7 +133,7 @@
     <value>Output format for detached AppHost results</value>
   </data>
   <data name="WatchArgumentDescription" xml:space="preserve">
-    <value>Start project resources in watch mode</value>
+    <value>Enable experimental package-backed .NET service and C# AppHost watching (preview)</value>
   </data>
   <data name="StartDebugSessionArgumentDescription" xml:space="preserve">
     <value>Whether to start a debug session, if running in an Aspire Terminal</value>
@@ -266,5 +266,60 @@
   </data>
   <data name="NoBuildNotSupportedWithWatchMode" xml:space="preserve">
     <value>The --no-build option cannot be used when watch mode is enabled.</value>
+  </data>
+  <data name="ExperimentalWatchNotice" xml:space="preserve">
+    <value>Experimental watch mode is enabled (ASPIREWATCH001). Unsupported .NET resources run normally; see the watch coverage diagnostics for limitations.</value>
+    <comment>ASPIREWATCH001 is a diagnostic identifier and must not be localized.</comment>
+  </data>
+  <data name="WatchNotSupportedWithDebugger" xml:space="preserve">
+    <value>The experimental --watch option cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</value>
+  </data>
+  <data name="WatchUnavailable" xml:space="preserve">
+    <value>Experimental watch could not be initialized: {0} The AppHost and its .NET services will run normally.</value>
+  </data>
+  <data name="WatchBootstrapUnavailable" xml:space="preserve">
+    <value>The restored AppHost must reference an Aspire.Hosting.Dotnet version with the EnsureAspireDotnetWatchTool target, and that target must successfully resolve the watcher.</value>
+    <comment>Aspire.Hosting.Dotnet and EnsureAspireDotnetWatchTool must not be localized.</comment>
+  </data>
+  <data name="WatchBootstrapInvalid" xml:space="preserve">
+    <value>The package-owned watch bootstrap returned invalid tool or SDK metadata.</value>
+  </data>
+  <data name="WatchAppHostFallback" xml:space="preserve">
+    <value>C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible .NET service groups can still be watched.</value>
+  </data>
+  <data name="WatchAppHostSdkIncompatible" xml:space="preserve">
+    <value>Watcher {0} uses .NET {1} and cannot load the AppHost's selected SDK {2}. Use a compatible experimental ASPIRE_DOTNET_WATCH_TOOL_VERSION or ASPIRE_DOTNET_WATCH_TOOL_PATH override to enable AppHost watching.</value>
+    <comment>ASPIRE_DOTNET_WATCH_TOOL_VERSION and ASPIRE_DOTNET_WATCH_TOOL_PATH must not be localized.</comment>
+  </data>
+  <data name="WatchAppHostRuntimeMissing" xml:space="preserve">
+    <value>The watcher requires {0} {1} in the selected dotnet installation '{2}'. Install that runtime without forcing major-version roll-forward.</value>
+  </data>
+  <data name="WatchAppHostProjectRequired" xml:space="preserve">
+    <value>This preview supports C# AppHost watching for .csproj entry points only.</value>
+  </data>
+  <data name="WatchAppHostDefaultBuildRequired" xml:space="preserve">
+    <value>This preview requires a single-targeted Debug AppHost build because the watcher has no build-configuration or target-framework options.</value>
+  </data>
+  <data name="WatchAppHostProfileUnsupported" xml:space="preserve">
+    <value>The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</value>
+  </data>
+  <data name="WatchAppHostGenerationRequired" xml:space="preserve">
+    <value>A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</value>
+  </data>
+  <data name="WatchAppHostInitializationFailed" xml:space="preserve">
+    <value>The watcher host exited during initialization before connecting to the AppHost.</value>
+  </data>
+  <data name="WatchDcpUnavailable" xml:space="preserve">
+    <value>C# AppHost watching requires a compatible DCP fork-process with --enable-child-cleanup, --skip-descendants, and application output forwarding. Use a compatible ASPIRE_DCP_PATH override until a supporting DCP release is bundled.</value>
+    <comment>DCP, fork-process, --enable-child-cleanup, --skip-descendants, and ASPIRE_DCP_PATH must not be localized.</comment>
+  </data>
+  <data name="WatchDcpShutdownFailed" xml:space="preserve">
+    <value>DCP did not confirm watcher shutdown. Check the diagnostic logs before starting another AppHost generation.</value>
+  </data>
+  <data name="WatchAppHostRestarting" xml:space="preserve">
+    <value>The C# AppHost model changed. Replacing the complete watch generation...</value>
+  </data>
+  <data name="WatchNativeServerUnsupported" xml:space="preserve">
+    <value>The native AppHost server cannot run managed .NET service watching in this preview. The guest AppHost retains its language-native watching.</value>
   </data>
 </root>

@@ -19,6 +19,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Watch;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -129,6 +130,10 @@ internal sealed class RunCommand : BaseCommand
     {
         Description = RunCommandStrings.NoBuildArgumentDescription
     };
+    internal static readonly Option<bool> s_watchOption = new("--watch")
+    {
+        Description = RunCommandStrings.WatchArgumentDescription
+    };
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -167,16 +172,46 @@ internal sealed class RunCommand : BaseCommand
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
+        Options.Add(s_watchOption);
         AppHostLauncher.AddLaunchOptions(this);
 
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        if (parseResult.GetValue(s_watchOption) && !parseResult.GetValue(s_detachOption))
+        {
+            // The first signal must leave the handler alive long enough to observe DCP retirement
+            // (up to 30s), not abandon it under the ordinary 5s grace + 5s final drain budget.
+            // The existing second-signal path still expires grace and keeps the final drain bounded.
+            _cancellationManager.ConfigureForCommand(DcpForkProcessExecution.ShutdownTimeout);
+        }
+        if (!parseResult.GetValue(s_watchOption) || parseResult.GetValue(s_detachOption))
+        {
+            return ExecuteGenerationAsync(parseResult, generation: null, cancellationToken);
+        }
+
+        var session = new DotnetWatchAppHostSession(_cancellationManager, s_gracefulShutdownBudget, _timeProvider, _logger);
+        return session.RunAsync(
+            (generation, token) => ExecuteGenerationAsync(parseResult, generation, token),
+            () =>
+            {
+                _resourceStates.Clear();
+                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.WatchAppHostRestarting);
+            },
+            cancellationToken);
+    }
+
+    private async Task<CommandResult> ExecuteGenerationAsync(
+        ParseResult parseResult,
+        DotnetWatchAppHostGeneration? generation,
+        CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
         var noBuild = parseResult.GetValue(s_noBuildOption);
+        var explicitWatch = parseResult.GetValue(s_watchOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
@@ -202,10 +237,21 @@ internal sealed class RunCommand : BaseCommand
         var extensionTerminalRunWithoutDebugSession = isExtensionHost
             && !startDebugSession
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
-        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession;
+        var watchModeEnabled = explicitWatch || _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession;
         if (noBuild && watchModeEnabled)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
+        }
+
+        if (explicitWatch && (
+            startDebugSession ||
+            parseResult.GetValue(RootCommand.WaitForDebuggerOption) ||
+            !string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]) ||
+            !string.IsNullOrEmpty(_configuration[KnownConfigNames.DebugSessionPort]) ||
+            !string.IsNullOrEmpty(_configuration[KnownConfigNames.DebugSessionInfo]) ||
+            !string.IsNullOrEmpty(_configuration[KnownConfigNames.DebugSessionRunMode])))
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.WatchNotSupportedWithDebugger);
         }
 
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
@@ -224,7 +270,7 @@ internal sealed class RunCommand : BaseCommand
         // Skip this when running in non-interactive mode (e.g. as a child of `aspire start`)
         // to avoid delegating back to the extension instead of launching the AppHost directly.
         var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
-        if (!nonInteractive
+        if (!explicitWatch && !nonInteractive
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
@@ -253,6 +299,11 @@ internal sealed class RunCommand : BaseCommand
             return CommandResult.Success();
         }
 
+        if (explicitWatch)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.ExperimentalWatchNotice);
+        }
+
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
         LauncherLivenessMonitor? launcherMonitor = null;
@@ -270,7 +321,7 @@ internal sealed class RunCommand : BaseCommand
             {
                 // BaseCommand owns the manager's process-wide shutdown deadline.
                 // Direct callers with an unrelated token still need a local bound.
-                var cleanupTimeout = _cancellationManager.IsCancellationRequested
+                var cleanupTimeout = _cancellationManager.IsCancellationRequested || generation is not null
                     ? Timeout.InfiniteTimeSpan
                     : s_appHostStartupCancellationTimeout;
                 // Do not repeat a completed bounded wait, but allow a later manager stop
@@ -359,7 +410,8 @@ internal sealed class RunCommand : BaseCommand
             context = new AppHostProjectContext
             {
                 AppHostFile = effectiveAppHostFile,
-                Watch = false,
+                Watch = explicitWatch,
+                WatchGeneration = generation,
                 Debug = parseResult.GetValue(RootCommand.DebugOption),
                 NoBuild = noBuild,
                 NoRestore = noBuild, // --no-build implies --no-restore
@@ -394,7 +446,7 @@ internal sealed class RunCommand : BaseCommand
             // onBackchannelEstablished below); from that point the AppHost's own orphan detector anchors to
             // this child, so the launcher's normal exit after observing readiness must not affect us.
             Func<ValueTask>? onBackchannelEstablished = null;
-            if (IsDetachedStartChild())
+            if (IsDetachedStartChild() && (generation?.RequiresLauncherMonitoring ?? true))
             {
                 // Use launcher monitor to ensure that if the launcher fails or is killed,
                 // the child process(es) are not leaked.
@@ -634,6 +686,13 @@ internal sealed class RunCommand : BaseCommand
                     {
                         // Orderly shutdown
                     }
+                    catch (Exception exception) when (generation?.IsEnabled == true && BackchannelDisconnectHelpers.IsExpectedDisconnect(exception))
+                    {
+                        // Rude edits can close the old backchannel before the replacement AppHost
+                        // announces itself on the private watch channel. Keep ownership of the wrapper
+                        // until that notification replaces the generation, it exits, or the user stops.
+                        _logger.LogDebug(exception, "Waiting for the watched AppHost generation after a backchannel disconnect.");
+                    }
                 }
 
                 using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
@@ -693,6 +752,12 @@ internal sealed class RunCommand : BaseCommand
                     _logger.LogDebug(ex, "AppHost log capture ended while the run command was exiting early.");
                 }
             }
+        }
+        catch (Exception ex) when (DcpForkShutdownException.ContainsFailure(ex))
+        {
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "watch_cleanup_failed");
+            _logger.LogError(ex, "DCP watcher cleanup failed; cancellation cannot be reported as success.");
+            return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, RunCommandStrings.WatchDcpShutdownFailed);
         }
         catch (OperationCanceledException ex) when (
             ex.CancellationToken == cancellationToken ||
@@ -1503,6 +1568,11 @@ internal sealed class RunCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
+        if (parseResult.GetValue(s_watchOption))
+        {
+            additionalArgs.Add("--watch");
+        }
+
         if (!string.IsNullOrEmpty(launchProfile))
         {
             additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
@@ -1545,6 +1615,12 @@ internal sealed class RunCommand : BaseCommand
         try
         {
             await pendingRun.WaitAsync(timeout, _timeProvider, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (DcpForkShutdownException.ContainsFailure(ex))
+        {
+            // This drain can run in finally after a successful cancellation result was selected.
+            // Surface the failed watch retirement instead of allowing that result to hide it.
+            throw new DcpForkShutdownException(ex);
         }
         catch (OperationCanceledException)
         {

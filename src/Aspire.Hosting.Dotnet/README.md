@@ -61,7 +61,8 @@ traditional project is then launched with the `RunCommand` and `RunArguments` re
 already-built project, so runtime environment variables cannot change which output is selected.
 File-based apps launch with `dotnet run --file <path> --no-build` after their direct build; uncoordinated
 file-based launches use `--no-cache` instead. Start and Restart reuse the coordinated output, matching
-project-based resources. Use the Rebuild command after source changes to rebuild and restart the resource.
+project-based resources. For ordinary resources, use the Rebuild command after source changes to rebuild
+and restart the resource. The experimental watch mode below owns automatic builds instead.
 
 Endpoints, environment variables, and service discovery are configured from the project's
 `launchSettings.json` and Kestrel configuration. V2 VB services prefer
@@ -86,9 +87,140 @@ overload mappings, C#/polyglot null differences, compile-correct typed/fluent ex
 build ownership, EF, composition, and retained legacy exceptions. Existing legacy calls keep
 their launch/publishing behavior; Functions and MAUI migrate separately.
 
-F#/VB support covers SDK-style project files, not scripts or old project systems. The new
-service/AppHost watcher is not implemented. Rebuild and non-watch debugging do not imply
-`aspire run --watch` support.
+F#/VB support covers SDK-style project files, not scripts or old project systems. Those resources
+keep ordinary launch behavior in the experimental C# watch mode.
+
+### Experimental watch
+
+Explicitly opt into the preview with:
+
+```bash
+aspire run --watch
+aspire run --watch --detach
+```
+
+This is an experimental CLI-owned mode, not watch debugging or a replacement for existing
+IDE watch/debug sessions. Omitting `--watch` preserves ordinary execution and the existing
+`features.defaultWatchEnabled` implementation. It does not acquire or start the package-backed
+watcher. Ordinary launches explicitly disable inherited private preview ownership
+and generation settings without changing legacy `DOTNET_WATCH` or IDE debugging.
+Discovery, SDK generation, restore, build, and publish do not activate it either.
+
+For compatible single-instance C# projects and managed file-based apps, Aspire retains the initial
+coordinated build, starts hidden watch servers for isolated SDK/build components, and launches
+Aspire-owned resource proxies. The watcher performs an additional initial build/workspace load.
+Service endpoints, intended model environment, launch-profile arguments, and application arguments
+remain attached to the original resources. Compiler diagnostics from a hidden server are forwarded
+to its sharing resources' logs.
+Each server uses the CLI's existing owned-process guardian, so an abrupt server/owner failure
+also terminates its service descendants rather than leaving orphaned applications.
+
+Project-based C# AppHosts use the selected tool's `host` command when their SDK/runtime and launch
+context are compatible. Metadata updates invalidate the model: the CLI tears down the old run and creates a
+fresh AppHost generation and backchannel before reconstructing resources. Polyglot AppHosts retain
+language-native watching; their managed Hosting server owns C# service watch. Native protocol-v2
+servers cannot load this managed integration and report reduced coverage instead.
+File-based C# AppHosts run normally in this preview; their independently compatible services can
+still watch, but AppHost source edits do not replace the model automatically.
+
+Private preview ownership and generation-control settings are excluded from ambient DCP inheritance,
+so an ordinary child that loads Hosting cannot announce a false AppHost start or invalidate its parent.
+
+C# AppHost watching requires a DCP `fork-process` that supports `--enable-child-cleanup`,
+`--skip-descendants`, cleanup-mode application output forwarding, and a helper-owned private Unix
+session for graceful startup-descendant cleanup. The CLI checks PID framing and output support
+with the resolved SDK before starting the watcher, then monitors the **long-lived CLI** rather than
+the detached foreground launcher. The first fork PID line is consumed internally; application
+output and exit codes remain observable. The managed AppHost retains its orphan detector and DCP
+workload cleanup. Failed retirement is an error, not permission to start another generation.
+
+The pinned DCP **0.27.3 does not provide this contract**. A supporting DCP release and bundle update
+are required; compatible local prototypes can be selected with `ASPIRE_DCP_PATH` (the DCP directory).
+There is no watch/status-file protocol or separate watcher supervisor.
+
+Inspect `watch.mode` (`experimental` or `ordinary`) and `watch.reason` in resource details or
+`aspire describe --format json`. Unsupported resources run normally with a per-resource warning.
+If an unsupported resource shares project/output directories with other roots, the entire sharing
+component remains ordinary; independent compatible components can still watch. Unknown output
+isolation leaves the C# resources ordinary instead of blocking application startup.
+
+Unsupported contexts include replicas or duplicate registrations of one entrypoint, persistent and
+completion-sensitive resources, multi-targeted/non-Debug configurations, custom launch tools or
+SDK run commands, AOT/trimmed configurations, and configurations without managed metadata/startup-hook
+support. File-based apps
+normally default to `PublishAot=true`, which disables those hooks; opt into a managed file app with
+`#:property PublishAot=false` when it should watch. Custom build environments and incompatible SDK
+runtime requirements can also prevent safe watch coverage.
+
+Manual **Rebuild** is disabled only for effectively watched resources. Source edits drive automatic
+hot reload or rebuild/restart. Manual **Restart** requests a process restart, not a build. To force a
+fresh build, stop and restart the watch run. An initial explicit **Start** is supported, but after a
+manual **Stop**, **Start** stays disabled until the whole watch run is restarted.
+
+These restrictions reflect the selected upstream protocol: it reports last-observed process state,
+not successful application exits, real application PIDs, or acknowledged completion of disconnect
+cleanup. The proxy's PID/exit is not reported as the application's; separately labeled
+`watch.transport.*` properties describe transport diagnostics. Do not use this preview as ordinary
+application-completion or Stop/Start parity. Pre-start watch infrastructure failures fall back to
+ordinary execution only after the CLI owner confirms cleanup of its whole process group/job.
+This group-scope confirmation does not supply the upstream per-service completion or Stop/Start
+acknowledgements. If cleanup cannot be confirmed, the group stays
+failed rather than risking duplicate applications or competing builds. Source build failures and
+cancellation do not select fallback. A fatal active
+group fails and stops that group's owned processes without silently downgrading it or stopping
+unrelated resources. Restart the watch run to recover.
+
+### Experimental watcher acquisition
+
+The integration provides preview acquisition infrastructure for
+`Microsoft.DotNet.HotReload.Watch.Aspire`, pinned by default to **10.0.403**.
+The infrastructure is experimental (`ASPIREWATCH001`); acquiring a tool does not enable
+service or AppHost watching.
+
+An already-restored C# AppHost that references this integration can explicitly resolve the
+tool through its MSBuild target:
+
+```bash
+dotnet msbuild AppHost.csproj -target:EnsureAspireDotnetWatchTool -getItem:AspireDotnetWatchTool
+```
+
+The returned item identifies the entry DLL and includes `Version`, `RuntimeMajor`,
+`SdkDirectory`, and `DotnetPath` metadata. The target is not attached to ordinary Restore,
+Build, Run, or Publish. Those operations ignore the acquisition overrides and do not install
+or start the watcher.
+
+Tool selection uses these experimental environment variables, in priority order:
+
+| Variable | Meaning |
+|---|---|
+| `ASPIRE_DOTNET_WATCH_TOOL_PATH` | Use an existing entry DLL or complete tool directory. Relative paths are resolved against the AppHost directory. |
+| `ASPIRE_DOTNET_WATCH_TOOL_VERSION` | Acquire an exact NuGet package version, including a prerelease version. Version ranges and floating versions are not supported. |
+
+An explicit path wins over a version override. Invalid or incomplete explicit installations
+produce an error; they never cause a different tool to be downloaded. Keep the entry DLL,
+runtime/dependency configuration, supporting assemblies, and `hotreload` agents together.
+Version overrides are developer opt-ins to potentially unverified payloads, not a promise
+that every package version implements a compatible runtime or protocol.
+
+On a cache miss, Aspire uses `dotnet tool install` with the AppHost directory's NuGet
+configuration, sources, and source mappings. The private cache is beneath the Aspire home
+directory, honoring `ASPIRE_HOME`, with separate entries for package version and host runtime
+identifier. This is not a global tool installation or a project tool manifest.
+
+A complete cache hit or explicit installation is resolved using filesystem checks only:
+there is no installer invocation, source query, update check, or `--help` probe. This offline
+guarantee covers tool acquisition/resolution, not application restore/build or unrelated CLI
+network operations. Incomplete published cache entries are not repaired in place; stop runs
+using that entry before removing it and retrying.
+
+The default tool requires both `Microsoft.NETCore.App` and `Microsoft.AspNetCore.App`
+**10.0.14**, independently of the SDK used to evaluate a service. Acquiring the package does
+not install these runtimes. The pinned tool cannot load the repository's .NET 11 MSBuild
+runtime dependencies; a successful acquisition alone does not establish SDK compatibility.
+Its `--help` commands also fail, so functional protocol checks, not help output, establish
+compatibility. SDK incompatibility is reported as ordinary coverage, not an automatic pin upgrade.
+The implementation decisions and protocol limitations are recorded in the
+[Project V2 watch plan](../../docs/plans/project-v2-csharpprogram-watch.md).
 
 ### Restoring projects individually
 

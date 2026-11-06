@@ -290,6 +290,17 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Cli.EndToEnd.Tests", "test:Aspire.Hosting.Sdk.Tests", "test:Aspire.Templates.Tests", "test:Aspire.TerminalHost.Tests", "job:extension-e2e"]
         },
         {
+            "src/Aspire.Hosting.Dotnet/buildTransitive/future-watch-extension.targets",
+            [
+                "test:Aspire.Hosting.Dotnet.Tests",
+                "test:Aspire.Hosting.Sdk.Tests",
+                "test:Aspire.Cli.EndToEnd.Tests",
+                "test:Aspire.Templates.Tests",
+                "job:cli-starter-validation",
+                "job:extension-e2e"
+            ]
+        },
+        {
             "eng/scripts/load-cli-e2e-images.sh",
             ["test:Aspire.Cli.EndToEnd.Tests"]
         },
