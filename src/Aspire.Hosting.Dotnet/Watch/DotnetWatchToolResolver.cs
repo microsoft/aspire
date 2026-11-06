@@ -260,9 +260,25 @@ internal static class DotnetWatchToolResolver
         throw new DistributedApplicationException($"Could not locate SDK '{version}' selected for '{projectDirectory}'.");
     }
 
-    private static async Task<string> RunDotnetAsync(string workingDirectory, string argument, CancellationToken cancellationToken)
+    /// <summary>
+    /// The SDK version <paramref name="muxer"/> selects in <paramref name="workingDirectory"/> (honoring its
+    /// <c>global.json</c> scope), or <see langword="null"/> if none can be selected there.
+    /// </summary>
+    public static async Task<string?> TryGetSdkVersionAsync(string muxer, string workingDirectory, CancellationToken cancellationToken)
     {
-        using var process = Process.Start(new ProcessStartInfo("dotnet", argument)
+        try
+        {
+            return (await RunDotnetAsync(workingDirectory, "--version", cancellationToken, muxer).ConfigureAwait(false)).Trim();
+        }
+        catch (Exception ex) when (ex is DistributedApplicationException or InvalidOperationException or System.ComponentModel.Win32Exception or IOException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task<string> RunDotnetAsync(string workingDirectory, string argument, CancellationToken cancellationToken, string muxer = "dotnet")
+    {
+        using var process = Process.Start(new ProcessStartInfo(muxer, argument)
         {
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,

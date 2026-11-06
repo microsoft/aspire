@@ -17,12 +17,20 @@ internal static class DotnetWatchRunEnvironment
     // Must match DotnetWatchCoordinator.ProxyHostConfigurationKey in Aspire.Hosting.Dotnet.
     public const string ProxyHostVariable = "ASPIRE_DOTNET_WATCH_PROXY_HOST";
 
+    // Must match DotnetWatchCoordinator.ProxyProtocolConfigurationKey in Aspire.Hosting.Dotnet. Bump when hosting starts
+    // relying on new proxy/host behavior, so a newer hosting package with an older CLI falls back to a normal run.
+    public const string ProxyProtocolVariable = "ASPIRE_DOTNET_WATCH_PROXY_PROTOCOL";
+
+    // 2: __dotnet-watch-server host, proxy --working-directory/--instance/--restore-env.
+    public const int ProxyProtocolVersion = 2;
+
     public static void Apply(IDictionary<string, string> environment)
     {
         environment[WatchEnabledVariable] = "true";
         if (GetCurrentCliPath() is { } path)
         {
             environment[ProxyPathVariable] = path;
+            environment[ProxyProtocolVariable] = ProxyProtocolVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             // A framework-dependent CLI must be hosted by the same muxer that runs this CLI (e.g. the repo-local
             // .dotnet/dotnet in dev builds), not whatever `dotnet` is first on PATH.

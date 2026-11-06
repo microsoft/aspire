@@ -6,9 +6,11 @@
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental.
 
 using System.Collections.Immutable;
+using System.Globalization;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -17,8 +19,8 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting.Dotnet.Watch;
 
 /// <summary>
-/// The hidden, infrastructure-only watch server that hosts <c>Microsoft.DotNet.HotReload.Watch.Aspire server</c>
-/// for every watched .NET project in one AppHost run.
+/// A hidden, infrastructure-only watch server that hosts <c>Microsoft.DotNet.HotReload.Watch.Aspire server</c> for a
+/// group of watched .NET projects in one AppHost run.
 /// </summary>
 internal sealed class DotnetWatchServerResource(string name, string workingDirectory)
     : ExecutableResource(name, "dotnet", workingDirectory);
@@ -29,18 +31,23 @@ internal sealed class DotnetWatchServerResource(string name, string workingDirec
 /// <remarks>
 /// <para>
 /// When <c>ExecutionContext.RunConfiguration.WatchEnabled</c> is set in run mode, every <c>AddDotnetProject</c>
-/// resource is registered with one per-AppHost <see cref="DotnetWatchServerResource"/>. The server acquires the
-/// watcher matching the resolved SDK, then runs its <c>server</c> command with all watched roots. SPIKE deviation from
-/// D7: Aspire's coordinated initial build is skipped in watch runs; the watcher's own initial build is the only build,
-/// and the server becomes healthy once it succeeds (a failed build waits for a fix instead of failing the run). Each service instance is launched through the hidden <c>aspire __dotnet-watch-proxy</c> command,
-/// which reads the service environment from its own process environment (never <c>-e</c> arguments) and sends it
-/// over the watcher's resource pipe.
+/// resource is registered with a <see cref="DotnetWatchServerResource"/>. Projects share a server unless they need a
+/// different watcher process: projects under a different <c>global.json</c> (which can select a different SDK) get
+/// their own server, and so does every project with <c>WithBuildEnvironment</c> (the watcher builds with its own
+/// process environment, so build-only variables can't be scoped to one project of a shared server). A server acquires
+/// the watcher matching its resolved SDK, then runs its <c>server</c> command with its roots, hosted by the hidden
+/// <c>aspire __dotnet-watch-server</c> command so that stopping it is prompt. SPIKE deviation from D7: Aspire's
+/// coordinated initial build is skipped in watch runs; the watcher's own initial build is the only build, and the
+/// server becomes healthy once it succeeds (a failed build waits for a fix instead of failing the run). Each service
+/// instance is launched through the hidden <c>aspire __dotnet-watch-proxy</c> command, which reads the service
+/// environment from its own process environment (never <c>-e</c> arguments) and sends it over the watcher's resource
+/// pipe.
 /// </para>
 /// <para>
 /// Known spike shortcuts are marked <c>TODO(spike)</c>/<c>HACK(spike)</c>.
 /// </para>
 /// </remarks>
-internal static class DotnetWatchCoordinator
+internal static partial class DotnetWatchCoordinator
 {
     internal const string ServerResourceName = "dotnet-watch";
 
@@ -50,10 +57,30 @@ internal static class DotnetWatchCoordinator
     /// <summary>Muxer that hosts a framework-dependent proxy <c>.dll</c>; defaults to <c>dotnet</c> on PATH.</summary>
     internal const string ProxyHostConfigurationKey = "ASPIRE_DOTNET_WATCH_PROXY_HOST";
 
+    /// <summary>Proxy/host protocol the CLI implements. Must match <c>DotnetWatchRunEnvironment</c> in the CLI.</summary>
+    internal const string ProxyProtocolConfigurationKey = "ASPIRE_DOTNET_WATCH_PROXY_PROTOCOL";
+
+    /// <summary>2: <c>__dotnet-watch-server</c> host and proxy <c>--working-directory</c>, instance marker and restore list.</summary>
+    internal const int RequiredProxyProtocol = 2;
+
     /// <summary>Process-environment variable naming the variables the proxy forwards to the service.</summary>
     internal const string ForwardedEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_FORWARD_ENV";
 
+    /// <summary>
+    /// Process-environment variable naming variables set only for the watcher (temp directory, build configuration,
+    /// build-only environment). The service inherits the watcher's environment, so the proxy resets each of these to
+    /// its own value (or unsets it) for the service.
+    /// </summary>
+    internal const string RestoreEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_RESTORE_ENV";
+
+    /// <summary>
+    /// Process-environment variable with the replica's DCP resource name. The proxy passes it to <c>dotnet run</c> so
+    /// the watcher's launch and exit log lines can be attributed to one replica.
+    /// </summary>
+    internal const string InstanceVariable = "ASPIRE_DOTNET_WATCH_INSTANCE";
+
     internal const string ProxyCommandName = "__dotnet-watch-proxy";
+    internal const string ServerHostCommandName = "__dotnet-watch-server";
 
     internal const string CrashedState = "Crashed";
 
@@ -71,8 +98,18 @@ internal static class DotnetWatchCoordinator
 
     internal static EventId NoticeEventId(WatchNoticeKind kind) => new(NoticeEventIdBase + (int)kind, $"WatchNotice.{kind}");
 
+    // DCP expands this per replica to the replica's unique name suffix (the OTEL service.instance.id), so
+    // "<resource>-<suffix>" is the replica's resource id.
+    private const string InstanceSuffixTemplate = "{{- index .Annotations \"otel-service-instance-id\" -}}";
+
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, WatchState> s_states = new();
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, object> s_warned = new();
+
+    // Keyed by resource: IResourceBuilder.ApplicationBuilder can be a different wrapper than the builder Configure saw.
+    private static readonly ConditionalWeakTable<DotnetProjectResource, WatchState> s_projectStates = new();
+
+    /// <summary>Temp-directory variables of the platform (what <see cref="Path.GetTempPath"/> reads).</summary>
+    internal static string[] GetTempVariables(bool windows) => windows ? ["TMP", "TEMP"] : ["TMPDIR"];
 
     /// <summary>Whether watch was requested for this run (<c>AppHost:Run:WatchEnabled</c> in run mode).</summary>
     internal static bool IsWatchRun(IDistributedApplicationBuilder builder) =>
@@ -111,6 +148,16 @@ internal static class DotnetWatchCoordinator
                     "Hot reload was requested (AppHost:Run:WatchEnabled=true), but this AppHost wasn't started by 'aspire run --watch', " +
                     $"so .NET services can't be watched ({ProxyPathConfigurationKey} is not set). Start it with 'aspire run --watch', " +
                     "or remove AppHost:Run:WatchEnabled to run without hot reload.")));
+            return false;
+        }
+
+        if (!int.TryParse(builder.Configuration[ProxyProtocolConfigurationKey], NumberStyles.Integer, CultureInfo.InvariantCulture, out var protocol)
+            || protocol < RequiredProxyProtocol)
+        {
+            OnceForBuilder(builder, () => builder.Eventing.Subscribe<BeforeStartEvent>((_, _) =>
+                throw new DistributedApplicationException(
+                    "Hot reload was requested, but this Aspire CLI is too old for this version of Aspire.Hosting.Dotnet. " +
+                    "Update the Aspire CLI ('aspire update --self'), or run without --watch.")));
             return false;
         }
 
@@ -159,40 +206,20 @@ internal static class DotnetWatchCoordinator
         DotnetProjectMetadata metadata)
     {
         var state = s_states.GetValue(builder, static b => new WatchState(b));
-        var existing = resource.Resource.Annotations.ToHashSet();
+        s_projectStates.AddOrUpdate(resource.Resource, state);
+        state.Configure(resource, metadata);
+    }
 
-        // Replace the SDK-selected launch tool (dotnet run) with the proxy. Program arguments contributed through
-        // WithArgs (launch-profile and user args) stay in the ordinary segment after `--`.
-        resource.WithLaunchToolArgs(ctx =>
+    /// <summary>
+    /// Called by <c>WithBuildEnvironment</c>: build-only variables must reach the watcher's builds of this project and
+    /// no other, so the project moves to a watch server of its own.
+    /// </summary>
+    internal static void OnBuildEnvironmentAdded(IResourceBuilder<DotnetProjectResource> resource)
+    {
+        if (s_projectStates.TryGetValue(resource.Resource, out var state))
         {
-            var executable = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
-            executable.Command = state.ProxyCommand;
-            foreach (var prefix in state.ProxyPrefixArgs)
-            {
-                ctx.Args.Add(prefix);
-            }
-
-            ctx.Args.Add(ProxyCommandName);
-            ctx.Args.Add("--server");
-            ctx.Args.Add(state.ResourcePipeName);
-            ctx.Args.Add("--entrypoint");
-            ctx.Args.Add(((IProjectMetadata)metadata).ProjectPath);
-            ctx.Args.Add("--");
-        },
-        // Owning the proxy with the project's launch configuration type lets HasCustomLaunch tell, through the public
-        // HasLaunchToolArgsOwnedBy, whether a later launch tool replaced it. It also matches the SDK-selected tool: an
-        // IDE project launch performs the invocation itself (watch never runs under an IDE).
-        ownedByLaunchConfigurationType: GetProjectLaunchConfigurationType(resource.Resource),
-        showInCommandLine: true);
-
-        // The watcher's own initial build is the build barrier in watch runs (Aspire's coordinated build is skipped).
-        resource.WaitFor(state.Server);
-
-        // Aspire's Rebuild command stays available: it stops the service, runs `dotnet build` and starts it again, and
-        // the watcher picks the fresh output back up. That's the escape hatch for edits the watcher can't apply on its
-        // own, such as a new PackageReference (the watcher reloads the project but doesn't rebuild or restart it).
-
-        state.Add(resource.Resource, metadata, resource.Resource.Annotations.Where(a => !existing.Contains(a)).ToArray());
+            state.UseDedicatedServer(resource);
+        }
     }
 
     private static string? GetProjectLaunchConfigurationType(IResource resource) =>
@@ -307,25 +334,20 @@ internal static class DotnetWatchCoordinator
     /// An excluded project keeps waiting for the watch server while other projects are watched, so its own
     /// <c>dotnet run</c> build doesn't race the watcher's initial build over shared project outputs.
     /// </remarks>
-    private static void ApplyEligibility(
-        List<(DotnetProjectResource Resource, DotnetProjectMetadata Metadata)> projects,
-        Dictionary<DotnetProjectResource, IResourceAnnotation[]> watchAnnotations,
-        IResource server,
-        DistributedApplicationModel model,
-        IServiceProvider services)
+    private static void ApplyEligibility(List<WatchedProject> projects, DistributedApplicationModel model, IServiceProvider services)
     {
         var errors = new List<string>();
-        var excluded = new List<(DotnetProjectResource Resource, string Reason)>();
-        foreach (var (resource, metadata) in projects)
+        var excluded = new List<(WatchedProject Project, string Reason)>();
+        foreach (var project in projects)
         {
-            var decision = Evaluate(resource, metadata, model.Resources);
+            var decision = Evaluate(project.Resource, project.Metadata, model.Resources);
             if (decision.Kind == WatchDecisionKind.Rejected)
             {
                 errors.Add(decision.Reason!);
             }
             else if (decision.Kind == WatchDecisionKind.Excluded)
             {
-                excluded.Add((resource, decision.Reason!));
+                excluded.Add((project, decision.Reason!));
             }
         }
 
@@ -337,13 +359,17 @@ internal static class DotnetWatchCoordinator
                 "Call WithWatch(false) on a project to run it without hot reload.");
         }
 
-        projects.RemoveAll(p => excluded.Any(x => ReferenceEquals(x.Resource, p.Resource)));
-        var keepServerWait = projects.Count > 0;
+        projects.RemoveAll(p => excluded.Any(x => ReferenceEquals(x.Project, p)));
         var noticeLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
         var loggers = services.GetRequiredService<ResourceLoggerService>();
-        foreach (var (resource, reason) in excluded)
+        foreach (var (project, reason) in excluded)
         {
-            foreach (var annotation in watchAnnotations[resource])
+            var resource = project.Resource;
+            var server = project.Server.Resource;
+
+            // The server stays in the model only while it still watches a project.
+            var keepServerWait = projects.Any(p => p.Server == project.Server);
+            foreach (var annotation in project.Annotations)
             {
                 var waitsForServer = annotation is WaitAnnotation wait && ReferenceEquals(wait.Resource, server)
                     || annotation is ResourceRelationshipAnnotation relationship && ReferenceEquals(relationship.Resource, server);
@@ -367,32 +393,77 @@ internal static class DotnetWatchCoordinator
 
     internal readonly record struct WatchDecision(WatchDecisionKind Kind, string? Reason);
 
+    /// <summary>
+    /// The directory of the <c>global.json</c> that governs SDK selection for <paramref name="directory"/>, or
+    /// <see langword="null"/> when none does. Projects with different scopes may resolve different SDKs, and a watcher
+    /// process loads exactly one.
+    /// </summary>
+    internal static string? FindSdkScope(string directory)
+    {
+        for (var current = new DirectoryInfo(directory); current is not null; current = current.Parent)
+        {
+            if (File.Exists(Path.Combine(current.FullName, "global.json")))
+            {
+                return current.FullName;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Parses the watcher's verbose "Launched ... process id N" line for a proxy-marked launch.</summary>
+    internal static bool TryParseLaunchedLine(string line, out int processId, out string instance)
+    {
+        processId = 0;
+        instance = string.Empty;
+        if (LaunchedLineRegex().Match(line) is not { Success: true } match)
+        {
+            return false;
+        }
+
+        instance = match.Groups["instance"].Value;
+        return int.TryParse(match.Groups["pid"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out processId);
+    }
+
+    /// <summary>Parses the watcher's verbose "Process id N ran for Xms and exited with exit code C" line.</summary>
+    internal static bool TryParseExitedLine(string line, out int processId, out int exitCode)
+    {
+        processId = exitCode = 0;
+        return ExitedLineRegex().Match(line) is { Success: true } match
+            && int.TryParse(match.Groups["pid"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out processId)
+            && int.TryParse(match.Groups["code"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out exitCode);
+    }
+
+    [GeneratedRegex(InstanceVariable + @"=(?<instance>[A-Za-z0-9-]+).*process id (?<pid>\d+)")]
+    private static partial Regex LaunchedLineRegex();
+
+    [GeneratedRegex(@"Process id (?<pid>\d+) ran for \d+ ?ms and exited with exit code (?<code>-?\d+)")]
+    private static partial Regex ExitedLineRegex();
+
+    private sealed class WatchedProject(DotnetProjectResource resource, DotnetProjectMetadata metadata, WatchServer server)
+    {
+        public DotnetProjectResource Resource { get; } = resource;
+        public DotnetProjectMetadata Metadata { get; } = metadata;
+        public string ProjectPath => ((IProjectMetadata)Metadata).ProjectPath;
+
+        /// <summary>Annotations the coordinator added (removed again if something else takes over the launch).</summary>
+        public List<IResourceAnnotation> Annotations { get; } = [];
+
+        public WatchServer Server { get; set; } = server;
+    }
+
     private sealed class WatchState
     {
-        private readonly List<(DotnetProjectResource Resource, DotnetProjectMetadata Metadata)> _projects = [];
-        private readonly Dictionary<DotnetProjectResource, IResourceAnnotation[]> _watchAnnotations = [];
-        private readonly IDistributedApplicationBuilder _builder;
-        private readonly string _runDirectory;
-        private readonly string _id;
-        private readonly object _gate = new();
-        private Task<PreparedServer>? _prepareTask;
-        private CancellationTokenSource? _monitorCts;
-        private int _generation;
-        private volatile bool _ready;
-        private volatile string? _lastBuildError;
-        private readonly object _noticeGate = new();
-        private DotnetWatchEventInterpreter? _interpreter;
-        private bool _flushScheduled;
+        private readonly List<WatchServer> _servers = [];
 
         public WatchState(IDistributedApplicationBuilder builder)
         {
-            _builder = builder;
-            _id = Guid.NewGuid().ToString("N")[..12];
+            Builder = builder;
+            Id = Guid.NewGuid().ToString("N")[..12];
 
-            // Holds the Unix sockets and, for multi-root runs, the watcher's TMPDIR. Deleted when the AppHost stops.
-            // Kept short: Unix socket paths are limited to ~108 characters.
-            _runDirectory = Path.Combine(Path.GetTempPath(), $"aspw-{_id}");
-            ResourcePipeName = OperatingSystem.IsWindows() ? $"aspire-watch-{_id}" : Path.Combine(_runDirectory, "res.sock");
+            // Holds the Unix sockets and redirected temp directories. Deleted when the AppHost stops. Kept short:
+            // Unix socket paths are limited to ~104 (macOS) / 108 (Linux) characters.
+            RunDirectory = Path.Combine(Path.GetTempPath(), $"aspw-{Id}");
 
             var proxyPath = builder.Configuration[ProxyPathConfigurationKey]!;
             if (proxyPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
@@ -406,92 +477,270 @@ internal static class DotnetWatchCoordinator
                 ProxyPrefixArgs = [];
             }
 
-            var healthCheckKey = $"{ServerResourceName}_initial_build";
+            builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) =>
+            {
+                // Resources removed or replaced after registration must not be built or watched.
+                Projects.RemoveAll(p => !e.Model.Resources.Contains(p.Resource));
+
+                // Opt-outs, run-to-completion and unsupported projects can only be decided on the final model.
+                ApplyEligibility(Projects, e.Model, e.Services);
+
+                var active = new List<WatchServer>();
+                foreach (var server in _servers)
+                {
+                    if (Projects.Any(p => p.Server == server))
+                    {
+                        active.Add(server);
+                    }
+                    else
+                    {
+                        e.Model.Resources.Remove(server.Resource);
+                    }
+                }
+
+                if (active.Count == 0)
+                {
+                    return Task.CompletedTask;
+                }
+
+                // The forwarded-name list must be computed after every user/integration environment callback, so it
+                // is appended once the model is final.
+                foreach (var project in Projects)
+                {
+                    var watched = project;
+                    watched.Resource.Annotations.Add(new EnvironmentCallbackAnnotation(async ctx =>
+                    {
+                        ctx.EnvironmentVariables[ForwardedEnvironmentNamesVariable] = string.Join(';', ctx.EnvironmentVariables.Keys
+                            .Where(k => k is not (ForwardedEnvironmentNamesVariable or RestoreEnvironmentNamesVariable or InstanceVariable)));
+
+                        var prepared = await watched.Server.PrepareAsync(ctx.ExecutionContext.Services, ctx.CancellationToken).ConfigureAwait(false);
+                        ctx.EnvironmentVariables[RestoreEnvironmentNamesVariable] = string.Join(';', prepared.WatcherOnlyNames);
+                        ctx.EnvironmentVariables[InstanceVariable] = $"{watched.Resource.Name}-{InstanceSuffixTemplate}";
+                    }));
+                }
+
+                var lifetime = e.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>();
+                lifetime.ApplicationStopped.Register(CleanupRunDirectory);
+                foreach (var server in active)
+                {
+                    server.Start(e.Services, lifetime.ApplicationStopping);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        public IDistributedApplicationBuilder Builder { get; }
+        public string Id { get; }
+        public string RunDirectory { get; }
+        public string ProxyCommand { get; }
+        public string[] ProxyPrefixArgs { get; }
+        public List<WatchedProject> Projects { get; } = [];
+
+        public void Configure(IResourceBuilder<DotnetProjectResource> resource, DotnetProjectMetadata metadata)
+        {
+            var existing = resource.Resource.Annotations.ToHashSet();
+            var projectPath = ((IProjectMetadata)metadata).ProjectPath;
+            var scope = FindSdkScope(Path.GetDirectoryName(projectPath)!);
+            var server = _servers.FirstOrDefault(s => s.DedicatedTo is null && string.Equals(s.SdkScope, scope, PathComparison))
+                ?? AddServer(scope, dedicatedTo: null, firstProjectName: resource.Resource.Name);
+            var project = new WatchedProject(resource.Resource, metadata, server);
+
+            // Replace the SDK-selected launch tool (dotnet run) with the proxy. Program arguments contributed through
+            // WithArgs (launch-profile and user args) stay in the ordinary segment after `--`.
+            resource.WithLaunchToolArgs(ctx =>
+            {
+                var executable = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
+                executable.Command = ProxyCommand;
+                foreach (var prefix in ProxyPrefixArgs)
+                {
+                    ctx.Args.Add(prefix);
+                }
+
+                ctx.Args.Add(ProxyCommandName);
+                ctx.Args.Add("--server");
+                ctx.Args.Add(project.Server.ResourcePipeName);
+                ctx.Args.Add("--entrypoint");
+                ctx.Args.Add(projectPath);
+                if (executable.WorkingDirectoryExplicitlySet)
+                {
+                    // The watcher launches `dotnet run` from the project directory; RunWorkingDirectory moves the app.
+                    ctx.Args.Add("--working-directory");
+                    ctx.Args.Add(executable.WorkingDirectory);
+                }
+
+                ctx.Args.Add("--");
+            },
+            // Owning the proxy with the project's launch configuration type lets HasCustomLaunch tell, through the
+            // public HasLaunchToolArgsOwnedBy, whether a later launch tool replaced it. It also matches the
+            // SDK-selected tool: an IDE project launch performs the invocation itself (watch never runs under an IDE).
+            ownedByLaunchConfigurationType: GetProjectLaunchConfigurationType(resource.Resource),
+            showInCommandLine: true);
+
+            // The watcher's own initial build is the build barrier in watch runs (Aspire's coordinated build is skipped).
+            resource.WaitFor(server.Builder);
+
+            // Aspire's Rebuild command stays available: it stops the service, runs `dotnet build` and starts it again,
+            // and the watcher picks the fresh output back up.
+            project.Annotations.AddRange(resource.Resource.Annotations.Where(a => !existing.Contains(a)));
+            Projects.Add(project);
+
+            if (resource.Resource.Annotations.OfType<DotnetProjectBuildEnvironmentCallbackAnnotation>().Any())
+            {
+                UseDedicatedServer(resource);
+            }
+        }
+
+        public void UseDedicatedServer(IResourceBuilder<DotnetProjectResource> resource)
+        {
+            if (Projects.Find(p => p.Resource == resource.Resource) is not { } project || project.Server.DedicatedTo == project.Resource)
+            {
+                return;
+            }
+
+            var previous = project.Server;
+            var server = AddServer(previous.SdkScope, dedicatedTo: project.Resource, firstProjectName: project.Resource.Name);
+
+            // Move the build barrier (WaitFor and its relationship) from the shared server to the dedicated one.
+            foreach (var annotation in resource.Resource.Annotations
+                .Where(a => a is WaitAnnotation w && w.Resource == previous.Resource || a is ResourceRelationshipAnnotation r && r.Resource == previous.Resource)
+                .ToList())
+            {
+                resource.Resource.Annotations.Remove(annotation);
+                project.Annotations.Remove(annotation);
+            }
+
+            var existing = resource.Resource.Annotations.ToHashSet();
+            resource.WaitFor(server.Builder);
+            project.Annotations.AddRange(resource.Resource.Annotations.Where(a => !existing.Contains(a)));
+            project.Server = server;
+        }
+
+        private WatchServer AddServer(string? scope, DotnetProjectResource? dedicatedTo, string firstProjectName)
+        {
+            var name = _servers.Count == 0 ? ServerResourceName : $"{ServerResourceName}-{firstProjectName}";
+            var unique = name;
+            for (var i = 2; Builder.Resources.Any(r => string.Equals(r.Name, unique, StringComparison.OrdinalIgnoreCase)); i++)
+            {
+                unique = $"{name}-{i}";
+            }
+
+            var server = new WatchServer(this, unique, _servers.Count, scope, dedicatedTo);
+            _servers.Add(server);
+            return server;
+        }
+
+        private void CleanupRunDirectory()
+        {
+            foreach (var server in _servers)
+            {
+                server.Invalidate();
+            }
+
+            try
+            {
+                if (Directory.Exists(RunDirectory))
+                {
+                    Directory.Delete(RunDirectory, recursive: true);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Best effort; the directory lives under the temp path.
+            }
+        }
+
+        private static StringComparison PathComparison => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+    }
+
+    private sealed class WatchServer
+    {
+        // How long a status event waits for the matching verbose log line (DCP streams logs with some delay).
+        private static readonly TimeSpan s_correlationTimeout = TimeSpan.FromSeconds(3);
+
+        private readonly WatchState _state;
+        private readonly int _index;
+        private readonly object _gate = new();
+        private Task<PreparedServer>? _prepareTask;
+        private CancellationTokenSource? _monitorCts;
+        private int _generation;
+        private volatile bool _ready;
+        private volatile string? _lastBuildError;
+        private readonly object _noticeGate = new();
+        private DotnetWatchEventInterpreter? _interpreter;
+        private bool _flushScheduled;
+
+        // Per-replica attribution of launches and exits, fed by the watcher's verbose log lines.
+        private readonly object _replicaGate = new();
+        private readonly Dictionary<int, string> _instanceByProcessId = [];
+        private readonly List<ReplicaEvent> _launches = [];
+        private readonly List<ReplicaEvent> _exits = [];
+
+        public WatchServer(WatchState state, string name, int index, string? sdkScope, DotnetProjectResource? dedicatedTo)
+        {
+            _state = state;
+            _index = index;
+            SdkScope = sdkScope;
+            DedicatedTo = dedicatedTo;
+            ResourcePipeName = OperatingSystem.IsWindows()
+                ? $"aspire-watch-{state.Id}-{index}"
+                : Path.Combine(state.RunDirectory, $"res{index}.sock");
+
+            var builder = state.Builder;
+            var healthCheckKey = $"{name}_initial_build";
             builder.Services.AddHealthChecks().AddCheck(healthCheckKey, () =>
                 _ready ? HealthCheckResult.Healthy("Watcher finished its initial build.")
                 : _lastBuildError is { } error ? HealthCheckResult.Unhealthy($"Initial build failed: {error}. Fix the code and save; the watcher rebuilds automatically.")
                 : HealthCheckResult.Unhealthy("Waiting for the watcher's initial build."));
 
-            var server = new DotnetWatchServerResource(ServerResourceName, builder.AppHostDirectory);
-            Server = builder.AddResource(server)
+            Builder = builder.AddResource(new DotnetWatchServerResource(name, builder.AppHostDirectory))
                 .WithIconName("ArrowSync")
                 .AsWatchSystemResource()
                 .WithHealthCheck(healthCheckKey)
                 .WithArgs(async ctx =>
                 {
                     var prepared = await PrepareAsync(ctx.ExecutionContext.Services, ctx.CancellationToken).ConfigureAwait(false);
-                    ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last().Command = prepared.Muxer;
-                    foreach (var arg in prepared.Args)
+                    ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last().Command = state.ProxyCommand;
+                    foreach (var arg in state.ProxyPrefixArgs.Concat(prepared.Args))
                     {
                         ctx.Args.Add(arg);
                     }
                 })
-                .WithEnvironment(ctx =>
+                .WithEnvironment(async ctx =>
                 {
-                    // HACK(spike): with more than one root, the watcher builds a temporary .slnx created via
-                    // Path.GetTempFileName() and runs `dotnet build` with the temp directory as working directory, so
-                    // the muxer selects the SDK from the temp dir's global.json scope rather than --sdk ("Build FAILED,
-                    // 0 errors" when they differ). Redirect the watcher's TMPDIR to the run directory, which gets a
-                    // global.json pinning the resolved SDK (see PrepareCoreAsync). TODO: Windows; upstream fix.
-                    if (!OperatingSystem.IsWindows() && Roots.Length > 1)
+                    var prepared = await PrepareAsync(ctx.ExecutionContext.Services, ctx.CancellationToken).ConfigureAwait(false);
+                    foreach (var (name, value) in prepared.Environment)
                     {
-                        ctx.EnvironmentVariables["TMPDIR"] = _runDirectory;
+                        ctx.EnvironmentVariables[name] = value;
                     }
                 });
 
             // Each (re)start of the server gets a fresh prepare (new status pipe + listener, re-resolved SDK).
-            builder.Eventing.Subscribe<ResourceStoppedEvent>(Server.Resource, (_, _) =>
+            builder.Eventing.Subscribe<ResourceStoppedEvent>(Builder.Resource, (_, _) =>
             {
                 Invalidate();
                 return Task.CompletedTask;
             });
-
-            builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) =>
-            {
-                // Resources removed or replaced after registration must not be built or watched.
-                _projects.RemoveAll(p => !e.Model.Resources.Contains(p.Resource));
-
-                // Opt-outs, run-to-completion and unsupported projects can only be decided on the final model.
-                ApplyEligibility(_projects, _watchAnnotations, Server.Resource, e.Model, e.Services);
-
-                if (_projects.Count == 0)
-                {
-                    e.Model.Resources.Remove(Server.Resource);
-                    return Task.CompletedTask;
-                }
-
-                // The forwarded-name list must be computed after every user/integration environment callback, so it
-                // is appended once the model is final.
-                foreach (var (resource, _) in _projects)
-                {
-                    resource.Annotations.Add(new EnvironmentCallbackAnnotation(ctx =>
-                    {
-                        ctx.EnvironmentVariables[ForwardedEnvironmentNamesVariable] =
-                            string.Join(';', ctx.EnvironmentVariables.Keys.Where(k => k != ForwardedEnvironmentNamesVariable));
-                    }));
-                }
-
-                var lifetime = e.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>();
-                lifetime.ApplicationStopped.Register(CleanupRunDirectory);
-                _ = Task.Run(() => TailServerLogsAsync(e.Services, lifetime.ApplicationStopping), CancellationToken.None);
-                return Task.CompletedTask;
-            });
         }
 
-        public IResourceBuilder<DotnetWatchServerResource> Server { get; }
+        public IResourceBuilder<DotnetWatchServerResource> Builder { get; }
+        public DotnetWatchServerResource Resource => Builder.Resource;
         public string ResourcePipeName { get; }
-        public string ProxyCommand { get; }
-        public string[] ProxyPrefixArgs { get; }
+        public string? SdkScope { get; }
+        public DotnetProjectResource? DedicatedTo { get; }
 
-        private string[] Roots => _projects.Select(p => ((IProjectMetadata)p.Metadata).ProjectPath).Distinct(StringComparer.Ordinal).ToArray();
+        private List<WatchedProject> Projects => _state.Projects.Where(p => p.Server == this).ToList();
 
-        public void Add(DotnetProjectResource resource, DotnetProjectMetadata metadata, IResourceAnnotation[] watchAnnotations)
+        private string[] Roots => Projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal).ToArray();
+
+        public void Start(IServiceProvider services, CancellationToken stopping)
         {
-            _projects.Add((resource, metadata));
-            _watchAnnotations[resource] = watchAnnotations;
+            _ = Task.Run(() => TailServerLogsAsync(services, stopping), CancellationToken.None);
         }
 
-        private Task<PreparedServer> PrepareAsync(IServiceProvider services, CancellationToken cancellationToken)
+        public Task<PreparedServer> PrepareAsync(IServiceProvider services, CancellationToken cancellationToken)
         {
             lock (_gate)
             {
@@ -503,7 +752,7 @@ internal static class DotnetWatchCoordinator
                     _lastBuildError = null;
                     lock (_noticeGate)
                     {
-                        _interpreter = new DotnetWatchEventInterpreter(_projects.Select(p => (((IProjectMetadata)p.Metadata).ProjectPath, p.Resource.Name)), Server.Resource.WorkingDirectory);
+                        _interpreter = new DotnetWatchEventInterpreter(Projects.Select(p => (p.ProjectPath, p.Resource.Name)), Resource.WorkingDirectory);
                     }
 
                     _prepareTask = PrepareWithNoticeAsync(services, ++_generation, _monitorCts.Token, cancellationToken);
@@ -513,29 +762,13 @@ internal static class DotnetWatchCoordinator
             }
         }
 
-        private void Invalidate()
+        public void Invalidate()
         {
             lock (_gate)
             {
                 _prepareTask = null;
                 _monitorCts?.Cancel();
                 _ready = false;
-            }
-        }
-
-        private void CleanupRunDirectory()
-        {
-            Invalidate();
-            try
-            {
-                if (Directory.Exists(_runDirectory))
-                {
-                    Directory.Delete(_runDirectory, recursive: true);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Best effort; the directory lives under the temp path.
             }
         }
 
@@ -547,7 +780,7 @@ internal static class DotnetWatchCoordinator
             }
             catch (DistributedApplicationException ex)
             {
-                // Forget the failed attempt so restarting the dotnet-watch resource retries (e.g. once the network is back),
+                // Forget the failed attempt so restarting the server resource retries (e.g. once the network is back),
                 // and say so in the terminal: otherwise the services just sit in "Waiting" with the reason buried in a log.
                 lock (_gate)
                 {
@@ -556,38 +789,91 @@ internal static class DotnetWatchCoordinator
 
                 services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogError(
                     "❌ Hot reload couldn't start: {Message} Watched services wait until it does; after fixing the problem, start '{Server}' from the dashboard ('aspire resource {Server} start').",
-                    ex.Message, ServerResourceName, ServerResourceName);
+                    ex.Message, Resource.Name, Resource.Name);
                 throw;
             }
         }
 
         private async Task<PreparedServer> PrepareCoreAsync(IServiceProvider services, int generation, CancellationToken monitorToken, CancellationToken cancellationToken)
         {
-            var logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(Server.Resource);
-            DotnetWatchServerInfrastructure.EnsurePrivateDirectory(_runDirectory);
+            var logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource);
+            DotnetWatchServerInfrastructure.EnsurePrivateDirectory(_state.RunDirectory);
 
-            // TODO(spike): one SDK per server. Projects that select different SDKs (different global.json) should be
-            // rejected or split into multiple servers; the spike uses the first project's SDK.
             var roots = Roots;
             var sdk = await DotnetWatchToolResolver.ResolveSdkAsync(Path.GetDirectoryName(roots[0])!, cancellationToken).ConfigureAwait(false);
-            var toolVersion = DotnetWatchToolResolver.SelectToolVersion(sdk.SdkVersion, _builder.Configuration[DotnetWatchToolResolver.ToolVersionConfigurationKey]);
+            var configuration = _state.Builder.Configuration;
+            var toolVersion = DotnetWatchToolResolver.SelectToolVersion(sdk.SdkVersion, configuration[DotnetWatchToolResolver.ToolVersionConfigurationKey]);
             var toolDll = await DotnetWatchToolResolver.EnsureToolAsync(
-                _builder.Configuration[DotnetWatchToolResolver.ToolPathConfigurationKey], toolVersion, logger, cancellationToken).ConfigureAwait(false);
+                configuration[DotnetWatchToolResolver.ToolPathConfigurationKey], toolVersion, logger, cancellationToken).ConfigureAwait(false);
             logger.LogInformation("Watching {Count} root(s) with SDK {SdkDirectory}: {Roots}", roots.Length, sdk.SdkDirectory, string.Join(", ", roots));
 
-            if (!OperatingSystem.IsWindows() && roots.Length > 1)
+            var environment = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+
+            // The watcher has no per-project build arguments (it hardcodes none), so build settings travel in its
+            // process environment, which MSBuild reads as properties for its builds, its in-process evaluation and
+            // the `dotnet run --no-build` launches. Environment properties have the lowest precedence: a project
+            // that sets the property unconditionally wins, unlike the global properties of the normal build.
+            // Debug is MSBuild's default, so it's left unset: anything set here is restored to the proxy's own value
+            // for the services, and a variable that was originally unset comes back empty rather than unset.
+            if (Projects.Select(p => p.Metadata.BuildConfiguration).FirstOrDefault(c => !string.IsNullOrEmpty(c)) is { } buildConfiguration &&
+                !string.Equals(buildConfiguration, "Debug", StringComparison.OrdinalIgnoreCase))
             {
-                await File.WriteAllTextAsync(
-                    Path.Combine(_runDirectory, "global.json"),
-                    $$"""{ "sdk": { "version": "{{sdk.SdkVersion}}", "rollForward": "disable", "allowPrerelease": true } }""",
-                    cancellationToken).ConfigureAwait(false);
+                environment["Configuration"] = buildConfiguration;
+
+                // The watcher only attaches its hot reload agent to unoptimized builds, and the agent is what
+                // applies the service environment (endpoints, connection strings) to the launched app. Release
+                // defaults Optimize only when it's empty, so this keeps Release's output paths and constants.
+                environment["Optimize"] = "false";
+            }
+
+            if (DedicatedTo is { } owner)
+            {
+                foreach (var (name, value) in await EvaluateBuildEnvironmentAsync(owner, services, logger, cancellationToken).ConfigureAwait(false))
+                {
+                    environment[name] = value;
+                }
+
+                logger.LogInformation("Build environment for '{Resource}': {Names}", owner.Name, string.Join(", ", environment.Keys));
+            }
+
+            if (roots.Length > 1)
+            {
+                // TODO(upstream dotnet/sdk#51311): with more than one root the watcher builds a temporary .slnx from
+                // Path.GetTempFileName() with the temp directory as working directory, so the muxer selects the SDK
+                // from the temp directory's global.json scope instead of --sdk ("Build FAILED, 0 errors" when they
+                // differ). Only when they do differ, point the watcher's temp directory at a private directory with a
+                // global.json pinning the resolved SDK. Services get their own temp directory back (restore list).
+                var tempSdk = await DotnetWatchToolResolver.TryGetSdkVersionAsync(sdk.Muxer, Path.GetTempPath(), cancellationToken).ConfigureAwait(false);
+                if (!string.Equals(tempSdk, sdk.SdkVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    var tempDirectory = Path.Combine(_state.RunDirectory, $"tmp{_index}");
+                    Directory.CreateDirectory(tempDirectory);
+                    await File.WriteAllTextAsync(
+                        Path.Combine(tempDirectory, "global.json"),
+                        $$"""{ "sdk": { "version": "{{sdk.SdkVersion}}", "rollForward": "disable", "allowPrerelease": true } }""",
+                        cancellationToken).ConfigureAwait(false);
+                    foreach (var name in GetTempVariables(OperatingSystem.IsWindows()))
+                    {
+                        environment[name] = tempDirectory;
+                    }
+
+                    logger.LogInformation(
+                        "The temp directory selects SDK {TempSdk} rather than {Sdk}; the watcher's multi-project build uses {TempDirectory} instead.",
+                        tempSdk ?? "(none)", sdk.SdkVersion, tempDirectory);
+                }
             }
 
             var statusPipeName = OperatingSystem.IsWindows()
-                ? $"aspire-watch-status-{_id}-{generation}"
-                : Path.Combine(_runDirectory, $"status{generation}.sock");
+                ? $"aspire-watch-status-{_state.Id}-{_index}-{generation}"
+                : Path.Combine(_state.RunDirectory, $"status{_index}-{generation}.sock");
 
-            var args = new List<string> { "exec", toolDll, "server", "--sdk", sdk.SdkDirectory, "--server", ResourcePipeName, "--status-pipe", statusPipeName };
+            // --verbose adds the watcher's "Launched ... process id" / "Process id ... exited" lines, which attribute
+            // launches and crashes to replicas.
+            var args = new List<string>
+            {
+                ServerHostCommandName, "--", sdk.Muxer, "exec", toolDll, "server",
+                "--sdk", sdk.SdkDirectory, "--server", ResourcePipeName, "--status-pipe", statusPipeName, "--verbose"
+            };
             foreach (var root in roots)
             {
                 args.Add("--resource");
@@ -597,7 +883,30 @@ internal static class DotnetWatchCoordinator
             // The status pipe listener must exist before the watcher connects to it.
             _ = Task.Run(() => MonitorStatusAsync(services, logger, statusPipeName, monitorToken), CancellationToken.None);
 
-            return new PreparedServer(sdk.Muxer, args);
+            // Everything set only for the watcher must not leak into the services, which inherit its environment.
+            return new PreparedServer(args, environment, [.. environment.Keys]);
+        }
+
+        private static async Task<IReadOnlyDictionary<string, string>> EvaluateBuildEnvironmentAsync(
+            DotnetProjectResource resource, IServiceProvider services, ILogger logger, CancellationToken cancellationToken)
+        {
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var environment = new Dictionary<string, object>(comparer);
+            var executionContext = services.GetRequiredService<DistributedApplicationExecutionContext>();
+            foreach (var callback in resource.Annotations.OfType<DotnetProjectBuildEnvironmentCallbackAnnotation>())
+            {
+                await callback.Callback(new EnvironmentCallbackContext(executionContext, resource, environment, cancellationToken) { Logger = logger }).ConfigureAwait(false);
+            }
+
+            var resolved = new Dictionary<string, string>(comparer);
+            foreach (var (name, value) in environment)
+            {
+                resolved[name] = value as string ?? throw new DistributedApplicationException(
+                    $"The build environment variable '{name}' for .NET project resource '{resource.Name}' " +
+                    $"has unsupported value type '{value?.GetType().Name ?? "null"}'. Build environment values must be strings.");
+            }
+
+            return resolved;
         }
 
         private async Task MonitorStatusAsync(IServiceProvider services, ILogger serverLogger, string statusPipeName, CancellationToken monitorToken)
@@ -660,12 +969,26 @@ internal static class DotnetWatchCoordinator
 
                     EmitNotices(services, notices);
 
-                    // Status events identify project paths only (plan 3.3), so fan out to every resource with that path.
+                    // Status events identify project paths only (plan 3.3). Launches and exits are attributed to a
+                    // replica through the verbose log lines; everything else applies to every resource with the path.
                     foreach (var path in projects)
                     {
-                        foreach (var (resource, _) in _projects.Where(p => string.Equals(((IProjectMetadata)p.Metadata).ProjectPath, path, StringComparison.Ordinal)))
+                        var targets = Projects.Where(p => string.Equals(p.ProjectPath, path, StringComparison.Ordinal)).ToList();
+                        if (targets.Count == 0)
                         {
-                            await PublishWatchEventAsync(notifications, resource, status).ConfigureAwait(false);
+                            continue;
+                        }
+
+                        if (status.type is DotnetWatchStatusTypes.ProcessExited or DotnetWatchStatusTypes.ProcessStarted)
+                        {
+                            _ = Task.Run(() => PublishReplicaEventAsync(notifications, targets, status, cts.Token), CancellationToken.None);
+                        }
+                        else
+                        {
+                            foreach (var target in targets)
+                            {
+                                await PublishWatchEventAsync(notifications, target.Resource, resourceId: null, status).ConfigureAwait(false);
+                            }
                         }
                     }
                 }
@@ -681,6 +1004,80 @@ internal static class DotnetWatchCoordinator
             }
         }
 
+        private async Task PublishReplicaEventAsync(ResourceNotificationService notifications, List<WatchedProject> targets, WatchStatus status, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var events = status.type == DotnetWatchStatusTypes.ProcessExited ? _exits : _launches;
+                var deadline = DateTime.UtcNow + s_correlationTimeout;
+                while (true)
+                {
+                    lock (_replicaGate)
+                    {
+                        foreach (var candidate in events)
+                        {
+                            if (candidate.Consumed || (status.type == DotnetWatchStatusTypes.ProcessExited && candidate.ExitCode != status.exitCode))
+                            {
+                                continue;
+                            }
+
+                            if (notifications.TryGetCurrentState(candidate.Instance, out var current)
+                                && targets.Find(t => t.Resource == current.Resource) is { } target)
+                            {
+                                candidate.Consumed = true;
+                                _ = PublishWatchEventAsync(notifications, target.Resource, candidate.Instance, status);
+                                return;
+                            }
+                        }
+                    }
+
+                    if (DateTime.UtcNow >= deadline)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                }
+
+                // No matching log line (for example, a renamed replica): fall back to every replica with the path.
+                foreach (var target in targets)
+                {
+                    await PublishWatchEventAsync(notifications, target.Resource, resourceId: null, status).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        private void OnReplicaLogLine(string line)
+        {
+            if (TryParseLaunchedLine(line, out var processId, out var instance))
+            {
+                lock (_replicaGate)
+                {
+                    _instanceByProcessId[processId] = instance;
+                    Record(_launches, new ReplicaEvent(instance, ExitCode: null));
+                }
+            }
+            else if (TryParseExitedLine(line, out processId, out var exitCode))
+            {
+                lock (_replicaGate)
+                {
+                    if (_instanceByProcessId.Remove(processId, out var exitedInstance))
+                    {
+                        Record(_exits, new ReplicaEvent(exitedInstance, exitCode));
+                    }
+                }
+            }
+
+            static void Record(List<ReplicaEvent> events, ReplicaEvent e)
+            {
+                events.RemoveAll(x => x.Consumed || DateTime.UtcNow - x.At > TimeSpan.FromMinutes(1));
+                events.Add(e);
+            }
+        }
+
         /// <summary>
         /// Feeds the watcher's console output (build and compiler errors, changed files, apply times) to the
         /// interpreter; the status protocol doesn't carry those details.
@@ -690,10 +1087,12 @@ internal static class DotnetWatchCoordinator
             try
             {
                 var loggers = services.GetRequiredService<ResourceLoggerService>();
-                await foreach (var batch in loggers.WatchAsync(Server.Resource).WithCancellation(cancellationToken).ConfigureAwait(false))
+                await foreach (var batch in loggers.WatchAsync(Resource).WithCancellation(cancellationToken).ConfigureAwait(false))
                 {
                     foreach (var line in batch)
                     {
+                        OnReplicaLogLine(line.Content);
+
                         IReadOnlyList<WatchNotice> notices;
                         lock (_noticeGate)
                         {
@@ -743,6 +1142,7 @@ internal static class DotnetWatchCoordinator
 
             var noticeLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
             var loggers = services.GetRequiredService<ResourceLoggerService>();
+            var projects = Projects;
             foreach (var notice in notices)
             {
 #pragma warning disable CA2254 // The notice text is the message; it has no structured parameters.
@@ -751,43 +1151,53 @@ internal static class DotnetWatchCoordinator
 
                 // Before the first successful build every service is waiting on the server, so tell all of them why.
                 var targets = notice.Kind == WatchNoticeKind.BuildFailed && !_ready
-                    ? _projects
-                    : _projects.Where(p => notice.ProjectPaths.Contains(((IProjectMetadata)p.Metadata).ProjectPath, StringComparer.Ordinal)).ToList();
-                foreach (var (resource, _) in targets)
+                    ? projects
+                    : projects.Where(p => notice.ProjectPaths.Contains(p.ProjectPath, StringComparer.Ordinal)).ToList();
+                foreach (var target in targets)
                 {
-                    loggers.GetLogger(resource).Log(notice.Level, "[watch] {Message}", notice.Message);
+                    loggers.GetLogger(target.Resource).Log(notice.Level, "[watch] {Message}", notice.Message);
                 }
             }
         }
 
-        private static async Task PublishWatchEventAsync(ResourceNotificationService notifications, DotnetProjectResource resource, WatchStatus status)
+        private static async Task PublishWatchEventAsync(ResourceNotificationService notifications, DotnetProjectResource resource, string? resourceId, WatchStatus status)
         {
-            var stamp = DateTime.Now.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
-            switch (status.type)
+            var stamp = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+            Func<CustomResourceSnapshot, CustomResourceSnapshot>? update = status.type switch
             {
-                case DotnetWatchStatusTypes.HotReloadApplied or DotnetWatchStatusTypes.Restarting:
-                    await notifications.PublishUpdateAsync(resource, s => s with
-                    {
-                        Properties = WithProperty(s.Properties, "dotnet-watch.last-event", $"{status.type} @ {stamp}")
-                    }).ConfigureAwait(false);
-                    break;
+                DotnetWatchStatusTypes.HotReloadApplied or DotnetWatchStatusTypes.Restarting => s => s with
+                {
+                    Properties = WithProperty(s.Properties, "dotnet-watch.last-event", $"{status.type} @ {stamp}")
+                },
 
                 // The resource pipe carries no exit status and the watcher keeps the proxy connected so it can
-                // relaunch the app on the next change. Surface the app's exit code on the resource instead.
-                case DotnetWatchStatusTypes.ProcessExited:
-                    await notifications.PublishUpdateAsync(resource, s => s with
-                    {
-                        State = new ResourceStateSnapshot(CrashedState, KnownResourceStateStyles.Error),
-                        ExitCode = status.exitCode,
-                        Properties = WithProperty(s.Properties, "dotnet-watch.last-event", $"process_exited({status.exitCode}) @ {stamp}")
-                    }).ConfigureAwait(false);
-                    break;
+                // relaunch the app on the next change. Surface the app's exit code on the replica instead.
+                DotnetWatchStatusTypes.ProcessExited => s => s with
+                {
+                    State = new ResourceStateSnapshot(CrashedState, KnownResourceStateStyles.Error),
+                    ExitCode = status.exitCode,
+                    Properties = WithProperty(s.Properties, "dotnet-watch.last-event", $"process_exited({status.exitCode}) @ {stamp}")
+                },
 
-                case DotnetWatchStatusTypes.ProcessStarted:
-                    await notifications.PublishUpdateAsync(resource, s => s.State?.Text == CrashedState
-                        ? s with { State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success), ExitCode = null }
-                        : s).ConfigureAwait(false);
-                    break;
+                DotnetWatchStatusTypes.ProcessStarted => s => s.State?.Text == CrashedState
+                    ? s with { State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success), ExitCode = null }
+                    : s,
+
+                _ => null
+            };
+
+            if (update is null)
+            {
+                return;
+            }
+
+            if (resourceId is null)
+            {
+                await notifications.PublishUpdateAsync(resource, update).ConfigureAwait(false);
+            }
+            else
+            {
+                await notifications.PublishUpdateAsync(resource, resourceId, update).ConfigureAwait(false);
             }
         }
 
@@ -795,7 +1205,13 @@ internal static class DotnetWatchCoordinator
             [.. properties.Where(p => p.Name != name), new ResourcePropertySnapshot(name, value)];
     }
 
-    private sealed record PreparedServer(string Muxer, IReadOnlyList<string> Args);
+    private sealed record ReplicaEvent(string Instance, int? ExitCode)
+    {
+        public DateTime At { get; } = DateTime.UtcNow;
+        public bool Consumed { get; set; }
+    }
+
+    private sealed record PreparedServer(IReadOnlyList<string> Args, IReadOnlyDictionary<string, string> Environment, IReadOnlyList<string> WatcherOnlyNames);
 
 #pragma warning disable IDE1006 // Naming: matches the watcher's JSON schema.
     private sealed record WatchStatus(string type, string[]? projects, bool? success, string? error, int? exitCode);

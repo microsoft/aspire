@@ -161,6 +161,9 @@ public static partial class DotnetProjectHostingExtensions
         }
 
         builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
+
+        // SPIKE: in `aspire run --watch` the watcher builds the project, so it needs a watcher of its own.
+        Dotnet.Watch.DotnetWatchCoordinator.OnBuildEnvironmentAdded(builder);
         return builder.WithDotnetProgramBuildEnvironment(callback);
     }
 

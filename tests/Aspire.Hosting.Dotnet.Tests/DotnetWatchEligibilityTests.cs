@@ -16,7 +16,7 @@ namespace Aspire.Hosting.Dotnet.Tests;
 public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_watchConfig =
-        ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll"];
+        ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll", $"{DotnetWatchCoordinator.ProxyProtocolConfigurationKey}={DotnetWatchCoordinator.RequiredProxyProtocol}"];
 
     [Fact]
     public void WithWatchReplacesEarlierChoice()
