@@ -7,19 +7,20 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Watch;
 
+/// <remarks>The values are part of the notice event id (see <c>DotnetWatchCoordinator.NoticeEventId</c>); don't renumber them.</remarks>
 internal enum WatchNoticeKind
 {
-    Watching,
-    HotReloadApplied,
-    CompileError,
-    Rebuilding,
-    Restarting,
-    BuildFailed,
-    BuildSucceeded,
-    Crashed,
-    Relaunched,
-    NoCodeChanges,
-    ProjectFileChanged,
+    Watching = 0,
+    HotReloadApplied = 1,
+    CompileError = 2,
+    Rebuilding = 3,
+    Restarting = 4,
+    BuildFailed = 5,
+    BuildSucceeded = 6,
+    Crashed = 7,
+    Relaunched = 8,
+    NoCodeChanges = 9,
+    ProjectFileChanged = 10,
 }
 
 /// <summary>A concise, user-facing watch notice, attributed to the affected watched projects.</summary>

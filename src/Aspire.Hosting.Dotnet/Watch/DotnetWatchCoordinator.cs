@@ -63,6 +63,14 @@ internal static class DotnetWatchCoordinator
     /// </summary>
     internal const string NoticeLoggerCategory = "Aspire.Hosting.Dotnet.Watch";
 
+    /// <summary>
+    /// The event id of a notice logged to <see cref="NoticeLoggerCategory"/>: <see cref="NoticeEventIdBase"/> plus the
+    /// <see cref="WatchNoticeKind"/>, which the AppHost log backchannel carries to the CLI alongside the text.
+    /// </summary>
+    internal const int NoticeEventIdBase = 7100;
+
+    internal static EventId NoticeEventId(WatchNoticeKind kind) => new(NoticeEventIdBase + (int)kind, $"WatchNotice.{kind}");
+
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, WatchState> s_states = new();
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, object> s_warned = new();
 
@@ -737,7 +745,7 @@ internal static class DotnetWatchCoordinator
             foreach (var notice in notices)
             {
 #pragma warning disable CA2254 // The notice text is the message; it has no structured parameters.
-                noticeLogger.Log(notice.Level, notice.Message);
+                noticeLogger.Log(notice.Level, NoticeEventId(notice.Kind), notice.Message);
 #pragma warning restore CA2254
 
                 // Before the first successful build every service is waiting on the server, so tell all of them why.

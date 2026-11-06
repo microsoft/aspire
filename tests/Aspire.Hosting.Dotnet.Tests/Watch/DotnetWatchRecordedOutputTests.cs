@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dotnet.Watch;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Tests.Watch;
 
@@ -24,6 +25,14 @@ public class DotnetWatchRecordedOutputTests
 
         DotnetWatchContractTests.AssertLifecycleNotices(notices);
         Assert.All(notices, n => Assert.Equal([s_project], n.ProjectPaths));
+    }
+
+    [Fact]
+    public void NoticeEventIdsAreStablePerKind()
+    {
+        Assert.Equal(new EventId(7101, "WatchNotice.HotReloadApplied"), DotnetWatchCoordinator.NoticeEventId(WatchNoticeKind.HotReloadApplied));
+        var ids = Enum.GetValues<WatchNoticeKind>().Select(k => DotnetWatchCoordinator.NoticeEventId(k).Id).ToArray();
+        Assert.Equal(ids.Length, ids.Distinct().Count());
     }
 
     [Fact]
