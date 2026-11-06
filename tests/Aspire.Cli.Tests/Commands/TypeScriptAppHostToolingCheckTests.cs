@@ -132,8 +132,9 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
     public async Task CheckAsync_Skips_WhenSettingsSelectAnotherLanguage()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var configuredWorkspace = TemporaryWorkspace.CreateForCli(outputHelper);
         CreateTypeScriptAppHost(workspace, "{ \"packageManager\": \"npm@10.5.0\" }");
-        var configuredAppHost = new FileInfo(Path.Combine(workspace.Path, "apphost.cs"));
+        var configuredAppHost = new FileInfo(Path.Combine(configuredWorkspace.Path, "apphost.cs"));
         File.WriteAllText(configuredAppHost.FullName, string.Empty);
         var check = CreateCheck(
             workspace,
