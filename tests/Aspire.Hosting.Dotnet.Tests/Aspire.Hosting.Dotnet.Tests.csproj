@@ -18,6 +18,19 @@
   <ItemGroup>
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
+
+  <!-- Watch contract tests: the fixture app is copied (not compiled) and launched through the real CLI proxy. -->
+  <ItemGroup>
+    <Compile Remove="Watch\Fixtures\**" />
+    <None Include="Watch\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Watch\Recordings\**" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\..\src\Aspire.Cli\Aspire.Cli.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false"
+                      ExcludeAssets="all" />
+    <AssemblyMetadata Include="AspireCliPath" Value="$(ArtifactsBinDir)Aspire.Cli\$(Configuration)\net11.0\aspire.dll" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />

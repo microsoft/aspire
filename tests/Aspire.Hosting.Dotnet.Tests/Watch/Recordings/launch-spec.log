@@ -1,0 +1,18 @@
+out aspire watch server 🔥 Hot reload enabled. For a list of supported edits, see https://aka.ms/dotnet/hot-reload.
+out aspire watch server 💡 Press Ctrl+R to restart.
+status {"type":"building","projects":["$ROOT$/ContractApp/ContractApp.csproj"]}
+out   Determining projects to restore...
+out   Restored $ROOT$/ContractApp/ContractApp.csproj (in 64 ms).
+out $DOTNET$/sdk/11.0.100-rc.2.26504.105/Sdks/Microsoft.NET.Sdk/targets/Microsoft.NET.RuntimeIdentifierInference.targets(385,5): message NETSDK1057: You are using a preview version of .NET. See: https://aka.ms/dotnet-support-policy [$ROOT$/ContractApp/ContractApp.csproj]
+out   ContractApp -> $ROOT$/ContractApp/bin/Debug/net11.0/ContractApp.dll
+out 
+out Build succeeded.
+out     0 Warning(s)
+out     0 Error(s)
+out 
+out Time Elapsed 00:00:02.82
+status {"type":"build_complete","projects":["$ROOT$/ContractApp/ContractApp.csproj"],"success":true}
+out aspire watch server ⌚ Loading projects ...
+out aspire watch server ⌚ Loaded 1 project(s) in 0.3s.
+out aspire watch server ⌚ Waiting for changes
+status {"type":"process_started","projects":["$ROOT$/ContractApp/ContractApp.csproj"]}
