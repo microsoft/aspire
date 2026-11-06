@@ -20,6 +20,19 @@ namespace Aspire.Cli.Tests.Projects;
 public class DotNetBasedAppHostServerScaffoldCacheTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task CreateProjectFiles_ExcludesBuildArtifacts_FromDefaultItems()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var project = CreateProject(workspace.Path);
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")]);
+
+        var document = System.Xml.Linq.XDocument.Load(project.GetProjectFilePath());
+        var excludes = document.Root!.Element("PropertyGroup")!.Element("DefaultItemExcludes");
+        Assert.Equal("$(DefaultItemExcludes);build/**", excludes?.Value);
+    }
+
+    [Fact]
     public async Task CreateProjectFiles_PreservesRestoreArtifacts_WhenScaffoldContentUnchanged()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -898,11 +898,12 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
-    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
-    public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.Go/GoVersionDetector.cs", "Aspire.Hosting.Go")]
+    public void GoVersionInputsSelectCliMinimumGoVersionGuard(string path, string affectedProject)
     {
-        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.Go");
+        var result = SelectWithRealMap(path, affectedProject);
 
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);

@@ -26,6 +26,36 @@ public class ScaffoldingServiceTests
         CodeGenerator: "python",
         AppHostFileName: "apphost.py");
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetScaffoldDirectory_IsolatesGoAppHost_FromExistingModule(bool hasModule)
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+        var language = DefaultLanguageDiscovery.AllLanguages.Single(language => language.LanguageId.Value == KnownLanguageId.Go);
+
+        try
+        {
+            if (hasModule)
+            {
+                File.WriteAllText(Path.Combine(rootDirectory.FullName, "go.mod"), "module existing\n\ngo 1.26\n");
+            }
+
+            var scaffoldDirectory = ScaffoldingService.GetScaffoldDirectory(rootDirectory, language);
+
+            Assert.Equal(
+                hasModule ? Path.Combine(rootDirectory.FullName, "aspire-apphost") : rootDirectory.FullName,
+                scaffoldDirectory.FullName);
+            Assert.Equal(
+                Path.Combine(scaffoldDirectory.FullName, "apphost.go"),
+                ScaffoldingService.GetAppHostPath(rootDirectory, language));
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void GetScaffoldDirectory_UsesNestedPackage_ForBrownfieldTypeScript()
     {
