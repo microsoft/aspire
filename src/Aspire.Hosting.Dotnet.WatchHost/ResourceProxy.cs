@@ -5,17 +5,18 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json.Nodes;
+using static Aspire.Shared.DotnetWatch.DotnetWatchHostProtocol;
 
-namespace Aspire.Cli.DotnetWatch;
+namespace Aspire.Hosting.Dotnet.WatchHost;
 
 /// <summary>
-/// Plan D10 / Session 6a: hidden, infrastructure-only per-instance proxy between DCP and the pinned
-/// <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> server's resource pipe.
+/// Plan D10 / Session 6a: per-replica proxy between DCP and the pinned <c>Microsoft.DotNet.HotReload.Watch.Aspire</c>
+/// server's resource pipe.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Usage (constructed by <c>Aspire.Hosting.Dotnet</c>, never by users):
-/// <c>aspire __dotnet-watch-proxy --server &lt;pipe&gt; --entrypoint &lt;path&gt; [--launch-gate &lt;file&gt;] [--working-directory &lt;dir&gt;] -- [application args]</c>.
+/// <c>dotnet exec Aspire.Hosting.Dotnet.WatchHost.dll proxy --server &lt;pipe&gt; --entrypoint &lt;path&gt; [--launch-gate &lt;file&gt;] [--working-directory &lt;dir&gt;] -- [application args]</c>.
 /// <c>--launch-gate</c> serializes the first launch of a project across its replicas (see <see cref="LaunchGate"/>).
 /// </para>
 /// <para>
@@ -36,17 +37,10 @@ namespace Aspire.Cli.DotnetWatch;
 /// Wire contract pinned to watcher 10.0.403 (dotnet/dotnet 5a2162be): version byte 1, 7-bit-length-prefixed UTF-8
 /// JSON <c>LaunchResourceRequest</c>, ACK byte 1, then records of (type byte 1=stdout/2=stderr, 7-bit-length string).
 /// </para>
-/// <para>
-/// This runs before the CLI host is built: no banners, prompts, first-run, telemetry or update checks.
-/// </para>
 /// </remarks>
-internal static class DotnetWatchResourceProxy
+internal static class ResourceProxy
 {
-    public const string CommandName = "__dotnet-watch-proxy";
-    public const string ForwardedEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_FORWARD_ENV";
-    public const string ConnectTimeoutVariable = "ASPIRE_DOTNET_WATCH_PROXY_CONNECT_TIMEOUT_SECONDS";
-    public const string RestoreEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_RESTORE_ENV";
-    public const string InstanceVariable = "ASPIRE_DOTNET_WATCH_INSTANCE";
+    private const string CommandName = "dotnet-watch proxy";
 
     // The proxy only starts after the server is healthy (WaitFor), so the pipe normally exists immediately.
     internal const int DefaultConnectTimeoutSeconds = 30;
@@ -61,8 +55,6 @@ internal static class DotnetWatchResourceProxy
     internal const int ExitConnectFailed = 69;
     internal const int ExitRejected = 70;
     internal const int ExitServerDisconnected = 75;
-
-    public static bool Matches(string[] args) => args.Length > 0 && args[0] == CommandName;
 
     public static async Task<int> RunAsync(string[] args)
     {
@@ -83,7 +75,8 @@ internal static class DotnetWatchResourceProxy
             int.TryParse(Environment.GetEnvironmentVariable(ConnectTimeoutVariable), out var seconds) && seconds > 0 ? seconds : DefaultConnectTimeoutSeconds);
 
         LaunchGate? gate = null;
-        await using var pipe = new NamedPipeClientStream(".", options.Server, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        var pipe = new NamedPipeClientStream(".", options.Server, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await using var pipeScope = pipe.ConfigureAwait(false);
         try
         {
             if (options.LaunchGate is { } marker)
@@ -176,20 +169,20 @@ internal static class DotnetWatchResourceProxy
         options = null;
         error = null;
 
-        for (var i = 1; i < args.Length; i++)
+        for (var i = 0; i < args.Length; i++)
         {
             switch (args[i])
             {
-                case "--server" when i + 1 < args.Length:
+                case ServerOption when i + 1 < args.Length:
                     server = args[++i];
                     break;
-                case "--entrypoint" when i + 1 < args.Length:
+                case EntryPointOption when i + 1 < args.Length:
                     entryPoint = args[++i];
                     break;
-                case "--working-directory" when i + 1 < args.Length:
+                case WorkingDirectoryOption when i + 1 < args.Length:
                     workingDirectory = args[++i];
                     break;
-                case "--launch-gate" when i + 1 < args.Length:
+                case LaunchGateOption when i + 1 < args.Length:
                     launchGate = args[++i];
                     break;
                 case "--":
@@ -204,7 +197,7 @@ internal static class DotnetWatchResourceProxy
 
         if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(entryPoint))
         {
-            error = "--server and --entrypoint are required.";
+            error = $"{ServerOption} and {EntryPointOption} are required.";
             return false;
         }
 

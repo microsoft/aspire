@@ -20,6 +20,9 @@ namespace Aspire.Hosting.Dotnet.Watch;
 /// that says how to fix it.
 /// Package-backed polyglot AppHosts (prebuilt AppHost server) don't run the package's MSBuild targets, so they have no
 /// metadata; they load this assembly straight from the restored package, so the tool is found next to it instead.
+/// The watch host (<c>Aspire.Hosting.Dotnet.WatchHost.dll</c>, which hosts the watcher and proxies each service
+/// replica) ships the same way under <c>tools/dotnet-watch-host/</c>, stamped as
+/// <see cref="WatchHostDirectoryMetadataKey"/>.
 /// </remarks>
 internal static class DotnetWatchToolResolver
 {
@@ -61,16 +64,55 @@ internal static class DotnetWatchToolResolver
             ? value
             : GetPackageToolsDirectory(typeof(DotnetWatchToolResolver).Assembly.Location);
 
-    /// <summary>Maps <c>&lt;package&gt;/lib/&lt;tfm&gt;/Aspire.Hosting.Dotnet.dll</c> to <c>&lt;package&gt;/tools/dotnet-watch/</c> when that exists.</summary>
-    public static string? GetPackageToolsDirectory(string? hostingDotnetAssemblyPath)
+    /// <summary>Maps <c>&lt;package&gt;/lib/&lt;tfm&gt;/Aspire.Hosting.Dotnet.dll</c> to <c>&lt;package&gt;/tools/&lt;folder&gt;/</c> when that exists.</summary>
+    public static string? GetPackageToolsDirectory(string? hostingDotnetAssemblyPath, string folder = "dotnet-watch")
     {
         if (string.IsNullOrEmpty(hostingDotnetAssemblyPath) || Path.GetDirectoryName(hostingDotnetAssemblyPath) is not { Length: > 0 } libDirectory)
         {
             return null;
         }
 
-        var candidate = Path.GetFullPath(Path.Combine(libDirectory, "..", "..", "tools", "dotnet-watch"));
+        var candidate = Path.GetFullPath(Path.Combine(libDirectory, "..", "..", "tools", folder));
         return Directory.Exists(candidate) ? candidate + Path.DirectorySeparatorChar : null;
+    }
+
+    /// <summary>AppHost assembly metadata key holding the directory that contains the watch host.</summary>
+    public const string WatchHostDirectoryMetadataKey = "aspiredotnetwatchhostdir";
+
+    /// <summary>Package folder (under <c>tools/</c>) of the watch host.</summary>
+    public const string WatchHostPackageFolder = "dotnet-watch-host";
+
+    /// <summary>
+    /// Reads the watch host directory from the AppHost assembly's metadata, or else from the package this assembly was
+    /// loaded from (prebuilt polyglot AppHost servers).
+    /// </summary>
+    public static string? GetWatchHostDirectory(Assembly? appHostAssembly) =>
+        appHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => string.Equals(a.Key, WatchHostDirectoryMetadataKey, StringComparison.OrdinalIgnoreCase))?.Value is { Length: > 0 } value
+            ? value
+            : GetPackageToolsDirectory(typeof(DotnetWatchToolResolver).Assembly.Location, WatchHostPackageFolder);
+
+    /// <summary>Returns the watch host (<c>Aspire.Hosting.Dotnet.WatchHost.dll</c>) under <paramref name="watchHostDirectory"/>.</summary>
+    /// <exception cref="DistributedApplicationException">The watch host isn't there; the message says how to fix it.</exception>
+    public static string ResolveWatchHostPath(string? watchHostDirectory)
+    {
+        if (string.IsNullOrEmpty(watchHostDirectory))
+        {
+            throw new DistributedApplicationException(
+                $"The hot reload host isn't available to this AppHost: it ships in the Aspire.Hosting.Dotnet package, but the AppHost " +
+                $"assembly has no '{WatchHostDirectoryMetadataKey}' metadata. Reference Aspire.Hosting.Dotnet from the AppHost project and " +
+                "rebuild it, or run without --watch.");
+        }
+
+        var path = Path.Combine(watchHostDirectory, Aspire.Shared.DotnetWatch.DotnetWatchHostProtocol.AssemblyFileName);
+        if (!File.Exists(path))
+        {
+            throw new DistributedApplicationException(
+                $"The hot reload host is missing: '{path}' does not exist. Restore and rebuild the AppHost so the Aspire.Hosting.Dotnet " +
+                "package is in place, or run without --watch.");
+        }
+
+        return path;
     }
 
     /// <summary>

@@ -1123,16 +1123,6 @@ public class Program
             return Environment.ExitCode;
         }
 
-        if (DotnetWatch.DotnetWatchResourceProxy.Matches(args))
-        {
-            return await DotnetWatch.DotnetWatchResourceProxy.RunAsync(args).ConfigureAwait(false);
-        }
-
-        if (DotnetWatch.DotnetWatchServerHost.Matches(args))
-        {
-            return await DotnetWatch.DotnetWatchServerHost.RunAsync(args).ConfigureAwait(false);
-        }
-
         if (CompletionInvocation.Matches(args))
         {
             return await InvokeCompletionAsync(args, Console.Out, Console.Error).ConfigureAwait(false);

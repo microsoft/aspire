@@ -60,8 +60,10 @@
                is specified to support dashboard path metadata generation on the inner loop. -->
     <AspireDashboardDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.Dashboard/$(Configuration)/net11.0/</AspireDashboardDir>
     <!-- Layout of the hot reload watch tool payloads (<major>/Microsoft.DotNet.HotReload.Watch.Aspire.dll) that
-         Aspire.Hosting.Dotnet repacks; in-repo AppHosts point their 'aspiredotnetwatchtoolsdir' metadata here. -->
+         Aspire.Hosting.Dotnet repacks, and of the watch host it ships; in-repo AppHosts point their
+         'aspiredotnetwatchtoolsdir' and 'aspiredotnetwatchhostdir' metadata here. -->
     <AspireDotnetWatchToolsDir>$(MSBuildThisFileDirectory)artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/</AspireDotnetWatchToolsDir>
+    <AspireDotnetWatchHostDir>$(MSBuildThisFileDirectory)artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch-host/</AspireDotnetWatchHostDir>
     <AspireTerminalHostDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.TerminalHost/$(Configuration)/net11.0/</AspireTerminalHostDir>
   </PropertyGroup>
 

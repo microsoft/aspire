@@ -14,6 +14,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -37,11 +38,11 @@ internal sealed class DotnetWatchServerResource(string name, string workingDirec
 /// different watcher process: projects under a different <c>global.json</c> (which can select a different SDK) get
 /// their own server, and so does every project with <c>WithBuildEnvironment</c> (the watcher builds with its own
 /// process environment, so build-only variables can't be scoped to one project of a shared server). A server acquires
-/// the watcher matching its resolved SDK, then runs its <c>server</c> command with its roots, hosted by the hidden
-/// <c>aspire __dotnet-watch-server</c> command so that stopping it is prompt. SPIKE deviation from D7: Aspire's
+/// the watcher matching its resolved SDK, then runs its <c>server</c> command with its roots, hosted by the watch host
+/// (<c>Aspire.Hosting.Dotnet.WatchHost.dll server</c>, shipped in this package) so that stopping it is prompt. SPIKE deviation from D7: Aspire's
 /// coordinated initial build is skipped in watch runs; the watcher's own initial build is the only build, and the
 /// server becomes healthy once it succeeds (a failed build waits for a fix instead of failing the run). Each service
-/// instance is launched through the hidden <c>aspire __dotnet-watch-proxy</c> command, which reads the service
+/// instance is launched through the watch host's <c>proxy</c> command, which reads the service
 /// environment from its own process environment (never <c>-e</c> arguments) and sends it over the watcher's resource
 /// pipe.
 /// </para>
@@ -53,40 +54,9 @@ internal static partial class DotnetWatchCoordinator
 {
     internal const string ServerResourceName = "dotnet-watch";
 
-    /// <summary>Path of the CLI that implements the proxy (an executable or a framework-dependent <c>.dll</c>).</summary>
-    internal const string ProxyPathConfigurationKey = "ASPIRE_DOTNET_WATCH_PROXY_PATH";
-
-    /// <summary>Muxer that hosts a framework-dependent proxy <c>.dll</c>; defaults to <c>dotnet</c> on PATH.</summary>
-    internal const string ProxyHostConfigurationKey = "ASPIRE_DOTNET_WATCH_PROXY_HOST";
-
-    /// <summary>Proxy/host protocol the CLI implements. Must match <c>DotnetWatchRunEnvironment</c> in the CLI.</summary>
-    internal const string ProxyProtocolConfigurationKey = "ASPIRE_DOTNET_WATCH_PROXY_PROTOCOL";
-
-    /// <summary>
-    /// 2: <c>__dotnet-watch-server</c> host and proxy <c>--working-directory</c>, instance marker and restore list.
-    /// 3: the proxy selects the project with <c>dotnet run --project</c> (a directory can hold several projects).
-    /// 4: proxy <c>--launch-gate</c> (replicas launch one at a time until the project has launched once).
-    /// </summary>
-    internal const int RequiredProxyProtocol = 4;
-
-    /// <summary>Process-environment variable naming the variables the proxy forwards to the service.</summary>
-    internal const string ForwardedEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_FORWARD_ENV";
-
-    /// <summary>
-    /// Process-environment variable naming variables set only for the watcher (temp directory, build configuration,
-    /// build-only environment). The service inherits the watcher's environment, so the proxy resets each of these to
-    /// its own value (or unsets it) for the service.
-    /// </summary>
-    internal const string RestoreEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_RESTORE_ENV";
-
-    /// <summary>
-    /// Process-environment variable with the replica's DCP resource name. The proxy passes it to <c>dotnet run</c> so
-    /// the watcher's launch and exit log lines can be attributed to one replica.
-    /// </summary>
-    internal const string InstanceVariable = "ASPIRE_DOTNET_WATCH_INSTANCE";
-
-    internal const string ProxyCommandName = "__dotnet-watch-proxy";
-    internal const string ServerHostCommandName = "__dotnet-watch-server";
+    internal const string ForwardedEnvironmentNamesVariable = DotnetWatchHostProtocol.ForwardedEnvironmentNamesVariable;
+    internal const string RestoreEnvironmentNamesVariable = DotnetWatchHostProtocol.RestoreEnvironmentNamesVariable;
+    internal const string InstanceVariable = DotnetWatchHostProtocol.InstanceVariable;
 
     internal const string CrashedState = "Crashed";
 
@@ -126,8 +96,8 @@ internal static partial class DotnetWatchCoordinator
     /// </summary>
     /// <remarks>
     /// Under an IDE debug session the IDE owns change tracking (D8): no service is watched, and the terminal and each
-    /// service's log say so. Watch requested without the CLI proxy (a plain <c>dotnet run</c> of the AppHost with
-    /// <c>AppHost:Run:WatchEnabled=true</c>) fails the run instead of silently running services without hot reload.
+    /// service's log say so. Nothing else is required of the launcher: <c>aspire run --watch</c> and a plain
+    /// <c>dotnet run</c> of the AppHost with <c>AppHost:Run:WatchEnabled=true</c> behave the same.
     /// </remarks>
     internal static bool ShouldWatch(IDistributedApplicationBuilder builder)
     {
@@ -144,26 +114,6 @@ internal static partial class DotnetWatchCoordinator
                     "Hot reload of .NET services is handled by the IDE: the AppHost is running under an IDE debug session, so 'aspire run --watch' doesn't watch them.");
                 return Task.CompletedTask;
             }));
-            return false;
-        }
-
-        if (string.IsNullOrEmpty(builder.Configuration[ProxyPathConfigurationKey]))
-        {
-            OnceForBuilder(builder, () => builder.Eventing.Subscribe<BeforeStartEvent>((_, _) =>
-                throw new DistributedApplicationException(
-                    "Hot reload was requested (AppHost:Run:WatchEnabled=true), but this AppHost wasn't started by 'aspire run --watch', " +
-                    $"so .NET services can't be watched ({ProxyPathConfigurationKey} is not set). Start it with 'aspire run --watch', " +
-                    "or remove AppHost:Run:WatchEnabled to run without hot reload.")));
-            return false;
-        }
-
-        if (!int.TryParse(builder.Configuration[ProxyProtocolConfigurationKey], NumberStyles.Integer, CultureInfo.InvariantCulture, out var protocol)
-            || protocol < RequiredProxyProtocol)
-        {
-            OnceForBuilder(builder, () => builder.Eventing.Subscribe<BeforeStartEvent>((_, _) =>
-                throw new DistributedApplicationException(
-                    "Hot reload was requested, but this Aspire CLI is too old for this version of Aspire.Hosting.Dotnet. " +
-                    "Update the Aspire CLI ('aspire update --self'), or run without --watch.")));
             return false;
         }
 
@@ -491,18 +441,6 @@ internal static partial class DotnetWatchCoordinator
             // Unix socket paths are limited to ~104 (macOS) / 108 (Linux) characters.
             RunDirectory = Path.Combine(Path.GetTempPath(), $"aspw-{Id}");
 
-            var proxyPath = builder.Configuration[ProxyPathConfigurationKey]!;
-            if (proxyPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-            {
-                ProxyCommand = builder.Configuration[ProxyHostConfigurationKey] is { Length: > 0 } host ? host : "dotnet";
-                ProxyPrefixArgs = [proxyPath];
-            }
-            else
-            {
-                ProxyCommand = proxyPath;
-                ProxyPrefixArgs = [];
-            }
-
             builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) =>
             {
                 // Resources removed or replaced after registration must not be built or watched.
@@ -559,8 +497,16 @@ internal static partial class DotnetWatchCoordinator
         public IDistributedApplicationBuilder Builder { get; }
         public string Id { get; }
         public string RunDirectory { get; }
-        public string ProxyCommand { get; }
-        public string[] ProxyPrefixArgs { get; }
+
+        /// <summary>
+        /// Path of the watch host, which proxies each replica and hosts the watcher. It ships in this package, so it's
+        /// found from the AppHost's metadata alone (no SDK resolution) and the same for every server.
+        /// </summary>
+        public string GetWatchHost() =>
+            _watchHost ??= DotnetWatchToolResolver.ResolveWatchHostPath(
+                DotnetWatchToolResolver.GetWatchHostDirectory(Builder.AppHostAssembly));
+
+        private string? _watchHost;
         public List<WatchedProject> Projects { get; } = [];
 
         /// <summary>Registered projects that run without hot reload, built by Aspire's coordinated build.</summary>
@@ -578,28 +524,25 @@ internal static partial class DotnetWatchCoordinator
                 ?? AddServer(scope, dedicatedTo: null, firstProjectName: resource.Resource.Name);
             var project = new WatchedProject(resource.Resource, metadata, buildCoordinator, server);
 
-            // Replace the SDK-selected launch tool (dotnet run) with the proxy. Program arguments contributed through
-            // WithArgs (launch-profile and user args) stay in the ordinary segment after `--`.
+            // Replace the SDK-selected launch tool (dotnet run) with the watch host's proxy, run by the same `dotnet`
+            // command that would have run `dotnet run`. Program arguments contributed through WithArgs (launch-profile
+            // and user args) stay in the ordinary segment after `--`.
             resource.WithLaunchToolArgs(ctx =>
             {
                 var executable = ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last();
-                executable.Command = ProxyCommand;
-                foreach (var prefix in ProxyPrefixArgs)
-                {
-                    ctx.Args.Add(prefix);
-                }
-
-                ctx.Args.Add(ProxyCommandName);
-                ctx.Args.Add("--server");
+                ctx.Args.Add("exec");
+                ctx.Args.Add(GetWatchHost());
+                ctx.Args.Add(DotnetWatchHostProtocol.ProxyCommand);
+                ctx.Args.Add(DotnetWatchHostProtocol.ServerOption);
                 ctx.Args.Add(project.Server.ResourcePipeName);
-                ctx.Args.Add("--entrypoint");
+                ctx.Args.Add(DotnetWatchHostProtocol.EntryPointOption);
                 ctx.Args.Add(projectPath);
-                ctx.Args.Add("--launch-gate");
+                ctx.Args.Add(DotnetWatchHostProtocol.LaunchGateOption);
                 ctx.Args.Add(project.Server.GetLaunchMarkerPath(projectPath));
                 if (executable.WorkingDirectoryExplicitlySet)
                 {
                     // The watcher launches `dotnet run` from the project directory; RunWorkingDirectory moves the app.
-                    ctx.Args.Add("--working-directory");
+                    ctx.Args.Add(DotnetWatchHostProtocol.WorkingDirectoryOption);
                     ctx.Args.Add(executable.WorkingDirectory);
                 }
 
@@ -746,8 +689,8 @@ internal static partial class DotnetWatchCoordinator
                 .WithArgs(async ctx =>
                 {
                     var prepared = await PrepareAsync(ctx.ExecutionContext.Services, ctx.CancellationToken).ConfigureAwait(false);
-                    ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last().Command = state.ProxyCommand;
-                    foreach (var arg in state.ProxyPrefixArgs.Concat(prepared.Args))
+                    ctx.Resource.Annotations.OfType<ExecutableAnnotation>().Last().Command = prepared.Muxer;
+                    foreach (var arg in prepared.Args)
                     {
                         ctx.Args.Add(arg);
                     }
@@ -926,6 +869,10 @@ internal static partial class DotnetWatchCoordinator
                 sdk.SdkVersion,
                 logger);
             await DotnetWatchToolResolver.EnsureRuntimeAvailableAsync(toolDll, sdk.Muxer, sdk.SdkVersion, cancellationToken).ConfigureAwait(false);
+
+            // The watch host hosts the watcher (and proxies each replica). It targets net10.0 and rolls forward to newer
+            // majors, so the muxer that runs the watcher runs it too.
+            var watchHost = _state.GetWatchHost();
             logger.LogInformation("Watching {Count} root(s) with SDK {SdkDirectory}: {Roots}", roots.Length, sdk.SdkDirectory, string.Join(", ", roots));
 
             var environment = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -992,7 +939,7 @@ internal static partial class DotnetWatchCoordinator
             // launches and crashes to replicas.
             var args = new List<string>
             {
-                ServerHostCommandName, "--", sdk.Muxer, "exec", toolDll, "server",
+                "exec", watchHost, DotnetWatchHostProtocol.ServerCommand, "--", sdk.Muxer, "exec", toolDll, "server",
                 "--sdk", sdk.SdkDirectory, "--server", ResourcePipeName, "--status-pipe", statusPipeName, "--verbose"
             };
             foreach (var root in roots)
@@ -1005,7 +952,7 @@ internal static partial class DotnetWatchCoordinator
             _ = Task.Run(() => MonitorStatusAsync(services, logger, statusPipeName, successfulBuild, generation, monitorToken), CancellationToken.None);
 
             // Everything set only for the watcher must not leak into the services, which inherit its environment.
-            return new PreparedServer(args, environment, [.. environment.Keys]);
+            return new PreparedServer(sdk.Muxer, watchHost, args, environment, [.. environment.Keys]);
         }
 
         private static async Task<IReadOnlyDictionary<string, string>> EvaluateBuildEnvironmentAsync(
@@ -1332,7 +1279,12 @@ internal static partial class DotnetWatchCoordinator
         public bool Consumed { get; set; }
     }
 
-    private sealed record PreparedServer(IReadOnlyList<string> Args, IReadOnlyDictionary<string, string> Environment, IReadOnlyList<string> WatcherOnlyNames);
+    /// <param name="Muxer">The <c>dotnet</c> that runs the watcher and the watch host's server command.</param>
+    /// <param name="WatchHost">Path of <c>Aspire.Hosting.Dotnet.WatchHost.dll</c>.</param>
+    /// <param name="Args">Server resource arguments: the watch host's <c>server</c> command wrapping the watcher.</param>
+    /// <param name="Environment">Environment of the watcher.</param>
+    /// <param name="WatcherOnlyNames">Variables the watcher strips from launched services.</param>
+    private sealed record PreparedServer(string Muxer, string WatchHost, IReadOnlyList<string> Args, IReadOnlyDictionary<string, string> Environment, IReadOnlyList<string> WatcherOnlyNames);
 
 #pragma warning disable IDE1006 // Naming: matches the watcher's JSON schema.
     private sealed record WatchStatus(string type, string[]? projects, bool? success, string? error, int? exitCode);

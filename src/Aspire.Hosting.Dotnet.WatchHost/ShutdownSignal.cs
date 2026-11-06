@@ -3,7 +3,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace Aspire.Cli.DotnetWatch;
+namespace Aspire.Hosting.Dotnet.WatchHost;
 
 /// <summary>
 /// Turns the stop signals DCP or a terminal can send into cancellation instead of process termination.

@@ -4,7 +4,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Aspire.Cli.DotnetWatch;
+namespace Aspire.Hosting.Dotnet.WatchHost;
 
 /// <summary>
 /// Launches a project's replicas one at a time until the project has launched once. The watcher hands a concurrent
