@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml;
+using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -899,6 +900,78 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         {
             Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
         }
+    }
+
+    [Fact]
+    public async Task UpdateAsync_OtherSolutionProjectRestorePreservesCustomRestoreTargetsOfItsReferences()
+    {
+        // https://github.com/microsoft/aspire/issues/11458: a solution project whose Aspire.AppHost.Sdk version is
+        // bumped is restored with the candidate restore preview, which applies to its whole reference graph.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = await CreateAppHostAsync(workspace, "AppHost.csproj");
+        var configFile = await WriteCurrentPolicyAsync(workspace, "https://old.example/v3/index.json", configureCache: false);
+        const string newSource = "https://new.example/v3/index.json";
+
+        var testsProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Tests").FullName, "Tests.csproj"));
+        await File.WriteAllTextAsync(testsProjectFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" />
+            </Project>
+            """);
+        var libraryProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Library").FullName, "Library.csproj"));
+        await File.WriteAllTextAsync(libraryProjectFile.FullName, """<Project Sdk="Microsoft.NET.Sdk" />""");
+        var customRestoreTargets = Path.Combine(libraryProjectFile.DirectoryName!, "Custom.Restore.targets");
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Repro.slnx"), "<Solution />");
+
+        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (file, _, _, _, _) =>
+        {
+            if (file.FullName == testsProjectFile.FullName)
+            {
+                return (0, JsonDocument.Parse(new JsonObject().WithProjectReference(libraryProjectFile.FullName).ToJsonString()));
+            }
+            if (file.FullName == libraryProjectFile.FullName)
+            {
+                return (0, JsonDocument.Parse(new JsonObject().WithProperty("NuGetRestoreTargets", customRestoreTargets).ToJsonString()));
+            }
+            return CreatePackageEvaluation();
+        };
+        runner.GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [projectFile, testsProjectFile]);
+        runner.SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+            (0, [new NuGetPackageCli { Id = query, Version = "9.4.1", Source = newSource }]);
+        runner.GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0,
+            [configFile.FullName, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "NuGet.Config")]);
+        var restoredProjects = new List<string>();
+        runner.RestoreAsyncCallback = (file, options, _) =>
+        {
+            Assert.NotNull(options.NuGetRestoreTargetsFile);
+            if (file.FullName == testsProjectFile.FullName)
+            {
+                // The library must keep its custom restore targets instead of the default ones.
+                var targets = XDocument.Load(options.NuGetRestoreTargetsFile.FullName);
+                Assert.Contains(targets.Root!.Elements("Import"), import =>
+                    import.Attribute("Project")?.Value == MSBuildEscaping.Escape(customRestoreTargets) &&
+                    import.Attribute("Condition")!.Value.Contains(MSBuildEscaping.Escape(libraryProjectFile.FullName), StringComparison.Ordinal));
+            }
+            restoredProjects.Add(file.FullName);
+            return 0;
+        };
+        using var provider = CreateServices(workspace, runner, new FakeNuGetClient
+        {
+            GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+        }).BuildServiceProvider();
+        var channel = PackageChannel.CreateExplicitChannel(
+            "staging", PackageChannelQuality.Both, [new("Aspire*", newSource)],
+            provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName),
+            """{ "channel": "staging", "sdkVersion": "9.4.1" }""");
+
+        var result = await provider.GetRequiredService<IProjectUpdater>().UpdateProjectAsync(
+            CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
+
+        Assert.True(result.UpdatedApplied);
+        Assert.Equal([projectFile.FullName, testsProjectFile.FullName], restoredProjects);
+        Assert.Contains("""<Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />""", await File.ReadAllTextAsync(testsProjectFile.FullName));
     }
 
     [Theory]
