@@ -10,10 +10,10 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class GoStarterReadinessTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
     [CaptureWorkspaceOnFailure]
-    public async Task StarterShipsTidyApiAndServesRequests(bool useRedisCache)
+    public async Task StarterShipsTidyApiAndServesRequests(bool useRedisCache, bool prebuildApplications)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -47,17 +47,26 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
         Assert.True(File.Exists(Path.Combine(projectRoot, "api", "go.sum")));
 
         await auto.RunCommandAsync("cd GoReady", counter);
-        // Build before any run/start can repair the template through WithModTidy.
-        await auto.RunCommandAsync("(cd api && go build -mod=readonly -o /tmp/go-ready-api . && go mod tidy -diff)", counter, TimeSpan.FromMinutes(3));
+        if (prebuildApplications)
+        {
+            // Prove both generated applications build without Aspire repairing dependencies.
+            await auto.RunCommandAsync("(cd api && go build -mod=readonly -o /tmp/go-ready-api . && go mod tidy -diff)", counter, TimeSpan.FromMinutes(3));
+            await auto.RunCommandAsync("npm --prefix frontend ci && npm --prefix frontend run build", counter, TimeSpan.FromMinutes(3));
+        }
         try
         {
             await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4));
             await auto.RunCommandAsync("aspire wait api --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
-            await auto.RunCommandAsync("aspire describe api --format json > api.json", counter);
+            await auto.RunCommandAsync("aspire wait frontend --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
+            if (useRedisCache)
+            {
+                await auto.RunCommandAsync("aspire wait cache --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
+            }
+            await auto.RunCommandAsync("aspire describe frontend --format json > frontend.json", counter);
             // Describe emits { resources: [{ urls: [{ url: \"http://...\" }] }] }. Use Node,
             // already provided by the polyglot image, rather than assuming jq is installed.
             await auto.RunCommandAsync(
-                """API_URL=$(node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync("api.json", "utf8")); const url = data.resources[0].urls.find(u => u.url.startsWith("http://")); if (!url) throw new Error("Missing HTTP API URL"); process.stdout.write(url.url.replace(/\/$/, ""));') && curl -fsS --retry 10 --retry-all-errors --retry-delay 1 "$API_URL/health" && curl -fsS "$API_URL/api/weatherforecast" > weather.json && node -e 'const assert = require("node:assert/strict"); const weather = require("./weather.json"); assert.equal(weather.length, 5); for (const forecast of weather) { assert.equal(typeof forecast.temperatureC, "number"); assert.equal(typeof forecast.summary, "string"); }'""",
+                """FRONTEND_URL=$(node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync("frontend.json", "utf8")); const url = data.resources[0].urls.find(u => u.url.startsWith("http://")); if (!url) throw new Error("Missing HTTP frontend URL"); process.stdout.write(url.url.replace(/\/$/, ""));') && curl -fsS --retry 10 --retry-all-errors --retry-delay 1 "$FRONTEND_URL/" > index.html && grep -q '<div id="root"></div>' index.html && curl -fsS "$FRONTEND_URL/api/weatherforecast" > weather.json && node -e 'const assert = require("node:assert/strict"); const weather = require("./weather.json"); assert.equal(weather.length, 5); for (const forecast of weather) { assert.equal(typeof forecast.temperatureC, "number"); assert.equal(typeof forecast.summary, "string"); }'""",
                 counter,
                 TimeSpan.FromMinutes(2));
         }
