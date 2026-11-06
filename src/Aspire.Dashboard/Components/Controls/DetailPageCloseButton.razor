@@ -1,0 +1,11 @@
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<ControlsStrings> Loc
+
+<FluentButton Class="toolbar-button detail-page-close"
+              Appearance="ButtonAppearance.Default"
+              IconOnly="true"
+              IconStart="@(new Icons.Regular.Size20.Dismiss())"
+              OnClick="@CloseAsync"
+              data-parent-url="@ParentUrl"
+              data-tooltip="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]"
+              aria-label="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]" />

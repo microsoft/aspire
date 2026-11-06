@@ -28,7 +28,9 @@ internal static class AppHostPresentation
 
     public static string GetTitle(AppHostInfo host) => Compact(GetDisplayName(host), 44);
 
-    public static string GetSubtitle(AppHostInfo host) => $"{Compact(GetLocation(host), 44)} \u00b7 PID {host.AppHostPid}";
+    public static string GetSubtitle(AppHostInfo host) => $"{GetCompactLocation(host.AppHostPath)} \u00b7 PID {host.AppHostPid}";
+
+    public static string GetCompactLocation(string appHostPath) => Compact(GetLocation(appHostPath), 44);
 
     public static string GetLabel(AppHostInfo host)
         => ToSingleLine($"{Path.GetFileNameWithoutExtension(host.AppHostPath)} - {GetLocation(host)} (PID {host.AppHostPid})");

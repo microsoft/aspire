@@ -23,5 +23,6 @@ internal enum AppHostHealth
     Unknown,
     Healthy,
     Warning,
-    Unhealthy
+    Unhealthy,
+    NoResources
 }

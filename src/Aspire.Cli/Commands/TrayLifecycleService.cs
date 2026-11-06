@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -21,6 +22,7 @@ internal sealed class TrayLifecycleService(
     LayoutProcessRunner processRunner,
     IEnvironment environment,
     IProcessPathProvider processPathProvider,
+    IInteractionService interactionService,
     TimeProvider timeProvider,
     ILogger<TrayLifecycleService> logger)
 {
@@ -28,7 +30,8 @@ internal sealed class TrayLifecycleService(
 
     public async Task<CommandResult> ExecuteAsync(bool start, CancellationToken cancellationToken)
     {
-        if ((!environment.IsMacOS() && !environment.IsWindows()) ||
+        if ((!environment.IsMacOS() && !environment.IsWindows() && !environment.IsLinux()) ||
+            (environment.IsLinux() && environment.RuntimeIdentifier.StartsWith("linux-musl-", StringComparison.Ordinal)) ||
             RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.UnsupportedPlatform);
@@ -82,6 +85,15 @@ internal sealed class TrayLifecycleService(
                 WindowsTrayPayload.Validate(Path.GetDirectoryName(trayPath)!,
                     RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64");
             }
+            else if (environment.IsLinux())
+            {
+                if (!string.Equals(trayPath, Path.Combine(bundleRoot, LinuxTrayPayload.ExecutablePath), StringComparison.Ordinal))
+                {
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, TrayCommandStrings.PayloadMissing);
+                }
+                LinuxTrayPayload.Validate(Path.GetDirectoryName(trayPath)!,
+                    RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64");
+            }
 
             string[] arguments = start
                 ? startupCliPath is null
@@ -109,6 +121,16 @@ internal sealed class TrayLifecycleService(
                 if (!string.IsNullOrWhiteSpace(error))
                 {
                     logger.LogDebug("Tray helper stderr: {Error}", error.Trim());
+                }
+
+                // A successful Linux start can still have no visible icon. The helper reports
+                // that with a marker on its own stdout line, for example:
+                //   aspire-tray:no-tray-host
+                // Other stdout is diagnostic only, as logged above.
+                if (start && exitCode == CliExitCodes.Success && environment.IsLinux()
+                    && output.Split('\n').Any(line => line.Trim() == LinuxTrayPayload.NoTrayHostMarker))
+                {
+                    interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, TrayCommandStrings.NoTrayHost);
                 }
 
                 return exitCode == CliExitCodes.Success

@@ -282,7 +282,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             Assert.Equal(0, hintGeometry[1]);
             Assert.InRange(hintGeometry[2], 0, 18);
             Assert.Equal(1, hintGeometry[3]);
-            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(hint).ToBeVisibleAsync();
             await page.WaitForFunctionAsync("""
                 () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
@@ -300,9 +300,15 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await Assertions.Expect(hint).ToHaveAttributeAsync("aria-label", usesCommand
                 ? Resources.Layout.ResourcePaneSelectionCommandDescription
                 : Resources.Layout.ResourcePaneSelectionControlDescription);
-            await pane.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(hint).ToBeVisibleAsync();
 
+            await GetRowLink("multi-a").ClickAsync();
+            await Assertions.Expect(GetRowLink("multi-a")).ToHaveAttributeAsync("aria-current", "page");
+            await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
+            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(2);
+            await GetRowLink("multi-c").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
+            await Assertions.Expect(pane.Locator("a[aria-current='true']")).ToHaveCountAsync(3);
             await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/structuredlogs\?resource=multi-a&resource=multi-c$"));
 

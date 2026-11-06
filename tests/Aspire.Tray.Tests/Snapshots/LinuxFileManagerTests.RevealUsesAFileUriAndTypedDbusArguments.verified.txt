@@ -1,0 +1,1 @@
+﻿(["file:///home/dev/project%20'quotes'%20&%20$(echo);%20%2520%20%23/apphost.cs"], '')

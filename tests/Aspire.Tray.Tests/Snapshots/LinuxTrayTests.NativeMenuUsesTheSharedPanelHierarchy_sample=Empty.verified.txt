@@ -1,0 +1,5 @@
+﻿Aspire · No AppHosts running [disabled]
+---
+Settings...
+Documentation
+Quit
