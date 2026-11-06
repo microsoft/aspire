@@ -17,7 +17,6 @@ app.MapGet("/", () => $"api v1 | {Greeter.Message}");
 // Reads appsettings.json on every request: edit Demo:Greeting and the running app picks it up (no rebuild).
 app.MapGet("/config", (IConfiguration config) => config["Demo:Greeting"] ?? "(not set)");
 
-// Exits with code 3 to try the crash flow: the resource shows Crashed; the next save (or Restart) relaunches it.
 // What the watcher built and how it launched this process (build configuration, build env, working directory, replica).
 app.MapGet("/diag", () =>
 {
@@ -43,6 +42,7 @@ app.MapGet("/diag", () =>
     });
 });
 
+// Exits with code 3 to try the crash flow: the resource shows Crashed; the next save (or Restart) relaunches it.
 app.MapGet("/crash", () => { Environment.Exit(3); return ""; });
 
 app.Run();

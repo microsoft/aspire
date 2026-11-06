@@ -244,7 +244,7 @@ public class DotnetWatchEventInterpreterTests
     }
 
     [Fact]
-    public void ProjectFileChangePointsToRebuild()
+    public void ProjectFileChangeRebuildsTheProject()
     {
         var interpreter = CreateReady();
 
@@ -252,10 +252,24 @@ public class DotnetWatchEventInterpreterTests
         var notice = Assert.Single(interpreter.OnLogLine("⌚ No managed code changes to apply."));
 
         Assert.Equal(WatchNoticeKind.ProjectFileChanged, notice.Kind);
-        Assert.Equal(LogLevel.Warning, notice.Level);
-        Assert.Contains("Api.csproj changed", notice.Message);
-        Assert.Contains("use Rebuild on api", notice.Message);
-        Assert.Contains("'aspire resource api rebuild'", notice.Message);
+        Assert.Equal(LogLevel.Information, notice.Level);
+        Assert.Equal("📦 Api.csproj changed. Rebuilding api to apply package and project reference changes.", notice.Message);
+        Assert.Equal([s_api], notice.ProjectPaths);
+    }
+
+    [Fact]
+    public void RestoreOutputsAreNotAnotherProjectChange()
+    {
+        var interpreter = CreateReady();
+
+        // Restore regenerates obj/*.nuget.g.targets right after the project file change; the watcher reports it on its own.
+        interpreter.OnLogLine($"File updated: {Path.Combine(s_root, "Api", "obj", "Api.csproj.nuget.g.targets")}");
+        Assert.Empty(interpreter.OnLogLine("⌚ No managed code changes to apply."));
+
+        interpreter.OnLogLine($"File updated: {s_api}");
+        interpreter.OnLogLine($"File updated: {Path.Combine(s_root, "Api", "obj", "Api.csproj.nuget.g.props")}");
+        var notice = Assert.Single(interpreter.OnLogLine("⌚ No managed code changes to apply."));
+        Assert.Equal("📦 Api.csproj changed. Rebuilding api to apply package and project reference changes.", notice.Message);
     }
 
     [Fact]

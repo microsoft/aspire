@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
@@ -26,6 +27,14 @@ internal static class DotnetWatchServerInfrastructure
     private const string ApplicationOrchestratorTypeName = "Aspire.Hosting.Orchestrator.ApplicationOrchestrator";
 
     /// <summary>
+    /// A hidden command that stops the server as the first half of a coordinator-driven restart (a fresh watcher drops
+    /// its compilation baselines and delta history), without the "watcher stopped" notice.
+    /// </summary>
+    internal const string StopForRestartCommand = "stop-for-restart";
+
+    private static readonly ConcurrentDictionary<IResource, byte> s_restarting = new();
+
+    /// <summary>
     /// Hides the server and replaces Start/Stop/Restart with a single <c>start</c> command that is only offered
     /// while the server isn't running, so it can be recovered (<c>aspire resource dotnet-watch start</c>) but not
     /// stopped out from under the watched services.
@@ -38,7 +47,8 @@ internal static class DotnetWatchServerInfrastructure
         // notices and the log of every service that waits on the server.
         server.ApplicationBuilder.Eventing.Subscribe<ResourceStoppedEvent>(server.Resource, (e, _) =>
         {
-            if (e.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.IsCancellationRequested)
+            if (e.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.IsCancellationRequested ||
+                s_restarting.TryRemove(server.Resource, out byte _))
             {
                 return Task.CompletedTask;
             }
@@ -59,6 +69,7 @@ internal static class DotnetWatchServerInfrastructure
         if (hostingAssembly.GetType(ExcludeLifecycleCommandsAnnotationTypeName) is not { } excludeType
             || hostingAssembly.GetType(ApplicationOrchestratorTypeName) is not { } orchestratorType
             || orchestratorType.GetMethod("StartResourceAsync", BindingFlags.Public | BindingFlags.Instance, [typeof(string), typeof(CancellationToken)]) is not { } startMethod
+            || orchestratorType.GetMethod("StopResourceAsync", BindingFlags.Public | BindingFlags.Instance, [typeof(string), typeof(CancellationToken)]) is not { } stopMethod
             || Activator.CreateInstance(excludeType, nonPublic: true) is not IResourceAnnotation excludeAnnotation)
         {
             // Keep the built-in lifecycle commands rather than leaving the server without a way to start again.
@@ -82,6 +93,21 @@ internal static class DotnetWatchServerInfrastructure
                 IconVariant = IconVariant.Filled,
                 IsHighlighted = true,
                 UpdateState = context => IsStopped(context.ResourceSnapshot.State?.Text) ? ResourceCommandState.Enabled : ResourceCommandState.Hidden,
+            });
+        server.WithCommand(
+            StopForRestartCommand,
+            "Stop for restart",
+            async context =>
+            {
+                s_restarting[server.Resource] = 0;
+                var orchestrator = context.Services.GetRequiredService(orchestratorType);
+                await ((Task)stopMethod.Invoke(orchestrator, [context.ResourceName, context.CancellationToken])!).ConfigureAwait(false);
+                return CommandResults.Success();
+            },
+            new CommandOptions
+            {
+                Description = "Stops the hot reload watcher so the AppHost can start a fresh one.",
+                UpdateState = _ => ResourceCommandState.Hidden,
             });
 
         return server;

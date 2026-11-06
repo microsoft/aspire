@@ -5,7 +5,9 @@
 #pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental.
 
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
@@ -220,11 +222,11 @@ internal static partial class DotnetWatchCoordinator
     /// <item><description>A project that another resource waits on with <c>WaitForCompletion</c> runs to completion. The watcher
     /// relaunches a watched service when it exits instead of letting it complete (#9756), so it's excluded, visibly; with an
     /// explicit <c>WithWatch(true)</c> the run fails instead.</description></item>
-    /// <item><description>File-based apps, persistent lifetimes and custom launches can't be watched and fail the run with
+    /// <item><description>Persistent lifetimes and custom launches can't be watched and fail the run with
     /// an error that names the opt-out.</description></item>
     /// </list>
     /// </remarks>
-    internal static WatchDecision Evaluate(DotnetProjectResource resource, IProjectMetadata metadata, IEnumerable<IResource> model)
+    internal static WatchDecision Evaluate(DotnetProjectResource resource, IEnumerable<IResource> model)
     {
         var requested = resource.Annotations.OfType<DotnetProjectWatchAnnotation>().LastOrDefault()?.Enabled;
         if (requested == false)
@@ -247,14 +249,6 @@ internal static partial class DotnetWatchCoordinator
                 : new(WatchDecisionKind.Excluded,
                     $"'{resource.Name}' runs without hot reload because {waiters} waits for it to complete (WaitForCompletion); " +
                     "a watched service would be relaunched instead of completing.");
-        }
-
-        if (metadata.IsFileBasedApp)
-        {
-            // The watch server launches `dotnet run` from the file's directory without `--file`, so a
-            // file-based app exits with "Couldn't find a project to run".
-            return new(WatchDecisionKind.Rejected,
-                $"'{resource.Name}' is a file-based C# app ({Path.GetFileName(metadata.ProjectPath)}), which hot reload doesn't support yet.");
         }
 
         if (HasPersistentLifetime(resource, []))
@@ -310,7 +304,7 @@ internal static partial class DotnetWatchCoordinator
         var excluded = new List<(WatchedProject Project, string Reason)>();
         foreach (var project in projects)
         {
-            var decision = Evaluate(project.Resource, project.Metadata, model.Resources);
+            var decision = Evaluate(project.Resource, model.Resources);
             if (decision.Kind == WatchDecisionKind.Rejected)
             {
                 errors.Add(decision.Reason!);
@@ -402,6 +396,21 @@ internal static partial class DotnetWatchCoordinator
             && int.TryParse(match.Groups["pid"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out processId)
             && int.TryParse(match.Groups["code"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out exitCode);
     }
+
+    /// <summary>Parses MSBuild's "Switch: path/app.cs.csproj" line that follows MSB1009 for a file-based app's virtual project.</summary>
+    internal static bool TryParseVirtualProjectBuildFailure(string line, [NotNullWhen(true)] out string? entryPoint)
+    {
+        entryPoint = VirtualProjectSwitchRegex().Match(line) is { Success: true } match ? match.Groups["path"].Value : null;
+        return entryPoint is not null;
+    }
+
+    private static readonly TimeSpan s_referenceRebuildDebounce = TimeSpan.FromSeconds(1);
+
+    internal static bool PathsEqual(string a, string b) =>
+        string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
+
+    [GeneratedRegex(@"Switch: (?<path>\S.*\.cs)\.csproj\s*$")]
+    private static partial Regex VirtualProjectSwitchRegex();
 
     [GeneratedRegex(InstanceVariable + @"=(?<instance>[A-Za-z0-9-]+).*process id (?<pid>\d+)")]
     private static partial Regex LaunchedLineRegex();
@@ -569,7 +578,10 @@ internal static partial class DotnetWatchCoordinator
             project.Annotations.AddRange(resource.Resource.Annotations.Where(a => !existing.Contains(a)));
             Projects.Add(project);
 
-            if (resource.Resource.Annotations.OfType<DotnetProjectBuildEnvironmentCallbackAnnotation>().Any())
+            // A file-based app gets its own watcher: on any project file change the watcher (rc.2) restores every root
+            // through its virtual project path (app.cs.csproj), which fails, and then crashes on the next file event.
+            if (resource.Resource.Annotations.OfType<DotnetProjectBuildEnvironmentCallbackAnnotation>().Any() ||
+                ((IProjectMetadata)metadata).IsFileBasedApp)
             {
                 UseDedicatedServer(resource);
             }
@@ -708,6 +720,7 @@ internal static partial class DotnetWatchCoordinator
             builder.Eventing.Subscribe<ResourceStoppedEvent>(Builder.Resource, (_, _) =>
             {
                 Invalidate();
+                Interlocked.Exchange(ref _stoppedForRestart, null)?.TrySetResult();
                 return Task.CompletedTask;
             });
         }
@@ -1011,7 +1024,7 @@ internal static partial class DotnetWatchCoordinator
                     }
 
                     diagnostics.LogDebug("dotnet-watch status: {Line}", line);
-                    var projects = status.projects ?? [];
+                    var projects = ToEntryPointPaths(status.projects ?? []);
 
                     if (status.type == DotnetWatchStatusTypes.BuildComplete)
                     {
@@ -1118,6 +1131,110 @@ internal static partial class DotnetWatchCoordinator
             }
         }
 
+        private readonly HashSet<DotnetProjectResource> _pendingReferenceRebuilds = [];
+        private int _referenceRebuildGeneration;
+        private readonly SemaphoreSlim _restartLock = new(1, 1);
+        private TaskCompletionSource? _stoppedForRestart;
+
+        /// <summary>
+        /// The watcher reloads a changed project file but doesn't restore or rebuild it, so new package or project
+        /// references wouldn't reach the service. Restarts the watcher with its services once saves settle.
+        /// </summary>
+        private void ScheduleReferenceRebuild(IServiceProvider services, IEnumerable<WatchedProject> projects)
+        {
+            int generation;
+            lock (_pendingReferenceRebuilds)
+            {
+                foreach (var project in projects)
+                {
+                    _pendingReferenceRebuilds.Add(project.Resource);
+                }
+
+                if (_pendingReferenceRebuilds.Count == 0)
+                {
+                    return;
+                }
+
+                generation = ++_referenceRebuildGeneration;
+            }
+
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(s_referenceRebuildDebounce).ConfigureAwait(false);
+                lock (_pendingReferenceRebuilds)
+                {
+                    if (generation != _referenceRebuildGeneration)
+                    {
+                        return;
+                    }
+
+                    _pendingReferenceRebuilds.Clear();
+                }
+
+                await RestartWithServicesAsync(services, "to apply the package and project reference changes").ConfigureAwait(false);
+            });
+        }
+
+        /// <summary>
+        /// Stops this server's services, restarts the watcher and starts the services again. Building outside the
+        /// watcher (Aspire's Rebuild) isn't enough: the running watcher keeps its compilation baselines and replays its
+        /// hot reload delta history to every process it launches. After removing a package whose API an earlier edit
+        /// used, the rebuilt assembly matched the original (same MVID), the replayed deltas applied and the service
+        /// aborted at startup (MethodAccessException). A fresh watcher restores and builds the projects as its initial
+        /// build; the services wait for it as they do at startup.
+        /// </summary>
+        private async Task RestartWithServicesAsync(IServiceProvider services, string reason)
+        {
+            await _restartLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var commands = services.GetRequiredService<ResourceCommandService>();
+                var resources = Projects.Select(p => p.Resource).Distinct().ToArray();
+                EmitNotices(services, [new WatchNotice(WatchNoticeKind.Restarting, LogLevel.Information,
+                    $"♻️ Restarting {string.Join(", ", resources.Select(r => r.Name))} with a fresh watcher {reason}.",
+                    [.. Projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal)])]);
+
+                foreach (var resource in resources)
+                {
+                    await commands.ExecuteCommandAsync(resource, KnownResourceCommands.StopCommand).ConfigureAwait(false);
+                }
+
+                var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                Volatile.Write(ref _stoppedForRestart, stopped);
+                var result = await commands.ExecuteCommandAsync(Resource, DotnetWatchServerInfrastructure.StopForRestartCommand).ConfigureAwait(false);
+                if (result.Success)
+                {
+                    // Start only after this server's stop handling (Invalidate) ran, so the new start gets a fresh prepare.
+                    await stopped.Task.WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+                    await commands.ExecuteCommandAsync(Resource, KnownResourceCommands.StartCommand).ConfigureAwait(false);
+                }
+
+                foreach (var resource in resources)
+                {
+                    await commands.ExecuteCommandAsync(resource, KnownResourceCommands.StartCommand).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+            {
+                services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogWarning(
+                    "⚠️ Couldn't restart the hot reload watcher '{Server}': {Message}", Resource.Name, ex.Message);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _stoppedForRestart, null);
+                _restartLock.Release();
+            }
+        }
+
+        // The watcher names a file-based app by its virtual project path (app.cs.csproj); the model has the .cs file.
+        private string[] ToEntryPointPaths(string[] paths) =>
+            [.. paths.Select(path => path.EndsWith(".cs.csproj", StringComparison.OrdinalIgnoreCase) &&
+                Projects.FirstOrDefault(p => PathsEqual(p.ProjectPath, path[..^".csproj".Length])) is { } project
+                    ? project.ProjectPath
+                    : path)];
+
+        private readonly ConcurrentDictionary<string, byte> _fileBasedRebuilds = new(StringComparer.Ordinal);
+
         private void OnReplicaLogLine(string line)
         {
             if (TryParseLaunchedLine(line, out var processId, out var instance))
@@ -1147,6 +1264,40 @@ internal static partial class DotnetWatchCoordinator
         }
 
         /// <summary>
+        /// The watcher (rc.2, and SDK main at the time of writing) rebuilds a restarted file-based app through its virtual
+        /// project path (<c>dotnet build ticker.cs.csproj</c>), which fails with MSB1009 and leaves the app stopped. A fresh
+        /// watcher builds the .cs file itself as its initial build, so restart the app's (dedicated) watcher instead.
+        /// </summary>
+        private void RebuildFileBasedAppIfStuck(IServiceProvider services, string line)
+        {
+            if (!TryParseVirtualProjectBuildFailure(line, out var entryPoint))
+            {
+                return;
+            }
+
+            foreach (var project in Projects.Where(p => ((IProjectMetadata)p.Metadata).IsFileBasedApp && PathsEqual(p.ProjectPath, entryPoint)))
+            {
+                if (!_fileBasedRebuilds.TryAdd(project.Resource.Name, 0))
+                {
+                    continue;
+                }
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // File-based apps have a dedicated server, so this restarts only this app.
+                        await RestartWithServicesAsync(services, "to rebuild the file-based app").ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        _fileBasedRebuilds.TryRemove(project.Resource.Name, out _);
+                    }
+                });
+            }
+        }
+
+        /// <summary>
         /// Feeds the watcher's console output (build and compiler errors, changed files, apply times) to the
         /// interpreter; the status protocol doesn't carry those details.
         /// </summary>
@@ -1160,6 +1311,7 @@ internal static partial class DotnetWatchCoordinator
                     foreach (var line in batch)
                     {
                         OnReplicaLogLine(line.Content);
+                        RebuildFileBasedAppIfStuck(services, line.Content);
 
                         IReadOnlyList<WatchNotice> notices;
                         lock (_noticeGate)
@@ -1213,6 +1365,18 @@ internal static partial class DotnetWatchCoordinator
             var projects = Projects;
             foreach (var notice in notices)
             {
+                if (notice.Kind == WatchNoticeKind.ProjectFileChanged)
+                {
+                    ScheduleReferenceRebuild(services, projects.Where(p => notice.ProjectPaths.Any(path => PathsEqual(p.ProjectPath, path))));
+                }
+
+                // The Rebuild command replaces the watcher's failed rebuild of a restarted file-based app; see RebuildFileBasedAppIfStuck.
+                if (notice.Kind == WatchNoticeKind.BuildFailed && notice.ProjectPaths.Count > 0 &&
+                    notice.ProjectPaths.All(path => projects.Any(p => _fileBasedRebuilds.ContainsKey(p.Resource.Name) && PathsEqual(p.ProjectPath, path))))
+                {
+                    continue;
+                }
+
 #pragma warning disable CA2254 // The notice text is the message; it has no structured parameters.
                 noticeLogger.Log(notice.Level, NoticeEventId(notice.Kind), notice.Message);
 #pragma warning restore CA2254

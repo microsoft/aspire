@@ -296,6 +296,25 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void FileBasedAppGetsADedicatedServer()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(WatchArgs());
+        var scriptPath = Path.Combine(workspace.Path, "ticker.cs");
+        File.WriteAllText(scriptPath, "Console.WriteLine(1);");
+
+        var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
+        var ticker = builder.AddDotnetProject("ticker", scriptPath);
+
+        var servers = builder.Resources.OfType<DotnetWatchServerResource>().ToList();
+        var shared = Assert.Single(servers, s => s.Name == DotnetWatchCoordinator.ServerResourceName);
+        var dedicated = Assert.Single(servers, s => s.Name == "dotnet-watch-ticker");
+        Assert.Contains(ticker.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == dedicated);
+        Assert.DoesNotContain(ticker.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == shared);
+        Assert.Contains(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == shared);
+    }
+
+    [Fact]
     public async Task UnusedSharedServerIsRemovedWhenEveryProjectHasItsOwn()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -394,6 +413,17 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.True(DotnetWatchCoordinator.TryParseExitedLine(line, out var processId, out var exitCode));
         Assert.Equal(expectedProcessId, processId);
         Assert.Equal(expectedExitCode, exitCode);
+    }
+
+    [Theory]
+    [InlineData("Switch: /src/Scripts/ticker.cs.csproj", "/src/Scripts/ticker.cs")]
+    [InlineData(@"Switch: C:\src\My Scripts\ticker.cs.csproj", @"C:\src\My Scripts\ticker.cs")]
+    [InlineData("Switch: /src/Api/Api.csproj", null)]
+    [InlineData("Building /src/Scripts/ticker.cs.csproj ...", null)]
+    public void VirtualProjectBuildFailureNamesTheEntryPoint(string line, string? expected)
+    {
+        Assert.Equal(expected is not null, DotnetWatchCoordinator.TryParseVirtualProjectBuildFailure(line, out var entryPoint));
+        Assert.Equal(expected, entryPoint);
     }
 
     [Fact]

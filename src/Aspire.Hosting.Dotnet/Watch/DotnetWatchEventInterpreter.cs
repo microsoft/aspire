@@ -474,11 +474,17 @@ internal sealed class DotnetWatchEventInterpreter
 
     /// <summary>
     /// The watcher reloads a changed project file but doesn't rebuild or restart the app, so a new package or project
-    /// reference isn't deployed (the app fails with FileNotFoundException when it's first used). Point to Rebuild.
+    /// reference isn't deployed (the app fails with FileNotFoundException when it's first used). The coordinator
+    /// restarts the watcher and its services for these projects.
     /// </summary>
     private bool TryAddProjectFileNotice(IReadOnlyCollection<string> files, List<WatchNotice> notices)
     {
-        var projectFiles = files.Where(IsProjectFile).ToArray();
+        if (files.Count > 0 && files.All(IsRestoreOutput))
+        {
+            return true;
+        }
+
+        var projectFiles = files.Where(f => IsProjectFile(f) && !IsRestoreOutput(f)).ToArray();
         if (projectFiles.Length == 0)
         {
             return false;
@@ -486,10 +492,14 @@ internal sealed class DotnetWatchEventInterpreter
 
         var projects = Attribute(projectFiles);
         var names = Names(projects);
-        notices.Add(Notice(WatchNoticeKind.ProjectFileChanged, LogLevel.Warning,
-            $"📦 {FileList(projectFiles)} changed. New package or project references aren't hot reloaded; use Rebuild on {names} (dashboard, or 'aspire resource {(projects.Count == 1 ? names : "<name>")} rebuild') to apply them.", projects));
+        notices.Add(Notice(WatchNoticeKind.ProjectFileChanged, LogLevel.Information,
+            $"📦 {FileList(projectFiles)} changed. Rebuilding {names} to apply package and project reference changes.", projects));
         return true;
     }
+
+    // Restore writes obj/*.nuget.g.props/targets right after a project file change; that's the same change, not another.
+    private static bool IsRestoreOutput(string file) =>
+        file.Replace('\\', '/').Contains("/obj/", StringComparison.OrdinalIgnoreCase) && IsProjectFile(file);
 
     private static bool IsProjectFile(string file) =>
         Path.GetExtension(file) is { } ext &&

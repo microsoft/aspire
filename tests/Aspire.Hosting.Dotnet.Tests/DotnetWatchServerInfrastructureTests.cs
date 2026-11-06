@@ -26,10 +26,21 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
         Assert.Contains(ManifestPublishingCallbackAnnotation.Ignore, server.Annotations);
         Assert.Single(server.Annotations.OfType<ExcludeLifecycleCommandsAnnotation>());
 
-        // What DCP adds when it creates the executable: the built-in lifecycle commands are skipped.
+        // What DCP adds when it creates the executable: the built-in lifecycle commands are skipped. The coordinator's
+        // own restart (a fresh watcher for reference changes) stops the server through a command the user never sees.
         server.AddLifeCycleCommands();
-        var command = Assert.Single(server.Annotations.OfType<ResourceCommandAnnotation>());
-        Assert.Equal(KnownResourceCommands.StartCommand, command.Name);
+        Assert.Equal(
+            [KnownResourceCommands.StartCommand, DotnetWatchServerInfrastructure.StopForRestartCommand],
+            server.Annotations.OfType<ResourceCommandAnnotation>().Select(c => c.Name));
+        var stopForRestart = Assert.Single(server.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == DotnetWatchServerInfrastructure.StopForRestartCommand);
+        foreach (var state in new[] { "Running", "Exited" })
+        {
+            Assert.Equal(ResourceCommandState.Hidden, stopForRestart.UpdateState(new UpdateCommandStateContext
+            {
+                ResourceSnapshot = new CustomResourceSnapshot { ResourceType = "Executable", Properties = [], State = state },
+                Services = new ServiceCollection().BuildServiceProvider(),
+            }));
+        }
 
         Assert.Equal([service.Resource], DotnetWatchServerInfrastructure.GetDependents(new DistributedApplicationModel(builder.Resources), server));
     }

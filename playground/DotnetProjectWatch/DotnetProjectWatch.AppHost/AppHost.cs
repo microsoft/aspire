@@ -34,9 +34,7 @@ builder.AddDotnetProject("worker", "../services/WatchDemo.Worker")
     .WithReference(api)
     .WaitFor(api);
 
-// File-based C# apps can't be hot reloaded yet: without WithWatch(false), `aspire run --watch` fails with an error naming
-// this resource. With it, ticker runs as a plain `dotnet run` and the terminal and its log say so.
-builder.AddDotnetProject("ticker", "../services/Scripts/ticker.cs")
-    .WithWatch(false);
+// File-based C# apps are watched like projects. WithWatch(false) opts a resource out of hot reload.
+builder.AddDotnetProject("ticker", "../services/Scripts/ticker.cs");
 
 builder.Build().Run();

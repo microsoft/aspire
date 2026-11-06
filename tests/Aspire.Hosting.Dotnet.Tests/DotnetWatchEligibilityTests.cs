@@ -149,7 +149,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         var api = AddProject(builder, workspace, "api").WaitForCompletion(migrations);
 
         Assert.Equal(DotnetWatchCoordinator.WatchDecisionKind.Excluded,
-            DotnetWatchCoordinator.Evaluate(migrations.Resource, Metadata(migrations), builder.Resources).Kind);
+            DotnetWatchCoordinator.Evaluate(migrations.Resource, builder.Resources).Kind);
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
@@ -175,7 +175,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task FileBasedAppFailsUnlessOptedOut()
+    public async Task FileBasedAppIsWatchedUnlessOptedOut()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var scriptPath = Path.Combine(workspace.Path, "ticker.cs");
@@ -184,11 +184,14 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         using (var builder = TestDistributedApplicationBuilder.Create(s_watchConfig))
         {
             AddProject(builder, workspace, "service");
-            builder.AddDotnetProject("ticker", scriptPath);
+            var ticker = builder.AddDotnetProject("ticker", scriptPath);
 
-            var ex = await AssertBeforeStartFailsAsync(builder);
-            Assert.Contains("'ticker' is a file-based C# app", ex.Message);
-            Assert.Contains("WithWatch(false)", ex.Message);
+            using var app = builder.Build();
+            await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+            var tickerArgs = await ArgumentEvaluator.GetArgumentListAsync(ticker.Resource);
+            Assert.Contains(DotnetWatchCoordinator.ProxyCommandName, tickerArgs);
+            Assert.Contains(scriptPath, tickerArgs);
         }
 
         using (var builder = TestDistributedApplicationBuilder.Create(s_watchConfig))
@@ -233,9 +236,9 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
             .WithAnnotation(new PersistenceAnnotation { Mode = PersistenceMode.Session });
 
         Assert.Equal(DotnetWatchCoordinator.WatchDecisionKind.Rejected,
-            DotnetWatchCoordinator.Evaluate(service.Resource, Metadata(service), builder.Resources).Kind);
+            DotnetWatchCoordinator.Evaluate(service.Resource, builder.Resources).Kind);
         Assert.Equal(DotnetWatchCoordinator.WatchDecisionKind.Watched,
-            DotnetWatchCoordinator.Evaluate(session.Resource, Metadata(session), builder.Resources).Kind);
+            DotnetWatchCoordinator.Evaluate(session.Resource, builder.Resources).Kind);
     }
 
     [Fact]
