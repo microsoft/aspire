@@ -701,7 +701,24 @@ internal static class DotnetWatchCoordinator
 
         public void Start(IServiceProvider services, CancellationToken stopping)
         {
-            var projectFileWatcher = new DotnetWatchProjectFileWatcher(Roots, changed => OnProjectFilesChanged(services, changed), s_projectFileDebounce);
+            DotnetWatchProjectFileWatcher? projectFileWatcher = null;
+            projectFileWatcher = new DotnetWatchProjectFileWatcher(Roots, changed =>
+            {
+                if (stopping.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                try
+                {
+                    OnProjectFilesChanged(services, changed);
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The AppHost was disposed without stopping (ApplicationStopping never fired).
+                    projectFileWatcher?.Dispose();
+                }
+            }, s_projectFileDebounce);
             projectFileWatcher.Start();
             stopping.Register(() =>
             {
