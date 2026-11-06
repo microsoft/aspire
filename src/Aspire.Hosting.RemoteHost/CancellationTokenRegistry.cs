@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
-
 namespace Aspire.Hosting.RemoteHost;
 
 /// <summary>
@@ -13,7 +11,9 @@ namespace Aspire.Hosting.RemoteHost;
 /// </summary>
 internal sealed class CancellationTokenRegistry : IDisposable
 {
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _sources = new();
+    private readonly object _lock = new();
+    private readonly Dictionary<string, CancellationTokenSource> _sources = [];
+    private readonly HashSet<string> _pendingCancellations = [];
     private int _counter;
     private bool _disposed;
 
@@ -24,18 +24,15 @@ internal sealed class CancellationTokenRegistry : IDisposable
     /// <returns>A tuple of (tokenId, cancellationToken).</returns>
     public (string TokenId, CancellationToken Token) Create()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        var id = $"ct_{Interlocked.Increment(ref _counter)}";
-        var cts = new CancellationTokenSource();
-
-        if (!_sources.TryAdd(id, cts))
+        lock (_lock)
         {
-            cts.Dispose();
-            throw new InvalidOperationException($"Failed to register cancellation token with ID '{id}'");
-        }
+            ObjectDisposedException.ThrowIf(_disposed, this);
 
-        return (id, cts.Token);
+            var id = $"ct_{++_counter}";
+            var cts = new CancellationTokenSource();
+            _sources.Add(id, cts);
+            return (id, cts.Token);
+        }
     }
 
     /// <summary>
@@ -46,18 +43,15 @@ internal sealed class CancellationTokenRegistry : IDisposable
     /// <returns>A tuple of (tokenId, cancellationToken).</returns>
     public (string TokenId, CancellationToken Token) CreateLinked(CancellationToken linkedToken)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        var id = $"ct_{Interlocked.Increment(ref _counter)}";
-        var cts = CancellationTokenSource.CreateLinkedTokenSource(linkedToken);
-
-        if (!_sources.TryAdd(id, cts))
+        lock (_lock)
         {
-            cts.Dispose();
-            throw new InvalidOperationException($"Failed to register cancellation token with ID '{id}'");
-        }
+            ObjectDisposedException.ThrowIf(_disposed, this);
 
-        return (id, cts.Token);
+            var id = $"ct_{++_counter}";
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(linkedToken);
+            _sources.Add(id, cts);
+            return (id, cts.Token);
+        }
     }
 
     /// <summary>
@@ -67,20 +61,28 @@ internal sealed class CancellationTokenRegistry : IDisposable
     /// <returns>True if the token was found and cancelled, false if not found.</returns>
     public bool Cancel(string tokenId)
     {
-        if (_sources.TryGetValue(tokenId, out var cts))
+        CancellationTokenSource? source;
+        lock (_lock)
         {
-            try
+            if (!_sources.TryGetValue(tokenId, out source))
             {
-                cts.Cancel();
-                return true;
-            }
-            catch (ObjectDisposedException)
-            {
-                // Already disposed, that's fine
+                // JsonRpc dispatches requests concurrently, so cancelToken can run before
+                // invokeCapability has unmarshalled and registered this guest-provided ID.
+                _pendingCancellations.Add(tokenId);
                 return false;
             }
         }
-        return false;
+
+        try
+        {
+            source.Cancel();
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Unregister can dispose the source after the lookup.
+            return false;
+        }
     }
 
     /// <summary>
@@ -91,12 +93,17 @@ internal sealed class CancellationTokenRegistry : IDisposable
     /// <returns>True if the token was found and unregistered, false if not found.</returns>
     public bool Unregister(string tokenId)
     {
-        if (_sources.TryRemove(tokenId, out var cts))
+        lock (_lock)
         {
-            cts.Dispose();
-            return true;
+            _pendingCancellations.Remove(tokenId);
+            if (_sources.Remove(tokenId, out var cts))
+            {
+                cts.Dispose();
+                return true;
+            }
+
+            return false;
         }
-        return false;
     }
 
     /// <summary>
@@ -107,13 +114,17 @@ internal sealed class CancellationTokenRegistry : IDisposable
     /// <returns>True if found, false otherwise.</returns>
     public bool TryGetToken(string tokenId, out CancellationToken token)
     {
-        if (_sources.TryGetValue(tokenId, out var cts))
+        lock (_lock)
         {
-            token = cts.Token;
-            return true;
+            if (_sources.TryGetValue(tokenId, out var cts))
+            {
+                token = cts.Token;
+                return true;
+            }
+
+            token = default;
+            return false;
         }
-        token = default;
-        return false;
     }
 
     /// <summary>
@@ -125,49 +136,44 @@ internal sealed class CancellationTokenRegistry : IDisposable
     /// <returns>The CancellationToken for this ID.</returns>
     public CancellationToken GetOrCreate(string tokenId)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        // Try to get existing first
-        if (_sources.TryGetValue(tokenId, out var existing))
+        lock (_lock)
         {
-            return existing.Token;
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (_sources.TryGetValue(tokenId, out var existing))
+            {
+                return existing.Token;
+            }
+
+            var cts = new CancellationTokenSource();
+            _sources.Add(tokenId, cts);
+            if (_pendingCancellations.Remove(tokenId))
+            {
+                cts.Cancel();
+            }
+
+            return cts.Token;
         }
-
-        // Create a new one
-        var cts = new CancellationTokenSource();
-
-        // Use GetOrAdd to handle race conditions
-        var added = _sources.GetOrAdd(tokenId, cts);
-        if (added != cts)
-        {
-            // Another thread added first, dispose our copy
-            cts.Dispose();
-        }
-
-        return added.Token;
     }
 
     public void Dispose()
     {
-        if (_disposed)
+        lock (_lock)
         {
-            return;
-        }
-
-        _disposed = true;
-
-        // Dispose all registered CancellationTokenSources
-        foreach (var kvp in _sources)
-        {
-            try
+            if (_disposed)
             {
-                kvp.Value.Dispose();
+                return;
             }
-            catch
+
+            _disposed = true;
+
+            foreach (var source in _sources.Values)
             {
-                // Ignore disposal errors
+                source.Dispose();
             }
+
+            _sources.Clear();
+            _pendingCancellations.Clear();
         }
-        _sources.Clear();
     }
 }

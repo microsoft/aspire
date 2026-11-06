@@ -296,14 +296,7 @@ public class AtsGoCodeGeneratorTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         try
         {
-            // The tests only exercise transport.go and base.go, so an empty model is enough.
-            var files = _generator.GenerateDistributedApplication(new AtsContext
-            {
-                Capabilities = [],
-                HandleTypes = [],
-                EnumTypes = [],
-                DtoTypes = []
-            });
+            var files = _generator.GenerateDistributedApplication(CreateContextFromTestAssembly());
             foreach (var (name, content) in files)
             {
                 await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
@@ -443,6 +436,63 @@ public class AtsGoCodeGeneratorTests
                         if called || errObj["code"] != float64(-32602) {
                             t.Fatalf("got %v, called=%v; want invalid params without calling user code", response, called)
                         }
+                    }
+                }
+
+                func TestTokenBearingCallbackAcceptsTokenIdAndOmittedNone(t *testing.T) {
+                    for _, tc := range []struct {
+                        name      string
+                        args      any
+                        wantToken bool
+                    }{
+                        {"token ID", map[string]any{"p0": "ct_callback"}, true},
+                        {"CancellationToken.None", nil, false},
+                    } {
+                        t.Run(tc.name, func(t *testing.T) {
+                            c, host := newFakeHost(t)
+                            resource := newTestRedisResourceFromHandle(&handle{
+                                HandleID: "redis",
+                                TypeID:   "Aspire.Hosting.CodeGeneration.Go.Tests/TestRedisResource",
+                            }, c)
+                            received := make(chan *CancellationToken, 1)
+                            done := make(chan TestRedisResource, 1)
+                            go func() {
+                                done <- resource.WithCancellableOperation(func(token *CancellationToken) {
+                                    received <- token
+                                })
+                            }()
+
+                            invocation := host.read()
+                            params, _ := invocation["params"].([]any)
+                            capabilityArgs, _ := params[1].(map[string]any)
+                            callbackID, _ := capabilityArgs["operation"].(string)
+                            if callbackID == "" {
+                                t.Fatalf("missing callback ID in %v", invocation)
+                            }
+
+                            host.write(callbackRequest(2, callbackID, tc.args))
+                            if response := host.read(); response["result"] == nil && response["error"] != nil {
+                                t.Fatalf("callback failed: %v", response)
+                            }
+                            token := <-received
+                            if (token != nil) != tc.wantToken {
+                                t.Fatalf("got token %v, want token=%v", token, tc.wantToken)
+                            }
+                            if token != nil {
+                                token.Cancel()
+                                cancellation := host.read()
+                                cancellationParams, _ := cancellation["params"].([]any)
+                                if cancellation["method"] != "cancelToken" || len(cancellationParams) != 1 || cancellationParams[0] != "ct_callback" {
+                                    t.Fatalf("got %v, want cancellation for the callback token", cancellation)
+                                }
+                                host.write(map[string]any{"jsonrpc": "2.0", "id": cancellation["id"], "result": true})
+                            }
+
+                            host.write(map[string]any{"jsonrpc": "2.0", "id": invocation["id"], "result": nil})
+                            if result := <-done; result.Err() != nil {
+                                t.Fatal(result.Err())
+                            }
+                        })
                     }
                 }
 

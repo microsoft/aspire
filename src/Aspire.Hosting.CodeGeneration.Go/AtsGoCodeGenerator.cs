@@ -2044,6 +2044,11 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
     // callbackArg, as do shims with no client in scope.
     private string GetCallbackArgExpression(AtsTypeRef type, int index, string? clientExpression)
     {
+        if (clientExpression is not null && IsCancellationTokenTypeId(type.TypeId))
+        {
+            return $"callbackCancellationTokenArg({clientExpression}, args, {index})";
+        }
+
         if (clientExpression is not null
             && type.Category == AtsTypeCategory.Handle
             && _implNames.ContainsKey(type.TypeId))

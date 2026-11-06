@@ -339,7 +339,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -1123,7 +1123,7 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -2077,7 +2077,7 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -3977,6 +3977,22 @@ func callbackArg[T any](args []any, idx int) T {
 	return v
 }
 
+// callbackCancellationTokenArg handles the callback wire representation for
+// CancellationToken. The host sends a token ID for cancellable tokens and omits
+// the positional argument for CancellationToken.None.
+func callbackCancellationTokenArg(c *client, args []any, idx int) *CancellationToken {
+	if idx < 0 || idx >= len(args) || args[idx] == nil {
+		return nil
+	}
+	if token, ok := args[idx].(*CancellationToken); ok {
+		return token
+	}
+	if id, ok := args[idx].(string); ok && id != "" {
+		return newRemoteCancellationToken(c, id)
+	}
+	panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: expected a cancellation token ID", idx)})
+}
+
 type callbackArgumentError struct{ error }
 
 // decodeAs converts an arbitrary RPC result into a typed value via JSON
@@ -4382,8 +4398,10 @@ func FormatError(err error) string {
 // Use NewCancellationToken to create one; call Cancel() to cancel it.
 // Pass token.Context() to any standard Go library that accepts a context.
 type CancellationToken struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx        context.Context
+	cancel     context.CancelFunc
+	cancelOnce sync.Once
+	notify     func()
 }
 
 // NewCancellationToken creates a new cancellation token backed by a cancellable
@@ -4399,12 +4417,25 @@ func newCancellationTokenFrom(parent context.Context) *CancellationToken {
 	return &CancellationToken{ctx: ctx, cancel: cancel}
 }
 
+func newRemoteCancellationToken(c *client, id string) *CancellationToken {
+	token := newCancellationTokenFrom(context.Background())
+	token.notify = func() {
+		go c.cancelToken(id)
+	}
+	return token
+}
+
 // Cancel cancels the token and propagates cancellation to the underlying context.
 func (ct *CancellationToken) Cancel() {
 	if ct == nil {
 		return
 	}
-	ct.cancel()
+	ct.cancelOnce.Do(func() {
+		ct.cancel()
+		if ct.notify != nil {
+			ct.notify()
+		}
+	})
 }
 
 // IsCancelled returns true if the token has been canceled.

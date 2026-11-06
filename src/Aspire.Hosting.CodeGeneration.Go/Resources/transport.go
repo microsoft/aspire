@@ -135,8 +135,10 @@ func FormatError(err error) string {
 // Use NewCancellationToken to create one; call Cancel() to cancel it.
 // Pass token.Context() to any standard Go library that accepts a context.
 type CancellationToken struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx        context.Context
+	cancel     context.CancelFunc
+	cancelOnce sync.Once
+	notify     func()
 }
 
 // NewCancellationToken creates a new cancellation token backed by a cancellable
@@ -152,12 +154,25 @@ func newCancellationTokenFrom(parent context.Context) *CancellationToken {
 	return &CancellationToken{ctx: ctx, cancel: cancel}
 }
 
+func newRemoteCancellationToken(c *client, id string) *CancellationToken {
+	token := newCancellationTokenFrom(context.Background())
+	token.notify = func() {
+		go c.cancelToken(id)
+	}
+	return token
+}
+
 // Cancel cancels the token and propagates cancellation to the underlying context.
 func (ct *CancellationToken) Cancel() {
 	if ct == nil {
 		return
 	}
-	ct.cancel()
+	ct.cancelOnce.Do(func() {
+		ct.cancel()
+		if ct.notify != nil {
+			ct.notify()
+		}
+	})
 }
 
 // IsCancelled returns true if the token has been canceled.
