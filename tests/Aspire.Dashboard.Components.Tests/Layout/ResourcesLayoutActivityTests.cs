@@ -111,7 +111,13 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         }
         Assert.Equal(before, cut.RenderCount);
         await AddLogAsync(SeverityNumber.Error);
-        cut.WaitForAssertion(() => Assert.Equal("1", cut.Find("[data-resource-name='service-0-TestId'] .error-badge").TextContent));
+        cut.WaitForAssertion(() =>
+        {
+            // The badge links to the resource's error logs, outside the row link so it doesn't select the row.
+            var errorLink = cut.Find("[data-resource-name='service-0-TestId'] > a.resource-row-error-link");
+            Assert.Equal("1", errorLink.TextContent);
+            Assert.Equal("/structuredlogs/resource/service-0-TestId?logLevel=error", errorLink.GetAttribute("href"));
+        });
         var afterError = cut.RenderCount;
         await notifyLogs();
         Assert.Equal(afterError, cut.RenderCount);

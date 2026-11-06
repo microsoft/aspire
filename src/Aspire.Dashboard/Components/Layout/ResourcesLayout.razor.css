@@ -931,6 +931,28 @@
     font-weight: 600;
 }
 
+/* In a flex row the link follows the row link, which fills the row up to the actions, so it lands where an inline
+   badge would. The sidebar and wide grids overlay it on the end of the row link's track instead (see below).
+   The margin matches the row link's end padding. */
+.resource-row-error-link {
+    margin-inline-end: 8px;
+    text-decoration: none;
+}
+
+.resource-row-error-link:hover {
+    background: var(--colorPaletteRedBackground3);
+}
+
+.resource-row-error-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+/* Only the grid layouts overlay the badge on the row link and need the spacer. */
+.error-badge-spacer {
+    display: none;
+}
+
 .resource-pane-foot {
     container: resource-footer / inline-size;
     display: grid;
@@ -2079,6 +2101,22 @@
 
     .resource-row:has(> .resource-row-wide-metadata) > .resource-row-link {
         grid-column: identity;
+        /* Pinned so the explicitly placed error link below can't push it to an implicit second row. */
+        grid-row: 1;
+    }
+
+    /* The error link shares the identity track with the row link. The row link keeps a hidden copy of the
+       badge so the resource name stops before it instead of running underneath. */
+    .resource-row:has(> .resource-row-wide-metadata) > .resource-row-error-link {
+        grid-column: identity;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+    }
+
+    .resource-row:has(> .resource-row-wide-metadata) .error-badge-spacer {
+        display: inline-flex;
+        visibility: hidden;
     }
 
     .resource-row-health-detail,
@@ -2358,6 +2396,25 @@
     grid-template-columns: minmax(0, 1fr) 112px;
     column-gap: 4px;
     padding-inline-end: 12px;
+}
+
+/* The error link shares the identity track with the row link instead of taking the action rail's slot. The row
+   link keeps a hidden copy of the badge so the resource name stops before it instead of running underneath. */
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-error-link) > .resource-row-link {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-error-link {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+}
+
+.resources-layout:not(.pane-full-canvas) .error-badge-spacer {
+    display: inline-flex;
+    visibility: hidden;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-link {
