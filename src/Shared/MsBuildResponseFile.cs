@@ -69,6 +69,12 @@ internal static class MsBuildResponseFileFactory
     public static string CreatePropertyArgument(string name, string value) =>
         $"--property:{EscapePropertyValue(name)}={EscapePropertyValue(value)}";
 
+    // Escaped ';' (%3B) stays literal when MSBuild expands a property into items, so list-valued properties
+    // such as RuntimeIdentifiers would collapse into a single entry. Escape each entry and keep the separators
+    // as real ';' inside quotes so MSBuild's property-switch parser doesn't split the value into new properties.
+    public static string CreateListPropertyArgument(string name, IEnumerable<string> values) =>
+        $"--property:{EscapePropertyValue(name)}=\"{string.Join(';', values.Select(EscapePropertyValue))}\"";
+
     internal static void TryDeleteDirectory(DirectoryInfo directory, ILogger logger)
     {
         try
