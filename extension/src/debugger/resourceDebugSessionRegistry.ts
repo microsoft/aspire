@@ -96,7 +96,7 @@ export class ResourceDebugSessionRegistry implements vscode.Disposable {
         appHost: ResourceDebugAppHostTarget,
         resourceName: string,
         cancellationToken: vscode.CancellationToken | undefined,
-        operation: () => Promise<T>,
+        operation: (waited: boolean) => Promise<T>,
         getCancelledResult: () => T,
     ): Promise<T> {
         const resourceKey = this._getResourceKey(appHost, resourceName);
@@ -117,7 +117,7 @@ export class ResourceDebugSessionRegistry implements vscode.Disposable {
                 return getCancelledResult();
             }
 
-            return await operation();
+            return await operation(precedingOperation !== undefined);
         }
         finally {
             releaseCurrentOperation!();
