@@ -11,6 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)ResourceNameHelpers.cs" Link="Shared/ResourceNameHelpers.cs" />
+    <Compile Include="$(SharedDir)EndpointPropertyInputCache.cs" Link="Shared/EndpointPropertyInputCache.cs" />
+    <Compile Include="$(SharedDir)BrowserOriginHelpers.cs" Link="Shared/BrowserOriginHelpers.cs" />
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 

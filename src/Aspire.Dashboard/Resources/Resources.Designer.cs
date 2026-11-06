@@ -1369,6 +1369,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Type display name.
+        /// </summary>
+        public static string ResourcesDetailsResourceTypeDisplayNameProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsResourceTypeDisplayNameProperty", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Executable arguments.
         /// </summary>
         public static string ResourcesDetailsExecutableArgumentsProperty {
@@ -1509,6 +1518,96 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcesGraphResetButton {
             get {
                 return ResourceManager.GetString("ResourcesGraphResetButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Exit.
+        /// </summary>
+        public static string ResourceGraphGameExit {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameExit", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Exit Aspire Outage and return to the graph.
+        /// </summary>
+        public static string ResourceGraphGameExitLabel {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameExitLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resources still stopped: {0}.
+        /// </summary>
+        public static string ResourceGraphGameHardCoreStopped {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameHardCoreStopped", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit..
+        /// </summary>
+        public static string ResourceGraphGameHardCoreWarning {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameHardCoreWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph..
+        /// </summary>
+        public static string ResourceGraphGameInstructions {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameInstructions", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Hard core.
+        /// </summary>
+        public static string ResourceGraphGameModeHardCore {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameModeHardCore", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Normal.
+        /// </summary>
+        public static string ResourceGraphGameModeNormal {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameModeNormal", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Play Aspire Outage.
+        /// </summary>
+        public static string ResourceGraphGamePlay {
+            get {
+                return ResourceManager.GetString("ResourceGraphGamePlay", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Sound: off.
+        /// </summary>
+        public static string ResourceGraphGameSoundOff {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameSoundOff", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Sound: on.
+        /// </summary>
+        public static string ResourceGraphGameSoundOn {
+            get {
+                return ResourceManager.GetString("ResourceGraphGameSoundOn", resourceCulture);
             }
         }
 

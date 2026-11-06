@@ -44,7 +44,7 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
                 var tab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = label, Exact = true });
                 var tabBounds = await tab.BoundingBoxAsync();
                 Assert.NotNull(tabBounds);
-                await page.Mouse.ClickAsync(tabBounds.X + tabBounds.Width / 2, tabBounds.Y + tabBounds.Height / 2);
+                await ClickResourceTabAndWaitForRenderAsync(page, () => page.Mouse.ClickAsync(tabBounds.X + tabBounds.Width / 2, tabBounds.Y + tabBounds.Height / 2));
                 await page.WaitForFunctionAsync(
                     "path => window.location.pathname.startsWith(path)",
                     path);

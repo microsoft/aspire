@@ -1467,7 +1467,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds redirect URIs for a resource's endpoint to a registration created by Aspire.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The registration is existing. Configure its redirect URIs manually.</exception>
+    /// <exception cref="InvalidOperationException">The registration is existing, or infrastructure generation detects that TLS is disabled for the deployed endpoint.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="endpoint">The endpoint that serves the callbacks.</param>
     /// <param name="callbackPaths">The callback paths on that endpoint, such as <c>/signin-oidc</c>.</param>
@@ -1476,9 +1476,11 @@ public static class EntraIdResourceExtensions
     /// <exception cref="ArgumentException">Thrown when no path is provided or a path doesn't start with <c>/</c>.</exception>
     /// <remarks>
     /// <para>
-    /// The scheme, host, and port come from the endpoint so they follow local endpoint allocation. When running locally the
-    /// allocated URL is used. When publishing or deploying, the host name comes from the resource's compute environment and
-    /// the scheme is <c>https</c>.
+    /// In run mode the origin comes from the endpoint's finalized browser URLs, including vanity hostnames and URL
+    /// customization. When publishing or deploying, the origin comes from the resource's compute environment,
+    /// and the deployed endpoint must have TLS enabled.
+    /// After endpoint allocation, resolution waits up to 30 seconds for finalized browser URLs. If they are not ready,
+    /// the allocated origin is used with a warning. Supply explicit redirect URIs if that address differs from the browser URL.
     /// </para>
     /// <para>
     /// The callback path can't be discovered from the endpoint: it's configured by the consuming application, so it is
@@ -1487,10 +1489,9 @@ public static class EntraIdResourceExtensions
     /// Throws for existing registrations; configure their redirect URIs manually.
     /// </para>
     /// <para>
-    /// When running locally, the URL shown as the endpoint's primary URL is used, so a friendly <c>*.dev.localhost</c> name
-    /// is registered when the dashboard uses one. That URL is read when this registration's URL callback runs, so a
-    /// <c>WithUrlForEndpoint</c> or <c>WithUrls</c> callback added after this call that changes the endpoint's host isn't
-    /// reflected. Add such callbacks before calling this method.
+    /// Run-mode resolution waits for all URL customization callbacks to complete and uses the shared browser-origin
+    /// preference order. Navigation paths are excluded before appending the supplied callback path.
+    /// If URL customization removes all browser URLs for the endpoint, resolution reports a missing origin.
     /// </para>
     /// </remarks>
     /// <example>
@@ -1527,10 +1528,41 @@ public static class EntraIdResourceExtensions
 
         foreach (var path in callbackPaths)
         {
-            builder.Resource.AddRedirectUri(new EntraIdEndpointRedirectUri(endpoint, path, builder.ApplicationBuilder.ExecutionContext.IsPublishMode));
+            builder.Resource.AddRedirectUri(new EntraIdEndpointRedirectUri(CreateExpression, path));
         }
 
         return builder;
+
+        ReferenceExpression CreateExpression()
+        {
+            if (!builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+            {
+                return ReferenceExpression.Create($"{new EntraIdRunModeBrowserOrigin(endpoint, builder.ApplicationBuilder.ExecutionContext)}");
+            }
+
+            // Delay environment lookup until infrastructure generation, so compute-environment
+            // configuration can follow WithRedirectUris. Keep the primary origin symbolic for Bicep.
+            if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpoint.Resource, out var computeEnvironment))
+            {
+                throw new InvalidOperationException(
+                    $"Resource '{endpoint.Resource.Name}' does not have a compute environment. " +
+                    "Ensure a compute environment (for example, Azure Container Apps or Azure App Service) is configured in the application model " +
+                    "or register the redirect URI with an explicit URL.");
+            }
+
+#pragma warning disable ASPIRECOMPUTE002 // Resolve deployment properties without allocating the endpoint.
+            var origin = computeEnvironment.GetEndpointPropertyExpression(endpoint.PrimaryBrowserOrigin);
+            var tlsEnabled = computeEnvironment.GetEndpointPropertyExpression(endpoint.Property(EndpointProperty.TlsEnabled));
+#pragma warning restore ASPIRECOMPUTE002
+            if (string.Equals(tlsEnabled.ValueExpression, bool.FalseString, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Endpoint '{endpoint.EndpointName}' on resource '{endpoint.Resource.Name}' cannot be used for an Entra redirect URI because TLS is disabled in compute environment '{computeEnvironment.Name}'. " +
+                    "Use an HTTPS endpoint, enable HTTPS upgrade, or supply an explicit HTTPS redirect URI.");
+            }
+
+            return origin;
+        }
     }
 
     /// <summary>
@@ -1587,7 +1619,7 @@ public static class EntraIdResourceExtensions
 
         foreach (var path in callbackPaths)
         {
-            builder.Resource.AddRedirectUri(new EntraIdHostRedirectUri(host.Resource, path));
+            builder.Resource.AddRedirectUri(ReferenceExpression.Create($"https://{host}{path}"));
         }
 
         return builder;

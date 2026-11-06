@@ -26,6 +26,36 @@ public sealed partial class SqliteTelemetryRepository
             : GetResources(includeUninstrumentedPeers).Where(resource => resource.ResourceKey == key).ToList();
     }
 
+    internal const string ResourceSignalAvailabilitySql = """
+        SELECT resource_name AS ResourceName, instance_id AS InstanceId,
+            EXISTS (SELECT 1 FROM telemetry_logs WHERE resource_id = r.resource_id) AS HasLogs,
+            (EXISTS (SELECT 1 FROM telemetry_spans WHERE resource_id = r.resource_id)
+                OR EXISTS (SELECT 1 FROM telemetry_spans WHERE uninstrumented_peer_resource_id = r.resource_id)) AS HasTraces,
+            EXISTS (SELECT 1 FROM telemetry_metric_instruments WHERE resource_id = r.resource_id) AS HasMetrics
+        FROM telemetry_resources r;
+        """;
+
+    public Dictionary<ResourceKey, ResourceSignalAvailability> GetResourceSignalAvailability()
+    {
+        using var connection = _database.OpenConnection();
+        // Resource flags record signals received, even after retention evicts their last item.
+        // Indexed existence probes reflect retained data (including incoming client spans) without
+        // scanning the telemetry tables, and are shared by every row in the layout snapshot.
+        // Read explicitly so this startup path never falls back to Dapper's runtime-generated
+        // deserializer, which is unavailable in the Native AOT dashboard.
+        using var command = connection.CreateCommand();
+        command.CommandText = ResourceSignalAvailabilitySql;
+        using var reader = command.ExecuteReader();
+        var availability = new Dictionary<ResourceKey, ResourceSignalAvailability>();
+        while (reader.Read())
+        {
+            var key = new ResourceKey(reader.GetString(0), reader.IsDBNull(1) ? null : reader.GetString(1));
+            availability.Add(key, new ResourceSignalAvailability(reader.GetBoolean(2), reader.GetBoolean(3), reader.GetBoolean(4)));
+        }
+
+        return availability;
+    }
+
     private async Task DeleteTelemetryResourceFromDatabaseAsync(ResourceKey resourceKey)
     {
         using (await _database.WriteLock.LockAsync().ConfigureAwait(false))

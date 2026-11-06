@@ -140,29 +140,12 @@ public sealed class CustomTemplateTests(ITestOutputHelper output)
 
         if (configured)
         {
-            await auto.WaitUntilTextAsync("Search for more templates", timeout: TimeSpan.FromSeconds(60));
-            await auto.KeyAsync(Hex1bKey.End);
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
-            await auto.WaitUntilTextAsync("Search again", timeout: TimeSpan.FromSeconds(30));
-            await auto.DownAsync();
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
-            await auto.TypeAsync("no-matching-template");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Back to default templates", timeout: TimeSpan.FromSeconds(30));
-            await auto.KeyAsync(Hex1bKey.End);
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search for more templates", timeout: TimeSpan.FromSeconds(30));
-            await auto.KeyAsync(Hex1bKey.End);
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Search templates (leave empty to list all)", timeout: TimeSpan.FromSeconds(30));
-            await auto.TypeAsync("DESCRIPTION METADATA");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("custom-template-fixture", timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitUntilTextAsync("Custom template E2E fixture", timeout: TimeSpan.FromSeconds(60));
             await auto.WaitUntilTextAsync("company", timeout: TimeSpan.FromSeconds(30));
+            await auto.KeyAsync(Hex1bKey.Home);
+            await auto.TypeAsync("DESCRIPTION METADATA");
+            await auto.WaitUntilTextAsync("DESCRIPTION METADATA", timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitUntilTextAsync("> Custom template E2E fixture", timeout: TimeSpan.FromSeconds(30));
             await auto.EnterAsync();
         }
 

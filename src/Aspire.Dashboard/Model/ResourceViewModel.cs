@@ -26,6 +26,11 @@ public sealed class ResourceViewModel
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
+    public string ResourceTypeDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
+        init;
+    }
     public required string DisplayName { get; init; }
     public required string Uid { get; init; }
     public required int ReplicaIndex { get; init; }
@@ -74,8 +79,8 @@ public sealed class ResourceViewModel
         string.Equals(lifetime.Value.StringValue, "Persistent", StringComparison.Ordinal);
 
     internal string GetResourceTypeDisplayName(IStringLocalizer<Resources.Resources> localizer) => IsPersistentContainer
-        ? string.Format(CultureInfo.CurrentCulture, localizer[nameof(Resources.Resources.ResourcePersistentType)], ResourceType)
-        : ResourceType;
+        ? string.Format(CultureInfo.CurrentCulture, localizer[nameof(Resources.Resources.ResourcePersistentType)], ResourceTypeDisplayName)
+        : ResourceTypeDisplayName;
 
     /// <summary>
     /// Gets the cached addresses for this resource that can be used for peer matching.
@@ -186,7 +191,8 @@ public sealed class ResourceViewModel
     internal bool MatchesFilter(string filter)
     {
         // TODO let ResourceType define the additional data values we include in searches
-        return Name.Contains(filter, StringComparisons.UserTextSearch);
+        return Name.Contains(filter, StringComparisons.UserTextSearch) ||
+            ResourceTypeDisplayName.Contains(filter, StringComparisons.UserTextSearch);
     }
 
     public string? GetResourcePropertyValue(string propertyName)

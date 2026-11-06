@@ -29,6 +29,20 @@ public class SettingsSchemaBuilderTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildConfigFileSchema_IncludesOptionalTemplateSourceDisplayName(bool global)
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global);
+        var sources = Assert.Single(schema.Properties, property => property.Name == "templateSources");
+        var displayName = Assert.Single(sources.SubProperties!, property => property.Name == "displayName");
+
+        Assert.Equal("string", displayName.Type);
+        Assert.False(displayName.Required);
+        Assert.Contains("alias", displayName.Description, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void BuildConfigFileSchema_HonorsConditionalJsonIgnore()
     {

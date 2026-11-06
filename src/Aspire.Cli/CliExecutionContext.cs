@@ -188,6 +188,14 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
 
     public LogLevel? ConsoleLogLevel { get; } = consoleLogLevel;
 
+    private int _sourceTrustWarningDisplayed;
+
+    internal bool TryMarkSourceTrustWarningDisplayed() =>
+        Interlocked.Exchange(ref _sourceTrustWarningDisplayed, 1) == 0;
+
+    internal void ResetSourceTrustWarning() =>
+        Volatile.Write(ref _sourceTrustWarningDisplayed, 0);
+
     private Command? _command;
 
     /// <summary>

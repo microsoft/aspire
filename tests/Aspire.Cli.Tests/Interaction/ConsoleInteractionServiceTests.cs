@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -12,6 +14,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
+using NewCommand = Aspire.Cli.Commands.NewCommand;
+using NewCommandPrompter = Aspire.Cli.Commands.NewCommandPrompter;
 
 using System.CommandLine;
 using System.Globalization;
@@ -33,6 +37,256 @@ public class ConsoleInteractionServiceTests
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupsRenderAsHeadingsAndKeepFirstLeafDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        TestItem[] choices = [
+            new("built-in", "Starter"),
+            new("first", "Same (same) - first"),
+            new("second", "Same (same) - second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select a template:", choices, choice => choice.Display,
+            choice => choice.Id switch
+            {
+                "built-in" => new("builtin", "Built-in templates"),
+                "first" => new("source:first", "Company [first]"),
+                "second" => new("source:second", "Company [second]"),
+                _ => null
+            }, choice => choice.Id switch
+            {
+                "built-in" => "Starter",
+                "first" => "Same",
+                _ => "Same (Observable services)"
+            });
+
+        Assert.Same(choices[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 3)]
+    public async Task PromptForSelectionAsync_GroupHeadersCannotBeSelected(int moves, int expectedIndex)
+    {
+        var keys = Enumerable.Repeat(new ConsoleKeyInfo('\0', ConsoleKey.DownArrow, false, false, false), moves)
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        TestItem[] choices = [
+            new("built-in", "Same"),
+            new("first", "Same (same) - first"),
+            new("second", "Same (same) - second"),
+            new("search", "Search")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => choice.Id == "search" ? null : new SelectionChoiceGroup(choice.Id, "Same heading"),
+            choice => choice.Id == "search" ? "Other action" : "Same");
+
+        Assert.Same(choices[expectedIndex], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupsWithSameIdShareOneHeadingAndRetainChildOrder()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        TestItem[] choices = [
+            new("first:one", "First template - first"),
+            new("second:one", "Other template - second"),
+            new("first:two", "Second template - first")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => choice.Id.StartsWith("first:", StringComparison.Ordinal)
+                ? new("source:first", "First source")
+                : new SelectionChoiceGroup("source:second", "Second source"), choice => choice.Display);
+
+        Assert.Same(choices[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PromptForSelectionAsync_PresentationGroupsPreserveValueTypeDefault(bool grouped)
+    {
+        var console = CreateSelectionConsole(new StringBuilder(), [new('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        bool[] choices = [true, false];
+
+        var selected = grouped
+            ? await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString(),
+                _ => new SelectionChoiceGroup("choices", "Choices"), choice => choice.ToString())
+            : await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.ToString());
+
+        Assert.False(selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedChoicesRemainSearchable()
+    {
+        var keys = "second".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(char.ToUpperInvariant(ch).ToString()), false, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        TestItem[] choices = [new("first", "Same (same) - first"), new("second", "Same (same) - second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            choice => new SelectionChoiceGroup(choice.Id, "Source"), choice => choice.Display);
+
+        Assert.Same(choices[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_DescriptionOnlySearchSelectsExactTemplate()
+    {
+        var keys = "OBSERVABLE".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        ITemplate[] templates = [CreateSearchableTemplate("first", null), CreateSearchableTemplate("second", "Observable [services]")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            template => new SelectionChoiceGroup(template.Name, template.Name),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[1], selected);
+    }
+
+    [Theory]
+    [InlineData("Name (Description)", 18, "Name (Description)")]
+    [InlineData("Name (Description)", 12, "Name (Descr…")]
+    [InlineData(" \tName\r\n (Description)\n", 30, "Name (Description)")]
+    [InlineData("Name [[services]]", 10, "Name [[ser…")]
+    [InlineData("Name [[services]]", 15, "Name [[services]]")]
+    [InlineData("界界界", 5, "界界…")]
+    [InlineData("界界界", 4, "界…")]
+    [InlineData("e\u0301e\u0301e\u0301e\u0301", 3, "e\u0301e\u0301…")]
+    [InlineData("😀😀😀", 4, "😀…")]
+    [InlineData(":rocket: launch", 3, "🚀…")]
+    [InlineData("Name\u001b[[31m", 20, "Name[[31m")]
+    [InlineData("Name", 1, "…")]
+    [InlineData("界", 1, "…")]
+    [InlineData("Name", 0, "")]
+    [InlineData("Name", -1, "")]
+    [InlineData("", 1, "")]
+    public void SelectionLabel_FitsTerminalCellsWithoutSplittingTextElements(string markup, int width, string expected)
+    {
+        var label = ConsoleInteractionService.FormatSelectionLabel(markup, width);
+
+        Assert.Equal(expected, label);
+        Assert.InRange(new Segment(label.RemoveMarkup()).CellCount(), 0, Math.Max(0, width));
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedLabelsFitWidthAndNormalizeMetadata()
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = 40;
+        var interaction = CreateInteractionService(console);
+        ITemplate[] templates = [CreateSearchableTemplate("first", "Observable [services]\r\nwith 界界 and a long description")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            _ => new SelectionChoiceGroup("source", "Company [source]\r\nwith a long heading that must fit"),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        await Verify(output.ToString()).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(10)]
+    public async Task PromptForSelectionAsync_GroupedLabelsFitNarrowTerminals(int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = width;
+        var interaction = CreateInteractionService(console);
+        ITemplate[] templates = [CreateSearchableTemplate("first", "Wide 界 description")];
+
+        var selected = await interaction.PromptForSelectionAsync("Pick:", templates, template => template.Name,
+            _ => new SelectionChoiceGroup("source", "Company"), template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        await Verify(output.ToString()).UseParameters(width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_TruncatedDescriptionTailIsNotSearchable()
+    {
+        var keys = "ZXQ".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var console = CreateSelectionConsole(new StringBuilder(), keys);
+        console.Profile.Width = 40;
+        var interaction = CreateInteractionService(console);
+        const string Description = "A description longer than the terminal with ZXQ at the end";
+        ITemplate[] templates = [CreateSearchableTemplate("first", null), CreateSearchableTemplate("second", Description)];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", templates, template => $"Same - {template.Name}",
+            template => new SelectionChoiceGroup(template.Name, template.Name),
+            template => NewCommand.FormatTemplateDisplayLabel(template).EscapeMarkup());
+
+        Assert.Same(templates[0], selected);
+        Assert.Equal(Description, templates[1].SearchDescription);
+    }
+
+    [Theory]
+    [InlineData(null, "Same")]
+    [InlineData("", "Same")]
+    [InlineData(" ", "Same")]
+    [InlineData("Observable [services]", "Same (Observable [services])")]
+    public void TemplateDisplayLabel_IncludesOnlyNonemptyDescriptions(string? description, string expectedLabel)
+    {
+        var template = CreateSearchableTemplate("sample", description);
+
+        Assert.Equal(expectedLabel, NewCommand.FormatTemplateDisplayLabel(template));
+    }
+
+    [Fact]
+    public async Task BuiltInTemplatePicker_DescriptionOnlySearchWorksWithoutConfiguredSources()
+    {
+        var keys = "OBSERVABLE".Select(ch => new ConsoleKeyInfo(ch, Enum.Parse<ConsoleKey>(ch.ToString()), true, false, false))
+            .Append(new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false));
+        var interaction = CreateInteractionService(CreateSelectionConsole(new StringBuilder(), keys));
+        var prompter = new NewCommandPrompter(interaction);
+        ITemplate[] templates = [CreateSearchableTemplate("first", ""), CreateSearchableTemplate("second", "Observable services")];
+
+        var selected = await prompter.PromptForTemplateAsync(templates, TestContext.Current.CancellationToken);
+
+        Assert.Same(templates[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupedBindingUsesFlatLabelWithoutRendering()
+    {
+        var output = new StringBuilder();
+        var interaction = CreateInteractionService(CreateInteractiveConsoleWithInput(output, ""),
+            hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var option = new Option<string?>("--template");
+        var binding = PromptBinding.Create(new RootCommand { option }.Parse("--template second"), option);
+        TestItem[] choices = [new("first", "first"), new("second", "second")];
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Display,
+            _ => throw new InvalidOperationException("Noninteractive binding must not evaluate grouping."),
+            _ => throw new InvalidOperationException("Noninteractive binding must use flat labels."), binding);
+
+        Assert.Same(choices[1], selected);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_EmptyGroupedChoicesHaveNoSelectableHeaders()
+    {
+        var interaction = CreateInteractionService(CreateInteractiveConsoleWithInput(new StringBuilder(), ""));
+
+        await Assert.ThrowsAsync<EmptyChoicesException>(() => interaction.PromptForSelectionAsync("Select:", Array.Empty<string>(), choice => choice,
+            _ => throw new InvalidOperationException("Empty choices must not create groups."), choice => choice));
     }
 
     [Fact]
@@ -1007,12 +1261,31 @@ public class ConsoleInteractionServiceTests
         console.Profile.Width = 200;
         var interactionService = CreateInteractionService(console);
 
-        interactionService.DisplaySourceTrustWarning();
+        var executionContext = CreateExecutionContext();
+        interactionService.DisplaySourceTrustWarning(executionContext);
+        interactionService.DisplaySourceTrustWarning(executionContext);
 
         var expected = enableColor
             ? $"\u001b[91m\U0001F6A8\u001b[0m \u001b[93m{SharedCommandStrings.SourceTrustWarning}\u001b[0m"
             : $"\U0001F6A8 {SharedCommandStrings.SourceTrustWarning}";
         Assert.Equal(expected, output.ToString().TrimEnd());
+    }
+
+    [Fact]
+    public void DisplaySourceTrustWarning_IsScopedToExecutionContext()
+    {
+        var interaction = new TestInteractionService();
+        var executionContext = CreateExecutionContext();
+
+        Parallel.For(0, 10, _ => interaction.DisplaySourceTrustWarning(executionContext));
+
+        var warning = Assert.Single(interaction.DisplayedMessages);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+
+        interaction.DisplaySourceTrustWarning(CreateExecutionContext());
+
+        Assert.Equal([warning, warning], interaction.DisplayedMessages);
     }
 
     [Fact]
@@ -2094,6 +2367,27 @@ public class ConsoleInteractionServiceTests
         public override string ToString() => Id;
     }
 
+    private static IAnsiConsole CreateSelectionConsole(StringBuilder output, IEnumerable<ConsoleKeyInfo> keys)
+    {
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.Yes,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 100;
+        console.Profile.Height = 40;
+        return new TestAnsiConsoleWithInput(console, keys);
+    }
+
+    private static CallbackTemplate CreateSearchableTemplate(string id, string? description) =>
+        new(id, "Same", (_, name) => name, _ => { }, (_, _, _, _) => throw new InvalidOperationException("The picker must not execute a template."))
+        {
+            SearchDescription = description
+        };
+
     private static IAnsiConsole CreateInteractiveConsoleWithInput(StringBuilder output, string input)
     {
         var settings = new AnsiConsoleSettings
@@ -2106,63 +2400,5 @@ public class ConsoleInteractionServiceTests
         var console = AnsiConsole.Create(settings);
         console.Profile.Width = int.MaxValue;
         return new TestAnsiConsoleWithInput(console, new StringReader(input));
-    }
-}
-
-/// <summary>
-/// A test <see cref="IAnsiConsole"/> wrapper that redirects input reads to a <see cref="TextReader"/>,
-/// allowing prompts to be answered in unit tests without blocking on real console input.
-/// </summary>
-file sealed class TestAnsiConsoleWithInput : IAnsiConsole
-{
-    private readonly IAnsiConsole _inner;
-    private readonly IAnsiConsoleInput _testInput;
-
-    public TestAnsiConsoleWithInput(IAnsiConsole inner, TextReader inputReader)
-    {
-        _inner = inner;
-        _testInput = new TextReaderInput(inputReader);
-    }
-
-    public Profile Profile => _inner.Profile;
-    public IAnsiConsoleCursor Cursor => _inner.Cursor;
-    public IAnsiConsoleInput Input => _testInput;
-    public IExclusivityMode ExclusivityMode => _inner.ExclusivityMode;
-    public RenderPipeline Pipeline => _inner.Pipeline;
-
-    public void Clear(bool home) => _inner.Clear(home);
-    public void Write(IRenderable renderable) => _inner.Write(renderable);
-    public void WriteAnsi(Action<AnsiWriter> action) => _inner.WriteAnsi(action);
-
-    private sealed class TextReaderInput : IAnsiConsoleInput
-    {
-        private readonly TextReader _reader;
-
-        public TextReaderInput(TextReader reader) => _reader = reader;
-
-        public bool IsKeyAvailable() => true;
-
-        public ConsoleKeyInfo? ReadKey(bool intercept)
-        {
-            var read = _reader.Read();
-            if (read == -1)
-            {
-                // End of stream - return Enter as a safe fallback
-                return new ConsoleKeyInfo('\r', ConsoleKey.Enter, shift: false, alt: false, control: false);
-            }
-
-            var ch = (char)read;
-            var key = ch switch
-            {
-                '\n' or '\r' => ConsoleKey.Enter,
-                'y' or 'Y'   => ConsoleKey.Y,
-                'n' or 'N'   => ConsoleKey.N,
-                _            => ConsoleKey.Enter,
-            };
-            return new ConsoleKeyInfo(ch, key, shift: char.IsUpper(ch), alt: false, control: false);
-        }
-
-        public Task<ConsoleKeyInfo?> ReadKeyAsync(bool intercept, CancellationToken cancellationToken)
-            => Task.FromResult(ReadKey(intercept));
     }
 }

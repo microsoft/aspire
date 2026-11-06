@@ -54,6 +54,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                       "templateSources:enterprise:repository": "https://git.example/templates",
                       "templateSources:enterprise:ref": "template-preview",
                       "templateSources:enterprise:path": "templates",
+                      "templateSources:enterprise:displayName": "Enterprise templates",
                       "docs": { "llmsTxtUrl": "https://docs.example/llms.txt" },
                       "features": { "unrelated": true }
                     }
@@ -74,6 +75,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal("https://git.example/templates", definition.Value!["repository"]!.GetValue<string>());
         Assert.Equal("template-preview", definition.Value["ref"]!.GetValue<string>());
         Assert.Equal("templates", definition.Value["path"]!.GetValue<string>());
+        Assert.Equal("Enterprise templates", definition.Value["displayName"]!.GetValue<string>());
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
 
@@ -149,11 +151,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("""{"templateSources":null}""")]
-    [InlineData("""{"templateSources":{".invalid":{"repository":"https://git.example/templates"}}}""")]
-    [InlineData("""{"templateSources":{"enterprise":{}}}""")]
-    [InlineData("""{"templateSources":{"enterprise":{"path":"relative"}}}""")]
-    public async Task TemplateSources_InvalidInheritedDefinitionsFailWithoutWritingSettings(string json)
+    [InlineData("""{"templateSources":null}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{".invalid":{"repository":"https://git.example/templates"}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{"enterprise":{}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{"enterprise":{"path":"relative"}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    [InlineData("""{"templateSources":{"enterprise":{"repository":"https://git.example/templates","displayName":42}}}""", typeof(ConfigSourceException))]
+    [InlineData("""{"templateSources":{"enterprise":{"repository":"https://git.example/templates","displayName":"Team\nTemplates"}}}""", typeof(Aspire.Cli.Templating.TemplateSourceConfigurationException))]
+    public async Task TemplateSources_InvalidInheritedDefinitionsFailWithoutWritingSettings(string json, Type exceptionType)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = new TestEnvironment(new Dictionary<string, string?>
@@ -166,7 +170,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, environment: environment);
 
-        await Assert.ThrowsAsync<Aspire.Cli.Templating.TemplateSourceConfigurationException>(
+        await Assert.ThrowsAsync(exceptionType,
             () => service.GetTemplateSourcesAsync(CancellationToken.None));
 
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
@@ -1886,7 +1890,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();
-        using var next = TestConfigSourceServices.Create(context, git: git, clock: clock, interaction: interaction);
+        using var next = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, clock: clock, interaction: interaction);
 
         await next.CheckProjectAsync(workspace.WorkspaceRoot, true, CancellationToken.None);
 

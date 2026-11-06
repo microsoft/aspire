@@ -62,7 +62,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(path, """
             {
               "TemplateSources": {
-                "local": { "Path": "/templates" },
+                "local": { "Path": "/templates", "DisplayName": "Company [templates]" },
                 "git": { "repository": "https://example.test/templates", "ref": null, "path": null },
                 "unfinished": { "ref": "main" }
               },
@@ -76,6 +76,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.NotNull(config.TemplateSources);
         Assert.Equal(["local", "git", "unfinished"], config.TemplateSources.Keys);
         Assert.Equal("/templates", config.TemplateSources["local"]?.Path);
+        Assert.Equal("Company [templates]", config.TemplateSources["local"]?.DisplayName);
         Assert.Equal("https://example.test/templates", config.TemplateSources["git"]?.Repository);
         Assert.Null(config.TemplateSources["git"]?.Ref);
         Assert.Null(config.TemplateSources["git"]?.Path);

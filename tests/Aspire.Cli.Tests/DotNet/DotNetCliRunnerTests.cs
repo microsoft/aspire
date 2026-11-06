@@ -2735,6 +2735,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         processStartInfo.ArgumentList.Add("-t:ComputeRunArguments");
         processStartInfo.ArgumentList.Add("-getProperty:RunCommand,RunArguments,RunWorkingDirectory");
         processStartInfo.ArgumentList.Add("-nologo");
+        // -getProperty sends all MSBuild logging to stderr, and NuGet audit fetches vulnerability
+        // data over the network. A transient feed failure then surfaces as warning NU1900 on stderr
+        // even though restore and ComputeRunArguments succeed, so keep this test off the network.
+        processStartInfo.ArgumentList.Add("-p:NuGetAudit=false");
 
         using var process = Process.Start(processStartInfo) ?? throw new InvalidOperationException("Failed to start dotnet msbuild.");
         var stdout = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
@@ -2747,7 +2751,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrWhiteSpace(properties.GetProperty("RunCommand").GetString()));
         Assert.Equal("--from-msbuild", properties.GetProperty("RunArguments").GetString());
         Assert.Equal(Path.Combine(projectDirectory.FullName, "relative-working-directory"), properties.GetProperty("RunWorkingDirectory").GetString());
-        Assert.True(string.IsNullOrWhiteSpace(stderr));
+        Assert.True(string.IsNullOrWhiteSpace(stderr), stderr);
     }
 
     [Fact]

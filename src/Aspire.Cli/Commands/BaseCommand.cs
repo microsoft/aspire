@@ -84,6 +84,7 @@ internal abstract class BaseCommand : Command
         ConfigSources = services.ConfigSources;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
+            _executionContext.ResetSourceTrustWarning();
             SelectForExecution(parseResult);
 
             // Route human-readable output to stderr when a machine-readable format is requested so

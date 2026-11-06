@@ -8,7 +8,7 @@ using Azure.Provisioning.Network;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var catalog = builder.AddProject<Projects.AzureApiManagement_ApiService>("catalog");
+var catalog = builder.AddDotnetProject("catalog", "../AzureApiManagement.ApiService/AzureApiManagement.ApiService.csproj");
 var insights = builder.AddAzureApplicationInsights("insights");
 var useOpenApiEndpoint =
     bool.TryParse(builder.Configuration["ApiManagement:UseOpenApiEndpoint"], out var configuredOpenApiEndpoint) &&

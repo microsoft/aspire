@@ -83,6 +83,53 @@ Declining a configuration source during `aspire new`, interactively or through
 `--use-config-source false`, also disables template sources inherited from it for
 that command. Independently configured global template sources remain available.
 
+Interactive `aspire new` without an explicit template discovers configured sources
+before showing the template picker. Their templates appear alongside built-ins,
+after the existing built-in choices. Selecting a configured template uses that exact
+discovered source snapshot, even when display names or short names collide.
+There is no separate search action: type in the picker to move to a matching name
+or description, case-insensitively. Descriptions, when provided, are shown as
+`Template Name (Template Description)` so Spectre's existing search can match them.
+Grouped terminal labels normalize whitespace and use an ellipsis when the combined
+name and description exceed the available terminal-cell width. Search matches only
+the visible prefix of a truncated label; full template metadata is retained.
+Empty or unavailable sources report their
+existing warnings without preventing selection from other sources or built-ins.
+The terminal picker shows nonselectable headings for built-in templates and each
+configured source. Group order follows first appearance in the discovered choices,
+with built-ins first; templates retain their existing ordering within each group.
+Source objects can specify an optional `displayName` for their heading:
+
+```json
+{
+  "templateSources": {
+    "company": {
+      "repository": "https://github.com/example/templates",
+      "displayName": "Company templates"
+    }
+  }
+}
+```
+
+This works in global configuration and accepted init-source definitions. Omitted,
+null, empty, or space-only names fall back to the source alias. Non-string values
+and control characters are rejected. Set an existing source's heading with
+`aspire config set templateSources.company.displayName "Company templates" --global`.
+The alias remains the lookup key and group identity, so identical display names do
+not merge sources or alter explicit invocations, warnings, or flat-client labels.
+Global overrides replace the entire inherited definition, including `displayName`;
+inherited values are never saved to global or generated-project configuration.
+
+Terminal choices do not repeat the source alias or short name under these headings.
+Grouping and terminal labels are optional
+interaction-service presentation metadata: clients such as the VS Code extension
+continue receiving the existing flat string choices with unique source-qualified
+labels. Description search in those flat clients is deferred. No extension
+protocol or capability change is required.
+Discovery does not authorize template post-actions or execution of generated code.
+Help, explicit templates, noninteractive invocations, and built-in-only options
+(`--source`, `--version`, `--channel`, or `--language`) do not trigger this discovery.
+
 Git-backed template discovery displays the CLI's shared localized source-trust
 warning once per command before contacting repositories, including configured
 sources and cached checkouts. `aspire template source add` displays the same warning before its

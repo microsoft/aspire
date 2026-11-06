@@ -286,6 +286,10 @@ message Resource {
 
     // Optional icon variant for the custom icon.
     optional IconVariant icon_variant = 24;
+
+    // Human-readable resource type label, independent of resource_type and telemetry service identity.
+    // Consumers fall back to resource_type when absent.
+    optional string resource_type_display_name = 25;
 }
 
 ////////////////////////////////////////////

@@ -18,6 +18,7 @@ public sealed record CustomResourceSnapshot
 {
     private readonly ImmutableArray<HealthReportSnapshot> _healthReports = [];
     private readonly ResourceStateSnapshot? _state;
+    private readonly string? _resourceTypeDisplayName;
 
     /// <summary>
     /// Monotonically increasing version number for the snapshot.
@@ -28,6 +29,24 @@ public sealed record CustomResourceSnapshot
     /// The type of the resource.
     /// </summary>
     public required string ResourceType { get; init; }
+
+    /// <summary>
+    /// Gets or initializes the human-readable resource type label, falling back to <see cref="ResourceType"/> when not set.
+    /// </summary>
+    /// <remarks>
+    /// This label is presentation metadata and must not be used to identify resource capabilities.
+    /// </remarks>
+    public string ResourceTypeDisplayName
+    {
+        get => _resourceTypeDisplayName ?? ResourceType;
+        init
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(value);
+            _resourceTypeDisplayName = value;
+        }
+    }
+
+    internal bool HasResourceTypeDisplayName() => _resourceTypeDisplayName is not null;
 
     /// <summary>
     /// The properties that should show up in the dashboard for this resource.
@@ -181,6 +200,7 @@ public sealed record CustomResourceSnapshot
         // Version counts publications rather than describing the resource. HealthStatus is derived
         // from State and HealthReports, so neither property needs an independent comparison.
         if (ResourceType != other.ResourceType ||
+            _resourceTypeDisplayName != other._resourceTypeDisplayName ||
             CreationTimeStamp != other.CreationTimeStamp ||
             StartTimeStamp != other.StartTimeStamp ||
             StopTimeStamp != other.StopTimeStamp ||

@@ -29,6 +29,7 @@
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
     <Compile Include="../Infrastructure.Tests/Shared/RepoRoot.cs" Link="shared/RepoRoot.cs" />
     <Compile Include="../Infrastructure.Tests/Shared/CommandResult.cs" Link="shared/CommandResult.cs" />
+    <Compile Include="../Infrastructure.Tests/ExecutableFile.cs" Link="shared/ExecutableFile.cs" />
   </ItemGroup>
 
 </Project>

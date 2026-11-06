@@ -447,6 +447,56 @@
         <target state="translated">(取消设置)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceGraphGameExit">
+        <source>Exit</source>
+        <target state="new">Exit</target>
+        <note>Text of the button that leaves the Aspire Outage game in the resource graph.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameExitLabel">
+        <source>Exit Aspire Outage and return to the graph</source>
+        <target state="new">Exit Aspire Outage and return to the graph</target>
+        <note>Accessible label of the button that leaves the Aspire Outage game in the resource graph.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameHardCoreStopped">
+        <source>Resources still stopped: {0}</source>
+        <target state="new">Resources still stopped: {0}</target>
+        <note>Shown on the game over screen of Aspire Outage after hard core mode stopped real resources. {0} is the number of resources.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameHardCoreWarning">
+        <source>Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</source>
+        <target state="new">Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</target>
+        <note>Warning shown when the hard core mode of the Aspire Outage game is selected.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameInstructions">
+        <source>Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</source>
+        <target state="new">Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</target>
+        <note>Accessible description of the Aspire Outage game in the resource graph. Aspire Outage is the name of the game. The key names refer to keyboard keys.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameModeHardCore">
+        <source>Hard core</source>
+        <target state="new">Hard core</target>
+        <note>Game mode of Aspire Outage in which destroying an enemy really stops the matching resource.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameModeNormal">
+        <source>Normal</source>
+        <target state="new">Normal</target>
+        <note>Default game mode of Aspire Outage, which has no effect on resources.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGamePlay">
+        <source>Play Aspire Outage</source>
+        <target state="new">Play Aspire Outage</target>
+        <note>Tooltip and accessible name of the resource graph button that launches the game. Aspire Outage is the name of the game.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameSoundOff">
+        <source>Sound: off</source>
+        <target state="new">Sound: off</target>
+        <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is off.</note>
+      </trans-unit>
+      <trans-unit id="ResourceGraphGameSoundOn">
+        <source>Sound: on</source>
+        <target state="new">Sound: on</target>
+        <note>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</note>
+      </trans-unit>
       <trans-unit id="ResourceOverviewBrowseMeters">
         <source>Browse meters</source>
         <target state="new">Browse meters</target>
@@ -825,6 +875,11 @@
       <trans-unit id="ResourcesDetailsProjectPathProperty">
         <source>Project path</source>
         <target state="translated">项目路径</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesDetailsResourceTypeDisplayNameProperty">
+        <source>Type display name</source>
+        <target state="new">Type display name</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesDetailsStartTimeProperty">

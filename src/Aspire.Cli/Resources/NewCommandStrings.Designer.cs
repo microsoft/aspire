@@ -61,14 +61,14 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Back to default templates.
+        ///   Looks up a localized string similar to Built-in templates.
         /// </summary>
-        internal static string BackToDefaultTemplates {
+        internal static string BuiltInTemplates {
             get {
-                return ResourceManager.GetString("BackToDefaultTemplates", resourceCulture);
+                return ResourceManager.GetString("BuiltInTemplates", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, daily).
         /// </summary>
@@ -241,15 +241,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No matching templates were found in the configured sources..
-        /// </summary>
-        internal static string NoMatchingConfiguredTemplates {
-            get {
-                return ResourceManager.GetString("NoMatchingConfiguredTemplates", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to No matching local Aspire.ProjectTemplates package was found for Aspire CLI version &apos;{0}&apos;. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version..
         /// </summary>
         internal static string NoMatchingLocalTemplatePackage {
@@ -340,29 +331,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Search for more templates.
-        /// </summary>
-        internal static string SearchForMoreTemplates {
-            get {
-                return ResourceManager.GetString("SearchForMoreTemplates", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Searching template source &apos;{0}&apos;....
         /// </summary>
         internal static string SearchingTemplateSource {
             get {
                 return ResourceManager.GetString("SearchingTemplateSource", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Search again.
-        /// </summary>
-        internal static string SearchTemplatesAgain {
-            get {
-                return ResourceManager.GetString("SearchTemplatesAgain", resourceCulture);
             }
         }
         
@@ -529,15 +502,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Search templates (leave empty to list all).
-        /// </summary>
-        internal static string TemplateSearchPrompt {
-            get {
-                return ResourceManager.GetString("TemplateSearchPrompt", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Add a named template source to global configuration after confirming you trust it..
         /// </summary>
         internal static string TemplateSourceAddDescription {
@@ -591,6 +555,15 @@ namespace Aspire.Cli.Resources {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Expected a display name string without control characters, or null to use the source alias..
+        /// </summary>
+        internal static string TemplateSourceDisplayNameInvalid {
+            get {
+                return ResourceManager.GetString("TemplateSourceDisplayNameInvalid", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed..
         /// </summary>
@@ -772,7 +745,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Unknown source field. Use an absolute &apos;path&apos;, or &apos;repository&apos; with optional &apos;ref&apos;/&apos;path&apos;..
+        ///   Looks up a localized string similar to Unknown source field. Use &apos;path&apos;, &apos;repository&apos;, &apos;ref&apos;, or &apos;displayName&apos;..
         /// </summary>
         internal static string TemplateSourceUnknownField {
             get {

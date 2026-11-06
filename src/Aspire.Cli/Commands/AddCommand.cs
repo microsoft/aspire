@@ -130,7 +130,7 @@ internal sealed class AddCommand : BaseCommand
                     ExecutionContext.WorkingDirectory);
             if (source is not null)
             {
-                InteractionService.DisplaySourceTrustWarning();
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
             }
             addActivity = _profilingTelemetry.StartAddCommand(integrationName, version, source, passedAppHostProjectFile);
 

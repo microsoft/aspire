@@ -94,12 +94,12 @@ export function unregisterPaneActivityVisibility(layoutElement) {
 // Priority+ overflow for the tab strip in the header. Tabs that no longer fit are marked with data-tab-overflow (hidden
 // by CSS) from the right, and their ids are reported to .NET, which lists them in the "..." menu. Hiding is done in the
 // DOM, rather than by rendering, so resizing never waits for a server round trip.
-let tabOverflow = null;
+const tabOverflowRegistrations = new Map();
 
-export function registerTabOverflow(dotNetRef) {
-    unregisterTabOverflow();
+export function registerTabOverflow(registrationId, dotNetRef) {
+    unregisterTabOverflow(registrationId);
 
-    const state = { dotNetRef, nav: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0 };
+    const state = { dotNetRef, nav: null, tablist: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0 };
     const schedule = () => {
         if (!state.frame) {
             state.frame = requestAnimationFrame(() => {
@@ -114,16 +114,20 @@ export function registerTabOverflow(dotNetRef) {
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav) {
             state.resizeObserver.disconnect();
-            state.tabsObserver.disconnect();
             state.nav = nav;
             state.reported = "";
             if (nav) {
                 state.resizeObserver.observe(nav);
-                const tablist = nav.querySelector(".resources-tab-header");
-                if (tablist) {
-                    // Attributes are filtered so setting data-tab-overflow below doesn't re-trigger a measurement.
-                    state.tabsObserver.observe(tablist, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
-                }
+            }
+        }
+        // Navigation replaces the keyed FluentTabs without necessarily replacing its surrounding strip.
+        const tablist = nav?.querySelector(".resources-tab-header") ?? null;
+        if (tablist !== state.tablist) {
+            state.tabsObserver.disconnect();
+            state.tablist = tablist;
+            if (tablist) {
+                // Attributes are filtered so setting data-tab-overflow below doesn't re-trigger a measurement.
+                state.tabsObserver.observe(tablist, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
             }
         }
         measure();
@@ -168,23 +172,26 @@ export function registerTabOverflow(dotNetRef) {
     state.tabsObserver = new MutationObserver(schedule);
     // Cheap check on any DOM change (the terminal updates constantly): only a replaced strip needs attaching again.
     state.bodyObserver = new MutationObserver(() => {
-        if (document.querySelector(".resource-tabs-nav") !== state.nav) {
+        const nav = document.querySelector(".resource-tabs-nav");
+        if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
         }
     });
     state.bodyObserver.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
-    tabOverflow = state;
+    // Recording switches can mount the new layout before the old layout finishes disposing.
+    // Use a per-layout ID: Blazor cannot resolve an ElementReference after its DOM element is removed.
+    tabOverflowRegistrations.set(registrationId, state);
     schedule();
 }
 
-export function unregisterTabOverflow() {
-    const state = tabOverflow;
+export function unregisterTabOverflow(registrationId) {
+    const state = tabOverflowRegistrations.get(registrationId);
     if (!state) {
         return;
     }
-    tabOverflow = null;
+    tabOverflowRegistrations.delete(registrationId);
     cancelAnimationFrame(state.frame);
     state.resizeObserver.disconnect();
     state.tabsObserver.disconnect();
@@ -579,10 +586,14 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
         const name = link?.querySelector('.resource-row-name');
-        // Ordinary names remain quiet. Only the finite-width extreme-name fallback
-        // needs a tooltip; the native link always retains its complete accessible name.
-        if (name && name.scrollWidth > name.clientWidth) {
-            link.setAttribute('data-tooltip', link.getAttribute('aria-label'));
+        // Keep availability explanations even when the name fits. Clipped names also
+        // need their full identity; ordinary available rows remain quiet.
+        const tooltip = [
+            name && name.scrollWidth > name.clientWidth ? link.getAttribute('aria-label') : null,
+            link?.getAttribute('data-resource-unavailable-reason')
+        ].filter(Boolean).join('\n');
+        if (tooltip) {
+            link.setAttribute('data-tooltip', tooltip);
             link.setAttribute('data-tooltip-positioning', 'above');
         }
         else if (link) {

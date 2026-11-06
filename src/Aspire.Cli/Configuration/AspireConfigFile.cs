@@ -176,7 +176,7 @@ internal sealed class AspireConfigFile
     public Dictionary<string, PackageEntry>? Packages { get; set; }
 
     [JsonPropertyName(TemplateSourcesSectionName)]
-    [Description("Named global template sources. Each source specifies an absolute local path or a Git repository with optional ref and path. " + SourceNameValidator.Description)]
+    [Description("Named template sources from global or accepted init-source configuration. Each source specifies an absolute local path or a Git repository with optional ref, path, and displayName. " + SourceNameValidator.Description)]
     public Dictionary<string, AspireConfigTemplateSource?>? TemplateSources { get; set; }
 
     // Unmodeled settings must survive typed load/save cycles.
@@ -602,6 +602,10 @@ internal sealed class AspireConfigApiDocs
 /// </summary>
 internal sealed class AspireConfigTemplateSource
 {
+    [JsonPropertyName("displayName")]
+    [Description("Optional template selector group heading. Defaults to the source alias when omitted or blank; the alias remains the source identity.")]
+    public string? DisplayName { get; set; }
+
     [JsonPropertyName("path")]
     public string? Path { get; set; }
 
