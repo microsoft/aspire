@@ -183,7 +183,7 @@ internal sealed class ChartDataCalculator
                 total[i] = (total[i], increases[i]) switch
                 {
                     (null, null) => null,
-                    var (current, increase) => (current ?? 0) + (increase ?? 0)
+                    var (current, increase) => AddFinite(current ?? 0, increase ?? 0)
                 };
             }
         }
@@ -216,6 +216,8 @@ internal sealed class ChartDataCalculator
     {
         var hasValue = false;
         pointValue = 0d;
+        var startUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(start.UtcDateTime);
+        var endUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(end.UtcDateTime);
 
         foreach (var dimension in dimensions)
         {
@@ -227,8 +229,9 @@ internal sealed class ChartDataCalculator
                 // An observation is at the end of its export interval, which puts it in exactly one chart interval so it
                 // can't be counted twice. Values are ordered by start, and an instrument's integer and double values
                 // are rolled up separately, so their ends aren't in order. An earlier end doesn't end the search.
-                var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
-                if (metricEnd <= start || metricEnd > end)
+                // Compare in nanoseconds: End is truncated to 100ns ticks, which would move an end just past a chart
+                // boundary back onto it, into the interval before the one its rollup was grouped into.
+                if (metric.EndTimeUnixNano <= startUnixNano || metric.EndTimeUnixNano > endUnixNano)
                 {
                     continue;
                 }
@@ -241,7 +244,7 @@ internal sealed class ChartDataCalculator
                 };
 
                 // Only values stored by an older dashboard can have a count above one, without their individual times.
-                pointValue += value * metric.Count;
+                pointValue = AddFinite(pointValue, value * metric.Count);
                 hasValue = true;
             }
         }
@@ -255,6 +258,14 @@ internal sealed class ChartDataCalculator
 
         return hasValue;
     }
+
+    /// <summary>
+    /// Adds two values, keeping the result finite. Each stored value is finite, but a sum of them can overflow to infinity,
+    /// for example a rollup that SQLite summed or the total of several dimensions. JS interop serializes chart values with
+    /// System.Text.Json, which throws on infinity, so an overflow would stop the chart from rendering. The largest finite
+    /// value still draws as off the scale.
+    /// </summary>
+    internal static double AddFinite(double value, double other) => Math.Clamp(value + other, double.MinValue, double.MaxValue);
 
     internal static List<double?> CalculateCounterIncreases(IReadOnlyList<double?> values, OtlpAggregationTemporality temporality)
     {
@@ -280,7 +291,7 @@ internal sealed class ChartDataCalculator
             }
 
             // The first point has nothing to compare against.
-            increases.Add(previous is { } last ? (current >= last ? current - last : current) : null);
+            increases.Add(previous is { } last ? (current >= last ? AddFinite(current, -last) : current) : null);
             previous = current;
         }
 
@@ -291,6 +302,7 @@ internal sealed class ChartDataCalculator
     {
         var hasValue = false;
         pointValue = 0d;
+        var endUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(end.UtcDateTime);
 
         foreach (var dimension in dimensions)
         {
@@ -339,7 +351,9 @@ internal sealed class ChartDataCalculator
                     continue;
                 }
 
-                if (metricStart <= end)
+                // Compare in nanoseconds: Start is truncated to 100ns ticks, which would move a start just past the
+                // interval end back onto it, and into this interval.
+                if (metric.StartTimeUnixNano <= endUnixNano)
                 {
                     var value = metric switch
                     {
@@ -354,7 +368,7 @@ internal sealed class ChartDataCalculator
                 }
             }
 
-            pointValue += dimensionValue;
+            pointValue = AddFinite(pointValue, dimensionValue);
         }
 
         // JS interop doesn't support serializing NaN values.

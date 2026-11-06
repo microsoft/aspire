@@ -451,6 +451,88 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void TryCalculateDeltaPoint_EndJustPastBoundary_IsInTheNextInterval()
+    {
+        // The end is 50ns past the boundary. Truncated to 100ns ticks it would be on the boundary, in the earlier interval,
+        // while the rollup query grouped it into the later one.
+        var dimension = new DimensionScope(capacity: 100, []);
+        var boundaryUnixNano = ToNanos(s_startTime);
+        dimension.Values.Add(new MetricValue<long>(4, boundaryUnixNano - 1_000, boundaryUnixNano + 50));
+
+        Assert.False(ChartDataCalculator.TryCalculateDeltaPoint([dimension], s_startTime.AddSeconds(-10), s_startTime, out _));
+        Assert.True(ChartDataCalculator.TryCalculateDeltaPoint([dimension], s_startTime, s_startTime.AddSeconds(10), out var value));
+        Assert.Equal(4, value);
+    }
+
+    [Fact]
+    public void TryCalculatePoint_StartJustPastIntervalEnd_IsNotInTheInterval()
+    {
+        var dimension = new DimensionScope(capacity: 100, []);
+        var endUnixNano = ToNanos(s_startTime);
+        dimension.Values.Add(new MetricValue<long>(4, endUnixNano + 50, endUnixNano + 1_000));
+
+        Assert.False(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime.AddSeconds(-10), s_startTime, out _));
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(10), out var value));
+        Assert.Equal(4, value);
+    }
+
+    [Fact]
+    public void TryCalculateDeltaPoint_SumOverflows_StaysFinite()
+    {
+        // Each value is finite, but their sum isn't. A rollup that SQLite summed can also already be infinite.
+        var dimension = new DimensionScope(capacity: 100, []);
+        var start = s_startTime.UtcDateTime;
+        dimension.Values.Add(new MetricValue<double>(double.MaxValue, start, start.AddSeconds(1)));
+        dimension.Values.Add(new MetricValue<double>(double.MaxValue, start.AddSeconds(1), start.AddSeconds(2)));
+        dimension.Values.Add(new MetricValue<double>(double.PositiveInfinity, start.AddSeconds(2), start.AddSeconds(3)));
+        dimension.Values.Add(new MetricValue<double>(double.MinValue, start.AddSeconds(3), start.AddSeconds(4)));
+
+        Assert.True(ChartDataCalculator.TryCalculateDeltaPoint([dimension], s_startTime, s_startTime.AddSeconds(10), out var value));
+        Assert.Equal(double.MaxValue, value);
+    }
+
+    [Fact]
+    public void TryCalculatePoint_DimensionSumOverflows_StaysFinite()
+    {
+        var dim1 = new DimensionScope(capacity: 100, []);
+        var dim2 = new DimensionScope(capacity: 100, []);
+        var start = s_startTime.UtcDateTime;
+        dim1.Values.Add(new MetricValue<double>(double.MinValue, start, start.AddSeconds(1)));
+        dim2.Values.Add(new MetricValue<double>(double.MinValue, start, start.AddSeconds(1)));
+
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dim1, dim2], s_startTime, s_startTime.AddSeconds(10), out var value));
+        Assert.Equal(double.MinValue, value);
+    }
+
+    [Fact]
+    public void CalculateCounterIncreases_DifferenceOverflows_StaysFinite()
+    {
+        var increases = ChartDataCalculator.CalculateCounterIncreases([double.MinValue, double.MaxValue], OtlpAggregationTemporality.Cumulative);
+
+        Assert.Equal([null, double.MaxValue], increases);
+    }
+
+    [Fact]
+    public void CalculateCounterIncreaseValues_DimensionTotalOverflows_StaysFinite()
+    {
+        var calculator = new ChartDataCalculator(pointCount: 2, duration: TimeSpan.FromSeconds(20));
+        var dimensions = new List<DimensionScope>();
+        for (var i = 0; i < 2; i++)
+        {
+            var dimension = new DimensionScope(capacity: 100, []);
+            var start = s_startTime.UtcDateTime;
+            dimension.Values.Add(new MetricValue<double>(0, start.AddSeconds(-25), start.AddSeconds(-25)));
+            dimension.Values.Add(new MetricValue<double>(double.MaxValue, start.AddSeconds(-5), start.AddSeconds(-5)));
+            dimensions.Add(dimension);
+        }
+
+        var increases = calculator.CalculateCounterIncreaseValues(dimensions, s_startTime, OtlpAggregationTemporality.Cumulative);
+
+        // Each dimension increases by the largest finite value in the third interval, and their total overflows.
+        Assert.Equal([null, null, double.MaxValue, null], increases);
+    }
+
+    [Fact]
     public void CalculateCounterIncreaseValues_NoDimensions_AllNullValues()
     {
         var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(30));
