@@ -1,0 +1,15 @@
+{
+  "id": "windows-docker-version-dependency-check-timeout",
+  "type": "infra-failure",
+  "title": "Windows runner: DCP docker --version dependency check times out, failing JavaScript fixture initialization",
+  "error_pattern": "Application orchestrator dependency check returned an error: The operation has timed out.\nContext expired, stopping process... docker.exe --version",
+  "occurrences": [
+    {
+      "run_id": 42157416383,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42157416383",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "observed_at": "2026-11-06T04:15:38Z",
+      "pr_number": 0
+    }
+  ]
+}
