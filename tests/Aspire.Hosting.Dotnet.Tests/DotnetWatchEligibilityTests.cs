@@ -190,7 +190,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
             await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
             var tickerArgs = await ArgumentEvaluator.GetArgumentListAsync(ticker.Resource);
-            Assert.Contains(DotnetWatchCoordinator.ProxyCommandName, tickerArgs);
+            Assert.Contains(DotnetWatchHostProtocol.ProxyCommand, tickerArgs);
             Assert.Contains(scriptPath, tickerArgs);
         }
 
