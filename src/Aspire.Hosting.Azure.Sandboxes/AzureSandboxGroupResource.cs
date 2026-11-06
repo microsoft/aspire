@@ -21,7 +21,7 @@ namespace Aspire.Hosting.Azure;
 [AspireExport]
 public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzureComputeEnvironmentResource
 {
-    internal const string ImagePullIdentityClientIdOutputName = "imagePullIdentityClientId";
+    internal const string ImagePullIdentityIdOutputName = "imagePullIdentityId";
 
     // The sandbox group ARM response exposes its data-plane management endpoint, but not a dashboard URL.
     // Sandboxes currently supports Azure public cloud only, so use its public portal until ARM provides
