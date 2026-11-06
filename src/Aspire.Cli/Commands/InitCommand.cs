@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Certificates;
@@ -118,7 +119,6 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
-        Options.Add(AgentInitCommand.s_aspireSourceOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -212,17 +212,16 @@ internal sealed class InitCommand : BaseCommand
             InteractionService,
             CliExitCodes.Success,
             workspaceRoot,
+            configurationDirectory,
             agentInitBinding,
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
-            PromptBinding.Create(parseResult, AgentInitCommand.s_aspireSourceOption, AgentInitCommand.DefaultAspireSource),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
             cancellationToken);
 
-        if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
+        if (agentInitResult.ExitCode == CliExitCodes.Success)
         {
-            var commands = GetAspireifyCommands(agentInitResult.SelectedClients);
+            var commands = GetAspireifyCommands(agentInitResult);
             if (commands.Count > 0)
             {
                 InteractionService.DisplayEmptyLine();
@@ -255,26 +254,64 @@ internal sealed class InitCommand : BaseCommand
         if (value is not null)
         {
             InteractionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
     }
 
-    private static IReadOnlyList<string> GetAspireifyCommands(IReadOnlyList<IAgentClient> selectedClients)
+    private static IReadOnlyList<string> GetAspireifyCommands(AgentInitExecutionResult agentInitResult)
     {
+        var registeredClients = agentInitResult.RegistrationResults
+            .Where(result => result.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)
+            .SelectMany(result => result.Clients.Where(client =>
+                result.Configuration is { } configuration &&
+                HasAspireifyRegistration(client, configuration, agentInitResult.SkillSources)))
+            .ToArray();
         var commands = new List<string>();
 
-        if (selectedClients.Any(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
+        if (registeredClients.Any(client => string.Equals(client.Id, ClaudeCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("claude \"run the aspireify skill\"");
         }
 
-        if (selectedClients.Any(client => string.Equals(client.Id, OpenCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
+        if (registeredClients.Any(client => string.Equals(client.Id, OpenCodeAgentClient.ClientId, StringComparisons.AgentClientId)))
         {
             commands.Add("opencode --prompt \"run the aspireify skill\"");
         }
 
         return commands;
+    }
+
+    // No-op registrations and custom plugins do not prove Aspireify is available.
+    // OpenCode must contain an official catalog belonging to an enabled source,
+    // not just an old registration or an unused V1/V2 catalog setting.
+    private static bool HasAspireifyRegistration(IAgentClient client, JsonObject configuration, IReadOnlyList<SkillSource> sources)
+    {
+        if (client.Id == OpenCodeAgentClient.ClientId)
+        {
+            return AspireSkillsRemoteConfiguration.ReadOpenCodeSkills(configuration)?
+                .Select(AspireSkillsRemoteConfiguration.String)
+                .Any(catalog => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, SkillSource.BuiltIn) &&
+                    sources.Any(source => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, source))) is true;
+        }
+
+        return sources.Any(source => (source.Plugins ?? ["aspire"]).Contains("aspire", StringComparer.Ordinal) &&
+            IsOfficialAspireSkillsRepository(source.GetRepositoryUrl()));
+    }
+
+    private static bool IsOfficialAspireSkillsRepository(string repositoryUrl)
+    {
+        repositoryUrl = AspireSkillsRemoteConfiguration.NormalizeRepositoryUrl(repositoryUrl);
+        if (Uri.TryCreate(repositoryUrl, UriKind.Absolute, out var uri))
+        {
+            return uri.Scheme is "https" or "ssh" &&
+                uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+                uri.AbsolutePath.Equals($"/{AspireSkillsRemoteConfiguration.Repository}", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // SCP-style Git addresses have no URI scheme, e.g. git@github.com:microsoft/aspire-skills.git.
+        // https://git-scm.com/docs/git-clone#URLS
+        return string.Equals(repositoryUrl, $"git@github.com:{AspireSkillsRemoteConfiguration.Repository}", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<int> DropCSharpSkeletonAsync(DirectoryInfo workingDirectory, FileInfo? solutionFile, CancellationToken cancellationToken)
@@ -585,7 +622,7 @@ internal sealed class InitCommand : BaseCommand
                 catch (JsonException ex)
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToParseExistingConfig, AspireConfigFile.FileName, configPath, ex.Message));
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
+                    InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
                     return (CliExitCodes.FailedToCreateNewProject, default);
                 }
             }

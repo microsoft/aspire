@@ -67,6 +67,9 @@
   <data name="EnvironmentCheckHeader" xml:space="preserve">
     <value>Aspire Environment Check</value>
   </data>
+  <data name="FilesHeader" xml:space="preserve">
+    <value>Files:</value>
+  </data>
   <data name="AspireCategoryHeader" xml:space="preserve">
     <value>Aspire</value>
   </data>
@@ -382,8 +385,13 @@ The legacy file continues to work — this is a non-blocking warning.</value>
     <comment>{0} is the full path to the legacy apphost.ts file.</comment>
   </data>
   <data name="PendingMigrationFix" xml:space="preserve">
-    <value>Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</value>
+    <value>Run 'aspire update --migrate' to apply the recommended migration.</value>
+  </data>
+  <data name="AspireSkillsFix" xml:space="preserve">
+    <value>Delete these files, then run 'aspire agent init --skills aspire'.</value>
+  </data>
+  <data name="AspireSkillsInspectionFailedMessage" xml:space="preserve">
+    <value>Could not inspect local Aspire skills</value>
   </data>
   <data name="ContainerRuntimeExplicitSelectionSuffix" xml:space="preserve">
     <value> ← explicitly selected</value>

@@ -95,7 +95,9 @@ suite('Aspire extension edge case E2E', function () {
         await setCliUnavailableForE2E(true);
 
         const settingsBefore = getCommandInvocationCount('aspire-vscode.settings');
-        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' });
+        // The first Settings editor open in a window can take well over the 10s control wait on
+        // Windows runners, so the command outcome wait owns completion.
+        await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.settings' }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.settings', 'success', 60000, settingsBefore);
 
         const launchJsonPath = path.join(getWorkspaceRoot(), '.vscode', 'launch.json');

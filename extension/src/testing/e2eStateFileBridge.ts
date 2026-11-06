@@ -32,6 +32,8 @@ import { isEnabledCommand } from '../views/treePresentation';
 import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs } from './blazorWasmDebugProofTimeouts';
 import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
+import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
+import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
 
 let atomicWriteSequence = 0;
 
@@ -927,9 +929,24 @@ export async function executeE2eControlCommand(
       markStarted();
       return await proveAppHostAndResourceDebugging(command, aspireContext, appHostTreeProvider);
     }
+    case 'proveDotnetResourceLaunch': {
+      markStarted();
+      return await proveDotnetResourceLaunch({
+        ...command,
+        launchConfig: { ...command.launchConfig, project_path: getE2eWorkspacePath(command.launchConfig.project_path) },
+        sourcePath: getE2eWorkspacePath(command.sourcePath),
+        breakpointLine: getE2eBreakpointLine(command.breakpointLine),
+        readyFilePath: getE2eWorkspacePath(command.readyFilePath),
+        timeoutMs: getE2ePositiveInteger(command.timeoutMs, 120000, 'timeoutMs'),
+      });
+    }
     case 'prepareBlazorWasmDebugger': {
       markStarted();
       return await prepareBlazorWasmDebugger();
+    }
+    case 'waitForCSharpProjectInitialization': {
+      markStarted();
+      return await waitForCSharpProjectInitialization(getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs'));
     }
     case 'proveBlazorWasmDebugging': {
       markStarted();
@@ -1345,6 +1362,9 @@ async function proveAttachedResourceDebugging(
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
+  const pendingBreakpointRequests = new Map<string, { sourcePath?: string; lines: number[]; afterRemoval: boolean }>();
+  const breakpointRemovalAcknowledgedSessionIds = new Set<string>();
+  let breakpointRemovalRequested = false;
 
   const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
     sessionById.set(session.id, session);
@@ -1364,6 +1384,16 @@ async function proveAttachedResourceDebugging(
               sessionName: session.name,
               command: message.command,
               body: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+          if (message?.type === 'request' && message.command === 'setBreakpoints' && typeof message.seq === 'number') {
+            const requestedBreakpoints: unknown[] = Array.isArray(message.arguments?.breakpoints) ? message.arguments.breakpoints : [];
+            pendingBreakpointRequests.set(`${session.id}:${message.seq}`, {
+              sourcePath: typeof message.arguments?.source?.path === 'string' ? message.arguments.source.path : undefined,
+              lines: requestedBreakpoints
+                .map(requested => (requested as { line?: unknown } | undefined)?.line)
+                .filter((line): line is number => typeof line === 'number'),
+              afterRemoval: breakpointRemovalRequested,
             });
           }
         },
@@ -1389,6 +1419,17 @@ async function proveAttachedResourceDebugging(
             };
             breakpointResponses.push(breakpointResponse);
             extensionLogOutputChannel.info(`Resource debug E2E ${session.type} setBreakpoints response: ${JSON.stringify(breakpointResponse)}`);
+
+            const requestKey = `${session.id}:${message.request_seq}`;
+            const request = pendingBreakpointRequests.get(requestKey);
+            pendingBreakpointRequests.delete(requestKey);
+            if (request?.afterRemoval &&
+              message.success === true &&
+              request.sourcePath !== undefined &&
+              isSamePath(request.sourcePath, sourcePath) &&
+              !request.lines.includes(breakpointLine + 1)) {
+              breakpointRemovalAcknowledgedSessionIds.add(session.id);
+            }
           }
           if (message?.type === 'event' && message.event === 'stopped') {
             const stoppedEvent = {
@@ -1419,24 +1460,56 @@ async function proveAttachedResourceDebugging(
       throw new Error('Aspire extension E2E attach proof could not find the registered aspire_resource_debug tool.');
     }
 
+    const fetchResourceResponse = async (phase: 'beforeAttach' | 'attached' | 'detached'): Promise<string | undefined> => {
+      const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
+      if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
+        return undefined;
+      }
+
+      const requestUrl = await resolveResourceRequestUrl(
+        appHostTreeProvider,
+        appHostPath,
+        resourceName,
+        resourceRequestPath,
+        timeoutMs);
+      try {
+        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
+        const body = await response.text();
+        return response.ok && body === expectedResponse ? body : undefined;
+      }
+      catch (error) {
+        throw new Error(`${phase} request to resource '${resourceName}' failed: ${error instanceof Error ? error.name : String(error)}`);
+      }
+    };
     const workspaceRoot = getE2eWorkspacePath(process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT);
     const relativeAppHostPath = path.relative(workspaceRoot, appHostPath).split(path.sep).join('/');
-    const toolCancellation = new vscode.CancellationTokenSource();
-    let languageModelResult: vscode.LanguageModelToolResult;
-    try {
-      languageModelResult = await invokeRegisteredLanguageModelTool(
-        resourceDebugTool,
-        'aspire_resource_debug',
-        {
-          appHostPath: relativeAppHostPath,
-          resourceName,
-          strategy: 'attach',
-        },
-        toolCancellation.token);
-    }
-    finally {
-      toolCancellation.dispose();
-    }
+    const languageModelResult = await attachWhenResourceResponds({
+      waitForResourceResponse: async phase => {
+        const body = await waitForE2eValue(
+          `resource '${resourceName}' response before attaching the debugger`,
+          timeoutMs,
+          () => fetchResourceResponse(phase));
+        extensionLogOutputChannel.info(`Resource debug E2E resource '${resourceName}' responded before attach.`);
+        return body;
+      },
+      attach: async () => {
+        const toolCancellation = new vscode.CancellationTokenSource();
+        try {
+          return await invokeRegisteredLanguageModelTool(
+            resourceDebugTool,
+            'aspire_resource_debug',
+            {
+              appHostPath: relativeAppHostPath,
+              resourceName,
+              strategy: 'attach',
+            },
+            toolCancellation.token);
+        }
+        finally {
+          toolCancellation.dispose();
+        }
+      },
+    });
     const resultPart = languageModelResult.content[0];
     if (!(resultPart instanceof vscode.LanguageModelTextPart)) {
       throw new Error('aspire_resource_debug returned a non-text result.');
@@ -1497,40 +1570,40 @@ async function proveAttachedResourceDebugging(
           return undefined;
         }));
 
-    // Remove the breakpoint before continuing so requests queued by the traffic driver cannot
-    // immediately stop the process again and race debugger detach.
-    vscode.debug.removeBreakpoints([breakpoint]);
-    await attachedSession.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
-    await vscode.debug.stopDebugging(attachedSession);
-    await waitForE2eValue(
-      `${expectedDebugType} attach session termination`,
-      timeoutMs,
-      () => terminatedSessionIds.has(attachedSession!.id) ? true : undefined);
-
-    const responseBody = await waitForE2eValue(
-      `resource '${resourceName}' response after debugger detach`,
-      timeoutMs,
-      async () => {
-        const resourceAfterDetach = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
-        if (!(resourceAfterDetach instanceof ResourceItem) || resourceAfterDetach.resource.state !== 'Running') {
-          return undefined;
-        }
-
-        const requestUrl = await resolveResourceRequestUrl(
-          appHostTreeProvider,
-          appHostPath,
-          resourceName,
-          resourceRequestPath,
-          timeoutMs);
-        try {
-          const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
-          const body = await response.text();
-          return response.ok && body === expectedResponse ? body : undefined;
-        }
-        catch {
-          return undefined;
-        }
-      });
+    const attachedSessionForDetach = attachedSession;
+    const responseBody = await runAttachedResourceDetachSequence({
+      removeBreakpoint: () => {
+        breakpointRemovalRequested = true;
+        vscode.debug.removeBreakpoints([breakpoint]);
+      },
+      waitForBreakpointRemoval: async () => {
+        await waitForE2eValue(
+          `${expectedDebugType} adapter to acknowledge breakpoint removal in ${sourcePath}:${breakpointLine + 1}`,
+          timeoutMs,
+          () => breakpointRemovalAcknowledgedSessionIds.has(attachedSessionForDetach.id) ? true : undefined);
+        extensionLogOutputChannel.info(`Resource debug E2E ${expectedDebugType} adapter acknowledged breakpoint removal.`);
+      },
+      continueExecution: async () => {
+        await attachedSessionForDetach.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
+      },
+      waitForResourceResponse: async phase => {
+        const body = await waitForE2eValue(
+          phase === 'attached'
+            ? `resource '${resourceName}' response while the debugger is still attached`
+            : `resource '${resourceName}' response after debugger detach`,
+          timeoutMs,
+          () => fetchResourceResponse(phase));
+        extensionLogOutputChannel.info(`Resource debug E2E resource '${resourceName}' responded while ${phase}.`);
+        return body;
+      },
+      detach: async () => {
+        await vscode.debug.stopDebugging(attachedSessionForDetach);
+        await waitForE2eValue(
+          `${expectedDebugType} attach session termination`,
+          timeoutMs,
+          () => terminatedSessionIds.has(attachedSessionForDetach.id) ? true : undefined);
+      },
+    });
 
     if (attachRequests.length === 0 || breakpointResponses.every(response => response.success !== true)) {
       throw new Error(`The ${expectedDebugType} adapter did not report both attach and bound-breakpoint protocol traffic.`);
@@ -1856,6 +1929,7 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
         matchingStackFrame: resourceHit.matchingFrame,
         topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
       },
+      appHostCodeLenses: await getCodeLensesForFile(appHostSourcePath),
       debugSessions,
       launchRequests,
       debugAdapterResponses,
@@ -3697,6 +3771,52 @@ async function prepareBlazorWasmDebugger(): Promise<BlazorWasmDebuggerStatus> {
   // https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/razor/src/blazorDebug/blazorDebugConfigurationProvider.ts
   const bridgePath = path.join(extension.extensionPath, '.vswebassemblybridge', 'Microsoft.Diagnostics.BrowserDebugHost.dll');
   return fs.existsSync(bridgePath) && fs.statSync(bridgePath).isFile() ? 'ready' : 'missing-bridge';
+}
+
+/**
+ * Waits until the C# language server has finished its initial project load.
+ *
+ * Without Dev Kit, the pinned C# extension enumerates the workspace's `*.csproj` files once, when its
+ * language server starts, and Roslyn then design-time builds each of them. On Windows the in-process
+ * MSBuild build makes the project directory the BuildHost's current directory, so a fixture created
+ * while that discovery is still pending gets loaded and cannot be deleted until the load finishes.
+ * Specs that create and delete project fixtures in the workspace wait here first so the language
+ * server's project set is fixed before their fixtures exist.
+ *
+ * initializationFinished() resolves after the server reports project initialization complete, even if
+ * that happened before this call.
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/activateRoslyn.ts
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/lsptoolshost/server/roslynLanguageServer.ts
+ */
+async function waitForCSharpProjectInitialization(timeoutMs: number): Promise<'initialized'> {
+  const extension = vscode.extensions.getExtension<{ initializationFinished?: () => Promise<void> }>(csharpExtensionId);
+  if (!extension) {
+    throw new Error(`${csharpExtensionId} is required to wait for C# project initialization.`);
+  }
+
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      (async () => {
+        const api = await extension.activate();
+        if (typeof api?.initializationFinished !== 'function') {
+          throw new Error(`${csharpExtensionId} did not export initializationFinished(), so C# project initialization cannot be observed.`);
+        }
+
+        await api.initializationFinished();
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`The C# language server did not finish its initial project load within ${timeoutMs}ms.`)), timeoutMs);
+      }),
+    ]);
+  }
+  finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+
+  return 'initialized';
 }
 
 /**

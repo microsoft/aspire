@@ -146,7 +146,7 @@ public static partial class DistributedApplicationExtensions
             return resource
                 is
                     // Container resources tend to write to stderr for various reasons so only assert projects and executables
-                    (ProjectResource or ExecutableResource)
+                    (IDotnetProgramResource or ExecutableResource)
                     // Node resources tend to have npm modules that write to stderr so ignore them
                     and not NodeAppResource;
         }
@@ -208,7 +208,7 @@ public static partial class DistributedApplicationExtensions
     /// <summary>
     /// Attempts to apply EF migrations for the specified project by sending a request to the migrations endpoint <c>/ApplyDatabaseMigrations</c>.
     /// </summary>
-    public static async Task<bool> TryApplyEfMigrationsAsync(this DistributedApplication app, ProjectResource project)
+    public static async Task<bool> TryApplyEfMigrationsAsync(this DistributedApplication app, IDotnetProgramResource project)
     {
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(TryApplyEfMigrationsAsync));
         var projectName = project.GetName();
@@ -229,7 +229,8 @@ public static partial class DistributedApplicationExtensions
         logger.LogInformation("Attempting to apply EF migrations for project '{ProjectName}'", projectName);
 
         // Load the project assembly and find all DbContext types
-        var projectDirectory = Path.GetDirectoryName(project.GetProjectMetadata().ProjectPath) ?? throw new UnreachableException();
+        var metadata = project.Annotations.OfType<IProjectMetadata>().Single();
+        var projectDirectory = Path.GetDirectoryName(metadata.ProjectPath) ?? throw new UnreachableException();
 #if DEBUG
         var configuration = "Debug";
 #else

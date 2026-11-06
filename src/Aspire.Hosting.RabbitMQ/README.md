@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.RabbitMQ` integration with 
 
 ```bash
 aspire add Aspire.Hosting.RabbitMQ
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a RabbitMQ resource and reference it from another resource w
 ```csharp
 var rmq = builder.AddRabbitMQ("rmq");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(rmq);
 ```
 

@@ -1,6 +1,7 @@
 ﻿{
   "templateSources": {
     "local": {
+      "displayName": "Company [templates]",
       "path": "/templates"
     },
     "git": {

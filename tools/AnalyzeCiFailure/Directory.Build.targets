@@ -1,0 +1,3 @@
+<Project>
+  <!-- Stop repository-root build targets for trusted sparse checkouts. -->
+</Project>

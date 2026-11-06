@@ -50,24 +50,34 @@ graph TB
 
 ### Step 1: AppHost Registers the WASM App and Gateway
 
-The `Aspire.Hosting.Blazor` package provides `AddBlazorWasmProject` and `AddBlazorGateway` APIs. The AppHost declares the WASM app, its service dependencies, and the gateway:
+The `Aspire.Hosting.Blazor` package provides `AddBlazorWasmProject` and
+`AddDotnetProjectBlazorGateway`. Add it and `Aspire.Hosting.Dotnet` to the AppHost
+(`aspire add Aspire.Hosting.Blazor` and `aspire add Aspire.Hosting.Dotnet`).
+The service paths below are relative to `BlazorStandalone.AppHost`; retain the WASM client
+project reference for its generated metadata and build inputs. See the [project migration guide](../../docs/migrate-from-addproject.md).
+
+The AppHost declares the WASM app, its service dependencies, and the gateway:
 
 ```csharp
+#pragma warning disable ASPIREBLAZOR001
+
 var builder = DistributedApplication.CreateBuilder(args);
 
-var weatherApi = builder.AddProject<Projects.BlazorStandalone_WeatherApi>("weatherapi");
+var weatherApi = builder.AddDotnetProject("weatherapi", "../BlazorStandalone.WeatherApi/BlazorStandalone.WeatherApi.csproj");
 
 // Register the WASM app — the resource name becomes the URL path prefix (e.g., /app/)
 var blazorApp = builder.AddBlazorWasmProject<Projects.BlazorStandalone>("app")
     .WithReference(weatherApi);
 
 // The Gateway serves WASM files and proxies API + OTLP traffic
-var gateway = builder.AddBlazorGateway("gateway")
+var gateway = builder.AddDotnetProjectBlazorGateway("gateway")
     .WithExternalHttpEndpoints()
     .WithOtlpExporter(Aspire.Hosting.OtlpProtocol.HttpProtobuf)
     .WithBlazorClientApp(blazorApp);
 
 builder.Build().Run();
+
+#pragma warning restore ASPIREBLAZOR001
 ```
 
 During development startup, the hosting layer:
@@ -75,6 +85,9 @@ During development startup, the hosting layer:
 2. Configures the official `Microsoft.AspNetCore.Components.Gateway.Cli` tool for each WASM client
 3. Builds a client configuration JSON with service URLs and OTLP settings
 4. Launches the gateway CLI while preserving the gateway's project resource in the Aspire dashboard
+
+The gateway deliberately runs its development tool as a process. Selecting the V2 gateway
+does not implement the future service/AppHost watcher.
 
 ### Step 2: Gateway Exposes Configuration Endpoint
 
@@ -180,7 +193,7 @@ await host.RunAsync();
 ```text
 BlazorStandalone/
 ├── BlazorStandalone.AppHost/           # Aspire orchestrator
-│   └── AppHost.cs                                # AddBlazorWasmProject + AddBlazorGateway
+│   └── AppHost.cs                                # AddBlazorWasmProject + AddDotnetProjectBlazorGateway
 │
 ├── BlazorStandalone/                   # Standalone Blazor WASM client
 │   ├── Program.cs                                # AddEnvironmentVariables() + service discovery

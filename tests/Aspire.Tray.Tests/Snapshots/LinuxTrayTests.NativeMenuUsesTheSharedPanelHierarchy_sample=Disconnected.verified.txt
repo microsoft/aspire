@@ -1,0 +1,18 @@
+﻿Aspire · Reconnecting… [disabled]
+Discovery is unavailable. Reconnecting… [disabled]
+---
+RUNNING [disabled]
+eShop · Discovery unavailable
+  Open dashboard
+  Stop
+  ---
+  Show in file manager
+  Copy path
+  Pin
+  ---
+  Healthy [disabled]
+  src/eShop.AppHost · PID 48213 [disabled]
+---
+Settings...
+Documentation
+Quit

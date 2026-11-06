@@ -2735,6 +2735,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         processStartInfo.ArgumentList.Add("-t:ComputeRunArguments");
         processStartInfo.ArgumentList.Add("-getProperty:RunCommand,RunArguments,RunWorkingDirectory");
         processStartInfo.ArgumentList.Add("-nologo");
+        // -getProperty sends all MSBuild logging to stderr, and NuGet audit fetches vulnerability
+        // data over the network. A transient feed failure then surfaces as warning NU1900 on stderr
+        // even though restore and ComputeRunArguments succeed, so keep this test off the network.
+        processStartInfo.ArgumentList.Add("-p:NuGetAudit=false");
 
         using var process = Process.Start(processStartInfo) ?? throw new InvalidOperationException("Failed to start dotnet msbuild.");
         var stdout = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
@@ -2747,7 +2751,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrWhiteSpace(properties.GetProperty("RunCommand").GetString()));
         Assert.Equal("--from-msbuild", properties.GetProperty("RunArguments").GetString());
         Assert.Equal(Path.Combine(projectDirectory.FullName, "relative-working-directory"), properties.GetProperty("RunWorkingDirectory").GetString());
-        Assert.True(string.IsNullOrWhiteSpace(stderr));
+        Assert.True(string.IsNullOrWhiteSpace(stderr), stderr);
     }
 
     [Fact]
@@ -2915,6 +2919,45 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, result.ExitCode);
         Assert.NotNull(result.Packages);
         Assert.Equal(1, executor.AttemptCount); // Should have attempted only once
+    }
+
+    [Fact]
+    public async Task SearchPackagesAsyncPreservesRedactedSourceFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            CreateExecutionContext(workspace.WorkspaceRoot),
+            (_, _, _, options) => options.StandardOutputCallback?.Invoke(
+                """
+                {
+                  "version": 2,
+                  "problems": [],
+                  "searchResult": [
+                    {
+                      "sourceName": "https://private.example/v3/index.json?sig=secret",
+                      "problems": [{"problemType": "Error", "text": "Diagnostic with secret"}],
+                      "packages": []
+                    },
+                    {
+                      "sourceName": "public-feed",
+                      "problems": [{"problemType": "Warning", "text": "A warning"}],
+                      "packages": [{"id": "Aspire.Hosting.Redis", "latestVersion": "1.0.0"}]
+                    }
+                  ]
+                }
+                """),
+            0);
+
+        var result = await runner.SearchPackagesAsync(
+            workspace.WorkspaceRoot, "Aspire.Hosting", exactMatch: false, prerelease: false,
+            take: 100, skip: 0, nugetConfigFile: null, useCache: false,
+            new ProcessInvocationOptions { SuppressLogging = true }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Equal(["https://private.example/v3/index.json"], result.FailedSources);
+        Assert.Equal("Aspire.Hosting.Redis", Assert.Single(result.Packages!).Id);
     }
 
     [Fact]

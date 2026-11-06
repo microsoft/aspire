@@ -4,6 +4,7 @@
 using Aspire.Cli.NuGet;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,6 +13,208 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, "Contoso.*")]
+    [InlineData(true, "Contoso.*")]
+    [InlineData(false, "Aspire.Hosting.Private")]
+    public async Task StableChannelPolicy_RejectsAmbiguousPrivateDependencyRouting(bool separateAlias, string narrowPattern)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        const string privateFeed = "https://example.test/team/v3/index.json";
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        var original = $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="aspire-daily" value="{{privateFeed}}" />
+                {{(separateAlias ? $"""<add key="company" value="{privateFeed}" />""" : "")}}
+                <add key="public" value="{{PackageSources.NuGetOrg}}" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="aspire-daily">
+                  <package pattern="Aspire*" />
+                  {{(separateAlias ? "" : $"""<package pattern="{narrowPattern}" />""")}}
+                </packageSource>
+                {{(separateAlias ? $"""<packageSource key="company"><package pattern="{narrowPattern}" /></packageSource>""" : "")}}
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        await File.WriteAllTextAsync(Path.Combine(appHostDirectory.FullName, Aspire.Cli.Configuration.AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled":false},
+                "team": {"source":"{{privateFeed}}","patterns":["Contoso.*"]}
+              }
+            }
+            """);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+        var settings = service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
+        Assert.Equal([privateFeed], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Private.Dependency"));
+        Assert.Throws<ProjectUpdaterException>(() =>
+            DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel));
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, "nuget.config")));
+        Assert.Equal([privateFeed], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Private.Dependency"));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Hosting.Private", false, true)]
+    [InlineData("Aspire.Hosting.Private*", false, true)]
+    [InlineData("Aspire.Hosting.Private", true, true)]
+    [InlineData("Aspire.Hosting.Private", false, false)]
+    [InlineData("*", false, true)]
+    public async Task StableChannelPolicy_PreservesIntegrationFeedAndRouting(
+        string privatePattern, bool separateIntegrationAlias, bool isEnabled)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        const string privateFeed = "https://example.test/team/v3/index.json";
+        const string sdkSourceKey = "aspire-daily";
+        var integrationKey = separateIntegrationAlias ? "company" : sdkSourceKey;
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        var original = $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{sdkSourceKey}}" value="{{privateFeed}}" />
+                <add key="aspire-staging" value="https://example.test/sdk/v3/index.json" />
+                {{(separateIntegrationAlias ? $"""<add key="{integrationKey}" value="{privateFeed}" />""" : "")}}
+                <add key="public" value="{{PackageSources.NuGetOrg}}" />
+              </packageSources>
+              <packageSourceCredentials>
+                <aspire-daily><add key="Username" value="test-user" /><add key="ClearTextPassword" value="test-password" /></aspire-daily>
+              </packageSourceCredentials>
+              {{(isEnabled ? "" : """<disabledPackageSources><add key="aspire-daily" value="true" /></disabledPackageSources>""")}}
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="aspire-staging"><package pattern="Aspire*" /></packageSource>
+                {{(separateIntegrationAlias ? "" : $"""<packageSource key="{sdkSourceKey}"><package pattern="{privatePattern}" /></packageSource>""")}}
+                {{(separateIntegrationAlias ? $"""<packageSource key="{integrationKey}"><package pattern="{privatePattern}" /></packageSource>""" : "")}}
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        await File.WriteAllTextAsync(Path.Combine(appHostDirectory.FullName, Aspire.Cli.Configuration.AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "default": {"enabled":false},
+                "team": {"source":"{{privateFeed}}","patterns":["Aspire.Hosting.Private"]}
+              }
+            }
+            """);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+        var settings = service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken);
+        Assert.True(Assert.Single(settings.Sources, source => source.Name == sdkSourceKey).IsIntegrationSource);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        if (privatePattern == PackageMapping.AllPackages)
+        {
+            Assert.Throws<ProjectUpdaterException>(() =>
+                DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel));
+            Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+            Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, "nuget.config")));
+            return;
+        }
+
+        var configuration = DotNetAppHostNuGetConfigBuilder.BuildStable(settings, "test", channel);
+        using var preview = await service.CreateConfigurationPreviewAsync(
+            appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        var previewDirectory = preview.EffectiveWorkingDirectory.FullName;
+        string[] privateSources = isEnabled ? [privateFeed] : [];
+
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.AppHost.Sdk"));
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.Hosting.AppHost"));
+        Assert.Equal(privateSources, NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.Hosting.Private"));
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        var merger = new DotNetAppHostNuGetConfigMerger(service);
+        var candidate = await merger.PrepareAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: false, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.AppHost.Sdk"));
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.AppHost"));
+        Assert.Equal(privateSources, NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.Private"));
+        var retained = Assert.Single(service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken).Sources,
+            source => source.Name == sdkSourceKey);
+        Assert.Equal(isEnabled, retained.IsEnabled);
+        Assert.True(retained.HasCredentials);
+        var persistedSource = Assert.Single(new global::NuGet.Configuration.PackageSourceProvider(
+            NuGetTestHelper.LoadSettings(appHostDirectory.FullName)).LoadPackageSources(), source => source.Name == sdkSourceKey);
+        Assert.NotNull(persistedSource.Credentials);
+        Assert.Equal("test-user", persistedSource.Credentials.Username);
+        Assert.Equal("test-password", persistedSource.Credentials.Password);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("*")]
+    [InlineData("Aspire*")]
+    public async Task ExactIntegrationSelection_PreservesSdkFeedAfterPersistence(string? sdkPattern)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sdkFeed = workspace.CreateDirectory(Path.Combine(".aspire", "hives", "pr-21366", "packages")).FullName;
+        var integrationFeed = workspace.CreateDirectory("integration-feed").FullName;
+        const string sdkSourceKey = "aspire-pr-21366";
+        const string packageId = "Contoso.Hosting.One";
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "nuget.config"), $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="{{sdkSourceKey}}" value="{{sdkFeed}}" />
+                <add key="public" value="{{PackageSources.NuGetOrg}}" />
+              </packageSources>
+              {{(sdkPattern is null ? "" : $"""
+              <packageSourceMapping>
+                <packageSource key="{sdkSourceKey}"><package pattern="{sdkPattern}" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+              """)}}
+            </configuration>
+            """);
+        var service = NuGetTestHelper.CreateService();
+        Assert.True(Assert.Single(service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).Sources,
+            source => source.Name == sdkSourceKey).IsCliManaged);
+        var configuration = service.BuildAppHostConfiguration(
+            workspace.WorkspaceRoot, "integration-add",
+            [new(packageId, integrationFeed) { SourceKey = "team" }],
+            overrideIntegrationSources: false, TestContext.Current.CancellationToken);
+        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: false,
+            globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+
+        Assert.True(Assert.Single(service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).Sources,
+            source => source.Name == sdkSourceKey).IsEnabled);
+        Assert.Equal(sdkPattern is not null,
+            service.IsPackageSourceMappingEnabled(workspace.WorkspaceRoot, TestContext.Current.CancellationToken));
+        string[] allSources = [sdkFeed, PackageSources.NuGetOrg, integrationFeed];
+        string[] sdkSources = sdkPattern switch
+        {
+            null => allSources,
+            "*" => [sdkFeed, PackageSources.NuGetOrg],
+            _ => [sdkFeed]
+        };
+        Assert.Equal(sdkSources.Order(StringComparer.Ordinal),
+            NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.AppHost"));
+        Assert.Equal((sdkPattern is null ? allSources : [integrationFeed]).Order(StringComparer.Ordinal),
+            NuGetTestHelper.GetEligiblePackageSources(workspace.Path, packageId));
+    }
+
     [Theory]
     [InlineData(PackageChannelNames.Daily, false)]
     [InlineData(PackageChannelNames.Daily, true)]
@@ -140,6 +343,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         var service = CreateService();
         var configuration = service.BuildAppHostConfiguration(
             appHostDirectory, "test", [new PackageMapping("Aspire*", newHive)],
+            overrideIntegrationSources: false,
             cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -196,6 +400,7 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
         var service = CreateService();
         var configuration = service.BuildAppHostConfiguration(
             directory, "test", [new PackageMapping("Aspire*", "https://new.example/v3/index.json")],
+            overrideIntegrationSources: false,
             cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             directory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -305,7 +510,8 @@ public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
             NullLogger<NuGetClient>.Instance);
         var bundleNuGetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient);
+            nuGetClient,
+            new TestConfigurationService());
         return bundleNuGetService;
     }
 }

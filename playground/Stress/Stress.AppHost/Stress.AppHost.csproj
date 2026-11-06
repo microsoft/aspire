@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <ProjectReference Include="..\Stress.ApiService\Stress.ApiService.csproj" />
     <ProjectReference Include="..\Stress.Empty\Stress.Empty.csproj" />
     <ProjectReference Include="..\Stress.TelemetryService\Stress.TelemetryService.csproj" />

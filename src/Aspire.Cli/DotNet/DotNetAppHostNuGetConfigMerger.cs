@@ -15,7 +15,7 @@ using NuGet.Configuration;
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Maintains channel-owned entries in local .NET AppHost configuration without replacing user policy.
+/// Maintains channel-owned entries and additive integration mappings without replacing user policy.
 /// </summary>
 internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetService)
 {
@@ -82,7 +82,17 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             }
         }
 
-        if (!configuration.HasSourcePolicyChanges && globalPackagesFolder is null)
+        // Discovery can narrow an already sufficient mapping policy without needing any
+        // persisted edits. Do not materialize an empty child configuration in that case.
+        var reusesExistingMappings = configuration.Settings.PackageSourceMappings.Count > 0 &&
+            configuration.AppHostConfig is
+            {
+                SourceChanges.Sources.Count: 0,
+                SourceChanges.RetiredSourceKeys.Count: 0,
+                PackageSourceMappings.Count: 0,
+                RemovedPackageSourceMappings.Count: 0
+            };
+        if ((!configuration.HasSourcePolicyChanges || reusesExistingMappings) && globalPackagesFolder is null)
         {
             return null;
         }
@@ -189,17 +199,23 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
 
             var ambientSource = sourceConfiguration.Settings.Sources.Single(ambient =>
                 string.Equals(ambient.Name, source.Key, StringComparison.OrdinalIgnoreCase));
-            // Borrowing an alias can shadow inherited mappings and gives the CLI no
-            // reliable ownership for later cleanup. Only maintain our own local entry.
-            // NuGet replaces mapping entries by key, so a local source definition alone
-            // does not make an inherited mapping safe to extend.
+            // Exact integration selections may extend local user mappings without taking
+            // ownership of the alias or its existing patterns. NuGet replaces mapping entries
+            // by key, so a local source definition alone cannot make inherited mappings safe
+            // to extend.
+            var canExtendIntegrationMapping = ambientSource.IsIntegrationSource &&
+                (source.IsExplicitlyNamed ||
+                 configuration.PackageSourceMappings
+                     .Where(mapping => string.Equals(mapping.SourceKey, source.Key, StringComparison.OrdinalIgnoreCase))
+                     .All(static mapping => mapping.Patterns.All(PackageSourceOverrideMappings.IsExactPackagePattern)));
             var inheritsMapping = !localMappingItems.Any(static item => item is ClearItem) &&
                 !localMappingItems.OfType<PackageSourceMappingSourceItem>().Any(mapping =>
                     string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase)) &&
                 inheritedMappings.Any(mapping =>
                     string.Equals(mapping.Key, source.Key, StringComparison.OrdinalIgnoreCase));
             if (inheritsMapping ||
-                !NuGetConfigurationBuilder.IsCliManagedSourceKey(source.Key, configuration.WorkloadId) ||
+                !(NuGetConfigurationBuilder.IsCliManagedSourceKey(source.Key, configuration.WorkloadId) ||
+                  canExtendIntegrationMapping) ||
                 !localSources.Any(local =>
                     string.Equals(local.Key, source.Key, StringComparison.OrdinalIgnoreCase) &&
                     string.Equals(
@@ -211,6 +227,41 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             {
                 conflictingSourceKey = source.Key;
                 break;
+            }
+        }
+
+        foreach (var removed in configuration.RemovedPackageSourceMappings)
+        {
+            if (!sourceConfiguration.Settings.Sources.Any(source =>
+                source.IsIntegrationSource &&
+                string.Equals(source.Name, removed.SourceKey, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            var localPatterns = localMappingItems.OfType<PackageSourceMappingSourceItem>()
+                .Where(mapping => string.Equals(mapping.Key, removed.SourceKey, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(static mapping => mapping.Patterns)
+                .Select(static pattern => pattern.Pattern)
+                .ToArray();
+            var retainsLocalMapping = localPatterns.Any(pattern =>
+                !removed.Patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase)) ||
+                configuration.PackageSourceMappings.Any(mapping =>
+                    string.Equals(mapping.SourceKey, removed.SourceKey, StringComparison.OrdinalIgnoreCase));
+            // Deleting the last local entry would expose the parent's whole mapping entry,
+            // potentially restoring the old exact route or changing unrelated eligibility.
+            var exposesInheritedMapping = !retainsLocalMapping &&
+                !localMappingItems.Any(static item => item is ClearItem) &&
+                inheritedMappings.Any(mapping =>
+                    string.Equals(mapping.Key, removed.SourceKey, StringComparison.OrdinalIgnoreCase));
+            if (!localPatterns.Any(pattern => removed.Patterns.Contains(pattern, StringComparer.OrdinalIgnoreCase)) ||
+                exposesInheritedMapping)
+            {
+                throw new ProjectUpdaterException(string.Format(
+                    CultureInfo.CurrentCulture,
+                    UpdateCommandStrings.ChannelFeedAlreadyConfiguredFormat,
+                    targetFile.FullName,
+                    removed.SourceKey));
             }
         }
 
@@ -299,6 +350,11 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
         await stream.WriteAsync(candidate.ProposedContent, CancellationToken.None);
     }
 
+    internal static DirectoryInfo GetRecommendedNuGetConfigDirectory(IReadOnlyList<string> configPaths, DirectoryInfo appHostDirectory)
+        => configPaths.Count > 0 && !IsGlobalNuGetConfig(configPaths[0])
+            ? new DirectoryInfo(Path.GetDirectoryName(configPaths[0])!)
+            : appHostDirectory;
+
     internal static bool TryFindNuGetConfigInDirectory(
         DirectoryInfo directory,
         [NotNullWhen(true)] out FileInfo? nugetConfigFile)
@@ -314,5 +370,18 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
 
         nugetConfigFile = matches.SingleOrDefault();
         return matches.Length == 1;
+    }
+
+    private static bool IsGlobalNuGetConfig(string path)
+    {
+        if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+        {
+            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.Ordinal);
+        }
+        else
+        {
+            var globalNuGetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget");
+            return path.StartsWith(globalNuGetFolder, StringComparison.Ordinal);
+        }
     }
 }

@@ -33,10 +33,10 @@ internal sealed class ClaudeCodeAgentClient(
     }
 
     public bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
         => AspireSkillsRemoteConfiguration.HasPluginRegistration(
             GetSettingsFiles(workspaceRoot, scope,
-                AgentConfiguration.EnumerateJsonFiles(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))), cancellationToken);
+                AgentConfiguration.EnumerateJsonFiles(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))), sources);
 
     public string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
     {
@@ -49,11 +49,11 @@ internal sealed class ClaudeCodeAgentClient(
 
     public Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
         => AspireSkillsRemoteConfiguration.ApplyPluginAsync(config,
             GetSettingsFiles(workspaceRoot, scope,
                 edit.GetJsonFilesForEdit(Path.Combine(ManagedSettingsDirectory, "managed-settings.d"))),
-            GetIntegrationConfigPath(scope, workspaceRoot), edit, cancellationToken);
+            GetIntegrationConfigPath(scope, workspaceRoot), edit, sources, cancellationToken);
 
     public string GetMcpConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
         => scope is AgentConfigurationScope.Project ? Path.Combine(workspaceRoot.FullName, ".mcp.json")

@@ -21,17 +21,26 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource, IAzureCdnPrivateLinkTarget
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalIngressResource, IAzureCdnPrivateLinkTarget
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Container Apps Environment";
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Id => ContainerAppEnvironmentId;
+    ReferenceExpression IAzureInternalIngressResource.DefaultDomain => ReferenceExpression.Create($"{ContainerAppDomain}");
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Location => ContainerAppLocation;
+    ReferenceExpression IAzureInternalIngressResource.StaticIp => ReferenceExpression.Create($"{ContainerAppStaticIp}");
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(IResource origin) => ContainerAppEnvironmentId;
+
+    /// <inheritdoc />
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(IResource origin) => ContainerAppLocation;
 
     /// <inheritdoc />
     string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "managedEnvironments";
@@ -301,6 +310,11 @@ public class AzureContainerAppEnvironmentResource :
     internal BicepOutputReference ContainerAppDomain => new("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", this);
 
     /// <summary>
+    /// Gets the private static IP address associated with an internal Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppStaticIp => new("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", this);
+
+    /// <summary>
     /// Gets the Azure region of the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppLocation => new(LocationOutputName, this);
@@ -416,6 +430,16 @@ public class AzureContainerAppEnvironmentResource :
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && IsExpress)
+        {
+            ValidatePublicEndpointReference(endpointReference);
+        }
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && (!endpoint.IsExternal || endpoint.UriScheme is not ("http" or "https")))
+        {
+            throw new NotSupportedException(
+                $"Azure Container Apps environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.");
+        }
         var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
         var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
         var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
@@ -423,6 +447,8 @@ public class AzureContainerAppEnvironmentResource :
 
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host,
             EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),

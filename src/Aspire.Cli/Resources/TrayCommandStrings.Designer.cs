@@ -133,6 +133,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The desktop has no tray host, so the tray icon won&apos;t appear yet. Enable an AppIndicator extension on GNOME or your desktop&apos;s tray module. The icon appears as soon as tray support is available..
+        /// </summary>
+        internal static string NoTrayHost {
+            get {
+                return ResourceManager.GetString("NoTrayHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The Aspire Tray is starting..
         /// </summary>
         internal static string Started {

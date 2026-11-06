@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
@@ -989,3 +990,4 @@ public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
         public HttpClient CreateClient(string name) => new(handler, disposeHandler: false);
     }
 }
+#pragma warning restore CS0618

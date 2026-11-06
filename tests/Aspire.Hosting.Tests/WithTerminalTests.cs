@@ -1454,7 +1454,9 @@ public class WithTerminalTests : IAsyncLifetime
     public void WithTerminalForcesProcessExecution()
     {
         using var builder = CreateBuilder(DistributedApplicationOperation.Run);
+#pragma warning disable CS0618 // Retain legacy ProjectResource terminal annotation compatibility.
         var resource = builder.AddProject<TestProject>("myproj", options => { options.ExcludeLaunchProfile = true; });
+#pragma warning restore CS0618
 
         resource.WithTerminal();
 

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREAZURE003
 
@@ -1498,3 +1499,4 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
         public string ValueExpression => "{customValue}";
     }
 }
+#pragma warning restore CS0618

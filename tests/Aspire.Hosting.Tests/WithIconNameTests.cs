@@ -69,7 +69,9 @@ public class WithIconNameTests
         var parameter = builder.AddParameter("param")
                               .WithIconName("Settings", IconVariant.Regular);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource default-icon compatibility.
         var project = builder.AddProject<TestProject>("project")
+#pragma warning restore CS0618
                             .WithIconName("CodeCircle");
 
         // Verify all have the annotations
