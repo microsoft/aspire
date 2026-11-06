@@ -6,7 +6,13 @@ namespace Aspire.Tray.Tests.Helpers;
 internal sealed class TrayWorktreeRepository : IDisposable
 {
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-tray-worktrees-");
-    public string CommonDirectory => Path.Combine(_directory.FullName, "main", ".git");
+    private readonly bool _bare;
+    public string CommonDirectory => _bare ? Path.Combine(_directory.FullName, "Shop.git") : Path.Combine(_directory.FullName, "main", ".git");
+
+    public TrayWorktreeRepository(bool bare = false)
+    {
+        _bare = bare;
+    }
 
     public string CreateHost(string checkout, string? branch, string relativePath = "Shop.AppHost/apphost.cs")
     {
@@ -17,9 +23,10 @@ internal sealed class TrayWorktreeRepository : IDisposable
         }
         var root = Path.Combine(_directory.FullName, checkout);
         Directory.CreateDirectory(root);
-        var git = checkout == "main" ? CommonDirectory : Path.Combine(CommonDirectory, "worktrees", checkout);
+        var linked = _bare || checkout != "main";
+        var git = linked ? Path.Combine(CommonDirectory, "worktrees", checkout) : CommonDirectory;
         Directory.CreateDirectory(git);
-        if (checkout != "main")
+        if (linked)
         {
             File.WriteAllText(Path.Combine(root, ".git"), "gitdir: " + Path.GetRelativePath(root, git));
             File.WriteAllText(Path.Combine(git, "commondir"), "../..");
