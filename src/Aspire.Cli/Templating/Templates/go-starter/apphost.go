@@ -21,7 +21,17 @@ func main() {
 		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
-	resources := []aspire.Resource{api}
+
+	// Aspire injects API_HTTP for the frontend's Vite proxy and delays the frontend
+	// until the API is ready to serve /api/weatherforecast.
+	frontend := builder.AddViteApp("frontend", "./frontend", nil).
+		WithReference(api).
+		WaitFor(api)
+
+	// In publish and deploy mode, copy the frontend build output into the Go API
+	// container. The API serves these files from ./static on the same origin as /api.
+	api.PublishWithContainerFiles(frontend, "./static")
+	resources := []aspire.Resource{api, frontend}
 	// {{#redis}}
 
 	// WithReference injects ConnectionStrings__cache for read-through caching.
