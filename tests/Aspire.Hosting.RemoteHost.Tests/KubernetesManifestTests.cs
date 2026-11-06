@@ -85,8 +85,12 @@ public class KubernetesManifestTests(ITestOutputHelper outputHelper)
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "api", "netpol.yaml")), "yaml");
     }
 
-    [Fact]
-    public async Task WithField_DispatchRejectsNonJsonHandleValues()
+    [Theory]
+    [InlineData("direct")]
+    [InlineData("object")]
+    [InlineData("array")]
+    [InlineData("nested")]
+    public async Task WithField_DispatchRejectsNonJsonHandleValues(string shape)
     {
         await using var handles = new HandleRegistry();
         var dispatcher = CreateDispatcher(handles);
@@ -99,16 +103,40 @@ public class KubernetesManifestTests(ITestOutputHelper outputHelper)
             ["name"] = "example"
         });
 
+        dispatcher.Invoke("Aspire.Hosting.Kubernetes/withField", new JsonObject
+        {
+            ["context"] = manifestHandle!.DeepClone(),
+            ["path"] = "spec",
+            ["value"] = "unchanged"
+        });
+        var handle = handles.Marshal(new ContainerResource("invalid"), "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource");
+        JsonNode value = shape switch
+        {
+            "object" => new JsonObject { ["label"] = handle },
+            "array" => new JsonArray(handle),
+            "nested" => new JsonObject { ["items"] = new JsonArray(new JsonObject { ["label"] = handle }) },
+            _ => handle
+        };
+
         var exception = Assert.Throws<CapabilityException>(() => dispatcher.Invoke(
             "Aspire.Hosting.Kubernetes/withField", new JsonObject
             {
                 ["context"] = manifestHandle,
-                ["path"] = "spec.invalid",
-                ["value"] = handles.Marshal(new ContainerResource("invalid"), "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource")
+                ["path"] = "spec",
+                ["value"] = value
             }));
 
         Assert.Equal(AtsErrorCodes.InvalidArgument, exception.Error.Code);
         Assert.StartsWith("Manifest field values must be JSON-compatible primitives, dictionaries, or arrays.", exception.Message);
+        var preservedValueException = Assert.Throws<CapabilityException>(() => dispatcher.Invoke(
+            "Aspire.Hosting.Kubernetes/withField", new JsonObject
+            {
+                ["context"] = manifestHandle.DeepClone(),
+                ["path"] = "spec.child",
+                ["value"] = true
+            }));
+        Assert.Equal(AtsErrorCodes.InvalidArgument, preservedValueException.Error.Code);
+        Assert.StartsWith("Cannot set nested manifest field 'spec.child' because 'spec' already has a scalar value.", preservedValueException.Message);
     }
 
     [Theory]

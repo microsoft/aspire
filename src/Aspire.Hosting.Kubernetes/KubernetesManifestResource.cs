@@ -228,6 +228,8 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
             JsonValueKind.Number when element.TryGetInt64(out var longValue) => longValue,
             JsonValueKind.Number => NormalizeFloatingPointValue(element.GetDouble()),
             JsonValueKind.Array => element.EnumerateArray().Select(NormalizeJsonElement).ToList(),
+            // ATS handles use { "$handle": "...", "$type": "..." }, including inside JSON subtrees.
+            JsonValueKind.Object when element.TryGetProperty("$handle", out _) => throw new ArgumentException("Manifest field values must be JSON-compatible primitives, dictionaries, or arrays. Resource handles are not supported.", nameof(element)),
             JsonValueKind.Object => element.EnumerateObject().ToDictionary(prop => prop.Name, prop => NormalizeJsonElement(prop.Value), StringComparer.Ordinal),
             _ => throw new ArgumentException($"Unsupported JSON value kind '{element.ValueKind}'.", nameof(element))
         };
@@ -235,6 +237,11 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
 
     private static Dictionary<string, object?> NormalizeDictionary(IDictionary dictionary)
     {
+        if (dictionary.Contains("$handle"))
+        {
+            throw new ArgumentException("Manifest field values must be JSON-compatible primitives, dictionaries, or arrays. Resource handles are not supported.", nameof(dictionary));
+        }
+
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
 
         foreach (DictionaryEntry entry in dictionary)
