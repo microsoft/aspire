@@ -20,20 +20,18 @@ namespace Aspire.Dashboard.Model;
 /// <para>
 /// Pins describe the application rather than a single run, so they're kept in the browser's local storage under a key
 /// scoped to the application name. The store is scoped to a circuit. Reads are synchronous and return nothing until
-/// <see cref="EnsureLoadedAsync"/> has read the stored pins, which raises <see cref="Changed"/>.
+/// <see cref="EnsureLoadedAsync"/> has read the stored pins, which raises <see cref="Changed"/>. Changes are merged
+/// with pins saved by other tabs of the same browser rather than replacing them.
 /// </para>
 /// </remarks>
 public sealed class MetricPinStore
 {
-    private readonly Lock _lock = new();
-    private readonly List<OtlpInstrumentKey> _pins = [];
     private readonly LocalStorageSetting<List<OtlpInstrumentKey>> _setting;
-    private Task? _loadTask;
-    private bool _loaded;
 
     public MetricPinStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
-        _setting = new(localStorage, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger);
+        _setting = new(localStorage, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger,
+            NormalizePins, () => Changed?.Invoke());
     }
 
     /// <summary>
@@ -44,18 +42,12 @@ public sealed class MetricPinStore
     /// <summary>
     /// Reads the stored pins, once per circuit.
     /// </summary>
-    public Task EnsureLoadedAsync() => _loadTask ??= LoadAsync();
+    public Task EnsureLoadedAsync() => _setting.EnsureLoadedAsync();
 
     /// <summary>
     /// Gets the pinned instruments in the order they were pinned.
     /// </summary>
-    public IReadOnlyList<OtlpInstrumentKey> GetPins()
-    {
-        lock (_lock)
-        {
-            return [.. _pins];
-        }
-    }
+    public IReadOnlyList<OtlpInstrumentKey> GetPins() => _setting.Read(pins => pins.ToArray());
 
     /// <summary>
     /// Gets the pinned instruments among <paramref name="instruments"/>, in the order they were pinned.
@@ -68,76 +60,39 @@ public sealed class MetricPinStore
         return [.. GetPins().SelectMany(key => instrumentsByKey[key])];
     }
 
-    public bool IsPinned(OtlpInstrumentKey key)
-    {
-        lock (_lock)
-        {
-            return _pins.Contains(key);
-        }
-    }
+    public bool IsPinned(OtlpInstrumentKey key) => _setting.Read(pins => pins.Contains(key));
 
     /// <summary>
-    /// Pins or unpins an instrument.
+    /// Pins or unpins an instrument. Pinning an instrument again lists it last.
     /// </summary>
     public void SetPinned(OtlpInstrumentKey key, bool pinned)
     {
-        lock (_lock)
-        {
-            if (_pins.Contains(key) == pinned)
-            {
-                return;
-            }
-
-            if (pinned)
-            {
-                _pins.Add(key);
-            }
-            else
-            {
-                _pins.Remove(key);
-            }
-            SaveLocked();
-        }
-
-        Changed?.Invoke();
+        _setting.Update(pins => pinned ? AddPin(pins, key) : pins.Remove(key));
     }
 
-    private async Task LoadAsync()
+    private static bool AddPin(List<OtlpInstrumentKey> pins, OtlpInstrumentKey key)
     {
-        var stored = await _setting.ReadAsync().ConfigureAwait(false);
-        lock (_lock)
+        if (pins.Contains(key))
         {
-            _loaded = true;
-
-            // Instruments pinned before the stored pins were read stay pinned after the stored ones, then are saved
-            // so neither replaces the other.
-            var pinnedBeforeLoad = _pins.ToList();
-            _pins.Clear();
-            foreach (var key in (stored ?? []).Concat(pinnedBeforeLoad))
-            {
-                if (!string.IsNullOrEmpty(key.MeterName) && !string.IsNullOrEmpty(key.InstrumentName) && !_pins.Contains(key))
-                {
-                    _pins.Add(key);
-                }
-            }
-            if (pinnedBeforeLoad.Count > 0)
-            {
-                SaveLocked();
-            }
+            return false;
         }
 
-        if (stored is { Count: > 0 })
-        {
-            Changed?.Invoke();
-        }
+        pins.Add(key);
+        return true;
     }
 
-    private void SaveLocked()
+    // Stored pins can be edited in the browser, so drop incomplete and repeated ones.
+    private static List<OtlpInstrumentKey> NormalizePins(List<OtlpInstrumentKey>? stored)
     {
-        // Until the stored pins are read, saving would replace them. LoadAsync saves changes made before then.
-        if (_loaded)
+        var pins = new List<OtlpInstrumentKey>();
+        foreach (var key in stored ?? [])
         {
-            _setting.Write([.. _pins]);
+            if (!string.IsNullOrEmpty(key.MeterName) && !string.IsNullOrEmpty(key.InstrumentName))
+            {
+                AddPin(pins, key);
+            }
         }
+
+        return pins;
     }
 }

@@ -116,28 +116,54 @@ public sealed class ResourceOrderStoreTests
 
         // Positions assigned before the stored order is read must not replace it.
         var reloaded = CreateStore();
-        var changes = 0;
-        reloaded.Changed += () => changes++;
         reloaded.EnsureResources(["new_0", "api_0"]);
         reloaded.EnsureGroups("State", ["Waiting"]);
-        Assert.Equal("""{"resources":["worker_0","api_0"],"groups":{"State":["Running"]},"customOrder":true}""", _browser.Items[s_storageKey]);
-
         await reloaded.EnsureLoadedAsync().DefaultTimeout();
+
         Assert.Equal(["worker_0", "api_0", "new_0"], GetOrderedKeys(reloaded));
         Assert.Equal(["Running", "Waiting"], GetOrderedGroupKeys(reloaded, "State"));
-        Assert.Equal(3, changes);
-        Assert.Equal(["worker_0", "api_0", "new_0"], GetOrderedKeys(await CreateLoadedStoreAsync()));
+        Assert.Equal("""{"resources":["worker_0","api_0","new_0"],"groups":{"State":["Running","Waiting"]},"customOrder":true}""", _browser.Items[s_storageKey]);
     }
 
     [Fact]
-    public async Task Order_InvalidStoredValueIsIgnored()
+    public async Task Order_ChangesFromAnotherTabAreKept()
+    {
+        var tabA = await CreateLoadedStoreAsync();
+        tabA.EnsureResources(["api_0", "cache_0", "worker_0"]);
+        var tabB = await CreateLoadedStoreAsync();
+        tabA.Move("worker_0", "api_0", after: false);
+
+        // Tab B didn't see tab A's move. A new resource in tab B is added after the order tab A saved.
+        tabB.EnsureResources(["new_0"]);
+
+        Assert.Equal(["worker_0", "api_0", "cache_0", "new_0"], GetOrderedKeys(tabB));
+        Assert.Equal("""{"resources":["worker_0","api_0","cache_0","new_0"],"groups":{},"customOrder":true}""", _browser.Items[s_storageKey]);
+    }
+
+    [Fact]
+    public async Task Order_UnreadableStorageIsNotOverwritten()
+    {
+        var store = await CreateLoadedStoreAsync();
+        store.EnsureResources(["api_0", "worker_0"]);
+        var storedValue = _browser.Items[s_storageKey];
+
+        _browser.FailReads = true;
+        var reloaded = await CreateLoadedStoreAsync();
+        reloaded.EnsureResources(["new_0"]);
+
+        Assert.Equal(["new_0"], GetOrderedKeys(reloaded));
+        Assert.Equal(storedValue, _browser.Items[s_storageKey]);
+    }
+
+    [Fact]
+    public async Task Order_InvalidStoredValueIsNotOverwritten()
     {
         _browser.Items[s_storageKey] = "[1, 2]";
         var store = await CreateLoadedStoreAsync();
         store.EnsureResources(["api_0"]);
 
         Assert.Equal(["api_0"], GetOrderedKeys(store));
-        Assert.Equal("""{"resources":["api_0"],"groups":{},"customOrder":false}""", _browser.Items[s_storageKey]);
+        Assert.Equal("[1, 2]", _browser.Items[s_storageKey]);
     }
 
     [Fact]

@@ -20,22 +20,20 @@ namespace Aspire.Dashboard.Model;
 /// </para>
 /// <para>
 /// The store is scoped to a circuit. Reads are synchronous and return nothing until <see cref="EnsureLoadedAsync"/>
-/// has read the stored tags, which raises <see cref="Changed"/> so views showing tags update.
+/// has read the stored tags, which raises <see cref="Changed"/> so views showing tags update. Changes are merged with
+/// tags saved by other tabs of the same browser rather than replacing them; see <see cref="LocalStorageSetting{TValue}"/>.
 /// </para>
 /// </remarks>
 public sealed class ResourceTagStore
 {
     internal const int MaxTagLength = 50;
 
-    private readonly Lock _lock = new();
     private readonly LocalStorageSetting<Dictionary<string, List<string>>> _setting;
-    private readonly Dictionary<string, List<string>> _tagsByResource = new(StringComparers.ResourceName);
-    private Task? _loadTask;
-    private bool _loaded;
 
     public ResourceTagStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
     {
-        _setting = new(localStorage, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger);
+        _setting = new(localStorage, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger,
+            NormalizeTags, () => Changed?.Invoke());
     }
 
     /// <summary>
@@ -46,41 +44,26 @@ public sealed class ResourceTagStore
     /// <summary>
     /// Reads the stored tags, once per circuit.
     /// </summary>
-    public Task EnsureLoadedAsync() => _loadTask ??= LoadAsync();
+    public Task EnsureLoadedAsync() => _setting.EnsureLoadedAsync();
 
     /// <summary>
     /// Gets the tags of a resource in the order they were added.
     /// </summary>
     /// <param name="resourceName">The display name of the resource.</param>
-    public IReadOnlyList<string> GetTags(string resourceName)
-    {
-        lock (_lock)
-        {
-            return _tagsByResource.TryGetValue(resourceName, out var tags) ? tags.ToArray() : [];
-        }
-    }
+    public IReadOnlyList<string> GetTags(string resourceName) =>
+        _setting.Read(tagsByResource => tagsByResource.TryGetValue(resourceName, out var tags) ? tags.ToArray() : []);
 
     /// <summary>
     /// Gets every tag assigned to at least one resource, ordered by name.
     /// </summary>
-    public IReadOnlyList<string> GetAllTags()
-    {
-        lock (_lock)
-        {
-            return GetAllTagsCore().Order(StringComparer.CurrentCultureIgnoreCase).ToArray();
-        }
-    }
+    public IReadOnlyList<string> GetAllTags() =>
+        _setting.Read(tagsByResource => GetAllTagsCore(tagsByResource).Order(StringComparer.CurrentCultureIgnoreCase).ToArray());
 
     /// <summary>
     /// Gets a snapshot of the tags of every tagged resource, keyed by resource display name.
     /// </summary>
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> GetTagsByResource()
-    {
-        lock (_lock)
-        {
-            return _tagsByResource.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<string>)kvp.Value.ToArray(), StringComparers.ResourceName);
-        }
-    }
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> GetTagsByResource() =>
+        _setting.Read(tagsByResource => tagsByResource.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<string>)kvp.Value.ToArray(), StringComparers.ResourceName));
 
     /// <summary>Gets editable tags merged with immutable tags in the selected run's resource snapshots.</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> GetTagsByResource(IEnumerable<ResourceViewModel> resources)
@@ -119,28 +102,7 @@ public sealed class ResourceTagStore
             return false;
         }
 
-        lock (_lock)
-        {
-
-            // Reusing the casing of an existing tag keeps a single group per tag in the tag list.
-            normalizedTag = GetAllTagsCore().FirstOrDefault(t => string.Equals(t, normalizedTag, StringComparison.OrdinalIgnoreCase)) ?? normalizedTag;
-
-            if (!_tagsByResource.TryGetValue(resourceName, out var tags))
-            {
-                tags = [];
-                _tagsByResource[resourceName] = tags;
-            }
-            else if (tags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            tags.Add(normalizedTag);
-            SaveLocked();
-        }
-
-        Changed?.Invoke();
-        return true;
+        return _setting.Update(tagsByResource => AddTagCore(tagsByResource, resourceName, normalizedTag));
     }
 
     /// <summary>
@@ -151,10 +113,9 @@ public sealed class ResourceTagStore
     /// <returns><see langword="true"/> when the tag was removed; otherwise, <see langword="false"/>.</returns>
     public bool RemoveTag(string resourceName, string tag)
     {
-        lock (_lock)
+        return _setting.Update(tagsByResource =>
         {
-
-            if (!_tagsByResource.TryGetValue(resourceName, out var tags) ||
+            if (!tagsByResource.TryGetValue(resourceName, out var tags) ||
                 tags.RemoveAll(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)) == 0)
             {
                 return false;
@@ -162,14 +123,10 @@ public sealed class ResourceTagStore
 
             if (tags.Count == 0)
             {
-                _tagsByResource.Remove(resourceName);
+                tagsByResource.Remove(resourceName);
             }
-
-            SaveLocked();
-        }
-
-        Changed?.Invoke();
-        return true;
+            return true;
+        });
     }
 
     /// <summary>
@@ -206,69 +163,49 @@ public sealed class ResourceTagStore
         return normalized.Length > MaxTagLength ? normalized[..MaxTagLength].TrimEnd() : normalized;
     }
 
-    private IEnumerable<string> GetAllTagsCore() =>
-        _tagsByResource.Values.SelectMany(tags => tags).Distinct(StringComparer.OrdinalIgnoreCase);
+    private static IEnumerable<string> GetAllTagsCore(Dictionary<string, List<string>> tagsByResource) =>
+        tagsByResource.Values.SelectMany(tags => tags).Distinct(StringComparer.OrdinalIgnoreCase);
 
-    private async Task LoadAsync()
+    private static bool AddTagCore(Dictionary<string, List<string>> tagsByResource, string resourceName, string normalizedTag)
     {
-        var stored = await _setting.ReadAsync().ConfigureAwait(false);
-        var changed = false;
-        lock (_lock)
+        // Reusing the casing of an existing tag keeps a single group per tag in the tag list. This also applies when
+        // the tag is added again to tags read from storage, which can include the tag with another casing.
+        normalizedTag = GetAllTagsCore(tagsByResource).FirstOrDefault(t => string.Equals(t, normalizedTag, StringComparison.OrdinalIgnoreCase)) ?? normalizedTag;
+
+        if (!tagsByResource.TryGetValue(resourceName, out var tags))
         {
-            _loaded = true;
-
-            // Tags added before the stored tags were read are kept after the stored ones, then saved, so neither
-            // replaces the other.
-            var addedBeforeLoad = _tagsByResource.Count > 0;
-            var current = _tagsByResource.ToDictionary(pair => pair.Key, pair => pair.Value.ToList(), StringComparers.ResourceName);
-            _tagsByResource.Clear();
-            foreach (var (resourceName, tags) in (stored ?? []).Concat(current))
-            {
-                if (string.IsNullOrEmpty(resourceName) || tags is null)
-                {
-                    continue;
-                }
-
-                foreach (var tag in tags)
-                {
-                    if (NormalizeTag(tag) is not { } normalizedTag)
-                    {
-                        continue;
-                    }
-
-                    if (!_tagsByResource.TryGetValue(resourceName, out var resourceTags))
-                    {
-                        resourceTags = [];
-                        _tagsByResource[resourceName] = resourceTags;
-                    }
-                    if (!resourceTags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
-                    {
-                        resourceTags.Add(normalizedTag);
-                        changed = true;
-                    }
-                }
-            }
-
-            if (addedBeforeLoad)
-            {
-                SaveLocked();
-            }
+            tags = [];
+            tagsByResource[resourceName] = tags;
+        }
+        else if (tags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
         }
 
-        if (changed)
-        {
-            Changed?.Invoke();
-        }
+        tags.Add(normalizedTag);
+        return true;
     }
 
-    private void SaveLocked()
+    // Stored tags can be edited in the browser, so they go through the same rules as tags added in the dashboard.
+    private static Dictionary<string, List<string>> NormalizeTags(Dictionary<string, List<string>>? stored)
     {
-        // Until the stored tags are read, saving would replace them. LoadAsync saves changes made before then.
-        if (!_loaded)
+        var tagsByResource = new Dictionary<string, List<string>>(StringComparers.ResourceName);
+        foreach (var (resourceName, tags) in stored ?? [])
         {
-            return;
+            if (string.IsNullOrEmpty(resourceName) || tags is null)
+            {
+                continue;
+            }
+
+            foreach (var tag in tags)
+            {
+                if (NormalizeTag(tag) is { } normalizedTag)
+                {
+                    AddTagCore(tagsByResource, resourceName, normalizedTag);
+                }
+            }
         }
 
-        _setting.Write(_tagsByResource.ToDictionary(pair => pair.Key, pair => pair.Value.ToList(), StringComparers.ResourceName));
+        return tagsByResource;
     }
 }

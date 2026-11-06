@@ -58,11 +58,25 @@ public sealed class MetricPinStoreTests
         // Pinning before the stored pins are read must not replace them.
         store = CreateStore();
         store.SetPinned(s_cpu, pinned: true);
-        store.SetPinned(s_heap, pinned: true);
-        Assert.Equal("""[{"meterName":"System.Runtime","instrumentName":"dotnet.gc.heap.total_allocated"}]""", _browser.Items[s_storageKey]);
-
         await store.EnsureLoadedAsync().DefaultTimeout();
+
         Assert.Equal([s_heap, s_cpu], store.GetPins());
+        Assert.Equal([s_heap, s_cpu], (await CreateLoadedStoreAsync()).GetPins());
+    }
+
+    [Fact]
+    public async Task SetPinned_ChangesFromAnotherTabAreKept()
+    {
+        var tabA = await CreateLoadedStoreAsync();
+        var tabB = await CreateLoadedStoreAsync();
+        tabA.SetPinned(s_heap, pinned: true);
+        tabA.SetPinned(s_duration, pinned: true);
+
+        // Tab B didn't see tab A's pins. Its changes are applied to what tab A saved.
+        tabB.SetPinned(s_cpu, pinned: true);
+        tabB.SetPinned(s_duration, pinned: false);
+
+        Assert.Equal([s_heap, s_cpu], tabB.GetPins());
         Assert.Equal([s_heap, s_cpu], (await CreateLoadedStoreAsync()).GetPins());
     }
 

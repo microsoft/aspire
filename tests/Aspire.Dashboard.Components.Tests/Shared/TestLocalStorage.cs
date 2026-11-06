@@ -7,6 +7,8 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 public sealed class TestLocalStorage : ILocalStorage
 {
+    private readonly Dictionary<string, object?> _unprotectedValues = new(StringComparer.Ordinal);
+
     public Func<string, Task>? OnBeforeGetUnprotectedAsync { get; set; }
     public Func<string, (bool Success, object? Value)>? OnGetUnprotectedAsync { get; set; }
     public Action<string, object?>? OnSetUnprotectedAsync { get; set; }
@@ -32,7 +34,20 @@ public sealed class TestLocalStorage : ILocalStorage
         if (OnGetUnprotectedAsync is { } callback)
         {
             var (success, value) = callback(key);
-            return new StorageResult<T>(success: success, value: (T)(value ?? default(T))!);
+            if (success)
+            {
+                return new StorageResult<T>(success: success, value: (T)(value ?? default(T))!);
+            }
+        }
+
+        // Like a browser, return what was saved. Settings stores read the stored value before every save, so a
+        // storage that forgot saved values would make them drop their own changes.
+        lock (_unprotectedValues)
+        {
+            if (_unprotectedValues.TryGetValue(key, out var savedValue) && savedValue is T typedValue)
+            {
+                return new StorageResult<T>(success: true, value: typedValue);
+            }
         }
 
         return new StorageResult<T>(success: false, value: default);
@@ -45,6 +60,11 @@ public sealed class TestLocalStorage : ILocalStorage
 
     public Task SetUnprotectedAsync<T>(string key, T value)
     {
+        lock (_unprotectedValues)
+        {
+            _unprotectedValues[key] = value;
+        }
+
         if (OnSetUnprotectedAsync is { } callback)
         {
             callback(key, value);

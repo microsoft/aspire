@@ -44,13 +44,13 @@ public abstract class BrowserStorageBase : IBrowserStorage
         catch (JSDisconnectedException)
         {
             // A disconnected circuit cannot read browser storage; avoid recording it as a storage error.
-            return new StorageResult<TValue>(false, default);
+            return new StorageResult<TValue>(false, default) { ReadFailed = true };
         }
         catch (Exception ex)
         {
             Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
 
-            return new StorageResult<TValue>(false, default);
+            return new StorageResult<TValue>(false, default) { ReadFailed = true };
         }
     }
 

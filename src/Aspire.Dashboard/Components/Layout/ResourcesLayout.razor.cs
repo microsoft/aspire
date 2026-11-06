@@ -292,9 +292,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ViewPreferences.Changed += OnViewPreferencesChanged;
         OrderStore.Changed += OnOrderChanged;
 
-        // Read stored tags and order before resources arrive, so new resources are placed after the stored order
-        // instead of the stored order being merged in after the list was first shown.
-        await Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync());
+        // Start reading stored tags and order now, so the reads overlap the other storage reads and the connection.
+        var settingsLoaded = Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync());
 
         var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         if (showHiddenResources.Success)
@@ -363,6 +362,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
+        // Wait for stored tags and order before showing resources, so the list doesn't first appear in another order.
+        await settingsLoaded;
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
         foreach (var resource in snapshot)
         {

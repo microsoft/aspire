@@ -132,28 +132,52 @@ public sealed class ResourceTagStoreTests
         // Adding a tag before the stored tags are read must not replace them.
         var reloadedStore = CreateStore();
         reloadedStore.AddTag("api", "core");
-        reloadedStore.AddTag("worker", "BACKEND");
         await reloadedStore.EnsureLoadedAsync().DefaultTimeout();
 
         Assert.Equal(["backend", "core"], reloadedStore.GetTags("api"));
-        Assert.Equal(["BACKEND"], reloadedStore.GetTags("worker"));
-
-        var thirdStore = CreateStore();
-        await thirdStore.EnsureLoadedAsync().DefaultTimeout();
-        Assert.Equal(["backend", "core"], thirdStore.GetTags("api"));
-        Assert.Equal(["BACKEND"], thirdStore.GetTags("worker"));
+        Assert.Equal(["backend", "core"], (await CreateLoadedStoreAsync()).GetTags("api"));
     }
 
     [Fact]
-    public async Task Tags_AreNotSavedUntilStoredTagsAreRead()
+    public async Task Tags_ChangesFromAnotherTabAreKept()
     {
-        var store = CreateStore();
+        var tabA = await CreateLoadedStoreAsync();
+        var tabB = await CreateLoadedStoreAsync();
+        tabA.AddTag("api", "backend");
+        tabA.AddTag("cache", "data");
+        var tabBChanges = 0;
+        tabB.Changed += () => tabBChanges++;
+
+        // Tab B didn't see tab A's tags. Its changes are applied to what tab A saved, including the existing casing.
+        tabB.AddTag("worker", "BACKEND");
+        tabB.RemoveTag("cache", "data");
+
+        Assert.Equal("""{"api":["backend"],"worker":["backend"]}""", _browser.Items[s_storageKey]);
+        Assert.Equal(["backend"], tabB.GetTags("api"));
+        Assert.Equal(["backend"], tabB.GetTags("worker"));
+        Assert.Equal(3, tabBChanges);
+    }
+
+    [Fact]
+    public async Task Tags_UnreadableStorageIsNotOverwritten()
+    {
+        var store = await CreateLoadedStoreAsync();
         store.AddTag("api", "backend");
 
-        Assert.Empty(_browser.Items);
+        _browser.FailReads = true;
+        var reloadedStore = CreateStore();
+        await reloadedStore.EnsureLoadedAsync().DefaultTimeout();
+        reloadedStore.AddTag("worker", "core");
 
-        await store.EnsureLoadedAsync().DefaultTimeout();
+        // The change is kept in memory, and the tags that couldn't be read aren't replaced.
+        Assert.Equal(["core"], reloadedStore.GetTags("worker"));
         Assert.Equal("""{"api":["backend"]}""", _browser.Items[s_storageKey]);
+
+        // Once storage can be read, loading again saves the change along with the stored tags.
+        _browser.FailReads = false;
+        await reloadedStore.EnsureLoadedAsync().DefaultTimeout();
+        Assert.Equal("""{"api":["backend"],"worker":["core"]}""", _browser.Items[s_storageKey]);
+        Assert.Equal(["backend"], reloadedStore.GetTags("api"));
     }
 
     [Fact]
@@ -170,16 +194,18 @@ public sealed class ResourceTagStoreTests
     }
 
     [Fact]
-    public async Task Tags_InvalidStoredValueIsIgnored()
+    public async Task Tags_InvalidStoredValueIsNotOverwritten()
     {
-        _browser.Items[s_storageKey] = """{"api":"backend"}""";
+        const string invalidValue = """{"api":"backend"}""";
+        _browser.Items[s_storageKey] = invalidValue;
         var store = CreateStore();
 
         await store.EnsureLoadedAsync().DefaultTimeout();
         Assert.Empty(store.GetAllTags());
 
         store.AddTag("api", "core");
-        Assert.Equal("""{"api":["core"]}""", _browser.Items[s_storageKey]);
+        Assert.Equal(["core"], store.GetTags("api"));
+        Assert.Equal(invalidValue, _browser.Items[s_storageKey]);
     }
 
     [Theory]

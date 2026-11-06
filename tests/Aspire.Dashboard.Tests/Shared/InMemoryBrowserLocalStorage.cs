@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Serialization;
+using Aspire.Tests.Shared;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.DataProtection;
@@ -21,7 +21,7 @@ internal sealed class InMemoryBrowserLocalStorage
 {
     public InMemoryBrowserLocalStorage()
     {
-        var jsRuntime = new LocalStorageJSRuntime(Items);
+        var jsRuntime = new TestJSRuntime { OnInvoke = HandleLocalStorageCall };
         var circuitOptions = new CircuitOptions();
 #pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
         // Matches the resolvers the dashboard registers, so a stored type missing from the context fails here too.
@@ -39,34 +39,31 @@ internal sealed class InMemoryBrowserLocalStorage
     /// </summary>
     public Dictionary<string, string> Items { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Gets or sets a value indicating whether reading local storage fails, as when the circuit is disconnected.
+    /// </summary>
+    public bool FailReads { get; set; }
+
     public ILocalStorage Storage { get; }
 
-    // This runtime is the fake browser, so its calls don't cross a circuit and can't be disconnected.
-#pragma warning disable BL0016 // JS interop call is not guarded with a try/catch block.
-    private sealed class LocalStorageJSRuntime(Dictionary<string, string> items) : IJSRuntime
+    private object? HandleLocalStorageCall((string Identifier, object?[]? Args) call)
     {
-        public ValueTask<TValue> InvokeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] TValue>(string identifier, object?[]? args)
-            => HandleLocalStorageCall<TValue>(identifier, args);
-
-        public ValueTask<TValue> InvokeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
-            => HandleLocalStorageCall<TValue>(identifier, args);
-#pragma warning restore BL0016
-
-        private ValueTask<TValue> HandleLocalStorageCall<TValue>(string identifier, object?[]? args)
+        var key = (string)call.Args![0]!;
+        lock (Items)
         {
-            var key = (string)args![0]!;
-            lock (items)
+            switch (call.Identifier)
             {
-                switch (identifier)
-                {
-                    case "localStorage.getItem":
-                        return ValueTask.FromResult(items.TryGetValue(key, out var json) ? (TValue)(object)json : default!);
-                    case "localStorage.setItem":
-                        items[key] = (string)args[1]!;
-                        return default;
-                    default:
-                        throw new NotSupportedException($"Unexpected JavaScript call '{identifier}'.");
-                }
+                case "localStorage.getItem":
+                    if (FailReads)
+                    {
+                        throw new JSException("Local storage is unavailable.");
+                    }
+                    return Items.GetValueOrDefault(key);
+                case "localStorage.setItem":
+                    Items[key] = (string)call.Args[1]!;
+                    return null;
+                default:
+                    throw new NotSupportedException($"Unexpected JavaScript call '{call.Identifier}'.");
             }
         }
     }
