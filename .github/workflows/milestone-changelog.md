@@ -78,29 +78,54 @@ jobs:
           # GraphQL queries below occasionally hit a transient 502/504 from
           # GitHub's GraphQL gateway or get a truncated response body. Retry
           # only those transient failures (4 attempts, 15s/30s/60s backoff);
-          # any other error fails immediately. Usage: gh_pr_list_with_retry OUT ARGS...
+          # Invalid JSON after a successful command is retryable even if gh
+          # printed warnings. Other command errors and valid non-array JSON
+          # fail immediately. Usage: gh_pr_list_with_retry OUT ARGS...
           gh_pr_list_with_retry() {
             local out="$1"; shift
             local delays=(15 30 60)
             local attempt=1
-            local err
-            err=$(mktemp)
+            local diagnostics err validation_err
+            diagnostics=$(mktemp -d)
+            err="$diagnostics/gh.stderr"
+            validation_err="$diagnostics/jq.stderr"
             while true; do
-              if gh pr list "$@" > "$out" 2> "$err" \
-                  && jq -e 'type == "array"' "$out" > /dev/null 2>&1; then
-                rm -f "$err"
-                return 0
-              fi
-              cat "$err" >&2
+              local status=0 validation_status=0
               local transient=false
-              if grep -qE 'HTTP 5[0-9][0-9]|unexpected end of JSON input' "$err"; then
-                transient=true
-              elif [ ! -s "$err" ] && ! jq -e . "$out" > /dev/null 2>&1; then
-                # gh exited 0 but returned an incomplete JSON body.
-                transient=true
+              : > "$validation_err"
+              if gh pr list "$@" > "$out" 2> "$err"; then
+                if jq -s -e 'if length == 1 and (.[0] | type == "array") then true else error("Expected exactly one JSON array") end' \
+                    "$out" > /dev/null 2> "$validation_err"; then
+                  tr '\r' '\n' < "$err" | sed 's/##\[/##\\[/g; s/^/gh stderr: /' >&2
+                  rm -f "$err" "$validation_err"
+                  rmdir "$diagnostics"
+                  return 0
+                else
+                  validation_status=$?
+                fi
+                if ! jq -s -e 'length > 0' "$out" > /dev/null 2>&1; then
+                  transient=true
+                fi
+              else
+                status=$?
+                # Examples: "HTTP 502: Bad Gateway", "unexpected end of JSON input".
+                if grep -qE 'HTTP 5[0-9][0-9]|unexpected end of JSON input' "$err"; then
+                  transient=true
+                fi
               fi
+
+              echo "gh pr list attempt $attempt failed for $out (gh exit=$status, jq exit=$validation_status)" >&2
+              tr '\r' '\n' < "$err" | sed 's/##\[/##\\[/g; s/^/gh stderr: /' >&2
+              tr '\r' '\n' < "$validation_err" | sed 's/##\[/##\\[/g; s/^/jq stderr: /' >&2
+              # PR bodies can be large and contain workflow-command syntax.
+              # Bound the preview and prefix every line, including CR-delimited lines.
+              # Legacy "##[command]" markers are recognized even after a prefix.
+              echo "Response preview (first 4096 bytes of $(wc -c < "$out") bytes):" >&2
+              head -c 4096 "$out" | tr '\r' '\n' | sed 's/##\[/##\\[/g; s/^/stdout: /' >&2
+              printf '\n' >&2
               if [ "$transient" != true ] || [ "$attempt" -gt "${#delays[@]}" ]; then
-                rm -f "$err"
+                rm -f "$err" "$validation_err"
+                rmdir "$diagnostics"
                 echo "::error::gh pr list failed after $attempt attempt(s)"
                 return 1
               fi
