@@ -24,10 +24,10 @@ public static partial class DotnetProjectHostingExtensions
     /// <c>WaitForCompletion</c>), which run without hot reload so that they can complete.
     /// </para>
     /// <para>
-    /// A project that is watched by default but can't be (a file-based C# app, a persistent lifetime, or a custom launch
-    /// tool) fails the watch run with an error that names it; call <c>WithWatch(false)</c> on it to run it without hot
-    /// reload. Passing <see langword="true"/> makes the requirement explicit: a project that runs to completion then
-    /// fails the run as well instead of being excluded.
+    /// File-based C# apps are watched like projects. A project that is watched by default but can't be (a persistent
+    /// lifetime or a custom launch tool) fails the watch run with an error that names it; call <c>WithWatch(false)</c> on
+    /// it to run it without hot reload. Passing <see langword="true"/> makes the requirement explicit: a project that runs
+    /// to completion then fails the run as well instead of being excluded.
     /// </para>
     /// <para>
     /// The last call wins. When the AppHost runs under an IDE debug session, the IDE owns change tracking and this
