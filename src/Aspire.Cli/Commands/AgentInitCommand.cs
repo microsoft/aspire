@@ -566,13 +566,11 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             try
             {
-                var (status, message) = await _playwrightCliInstaller.InstallSelectedAsync(selectedSkillDirs, cancellationToken);
+                var (status, message, installedSkillDirectories) = await _playwrightCliInstaller.InstallSelectedAsync(selectedSkillDirs, cancellationToken);
                 switch (status)
                 {
                     case PlaywrightInstallStatus.Installed:
                         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
-                        installedSkills.AddRange(selectedSkillDirs.Select(directory =>
-                            new InstalledSkillSummaryItem(SkillDefinition.PlaywrightCli.Name, directory)));
                         break;
                     case PlaywrightInstallStatus.InstalledWithWarnings:
                         InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, message!);
@@ -588,6 +586,9 @@ internal sealed class AgentInitCommand : BaseCommand
                     default:
                         throw new UnreachableException($"Unexpected PlaywrightInstallStatus: {status}");
                 }
+
+                installedSkills.AddRange(installedSkillDirectories.Select(directory =>
+                    new InstalledSkillSummaryItem(SkillDefinition.PlaywrightCli.Name, directory)));
             }
             catch (InvalidOperationException ex)
             {
