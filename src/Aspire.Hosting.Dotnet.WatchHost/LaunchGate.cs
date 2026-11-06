@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Security.Cryptography;
+using System.IO.Hashing;
 using System.Text;
 
 namespace Aspire.Hosting.Dotnet.WatchHost;
@@ -92,5 +92,5 @@ internal sealed class LaunchGate : IDisposable
     public void Dispose() => _released.Set();
 
     internal static string GetMutexName(string markerPath) =>
-        "aspire-watch-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(markerPath)), 0, 16);
+        "aspire-watch-" + Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(markerPath)));
 }

@@ -268,6 +268,17 @@ public class ResourceProxyTests
     }
 
     [Fact]
+    public void LaunchGateMutexNameIsStablePerMarker()
+    {
+        var name = LaunchGate.GetMutexName("/tmp/aspw/launched0-1-AB");
+
+        // Replicas of one project compute the same name independently; other markers get their own mutex.
+        Assert.Equal(name, LaunchGate.GetMutexName("/tmp/aspw/launched0-1-AB"));
+        Assert.NotEqual(name, LaunchGate.GetMutexName("/tmp/aspw/launched0-2-AB"));
+        Assert.Matches("^aspire-watch-[0-9A-F]{16}$", name);
+    }
+
+    [Fact]
     public async Task LaunchGateAdmitsOneLaunchUntilTheProjectHasLaunched()
     {
         var directory = Directory.CreateTempSubdirectory("aspire-launch-gate-");

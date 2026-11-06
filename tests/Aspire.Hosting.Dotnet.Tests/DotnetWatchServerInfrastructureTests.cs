@@ -138,15 +138,25 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix sockets.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var socket = Path.Combine(workspace.Path, "s.sock");
-        await using var pipe = new System.IO.Pipes.NamedPipeServerStream(
-            socket, System.IO.Pipes.PipeDirection.In, 1, System.IO.Pipes.PipeTransmissionMode.Byte,
-            System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly);
+        // A short, owner-only temp directory: a TemporaryWorkspace path under macOS's /var/folders/.../T/ pushes the
+        // socket past the 103-byte Unix socket path limit.
+        var directory = Directory.CreateTempSubdirectory("apx");
+        try
+        {
+            var socket = Path.Combine(directory.FullName, "s.sock");
+            await using (var pipe = new System.IO.Pipes.NamedPipeServerStream(
+                socket, System.IO.Pipes.PipeDirection.In, 1, System.IO.Pipes.PipeTransmissionMode.Byte,
+                System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly))
+            {
+                DotnetWatchServerInfrastructure.RestrictSocketToCurrentUser(socket);
 
-        DotnetWatchServerInfrastructure.RestrictSocketToCurrentUser(socket);
-
-        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(socket));
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(socket));
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     private static string CreateProject(string root)
