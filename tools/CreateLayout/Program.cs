@@ -517,7 +517,7 @@ internal sealed class LayoutBuilder : IDisposable
     // Bundle.proj passes explicit paths instead, keeping copying aligned with validation and signing.
     internal static string GetComponentTargetFramework(string projectName) =>
         typeof(LayoutBuilder).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(attribute => attribute.Key == $"{projectName}.TargetFramework").Value
+            .SingleOrDefault(attribute => attribute.Key == $"{projectName}.TargetFramework")?.Value
         ?? throw new InvalidOperationException($"Missing target framework metadata for {projectName}.");
 
     private string? ResolvePublishPath(string projectName, string option, string? selectedPath, bool requireRidSpecific)

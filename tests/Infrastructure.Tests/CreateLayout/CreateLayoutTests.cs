@@ -8,6 +8,15 @@ namespace Infrastructure.Tests.CreateLayout;
 
 public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public void GetComponentTargetFramework_MissingMetadataIdentifiesProject()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            LayoutBuilder.GetComponentTargetFramework("Missing.Project"));
+
+        Assert.Equal("Missing target framework metadata for Missing.Project.", exception.Message);
+    }
+
     [Theory]
     [InlineData("Aspire.Managed", "managed", "aspire-managed")]
     [InlineData("Aspire.Dashboard", "dashboard", "Aspire.Dashboard")]
