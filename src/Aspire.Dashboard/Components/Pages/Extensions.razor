@@ -1,4 +1,5 @@
 @page "/extensions"
+@attribute [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
 @using Aspire.Dashboard.Components.Layout
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Dashboard.Resources.Layout> Loc

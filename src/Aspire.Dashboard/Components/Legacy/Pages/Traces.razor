@@ -1,5 +1,6 @@
 ﻿@page "/legacy/traces"
 @page "/legacy/traces/resource/{resourceName}"
+@attribute [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
 
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid

@@ -2,6 +2,7 @@
 @page "/metrics/resource/{resourceName}"
 @page "/metrics/resource/{resourceName}/meter/{meterName}"
 @page "/metrics/resource/{resourceName}/meter/{meterName}/instrument/{instrumentName}"
+@attribute [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
 @layout ResourcesLayout
 
 @using System.Globalization
