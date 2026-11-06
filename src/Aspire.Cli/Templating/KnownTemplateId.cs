@@ -54,7 +54,7 @@ internal static class KnownTemplateId
     public const string RustEmptyAppHost = "aspire-rust-empty";
 
     /// <summary>
-    /// The template ID for the Go starter template (Redis + Go HTTP API).
+    /// The template ID for the Go starter template (Redis + Go HTTP API + React frontend).
     /// </summary>
     public const string GoStarter = "aspire-go-starter";
 

@@ -28,8 +28,13 @@ func main() {
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 
+	// Run the Vite frontend after the API and inject the API URL for local proxying.
+	frontend := builder.AddViteApp("frontend", "./frontend", &aspire.AddViteAppOptions{}).
+		WithReference(api).
+		WaitFor(api)
+
 	// Each call records its failure on the handle that it returns, so check every resource.
-	for _, resource := range []aspire.Resource{cache, api} {
+	for _, resource := range []aspire.Resource{cache, api, frontend} {
 		if err := resource.Err(); err != nil {
 			log.Fatal(aspire.FormatError(err))
 		}

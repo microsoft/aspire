@@ -9,7 +9,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end tests for the Go starter template (aspire-go-starter).
-/// Validates that aspire new creates a Go API + Redis project with a restored Go SDK
+/// Validates that aspire new creates a Go API + React frontend + Redis project with a restored Go SDK
 /// and that aspire start runs it successfully.
 /// </summary>
 public sealed class GoStarterTemplateTests(ITestOutputHelper output)
@@ -50,9 +50,8 @@ public sealed class GoStarterTemplateTests(ITestOutputHelper output)
         // The workspace is not a git repository, so VCS stamping would fail the build.
         await auto.RunCommandAsync("go build -buildvcs=false ./...", counter, TimeSpan.FromMinutes(3));
 
-        // The Go API runs `go mod tidy` before it starts, which downloads the OpenTelemetry modules.
         await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4));
-        await auto.AssertResourcesExistAsync(counter, "cache", "api");
+        await auto.AssertResourcesExistAsync(counter, "cache", "api", "frontend");
         await auto.AspireStopAsync(counter);
     }
 }
