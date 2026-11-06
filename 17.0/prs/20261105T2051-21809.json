@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Clarified agent installation scope prompt",
+  "mergedAt": "2026-11-05T20:51:54Z",
+  "number": 21809,
+  "runDate": "2026-11-06T00:10:00Z",
+  "status": "included",
+  "title": "Clarify Aspire agent integration scope during project creation"
+}

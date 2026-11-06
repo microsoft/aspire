@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Azure Front Door Private Link for App Service",
+  "mergedAt": "2026-11-05T21:27:54Z",
+  "number": 21396,
+  "runDate": "2026-11-06T00:10:00Z",
+  "status": "included",
+  "title": "Support Azure Front Door Private Link for App Service"
+}

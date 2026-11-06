@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension now gives the Deno AppHost inspector attach the same startup time budget as the AppHost itself, fixing intermittent failures when debugging a Deno AppHost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\udd95",
+  "firstMergedAt": "2026-11-05T18:32:56Z",
+  "lastMergedAt": "2026-11-05T18:32:56Z",
+  "name": "Deno AppHost debugger attach uses full startup budget",
+  "owner": "davidfowl",
+  "prs": [
+    21604
+  ]
+}

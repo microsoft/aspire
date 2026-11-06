@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Test-only change; production fix landed in an earlier PR",
+  "mergedAt": "2026-11-05T23:35:39Z",
+  "number": 21692,
+  "runDate": "2026-11-06T00:10:00Z",
+  "status": "excluded",
+  "title": "Keep dashboard resource filters within the viewport"
+}

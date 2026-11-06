@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Go AppHosts can now be used without enabling an experimental feature flag.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udc39",
+  "firstMergedAt": "2026-11-05T21:08:58Z",
+  "lastMergedAt": "2026-11-05T21:08:58Z",
+  "name": "Go AppHost no longer behind an experimental flag",
+  "owner": "IEvangelist",
+  "prs": [
+    21183
+  ]
+}

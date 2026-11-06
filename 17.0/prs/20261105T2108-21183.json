@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Go AppHost no longer behind an experimental flag",
+  "mergedAt": "2026-11-05T21:08:58Z",
+  "number": 21183,
+  "runDate": "2026-11-06T00:10:00Z",
+  "status": "included",
+  "title": "Remove the Go AppHost experimental feature flag"
+}

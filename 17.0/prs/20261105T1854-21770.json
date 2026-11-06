@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Clearer dotnet-inspect requirements in agent init help",
+  "mergedAt": "2026-11-05T18:54:18Z",
+  "number": 21770,
+  "runDate": "2026-11-06T00:10:00Z",
+  "status": "included",
+  "title": "Clarify dotnet-inspect requirements in agent init help"
+}

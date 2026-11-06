@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "`aspire doctor` now detects static Aspire skill files that can override plugin-supplied skills and suggests removing them and running `aspire agent init --skills aspire`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\ude7a",
+  "firstMergedAt": "2026-11-05T21:43:41Z",
+  "lastMergedAt": "2026-11-05T21:43:41Z",
+  "name": "aspire doctor warns about local Aspire skills",
+  "owner": "ellahathaway",
+  "prs": [
+    21783
+  ]
+}

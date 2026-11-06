@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The installation scope prompt during project creation now makes clear that the choice applies to agent skills and tools, not Aspire itself.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfaf",
+  "firstMergedAt": "2026-11-05T20:51:54Z",
+  "lastMergedAt": "2026-11-05T20:51:54Z",
+  "name": "Clarified agent installation scope prompt",
+  "owner": "ellahathaway",
+  "prs": [
+    21809
+  ]
+}

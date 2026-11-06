@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds an arcade game, Aspire Outage, playable from the resource graph, where the app's resources are the enemies.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfae",
+  "firstMergedAt": "2026-11-05T22:27:36Z",
+  "lastMergedAt": "2026-11-05T22:27:36Z",
+  "name": "Aspire Outage game on the resource graph",
+  "owner": "sebastienros",
+  "prs": [
+    21693
+  ]
+}

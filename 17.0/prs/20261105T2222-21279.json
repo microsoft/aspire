@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Resource type display names in Dashboard and CLI",
+  "mergedAt": "2026-11-05T22:22:22Z",
+  "number": 21279,
+  "runDate": "2026-11-06T00:10:00Z",
+  "status": "included",
+  "title": "Add resource type display names to Dashboard and CLI"
+}

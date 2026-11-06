@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Deno AppHost debugger attach uses full startup budget",
+  "mergedAt": "2026-11-05T18:32:56Z",
+  "number": 21604,
+  "runDate": "2026-11-06T00:10:00Z",
+  "status": "included",
+  "title": "Give the Deno AppHost inspector attach the AppHost startup budget"
+}
