@@ -61,6 +61,9 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
         }
 
+        // Init supplies SDK sources without the restore cache metadata. Establish a restored
+        // baseline before saving it so the stale-cache assertions exercise an actual prior restore.
+        await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
         await auto.RunCommandAsync("cp -a .aspire/modules ~/typescript-sdk-baseline", counter);
         var baselineSdkPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules", "aspire.mts");
         var baselineSdk = File.ReadAllText(baselineSdkPath);

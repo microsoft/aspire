@@ -9,9 +9,11 @@ namespace Aspire.Cli.EndToEnd.Tests;
 
 public sealed class GoStarterReadinessTests(ITestOutputHelper output)
 {
-    [Fact]
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     [CaptureWorkspaceOnFailure]
-    public async Task StarterShipsTidyApiAndServesRequests()
+    public async Task StarterShipsTidyApiAndServesRequests(bool useRedisCache)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -21,14 +23,24 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
             repoRoot, strategy, output,
             variant: CliE2ETestHelpers.DockerfileVariant.PolyglotGo,
-            mountDockerSocket: true, workspace: workspace, network: "host");
+            mountDockerSocket: useRedisCache, workspace: workspace, network: "host");
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.AspireNewAsync("GoReady", counter, template: AspireTemplate.GoStarter);
+        if (useRedisCache)
+        {
+            await auto.AspireNewAsync("GoReady", counter, template: AspireTemplate.GoStarter);
+        }
+        else
+        {
+            await auto.RunCommandAsync(
+                "aspire new aspire-go-starter --name GoReady --output GoReady --use-redis-cache false --localhost-tld false --non-interactive --suppress-agent-init",
+                counter,
+                TimeSpan.FromMinutes(3));
+        }
 
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "GoReady");
         GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");

@@ -106,8 +106,10 @@ still select their normal validation.
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
 Starter validation runs C#, TypeScript, and Go starters on all six native runner
-platforms. The Go scenario waits for both the API and Redis, and changes to their
-hosting/code-generation packages select this lane through runtime consumer rules.
+platforms. The Go scenario waits for the API on every platform and Redis on Linux.
+Containerless macOS/Windows runners use `--use-redis-cache false`; the default
+Redis-enabled starter remains covered by Linux runners and Docker CLI E2E tests.
+Changes to their hosting/code-generation packages select this lane through runtime consumer rules.
 The stabilization smoke separately scaffolds and restores Go and Java starters
 against the isolated local stable feed; it runs only when the stabilization gate
 is enabled, not through the test selector.
