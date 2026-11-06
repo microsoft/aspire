@@ -14,6 +14,61 @@ namespace Infrastructure.Tests;
 /// <summary>Exercises workflow-run admission, evidence acquisition and incomplete-result handling through the CLI.</summary>
 public sealed partial class AnalyzeCiFailureWorkflowTests
 {
+    [Theory]
+    [InlineData("Build test project", "empty")]
+    [InlineData("Set up WSLC (Windows)", "missing")]
+    [InlineData("Build test project", "stale")]
+    [RequiresTools(["bash", "git"])]
+    public async Task PreTestFailureDoesNotBlockOtherObservedFailures(string failedStep, string artifact)
+    {
+        var job = AnalyzeCiFailureFixtures.CreatePreTestFailureJob(failedStep);
+        var result = await RunCollectionAsync("pre-test-" + artifact, useWorkflowAdapter: true, testJob: job);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("analysis_ready=true", await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "workflow-output")));
+        var evidence = AnalyzeCiFailure.TransientJson.Read<AnalyzeCiFailure.EvidenceBundle>(
+            await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")));
+        Assert.Equal(AnalyzeCiFailure.EvidenceState.Complete, evidence.TestEvidence.State);
+        Assert.Empty(evidence.TestEvidence.Problems);
+        Assert.Equal([77L, 79L], evidence.Jobs.Select(job => job.Id));
+        var failure = Assert.Single(evidence.TestEvidence.Failures);
+        Assert.Equal("Other.Failure", failure.Name);
+        Assert.Equal(79, failure.JobId);
+        Assert.Equal(11, Assert.Single(failure.Sources).ArtifactId);
+        var diagnostics = JsonNode.Parse(await File.ReadAllTextAsync(DiagnosticSummary))!;
+        var plan = Assert.Single(diagnostics["events"]!.AsArray(), entry =>
+            entry!["action"]!.GetValue<string>() == "artifact-plan" &&
+            entry["detail"]!["artifact"]!.GetValue<string>() == "logs-Infrastructure-ubuntu-latest")!;
+        Assert.False(plan["detail"]!["results_required"]!.GetValue<bool>());
+        Assert.Equal(artifact == "empty" ? ["10"] : Array.Empty<string>(),
+            plan["detail"]!["ids"]!.AsArray().Select(id => id!.GetValue<string>()));
+    }
+
+    [Theory]
+    [InlineData("completed", "failure")]
+    [InlineData("completed", "success")]
+    [InlineData("completed", "cancelled")]
+    [InlineData("completed", "timed_out")]
+    [InlineData("in_progress", null)]
+    [InlineData("completed", null)]
+    [RequiresTools(["bash", "git"])]
+    public async Task MissingReportsAfterTestExecutionStillBlockOtherObservedFailures(string status, string? conclusion)
+    {
+        var job = AnalyzeCiFailureFixtures.CreatePreTestFailureJob();
+        job["steps"]![3]!["status"] = status;
+        job["steps"]![3]!["conclusion"] = conclusion;
+
+        var result = await RunCollectionAsync("pre-test-empty", useWorkflowAdapter: true, testJob: job);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("analysis_ready=false", await File.ReadAllLinesAsync(Path.Combine(_workspace.Path, "workflow-output")));
+        var evidence = AnalyzeCiFailure.TransientJson.Read<AnalyzeCiFailure.EvidenceBundle>(
+            await File.ReadAllTextAsync(Path.Combine(EvidenceDirectory, "evidence.json")));
+        Assert.Equal(AnalyzeCiFailure.EvidenceState.Unavailable, evidence.TestEvidence.State);
+        Assert.NotEmpty(evidence.TestEvidence.Problems);
+        Assert.Equal("Other.Failure", Assert.Single(evidence.TestEvidence.Failures).Name);
+    }
+
     [Fact]
     [RequiresTools(["bash", "git"])]
     public async Task CompletedJobsCannotClaimRunnerLossFromMatchingWorkflowAnnotations()
@@ -643,7 +698,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         IReadOnlyDictionary<string, string>? environment = null,
         string runId = "123",
         string? runAttempt = "2",
-        bool useWorkflowAdapter = false)
+        bool useWorkflowAdapter = false,
+        JsonObject? testJob = null)
     {
         var responses = Directory.CreateDirectory(Path.Combine(_workspace.Path, "responses")).FullName;
         var runnerFailure = scenario.StartsWith("runner-", StringComparison.Ordinal);
@@ -677,6 +733,12 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             [{"jobs":[{"id":77,"name":{{JsonSerializer.Serialize(jobName)}},"conclusion":"failure","check_run_url":"https://api.github.com/repos/microsoft/aspire/check-runs/88","steps":[{"name":"Run tests","conclusion":"failure"}]}]},
              {"jobs":[{"id":78,"name":"Final Results","conclusion":"failure","steps":[{"name":"Check dependent jobs failed","conclusion":"failure"}]}]}]
             """);
+        if (testJob is not null)
+        {
+            var pages = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(responses, "jobs.json")))!;
+            pages[0]!["jobs"]![0] = testJob.DeepClone();
+            await File.WriteAllTextAsync(Path.Combine(responses, "jobs.json"), pages.ToJsonString());
+        }
         if (scenario == "independent-wrappers")
         {
             var pages = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(responses, "jobs.json")))!;
@@ -763,7 +825,9 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             {
                 await WriteZipEntryAsync(
                     archive,
-                    scenario == "unsafe-archive" ? "../failure.trx" : scenario == "missing-trx" ? "ignored.txt" : mocha ? "nested/mocha.json" : "nested/failure.trx",
+                    scenario == "unsafe-archive" ? "../failure.trx" :
+                    scenario.StartsWith("pre-test-", StringComparison.Ordinal) ? "Build.binlog" :
+                    scenario == "missing-trx" ? "ignored.txt" : mocha ? "nested/mocha.json" : "nested/failure.trx",
                     scenario is "malformed-trx" or "malformed-mocha" ? "malformed" :
                     """
                     <TestRun><TestDefinitions><UnitTest id="duplicate"/><UnitTest id="duplicate"/></TestDefinitions><Results><UnitTestResult testName="Suite.Case(value: a/b)" outcome="Failed"><Output><ErrorInfo><Message>Assertion failed</Message><StackTrace>frame</StackTrace></ErrorInfo><StdErr>stderr evidence</StdErr></Output></UnitTestResult></Results></TestRun>
@@ -804,6 +868,10 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
             ["workflow_run"] = new JsonObject { ["id"] = scenario == "wrong-artifact-run" ? 999 : 123, ["head_sha"] = scenario == "wrong-artifact-sha" ? "other-sha" : "failed-sha" },
         };
         var artifacts = new JsonArray();
+        if (scenario == "pre-test-stale")
+        {
+            artifact["created_at"] = "2026-09-04T11:59:00Z";
+        }
         if (scenario == "runner-confirmed-loss-invalid-size")
         {
             artifact["size_in_bytes"] = "invalid";
@@ -812,7 +880,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         {
             artifact["expired"] = true;
         }
-        if (scenario is not "missing-artifact" and not "optional-missing-mocha" && !scenario.EndsWith("-missing-artifact", StringComparison.Ordinal) &&
+        if (scenario is not "missing-artifact" and not "optional-missing-mocha" and not "pre-test-missing" && !scenario.EndsWith("-missing-artifact", StringComparison.Ordinal) &&
             scenario != "runner-confirmed-loss-ambiguous-job" &&
             (!runnerFailure || scenario is "runner-empty-artifact" or "runner-download-failure" ||
             scenario.StartsWith("runner-confirmed-loss-", StringComparison.Ordinal)))
@@ -823,7 +891,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
                 artifacts.Add(artifact.DeepClone());
             }
         }
-        if (scenario.StartsWith("runner-confirmed-loss-", StringComparison.Ordinal))
+        if (scenario.StartsWith("runner-confirmed-loss-", StringComparison.Ordinal) || scenario.StartsWith("pre-test-", StringComparison.Ordinal))
         {
             var otherZip = Path.Combine(responses, "other.zip");
             using (var archive = ZipFile.Open(otherZip, ZipArchiveMode.Create))

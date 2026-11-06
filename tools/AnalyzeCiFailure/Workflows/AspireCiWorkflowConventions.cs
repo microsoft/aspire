@@ -36,10 +36,10 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
             return [];
         }
         var steps = job["steps"] as JsonArray ?? [];
-        var required = steps.Any(step => Text(Field(step, "name")) == ResultsUploadStep) ||
+        var trx = steps.Any(step => Text(Field(step, "name")) == ResultsUploadStep) ||
             RequiredTestJobNameRegex().IsMatch(name);
         var extension = ExtensionTestJobNameRegex().IsMatch(name);
-        if (!required && !extension)
+        if (!trx && !extension)
         {
             return [];
         }
@@ -47,19 +47,20 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
         // Reusable workflow jobs appear as "... / Infrastructure (ubuntu-latest)".
         // Their logs artifacts are "logs-Infrastructure-ubuntu-latest"; extension
         // artifacts instead contain a runtime ID, shard and explicit attempt.
-        var match = (required ? TestArtifactJobNameRegex() : ExtensionArtifactJobNameRegex()).Match(name);
+        var match = (trx ? TestArtifactJobNameRegex() : ExtensionArtifactJobNameRegex()).Match(name);
         if (!match.Success)
         {
             throw new ValidationException("failed test job name does not match the artifact naming contract: " +
                 Display(DiagnosticTextSanitizer.Sanitize(name, limit: 500)));
         }
-        if (required)
+        if (trx)
         {
             return [new(
                 name,
                 $"logs-{match.Groups["short"].Value}-{match.Groups["runner"].Value}",
                 TestArtifactFormat.Trx,
-                TestEvidencePolicy.Required)];
+                TestsWereSkippedAfterFailure(job, steps)
+                    ? TestEvidencePolicy.OptionalDiagnostics : TestEvidencePolicy.Required)];
         }
 
         var interrupted = !steps.Any(step => Text(Field(step, "conclusion")) == "failure") ||
@@ -75,6 +76,35 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
             TestArtifactFormat.Mocha,
             interrupted
                 ? TestEvidencePolicy.RequiredForInterruptedExecution : TestEvidencePolicy.OptionalDiagnostics)];
+    }
+
+    private static bool TestsWereSkippedAfterFailure(JsonObject job, JsonArray steps)
+    {
+        if (Text(job["status"]) != "completed" || Text(job["conclusion"]) != "failure" ||
+            steps.Any(step => Text(Field(step, "status")) != "completed" ||
+                Text(Field(step, "conclusion")) is not ("success" or "failure" or "skipped") ||
+                Field(step, "number") is not JsonValue number || !number.TryGetValue<int>(out var value) || value <= 0))
+        {
+            return false;
+        }
+
+        // Require the complete execution-step inventory from run-tests.yml. Missing or
+        // renamed steps cannot prove non-execution. GitHub gives skipped steps a
+        // started_at too: {"status":"completed","conclusion":"skipped",...}.
+        var tests = steps.Where(step => Text(Field(step, "name")) is
+            "Run tests (Linux/macOS)" or "Run tests (Windows)" or
+            "Run nuget dependent tests (Linux/macOS)" or "Run nuget dependent tests (Windows)").ToArray();
+        if (tests.Length != 4 || tests.Select(step => Text(Field(step, "name"))).Distinct().Count() != 4 ||
+            tests.Any(step => Text(Field(step, "conclusion")) != "skipped") ||
+            steps.Select(step => Field(step, "number")!.GetValue<int>()).Distinct().Count() != steps.Count)
+        {
+            return false;
+        }
+
+        var firstTest = tests.Min(step => Field(step, "number")!.GetValue<int>());
+        var failures = steps.Where(step => Text(Field(step, "conclusion")) == "failure").ToArray();
+
+        return failures.Length > 0 && failures.All(step => Field(step, "number")!.GetValue<int>() < firstTest);
     }
 
     [GeneratedRegex(@"^Tests / (No-package tests|Package tests - (Linux|Windows|macOS)|CLI archive tests)( \(| / )")]
