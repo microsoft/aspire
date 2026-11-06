@@ -780,7 +780,7 @@ internal static partial class DotnetWatchCoordinator
             }
             catch (DistributedApplicationException ex)
             {
-                // Forget the failed attempt so restarting the server resource retries (e.g. once the network is back),
+                // Forget the failed attempt so restarting the server resource retries (e.g. after selecting a supported SDK),
                 // and say so in the terminal: otherwise the services just sit in "Waiting" with the reason buried in a log.
                 lock (_gate)
                 {
@@ -802,9 +802,11 @@ internal static partial class DotnetWatchCoordinator
             var roots = Roots;
             var sdk = await DotnetWatchToolResolver.ResolveSdkAsync(Path.GetDirectoryName(roots[0])!, cancellationToken).ConfigureAwait(false);
             var configuration = _state.Builder.Configuration;
-            var toolVersion = DotnetWatchToolResolver.SelectToolVersion(sdk.SdkVersion, configuration[DotnetWatchToolResolver.ToolVersionConfigurationKey]);
-            var toolDll = await DotnetWatchToolResolver.EnsureToolAsync(
-                configuration[DotnetWatchToolResolver.ToolPathConfigurationKey], toolVersion, logger, cancellationToken).ConfigureAwait(false);
+            var toolDll = DotnetWatchToolResolver.ResolveToolPath(
+                configuration[DotnetWatchToolResolver.ToolPathConfigurationKey],
+                DotnetWatchToolResolver.GetToolsDirectory(services.GetRequiredService<DistributedApplicationOptions>()),
+                sdk.SdkVersion,
+                logger);
             logger.LogInformation("Watching {Count} root(s) with SDK {SdkDirectory}: {Roots}", roots.Length, sdk.SdkDirectory, string.Join(", ", roots));
 
             var environment = new Dictionary<string, string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);

@@ -148,24 +148,12 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         StartProcess(server, line => Record(WatchObservationKind.Output, line), "server");
     }
 
-    private static async Task<string> AcquireToolAsync(string sdkVersion)
-    {
-        var overridePath = Environment.GetEnvironmentVariable(DotnetWatchToolResolver.ToolPathConfigurationKey);
-        var version = DotnetWatchToolResolver.SelectToolVersion(sdkVersion, Environment.GetEnvironmentVariable(DotnetWatchToolResolver.ToolVersionConfigurationKey));
-
-        // NuGet feeds are flaky on CI agents.
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                return await DotnetWatchToolResolver.EnsureToolAsync(overridePath, version, NullLogger.Instance, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (DistributedApplicationException) when (attempt < 3 && string.IsNullOrEmpty(overridePath))
-            {
-                await Task.Delay(TimeSpan.FromSeconds(5 * attempt)).ConfigureAwait(false);
-            }
-        }
-    }
+    private static Task<string> AcquireToolAsync(string sdkVersion) =>
+        Task.FromResult(DotnetWatchToolResolver.ResolveToolPath(
+            Environment.GetEnvironmentVariable(DotnetWatchToolResolver.ToolPathConfigurationKey),
+            DotnetWatchToolResolver.GetToolsDirectory(typeof(WatchServerHarness).Assembly),
+            sdkVersion,
+            NullLogger.Instance));
 
     /// <summary>Path of the CLI that implements <c>__dotnet-watch-proxy</c>, or <see langword="null"/> when it isn't built.</summary>
     public static string? FindProxy()

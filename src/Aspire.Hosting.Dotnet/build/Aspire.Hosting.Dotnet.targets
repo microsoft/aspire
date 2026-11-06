@@ -1,0 +1,20 @@
+<Project>
+
+  <!-- Packed as buildTransitive/Aspire.Hosting.Dotnet.targets; in-repo AppHosts import it from source with
+       AspireDotnetWatchToolsDir preset to the repo layout (Directory.Build.props). -->
+  <PropertyGroup>
+    <AspireDotnetWatchToolsDir Condition="'$(AspireDotnetWatchToolsDir)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'tools', 'dotnet-watch'))</AspireDotnetWatchToolsDir>
+  </PropertyGroup>
+
+  <!-- Records where the hot reload watch tool payloads (<SDK major>/Microsoft.DotNet.HotReload.Watch.Aspire.dll) are,
+       so the watch mode of 'aspire run' runs the shipped tool instead of acquiring one. -->
+  <Target Name="_SetAspireDotnetWatchToolsAttribute" BeforeTargets="GetAssemblyAttributes" Condition="'$(IsAspireHost)' == 'true'">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+        <_Parameter1>aspiredotnetwatchtoolsdir</_Parameter1>
+        <_Parameter2>$([MSBuild]::EnsureTrailingSlash('$(AspireDotnetWatchToolsDir)'))</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+</Project>

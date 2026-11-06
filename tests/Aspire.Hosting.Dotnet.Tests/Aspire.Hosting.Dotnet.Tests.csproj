@@ -30,6 +30,8 @@
                       Private="false"
                       ExcludeAssets="all" />
     <AssemblyMetadata Include="AspireCliPath" Value="$(ArtifactsBinDir)Aspire.Cli\$(Configuration)\net11.0\aspire.dll" />
+    <!-- The watch tool payloads Aspire.Hosting.Dotnet lays out at build (what AppHosts get as the same metadata). -->
+    <AssemblyMetadata Include="aspiredotnetwatchtoolsdir" Value="$(AspireDotnetWatchToolsDir)" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />

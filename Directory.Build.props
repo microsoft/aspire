@@ -59,6 +59,9 @@
     <!-- TODO: Need to figure out we can automatically detect target framework here. This property
                is specified to support dashboard path metadata generation on the inner loop. -->
     <AspireDashboardDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.Dashboard/$(Configuration)/net11.0/</AspireDashboardDir>
+    <!-- Layout of the hot reload watch tool payloads (<major>/Microsoft.DotNet.HotReload.Watch.Aspire.dll) that
+         Aspire.Hosting.Dotnet repacks; in-repo AppHosts point their 'aspiredotnetwatchtoolsdir' metadata here. -->
+    <AspireDotnetWatchToolsDir>$(MSBuildThisFileDirectory)artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/</AspireDotnetWatchToolsDir>
     <AspireTerminalHostDir>$(MSBuildThisFileDirectory)/artifacts/bin/Aspire.TerminalHost/$(Configuration)/net11.0/</AspireTerminalHostDir>
   </PropertyGroup>
 

@@ -171,6 +171,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         projectFile.AddProperty("AspireHostingSDKVersion", "42.42.42");
         projectFile.AddProperty("DcpDir", $"$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/");
         projectFile.AddProperty("AspireDashboardDir", $"{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net11.0/");
+        projectFile.AddProperty("AspireDotnetWatchToolsDir", $"{_repoRoot}artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/");
         projectFile.PackageReferences.Add(new CSharpPackageReference("StreamJsonRpc"));
         projectFile.PackageReferences.Add(new CSharpPackageReference("Google.Protobuf"));
 
@@ -203,6 +204,13 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         if (File.Exists(sdkInTargets))
         {
             projectFile.Imports.Add(new CSharpProjectImport(sdkInTargets));
+        }
+
+        // Mirrors the Aspire.Hosting.Dotnet package's buildTransitive targets so --watch finds the repacked watch tool.
+        var dotnetTargets = Path.Combine(_repoRoot, "src", "Aspire.Hosting.Dotnet", "build", "Aspire.Hosting.Dotnet.targets");
+        if (File.Exists(dotnetTargets))
+        {
+            projectFile.Imports.Add(new CSharpProjectImport(dotnetTargets));
         }
 
         // The Dashboard is a standalone net11 process and isn't loaded by the net10 AppHost scanner.

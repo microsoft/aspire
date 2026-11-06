@@ -9,6 +9,7 @@ using Aspire.Hosting.Dotnet.Watch;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
@@ -105,21 +106,104 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("10.0.100", null, DotnetWatchToolResolver.PinnedVersion)]
-    [InlineData("10.0.403", null, DotnetWatchToolResolver.PinnedVersion)]
-    [InlineData("11.0.100-rc.2.26504.105", null, "11.0.100-rc.2.26504.105")]
-    [InlineData("11.0.100-rc.2.26504.105", "11.0.100-rc.3.26522.148", "11.0.100-rc.3.26522.148")]
-    public void ToolVersionFollowsSdk(string sdkVersion, string? overrideVersion, string expected)
+    [InlineData("10.0.100", 10)]
+    [InlineData("10.0.403", 10)]
+    [InlineData("11.0.100-rc.2.26504.105", 11)]
+    public void SdkMajorSelectsThePayload(string sdkVersion, int expected)
     {
-        Assert.Equal(expected, DotnetWatchToolResolver.SelectToolVersion(sdkVersion, overrideVersion));
+        Assert.Equal(expected, DotnetWatchToolResolver.GetSdkMajor(sdkVersion));
+    }
+
+    [Theory]
+    [InlineData("10.0.100", "10")]
+    [InlineData("11.0.100-rc.3.26522.148", "11")]
+    public void ToolForTheSdkMajorIsResolved(string sdkVersion, string major)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var toolsDir = CreateToolsLayout(workspace.Path, "10", "11");
+
+        var dll = DotnetWatchToolResolver.ResolveToolPath(null, toolsDir, sdkVersion, NullLogger.Instance);
+
+        Assert.Equal(Path.Combine(toolsDir, major, DotnetWatchToolResolver.ToolDllName), dll);
     }
 
     [Fact]
-    public void PinnedToolVersionHasPinnedHash()
+    public void UnsupportedSdkMajorFailsWithShippedMajors()
     {
-        // Bumping PinnedVersion without its SHA-512 would silently fall back to the catalog lookup.
-        Assert.True(DotnetWatchToolResolver.s_pinnedSha512.TryGetValue(DotnetWatchToolResolver.PinnedVersion, out var hash));
-        Assert.Equal(128, hash.Length);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var toolsDir = CreateToolsLayout(workspace.Path, "10", "11");
+
+        var ex = Assert.Throws<DistributedApplicationException>(
+            () => DotnetWatchToolResolver.ResolveToolPath(null, toolsDir, "12.0.100-preview.1.26101.1", NullLogger.Instance));
+
+        Assert.Contains(".NET 12 SDKs", ex.Message);
+        Assert.Contains("only for .NET 10, 11 SDKs", ex.Message);
+        Assert.Contains("global.json", ex.Message);
+    }
+
+    [Fact]
+    public void MissingPayloadFailsWithFix()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var ex = Assert.Throws<DistributedApplicationException>(
+            () => DotnetWatchToolResolver.ResolveToolPath(null, Path.Combine(workspace.Path, "missing"), "10.0.100", NullLogger.Instance));
+
+        Assert.Contains("hot reload tool is missing", ex.Message);
+        Assert.Contains("rebuild the AppHost", ex.Message);
+    }
+
+    [Fact]
+    public void AppHostWithoutToolMetadataFailsWithFix()
+    {
+        var ex = Assert.Throws<DistributedApplicationException>(
+            () => DotnetWatchToolResolver.ResolveToolPath(null, DotnetWatchToolResolver.GetToolsDirectory(typeof(object).Assembly), "10.0.100", NullLogger.Instance));
+
+        Assert.Contains(DotnetWatchToolResolver.ToolsDirectoryMetadataKey, ex.Message);
+        Assert.Contains("Reference Aspire.Hosting.Dotnet", ex.Message);
+    }
+
+    [Fact]
+    public void ExplicitToolPathWins()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var toolsDir = CreateToolsLayout(workspace.Path, "10");
+        var explicitDir = Path.Combine(toolsDir, "10");
+
+        Assert.Equal(
+            Path.Combine(explicitDir, DotnetWatchToolResolver.ToolDllName),
+            DotnetWatchToolResolver.ResolveToolPath(explicitDir, toolsDirectory: null, "11.0.100", NullLogger.Instance));
+        Assert.Throws<DistributedApplicationException>(
+            () => DotnetWatchToolResolver.ResolveToolPath(Path.Combine(workspace.Path, "nope"), toolsDir, "10.0.100", NullLogger.Instance));
+    }
+
+    [Fact]
+    public void ShippedPayloadsMatchTheirSdkMajor()
+    {
+        // The test assembly carries the same metadata AppHosts get, pointing at the layout Aspire.Hosting.Dotnet builds.
+        var toolsDir = DotnetWatchToolResolver.GetToolsDirectory(typeof(DotnetWatchCoordinatorTests).Assembly);
+        Assert.NotNull(toolsDir);
+
+        foreach (var major in new[] { "10", "11" })
+        {
+            var dll = DotnetWatchToolResolver.ResolveToolPath(null, toolsDir, $"{major}.0.100", NullLogger.Instance);
+            var runtimeConfig = Path.ChangeExtension(dll, ".runtimeconfig.json");
+            Assert.True(File.Exists(runtimeConfig), runtimeConfig);
+            using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(runtimeConfig));
+            Assert.Equal($"net{major}.0", json.RootElement.GetProperty("runtimeOptions").GetProperty("tfm").GetString());
+        }
+    }
+
+    private static string CreateToolsLayout(string root, params string[] majors)
+    {
+        var toolsDir = Path.Combine(root, "dotnet-watch");
+        foreach (var major in majors)
+        {
+            Directory.CreateDirectory(Path.Combine(toolsDir, major));
+            File.WriteAllText(Path.Combine(toolsDir, major, DotnetWatchToolResolver.ToolDllName), "");
+        }
+
+        return toolsDir;
     }
 
     [Fact]

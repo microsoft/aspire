@@ -14,6 +14,51 @@
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 
+  <!-- Hot reload watch server (Microsoft.DotNet.HotReload.Watch.Aspire), shipped like DCP: the DotnetTool package
+       can't be a PackageReference (NU1212), so PackageDownload fetches it at restore and its payload is repacked into
+       this package under tools/dotnet-watch/<SDK major>/. buildTransitive/Aspire.Hosting.Dotnet.targets stamps that
+       directory on the AppHost as 'aspiredotnetwatchtoolsdir' assembly metadata. Nothing is downloaded at run time. -->
+  <ItemGroup>
+    <_AspireDotnetWatchTool Include="10" Version="$(MicrosoftDotNetHotReloadWatchAspireNet10Version)" TargetFramework="net10.0" />
+    <_AspireDotnetWatchTool Include="11" Version="$(MicrosoftDotNetHotReloadWatchAspireNet11Version)" TargetFramework="net11.0" />
+    <PackageDownload Include="Microsoft.DotNet.HotReload.Watch.Aspire" Version="[$(MicrosoftDotNetHotReloadWatchAspireNet10Version)];[$(MicrosoftDotNetHotReloadWatchAspireNet11Version)]" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="build\Aspire.Hosting.Dotnet.targets" Pack="true" PackagePath="buildTransitive\Aspire.Hosting.Dotnet.targets" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_AddDotnetWatchToolsToPackage</TargetsForTfmSpecificContentInPackage>
+    <!-- The repacked tool payload is a runnable app, not a library: its assemblies belong under tools/. -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
+  </PropertyGroup>
+
+  <Target Name="_CollectDotnetWatchToolFiles">
+    <ItemGroup>
+      <_AspireDotnetWatchToolFile Remove="@(_AspireDotnetWatchToolFile)" />
+      <_AspireDotnetWatchToolFile Include="$(NuGetPackageRoot)microsoft.dotnet.hotreload.watch.aspire/%(_AspireDotnetWatchTool.Version)/tools/%(_AspireDotnetWatchTool.TargetFramework)/any/**/*"
+                                  Major="%(_AspireDotnetWatchTool.Identity)" />
+      <_AspireDotnetWatchToolDll Include="@(_AspireDotnetWatchToolFile)" Condition="'%(Filename)%(Extension)' == 'Microsoft.DotNet.HotReload.Watch.Aspire.dll'" />
+    </ItemGroup>
+
+    <Error Condition="@(_AspireDotnetWatchToolDll->Count()) != @(_AspireDotnetWatchTool->Count())"
+           Text="Microsoft.DotNet.HotReload.Watch.Aspire payloads are missing from '$(NuGetPackageRoot)microsoft.dotnet.hotreload.watch.aspire/' (expected one per SDK major: @(_AspireDotnetWatchTool->'%(Identity)=%(Version)', ', ')). Restore this project." />
+  </Target>
+
+  <!-- Lays out the payloads for in-repo AppHosts, which reference this project rather than the package. -->
+  <Target Name="_LayoutDotnetWatchTools" AfterTargets="Build" DependsOnTargets="_CollectDotnetWatchToolFiles" Condition="'$(AspireDotnetWatchToolsDir)' != ''">
+    <Copy SourceFiles="@(_AspireDotnetWatchToolFile)"
+          DestinationFiles="@(_AspireDotnetWatchToolFile->'$(AspireDotnetWatchToolsDir)%(Major)/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="_AddDotnetWatchToolsToPackage" DependsOnTargets="_CollectDotnetWatchToolFiles" Returns="@(TfmSpecificPackageFile)">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="@(_AspireDotnetWatchToolFile)" PackagePath="tools/dotnet-watch/%(Major)/%(RecursiveDir)" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <!-- Source-shared helpers keep this package buildable from the public Aspire.Hosting surface only. -->
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
