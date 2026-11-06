@@ -1,0 +1,62 @@
+[automated] **Flaky-test investigation: blocked - no verified fix PR**
+
+- **Analysis source:** Trusted controller fallback. No valid terminal model analysis was received.
+- **Why no verified fix:** The investigation could not establish a verified fix. worker attempt rejected: Unrelated project test failed; not reproduction evidence
+- **Tried:** Selected Sample.Tests.WidgetTests.WaitsForWidget; 0 model phases started, 2 worker rounds reserved, 0 repair attempts reserved.
+- **Next:** Have a maintainer inspect the rejected attempt and checkpoint before authorizing further work.
+- **Observed:** 1 target passes, 0 target failures; 1 actual tests in accepted evidence.
+- **Rejected evidence:** https://github.com/microsoft/aspire/actions/runs/101. Rejected attempts are excluded from accepted counts.
+
+<details>
+<summary>Evidence</summary>
+
+| Run | Mode | Requested runner-iterations | Target passed | Target failed | Actual tests |
+|-----|------|-----------------------------|---------------|---------------|--------------|
+| https://github.com/microsoft/aspire/actions/runs/100 | reproduce/single | 1 | 1 | 0 | 1 |
+
+Project-mode actual test counts are not capped by the runner-iteration budget.
+
+### Source identities
+<pre>{
+  "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "control_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "agent_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "worker_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}</pre>
+
+### Latest checkpointed run identities (not test results)
+
+https://github.com/microsoft/aspire/actions/runs/101
+<pre>{
+  "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "workflow": "reproduce-flaky-tests.yml",
+  "phase": "reproduce",
+  "runners": 3,
+  "iterations": 3,
+  "mode": "single",
+  "branch": "ankj/flaky-test-123-run-2",
+  "id": 101
+}</pre>
+
+### Rejected attempts (not accepted test counts)
+
+https://github.com/microsoft/aspire/actions/runs/101
+<pre>{
+  "phase": "worker",
+  "reason": "Unrelated project test failed; not reproduction evidence",
+  "source_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "mode": "single",
+  "branch": "ankj/flaky-test-123-run-2",
+  "run_id": 101
+}</pre>
+
+### Recorded controller reason
+<pre>Validation/remote operation blocked: Unrelated project test failed; not reproduction evidence</pre>
+
+</details>
+
+No merge, issue closure, or unquarantine was performed.
+
+<!-- aspire-flaky-investigation:123:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -->

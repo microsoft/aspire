@@ -1,0 +1,46 @@
+name: Flaky Test Investigation
+run-name: "Flaky investigation ${{ inputs.issue_url || 'recovery' }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_url:
+        description: Exact https://github.com/microsoft/aspire/issues/number URL
+        required: true
+        type: string
+      operation:
+        description: Start, resume, or cancel this investigation
+        default: start
+        type: choice
+        options: [start, resume, cancel]
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+
+permissions: {}
+
+# Manual and scheduled recovery share one writer. Git's nonforced checkpoint update is
+# still the final guard against an independently resumed stale controller.
+concurrency:
+  group: flaky-test-investigation-controller
+  cancel-in-progress: false
+
+jobs:
+  advance:
+    if: github.repository == 'microsoft/aspire'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Advance immutable investigation checkpoints
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_URL: ${{ inputs.issue_url }}
+          OPERATION: ${{ inputs.operation || 'resume' }}
+        run: python3 .github/scripts/flaky_investigation/controller.py advance
