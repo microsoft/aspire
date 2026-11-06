@@ -5989,6 +5989,9 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             markLaunchAttemptFailureRecorded: () => {
                 throw new Error('The successful restart should not record a launch failure.');
             },
+            markLaunchAttemptCanceled: () => {
+                throw new Error('The successful restart should not cancel its launch.');
+            },
             tryReserveExternalOperation: () => {
                 throw new Error('The run restart should not reserve an external operation.');
             },
@@ -6129,6 +6132,9 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             },
             markLaunchAttemptFailureRecorded: () => {
                 throw new Error('The successful restart should not record a launch failure.');
+            },
+            markLaunchAttemptCanceled: () => {
+                throw new Error('The successful restart should not cancel its launch.');
             },
             tryReserveExternalOperation: () => {
                 throw new Error('The matching launch token already owns this operation.');
