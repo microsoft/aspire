@@ -31,6 +31,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public ComposeOperationContext? LastComposeDownContext { get; private set; }
     public ConcurrentBag<(string localImageName, string targetImageName)> TagImageCalls { get; } = [];
     public ConcurrentBag<string> RemoveImageCalls { get; } = [];
+    public ConcurrentBag<(string ImageName, string SourcePath, string DestinationPath)> CopyFilesFromImageCalls { get; } = [];
     public ConcurrentBag<IResource> PushImageCalls { get; } = [];
     public ConcurrentBag<string> InspectImageConfigCalls { get; } = [];
     public ConcurrentBag<string> InspectImageManifestCalls { get; } = [];
@@ -42,6 +43,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public Func<string, string, ContainerImageBuildOptions?, Dictionary<string, string?>, Dictionary<string, BuildImageSecretValue>, string?, CancellationToken, Task>? BuildImageAsyncCallback { get; set; }
     public Func<string, string, CancellationToken, Task>? TagImageAsyncCallback { get; set; }
     public Func<string, CancellationToken, Task>? RemoveImageAsyncCallback { get; set; }
+    public Func<string, string, string, CancellationToken, Task>? CopyFilesFromImageAsyncCallback { get; set; }
     public Func<string, CancellationToken, Task<ContainerImageManifestInspectionResult>>? InspectImageManifestAsyncCallback { get; set; }
     public Func<CancellationToken, Task<bool>>? CheckIfRunningAsyncCallback { get; set; }
     public Func<CancellationToken, Task<IContainerRuntime>>? ResolveAsyncCallback { get; set; }
@@ -86,6 +88,17 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
             throw new InvalidOperationException("Fake container runtime is configured to fail");
         }
         return Task.CompletedTask;
+    }
+
+    public Task CopyFilesFromImageAsync(string imageName, string sourcePath, string destinationPath, CancellationToken cancellationToken)
+    {
+        CopyFilesFromImageCalls.Add((imageName, sourcePath, destinationPath));
+        if (shouldFail)
+        {
+            throw new DistributedApplicationException("Fake container runtime is configured to fail");
+        }
+        return CopyFilesFromImageAsyncCallback?.Invoke(imageName, sourcePath, destinationPath, cancellationToken)
+            ?? throw new InvalidOperationException("Set CopyFilesFromImageAsyncCallback to supply the exported files.");
     }
 
     public async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
