@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayMs, hourMs, personalPickActions, reviewDebtSignalLabel } from "./constants.mjs";
+import { dayMs, hourMs, personalPickActions, reviewDebtSignalLabel, urgentReviewLabel } from "./constants.mjs";
 import {
   actorIdentityKey,
   computeCommunityItems,
@@ -16,6 +16,7 @@ import {
   filterCheckFailureRules,
   isChecksFailing,
   isReviewDebt,
+  isUrgentPullRequest,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
@@ -189,9 +190,47 @@ test("computeFocusItems breaks first-readiness ties by ordinal host, repository,
     make("github.com", "microsoft/aspire", 10),
     make("github.com", "microsoft/dcp", 1),
   ];
-  for (const input of [ordered, [...ordered].reverse(), [ordered[2], ordered[0], ordered[3], ordered[1]]]) {
-    const focus = computeFocusItems(createAttentionBuckets(input, "joperezr"));
-    assert.deepEqual(focus.map((item) => item.pullRequest.url), ordered.map((pr) => pr.url));
+  for (const urgentIndexes of [[], [1, 3], [0, 1, 2, 3]]) {
+    const prs = ordered.map((pr, index) => ({ ...pr, labels: urgentIndexes.includes(index) ? [urgentReviewLabel] : [] }));
+    const expected = [...prs.filter(isUrgentPullRequest), ...prs.filter((pr) => !isUrgentPullRequest(pr))];
+    for (const input of [prs, [...prs].reverse(), [prs[2], prs[0], prs[3], prs[1]]]) {
+      const focus = computeFocusItems(createAttentionBuckets(input, "joperezr"));
+      assert.deepEqual(focus.map((item) => item.pullRequest.url), expected.map((pr) => pr.url));
+    }
+  }
+});
+
+test("urgency matches the complete label case-insensitively, not similar labels", () => {
+  for (const label of [urgentReviewLabel, "pr REVIEW URGENT"]) {
+    assert.equal(isUrgentPullRequest(makePr({ labels: [label] })), true);
+  }
+  for (const labels of [[], ["urgent"], ["PR review urgent later"], ["not PR review urgent"]]) {
+    assert.equal(isUrgentPullRequest(makePr({ labels })), false);
+  }
+});
+
+test("urgency does not bypass shared-queue eligibility or specialize other lanes", () => {
+  const regular = makePr({ number: 2, url: "https://github.com/microsoft/aspire/pull/2" });
+  const blockers = [
+    { state: "closed" },
+    { draft: true },
+    { mergeableState: "dirty" },
+    { labels: ["needs-author-action"] },
+    { labels: ["no-merge"] },
+    { checks: { state: "failure" } },
+    { review: { state: "changes_requested", lastReviewedAt: isoAgo(hourMs) } },
+    { review: { state: "reviewed", unresolvedThreadCount: 1, lastReviewedAt: isoAgo(hourMs) } },
+    { firstReadyForReviewAt: null },
+    { author: "external-contributor" },
+    { author: "dependabot[bot]", authorType: "Bot" },
+    { repository: "microsoft/aspire.dev", labels: ["docs-from-code"] },
+    { repository: "CommunityToolkit/Aspire" },
+    { updatedAt: isoAgo(20 * dayMs), review: { state: "approved", lastApprovedAt: isoAgo(20 * dayMs) } },
+  ];
+  for (const blocker of blockers) {
+    const urgent = makePr({ ...blocker, labels: [urgentReviewLabel, ...(blocker.labels ?? [])] });
+    const focus = computeFocusItems(createAttentionBuckets([urgent, regular], "joperezr"));
+    assert.deepEqual(focus.map((item) => item.pullRequest.number), [2], JSON.stringify(blocker));
   }
 });
 

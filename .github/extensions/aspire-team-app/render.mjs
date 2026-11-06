@@ -344,7 +344,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .queue-reference a:hover { text-decoration: underline; }
 .queue-reference .repo { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
 
-/* Review board section dividers (For you / Needs attention / breakdown / Community). */
+/* Review board section dividers (PR queue / For you / breakdown / Community). */
 .board-sep {
   margin: 13px 2px 2px; padding-top: 12px; border-top: 1px solid var(--border);
   font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
@@ -359,7 +359,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .collapse-body > .collapse-inner { overflow: hidden; min-height: 0; }
 .collapsible.collapsed > .collapse-body { grid-template-rows: 0fr; opacity: 0; }
 
-/* Primary queue panels: For you / Needs attention / Your PRs outside.
+/* Primary queue panels: PR queue / For you / Your PRs outside.
    Collapsible sections that lead the review board. */
 .qpanel { display: flex; flex-direction: column; }
 .qhead {
@@ -428,6 +428,14 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 12px;
 }
 .card:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.card.card-urgent { border-color: var(--danger); border-inline-start-width: 3px; }
+.urgent-badge {
+  display: inline-flex; align-self: flex-start; padding: 2px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; line-height: 1.4;
+  color: color-mix(in srgb, var(--danger), var(--fg) 25%);
+  background: color-mix(in srgb, var(--danger) 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+}
 .card-main { display: flex; flex-direction: column; gap: 8px; }
 .card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .card-btn {
@@ -2148,7 +2156,7 @@ const signalExplanations = {
   "aged out community": "An external contributor's public PR has had no update for more than 14 days. Re-engage the contributor and arrange review or clarify whether the work should continue.",
   "community wait": "An external contributor's public PR has waited at least 12 hours for its first review, or has been reviewed and idle for at least 7 days. Follow up with a review or a clear next step.",
   "community": "This public PR is from an external contributor. Welcome the contribution and help the author reach the next review step.",
-  "community list": "This active external-contributor PR is routed to the Community list instead of Needs attention. Follow up there.",
+  "community list": "This active external-contributor PR is routed to the Community list instead of PR queue. Follow up there.",
   "unstick": "The PR has had no update for at least 7 days. Ask what is blocking progress and agree on the next step.",
   "stalled": "The PR has had no update for at least 7 days. Ask what is blocking progress and agree on the next step.",
   "stalled only": "The PR has gone quiet without a fresher actionable lane. Check whether it still needs work and identify the next owner.",
@@ -2164,9 +2172,9 @@ const signalExplanations = {
   "docs review": "This is a generated docs PR in microsoft/aspire.dev with the docs-from-code label. Review the generated documentation for accuracy.",
   "community toolkit": "The PR belongs to CommunityToolkit/Aspire. Review it in the toolkit's specialized lane.",
   "toolkit review": "The PR belongs to CommunityToolkit/Aspire. Review it in the toolkit's specialized lane.",
-  "docs lane": "This PR is routed to the generated documentation lane instead of Needs attention. Review it there.",
-  "community toolkit lane": "This PR is routed to the Community Toolkit lane instead of Needs attention. Review it there.",
-  "bots / automation lane": "This PR is routed to the automation lane instead of Needs attention. Check its changes and CI there.",
+  "docs lane": "This PR is routed to the generated documentation lane instead of PR queue. Review it there.",
+  "community toolkit lane": "This PR is routed to the Community Toolkit lane instead of PR queue. Review it there.",
+  "bots / automation lane": "This PR is routed to the automation lane instead of PR queue. Check its changes and CI there.",
   "held by label": "A needs-author-action or no-merge label keeps this PR out of the focused queue. Address the hold before proceeding.",
   "stale activity": "The PR's actionable lane has no fresh activity within 14 days. Reassess the work and arrange the next action.",
   "outside queue": "The PR does not match a focused actionable lane. Check its current state before choosing a next action.",
@@ -2435,7 +2443,7 @@ function signalActions(item) {
   return out;
 }
 
-// Which action buttons a "Needs attention" or "Your PRs outside" card gets. A review-debt card
+// Which action buttons a "PR queue" or "Your PRs outside" card gets. A review-debt card
 // (aged without an approving review) offers Address review (a fresh review) plus Discuss review
 // (talk through existing feedback) — on every card carrying the debt, including your own, so a
 // review-debt card is never actionless. Focus cards carry a reviewDebt flag (isReviewDebtItem)
@@ -2515,12 +2523,18 @@ function isReviewDebtItem(item) {
 }
 
 // Your own PR is "author response" when a reviewer requested changes (pr.review.state), or when the
-// "Your PRs outside Needs attention" lane tagged the card with the "Author response" exclusion pill.
+// "Your PRs outside PR queue" lane tagged the card with the "Author response" exclusion pill.
 // Either way the ball is in your court, so focusCardActions offers Address feedback + Discuss review.
 function isAuthorResponseItem(item) {
   var pr = (item && item.pr) || {};
   if (pr.review && pr.review.state === "changes_requested") return true;
   return ((item && item.signals) || []).some((s) => s && /^Author response$/i.test(s.label || ""));
+}
+
+function urgencyBadge(item) {
+  return item.urgent
+    ? '<span class="urgent-badge" title="PR review urgent label: prioritized ahead of regular eligible PRs.">Urgent</span>'
+    : "";
 }
 
 function prCard(item, actions) {
@@ -2540,7 +2554,7 @@ function prCard(item, actions) {
   const acts = (actions && actions.length)
     ? '<div class="card-actions">' + actions.map((a) => cardActionBtn(pr, a)).join("") + "</div>"
     : "";
-  return '<div class="card">' + main + signals + acts + "</div>";
+  return '<div class="card' + (item.urgent ? " card-urgent" : "") + '">' + urgencyBadge(item) + main + signals + acts + "</div>";
 }
 
 function issueCard(item) {
@@ -2672,7 +2686,7 @@ function collapsibleSect(opts) {
   "</section>";
 }
 
-// A clean, always-expanded primary queue (For you / Needs attention / Your PRs
+// A clean, always-expanded primary queue (PR queue / For you / Your PRs
 // outside). Masonry cards with a title, count metric, and descriptive subtitle.
 function queuePanel(opts) {
   const items = opts.items || [];
@@ -2688,7 +2702,7 @@ function queuePanel(opts) {
       const position = it.queuePosition || index + 1;
       return '<li value="' + position + '"><span class="queue-position">' + position + ".</span>" + card + "</li>";
     }).join("");
-    body = opts.numbered ? '<ol class="focus-queue" role="list" aria-label="Needs attention, first-readiness order">' + cards + "</ol>"
+    body = opts.numbered ? '<ol class="focus-queue" role="list" aria-label="PR queue, urgent first, then first-readiness order">' + cards + "</ol>"
       : '<div class="grid">' + cards + "</div>";
   } else {
     body = '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
@@ -2713,20 +2727,10 @@ function reviewBoardHtml() {
   seedReviewCollapse(att);
   let html = "";
 
-  // 1. For you — personalized headline of your highest-leverage actions.
-  if (att.forMe && att.forMe.length) {
-    html += queuePanel({
-      id: "for-you", title: "For you", tone: "accent", icon: ICONS.sparkle,
-      subtitle: "Your highest-leverage actions across every repo, pulled to the top of the queue.",
-      items: att.forMe.slice(0, 6), cappedTotal: att.forMe.length,
-      cardActions: forYouCardActions,
-    });
-  }
-
-  // 2. Needs attention — the focused, team-managed review queue (the headline).
+  // 1. PR queue — the focused, team-managed review queue (the headline).
   html += queuePanel({
-    id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
-    subtitle: "First readiness, oldest first. Blocked PRs keep their priority when they return.",
+    id: "pr-queue", title: "PR queue", tone: "danger", icon: ICONS.alertSm,
+    subtitle: "Urgent PRs first; first readiness, oldest first within each group. Blocked PRs keep their readiness when they return.",
     items: att.focus || [], cappedTotal: att.focusTotal,
     numbered: true,
     cardActions: focusCardActions,
@@ -2738,19 +2742,28 @@ function reviewBoardHtml() {
     html += collapsibleSect({
       id: "later-in-queue", title: "Later in queue", icon: ICONS.clock,
       count: remainder.length,
-      subtitle: "Find a PR\u2019s position here. Prioritize the first 10 in Needs attention for review.",
-      body: '<ol class="queue-remainder" start="' + remainder[0].queuePosition + '" role="list" aria-label="Later in queue, first-readiness order">' +
+      subtitle: "Find a PR\u2019s position here. Prioritize the first 10 in PR queue for review.",
+      body: '<ol class="queue-remainder" start="' + remainder[0].queuePosition + '" role="list" aria-label="Later in queue, urgent first, then first-readiness order">' +
         remainder.map((item) => '<li value="' + item.queuePosition + '"><span class="queue-position">' + item.queuePosition +
-          '.</span><div class="queue-reference"><a href="' + safeHref(item.pr.url) + '" target="_blank" rel="noreferrer">' +
+          '.</span><div class="queue-reference">' + urgencyBadge(item) + ' <a href="' + safeHref(item.pr.url) + '" target="_blank" rel="noreferrer">' +
           esc(item.pr.title) + '</a><span class="repo">' + esc(item.pr.repository) + " #" + item.pr.number + "</span></div></li>").join("") +
         "</ol>",
     });
   }
 
-  // 3. Your PRs outside Needs attention — the viewer's own out-of-queue work,
-  //    sat directly under the focused queue so it's easy to see what got filtered.
+  // 2. For you — personalized highest-leverage actions beneath the shared priority.
+  if (att.forMe && att.forMe.length) {
+    html += queuePanel({
+      id: "for-you", title: "For you", tone: "accent", icon: ICONS.sparkle,
+      subtitle: "Your highest-leverage actions across every repo.",
+      items: att.forMe.slice(0, 6), cappedTotal: att.forMe.length,
+      cardActions: forYouCardActions,
+    });
+  }
+
+  // 3. Your PRs outside PR queue — the viewer's own out-of-queue work.
   html += queuePanel({
-    id: "outside-focus", title: "Your PRs outside Needs attention", tone: "info", icon: ICONS.pr,
+    id: "outside-focus", title: "Your PRs outside PR queue", tone: "info", icon: ICONS.pr,
     subtitle: "Open non-draft PRs you authored that do not currently qualify for the focused queue.",
     items: (att.focusExclusions || []).slice(0, 10), cappedTotal: (att.focusExclusions || []).length,
     cardActions: focusCardActions,
@@ -3120,7 +3133,7 @@ function statsHtml() {
       return b ? b.items.length : 0;
     };
     return '<div class="stats">' +
-      '<span class="stat"><span class="dot bg-danger"></span><b>' + att.focusTotal + "</b> needs attention</span>" +
+      '<span class="stat"><span class="dot bg-danger"></span><b>' + att.focusTotal + "</b> in PR queue</span>" +
       '<span class="stat"><span class="dot bg-success"></span><b>' + bucket("Ready to merge") + "</b> ready</span>" +
       '<span class="stat"><span class="dot bg-warning"></span><b>' + bucket("CI failing") + "</b> CI failing</span>" +
       '<span class="stat"><span class="dot bg-accent"></span><b>' + (att.community ? att.community.length : 0) + "</b> community</span>" +
@@ -3154,7 +3167,7 @@ function filtersView() {
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.merge + "<span>A PR reaches the <b>shared review queue</b> only once <b>checks are green</b> and <b>all feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>" +
         '<div class="policy-row">' + ICONS.pr + "<span><b>Drafts, merge conflicts, and needs-author-action</b> PRs are routed out of the shared lists, so reviewers only see PRs that are genuinely ready.</span></div>" +
-        '<div class="policy-row">' + ICONS.xcircle + "<span><b>CI-failing</b> PRs are held out of Needs attention. A failure driven only by informational <b>aspire-1p checks</b> (proof of presence) is not counted as red.</span></div>" +
+        '<div class="policy-row">' + ICONS.xcircle + "<span><b>CI-failing</b> PRs are held out of PR queue. A failure driven only by informational <b>aspire-1p checks</b> (proof of presence) is not counted as red.</span></div>" +
         '<div class="policy-row">' + ICONS.usersSm + "<span>PRs you authored <b>as yourself or via Copilot</b> both count as yours, so delegated work still lands in your lanes and developer totals.</span></div>" +
       "</div>" +
     "</div>" +
@@ -3215,7 +3228,7 @@ function settingsView() {
   return '<div class="page">' +
     '<div class="page-head"><h2>Settings</h2><p>Tune the shared review queue, delivery health, the ship milestone, and when the canvas speaks up. Watched repositories are configured per account in the Accounts tab.</p></div>' +
     '<div class="section"><h3>Review queue</h3>' +
-      '<p class="hint">The shared queue is team-managed, not individually sorted. Needs attention shows the first <b>10</b> PRs in first-readiness order, oldest first. Later in queue starts collapsed and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
+      '<p class="hint">The shared <b>PR queue</b> is team-managed, not individually sorted. Eligible PRs labeled <b>PR review urgent</b> come first; each group keeps first-readiness order, oldest first. Only the first <b>10</b> are shown as cards, even when more than 10 are urgent. Removing the label restores first-readiness order. Later in queue starts collapsed and lets you look up the remaining positions; prioritize the first 10 for review.</p>' +
       '<div class="policy">' +
         '<div class="policy-row">' + ICONS.eye + '<span>A PR only enters the shared queue once <b>checks are green</b> and <b>all review feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>' +
         '<div class="policy-row">' + ICONS.pr + '<span>Draft PRs are hidden by default. They are prototypes and experiments, not review work.</span></div>' +

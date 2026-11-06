@@ -3,6 +3,7 @@
 export const currentRelease = "13.5";
 export const hourMs = 1000 * 60 * 60;
 export const dayMs = hourMs * 24;
+export const urgentReviewLabel = "PR review urgent";
 
 export const coreTeamMembers = [
   "davidfowl",
