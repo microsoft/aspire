@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
+import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
 import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeBaselineActionCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
@@ -27,7 +27,15 @@ suite('Aspire tree action command E2E', function () {
             () => restoreWorkspaceFoldersForE2E(),
             () => restoreWorkspaceCliPath(),
             () => removeAdditionalAppHostCandidate('AspireE2E.SecondaryActions'),
-            () => removeAdditionalAppHostCandidate('AspireE2E.MissingGoDebugger'),
+            async () => {
+                if (fs.existsSync(path.join(getWorkspaceRoot(), 'AspireE2E.MissingGoDebugger'))) {
+                    removeAdditionalAppHostCandidate('AspireE2E.MissingGoDebugger');
+                    // Discovery can select the temporary Go AppHost. Restore the selected
+                    // primary before the next test derives workspace folders from that state.
+                    await executeE2eControlCommand({ name: 'refreshAppHosts' });
+                    await waitForSelectedWorkspaceAppHost();
+                }
+            },
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => stopPrimaryAppHostIfRunning(),
