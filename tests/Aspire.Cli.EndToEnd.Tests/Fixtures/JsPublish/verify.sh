@@ -5,45 +5,67 @@
 
 DIAG=diagnostics
 mkdir -p "$DIAG"
+COMPOSE_PROJECT=${1:?A Compose project name is required}
+
+capture_container_logs() {
+    for c in $(docker ps --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" --format '{{.Names}}'); do
+        echo "=== $c ===" >> "$DIAG/container-logs.txt"
+        docker logs "$c" >> "$DIAG/container-logs.txt" 2>&1
+    done
+}
+trap capture_container_logs EXIT
 
 # Capture docker state
-docker ps -a > "$DIAG/docker-ps.txt" 2>&1
-docker images > "$DIAG/docker-images.txt" 2>&1
-
-resolve_published_host() {
-    if curl -sf --max-time 2 http://localhost:3001/api/weather > /dev/null 2>&1; then
-        echo "localhost"
-        return
-    fi
-
-    if getent hosts host.docker.internal > /dev/null 2>&1 && \
-        curl -sf --max-time 2 http://host.docker.internal:3001/api/weather > /dev/null 2>&1; then
-        echo "host.docker.internal"
-        return
-    fi
-
-    GATEWAY_HEX=$(awk '$2 == "00000000" { print $3; exit }' /proc/net/route 2>/dev/null)
-    if [ -n "$GATEWAY_HEX" ]; then
-        GATEWAY=$(printf '%d.%d.%d.%d' \
-            "0x${GATEWAY_HEX:6:2}" \
-            "0x${GATEWAY_HEX:4:2}" \
-            "0x${GATEWAY_HEX:2:2}" \
-            "0x${GATEWAY_HEX:0:2}")
-        if curl -sf --max-time 2 "http://$GATEWAY:3001/api/weather" > /dev/null 2>&1; then
-            echo "$GATEWAY"
-            return
-        fi
-    fi
-
-    echo "localhost"
-}
-
-PUBLISHED_HOST=$(resolve_published_host)
-echo "published_host=$PUBLISHED_HOST" >> "$DIAG/ports.txt"
+docker ps -a --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" > "$DIAG/docker-ps.txt" 2>&1
 
 get_port() {
-    docker ps --filter "name=$1" --format '{{.Ports}}' | grep -oP '0.0.0.0:\K[0-9]+' | head -1
+    local service=$1 port
+    port=$(docker ps --filter "label=com.docker.compose.project=$COMPOSE_PROJECT" \
+        --filter "label=com.docker.compose.service=$service" --format '{{.Ports}}' |
+        grep -oP '0.0.0.0:\K[0-9]+' | head -1)
+    if [ -z "$port" ]; then
+        echo "${service}_port_FAIL (no published port found for $COMPOSE_PROJECT)" >&2
+        return 1
+    fi
+    echo "$port"
 }
+
+if ! API_PORT=$(get_port api); then
+    exit 1
+fi
+
+resolve_published_host() {
+    local hosts=(localhost host.docker.internal)
+    local gateway_hex gateway host
+    gateway_hex=$(awk '$2 == "00000000" { print $3; exit }' /proc/net/route 2>/dev/null)
+    if [ -n "$gateway_hex" ]; then
+        gateway=$(printf '%d.%d.%d.%d' \
+            "0x${gateway_hex:6:2}" \
+            "0x${gateway_hex:4:2}" \
+            "0x${gateway_hex:2:2}" \
+            "0x${gateway_hex:0:2}")
+        hosts+=("$gateway")
+    fi
+
+    for i in $(seq 1 15); do
+        for host in "${hosts[@]}"; do
+            if curl -sf --max-time 2 "http://$host:$API_PORT/api/weather" > /dev/null 2>&1; then
+                echo "$host"
+                return 0
+            fi
+        done
+        sleep 1
+    done
+
+    echo "api_host_FAIL (could not reach the published API for $COMPOSE_PROJECT)" >&2
+    return 1
+}
+
+if ! PUBLISHED_HOST=$(resolve_published_host); then
+    exit 1
+fi
+echo "published_host=$PUBLISHED_HOST" >> "$DIAG/ports.txt"
+echo "api=$API_PORT" >> "$DIAG/ports.txt"
 
 wait_for_url() {
     URL=$1
@@ -54,40 +76,58 @@ wait_for_url() {
     return 1
 }
 
-# Wait for API to be ready
-for i in $(seq 1 30); do
-    curl -sf "http://$PUBLISHED_HOST:3001/api/weather" > /dev/null 2>&1 && break
-    sleep 1
-done
+capture_response() {
+    local name=$1 url=$2
+    shift 2
+    curl -sS --max-time 10 "$@" -o "$DIAG/$name-response.txt" \
+        -w '%{http_code}' "$url" > "$DIAG/$name-status.txt" 2> "$DIAG/$name-error.txt"
+}
 
 # Phase 1: Capture all responses (no -f, so non-200 still writes output)
-curl -s "http://$PUBLISHED_HOST:3001/api/weather" > "$DIAG/api-response.txt" 2>&1
+curl -s "http://$PUBLISHED_HOST:$API_PORT/api/weather" > "$DIAG/api-response.txt" 2>&1
 
-SP=$(get_port staticsite)
+if ! SP=$(get_port staticsite); then
+    exit 1
+fi
 echo "staticsite=$SP" >> "$DIAG/ports.txt"
 wait_for_url "http://$PUBLISHED_HOST:$SP/index.html" || true
-curl -s "http://$PUBLISHED_HOST:$SP/index.html" > "$DIAG/staticsite-response.txt" 2>&1
+capture_response staticsite "http://$PUBLISHED_HOST:$SP/index.html"
+capture_response staticsite-deep "http://$PUBLISHED_HOST:$SP/test"
+capture_response staticsite-nested "http://$PUBLISHED_HOST:$SP/test/nested?query=value"
+capture_response staticsite-head "http://$PUBLISHED_HOST:$SP/test" -I
+capture_response staticsite-post "http://$PUBLISHED_HOST:$SP/test" -X POST
+capture_response staticsite-missing-asset "http://$PUBLISHED_HOST:$SP/missing.js"
+capture_response staticsite-api "http://$PUBLISHED_HOST:$SP/api/weather"
+capture_response staticsite-missing-api "http://$PUBLISHED_HOST:$SP/api/missing"
 
-NP=$(get_port nodeserver)
+if ! DP=$(get_port static-no-fallback); then
+    exit 1
+fi
+echo "static-no-fallback=$DP" >> "$DIAG/ports.txt"
+wait_for_url "http://$PUBLISHED_HOST:$DP/index.html" || true
+capture_response static-no-fallback "http://$PUBLISHED_HOST:$DP/index.html"
+capture_response static-no-fallback-deep "http://$PUBLISHED_HOST:$DP/test"
+
+if ! NP=$(get_port nodeserver); then
+    exit 1
+fi
 echo "nodeserver=$NP" >> "$DIAG/ports.txt"
 wait_for_url "http://$PUBLISHED_HOST:$NP/" || true
 curl -s "http://$PUBLISHED_HOST:$NP/" > "$DIAG/nodeserver-response.txt" 2>&1
 
-MP=$(get_port npmscript)
+if ! MP=$(get_port npmscript); then
+    exit 1
+fi
 echo "npmscript=$MP" >> "$DIAG/ports.txt"
 wait_for_url "http://$PUBLISHED_HOST:$MP/" || true
 curl -s "http://$PUBLISHED_HOST:$MP/" > "$DIAG/npmscript-response.txt" 2>&1
 
-XP=$(get_port nextjs)
+if ! XP=$(get_port nextjs); then
+    exit 1
+fi
 echo "nextjs=$XP" >> "$DIAG/ports.txt"
 wait_for_url "http://$PUBLISHED_HOST:$XP/" || true
 curl -s "http://$PUBLISHED_HOST:$XP/" > "$DIAG/nextjs-response.txt" 2>&1
-
-# Capture container logs
-for c in $(docker ps --format '{{.Names}}'); do
-    echo "=== $c ===" >> "$DIAG/container-logs.txt"
-    docker logs "$c" >> "$DIAG/container-logs.txt" 2>&1
-done
 
 # Phase 2: Assert
 FAIL=0
@@ -105,8 +145,32 @@ check() {
     fi
 }
 
+check_same() {
+    local name=$1 actual=$2 expected=$3
+    if cmp -s "$actual" "$expected"; then
+        echo "${name}_OK"
+    else
+        echo "${name}_FAIL (response differs from index.html)"
+        FAIL=1
+    fi
+}
+
 check api "$DIAG/api-response.txt" temperatureC
 check staticsite "$DIAG/staticsite-response.txt" Weather
+check staticsite_status "$DIAG/staticsite-status.txt" '^200$'
+check staticsite_deep_status "$DIAG/staticsite-deep-status.txt" '^200$'
+check_same staticsite_deep "$DIAG/staticsite-deep-response.txt" "$DIAG/staticsite-response.txt"
+check staticsite_nested_status "$DIAG/staticsite-nested-status.txt" '^200$'
+check_same staticsite_nested "$DIAG/staticsite-nested-response.txt" "$DIAG/staticsite-response.txt"
+check staticsite_head "$DIAG/staticsite-head-status.txt" '^200$'
+check staticsite_post "$DIAG/staticsite-post-status.txt" '^405$'
+check staticsite_missing_asset "$DIAG/staticsite-missing-asset-status.txt" '^404$'
+check staticsite_api_status "$DIAG/staticsite-api-status.txt" '^200$'
+check staticsite_api "$DIAG/staticsite-api-response.txt" temperatureC
+check staticsite_missing_api_status "$DIAG/staticsite-missing-api-status.txt" '^404$'
+check staticsite_missing_api "$DIAG/staticsite-missing-api-response.txt" 'API route not found'
+check static_no_fallback "$DIAG/static-no-fallback-response.txt" Weather
+check static_no_fallback_deep "$DIAG/static-no-fallback-deep-status.txt" '^404$'
 check nodeserver "$DIAG/nodeserver-response.txt" PublishAsNodeServer
 check npmscript "$DIAG/npmscript-response.txt" PublishAsPackageScript
 check nextjs "$DIAG/nextjs-response.txt" "Next.js"

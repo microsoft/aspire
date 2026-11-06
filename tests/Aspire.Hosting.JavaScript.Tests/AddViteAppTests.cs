@@ -6,11 +6,13 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
@@ -148,8 +150,86 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
 
         Assert.Equal("true", env["YARP_ENABLE_STATIC_FILES"]);
+        Assert.Equal("aspireSpaFallback", env["REVERSEPROXY__ROUTES__aspireSpaFallback__CLUSTERID"]);
+        Assert.Equal("2147483647", env["REVERSEPROXY__ROUTES__aspireSpaFallback__ORDER"]);
+        Assert.Equal("/{**path:nonfile}", env["REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__PATH"]);
+        Assert.Equal("GET", env["REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__METHODS__0"]);
+        Assert.Equal("HEAD", env["REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__METHODS__1"]);
+        Assert.Equal("*", env["REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__HOSTS__0"]);
+        Assert.Equal("/index.html", env["REVERSEPROXY__ROUTES__aspireSpaFallback__TRANSFORMS__0__PATHSET"]);
+        Assert.Equal("http://127.0.0.1:{vite.bindings.http.targetPort}", env["REVERSEPROXY__CLUSTERS__aspireSpaFallback__DESTINATIONS__self__ADDRESS"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_URLS"));
+        Assert.Equal("true", env["YARP_DISABLE_SPA_FALLBACK"]);
         // PORT is set by the endpoint — verify it's present
         Assert.True(env.ContainsKey("PORT"), "PORT should be set by the HTTP endpoint");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishAsStaticWebsiteCanDisableSpaFallback(bool polyglot)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddViteApp("vite", workspace.Path);
+        if (polyglot)
+        {
+            nodeApp.PublishAsStaticWebsitePolyglot(enableSpaFallback: false);
+        }
+        else
+        {
+            nodeApp.PublishAsStaticWebsite(options => options.EnableSpaFallback = false);
+        }
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.Equal("true", env["YARP_ENABLE_STATIC_FILES"]);
+        Assert.Equal("true", env["YARP_DISABLE_SPA_FALLBACK"]);
+        Assert.Equal(Array.Empty<string>(), env.Keys.Where(key => key.StartsWith("REVERSEPROXY__", StringComparison.OrdinalIgnoreCase)).ToArray());
+    }
+
+    [Fact]
+    public async Task PublishAsStaticWebsiteUsesUpdatedTargetPort()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
+            .PublishAsStaticWebsite()
+            .WithEndpoint("http", endpoint => endpoint.TargetPort = 6200);
+
+        var testProvider = new TestServiceProvider().AddService(Options.Create(new DcpOptions()));
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Run, testProvider);
+
+        Assert.Equal("http://127.0.0.1:6200", env["REVERSEPROXY__CLUSTERS__aspireSpaFallback__DESTINATIONS__self__ADDRESS"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_URLS"));
+        Assert.Equal("6200", env["PORT"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishAsStaticWebsitePreservesExplicitListeningUrls(bool configureFirst)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var nodeApp = builder.AddViteApp("vite", workspace.Path);
+        if (configureFirst)
+        {
+            nodeApp.WithEnvironment("ASPNETCORE_URLS", "http://+:6200");
+        }
+
+        nodeApp.PublishAsStaticWebsite();
+        if (!configureFirst)
+        {
+            nodeApp.WithEnvironment("ASPNETCORE_URLS", "http://+:6200");
+        }
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.Equal("http://+:6200", env["ASPNETCORE_URLS"]);
     }
 
     [Fact]
@@ -178,6 +258,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         Assert.Equal("true", env["YARP_ENABLE_STATIC_FILES"]);
         Assert.Equal("api", env["REVERSEPROXY__ROUTES__api__CLUSTERID"]);
         Assert.Equal("/api/{**catch-all}", env["REVERSEPROXY__ROUTES__api__MATCH__PATH"]);
+        Assert.Equal("/{**path:nonfile}", env["REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__PATH"]);
         Assert.False(env.ContainsKey("REVERSEPROXY__ROUTES__api__TRANSFORMS__0__PATHREMOVEPREFIX"), "StripPrefix defaults to false");
         Assert.True(env.ContainsKey("REVERSEPROXY__CLUSTERS__api__DESTINATIONS__destination1__ADDRESS"));
     }

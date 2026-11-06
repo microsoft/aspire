@@ -1,11 +1,19 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Yarp.Transforms;
 using Aspire.TestUtilities;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 
 namespace Aspire.Hosting.Yarp.Tests;
 
@@ -28,6 +36,148 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
                        .WithTransformPathRemovePrefix("/aspnetapp");
             });
         });
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public async Task StaticFilesServeSpaFallbackWithExpectedProxyRoutePriority()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var frontendPath = Path.Combine(workspace.Path, "frontend");
+        var backendPath = Path.Combine(workspace.Path, "backend");
+        Directory.CreateDirectory(frontendPath);
+        Directory.CreateDirectory(backendPath);
+        await File.WriteAllTextAsync(Path.Combine(frontendPath, "index.html"), "<html>SPA index</html>");
+        await File.WriteAllTextAsync(Path.Combine(frontendPath, "app.js"), "console.log('app');");
+        await File.WriteAllTextAsync(Path.Combine(frontendPath, "plain-file"), "static file");
+        await File.WriteAllTextAsync(Path.Combine(backendPath, "api.txt"), "backend response");
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var backend = builder.AddYarp("backend")
+            .WithStaticFiles(backendPath)
+            .WithHttpHealthCheck("/api.txt", endpointName: "http");
+
+        var frontend = builder.AddYarp("frontend")
+            .WithEndpoint("http", endpoint => endpoint.TargetPort = 6200)
+            .WithEnvironment("ASPNETCORE_URLS", "http://+:6200")
+            .WithStaticFiles(frontendPath)
+            .WithSpaFallback()
+            .WithConfiguration(config =>
+            {
+                config.AddRoute("/api/{**catch-all}", backend.GetEndpoint("http"))
+                    .WithTransformPathRemovePrefix("/api")
+                    .WithOrder(int.MaxValue);
+            })
+            .WithHttpHealthCheck("/index.html", endpointName: "http");
+
+        var catchAll = builder.AddYarp("catchall")
+            .WithStaticFiles(frontendPath)
+            .WithSpaFallback()
+            .WithConfiguration(config => config.AddRoute("/{**catch-all}", backend.GetEndpoint("http")))
+            .WithHttpHealthCheck("/index.html", endpointName: "http");
+
+        var fallbackOrderCatchAll = builder.AddYarp("fallbackorder")
+            .WithStaticFiles(frontendPath)
+            .WithSpaFallback()
+            .WithConfiguration(config => config.AddRoute("/{**catch-all}", backend.GetEndpoint("http")).WithOrder(int.MaxValue))
+            .WithHttpHealthCheck("/index.html", endpointName: "http");
+
+        using var app = builder.Build();
+        using var startTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        await app.StartAsync(startTimeout.Token);
+
+        using var readyTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        await Task.WhenAll(
+            app.ResourceNotifications.WaitForResourceHealthyAsync(backend.Resource.Name, readyTimeout.Token),
+            app.ResourceNotifications.WaitForResourceHealthyAsync(frontend.Resource.Name, readyTimeout.Token),
+            app.ResourceNotifications.WaitForResourceHealthyAsync(catchAll.Resource.Name, readyTimeout.Token),
+            app.ResourceNotifications.WaitForResourceHealthyAsync(fallbackOrderCatchAll.Resource.Name, readyTimeout.Token));
+
+        using var client = app.CreateHttpClient(frontend.Resource.Name, "http");
+        client.Timeout = TimeSpan.FromSeconds(15);
+
+        Assert.Equal("<html>SPA index</html>", await client.GetStringAsync("/"));
+        Assert.Equal("<html>SPA index</html>", await client.GetStringAsync("/test"));
+        Assert.Equal("<html>SPA index</html>", await client.GetStringAsync("/test/nested?query=value"));
+        Assert.Equal("console.log('app');", await client.GetStringAsync("/app.js"));
+        // The image does not serve files without a recognized content type.
+        Assert.Equal("<html>SPA index</html>", await client.GetStringAsync("/plain-file"));
+
+        using var missingAsset = await client.GetAsync("/missing.js");
+        Assert.Equal(HttpStatusCode.NotFound, missingAsset.StatusCode);
+
+        using var headRequest = new HttpRequestMessage(HttpMethod.Head, "/test");
+        using var headResponse = await client.SendAsync(headRequest);
+        Assert.Equal(HttpStatusCode.OK, headResponse.StatusCode);
+        Assert.Equal(string.Empty, await headResponse.Content.ReadAsStringAsync());
+
+        using var postResponse = await client.PostAsync("/test", content: null);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, postResponse.StatusCode);
+
+        Assert.Equal("backend response", await client.GetStringAsync("/api/api.txt"));
+        using var missingApi = await client.GetAsync("/api/missing");
+        Assert.Equal(HttpStatusCode.NotFound, missingApi.StatusCode);
+
+        using var backendClient = app.CreateHttpClient(backend.Resource.Name, "http");
+        backendClient.Timeout = TimeSpan.FromSeconds(15);
+        using var defaultResponse = await backendClient.GetAsync("/test");
+        Assert.Equal(HttpStatusCode.NotFound, defaultResponse.StatusCode);
+
+        using var catchAllClient = app.CreateHttpClient(catchAll.Resource.Name, "http");
+        catchAllClient.Timeout = TimeSpan.FromSeconds(15);
+        Assert.Equal("backend response", await catchAllClient.GetStringAsync("/api.txt"));
+        using var missingCatchAll = await catchAllClient.GetAsync("/test");
+        Assert.Equal(HttpStatusCode.NotFound, missingCatchAll.StatusCode);
+
+        using var fallbackOrderClient = app.CreateHttpClient(fallbackOrderCatchAll.Resource.Name, "http");
+        fallbackOrderClient.Timeout = TimeSpan.FromSeconds(15);
+        Assert.Equal("backend response", await fallbackOrderClient.GetStringAsync("/api.txt"));
+        Assert.Equal("<html>SPA index</html>", await fallbackOrderClient.GetStringAsync("/test"));
+
+        await app.StopAsync();
+    }
+
+    [Theory]
+    [InlineData(true, "Aspire fallback")]
+    [InlineData(false, "native fallback")]
+    public async Task GeneratedFallbackCanCoexistWithNativeFallback(bool enableAspireFallback, string expectedResponse)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "index.html"), "native fallback");
+
+        var backendBuilder = WebApplication.CreateSlimBuilder();
+        backendBuilder.WebHost.UseUrls("http://127.0.0.1:0");
+        await using var backend = backendBuilder.Build();
+        backend.MapGet("/index.html", () => "Aspire fallback");
+        await backend.StartAsync();
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var yarp = builder.AddYarp("yarp").WithStaticFiles().WithSpaFallback(enableAspireFallback);
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(yarp.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+        var proxySettings = environment
+            .Where(item => item.Key.StartsWith("REVERSEPROXY__", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(item => item.Key.Replace("__", ":"), item => (string?)item.Value);
+        if (enableAspireFallback)
+        {
+            proxySettings["REVERSEPROXY:CLUSTERS:aspireSpaFallback:DESTINATIONS:self:ADDRESS"] = backend.Urls.Single();
+        }
+
+        var proxyBuilder = WebApplication.CreateSlimBuilder();
+        proxyBuilder.WebHost.UseUrls("http://127.0.0.1:0");
+        proxyBuilder.Configuration.AddInMemoryCollection(proxySettings);
+        proxyBuilder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        proxyBuilder.Services.AddReverseProxy().LoadFromConfig(proxyBuilder.Configuration.GetSection("REVERSEPROXY"));
+        using var files = new PhysicalFileProvider(workspace.Path);
+        await using var proxy = proxyBuilder.Build();
+        proxy.MapReverseProxy();
+        proxy.MapFallbackToFile("index.html", new StaticFileOptions { FileProvider = files });
+        await proxy.StartAsync();
+
+        using var client = new HttpClient { BaseAddress = new Uri(proxy.Urls.Single()), Timeout = TimeSpan.FromSeconds(15) };
+        using var response = await client.GetAsync("/test");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(expectedResponse, await response.Content.ReadAsStringAsync());
     }
 
     private async Task VerifyYarpResource(Action<IResourceBuilder<YarpResource>, EndpointReference> configurator)
