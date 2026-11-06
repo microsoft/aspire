@@ -122,7 +122,7 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
             // The frontend is a build-only resource whose output is copied into the API container.
             // A separate workload would expose the wrong production model and duplicate the public surface.
             await auto.RunCommandAsync(
-                $"test -z \"$(kubectl get deployments,pods,services -n {k8sNamespace} -l app.kubernetes.io/component=frontend -o name)\"",
+                $"frontend_workloads=$(kubectl get deployments,pods,services -n {k8sNamespace} -l app.kubernetes.io/component=frontend -o name) && test -z \"$frontend_workloads\"",
                 counter);
 
             // Verify the API container serves the SPA, one of its compiled assets, and the API endpoint
