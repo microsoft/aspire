@@ -3,8 +3,10 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Aspire.Hosting;
+using StreamJsonRpc;
 
 namespace Aspire.Managed.Tests;
 
@@ -97,6 +99,45 @@ public partial class TerminalHostSignalTests
     [Fact]
     public async Task TerminalHostSubcommandStopsWhenOwningAppHostIsGone()
         => await AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(hostAssemblyPath: null);
+
+    [Fact]
+    public async Task RequestShutdownAsyncDeliversNotificationBeforeClosingConnection()
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var controlPath = Path.Combine(root.FullName, "c.sock");
+            using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            listener.Bind(new UnixDomainSocketEndPoint(controlPath));
+            listener.Listen();
+
+            // Repeat so later requests run on a warm JsonRpc path, where closing the socket
+            // right after NotifyAsync used to beat the background write of the notification.
+            for (var i = 0; i < 5; i++)
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var serverTask = ReceiveShutdownAsync(listener, timeout.Token);
+                await TerminalHostForwarder.RequestShutdownAsync(["--control-uds", controlPath], timeout.Token);
+                Assert.True(await serverTask, $"Shutdown request {i} closed the connection without delivering the notification.");
+            }
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+
+        static async Task<bool> ReceiveShutdownAsync(Socket listener, CancellationToken cancellationToken)
+        {
+            using var client = await listener.AcceptAsync(cancellationToken);
+            using var stream = new NetworkStream(client);
+            var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var rpc = new JsonRpc(stream);
+            rpc.AddLocalRpcMethod("shutdown", new Action(() => received.TrySetResult()));
+            rpc.StartListening();
+            await Task.WhenAny(received.Task, rpc.Completion).WaitAsync(cancellationToken);
+            return received.Task.IsCompletedSuccessfully;
+        }
+    }
 
     [Fact]
     public async Task TerminalHostControlShutdownUnlinksSockets()
