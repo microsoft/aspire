@@ -11,6 +11,6 @@ internal static class WebPubSubEmulatorContainerImageTags
     /// <remarks>webpubsub/emulator</remarks>
     public const string Image = "webpubsub/emulator";
 
-    /// <remarks>1.0.0-beta.2</remarks>
-    public const string Tag = "1.0.0-beta.2";
+    /// <remarks>1.0.0-beta.3</remarks>
+    public const string Tag = "1.0.0-beta.3";
 }
