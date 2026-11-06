@@ -63,7 +63,7 @@ public class ContainerRuntimeBaseTests
             ["PATH"] = """C:\path with spaces\trailing\""",
             ["QUOTED_PATH"] = """C:\path\"quoted"\file""",
             ["EMPTY"] = "",
-            ["INHERITED"] = null
+            [$"ASPIRE_BUILD_ARG_{Guid.NewGuid():N}"] = null
         };
 
         await runtime.BuildImageAsync(contextPath, dockerfile,
@@ -86,6 +86,10 @@ public class ContainerRuntimeBaseTests
         expected.AddRange(["build", "--file", dockerfile, "--tag", "myapp:latest"]);
         foreach (var (key, value) in values)
         {
+            if (runtimeName == KnownContainerRuntimes.Wslc && value is null)
+            {
+                continue;
+            }
             expected.AddRange(["--build-arg", value is null ? key : $"{key}={value}"]);
         }
         expected.AddRange([

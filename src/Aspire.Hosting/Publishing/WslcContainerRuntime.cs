@@ -77,7 +77,14 @@ internal sealed class WslcContainerRuntime : ContainerRuntimeBase<WslcContainerR
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
         var normalizedContextPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(contextPath));
         var arguments = new List<string> { "build", "--file", dockerfilePath, "--tag", imageName };
-        arguments.AddRange(BuildArguments(buildArguments));
+        // WSLc runs buildx inside its VM, so bare --build-arg KEY cannot inherit the host environment.
+        foreach (var (key, value) in buildArguments)
+        {
+            if ((value ?? Environment.GetEnvironmentVariable(key)) is { } resolvedValue)
+            {
+                arguments.AddRange(["--build-arg", $"{key}={resolvedValue}"]);
+            }
+        }
         arguments.AddRange(BuildSecrets(buildSecrets, useCsv: true));
         arguments.AddRange(BuildStage(stage));
         arguments.Add(normalizedContextPath);

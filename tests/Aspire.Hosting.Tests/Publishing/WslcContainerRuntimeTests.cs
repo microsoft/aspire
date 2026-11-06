@@ -38,12 +38,13 @@ public class WslcContainerRuntimeTests(ITestOutputHelper output)
     {
         var runner = new TestProcessRunner();
         var runtime = new WslcContainerRuntime(NullLogger<WslcContainerRuntime>.Instance, runner);
+        var unsetVariable = $"ASPIRE_WSLC_BUILD_ARG_{Guid.NewGuid():N}";
 
         await runtime.BuildImageAsync(
             "context",
             "Dockerfile",
             new ContainerImageBuildOptions { ImageName = "myapp", Tag = "latest", ImageFormat = ContainerImageFormat.Docker },
-            new() { ["VERSION"] = "1.0", ["INHERITED"] = null },
+            new() { ["VERSION"] = "1.0", [unsetVariable] = null },
             new()
             {
                 ["token"] = new("secret-value", BuildImageSecretType.Environment),
@@ -55,12 +56,52 @@ public class WslcContainerRuntimeTests(ITestOutputHelper output)
         var spec = Assert.Single(runner.ProcessSpecs);
         Assert.Equal("wslc", spec.ExecutablePath);
         Assert.Equal(
-            ["build", "--file", "Dockerfile", "--tag", "myapp:latest", "--build-arg", "VERSION=1.0", "--build-arg", "INHERITED",
+            ["build", "--file", "Dockerfile", "--tag", "myapp:latest", "--build-arg", "VERSION=1.0",
                 "--secret", "id=token,type=env,env=TOKEN", "--secret", "id=file,type=file,src=secret.txt", "--target", "final",
                 Path.GetFullPath("context")],
             spec.ArgumentList);
         Assert.Equal("secret-value", spec.EnvironmentVariables["TOKEN"]);
         Assert.Equal(1, Assert.Single(runner.Disposables).DisposeCallCount);
+    }
+
+    [Theory]
+    [InlineData(null, null, null)]
+    [InlineData("host-value", null, "host-value")]
+    [InlineData("", null, "")]
+    [InlineData("""say "hello world" C:\path with spaces\trailing\ a=b""", null, """say "hello world" C:\path with spaces\trailing\ a=b""")]
+    [InlineData("host-value", "explicit-value", "explicit-value")]
+    [InlineData("host-value", "", "")]
+    [InlineData(null, "", "")]
+    public async Task BuildImageAsync_ResolvesInheritedBuildArguments(string? hostValue, string? explicitValue, string? expectedValue)
+    {
+        var variable = $"ASPIRE_WSLC_BUILD_ARG_{Guid.NewGuid():N}";
+        var runner = new TestProcessRunner();
+        var runtime = new WslcContainerRuntime(NullLogger<WslcContainerRuntime>.Instance, runner);
+        try
+        {
+            Environment.SetEnvironmentVariable(variable, hostValue);
+            Assert.Equal(hostValue, Environment.GetEnvironmentVariable(variable));
+            var buildArguments = new Dictionary<string, string?> { [variable] = explicitValue };
+
+            await runtime.BuildImageAsync(
+                "context", "Dockerfile", new ContainerImageBuildOptions { ImageName = "myapp" },
+                buildArguments, [], null, TestContext.Current.CancellationToken);
+
+            var expected = new List<string> { "build", "--file", "Dockerfile", "--tag", "myapp" };
+            if (expectedValue is not null)
+            {
+                expected.AddRange(["--build-arg", $"{variable}={expectedValue}"]);
+            }
+            expected.Add(Path.GetFullPath("context"));
+            var spec = Assert.Single(runner.ProcessSpecs);
+            Assert.Null(spec.Arguments);
+            Assert.Equal(expected, spec.ArgumentList);
+            Assert.Equal(explicitValue, buildArguments[variable]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
     }
 
     [Theory]
