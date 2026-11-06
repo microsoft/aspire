@@ -720,13 +720,13 @@ public class AtsGoCodeGeneratorTests
                 }
 
                 func TestReadMessageBoundsHeaders(t *testing.T) {
-                    for name, headers := range map[string]string{
-                        "unterminated line": strings.Repeat("x", maxHeaderSize + 1),
-                        "too many headers": strings.Repeat("X: y\r\n", maxHeaderCount + 1),
-                        "total size": strings.Repeat("X: " + strings.Repeat("y", 1020) + "\r\n", 9),
+                    for name, tc := range map[string]struct{ headers, want string }{
+                        "unterminated line": {strings.Repeat("x", maxHeaderSize + 1), "AppHost message headers exceed 8192 bytes"},
+                        "too many headers": {strings.Repeat("X: y\r\n", maxHeaderCount + 1), "AppHost message has more than 16 headers"},
+                        "total size": {strings.Repeat("X: " + strings.Repeat("y", 1020) + "\r\n", 9), "AppHost message headers exceed 8192 bytes"},
                     } {
-                        if _, err := readMessage(bufio.NewReader(strings.NewReader(headers + "\r\n{}"))); err == nil {
-                            t.Errorf("%s: oversized header block was accepted", name)
+                        if _, err := readMessage(bufio.NewReader(strings.NewReader(tc.headers + "\r\n{}"))); err == nil || err.Error() != tc.want {
+                            t.Errorf("%s: got %v, want %q", name, err, tc.want)
                         }
                     }
                     // A long but valid line may span several reader buffers.
@@ -1156,14 +1156,16 @@ public class AtsGoCodeGeneratorTests
                 }
                 """, timeout.Token);
 
-            using var process = Process.Start(new ProcessStartInfo("go")
+            var startInfo = new ProcessStartInfo("go")
             {
                 WorkingDirectory = directory.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 ArgumentList = { "test", "-timeout", "30s", "." }
-            })!;
+            };
+            EnableGoRaceDetection(startInfo);
+            using var process = Process.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
             try
@@ -1349,14 +1351,16 @@ public class AtsGoCodeGeneratorTests
                 }
                 """, timeout.Token);
 
-            using var process = Process.Start(new ProcessStartInfo("go")
+            var startInfo = new ProcessStartInfo("go")
             {
                 WorkingDirectory = directory.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 ArgumentList = { "test", "-timeout", "30s", "." }
-            })!;
+            };
+            EnableGoRaceDetection(startInfo);
+            using var process = Process.Start(startInfo)!;
             var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
             try
@@ -1376,6 +1380,17 @@ public class AtsGoCodeGeneratorTests
         finally
         {
             directory.Delete(recursive: true);
+        }
+    }
+
+    private static void EnableGoRaceDetection(ProcessStartInfo startInfo)
+    {
+        // Linux CI runners provide GCC; Go's race detector needs cgo and a C compiler.
+        // Keep ordinary runtime coverage on Windows, where that toolchain is not guaranteed.
+        if (OperatingSystem.IsLinux())
+        {
+            startInfo.ArgumentList.Insert(1, "-race");
+            startInfo.Environment["CGO_ENABLED"] = "1";
         }
     }
 
