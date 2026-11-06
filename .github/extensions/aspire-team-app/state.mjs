@@ -8,7 +8,8 @@
 // account watches its own set and any number of accounts can be active at once.
 // Results from every active account are interleaved into the same tabs.
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_PROXIMA_REPOS, DEFAULT_REPOS, CURRENT_RELEASE } from "./github.mjs";
@@ -31,6 +32,7 @@ export const DEFAULT_PREFS = {
   release: CURRENT_RELEASE,
   showDrafts: false,
   autoApplyUpdates: true,
+  detachedSessions: false,
   dismissedNotifications: [],
   notifications: { ...DEFAULT_NOTIFICATIONS },
   azurePipelines: [],
@@ -62,6 +64,7 @@ function migrate(parsed) {
     ...parsed,
     showDrafts: !!parsed.showDrafts,
     autoApplyUpdates: parsed.autoApplyUpdates !== false,
+    detachedSessions: parsed.detachedSessions === true,
     notifications: { ...DEFAULT_NOTIFICATIONS, ...(parsed.notifications ?? {}) },
     dismissedNotifications: Array.isArray(parsed.dismissedNotifications) ? parsed.dismissedNotifications : [],
     azurePipelines: normalizeAzurePipelines(parsed.azurePipelines),
@@ -96,7 +99,15 @@ export async function loadPrefs() {
 
 export async function savePrefs(prefs) {
   await mkdir(ARTIFACT_DIR, { recursive: true });
-  await writeFile(PREFS_FILE, JSON.stringify(prefs, null, 2) + "\n", "utf8");
+  // Dispatch-time reads do not use the update queue. Replace the file only after writing
+  // complete JSON, so readers keep the last saved preferences instead of falling back to defaults.
+  const pendingFile = join(ARTIFACT_DIR, `preferences.${randomUUID()}.pending`);
+  try {
+    await writeFile(pendingFile, JSON.stringify(prefs, null, 2) + "\n", { encoding: "utf8", flag: "wx" });
+    await rename(pendingFile, PREFS_FILE);
+  } finally {
+    await rm(pendingFile, { force: true });
+  }
   return prefs;
 }
 

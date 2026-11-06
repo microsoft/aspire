@@ -29,12 +29,54 @@ public class AzureAppServiceEnvironmentResource :
     AzureProvisioningResource,
     IAzureComputeEnvironmentResource,
     IAzureContainerRegistry,
-    IAzureDelegatedSubnetResource
+    IAzureDelegatedSubnetResource,
+    IAzureCdnPrivateLinkTarget
 #pragma warning restore CS0618 // Type or member is obsolete
 #pragma warning restore ASPIREAZURE003
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure App Service Environment";
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.AppServiceEnvironments;
+
+#pragma warning disable ASPIREAZURE003 // Private networking APIs are experimental.
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(IResource origin) =>
+        new("resourceId", GetPrivateLinkWebsite(origin));
+
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(IResource origin) =>
+        new("resourceLocation", GetPrivateLinkWebsite(origin));
+
+    string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "sites";
+
+    internal bool IsPublicNetworkAccessDisabled => this.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+#pragma warning restore ASPIREAZURE003
+
+    private readonly Dictionary<IResource, AzureAppServiceWebSiteResource> _websites = new(new ResourceNameComparer());
+
+    internal AzureAppServiceWebSiteResource GetOrCreateWebsite(IResource origin)
+    {
+        if (!_websites.TryGetValue(origin, out var website))
+        {
+            // Front Door discovers Azure dependencies before BeforeStart materializes deployment targets.
+            // Keep the website's identity stable across those phases, but defer building its template until
+            // the environment context has processed endpoints, identities, and environment variables.
+            website = new AzureAppServiceWebSiteResource(origin.Name + "-website", infrastructure =>
+            {
+                if (!this.TryGetLastAnnotation<AzureAppServiceEnvironmentContextAnnotation>(out var annotation))
+                {
+                    throw new InvalidOperationException($"App Service environment '{Name}' has not prepared its deployment targets.");
+                }
+
+                annotation.EnvironmentContext.GetAppServiceContext(origin).BuildWebSite(infrastructure);
+            }, origin);
+            _websites.Add(origin, website);
+        }
+
+        return website;
+    }
+
+    private AzureAppServiceWebSiteResource GetPrivateLinkWebsite(IResource origin) => GetOrCreateWebsite(origin);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureAppServiceEnvironmentResource"/> class.
@@ -520,6 +562,12 @@ public class AzureAppServiceEnvironmentResource :
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && (!endpoint.IsExternal || endpoint.UriScheme is not ("http" or "https")))
+        {
+            throw new NotSupportedException(
+                $"Azure App Service environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.");
+        }
         var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
         var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
         var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
@@ -527,6 +575,8 @@ public class AzureAppServiceEnvironmentResource :
 
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host,
             EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),

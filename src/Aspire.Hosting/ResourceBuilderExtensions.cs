@@ -2247,9 +2247,16 @@ public static class ResourceBuilderExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
-    /// The callback will be executed after endpoints have been allocated for this resource.<br/>
+    /// The callback will be executed after endpoints have been allocated for this resource and before
+    /// <see cref="ResourceEndpointsAllocatedEvent"/> handlers run.<br/>
     /// This allows you to modify any URLs for the resource, including adding, modifying, or even deletion.<br/>
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
+    /// </para>
+    /// <para>
+    /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
+    /// Browser references are finalized after these callbacks. Resolving unfinished browser references from a URL callback
+    /// throws <see cref="InvalidOperationException"/> rather than waiting; already-finalized browser references remain available.
     /// </para>
     /// <example>
     /// Update all displayed URLs to have display text:
@@ -2305,9 +2312,16 @@ public static class ResourceBuilderExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// The callback will be executed after endpoints have been allocated for this resource.<br/>
+    /// The callback will be executed after endpoints have been allocated for this resource and before
+    /// <see cref="ResourceEndpointsAllocatedEvent"/> handlers run.<br/>
     /// This allows you to modify any URLs for the resource, including adding, modifying, or even deletion.<br/>
     /// Note that any endpoints on the resource will automatically get a corresponding URL added for them.
+    /// </para>
+    /// <para>
+    /// Final origins associated with the resource's own endpoints are exposed through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// Preferred browser values follow display ordering; origin collections deduplicate scheme, host, and port.
+    /// Browser references are finalized after these callbacks. Resolving unfinished browser references from a URL callback
+    /// throws <see cref="InvalidOperationException"/> rather than waiting; already-finalized browser references remain available.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the synchronous Action<> overload via withUrlsCallback.")]
@@ -2466,8 +2480,14 @@ public static class ResourceBuilderExtensions
     /// To add another URL for an endpoint, use <see cref="WithUrlForEndpoint{T}(IResourceBuilder{T}, string, Func{EndpointReference, ResourceUrlAnnotation})"/>.
     /// </para>
     /// <para>
-    /// The callback will be executed after endpoints have been allocated and the URL has been generated.<br/>
+    /// The callback will be executed after endpoints have been allocated and the URL has been generated,
+    /// but before <see cref="ResourceEndpointsAllocatedEvent"/> handlers run.<br/>
     /// This allows you to modify the URL or its display text.
+    /// </para>
+    /// <para>
+    /// The preferred finalized origin is available through <see cref="EndpointReference.PrimaryBrowserOrigin"/>,
+    /// and all origins through <see cref="EndpointReference.BrowserOrigins"/>.
+    /// Localhost and container network references are unchanged.
     /// </para>
     /// <para>
     /// If the URL returned by <paramref name="callback"/> is relative, it will be combined with the endpoint URL to create an absolute URL.
@@ -5111,6 +5131,34 @@ public static class ResourceBuilderExtensions
     {
         var childBuilder = builder.ApplicationBuilder.CreateResourceBuilder(child);
         return builder.WithChildRelationship(childBuilder);
+    }
+
+    /// <summary>
+    /// Overrides the human-readable resource type label.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="resourceTypeDisplayName">The type label, such as Redis or PostgreSQL Server.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// When not specified, the resource class supplies the default label, falling back to the resource type.
+    /// This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+    /// Repeated calls replace the previous override.
+    /// </remarks>
+    /// <example>
+    /// <code lang="C#">
+    /// builder.AddProject&lt;Projects.Orders&gt;("orders").WithResourceTypeDisplayName("Orders API");
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">The builder is null.</exception>
+    /// <exception cref="ArgumentException">The resource type display name is empty or whitespace.</exception>
+    [AspireExport]
+    public static IResourceBuilder<T> WithResourceTypeDisplayName<T>(this IResourceBuilder<T> builder, string resourceTypeDisplayName) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceTypeDisplayName);
+
+        return builder.WithAnnotation(new ResourceTypeDisplayNameAnnotation(resourceTypeDisplayName), ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>

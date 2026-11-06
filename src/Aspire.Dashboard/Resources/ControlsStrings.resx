@@ -186,15 +186,6 @@
   <data name="ParameterSetValueAction" xml:space="preserve">
     <value>Click to set parameter value</value>
   </data>
-  <data name="ParameterEditShortAction" xml:space="preserve">
-    <value>Edit</value>
-  </data>
-  <data name="ParameterSetShortAction" xml:space="preserve">
-    <value>Set</value>
-  </data>
-  <data name="ParameterDeleteShortAction" xml:space="preserve">
-    <value>Delete</value>
-  </data>
   <data name="ParameterDeleteValueAction" xml:space="preserve">
     <value>Delete value</value>
   </data>

@@ -1,0 +1,8 @@
+﻿{
+  "agent_failure_issue.md": "[automated] Requested CI run unavailable: invalid workflow_dispatch run_id.\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "agent_failure_comment.md": "[automated] Requested CI run unavailable: invalid workflow_dispatch run_id.\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "failed_jobs_issue.md": "[automated] Requested CI run unavailable: invalid workflow_dispatch run_id.\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "missing_data_issue.md": "[automated] Requested CI run unavailable: invalid workflow_dispatch run_id.\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "missing_tool_issue.md": "[automated] Requested CI run unavailable: invalid workflow_dispatch run_id.\n\nUpstream report for {workflow_name}.\n\n[Analyzer run]({run_url})\n",
+  "other.md": "Unrelated template\n"
+}

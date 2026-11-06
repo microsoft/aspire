@@ -167,24 +167,9 @@
         <target state="translated">.env 내보내기</target>
         <note />
       </trans-unit>
-      <trans-unit id="ParameterDeleteShortAction">
-        <source>Delete</source>
-        <target state="new">Delete</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">
         <source>Delete value</source>
         <target state="new">Delete value</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ParameterEditShortAction">
-        <source>Edit</source>
-        <target state="new">Edit</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ParameterSetShortAction">
-        <source>Set</source>
-        <target state="new">Set</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">

@@ -33,7 +33,7 @@ import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs 
 import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
-import { runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
+import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
 
 let atomicWriteSequence = 0;
 
@@ -944,6 +944,10 @@ export async function executeE2eControlCommand(
       markStarted();
       return await prepareBlazorWasmDebugger();
     }
+    case 'waitForCSharpProjectInitialization': {
+      markStarted();
+      return await waitForCSharpProjectInitialization(getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs'));
+    }
     case 'proveBlazorWasmDebugging': {
       markStarted();
       return await proveBlazorWasmDebugging(command, appHostTreeProvider, context.logUri.fsPath);
@@ -1456,24 +1460,56 @@ async function proveAttachedResourceDebugging(
       throw new Error('Aspire extension E2E attach proof could not find the registered aspire_resource_debug tool.');
     }
 
+    const fetchResourceResponse = async (phase: 'beforeAttach' | 'attached' | 'detached'): Promise<string | undefined> => {
+      const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
+      if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
+        return undefined;
+      }
+
+      const requestUrl = await resolveResourceRequestUrl(
+        appHostTreeProvider,
+        appHostPath,
+        resourceName,
+        resourceRequestPath,
+        timeoutMs);
+      try {
+        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
+        const body = await response.text();
+        return response.ok && body === expectedResponse ? body : undefined;
+      }
+      catch (error) {
+        throw new Error(`${phase} request to resource '${resourceName}' failed: ${error instanceof Error ? error.name : String(error)}`);
+      }
+    };
     const workspaceRoot = getE2eWorkspacePath(process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT);
     const relativeAppHostPath = path.relative(workspaceRoot, appHostPath).split(path.sep).join('/');
-    const toolCancellation = new vscode.CancellationTokenSource();
-    let languageModelResult: vscode.LanguageModelToolResult;
-    try {
-      languageModelResult = await invokeRegisteredLanguageModelTool(
-        resourceDebugTool,
-        'aspire_resource_debug',
-        {
-          appHostPath: relativeAppHostPath,
-          resourceName,
-          strategy: 'attach',
-        },
-        toolCancellation.token);
-    }
-    finally {
-      toolCancellation.dispose();
-    }
+    const languageModelResult = await attachWhenResourceResponds({
+      waitForResourceResponse: async phase => {
+        const body = await waitForE2eValue(
+          `resource '${resourceName}' response before attaching the debugger`,
+          timeoutMs,
+          () => fetchResourceResponse(phase));
+        extensionLogOutputChannel.info(`Resource debug E2E resource '${resourceName}' responded before attach.`);
+        return body;
+      },
+      attach: async () => {
+        const toolCancellation = new vscode.CancellationTokenSource();
+        try {
+          return await invokeRegisteredLanguageModelTool(
+            resourceDebugTool,
+            'aspire_resource_debug',
+            {
+              appHostPath: relativeAppHostPath,
+              resourceName,
+              strategy: 'attach',
+            },
+            toolCancellation.token);
+        }
+        finally {
+          toolCancellation.dispose();
+        }
+      },
+    });
     const resultPart = languageModelResult.content[0];
     if (!(resultPart instanceof vscode.LanguageModelTextPart)) {
       throw new Error('aspire_resource_debug returned a non-text result.');
@@ -1535,27 +1571,6 @@ async function proveAttachedResourceDebugging(
         }));
 
     const attachedSessionForDetach = attachedSession;
-    const fetchResourceResponse = async (phase: 'attached' | 'detached'): Promise<string | undefined> => {
-      const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
-      if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
-        return undefined;
-      }
-
-      const requestUrl = await resolveResourceRequestUrl(
-        appHostTreeProvider,
-        appHostPath,
-        resourceName,
-        resourceRequestPath,
-        timeoutMs);
-      try {
-        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
-        const body = await response.text();
-        return response.ok && body === expectedResponse ? body : undefined;
-      }
-      catch (error) {
-        throw new Error(`${phase} request to resource '${resourceName}' failed: ${error instanceof Error ? error.name : String(error)}`);
-      }
-    };
     const responseBody = await runAttachedResourceDetachSequence({
       removeBreakpoint: () => {
         breakpointRemovalRequested = true;
@@ -1914,6 +1929,7 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
         matchingStackFrame: resourceHit.matchingFrame,
         topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
       },
+      appHostCodeLenses: await getCodeLensesForFile(appHostSourcePath),
       debugSessions,
       launchRequests,
       debugAdapterResponses,
@@ -3755,6 +3771,52 @@ async function prepareBlazorWasmDebugger(): Promise<BlazorWasmDebuggerStatus> {
   // https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/razor/src/blazorDebug/blazorDebugConfigurationProvider.ts
   const bridgePath = path.join(extension.extensionPath, '.vswebassemblybridge', 'Microsoft.Diagnostics.BrowserDebugHost.dll');
   return fs.existsSync(bridgePath) && fs.statSync(bridgePath).isFile() ? 'ready' : 'missing-bridge';
+}
+
+/**
+ * Waits until the C# language server has finished its initial project load.
+ *
+ * Without Dev Kit, the pinned C# extension enumerates the workspace's `*.csproj` files once, when its
+ * language server starts, and Roslyn then design-time builds each of them. On Windows the in-process
+ * MSBuild build makes the project directory the BuildHost's current directory, so a fixture created
+ * while that discovery is still pending gets loaded and cannot be deleted until the load finishes.
+ * Specs that create and delete project fixtures in the workspace wait here first so the language
+ * server's project set is fixed before their fixtures exist.
+ *
+ * initializationFinished() resolves after the server reports project initialization complete, even if
+ * that happened before this call.
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/activateRoslyn.ts
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/lsptoolshost/server/roslynLanguageServer.ts
+ */
+async function waitForCSharpProjectInitialization(timeoutMs: number): Promise<'initialized'> {
+  const extension = vscode.extensions.getExtension<{ initializationFinished?: () => Promise<void> }>(csharpExtensionId);
+  if (!extension) {
+    throw new Error(`${csharpExtensionId} is required to wait for C# project initialization.`);
+  }
+
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      (async () => {
+        const api = await extension.activate();
+        if (typeof api?.initializationFinished !== 'function') {
+          throw new Error(`${csharpExtensionId} did not export initializationFinished(), so C# project initialization cannot be observed.`);
+        }
+
+        await api.initializationFinished();
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`The C# language server did not finish its initial project load within ${timeoutMs}ms.`)), timeoutMs);
+      }),
+    ]);
+  }
+  finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+
+  return 'initialized';
 }
 
 /**

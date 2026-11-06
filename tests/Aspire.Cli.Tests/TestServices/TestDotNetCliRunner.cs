@@ -32,6 +32,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     public Func<FileInfo, string, DirectoryInfo, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, ProcessInvocationOptions, CancellationToken, Task<int>>? RunAppHostCommandAsyncCallback { get; set; }
     public bool InvokeExtensionAppHostLaunchCompletedCallback { get; set; } = true;
     public Func<DirectoryInfo, string, bool, bool, int, int, FileInfo?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, NuGetPackage[]? Packages)>? SearchPackagesAsyncCallback { get; set; }
+    public IReadOnlyList<string> SearchFailedSources { get; init; } = [];
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, IReadOnlyList<FileInfo> Projects)>? GetSolutionProjectsAsyncCallback { get; set; }
     public Func<FileInfo, FileInfo, ProcessInvocationOptions, CancellationToken, int>? AddProjectReferenceAsyncCallback { get; set; }
 
@@ -221,11 +222,13 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : throw new NotImplementedException();
     }
 
-    public Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
-        return SearchPackagesAsyncCallback != null
-            ? Task.FromResult(SearchPackagesAsyncCallback(workingDirectory, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken))
+        var result = SearchPackagesAsyncCallback is not null
+            ? SearchPackagesAsyncCallback(workingDirectory, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken)
             : throw new NotImplementedException();
+
+        return Task.FromResult(new DotNetPackageSearchResult(result.ExitCode, result.Packages, SearchFailedSources));
     }
 
     public Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken)

@@ -150,7 +150,8 @@ public sealed class Scene : IAsyncDisposable
     /// </summary>
     public async Task OpenAsync(string path)
     {
-        await Page.GotoAsync(BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        // Scenes wait for their own controls; a Blazor circuit need not become network-idle.
+        await Page.GotoAsync(BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.DOMContentLoaded });
         await Page.Mouse.MoveAsync((float)_cursorX, (float)_cursorY);
         await Task.Delay(400);
     }

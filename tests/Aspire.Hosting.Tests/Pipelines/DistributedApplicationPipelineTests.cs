@@ -10,6 +10,7 @@
 
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Publishing;
@@ -22,8 +23,36 @@ using Microsoft.AspNetCore.InternalTesting;
 namespace Aspire.Hosting.Tests.Pipelines;
 
 [Trait("Partition", "4")]
-public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHelper)
+public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
+    // Executing the pipeline runs the built-in destroy step, which writes deployment state. Give each
+    // test its own ASPIRE_HOME so tests don't share (and repeatedly replace) one state file under the
+    // real user profile.
+    private readonly DirectoryInfo _aspireHome = Directory.CreateTempSubdirectory("aspire-pipeline-tests-");
+
+    public void Dispose()
+    {
+        _aspireHome.Delete(recursive: true);
+        GC.SuppressFinalize(this);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WritesDeploymentStateUnderTestAspireHome()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        var pipeline = new DistributedApplicationPipeline();
+        using var app = builder.Build();
+        var context = CreateDeployingContext(app);
+
+        var statePath = app.Services.GetRequiredService<IDeploymentStateManager>().StateFilePath;
+
+        await pipeline.ExecuteAsync(context).DefaultTimeout();
+
+        Assert.NotNull(statePath);
+        Assert.StartsWith(_aspireHome.FullName + Path.DirectorySeparatorChar, statePath);
+        Assert.True(File.Exists(FileDeploymentStateManager.GetMigrationStatePath(statePath)));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -2276,6 +2305,83 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     }
 
     [Fact]
+    public async Task ExecuteStepSequentiallyAsync_StepOutsideTargetClosureDependsOnStepMaterializedByTarget_Succeeds()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/20301.
+        // Deployment targets (and their provisioning steps) are materialized while the
+        // before-start step runs, so a user step that depends on one of those steps must not
+        // fail before-start validation. Its dependency is validated once the full pipeline runs.
+        using var builder = CreatePipelineTestBuilder();
+        var executionOrder = new List<string>();
+        var materialized = false;
+        builder.AddResource(new CustomResource("compute"))
+            .WithAnnotation(new PipelineStepAnnotation(_ => materialized
+                ? [new PipelineStep
+                {
+                    Name = "provision-compute",
+                    Action = _ =>
+                    {
+                        executionOrder.Add("provision-compute");
+                        return Task.CompletedTask;
+                    }
+                }]
+                : []));
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+
+        pipeline.AddStep("prepare-targets", _ =>
+        {
+            executionOrder.Add("prepare-targets");
+            materialized = true;
+            return Task.CompletedTask;
+        }, requiredBy: WellKnownPipelineSteps.BeforeStart);
+        pipeline.AddStep("start-job", _ =>
+        {
+            executionOrder.Add("start-job");
+            return Task.CompletedTask;
+        }, dependsOn: "provision-compute");
+
+        await pipeline.Clone().ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, CreateDeployingContext(app)).DefaultTimeout();
+
+        Assert.Equal(["prepare-targets"], executionOrder);
+
+        // Once the deployment target exists, the dependency resolves and runs first.
+        await pipeline.ExecuteStepSequentiallyAsync("start-job", CreateDeployingContext(app)).DefaultTimeout();
+
+        Assert.Equal(["prepare-targets", "provision-compute", "start-job"], executionOrder);
+    }
+
+    [Fact]
+    public async Task ExecuteStepSequentiallyAsync_StepInTargetClosureDependsOnUnknownStep_Throws()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("step1", _ => Task.CompletedTask, dependsOn: "unknown-step", requiredBy: "target");
+        pipeline.AddStep("target", _ => Task.CompletedTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteStepSequentiallyAsync("target", CreateDeployingContext(app))).DefaultTimeout();
+
+        Assert.Equal("Step 'step1' depends on unknown step 'unknown-step'", exception.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteStepSequentiallyAsync_StepInTargetClosureRequiredByUnknownStep_Throws()
+    {
+        using var builder = CreatePipelineTestBuilder();
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("step1", _ => Task.CompletedTask, requiredBy: new[] { "target", "unknown-step" });
+        pipeline.AddStep("target", _ => Task.CompletedTask);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => pipeline.ExecuteStepSequentiallyAsync("target", CreateDeployingContext(app))).DefaultTimeout();
+
+        Assert.Equal("Step 'step1' is required by unknown step 'unknown-step'", exception.Message);
+    }
+
+    [Fact]
     public async Task ExecuteStepSequentiallyAsync_WithMultipleFinalActions_ExecutesInRegistrationOrder()
     {
         using var builder = CreatePipelineTestBuilder();
@@ -2590,6 +2696,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
             .Create(DistributedApplicationOperation.Publish, logLevel: logLevel, step: step)
             .WithTestAndResourceLogging(testOutputHelper);
 
+        builder.Configuration[KnownConfigNames.AspireHome] = _aspireHome.FullName;
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IContainerRuntimeResolver>(new FakeContainerRuntime());
 

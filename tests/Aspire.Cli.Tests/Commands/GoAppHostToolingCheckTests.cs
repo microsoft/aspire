@@ -111,7 +111,7 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
             workspace,
             configuredAppHost,
             commandResolver: _ => null,
-            languageDiscovery: CreateLanguageDiscovery(goEnabled: true));
+            languageDiscovery: CreateLanguageDiscovery());
 
         var results = await check.CheckAsync().DefaultTimeout();
 
@@ -127,7 +127,7 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
             workspace,
             appHostFile: null,
             commandResolver: _ => null,
-            languageDiscovery: CreateLanguageDiscovery(goEnabled: true));
+            languageDiscovery: CreateLanguageDiscovery());
 
         var result = Assert.Single(await check.CheckAsync().DefaultTimeout());
 
@@ -135,22 +135,6 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
         Assert.Equal(GoAppHostToolingCheck.GoCommandCheckName, result.Name);
         Assert.NotNull(result.Metadata);
         Assert.Equal(appHostFile.FullName, result.Metadata["appHostPath"]?.GetValue<string>());
-    }
-
-    [Fact]
-    public async Task CheckAsync_Skips_WhenGoFeatureIsDisabled()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        CreateGoAppHostBesideCSharpProject(workspace);
-        var check = CreateCheck(
-            workspace,
-            appHostFile: null,
-            commandResolver: _ => null,
-            languageDiscovery: CreateLanguageDiscovery(goEnabled: false));
-
-        var results = await check.CheckAsync().DefaultTimeout();
-
-        Assert.Empty(results);
     }
 
     [Fact]
@@ -567,8 +551,8 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
         return CreateGoAppHost(workspace);
     }
 
-    private static DefaultLanguageDiscovery CreateLanguageDiscovery(bool goEnabled) =>
-        new(new TestFeatures().SetFeature(KnownFeatures.ExperimentalPolyglotGo, goEnabled));
+    private static DefaultLanguageDiscovery CreateLanguageDiscovery() =>
+        new(new TestFeatures());
 
     private static GoAppHostToolingCheck CreateCheck(
         TemporaryWorkspace workspace,

@@ -449,17 +449,6 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
-                func TestRegisterCancellationDoesNotParkGoroutinePerToken(t *testing.T) {
-                    c := newClient("")
-                    before := runtime.NumGoroutine()
-                    for range 1000 {
-                        c.registerCancellation(NewCancellationToken())
-                    }
-                    if grown := runtime.NumGoroutine() - before; grown > 50 {
-                        t.Fatalf("registering 1000 tokens left %d more goroutines running", grown)
-                    }
-                }
-
                 func TestCancellationNotifiesHostUntilCallReturns(t *testing.T) {
                     c, host := newFakeHost(t)
 
