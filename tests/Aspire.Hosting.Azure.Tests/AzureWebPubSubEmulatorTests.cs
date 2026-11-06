@@ -37,7 +37,7 @@ public class AzureWebPubSubEmulatorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal($"http://localhost:{port}", await properties["Uri"].GetValueAsync(CancellationToken.None));
 
         var image = Assert.Single(webPubSub.Resource.Annotations.OfType<ContainerImageAnnotation>());
-        Assert.Equal("mcr.microsoft.com/webpubsub/emulator:1.0.0-beta.2", $"{image.Registry}/{image.Image}:{image.Tag}");
+        Assert.Equal("mcr.microsoft.com/webpubsub/emulator:1.0.0-beta.3", $"{image.Registry}/{image.Image}:{image.Tag}");
         Assert.Equal(8080, webPubSub.GetEndpoint("emulator").TargetPort);
     }
 
