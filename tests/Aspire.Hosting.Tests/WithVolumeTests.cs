@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPERSISTENCE001
-
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Tests.Utils;

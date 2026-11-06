@@ -4029,11 +4029,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper).WithResourceCleanUp(true);
-#pragma warning disable ASPIREPERSISTENCE001
         var project = builder.AddDotnetProject("persistent-project", projectPath, options => options.ExcludeLaunchProfile = true)
             .WithPersistentLifetime()
             .WithExplicitStart();
-#pragma warning restore ASPIREPERSISTENCE001
         var metadata = Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>());
         var resolverCallCount = 0;
         metadata.RunPropertiesResolver = (_, _, _, _, _, _) =>
