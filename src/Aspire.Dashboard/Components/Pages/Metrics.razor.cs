@@ -165,6 +165,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         _metricsContentPaneSize = string.Create(CultureInfo.InvariantCulture, $"{100 - clampedPercent}%");
     }
 
+    // Pins are read before parameters are applied, so the default view can open the pinned group.
+    protected override Task OnInitializedAsync() => PinStore.EnsureLoadedAsync();
+
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);

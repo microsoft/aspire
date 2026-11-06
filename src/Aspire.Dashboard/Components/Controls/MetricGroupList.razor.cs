@@ -42,9 +42,10 @@ public partial class MetricGroupList : IDisposable
     [Inject]
     public required MetricPinStore PinStore { get; init; }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         PinStore.Changed += OnPinsChanged;
+        await PinStore.EnsureLoadedAsync();
     }
 
     private void OnPinsChanged()

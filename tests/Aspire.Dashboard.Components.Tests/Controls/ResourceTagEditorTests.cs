@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -35,7 +37,7 @@ public class ResourceTagEditorTests : DashboardTestContext
         Assert.Equal(["backend"], store.GetTags("api"));
     }
 
-    private readonly ResourceTagStore _tagStore = new(databasePath: null, NullLogger.Instance);
+    private readonly ResourceTagStore _tagStore = new(new TestLocalStorage(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
 
     [Fact]
     public void AppHostTagsFromOtherResourcesCanBeAddedAsEditableUserTags()

@@ -158,9 +158,10 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        // The Metrics card lists pinned instruments, which can change on the metrics page in another tab.
+        // The Metrics card lists pinned instruments, which can be changed from the card's charts.
         PinStore.Changed += OnPinsChanged;
         TerminalDockState.Changed += OnTerminalDockStateChanged;
+        await PinStore.EnsureLoadedAsync();
 
         // The console preview hides lines removed with the console logs page's "Remove" action, which are stored
         // as filters in session storage.

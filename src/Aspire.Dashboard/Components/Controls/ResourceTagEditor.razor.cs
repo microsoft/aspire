@@ -46,9 +46,10 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
 
     private string ListboxId => $"{_id}-listbox";
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         TagStore.Changed += OnTagsChanged;
+        await TagStore.EnsureLoadedAsync();
     }
 
     protected override void OnParametersSet()

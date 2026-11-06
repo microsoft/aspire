@@ -292,6 +292,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ViewPreferences.Changed += OnViewPreferencesChanged;
         OrderStore.Changed += OnOrderChanged;
 
+        // Read stored tags and order before resources arrive, so new resources are placed after the stored order
+        // instead of the stored order being merged in after the list was first shown.
+        await Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync());
+
         var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         if (showHiddenResources.Success)
         {
@@ -1328,11 +1332,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
             return false;
         }
-        if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after))
-        {
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderFailed)]);
-            return false;
-        }
+        OrderStore.Move(resource.PersistentKey, target.PersistentKey, after);
 
         _orderStatus = string.Format(CultureInfo.CurrentCulture,
             Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
@@ -1356,11 +1356,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
             return false;
         }
-        if (!OrderStore.TryMoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after))
-        {
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderFailed)]);
-            return false;
-        }
+        OrderStore.MoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after);
 
         _orderStatus = string.Format(CultureInfo.CurrentCulture,
             Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],

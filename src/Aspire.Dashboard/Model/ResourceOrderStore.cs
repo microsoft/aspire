@@ -1,39 +1,49 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using Aspire.Dashboard.Configuration;
-using Microsoft.Data.Sqlite;
+using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
-/// Stores resource and group positions in the application settings database, independently of individual runs.
+/// Stores resource and group positions, independently of individual runs.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Positions describe the application rather than a single run, so they're kept in the browser's local storage under
+/// a key scoped to the application name, and every run of the application uses them. They aren't shared between
+/// browsers.
+/// </para>
+/// <para>
+/// The store is scoped to a circuit. Reads are synchronous and only include stored positions once
+/// <see cref="EnsureLoadedAsync"/> has read them, which raises <see cref="Changed"/>. Await it before assigning
+/// positions to new resources, so they're placed after the stored ones.
+/// </para>
+/// </remarks>
 public sealed class ResourceOrderStore
 {
-    private const string SettingsName = "resource and group order";
-
     private readonly Lock _lock = new();
     private readonly Dictionary<string, long> _positions = new(StringComparers.ResourceName);
     private readonly Dictionary<string, long> _defaultPositions = new(StringComparers.ResourceName);
     private readonly Dictionary<string, Dictionary<string, long>> _groupPositions = new(StringComparer.Ordinal);
-    private readonly DashboardSettingsDatabase _database;
+    private readonly LocalStorageSetting<ResourceOrderSettings> _setting;
+    private Task? _loadTask;
     private bool _loaded;
     private bool _hasCustomResourceOrder;
 
-    public ResourceOrderStore(IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
-        : this(DashboardSettingsDatabase.GetDatabasePath(options.Value), logger)
+    public ResourceOrderStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
     {
-    }
-
-    internal ResourceOrderStore(string? databasePath, ILogger logger)
-    {
-        _database = new DashboardSettingsDatabase(databasePath, logger);
+        _setting = new(localStorage, BrowserStorageKeys.ResourceOrderKey(options.Value.GetApplicationNameOrDefault()), logger);
     }
 
     public event Action? Changed;
+
+    /// <summary>
+    /// Reads the stored positions, once per circuit.
+    /// </summary>
+    public Task EnsureLoadedAsync() => _loadTask ??= LoadAsync();
 
     public IReadOnlyDictionary<string, long> GetPositions() => GetPositions(grouping: null);
 
@@ -43,7 +53,6 @@ public sealed class ResourceOrderStore
     {
         lock (_lock)
         {
-            EnsureLoaded();
             return grouping is null ? GetEffectiveResourcePositions() : new Dictionary<string, long>(GetScopePositions(grouping), StringComparers.ResourceName);
         }
     }
@@ -85,7 +94,6 @@ public sealed class ResourceOrderStore
         var changed = false;
         lock (_lock)
         {
-            EnsureLoaded();
             var positions = GetScopePositions(grouping);
             var newKeys = keys.Where(key => !positions.ContainsKey(key)).Distinct(StringComparers.ResourceName).ToList();
             if (newKeys.Count > 0)
@@ -96,7 +104,7 @@ public sealed class ResourceOrderStore
                     positions.Add(key, nextPosition++);
                 }
                 changed = true;
-                Save(grouping, positions, isUserMove: false);
+                SaveLocked();
             }
         }
         if (changed)
@@ -105,15 +113,14 @@ public sealed class ResourceOrderStore
         }
     }
 
-    public bool TryMove(string resourceKey, string targetKey, bool after) => TryMove(grouping: null, resourceKey, targetKey, after);
+    public void Move(string resourceKey, string targetKey, bool after) => Move(grouping: null, resourceKey, targetKey, after);
 
-    public bool TryMoveGroup(string grouping, string groupKey, string targetKey, bool after) => TryMove(grouping, groupKey, targetKey, after);
+    public void MoveGroup(string grouping, string groupKey, string targetKey, bool after) => Move(grouping, groupKey, targetKey, after);
 
-    private bool TryMove(string? grouping, string resourceKey, string targetKey, bool after)
+    private void Move(string? grouping, string resourceKey, string targetKey, bool after)
     {
         lock (_lock)
         {
-            EnsureLoaded();
             var currentPositions = GetScopePositions(grouping);
             if (!currentPositions.ContainsKey(resourceKey) || !currentPositions.ContainsKey(targetKey))
             {
@@ -121,7 +128,7 @@ public sealed class ResourceOrderStore
             }
             if (StringComparers.ResourceName.Equals(resourceKey, targetKey))
             {
-                return true;
+                return;
             }
 
             var effectivePositions = grouping is null ? GetEffectiveResourcePositions() : currentPositions;
@@ -129,24 +136,18 @@ public sealed class ResourceOrderStore
             orderedKeys.RemoveAll(key => StringComparers.ResourceName.Equals(key, resourceKey));
             var targetIndex = orderedKeys.FindIndex(key => StringComparers.ResourceName.Equals(key, targetKey));
             orderedKeys.Insert(targetIndex + (after ? 1 : 0), resourceKey);
-            var positions = orderedKeys.Select((key, index) => (key, position: (long)index))
-                .ToDictionary(pair => pair.key, pair => pair.position, StringComparers.ResourceName);
-            if (!Save(grouping, positions, isUserMove: true))
-            {
-                return false;
-            }
             currentPositions.Clear();
-            foreach (var pair in positions)
+            for (var i = 0; i < orderedKeys.Count; i++)
             {
-                currentPositions.Add(pair.Key, pair.Value);
+                currentPositions.Add(orderedKeys[i], i);
             }
             if (grouping is null)
             {
                 _hasCustomResourceOrder = true;
             }
+            SaveLocked();
         }
         Changed?.Invoke();
-        return true;
     }
 
     private Dictionary<string, long> GetScopePositions(string? grouping)
@@ -183,90 +184,90 @@ public sealed class ResourceOrderStore
         return positions;
     }
 
-    private void EnsureLoaded()
+    private async Task LoadAsync()
     {
-        if (_loaded)
+        var stored = await _setting.ReadAsync().ConfigureAwait(false);
+        lock (_lock)
+        {
+            _loaded = true;
+
+            // Positions assigned before the stored ones were read weren't saved, because saving would have replaced
+            // the stored positions. Stored positions come first, and those items keep their relative order after the
+            // stored ones, like any other new item.
+            var assignedBeforeLoad = _positions.Count > 0 || _groupPositions.Values.Any(positions => positions.Count > 0);
+            if (stored is not null)
+            {
+                MergeStoredPositions(_positions, stored.Resources);
+                foreach (var (grouping, groupKeys) in stored.Groups ?? [])
+                {
+                    MergeStoredPositions(GetScopePositions(grouping), groupKeys);
+                }
+                _hasCustomResourceOrder |= stored.CustomOrder;
+            }
+            if (assignedBeforeLoad)
+            {
+                SaveLocked();
+            }
+        }
+
+        if (stored is not null)
+        {
+            Changed?.Invoke();
+        }
+    }
+
+    private static void MergeStoredPositions(Dictionary<string, long> positions, List<string>? storedKeys)
+    {
+        var assignedBeforeLoad = positions.OrderBy(pair => pair.Value).Select(pair => pair.Key).ToList();
+        positions.Clear();
+        foreach (var key in (storedKeys ?? []).Concat(assignedBeforeLoad))
+        {
+            // Group keys can be empty, so only skip missing keys from an edited or corrupted value.
+            if (key is not null)
+            {
+                positions.TryAdd(key, positions.Count);
+            }
+        }
+    }
+
+    private void SaveLocked()
+    {
+        // Until the stored positions are read, saving would replace them. LoadAsync saves changes made before then.
+        if (!_loaded)
         {
             return;
         }
-        _loaded = true;
 
-        _database.Load(SettingsName, connection =>
+        _setting.Write(new ResourceOrderSettings
         {
-            using var command = connection.CreateCommand();
-            command.CommandText = """
-                CREATE TABLE IF NOT EXISTS resource_order (
-                    resource_key TEXT NOT NULL COLLATE NOCASE PRIMARY KEY,
-                    position INTEGER NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS resource_group_order (
-                    grouping TEXT NOT NULL,
-                    group_key TEXT NOT NULL COLLATE NOCASE,
-                    position INTEGER NOT NULL,
-                    PRIMARY KEY (grouping, group_key)
-                );
-                CREATE TABLE IF NOT EXISTS resource_order_settings (
-                    id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
-                    custom_order INTEGER NOT NULL
-                );
-                SELECT resource_key, position FROM resource_order ORDER BY position;
-                """;
-            using (var reader = command.ExecuteReader())
-            {
-                while (reader.Read())
-                {
-                    _positions.Add(reader.GetString(0), reader.GetInt64(1));
-                }
-            }
-
-            command.CommandText = "SELECT custom_order FROM resource_order_settings WHERE id = 1;";
-            var customOrder = command.ExecuteScalar();
-            // Older settings do not record whether order was inferred or customized; preserve
-            // their existing order rather than risk undoing a user's drag-and-drop customization.
-            _hasCustomResourceOrder = customOrder is null ? _positions.Count > 0 : Convert.ToBoolean(customOrder, CultureInfo.InvariantCulture);
-            command.CommandText = "INSERT OR IGNORE INTO resource_order_settings (id, custom_order) VALUES (1, $customOrder);";
-            command.Parameters.AddWithValue("$customOrder", _hasCustomResourceOrder);
-            command.ExecuteNonQuery();
-            command.Parameters.Clear();
-
-            command.CommandText = "SELECT grouping, group_key, position FROM resource_group_order ORDER BY grouping, position;";
-            using var groupReader = command.ExecuteReader();
-            while (groupReader.Read())
-            {
-                GetScopePositions(groupReader.GetString(0)).Add(groupReader.GetString(1), groupReader.GetInt64(2));
-            }
+            Resources = GetOrderedKeys(_positions),
+            Groups = _groupPositions.ToDictionary(pair => pair.Key, pair => GetOrderedKeys(pair.Value), StringComparer.Ordinal),
+            CustomOrder = _hasCustomResourceOrder
         });
-    }
 
-    private bool Save(string? grouping, IReadOnlyDictionary<string, long> positions, bool isUserMove)
-    {
-        return _database.TrySave(SettingsName, connection =>
-        {
-            using var transaction = connection.BeginTransaction();
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = grouping is null
-                ? "INSERT INTO resource_order (resource_key, position) VALUES ($key, $position) ON CONFLICT(resource_key) DO UPDATE SET position = excluded.position;"
-                : "INSERT INTO resource_group_order (grouping, group_key, position) VALUES ($grouping, $key, $position) ON CONFLICT(grouping, group_key) DO UPDATE SET position = excluded.position;";
-            if (grouping is not null)
-            {
-                command.Parameters.AddWithValue("$grouping", grouping);
-            }
-            var keyParameter = command.Parameters.Add("$key", SqliteType.Text);
-            var positionParameter = command.Parameters.Add("$position", SqliteType.Integer);
-            foreach (var pair in positions)
-            {
-                keyParameter.Value = pair.Key;
-                positionParameter.Value = pair.Value;
-                command.ExecuteNonQuery();
-            }
-            if (grouping is null && isUserMove)
-            {
-                command.Parameters.Clear();
-                command.CommandText = "UPDATE resource_order_settings SET custom_order = 1 WHERE id = 1;";
-                command.ExecuteNonQuery();
-            }
-            transaction.Commit();
-        });
+        static List<string> GetOrderedKeys(Dictionary<string, long> positions) =>
+            [.. positions.OrderBy(pair => pair.Value).Select(pair => pair.Key)];
     }
+}
+
+/// <summary>
+/// The resource and group order saved in the browser's local storage.
+/// </summary>
+internal sealed class ResourceOrderSettings
+{
+    /// <summary>
+    /// Gets or sets the persistent keys of resources, in order.
+    /// </summary>
+    public List<string>? Resources { get; set; }
+
+    /// <summary>
+    /// Gets or sets the group keys of each grouping, such as "Tags" or "State", in order.
+    /// </summary>
+    public Dictionary<string, List<string>>? Groups { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the user reordered resources. Until then, positions declared by the
+    /// AppHost take precedence over the stored order.
+    /// </summary>
+    public bool CustomOrder { get; set; }
 }

@@ -3,7 +3,7 @@
 
 using System.Text;
 using Aspire.Dashboard.Configuration;
-using Microsoft.Data.Sqlite;
+using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Model;
@@ -12,41 +12,41 @@ namespace Aspire.Dashboard.Model;
 /// Stores the tags users assign to resources.
 /// </summary>
 /// <remarks>
-/// Tags describe the application rather than a single run, so they're stored in a settings database shared by every
-/// run of the application instead of the per-run database, which is replaced on each run and pruned. Tags are keyed
-/// by the resource's display name because replica names have a random suffix that changes on every run; a tag
-/// therefore applies to every replica of a resource. When the dashboard doesn't persist data, tags are only kept in
-/// memory.
+/// <para>
+/// Tags describe the application rather than a single run, so they're kept in the browser's local storage under a key
+/// scoped to the application name, and every run of the application shows them. They aren't shared between browsers.
+/// Tags are keyed by the resource's display name because replica names have a random suffix that changes on every
+/// run; a tag therefore applies to every replica of a resource.
+/// </para>
+/// <para>
+/// The store is scoped to a circuit. Reads are synchronous and return nothing until <see cref="EnsureLoadedAsync"/>
+/// has read the stored tags, which raises <see cref="Changed"/> so views showing tags update.
+/// </para>
 /// </remarks>
 public sealed class ResourceTagStore
 {
     internal const int MaxTagLength = 50;
-    private const string SettingsName = "resource tags";
 
     private readonly Lock _lock = new();
-    private readonly DashboardSettingsDatabase _database;
+    private readonly LocalStorageSetting<Dictionary<string, List<string>>> _setting;
     private readonly Dictionary<string, List<string>> _tagsByResource = new(StringComparers.ResourceName);
+    private Task? _loadTask;
     private bool _loaded;
 
-    public ResourceTagStore(IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
-        : this(DashboardSettingsDatabase.GetDatabasePath(options.Value), logger)
+    public ResourceTagStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
     {
-    }
-
-    internal ResourceTagStore(string? databasePath, ILogger logger)
-    {
-        _database = new DashboardSettingsDatabase(databasePath, logger);
+        _setting = new(localStorage, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger);
     }
 
     /// <summary>
-    /// Gets the path of the settings database, or <see langword="null"/> when tags are only kept in memory.
-    /// </summary>
-    internal string? DatabasePath => _database.DatabasePath;
-
-    /// <summary>
-    /// Raised after tags are added or removed. Handlers can be invoked on any thread.
+    /// Raised after tags are loaded, added or removed. Handlers can be invoked on any thread.
     /// </summary>
     public event Action? Changed;
+
+    /// <summary>
+    /// Reads the stored tags, once per circuit.
+    /// </summary>
+    public Task EnsureLoadedAsync() => _loadTask ??= LoadAsync();
 
     /// <summary>
     /// Gets the tags of a resource in the order they were added.
@@ -56,7 +56,6 @@ public sealed class ResourceTagStore
     {
         lock (_lock)
         {
-            EnsureLoaded();
             return _tagsByResource.TryGetValue(resourceName, out var tags) ? tags.ToArray() : [];
         }
     }
@@ -68,7 +67,6 @@ public sealed class ResourceTagStore
     {
         lock (_lock)
         {
-            EnsureLoaded();
             return GetAllTagsCore().Order(StringComparer.CurrentCultureIgnoreCase).ToArray();
         }
     }
@@ -80,7 +78,6 @@ public sealed class ResourceTagStore
     {
         lock (_lock)
         {
-            EnsureLoaded();
             return _tagsByResource.ToDictionary(kvp => kvp.Key, kvp => (IReadOnlyList<string>)kvp.Value.ToArray(), StringComparers.ResourceName);
         }
     }
@@ -124,7 +121,6 @@ public sealed class ResourceTagStore
 
         lock (_lock)
         {
-            EnsureLoaded();
 
             // Reusing the casing of an existing tag keeps a single group per tag in the tag list.
             normalizedTag = GetAllTagsCore().FirstOrDefault(t => string.Equals(t, normalizedTag, StringComparison.OrdinalIgnoreCase)) ?? normalizedTag;
@@ -140,12 +136,7 @@ public sealed class ResourceTagStore
             }
 
             tags.Add(normalizedTag);
-            Persist(command =>
-            {
-                command.CommandText = "INSERT OR IGNORE INTO resource_tags (resource_name, tag) VALUES ($resourceName, $tag);";
-                command.Parameters.AddWithValue("$resourceName", resourceName);
-                command.Parameters.AddWithValue("$tag", normalizedTag);
-            });
+            SaveLocked();
         }
 
         Changed?.Invoke();
@@ -162,7 +153,6 @@ public sealed class ResourceTagStore
     {
         lock (_lock)
         {
-            EnsureLoaded();
 
             if (!_tagsByResource.TryGetValue(resourceName, out var tags) ||
                 tags.RemoveAll(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)) == 0)
@@ -175,12 +165,7 @@ public sealed class ResourceTagStore
                 _tagsByResource.Remove(resourceName);
             }
 
-            Persist(command =>
-            {
-                command.CommandText = "DELETE FROM resource_tags WHERE resource_name = $resourceName AND tag = $tag;";
-                command.Parameters.AddWithValue("$resourceName", resourceName);
-                command.Parameters.AddWithValue("$tag", tag);
-            });
+            SaveLocked();
         }
 
         Changed?.Invoke();
@@ -224,56 +209,66 @@ public sealed class ResourceTagStore
     private IEnumerable<string> GetAllTagsCore() =>
         _tagsByResource.Values.SelectMany(tags => tags).Distinct(StringComparer.OrdinalIgnoreCase);
 
-    private void EnsureLoaded()
+    private async Task LoadAsync()
     {
-        if (_loaded)
+        var stored = await _setting.ReadAsync().ConfigureAwait(false);
+        var changed = false;
+        lock (_lock)
+        {
+            _loaded = true;
+
+            // Tags added before the stored tags were read are kept after the stored ones, then saved, so neither
+            // replaces the other.
+            var addedBeforeLoad = _tagsByResource.Count > 0;
+            var current = _tagsByResource.ToDictionary(pair => pair.Key, pair => pair.Value.ToList(), StringComparers.ResourceName);
+            _tagsByResource.Clear();
+            foreach (var (resourceName, tags) in (stored ?? []).Concat(current))
+            {
+                if (string.IsNullOrEmpty(resourceName) || tags is null)
+                {
+                    continue;
+                }
+
+                foreach (var tag in tags)
+                {
+                    if (NormalizeTag(tag) is not { } normalizedTag)
+                    {
+                        continue;
+                    }
+
+                    if (!_tagsByResource.TryGetValue(resourceName, out var resourceTags))
+                    {
+                        resourceTags = [];
+                        _tagsByResource[resourceName] = resourceTags;
+                    }
+                    if (!resourceTags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
+                    {
+                        resourceTags.Add(normalizedTag);
+                        changed = true;
+                    }
+                }
+            }
+
+            if (addedBeforeLoad)
+            {
+                SaveLocked();
+            }
+        }
+
+        if (changed)
+        {
+            Changed?.Invoke();
+        }
+    }
+
+    private void SaveLocked()
+    {
+        // Until the stored tags are read, saving would replace them. LoadAsync saves changes made before then.
+        if (!_loaded)
         {
             return;
         }
 
-        _loaded = true;
-        _database.Load(SettingsName, connection =>
-        {
-            using (var createCommand = connection.CreateCommand())
-            {
-                // The tag column uses NOCASE so a tag can't be stored twice for a resource with different casing.
-                createCommand.CommandText = """
-                    CREATE TABLE IF NOT EXISTS resource_tags (
-                        resource_name TEXT NOT NULL COLLATE NOCASE,
-                        tag TEXT NOT NULL COLLATE NOCASE,
-                        PRIMARY KEY (resource_name, tag)
-                    );
-                    """;
-                createCommand.ExecuteNonQuery();
-            }
-
-            using var selectCommand = connection.CreateCommand();
-            // rowid preserves the order tags were added in.
-            selectCommand.CommandText = "SELECT resource_name, tag FROM resource_tags ORDER BY rowid;";
-            using var reader = selectCommand.ExecuteReader();
-            while (reader.Read())
-            {
-                var resourceName = reader.GetString(0);
-                if (!_tagsByResource.TryGetValue(resourceName, out var tags))
-                {
-                    tags = [];
-                    _tagsByResource[resourceName] = tags;
-                }
-
-                tags.Add(reader.GetString(1));
-            }
-        });
-    }
-
-    private void Persist(Action<SqliteCommand> configureCommand)
-    {
-        // A tag that couldn't be saved is still shown for the rest of the run. Tags are a convenience, so it isn't
-        // worth failing the edit for.
-        _database.TrySave(SettingsName, connection =>
-        {
-            using var command = connection.CreateCommand();
-            configureCommand(command);
-            command.ExecuteNonQuery();
-        });
+        _setting.Write(_tagsByResource.ToDictionary(pair => pair.Key, pair => pair.Value.ToList(), StringComparers.ResourceName));
     }
 }
