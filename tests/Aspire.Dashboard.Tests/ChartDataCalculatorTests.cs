@@ -412,13 +412,7 @@ public class ChartDataCalculatorTests
         Assert.Equal(15, increases.Sum());
 
         // Refreshing a chart clones its values through the instrument cache, which must keep the count.
-        var cached = new OtlpInstrumentData
-        {
-            Summary = null!,
-            Dimensions = [dimension],
-            KnownAttributeValues = [],
-            HasOverflow = false
-        };
+        var cached = CreateInstrumentData([dimension], OtlpInstrumentType.Sum, OtlpAggregationTemporality.Delta);
         var merged = MetricInstrumentDataCache.Merge(cached, cached, [], s_startTime.AddHours(-1).UtcDateTime);
         Assert.Equal(15, calculator.CalculateCounterIncreaseValues(merged.Dimensions, s_startTime, OtlpAggregationTemporality.Delta).Sum());
     }
@@ -1013,8 +1007,8 @@ public class ChartDataCalculatorTests
         var newDimension = new DimensionScope(capacity: 100, secondAttributes);
         newDimension.Values.Add(new MetricValue<long>(4, start.AddSeconds(3), start.AddSeconds(4)));
 
-        var cached = CreateInstrumentData([cachedDimension]);
-        var refreshed = CreateInstrumentData([refreshedDimension, newDimension]);
+        var cached = CreateInstrumentData([cachedDimension], OtlpInstrumentType.Gauge, OtlpAggregationTemporality.Cumulative);
+        var refreshed = CreateInstrumentData([refreshedDimension, newDimension], OtlpInstrumentType.Gauge, OtlpAggregationTemporality.Cumulative);
         var cursors = new List<MetricDimensionCursor>
         {
             new() { Attributes = firstAttributes, StartTime = start.AddSeconds(1) }
@@ -1044,8 +1038,8 @@ public class ChartDataCalculatorTests
         refreshedDimension.Values.Add(new MetricValue<long>(20, start.AddSeconds(14), start.AddSeconds(15)));
         refreshedDimension.Values.Add(new MetricValue<long>(3, start.AddSeconds(29), start.AddSeconds(30)));
 
-        var cached = CreateInstrumentData([cachedDimension]);
-        var refreshed = CreateInstrumentData([refreshedDimension]);
+        var cached = CreateInstrumentData([cachedDimension], OtlpInstrumentType.Gauge, OtlpAggregationTemporality.Cumulative);
+        var refreshed = CreateInstrumentData([refreshedDimension], OtlpInstrumentType.Gauge, OtlpAggregationTemporality.Cumulative);
         var cursors = MetricInstrumentDataCache.CreateCursors(cached, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(1));
 
         Assert.Equal(start.AddSeconds(10), Assert.Single(cursors).StartTime);
@@ -1057,6 +1051,30 @@ public class ChartDataCalculatorTests
             value => Assert.Equal((1L, start.AddSeconds(5)), (value.Value, value.End)),
             value => Assert.Equal((20L, start.AddSeconds(15)), (value.Value, value.End)),
             value => Assert.Equal((3L, start.AddSeconds(30)), (value.Value, value.End)));
+    }
+
+    [Fact]
+    public void Merge_DeltaNumberEndingAtCursor_IsKeptFromPreviousRead()
+    {
+        var start = s_startTime.UtcDateTime;
+        var cachedDimension = new DimensionScope(capacity: 100, []);
+        cachedDimension.Values.Add(new MetricValue<long>(4, start, start.AddSeconds(60)));
+        cachedDimension.Values.Add(new MetricValue<long>(6, start.AddSeconds(60), start.AddSeconds(70)));
+
+        // A delta number is observed at its end, so the refreshed read only has what ends after the cursor.
+        var refreshedDimension = new DimensionScope(capacity: 100, []);
+        refreshedDimension.Values.Add(new MetricValue<long>(7, start.AddSeconds(60), start.AddSeconds(70)));
+
+        var merged = MetricInstrumentDataCache.Merge(
+            CreateInstrumentData([cachedDimension], OtlpInstrumentType.Sum, OtlpAggregationTemporality.Delta),
+            CreateInstrumentData([refreshedDimension], OtlpInstrumentType.Sum, OtlpAggregationTemporality.Delta),
+            [new MetricDimensionCursor { Attributes = [], StartTime = start.AddSeconds(60) }],
+            start);
+
+        Assert.Collection(
+            Assert.Single(merged.Dimensions).Values.Cast<MetricValue<long>>(),
+            value => Assert.Equal((4L, start.AddSeconds(60)), (value.Value, value.End)),
+            value => Assert.Equal((7L, start.AddSeconds(70)), (value.Value, value.End)));
     }
 
     [Theory]
@@ -1080,7 +1098,7 @@ public class ChartDataCalculatorTests
         Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), MetricDataPointInterval.Get(TimeSpan.FromMinutes(durationMinutes)));
     }
 
-    private static OtlpInstrumentData CreateInstrumentData(List<DimensionScope> dimensions)
+    private static OtlpInstrumentData CreateInstrumentData(List<DimensionScope> dimensions, OtlpInstrumentType type, OtlpAggregationTemporality temporality)
     {
         var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, CreateContext());
 
@@ -1091,9 +1109,9 @@ public class ChartDataCalculatorTests
                 Name = "test",
                 Description = "test",
                 Unit = "items",
-                Type = OtlpInstrumentType.Gauge,
-                AggregationTemporality = OtlpAggregationTemporality.Cumulative,
-                IsMonotonic = false,
+                Type = type,
+                AggregationTemporality = temporality,
+                IsMonotonic = type == OtlpInstrumentType.Sum,
                 Parent = OtlpScope.Empty,
                 ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
             },

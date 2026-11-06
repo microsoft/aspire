@@ -205,6 +205,27 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetInstrumentAsync_Rollup_DeltaOnBoundaryStaysInItsChartInterval()
+    {
+        var start = s_testTime.AddMinutes(1);
+        var windowEnd = start.AddSeconds(180);
+
+        // Chart intervals include their end, so the export at 120s belongs to (60s, 120s] and the one at 130s to
+        // (120s, 180s], even though both are in the 120s minute.
+        var instrument = await GetDeltaInstrumentAsync(
+            [
+                CreateDeltaPoint(4, start.AddSeconds(110), start.AddSeconds(120)),
+                CreateDeltaPoint(6, start.AddSeconds(120), start.AddSeconds(130))
+            ],
+            start, windowEnd, TimeSpan.FromMinutes(1), includeExemplars: false);
+
+        var calculator = new ChartDataCalculator(pointCount: 2, duration: TimeSpan.FromSeconds(120));
+        var increases = calculator.CalculateCounterIncreaseValues(instrument.Dimensions, new DateTimeOffset(windowEnd, TimeSpan.Zero), OtlpAggregationTemporality.Delta);
+
+        Assert.Equal([null, 4, 6, null], increases);
+    }
+
+    [Fact]
     public async Task GetInstrumentAsync_Rollup_PromotedIntegerSumKeepsItsExemplars()
     {
         var start = s_testTime.AddMinutes(1);

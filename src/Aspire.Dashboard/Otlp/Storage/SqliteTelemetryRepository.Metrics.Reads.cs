@@ -37,9 +37,12 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = p.dimension_id
             WHERE {s_metricPointRangeFilterSql}
-              -- A level or histogram interval overlapping the window's end is part of it, but a delta number is observed
-              -- at its end: one after the window would otherwise join a rollup in the window and move its sum out of it.
-              AND (p.point_type = {HistogramPointType} OR i.aggregation_temporality <> {(int)OtlpAggregationTemporality.Delta} OR p.end_time_unix_nano <= @EndUnixNano)
+              -- A level or histogram interval overlapping the window is part of it, but a delta number is observed at its
+              -- end, which belongs to (start, end], like a chart interval. One after the window would otherwise join a
+              -- rollup in the window and move its sum out of it. One at the start belongs to the interval before, which
+              -- a refreshing chart keeps from its previous read.
+              AND (p.point_type = {HistogramPointType} OR i.aggregation_temporality <> {(int)OtlpAggregationTemporality.Delta} OR
+                  (p.end_time_unix_nano > r.start_time_unix_nano AND p.end_time_unix_nano <= @EndUnixNano))
         )
         """;
     private static readonly string s_effectiveMetricPointsCteSql = $"""
@@ -66,7 +69,8 @@ public sealed partial class SqliteTelemetryRepository
     // A rollup keeps the largest number, which is right for a level, but delta numbers are changes that the
     // counter charts add up, so the ones in a rollup become their sum, observed once. Each one is observed at its end,
     // and its start is the previous export's end however long ago that was, so delta numbers are grouped by their end:
-    // grouping by start would move a sparse export into the rollup of an earlier one. SUM throws when integers
+    // grouping by start would move a sparse export into the rollup of an earlier one. Like a chart interval, a group
+    // includes its end and not its start, so an export at 120s is in the same chart interval as its group. SUM throws when integers
     // overflow, which would stop the instrument's charts loading, so it only runs when the magnitudes can't reach
     // the integer range. A larger sum is returned as a double point, because integer_value can't hold it.
     // Cumulative representatives start at their earliest source interval, not the rounded bucket
@@ -78,7 +82,7 @@ public sealed partial class SqliteTelemetryRepository
                 p.*,
                 CASE
                     WHEN p.point_type <> {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
-                        THEN (p.end_time_unix_nano / @PointIntervalUnixNano) * @PointIntervalUnixNano
+                        THEN ((p.end_time_unix_nano - 1) / @PointIntervalUnixNano) * @PointIntervalUnixNano
                     ELSE (p.start_time_unix_nano / @PointIntervalUnixNano) * @PointIntervalUnixNano
                 END AS rollup_start_time_unix_nano
             FROM effective_metric_points p
@@ -596,7 +600,7 @@ public sealed partial class SqliteTelemetryRepository
             var isDeltaNumber = pointType != HistogramPointType &&
                 temporalities.GetValueOrDefault(dimensionId) == (int)OtlpAggregationTemporality.Delta;
             var groupStartTimeUnixNano = pointIntervalUnixNano is { } intervalUnixNano
-                ? ((isDeltaNumber ? sourceEndTimeUnixNano : sourceStartTimeUnixNano) / intervalUnixNano) * intervalUnixNano
+                ? ((isDeltaNumber ? sourceEndTimeUnixNano - 1 : sourceStartTimeUnixNano) / intervalUnixNano) * intervalUnixNano
                 : sourceStartTimeUnixNano;
             return new MetricPointKey(dimensionId, pointType, groupStartTimeUnixNano, aggregationId);
         }
