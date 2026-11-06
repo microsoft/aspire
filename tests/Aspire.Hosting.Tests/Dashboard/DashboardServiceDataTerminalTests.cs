@@ -33,13 +33,13 @@ public class DashboardServiceDataTerminalTests
         using var _ = data;
         resource.Annotations.Add(new TraitAnnotation("Owner", "Finance, Inc."));
         resource.Annotations.Add(new TraitAnnotation("Owner", "Platform"));
-        resource.Annotations.Add(new TraitAnnotation("Aspire_Dashboard_Tag", "Backend"));
+        resource.Annotations.Add(new TraitAnnotation("Aspire_Tag", "Backend"));
         await notifications.PublishUpdateAsync(resource, s => s with { State = new ResourceStateSnapshot("Running", null) }).DefaultTimeout();
 
         var snapshot = await data.WaitForResourceAsync(resource.Name, r => r.Properties.Any(p => p.Name == "resource.trait.Owner")).DefaultTimeout();
         var owner = Assert.Single(snapshot.Properties, p => p.Name == "resource.trait.Owner");
         Assert.Equal(["Finance, Inc.", "Platform"], owner.Value.ListValue.Values.Select(v => v.StringValue));
-        Assert.Equal(["Backend"], Assert.Single(snapshot.Properties, p => p.Name == "resource.trait.Aspire_Dashboard_Tag").Value.ListValue.Values.Select(v => v.StringValue));
+        Assert.Equal(["Backend"], Assert.Single(snapshot.Properties, p => p.Name == "resource.trait.Aspire_Tag").Value.ListValue.Values.Select(v => v.StringValue));
         Assert.Equal("true", GetTerminalProperty(snapshot, "terminal.enabled").Value.StringValue);
     }
 
