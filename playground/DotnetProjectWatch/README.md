@@ -24,9 +24,17 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
   (only the names listed in `ASPIRE_DOTNET_WATCH_FORWARD_ENV`; values never go on the command line), sends the
   launch request over the watcher's resource pipe (30 s connect timeout, with an actionable error), and forwards stdout/stderr. Stopping or restarting the
   resource kills the proxy, which makes the watcher terminate the app.
-- Not watched (they run normally, with a terminal warning saying so): resources with a custom launch tool (the Blazor
-  gateway), file-based C# apps (`AddDotnetProject("x", "app.cs")`), and every service when the AppHost isn't started by
-  `aspire run --watch` (plain `dotnet run`, or an IDE debug session where `DEBUG_SESSION_PORT` is set).
+- No silent fallbacks. Every project is watched unless it opts out, and an unsupported one fails the run with an error that
+  names it and the fix:
+  - `.WithWatch(false)` opts a project out: it runs as a plain `dotnet run`, and the terminal and its log say so (the
+    Blazor gateway opts itself out).
+  - Projects another resource waits on with `WaitForCompletion` run once, unwatched, with a notice: a watched service would
+    be relaunched instead of completing. With an explicit `.WithWatch(true)` the run fails instead.
+  - File-based C# apps (`AddDotnetProject("x", "app.cs")`), persistent lifetimes and custom launches (`WithLaunchToolArgs`,
+    `ProjectLaunchArgsOverrideAnnotation`) fail the run unless they call `.WithWatch(false)`.
+  - Under an IDE debug session (`DEBUG_SESSION_PORT` set) the IDE owns hot reload: nothing is watched, and the terminal and
+    each service's log say so.
+  - `AppHost:Run:WatchEnabled=true` without the CLI (a plain `dotnet run` of the AppHost) fails the run.
 
 ## What you see
 
@@ -68,7 +76,7 @@ Measured on Linux (2 cores) with SDK 11.0.100-rc.2 and the playground; latency i
 | Method body edit (api `MapGet` string) | works | 0.36–0.64 s; first edit after start 3.9–4.5 s (warm-up); same PID. [transcript](docs/transcripts/04-edit-compile-error-crash.txt) | #15710, #13924 |
 | Add a member/type | works | New members/types hot reload; a new top-level `app.MapGet` route is a rude edit → api restarts (6.6 s) | #15710 |
 | Razor Pages (`Pages/Hello.cshtml` markup and `@{}` code) | works | 0.36–0.46 s (first 4.5 s) | #13928 |
-| Blazor (gateway / WebAssembly) | not supported | `WithBlazorGateway` resources keep their launch tool and run unwatched with a warning (unit-tested; no Blazor app in the playground) | #13928, #20361 |
+| Blazor (gateway / WebAssembly) | not supported | `WithBlazorGateway` resources opt out with `WithWatch(false)` and run with their own launch tool (unit-tested; no Blazor app in the playground) | #13928, #20361 |
 | Static files (`wwwroot/hello.html`) | works | 0.02 s; `📝 hello.html changed; no code to update in api.` | #13925 |
 | `appsettings.json` | works | `/config` picks up the change in 3.4–8 s (this machine uses the polling file watcher) | |
 | `.csproj`/`.props` change | fixed | Watcher re-evaluates the project; terminal says `📦 … use Rebuild on api` | #20997 |
@@ -84,15 +92,17 @@ Measured on Linux (2 cores) with SDK 11.0.100-rc.2 and the playground; latency i
 | Env vars and endpoints across restarts | works | `GREETING_SOURCE`, `services__api__*` and the 5380 endpoint survive rude-edit restarts (11 s edit→served) and relaunches (same target port; worker keeps reaching api); [transcript](docs/transcripts/08-restart-preserves-env-and-endpoints.txt) | |
 | App arguments (`WithArgs`) | fixed | The watcher appends arguments directly to `dotnet run`; the proxy now prefixes them with `--`, so `WithArgs("--Demo:Greeting", "from args")` reaches the app (`/config` → `from args`) | |
 | `WithReplicas(2)` | works | Shared edit reaches both replicas; rude edit restarts both. [transcript](docs/transcripts/03-replicas-csproj-static.txt) | #13738 |
-| File-based C# app (`AddDotnetProject("x", "app.cs")`) | not supported | rc.2 watch server runs `dotnet run` without `--file` ("Couldn't find a project to run"); such apps now run unwatched with a warning. [transcript](docs/transcripts/07-file-based-app-unwatched.txt) | |
+| File-based C# app (`AddDotnetProject("x", "app.cs")`) | not supported | rc.2 watch server runs `dotnet run` without `--file` ("Couldn't find a project to run"), so `aspire run --watch` fails until the app calls `.WithWatch(false)`, then it runs plain. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | |
 | Watch tool download offline | fixed | Actionable terminal error; services wait; `aspire resource dotnet-watch start` recovers. [transcript](docs/transcripts/06-offline-tool-download.txt) | |
-| Plain `dotnet run` of the AppHost / IDE debug | fixed | Warning, services run without watch | #15710 |
+| Plain `dotnet run` of the AppHost / IDE debug | fixed | IDE: notice, the IDE owns hot reload. `WatchEnabled` without the CLI: error | #15710 |
+| Per-resource opt-out | fixed | `.WithWatch(false)`: terminal and resource-log notice, plain `dotnet run`. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | #20702 |
+| Run-to-completion / persistent | fixed | `WaitForCompletion` targets run once unwatched (notice); persistent lifetime is an error (unit-tested) | #9756 |
 | AppHost edits (Session 8) | not supported | Restart `aspire run` | #13839 |
 
 ## Known gaps
 
 - New package/project references need **Rebuild** (upstream watcher doesn't rebuild on reference changes).
-- Blazor gateway resources and file-based apps aren't watched (upstream launch support needed).
+- Blazor gateway resources and file-based apps can't be watched and must opt out with `WithWatch(false)` (upstream launch support needed).
 - DCP takes 10–50 s to reap the watcher and services after Ctrl+C (the CLI itself exits immediately). Editing files while
   the AppHost is shutting down can leave relaunched services behind (seen once).
 - **Crashed** is a custom state, so the dashboard summary counts it as "Inactive" rather than "needs attention".
@@ -136,7 +146,8 @@ Then, while it is running (in another terminal; `aspire` = `../../../dotnet.sh .
 - `curl :5380/crash`: api shows **Crashed** (exit code 3); save any api file (or Restart) and it comes back.
 - Add a `PackageReference` to `WatchDemo.Api.csproj`: the terminal suggests Rebuild; `aspire resource api rebuild` applies it.
 - Add `.WithReplicas(2)` to the worker in `AppHost.cs` (restart `aspire run`): edits reach both replicas.
-- `ticker` (`services/Scripts/ticker.cs`) is a file-based app: it runs, but unwatched (the terminal says so).
+- `ticker` (`services/Scripts/ticker.cs`) is a file-based app with `.WithWatch(false)`: it runs plain and the terminal says so.
+  Remove `.WithWatch(false)` and the run fails with an error naming `ticker`.
 - Dashboard **Stop**/**Start**/**Restart**/**Rebuild** on api (or `aspire resource api <command>`).
 - Ctrl+C: the CLI exits immediately; the watcher and services stop shortly after and `/tmp/aspw-*` is removed.
 - Start with a compile error already present: services wait with "Initial build failed"; fix it and they start.
@@ -175,8 +186,8 @@ Screenshots (dashboard) and terminal transcripts (`aspire run --watch` output, d
   [edit, compile error, crash](docs/transcripts/04-edit-compile-error-crash.txt),
   [initial failure and revert](docs/transcripts/05-initial-build-failure-revert.txt),
   [offline tool download](docs/transcripts/06-offline-tool-download.txt),
-  [file-based app unwatched](docs/transcripts/07-file-based-app-unwatched.txt),
   [restart preserves env/endpoints](docs/transcripts/08-restart-preserves-env-and-endpoints.txt),
   [TypeScript AppHost, --no-build errors, defaultWatchEnabled](docs/transcripts/09-typescript-apphost-watch.txt),
-  [Python AppHost](docs/transcripts/10-python-apphost-watch.txt)
+  [Python AppHost](docs/transcripts/10-python-apphost-watch.txt),
+  [opt-out and rejection](docs/transcripts/11-watch-opt-out-and-rejection.txt)
 - Earlier spike screenshots: [01](docs/01-resources.png), [02](docs/02-api-console.png), [03](docs/03-worker-console.png), [04](docs/04-dotnet-watch-console.png)
