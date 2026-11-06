@@ -179,7 +179,9 @@ public sealed class ResourceTagStoreTests
         Assert.False(_browser.Items.ContainsKey(s_storageKey));
         releaseTabA.SetResult();
         await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend"],"worker":["db"]}""");
-        Assert.Equal(["backend"], tabB.GetTags("api"));
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => tabB.GetTags("api").SequenceEqual(["backend"]),
+            "Tab B should adopt the saved tags.").DefaultTimeout();
     }
 
     [Fact]
