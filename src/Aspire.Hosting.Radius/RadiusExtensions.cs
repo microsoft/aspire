@@ -152,6 +152,12 @@ public static partial class RadiusExtensions
     /// <returns>The same resource builder for chaining.</returns>
     /// <remarks>
     /// <para>
+    /// The Radius publisher does not yet build or push images for .NET program resources
+    /// (tracked at https://github.com/microsoft/aspire/issues/16844). Build and push the image to a
+    /// registry the target cluster can pull from, then attach it with this method; without it,
+    /// <c>aspire publish</c> against a Radius environment fails with a remediation message.
+    /// </para>
+    /// <para>
     /// The attached image is treated as a final artifact and is not modified by Aspire.
     /// Include any files required by <c>PublishWithContainerFiles</c> when building the image
     /// instead of combining that method with <c>WithContainerImage</c>.
