@@ -345,6 +345,46 @@ public class ContainerRuntimeBaseTests
         Assert.False(result.TryGetManifest("linux", "amd64", out _));
     }
 
+    [Fact]
+    public void AppendAdditionalArguments_EmptyOrNull_AddsNothing()
+    {
+        var arguments = new List<string> { "build" };
+
+        TestContainerRuntime.AppendArguments(arguments, null);
+        TestContainerRuntime.AppendArguments(arguments, []);
+
+        Assert.Equal(["build"], arguments);
+    }
+
+    [Fact]
+    public void AppendAdditionalArguments_PreservesCommasSpacesAndQuotesAsTokens()
+    {
+        // Commas in a cache spec are data, not separators. Spaces and quotes must also stay inside
+        // the token instead of being treated as shell syntax.
+        var arguments = new List<string>();
+        TestContainerRuntime.AppendArguments(
+            arguments,
+            [
+                "--cache-from",
+                "type=registry,ref=cr.example.com/app:cache",
+                "--cache-to",
+                "type=local,dest=/tmp/build cache",
+                "--opt",
+                "label=name\"quoted,mode=max"
+            ]);
+
+        Assert.Equal(
+            [
+                "--cache-from",
+                "type=registry,ref=cr.example.com/app:cache",
+                "--cache-to",
+                "type=local,dest=/tmp/build cache",
+                "--opt",
+                "label=name\"quoted,mode=max"
+            ],
+            arguments);
+    }
+
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
@@ -371,6 +411,11 @@ public class ContainerRuntimeBaseTests
                 "Test command succeeded.",
                 "Test command failed with exit code {0}.",
                 cancellationToken);
+        }
+
+        public static void AppendArguments(List<string> arguments, IReadOnlyList<string>? additionalArguments)
+        {
+            AppendAdditionalArguments(arguments, additionalArguments);
         }
 
         public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)

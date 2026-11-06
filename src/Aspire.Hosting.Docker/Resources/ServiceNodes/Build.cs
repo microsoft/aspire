@@ -56,6 +56,35 @@ public sealed class Build
     public List<string> CacheFrom { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets a list of cache export destinations for the build process.
+    /// This property corresponds to the "cache_to" field in a Docker Compose
+    /// build configuration and allows exporting built layers as cache entries
+    /// so that subsequent builds can consume them via <see cref="CacheFrom"/>.
+    /// </summary>
+    /// <value>
+    /// A list of cache export definitions in the Compose long syntax, for example
+    /// "type=registry,ref=myregistry/myimage:cache,mode=max".
+    /// </value>
+    /// <remarks>
+    /// Exporting cache to a registry requires a BuildKit-enabled builder
+    /// (such as Docker Buildx); the legacy builder ignores this field.
+    /// See the <see href="https://compose-spec.readthedocs.io/en/latest/build.html#cache_to">Compose Build specification</see>.
+    /// </remarks>
+    /// <example>
+    /// Configure registry cache round-trips for a published service:
+    /// <code>
+    /// builder.AddProject&lt;Projects.MyApi&gt;("api")
+    ///     .PublishAsDockerComposeService((resource, service) =>
+    ///     {
+    ///         service.Build ??= new Build();
+    ///         service.Build.CacheTo.Add("type=registry,ref=cr.example.com/api:cache");
+    ///     });
+    /// </code>
+    /// </example>
+    [YamlMember(Alias = "cache_to", DefaultValuesHandling = DefaultValuesHandling.OmitEmptyCollections)]
+    public List<string> CacheTo { get; set; } = [];
+
+    /// <summary>
     /// Gets or sets the collection of additional labels to be applied to the build.
     /// Labels are key-value pairs that provide metadata about the build.
     /// </summary>
