@@ -43,6 +43,13 @@ resource env 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
   tags: tags
   location: location
   properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: env_law.properties.customerId
+        sharedKey: env_law.listKeys().primarySharedKey
+      }
+    }
     environmentMode: 'Express'
   }
 }
