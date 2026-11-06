@@ -23,13 +23,26 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
     assembly metadata (in-repo AppHosts use `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/`). A missing tool, missing
     metadata, or a selected SDK that isn't .NET 10 fails with an error that says how to fix it; there is no fallback.
     `ASPIRE_DOTNET_WATCH_TOOL_PATH` points at an explicit tool directory instead (for testing a different watcher build).
-  - runs `dotnet exec <host> server -- dotnet exec <tool> server --sdk <sdk> --server <pipe> --status-pipe <pipe> --resource <each project>`
+  - runs `dotnet exec <host> server -- dotnet exec <tool> server --sdk <sdk> --server <pipe> --status-pipe <pipe> --control-pipe <pipe> --resource <each project>`
     (the host supervises the watcher's process tree and stops it when the AppHost goes away) from a
     per-run directory `/tmp/aspw-<id>`, which is deleted on shutdown. The directory is created `0700` (an existing or
     symlinked one is rejected) and every pipe/socket is `CurrentUserOnly` (`0600` sockets, peer UID checked).
-  - reads the status pipe and the watcher's output, becomes healthy after the first successful build, and turns
-    build/hot-reload/restart/exit events into short notices (`DotnetWatchEventInterpreter`). Notices go to the affected
-    service's console log (prefixed `[watch]`) and to the `aspire run` terminal. Raw status JSON is debug-level only.
+  - is **protocol-only**: all state comes from the watcher's `--status-pipe` JSON events (`building`,
+    `build_complete{success}`, `hot_reload_applied`, `restarting`, `process_started`, `process_exited{exitCode}`).
+    It becomes healthy after the first successful build and turns those events into short notices
+    (`DotnetWatchEventInterpreter`). Notices go to the affected service's console log (prefixed `[watch]`) and to the
+    `aspire run` terminal. The watcher's console output is shown as plain logs of the hidden `dotnet-watch` resource and
+    is never parsed. Raw status JSON is debug-level only.
+  - sends `{"type":"rebuild","projects":[...]}` on the `--control-pipe` for the dashboard **Restart** of a running
+    service. Verified on the 10.0.403 tool: `rebuild` does **not** build. It emits `restarting` and relaunches every
+    running process of the listed projects (`dotnet run --no-build`, new PIDs, earlier hot reload deltas replayed); a
+    crashed process is skipped. So Restart of a crashed service, or of a project with several replicas, uses the normal
+    DCP restart (the proxy relaunches through the watcher).
+  - watches project files itself (`DotnetWatchProjectFileWatcher`: `*.*proj`, `.props`, `.targets` in each project and
+    referenced-project directory, plus `Directory.Build.props/targets` and `Directory.Packages.props` in ancestors). The
+    watcher re-evaluates a changed project file and restores, but doesn't rebuild or relaunch: an added PackageReference
+    then fails at run time (`FileNotFoundException` for the new assembly, same PID). On such a change Aspire restarts the
+    services of that watch server with a fresh watcher.
 - Each service waits for `dotnet-watch`, then DCP launches `dotnet exec <host> proxy --server <pipe> --entrypoint <project> -- <args>`
   instead of `dotnet run`. The proxy reads the service environment from its own process environment
   (only the names listed in `ASPIRE_DOTNET_WATCH_FORWARD_ENV`; values never go on the command line), sends the
@@ -54,17 +67,15 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
        Watch:  🔥 Hot reload is on for C# services (preview). Save a file to apply changes.
                Press CTRL+C to stop the AppHost and exit.
 22:14:02 👀 Watching api, worker for changes. Edits are hot reloaded; changes that need a restart restart only the affected service.
-22:14:59 🔥 Hot reload applied to api, worker in 80 ms (Greeter.cs).
-22:15:06 ❌ Build error in api: Program.cs(19,32): CS1525: Invalid expression term ')'. The app keeps running the last good code; fix it and save.
-22:21:32 ✅ Fixed. api already runs this code; nothing to apply.
-21:51:32 ⌚ Rebuilding worker…
-21:51:38 🔄 Restarting worker to apply changes that can't be hot reloaded.
-05:32:00 📦 WatchDemo.Api.csproj changed. Rebuilding api to apply package and project reference changes.
-05:32:01 ♻️ Restarting api, worker with a fresh watcher to apply the package and project reference changes.
-21:50:31 📝 appsettings.json changed; no code to update in api.
-22:17:42 💥 api exited with code 3. Save a change or use Restart to relaunch it.
-21:50:46 ▶️ api is running again.
-22:19:42 ❌ Initial build failed: Program.cs(19,37): CS0117: 'Greeter' does not contain a definition for 'Mesage'. Fix it and save; api, worker start once the build succeeds.
+07:43:42 🔥 Hot reload processed the change for api, worker. Compile errors, if any, are in the 'dotnet-watch' resource logs.
+07:44:22 ⌚ Rebuilding api…
+07:44:25 🔄 Restarting api…
+07:46:30 📦 WatchDemo.Api.csproj changed.
+07:46:30 ♻️ Restarting api, worker with a fresh watcher to apply the project file changes.
+07:45:33 💥 api exited with code 3. Save a change or use Restart to relaunch it.
+07:46:02 ▶️ api is running again.
+07:47:27 ♻️ Restarting ticker with a fresh watcher to rebuild the file-based app.
+22:19:42 ❌ Initial build failed: see the 'dotnet-watch' resource logs for the errors. Fix it and save; api, worker start once the build succeeds.
 22:21:13 ✅ Build succeeded. 👀 Watching api, worker for changes. …
 ```
 
@@ -77,11 +88,33 @@ In the dashboard:
   (`❌ The hot reload watcher stopped (exit code N) … 'aspire resource dotnet-watch start'`).
 - Each service's console log has the same `[watch]` notices (filter the log by `[watch]`).
 - A service that exits with a non-zero code shows **Crashed** with the exit code (property `dotnet-watch.last-event`); the next save, or Restart, relaunches it.
-  With `WithReplicas`, only the replica that exited is Crashed. The dashboard summary counts Crashed as an error
-  (custom states are classified by their style), not as Inactive.
-- **Stop**/**Start**/**Restart** work as usual. **Rebuild** stops the service, runs `dotnet build`, and starts it again.
+  With `WithReplicas(n > 1)` no replica is marked Crashed (see Accepted losses). The dashboard summary counts Crashed as
+  an error (custom states are classified by their style), not as Inactive.
+- **Stop**/**Start** work as usual. **Restart** of a running single-replica service asks the watcher to relaunch it
+  (`rebuild` on the control pipe, no build); otherwise it's the normal restart. **Rebuild** stops the service, runs
+  `dotnet build`, and starts it again.
 - If the watch tool can't be resolved (tool missing, SDK isn't .NET 10), the terminal says why and what to do; after fixing it,
   **Start** `dotnet-watch` (`aspire resource dotnet-watch start`) and the services start.
+
+### Accepted losses (protocol-only)
+
+The 10.0.403 status pipe carries less than the watcher's console, and the console is no longer parsed. Until the status
+pipe grows the missing fields ([dotnet/sdk issue](#upstream-asks)), these are gone:
+
+- **Error text, apply timing and changed files.** `build_complete` leaves `error` empty and `hot_reload_applied` has no
+  elapsed time or file list, so notices say "see the 'dotnet-watch' resource logs" and "Hot reload processed the change
+  for api" instead of the first compiler error, "in 80 ms" and "(Greeter.cs)". The watcher's output (with the errors) is
+  in the `dotnet-watch` resource logs.
+- **"No changes" and "blocked by compile errors" notices.** `hot_reload_applied` is emitted after every apply attempt,
+  whether it applied deltas, found nothing to apply, or was blocked by compile errors, so all three show the same 🔥
+  notice. A compile error during a session isn't announced; the app keeps running the last good code.
+- **Per-replica crash attribution.** `process_*` events name the project, not the process. With `WithReplicas(n > 1)` a
+  crash shows the 💥 notice and updates `dotnet-watch.last-event`, but no replica is marked **Crashed**.
+
+### Upstream asks
+
+Filed on dotnet/sdk (link in the PR description): populate `error`; add `no_changes`, `apply_blocked` and `file_changed`
+events; add `elapsedMs`; and echo a request/replica id in the `process_*` events.
 
 ## Hot reload scenario matrix
 
@@ -90,6 +123,9 @@ were first measured on SDK 11.0.100-rc.2; the scripted matrix (method body, shar
 appsettings, rude edit, compile error, `.csproj` change, crash, Stop/Start/Restart/Rebuild, env and endpoints), the
 file-based app, PackageReference add/remove, `WithReplicas(2)` crash, Release/`WithBuildEnvironment`/`WithWorkingDirectory`
 and Ctrl+C were re-run on the shipped 10.0.403 tool at the PR head (all pass).
+After the protocol-only change, hot reload (same PID), rude edit → restart, compile error → recovery, crash → Crashed,
+Restart (running via `rebuild`, crashed via DCP), `.csproj` change, file-based rude edit/compile error and Ctrl+C were
+re-run (all pass). Older transcripts under `docs/` show the earlier, console-derived notice wording.
 "works" = worked without changes in this PR's later commits; "fixed" = needed a fix/UX work in this PR; "not supported" = documented limitation.
 
 | Scenario | Status | Evidence | Related |
@@ -98,23 +134,23 @@ and Ctrl+C were re-run on the shipped 10.0.403 tool at the PR head (all pass).
 | Add a member/type | works | New members/types hot reload; a new top-level `app.MapGet` route is a rude edit → api restarts (6.6 s) | #15710 |
 | Razor Pages (`Pages/Hello.cshtml` markup and `@{}` code) | works | 0.36–0.46 s (first 4.5 s) | #13928 |
 | Blazor (gateway / WebAssembly) | not supported | `WithBlazorGateway` resources opt out with `WithWatch(false)` and run with their own launch tool (unit-tested; no Blazor app in the playground) | #13928, #20361 |
-| Static files (`wwwroot/hello.html`) | works | 0.02 s; `📝 hello.html changed in api; no rebuild needed.` | #13925 |
+| Static files (`wwwroot/hello.html`) | works | 0.02 s; shows the generic 🔥 notice (no `file_changed` event) | #13925 |
 | `appsettings.json` | works | `/config` picks up the change in 3.4–8 s (this machine uses the polling file watcher) | |
-| `.csproj`/`.props` change | fixed | `📦 … Rebuilding api` then `♻️ Restarting api, worker with a fresh watcher`; serving again in 15–22 s (revert 20–27 s) | #20997 |
+| `.csproj`/`.props` change | fixed | Aspire's project-file watcher: `📦 WatchDemo.Api.csproj changed.` then `♻️ Restarting api, worker with a fresh watcher`; serving again in 15–22 s (revert 20–27 s) | #20997 |
 | Add a PackageReference / ProjectReference | fixed | The watcher only re-evaluates a changed project file, and replays its earlier deltas to the relaunched app (an app built without the package then aborts with `MethodAccessException`). So a project-file change restarts the services on that watch server with a fresh watcher: add Humanizer → restarted in 24–29 s, an edit using it hot reloads in 4.9–5.3 s, removing it restarts in 20–26 s, api Running. | #7695 |
 | Rude edit → auto-restart | fixed | Only the affected service restarts, 6.6 s; spurious "hot reload applied" after the restart removed | #7695 |
-| Compile error → fix | fixed | `❌ Build error in api: Program.cs(19,32): CS1525 …`, old code keeps serving; fix → `✅ Fixed. 🔥 Hot reload applied`; reverting → `✅ Fixed. api already runs this code` | #13928 |
+| Compile error → fix | fixed | Old code keeps serving, same PID; the error is in the `dotnet-watch` logs and the notice is the generic 🔥 one (accepted loss); fix → hot reloaded, same PID | #13928 |
 | Initial build failure → fix | fixed | Terminal + service log + `dotnet-watch` Unhealthy with the error; fix → serving in 11–14 s. [screenshot](docs/08-initial-build-failure.png), [transcript](docs/transcripts/05-initial-build-failure-revert.txt) | #15710 |
 | Shared class library edit | works | api and worker both updated, 0.43 s (watcher: 80 ms) | #20987 |
 | Multiple projects | fixed | One watcher for api + worker (+ replicas). Projects are grouped per `global.json` SDK scope; the multi-root temp directory redirect (upstream dotnet/sdk#51311) only applies when the temp directory selects a different SDK, and services get their own temp directory back | #20997 |
 | Service crash → restart | fixed | `/crash` → **Crashed**, exit code 3; save → relaunched in 6–8 s. Dashboard summary counts it as an error. [screenshot](docs/07-crashed.png) | |
-| Dashboard Stop / Start / Restart / Rebuild | works | Start after Stop ~13 s; Restart re-launches with the latest applied code; Rebuild 8–10 s, hot reload afterwards 0.7 s | #20702 |
+| Dashboard Stop / Start / Restart / Rebuild | works | Start after Stop ~13 s; Restart of a running service → `rebuild` on the control pipe → `🔄 Restarting api…`, new PID, no build; Restart of a crashed service → `▶️ api is running again.`; Rebuild 8–10 s, hot reload afterwards 0.7 s | #20702 |
 | Build configuration, `WithBuildEnvironment`, `WithWorkingDirectory` | fixed | Playground switches `WATCHDEMO_BUILD_CONFIGURATION=Release WATCHDEMO_BUILD_MARKER=marker-42 WATCHDEMO_WORKING_DIRECTORY=/tmp`: `/diag` shows `assemblyConfiguration: Release`, `buildMarker: marker-42`, `workingDirectory: /tmp`; an edit hot reloads in 4.6–5.2 s, same PID. The configuration travels as `Configuration` + `Optimize=false` (the agent needs unoptimized code); build env moves the project to its own watch server; the working directory is `-p:RunWorkingDirectory`. | |
 | Ctrl+C | fixed | CLI exits in 0.2–0.5 s; services gone in 0.4–0.8 s, watcher, its host and file-based app in 1.9–2.3 s, DCP in 3.4–5.2 s (was 10–50 s); `/tmp/aspw-*` removed. The watch host gives the watcher a 1.5 s grace, then kills its supervised process group | #17590 |
 | Env vars and endpoints across restarts | works | `GREETING_SOURCE`, `services__api__*` and the 5380 endpoint survive rude-edit restarts (11 s edit→served) and relaunches (same target port; worker keeps reaching api); [transcript](docs/transcripts/08-restart-preserves-env-and-endpoints.txt) | |
 | App arguments (`WithArgs`) | fixed | The watcher appends arguments directly to `dotnet run`; the proxy now prefixes them with `--`, so `WithArgs("--Demo:Greeting", "from args")` reaches the app (`/config` → `from args`) | |
-| `WithReplicas(2)` | fixed | Shared edit reaches both replicas (same PIDs); rude edit restarts both. `/crash` on one replica marks only that one Crashed (`api-rajtmjjz Crashed`, `api-hbhphstw Running`); a save relaunches it. Launches and exits are attributed per replica (`ASPIRE_DOTNET_WATCH_INSTANCE`). The watcher races concurrent first launches of the same web project ("Server not started" from its browser refresh server, unfixed in dotnet/sdk main), so the proxies launch a project's replicas one at a time until it has launched once (`--launch-gate`). [transcript](docs/transcripts/03-replicas-csproj-static.txt) | #13738 |
-| File-based C# app (`AddDotnetProject("x", "app.cs")`) | fixed | Playground `ticker` (`Scripts/ticker.cs`). Method edits hot reload (3–10 s including the 3 s tick; watcher 57–83 ms after warm-up), same PID. A top-level statement edit restarts it with a fresh watcher in 15–24 s; hot reload works afterwards. Workarounds for the watcher: the proxy adds `--file`; status paths of the virtual `ticker.cs.csproj` map back to `ticker.cs`; the app gets its own watch server (a project-file change otherwise crashes the shared watcher); `StartupHookSupport`/`MetadataUpdaterSupport` are turned on (the PublishAot default turns them off, so every edit failed with ENC0097 on .NET 10); a restart the watcher can't build (`MSB1009` on the virtual project) uses a fresh watcher. | |
+| `WithReplicas(2)` | fixed | Shared edit reaches both replicas (same PIDs); rude edit restarts both. `/crash` on one replica prints `💥 api exited with code 3` but marks no replica Crashed (the status pipe doesn't say which process exited; accepted loss); a save relaunches it. The watcher races concurrent first launches of the same web project ("Server not started" from its browser refresh server, unfixed in dotnet/sdk main), so the proxies launch a project's replicas one at a time until it has launched once (`--launch-gate`). [transcript](docs/transcripts/03-replicas-csproj-static.txt) | #13738 |
+| File-based C# app (`AddDotnetProject("x", "app.cs")`) | fixed | Playground `ticker` (`Scripts/ticker.cs`). Method edits hot reload (3–10 s including the 3 s tick; watcher 57–83 ms after warm-up), same PID. A top-level statement edit restarts it with a fresh watcher in 15–24 s; hot reload works afterwards. Workarounds for the watcher: the proxy adds `--file`; status paths of the virtual `ticker.cs.csproj` map back to `ticker.cs`; the app gets its own watch server (a project-file change otherwise crashes the shared watcher); `StartupHookSupport`/`MetadataUpdaterSupport` are turned on (the PublishAot default turns them off, so every edit failed with ENC0097 on .NET 10); a failed `build_complete` for the virtual `ticker.cs.csproj` after startup (the watcher can't rebuild it) restarts the app with a fresh watcher. | |
 | Watch tool acquisition | fixed | Shipped in `Aspire.Hosting.Dotnet` (no download); a missing tool or non-.NET 10 SDK is an actionable terminal error. | |
 | Plain `dotnet run` of the AppHost / IDE debug | works | IDE: notice, the IDE owns hot reload. `AppHost__Run__WatchEnabled=true` without the CLI: services are watched and hot reloaded the same as with `aspire run --watch` | #15710 |
 | Per-resource opt-out | fixed | `.WithWatch(false)`: terminal and resource-log notice, plain `dotnet run`. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | #20702 |
@@ -124,7 +160,7 @@ and Ctrl+C were re-run on the shipped 10.0.403 tool at the PR head (all pass).
 ## Known gaps
 
 Closed in this PR (see the PR description for commits): build configuration / `WithBuildEnvironment` /
-`WithWorkingDirectory`, per-replica crash state, Crashed counted as Inactive, slow Ctrl+C, the TMPDIR/global.json hack,
+`WithWorkingDirectory`, Crashed counted as Inactive, slow Ctrl+C, the TMPDIR/global.json hack,
 file-based apps and package/project reference changes. Still open:
 
 - **Blazor gateway (`WithBlazorGateway`)**: not feasible here. The gateway runs through its own launch tool
@@ -185,7 +221,7 @@ Then, while it is running (in another terminal; `aspire` = `../../../dotnet.sh .
 - Add a new `app.MapGet(...)` route (a rude edit): the watcher restarts only the api, with the same Aspire env/endpoint.
 - Introduce a compile error: the terminal and the api log show the first error with file:line and the old code keeps running; fixing it reloads.
 - `curl :5380/crash`: api shows **Crashed** (exit code 3); save any api file (or Restart) and it comes back.
-- Add a `PackageReference` to `WatchDemo.Api.csproj`: the terminal suggests Rebuild; `aspire resource api rebuild` applies it.
+- Add a `PackageReference` to `WatchDemo.Api.csproj`: Aspire's project-file watcher restarts api and worker with a fresh watcher.
 - Add `.WithReplicas(2)` to the worker in `AppHost.cs` (restart `aspire run`): edits reach both replicas.
 - `ticker` (`services/Scripts/ticker.cs`) is a file-based app with `.WithWatch(false)`: it runs plain and the terminal says so.
   Remove `.WithWatch(false)` and the run fails with an error naming `ticker`.

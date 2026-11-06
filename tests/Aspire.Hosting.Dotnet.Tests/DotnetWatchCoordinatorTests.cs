@@ -452,39 +452,6 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("--working-directory", await ArgumentEvaluator.GetArgumentListAsync(service.Resource));
     }
 
-    [Theory]
-    [InlineData(
-        "dotnet watch ⌚ [api (net11.0)] Launched '/usr/share/dotnet/dotnet' with arguments 'run --no-build -e ASPIRE_DOTNET_WATCH_INSTANCE=api-hsgdtzpa -e DOTNET_WATCH=1': process id 4242",
-        4242, "api-hsgdtzpa")]
-    public void LaunchedLineIdentifiesTheReplica(string line, int expectedProcessId, string expectedInstance)
-    {
-        Assert.True(DotnetWatchCoordinator.TryParseLaunchedLine(line, out var processId, out var instance));
-        Assert.Equal(expectedProcessId, processId);
-        Assert.Equal(expectedInstance, instance);
-        Assert.False(DotnetWatchCoordinator.TryParseLaunchedLine("Launched 'dotnet' with arguments 'run': process id 1", out _, out _));
-    }
-
-    [Theory]
-    [InlineData("dotnet watch ⌚ [api (net11.0)] Process id 4242 ran for 1234ms and exited with exit code 3.", 4242, 3)]
-    [InlineData("Process id 7 ran for 12 ms and exited with exit code -1.", 7, -1)]
-    public void ExitedLineCarriesTheExitCode(string line, int expectedProcessId, int expectedExitCode)
-    {
-        Assert.True(DotnetWatchCoordinator.TryParseExitedLine(line, out var processId, out var exitCode));
-        Assert.Equal(expectedProcessId, processId);
-        Assert.Equal(expectedExitCode, exitCode);
-    }
-
-    [Theory]
-    [InlineData("Switch: /src/Scripts/ticker.cs.csproj", "/src/Scripts/ticker.cs")]
-    [InlineData(@"Switch: C:\src\My Scripts\ticker.cs.csproj", @"C:\src\My Scripts\ticker.cs")]
-    [InlineData("Switch: /src/Api/Api.csproj", null)]
-    [InlineData("Building /src/Scripts/ticker.cs.csproj ...", null)]
-    public void VirtualProjectBuildFailureNamesTheEntryPoint(string line, string? expected)
-    {
-        Assert.Equal(expected is not null, DotnetWatchCoordinator.TryParseVirtualProjectBuildFailure(line, out var entryPoint));
-        Assert.Equal(expected, entryPoint);
-    }
-
     [Fact]
     public void TempVariablesMatchWhatGetTempPathReads()
     {

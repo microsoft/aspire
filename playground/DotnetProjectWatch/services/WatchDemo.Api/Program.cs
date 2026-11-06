@@ -25,7 +25,7 @@ app.MapGet("/diag", () =>
     return Results.Json(new
     {
         pid = Environment.ProcessId,
-        replica = Env("OTEL_SERVICE_INSTANCE_ID") ?? Env("ASPIRE_DOTNET_WATCH_INSTANCE"),
+        replica = Env("OTEL_SERVICE_INSTANCE_ID"),
         workingDirectory = Environment.CurrentDirectory,
         assemblyConfiguration = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyConfigurationAttribute), false)
             .OfType<System.Reflection.AssemblyConfigurationAttribute>().FirstOrDefault()?.Configuration,

@@ -114,26 +114,23 @@ public class ResourceProxyTests
     }
 
     [Fact]
-    public void RunOptionsCarryWorkingDirectoryAndReplicaMarkerBeforeApplicationArguments()
+    public void RunOptionsCarryWorkingDirectoryBeforeApplicationArguments()
     {
-        var options = ResourceProxy.GetRunOptions("/src/Api/Api.csproj", "/data/a;b,c%d", "api-abcd1234");
+        var options = ResourceProxy.GetRunOptions("/src/Api/Api.csproj", "/data/a;b,c%d");
 
-        Assert.Equal(["--project", "/src/Api/Api.csproj", "-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d", "-e", "ASPIRE_DOTNET_WATCH_INSTANCE=api-abcd1234"], options);
+        Assert.Equal(["--project", "/src/Api/Api.csproj", "-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d"], options);
 
         var json = ResourceProxy.CreateRequestJson("/src/Api/Api.csproj", options, ["--urls", "x"], new Dictionary<string, string>());
         using var document = JsonDocument.Parse(json);
         Assert.Equal(
-            ["--project", "/src/Api/Api.csproj", "-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d", "-e", "ASPIRE_DOTNET_WATCH_INSTANCE=api-abcd1234", "--", "--urls", "x"],
+            ["--project", "/src/Api/Api.csproj", "-p:RunWorkingDirectory=/data/a%3Bb%2Cc%25d", "--", "--urls", "x"],
             document.RootElement.GetProperty("ApplicationArguments").EnumerateArray().Select(e => e.GetString()));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("api-{{- index .Annotations \"otel-service-instance-id\" -}}")]
-    public void UnexpandedOrMissingReplicaMarkerIsOmitted(string? instance)
+    [Fact]
+    public void RunOptionsOmitMissingWorkingDirectory()
     {
-        Assert.Equal(["--project", "/src/Api/Api.csproj"], ResourceProxy.GetRunOptions("/src/Api/Api.csproj", null, instance));
+        Assert.Equal(["--project", "/src/Api/Api.csproj"], ResourceProxy.GetRunOptions("/src/Api/Api.csproj", null));
     }
 
     [Theory]
@@ -144,7 +141,7 @@ public class ResourceProxyTests
     {
         // The watcher runs `dotnet run --no-build` in the project's directory; without --project a directory with a
         // second project fails with "Specify which project file to use".
-        var options = ResourceProxy.GetRunOptions(entryPoint, null, null);
+        var options = ResourceProxy.GetRunOptions(entryPoint, null);
 
         Assert.Equal(["--project", entryPoint], options);
     }
@@ -153,7 +150,7 @@ public class ResourceProxyTests
     public void FileBasedAppsAreLaunchedWithFile()
     {
         // The watcher runs `dotnet run` in the file's directory, which doesn't find a .cs entry point.
-        Assert.Equal(["--file", "/src/Scripts/ticker.cs"], ResourceProxy.GetRunOptions("/src/Scripts/ticker.cs", null, null));
+        Assert.Equal(["--file", "/src/Scripts/ticker.cs"], ResourceProxy.GetRunOptions("/src/Scripts/ticker.cs", null));
     }
 
     [Fact]

@@ -23,7 +23,6 @@
   <ItemGroup>
     <Compile Remove="Watch\Fixtures\**" />
     <None Include="Watch\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Watch\Recordings\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Aliased so its source-shared internals don't clash with Aspire.Hosting.Dotnet's. -->
     <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet.WatchHost\Aspire.Hosting.Dotnet.WatchHost.csproj" Aliases="WatchHost" />
     <!-- The watch tool and watch host Aspire.Hosting.Dotnet lays out at build (what AppHosts get as the same metadata). -->

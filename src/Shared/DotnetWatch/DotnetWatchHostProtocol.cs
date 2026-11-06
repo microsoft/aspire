@@ -37,12 +37,6 @@ internal static class DotnetWatchHostProtocol
     /// </summary>
     public const string RestoreEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_RESTORE_ENV";
 
-    /// <summary>
-    /// Process-environment variable with the replica's DCP resource name. The proxy passes it to <c>dotnet run</c> so
-    /// the watcher's launch and exit log lines can be attributed to one replica.
-    /// </summary>
-    public const string InstanceVariable = "ASPIRE_DOTNET_WATCH_INSTANCE";
-
     /// <summary>Overrides how long the proxy waits to connect to the watcher's resource pipe.</summary>
     public const string ConnectTimeoutVariable = "ASPIRE_DOTNET_WATCH_PROXY_CONNECT_TIMEOUT_SECONDS";
 

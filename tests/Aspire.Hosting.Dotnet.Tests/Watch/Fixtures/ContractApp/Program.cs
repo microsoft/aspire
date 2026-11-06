@@ -10,6 +10,7 @@ Console.WriteLine($"contract-env: CONTRACT_VALUE={Environment.GetEnvironmentVari
 Console.WriteLine($"contract-env: CONTRACT_UNLISTED={Environment.GetEnvironmentVariable("CONTRACT_UNLISTED") ?? "(unset)"}");
 
 app.MapGet("/", () => Greeting.Message());
+app.MapGet("/pid", () => Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
 app.MapGet("/crash", () => { Environment.Exit(42); return ""; });
 
 app.Run();

@@ -22,9 +22,8 @@ namespace Aspire.Hosting.Dotnet.WatchHost;
 /// <para>
 /// The watcher launches every service as <c>dotnet run</c> from the project directory, with the watcher's own process
 /// environment plus the request's variables. So the proxy also asks <c>dotnet run</c> for the project (<c>--project</c>,
-/// since that directory can hold several), the working directory
-/// (<c>-p:RunWorkingDirectory</c>) and a replica marker (<c>-e ASPIRE_DOTNET_WATCH_INSTANCE</c>, which lets hosting
-/// attribute launches and exits to one replica), and resets the variables set only for the watcher
+/// since that directory can hold several) and the working directory (<c>-p:RunWorkingDirectory</c>), and resets the
+/// variables set only for the watcher
 /// (<c>ASPIRE_DOTNET_WATCH_RESTORE_ENV</c>, for example its temp directory or build configuration) to the proxy's own
 /// values, or unsets them.
 /// </para>
@@ -70,7 +69,7 @@ internal static class ResourceProxy
             Environment.GetEnvironmentVariable,
             Environment.GetEnvironmentVariables().Keys.Cast<string>());
         AddRestoredEnvironment(environment, Environment.GetEnvironmentVariable(RestoreEnvironmentNamesVariable), Environment.GetEnvironmentVariable);
-        var request = CreateRequestJson(options.EntryPoint, GetRunOptions(options.EntryPoint, options.WorkingDirectory, Environment.GetEnvironmentVariable(InstanceVariable)), options.AppArgs, environment);
+        var request = CreateRequestJson(options.EntryPoint, GetRunOptions(options.EntryPoint, options.WorkingDirectory), options.AppArgs, environment);
         var timeout = TimeSpan.FromSeconds(
             int.TryParse(Environment.GetEnvironmentVariable(ConnectTimeoutVariable), out var seconds) && seconds > 0 ? seconds : DefaultConnectTimeoutSeconds);
 
@@ -249,7 +248,7 @@ internal static class ResourceProxy
     /// when that directory holds more than one project and never finds a file-based app's .cs file. <c>--project</c>
     /// or <c>--file</c> selects the requested one explicitly.
     /// </remarks>
-    internal static List<string> GetRunOptions(string entryPoint, string? workingDirectory, string? instance)
+    internal static List<string> GetRunOptions(string entryPoint, string? workingDirectory)
     {
         var options = new List<string>();
         if (IsProjectFile(entryPoint))
@@ -266,13 +265,6 @@ internal static class ResourceProxy
         if (!string.IsNullOrEmpty(workingDirectory))
         {
             options.Add($"-p:RunWorkingDirectory={EscapeMSBuildPropertyValue(workingDirectory)}");
-        }
-
-        // DCP expands the template per replica; an unexpanded value means the marker isn't available.
-        if (!string.IsNullOrEmpty(instance) && !instance.Contains("{{", StringComparison.Ordinal))
-        {
-            options.Add("-e");
-            options.Add($"{InstanceVariable}={instance}");
         }
 
         return options;

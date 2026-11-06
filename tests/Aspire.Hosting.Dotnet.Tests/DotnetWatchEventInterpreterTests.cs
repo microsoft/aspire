@@ -6,148 +6,50 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-// SPIKE: the notices printed by `aspire run --watch`, derived from the watcher's status events and console output.
+// SPIKE: the notices printed by `aspire run --watch`, derived from the watcher's status events only.
 public class DotnetWatchEventInterpreterTests
 {
     private static readonly string s_root = OperatingSystem.IsWindows() ? @"C:\src" : "/src";
     private static readonly string s_api = Path.Combine(s_root, "Api", "Api.csproj");
     private static readonly string s_worker = Path.Combine(s_root, "Worker", "Worker.csproj");
-    private static readonly string s_apiProgram = Path.Combine(s_root, "Api", "Program.cs");
-    private static readonly string s_shared = Path.Combine(s_root, "Shared", "Greeter.cs");
 
     private static DotnetWatchEventInterpreter CreateReady()
     {
         var interpreter = new DotnetWatchEventInterpreter([(s_api, "api"), (s_worker, "worker")]);
-        interpreter.OnStatus("building", [s_api, s_worker], null, null);
+        Assert.Empty(interpreter.OnStatus("building", [s_api, s_worker], null, null));
         var notice = Assert.Single(interpreter.OnStatus("build_complete", [s_api, s_worker], true, null));
         Assert.Equal(WatchNoticeKind.Watching, notice.Kind);
-        Assert.Contains("api, worker", notice.Message);
+        Assert.StartsWith("👀 Watching api, worker for changes.", notice.Message);
+        Assert.Equal([s_api, s_worker], notice.ProjectPaths);
         return interpreter;
     }
 
     [Fact]
-    public void HotReloadIsAttributedToTheProjectThatOwnsTheFile()
+    public void NoticeEventIdsAreStablePerKind()
+    {
+        Assert.Equal(new EventId(7101, "WatchNotice.HotReloadApplied"), DotnetWatchCoordinator.NoticeEventId(WatchNoticeKind.HotReloadApplied));
+        var ids = Enum.GetValues<WatchNoticeKind>().Select(k => DotnetWatchCoordinator.NoticeEventId(k).Id).ToArray();
+        Assert.Equal(ids.Length, ids.Distinct().Count());
+    }
+
+    [Fact]
+    public void HotReloadIsReportedForTheProjectsTheEventNames()
     {
         var interpreter = CreateReady();
 
-        Assert.Empty(interpreter.OnLogLine($"⌚ File updated: {s_apiProgram}"));
-        var notice = Assert.Single(interpreter.OnLogLine("🔥 C# and Razor changes applied in 42ms."));
+        var notice = Assert.Single(interpreter.OnStatus("hot_reload_applied", [s_api], null, null));
 
+        // The event follows every apply attempt (applied, blocked by compile errors, no changes), so it says "processed".
         Assert.Equal(WatchNoticeKind.HotReloadApplied, notice.Kind);
-        Assert.Equal("🔥 Hot reload applied to api in 42 ms (Program.cs).", notice.Message);
+        Assert.Equal("🔥 Hot reload processed the change for api. Compile errors, if any, are in the 'dotnet-watch' resource logs.", notice.Message);
         Assert.Equal([s_api], notice.ProjectPaths);
     }
 
     [Fact]
-    public void UnattributableSharedFileEditDoesNotNameProjects()
+    public void HotReloadWithoutProjectsIsIgnored()
     {
-        var interpreter = CreateReady();
-
-        interpreter.OnLogLine($"File updated: {s_shared}");
-        var notice = Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 7ms."));
-
-        // Without a reference graph the owner is unknown: every service gets the notice, but it doesn't claim they all changed.
-        Assert.Equal("🔥 Hot reload applied in 7 ms (Greeter.cs).", notice.Message);
-        Assert.Equal([s_api, s_worker], notice.ProjectPaths);
-    }
-
-    [Fact]
-    public void SharedLibraryEditIsAttributedToTheServicesThatReferenceIt()
-    {
-        var root = Directory.CreateTempSubdirectory("aspire-watch-refs").FullName;
-        try
-        {
-            var api = Path.Combine(root, "Api", "Api.csproj");
-            var worker = Path.Combine(root, "Worker", "Worker.csproj");
-            var shared = Path.Combine(root, "Shared", "Shared.csproj");
-            var core = Path.Combine(root, "Core", "Core.csproj");
-            WriteProject(api, @"..\Shared\Shared.csproj");
-            WriteProject(worker);
-            WriteProject(shared, "../Core/Core.csproj");
-            WriteProject(core);
-
-            var projects = new[] { (api, "api"), (worker, "worker") };
-            var references = projects.ToDictionary(p => p.Item1, p => DotnetWatchEventInterpreter.ReadReferencedDirectories(p.Item1));
-            var interpreter = new DotnetWatchEventInterpreter(projects, root, references);
-            interpreter.OnStatus("build_complete", [api, worker], true, null);
-
-            // Api -> Shared -> Core; the independent worker isn't affected by either.
-            interpreter.OnLogLine($"File updated: {Path.Combine(root, "Shared", "Greeter.cs")}");
-            var notice = Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 7ms."));
-            Assert.Equal("🔥 Hot reload applied to api in 7 ms (Greeter.cs).", notice.Message);
-            Assert.Equal([api], notice.ProjectPaths);
-
-            interpreter.OnLogLine($"File updated: {Path.Combine(root, "Core", "Clock.cs")}");
-            Assert.Equal([api], Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 5ms.")).ProjectPaths);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-
-        static void WriteProject(string path, params string[] references)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var items = string.Concat(references.Select(r => $"<ProjectReference Include=\"{r}\" />"));
-            File.WriteAllText(path, $"<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>{items}</ItemGroup></Project>");
-        }
-    }
-
-    [Fact]
-    public void CompileErrorShowsFirstErrorAndFixIsAnnounced()
-    {
-        var interpreter = CreateReady();
-
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Empty(interpreter.OnLogLine("🔥 Unable to apply changes due to compilation errors."));
-        Assert.True(interpreter.HasPending);
-
-        var error = Assert.Single(interpreter.OnLogLine($"❌ {s_apiProgram}(8,43): error CS0117: 'Greeter' does not contain a definition for 'Mesage' [{s_api}]"));
-        Assert.Equal(WatchNoticeKind.CompileError, error.Kind);
-        Assert.Equal(LogLevel.Error, error.Level);
-        Assert.Equal([s_api], error.ProjectPaths);
-        Assert.Contains("Build error in api: Program.cs(8,43): CS0117: 'Greeter' does not contain a definition for 'Mesage'.", error.Message);
-        Assert.Contains("keeps running the last good code", error.Message);
-        Assert.False(interpreter.HasPending);
-
-        // Later errors of the same attempt don't produce more notices.
-        Assert.Empty(interpreter.OnLogLine($"{s_apiProgram}(9,1): error CS1002: ; expected"));
-
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        var fixedNotice = Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 30ms."));
-        Assert.StartsWith("✅ Fixed. 🔥 Hot reload applied to api", fixedNotice.Message);
-    }
-
-    [Fact]
-    public void RevertingBrokenEditReportsFixedInsteadOfNoChanges()
-    {
-        var interpreter = CreateReady();
-
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        interpreter.OnLogLine("Unable to apply changes due to compilation errors.");
-        Assert.Single(interpreter.OnLogLine($"{s_apiProgram}(19,32): error CS1525: Invalid expression term ')' [{s_api}]"));
-
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        var notice = Assert.Single(interpreter.OnLogLine("No managed code changes to apply."));
-        Assert.Equal(LogLevel.Information, notice.Level);
-        Assert.StartsWith("✅ Fixed. api already runs this code", notice.Message);
-
-        // Back to normal afterwards.
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.StartsWith("📝", Assert.Single(interpreter.OnLogLine("No managed code changes to apply.")).Message);
-    }
-
-    [Fact]
-    public void FailureWithoutErrorLineIsFlushedWithPointerToLogs()
-    {
-        var interpreter = CreateReady();
-
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        interpreter.OnLogLine("Unable to apply changes due to compilation errors.");
-
-        var notice = Assert.Single(interpreter.FlushPending());
-        Assert.Contains("see the 'dotnet-watch' resource logs", notice.Message);
-        Assert.Empty(interpreter.FlushPending());
+        // The watcher reports an empty update during a rebuild/restart cycle.
+        Assert.Empty(CreateReady().OnStatus("hot_reload_applied", [], null, null));
     }
 
     [Fact]
@@ -156,13 +58,11 @@ public class DotnetWatchEventInterpreterTests
         var interpreter = new DotnetWatchEventInterpreter([(s_api, "api"), (s_worker, "worker")]);
         Assert.Empty(interpreter.OnStatus("building", [s_api, s_worker], null, null));
 
-        // The status event can arrive before the compiler output; the notice waits for the first error.
-        Assert.Empty(interpreter.OnStatus("build_complete", [s_api, s_worker], false, null));
-        var failed = Assert.Single(interpreter.OnLogLine($"{s_apiProgram}(8,43): error CS0117: 'Greeter' does not contain a definition for 'Mesage' [{s_api}]"));
+        // 10.0.x leaves `error` empty: the notice points at the watcher's logs.
+        var failed = Assert.Single(interpreter.OnStatus("build_complete", [s_api, s_worker], false, null));
         Assert.Equal(WatchNoticeKind.BuildFailed, failed.Kind);
-        Assert.StartsWith("❌ Initial build failed: Program.cs(8,43): CS0117:", failed.Message);
-        Assert.Contains("api, worker start once the build succeeds", failed.Message);
-        Assert.Equal("Program.cs(8,43): CS0117: 'Greeter' does not contain a definition for 'Mesage'", interpreter.FirstError);
+        Assert.Equal(LogLevel.Error, failed.Level);
+        Assert.Equal("❌ Initial build failed: see the 'dotnet-watch' resource logs for the errors. Fix it and save; api, worker start once the build succeeds.", failed.Message);
 
         interpreter.OnStatus("building", [s_api, s_worker], null, null);
         var ready = Assert.Single(interpreter.OnStatus("build_complete", [s_api, s_worker], true, null));
@@ -171,24 +71,37 @@ public class DotnetWatchEventInterpreterTests
     }
 
     [Fact]
-    public void RudeEditReportsRebuildAndRestartButNotHotReload()
+    public void BuildFailureShowsTheEventsErrorWhenPresent()
+    {
+        var interpreter = CreateReady();
+        Assert.Equal(WatchNoticeKind.Rebuilding, Assert.Single(interpreter.OnStatus("building", [s_api], null, null)).Kind);
+
+        var failed = Assert.Single(interpreter.OnStatus("build_complete", [s_api], false, null, "Program.cs(8,43): error CS0117"));
+        Assert.Equal("❌ Build failed for api: Program.cs(8,43): error CS0117. Fix it and save.", failed.Message);
+
+        var fixedNotice = Assert.Single(interpreter.OnStatus("build_complete", [s_api], true, null));
+        Assert.Equal(WatchNoticeKind.BuildSucceeded, fixedNotice.Kind);
+        Assert.Equal("✅ Build succeeded for api.", fixedNotice.Message);
+    }
+
+    [Fact]
+    public void RudeEditReportsRebuildAndRestart()
     {
         var interpreter = CreateReady();
 
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Empty(interpreter.OnLogLine("🔥 Restart is needed to apply the changes."));
-        Assert.Equal(WatchNoticeKind.Rebuilding, Assert.Single(interpreter.OnStatus("building", [s_api], null, null)).Kind);
+        Assert.Equal("⌚ Rebuilding api…", Assert.Single(interpreter.OnStatus("building", [s_api], null, null)).Message);
         Assert.Empty(interpreter.OnStatus("build_complete", [s_api], true, null));
-        var restarting = Assert.Single(interpreter.OnStatus("restarting", [s_api], null, null));
-        Assert.Equal("🔄 Restarting api to apply changes that can't be hot reloaded.", restarting.Message);
+        Assert.Empty(interpreter.OnStatus("hot_reload_applied", [], null, null));
 
-        // The watcher's console output arrives after the status events (it flows through DCP) and reports the
-        // restart cycle as "changes applied"; that isn't a hot reload.
-        Assert.Empty(interpreter.OnLogLine("C# and Razor changes applied in 5201ms."));
+        // `rebuild` (the Restart command) lists the project once per process.
+        var restarting = Assert.Single(interpreter.OnStatus("restarting", [s_api, s_api], null, null));
+        Assert.Equal(WatchNoticeKind.Restarting, restarting.Kind);
+        Assert.Equal("🔄 Restarting api…", restarting.Message);
+        Assert.Equal([s_api], restarting.ProjectPaths);
+        Assert.Empty(interpreter.OnStatus("process_started", [s_api], null, null));
 
-        // The next real edit is reported again.
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Equal(WatchNoticeKind.HotReloadApplied, Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 20ms.")).Kind);
+        // Nothing running to restart.
+        Assert.Empty(interpreter.OnStatus("restarting", [], null, null));
     }
 
     [Fact]
@@ -201,99 +114,31 @@ public class DotnetWatchEventInterpreterTests
         Assert.Equal(LogLevel.Error, crashed.Level);
         Assert.Equal("💥 api exited with code 3. Save a change or use Restart to relaunch it.", crashed.Message);
 
-        // The crashed project is relaunched rather than patched.
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Empty(interpreter.OnLogLine("C# and Razor changes applied in 32ms."));
+        // The crashed project is relaunched rather than patched; the other one is still hot reloaded.
+        var updated = Assert.Single(interpreter.OnStatus("hot_reload_applied", [s_api, s_worker], null, null));
+        Assert.Equal([s_worker], updated.ProjectPaths);
 
         var relaunched = Assert.Single(interpreter.OnStatus("process_started", [s_api], null, null));
+        Assert.Equal(WatchNoticeKind.Relaunched, relaunched.Kind);
         Assert.Equal("▶️ api is running again.", relaunched.Message);
         Assert.Empty(interpreter.OnStatus("process_started", [s_api], null, null));
+        Assert.Equal(WatchNoticeKind.HotReloadApplied, Assert.Single(interpreter.OnStatus("hot_reload_applied", [s_api], null, null)).Kind);
     }
 
     [Fact]
-    public void RelaunchReportedBeforeItsConsoleLineIsNotReportedAsHotReload()
+    public void UnknownProjectIsNamedByItsFile()
     {
-        var interpreter = CreateReady();
-        interpreter.OnStatus("process_exited", [s_api], null, 3);
-
-        // The status pipe delivers process_started before DCP delivers the console lines of the same cycle.
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Equal(WatchNoticeKind.Relaunched, Assert.Single(interpreter.OnStatus("process_started", [s_api], null, null)).Kind);
-        Assert.True(interpreter.HasPending);
-        Assert.Empty(interpreter.OnLogLine("C# and Razor changes applied in 32ms."));
-
-        // The next real edit is reported again.
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Equal(WatchNoticeKind.HotReloadApplied, Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 20ms.")).Kind);
+        var other = Path.Combine(s_root, "Other", "Other.csproj");
+        var notice = Assert.Single(CreateReady().OnStatus("hot_reload_applied", [other], null, null));
+        Assert.Contains("for Other.", notice.Message);
     }
 
-    [Fact]
-    public void RelaunchWithoutAConsoleLineDoesNotSuppressLaterHotReloads()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void FailureDetailFallsBackToTheLogs(string? error)
     {
-        var interpreter = CreateReady();
-        interpreter.OnStatus("process_exited", [s_api], null, 3);
-        interpreter.OnStatus("process_started", [s_api], null, null);
-
-        // No "changes applied" line followed the relaunch; the coordinator flushes after a short delay.
-        Assert.True(interpreter.HasPending);
-        Assert.Empty(interpreter.FlushPending());
-        Assert.False(interpreter.HasPending);
-
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Equal(WatchNoticeKind.HotReloadApplied, Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 20ms.")).Kind);
-    }
-
-    [Fact]
-    public void ProjectFileChangeRebuildsTheProject()
-    {
-        var interpreter = CreateReady();
-
-        interpreter.OnLogLine($"File updated: {s_api}");
-        var notice = Assert.Single(interpreter.OnLogLine("⌚ No managed code changes to apply."));
-
-        Assert.Equal(WatchNoticeKind.ProjectFileChanged, notice.Kind);
-        Assert.Equal(LogLevel.Information, notice.Level);
-        Assert.Equal("📦 Api.csproj changed. Rebuilding api to apply package and project reference changes.", notice.Message);
-        Assert.Equal([s_api], notice.ProjectPaths);
-    }
-
-    [Fact]
-    public void RestoreOutputsAreNotAnotherProjectChange()
-    {
-        var interpreter = CreateReady();
-
-        // Restore regenerates obj/*.nuget.g.targets right after the project file change; the watcher reports it on its own.
-        interpreter.OnLogLine($"File updated: {Path.Combine(s_root, "Api", "obj", "Api.csproj.nuget.g.targets")}");
-        Assert.Empty(interpreter.OnLogLine("⌚ No managed code changes to apply."));
-
-        interpreter.OnLogLine($"File updated: {s_api}");
-        interpreter.OnLogLine($"File updated: {Path.Combine(s_root, "Api", "obj", "Api.csproj.nuget.g.props")}");
-        var notice = Assert.Single(interpreter.OnLogLine("⌚ No managed code changes to apply."));
-        Assert.Equal("📦 Api.csproj changed. Rebuilding api to apply package and project reference changes.", notice.Message);
-    }
-
-    [Fact]
-    public void NonCodeFileChangeSaysNoRebuildNeeded()
-    {
-        var interpreter = CreateReady();
-
-        interpreter.OnLogLine($"File updated: {Path.Combine(s_root, "Api", "appsettings.json")}");
-        var notice = Assert.Single(interpreter.OnLogLine("No managed code changes to apply."));
-        Assert.Equal("📝 appsettings.json changed in api; no rebuild needed.", notice.Message);
-
-        // The file list doesn't leak into the next notice.
-        interpreter.OnLogLine($"File updated: {s_apiProgram}");
-        Assert.Equal("🔥 Hot reload applied to api in 5 ms (Program.cs).", Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 5ms.")).Message);
-    }
-
-    [Fact]
-    public void UnrelatedOutputProducesNoNotices()
-    {
-        var interpreter = CreateReady();
-
-        Assert.Empty(interpreter.OnLogLine("  Determining projects to restore..."));
-        Assert.Empty(interpreter.OnLogLine("Build succeeded."));
-        Assert.Empty(interpreter.OnLogLine("    0 Error(s)"));
-        Assert.Empty(interpreter.OnStatus("hot_reload_applied", [s_api, s_worker], null, null));
+        Assert.Equal("see the 'dotnet-watch' resource logs for the errors", DotnetWatchEventInterpreter.FailureDetail(error));
     }
 }

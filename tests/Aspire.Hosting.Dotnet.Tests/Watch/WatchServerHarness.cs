@@ -32,13 +32,11 @@ internal enum WatchObservationKind
 /// <remarks>
 /// Inputs (all optional): <c>ASPIRE_DOTNET_WATCH_TOOL_PATH</c> (watch tool folder or dll; otherwise the tool is
 /// acquired the same way <c>aspire run --watch</c> acquires it). The watch host comes from the repo layout that
-/// Aspire.Hosting.Dotnet writes at build (this assembly's <c>aspiredotnetwatchhostdir</c> metadata). Set <c>ASPIRE_WATCH_CONTRACT_RECORD_DIR</c> to
-/// save each run's observations as a recording for <see cref="DotnetWatchRecordedOutputTests"/>.
+/// Aspire.Hosting.Dotnet writes at build (this assembly's <c>aspiredotnetwatchhostdir</c> metadata).
+/// Console lines are recorded for diagnostics only; the tests assert on status events and the app's responses.
 /// </remarks>
 internal sealed class WatchServerHarness : IAsyncDisposable
 {
-    public const string RootPlaceholder = "$ROOT$";
-
     private static readonly TimeSpan s_defaultTimeout = TimeSpan.FromMinutes(3);
 
     private readonly List<WatchObservation> _observations = [];
@@ -48,6 +46,7 @@ internal sealed class WatchServerHarness : IAsyncDisposable
     private readonly ITestOutputHelper _output;
     private readonly string _runDirectory;
     private Task? _statusTask;
+    private DotnetWatchControlPipeServer? _controlServer;
 
     private WatchServerHarness(ITestOutputHelper output, string directory)
     {
@@ -59,6 +58,7 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         ProjectPath = Path.Combine(AppDirectory, "ContractApp.csproj");
         ResourcePipe = OperatingSystem.IsWindows() ? $"aspire-watch-contract-{Guid.NewGuid():N}" : Path.Combine(_runDirectory, "res.sock");
         StatusPipe = OperatingSystem.IsWindows() ? $"aspire-watch-contract-status-{Guid.NewGuid():N}" : Path.Combine(_runDirectory, "status.sock");
+        ControlPipe = OperatingSystem.IsWindows() ? $"aspire-watch-contract-control-{Guid.NewGuid():N}" : Path.Combine(_runDirectory, "control.sock");
     }
 
     public string Directory { get; }
@@ -66,6 +66,7 @@ internal sealed class WatchServerHarness : IAsyncDisposable
     public string ProjectPath { get; }
     public string ResourcePipe { get; }
     public string StatusPipe { get; }
+    public string ControlPipe { get; }
     public string Muxer { get; private set; } = "dotnet";
 
     public string ProxyOutput
@@ -151,9 +152,19 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         var statusServer = new NamedPipeServerStream(StatusPipe, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         _statusTask = Task.Run(() => ReadStatusAsync(statusServer, _cts.Token));
 
-        var server = CreateStartInfo(Muxer, Directory, ["exec", toolDll, "server", "--sdk", sdk.SdkDirectory, "--server", ResourcePipe, "--status-pipe", StatusPipe, "--resource", ProjectPath]);
+        _controlServer = new DotnetWatchControlPipeServer(ControlPipe);
+        _controlServer.Start();
+
+        var server = CreateStartInfo(Muxer, Directory, ["exec", toolDll, "server", "--sdk", sdk.SdkDirectory, "--server", ResourcePipe, "--status-pipe", StatusPipe, "--control-pipe", ControlPipe, "--resource", ProjectPath]);
         StartProcess(server, line => Record(WatchObservationKind.Output, line), "server");
     }
+
+    /// <summary>Sends a <c>rebuild</c> command for <paramref name="projects"/> on the watcher's control pipe.</summary>
+    public Task<bool> RequestRebuildAsync(params string[] projects) =>
+        _controlServer!.SendRebuildAsync(projects, _cts.Token);
+
+    /// <summary>How many times the watcher connected to the control pipe.</summary>
+    public int ControlConnections => _controlServer?.ConnectionCount ?? 0;
 
     /// <summary>Path of the watch host, or <see langword="null"/> when Aspire.Hosting.Dotnet hasn't laid it out.</summary>
     public static string? FindWatchHost()
@@ -222,28 +233,6 @@ internal sealed class WatchServerHarness : IAsyncDisposable
 
             await Task.Delay(100).ConfigureAwait(false);
         }
-    }
-
-    /// <summary>
-    /// Writes the observations in the recording format (<c>status &lt;json&gt;</c> / <c>out &lt;line&gt;</c>, with the
-    /// fixture root replaced by <see cref="RootPlaceholder"/>) when <c>ASPIRE_WATCH_CONTRACT_RECORD_DIR</c> is set.
-    /// </summary>
-    public void SaveRecording(string name)
-    {
-        var lines = Observations.Select(o => (o.Kind == WatchObservationKind.Status ? "status " : "out ") + Normalize(o.Text)).ToArray();
-        _output.WriteLine($"--- recording {name} ---{Environment.NewLine}{string.Join(Environment.NewLine, lines)}");
-        if (Environment.GetEnvironmentVariable("ASPIRE_WATCH_CONTRACT_RECORD_DIR") is { Length: > 0 } dir)
-        {
-            System.IO.Directory.CreateDirectory(dir);
-            File.WriteAllLines(Path.Combine(dir, name + ".log"), lines);
-        }
-    }
-
-    private string Normalize(string text)
-    {
-        text = text.Replace(JsonEncodedText.Encode(Directory).ToString(), RootPlaceholder, StringComparison.Ordinal)
-            .Replace(Directory, RootPlaceholder, StringComparison.Ordinal);
-        return Path.GetDirectoryName(Muxer) is { Length: > 0 } dotnetRoot ? text.Replace(dotnetRoot, "$DOTNET$", StringComparison.Ordinal) : text;
     }
 
     private void Record(WatchObservationKind kind, string text)
@@ -336,6 +325,11 @@ internal sealed class WatchServerHarness : IAsyncDisposable
             }
 
             process.Dispose();
+        }
+
+        if (_controlServer is not null)
+        {
+            await _controlServer.DisposeAsync().ConfigureAwait(false);
         }
 
         if (_statusTask is not null)

@@ -7,14 +7,12 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,13 +50,12 @@ internal sealed class DotnetWatchServerResource(string name, string workingDirec
 /// Known spike shortcuts are marked <c>TODO(spike)</c>/<c>HACK(spike)</c>.
 /// </para>
 /// </remarks>
-internal static partial class DotnetWatchCoordinator
+internal static class DotnetWatchCoordinator
 {
     internal const string ServerResourceName = "dotnet-watch";
 
     internal const string ForwardedEnvironmentNamesVariable = DotnetWatchHostProtocol.ForwardedEnvironmentNamesVariable;
     internal const string RestoreEnvironmentNamesVariable = DotnetWatchHostProtocol.RestoreEnvironmentNamesVariable;
-    internal const string InstanceVariable = DotnetWatchHostProtocol.InstanceVariable;
 
     internal const string CrashedState = "Crashed";
 
@@ -75,10 +72,6 @@ internal static partial class DotnetWatchCoordinator
     internal const int NoticeEventIdBase = 7100;
 
     internal static EventId NoticeEventId(WatchNoticeKind kind) => new(NoticeEventIdBase + (int)kind, $"WatchNotice.{kind}");
-
-    // DCP expands this per replica to the replica's unique name suffix (the OTEL service.instance.id), so
-    // "<resource>-<suffix>" is the replica's resource id.
-    private const string InstanceSuffixTemplate = "{{- index .Annotations \"otel-service-instance-id\" -}}";
 
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, WatchState> s_states = new();
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, object> s_warned = new();
@@ -374,49 +367,10 @@ internal static partial class DotnetWatchCoordinator
         return null;
     }
 
-    /// <summary>Parses the watcher's verbose "Launched ... process id N" line for a proxy-marked launch.</summary>
-    internal static bool TryParseLaunchedLine(string line, out int processId, out string instance)
-    {
-        processId = 0;
-        instance = string.Empty;
-        if (LaunchedLineRegex().Match(line) is not { Success: true } match)
-        {
-            return false;
-        }
-
-        instance = match.Groups["instance"].Value;
-        return int.TryParse(match.Groups["pid"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out processId);
-    }
-
-    /// <summary>Parses the watcher's verbose "Process id N ran for Xms and exited with exit code C" line.</summary>
-    internal static bool TryParseExitedLine(string line, out int processId, out int exitCode)
-    {
-        processId = exitCode = 0;
-        return ExitedLineRegex().Match(line) is { Success: true } match
-            && int.TryParse(match.Groups["pid"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out processId)
-            && int.TryParse(match.Groups["code"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out exitCode);
-    }
-
-    /// <summary>Parses MSBuild's "Switch: path/app.cs.csproj" line that follows MSB1009 for a file-based app's virtual project.</summary>
-    internal static bool TryParseVirtualProjectBuildFailure(string line, [NotNullWhen(true)] out string? entryPoint)
-    {
-        entryPoint = VirtualProjectSwitchRegex().Match(line) is { Success: true } match ? match.Groups["path"].Value : null;
-        return entryPoint is not null;
-    }
-
-    private static readonly TimeSpan s_referenceRebuildDebounce = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_projectFileDebounce = TimeSpan.FromSeconds(1);
 
     internal static bool PathsEqual(string a, string b) =>
         string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
-
-    [GeneratedRegex(@"Switch: (?<path>\S.*\.cs)\.csproj\s*$")]
-    private static partial Regex VirtualProjectSwitchRegex();
-
-    [GeneratedRegex(InstanceVariable + @"=(?<instance>[A-Za-z0-9-]+).*process id (?<pid>\d+)")]
-    private static partial Regex LaunchedLineRegex();
-
-    [GeneratedRegex(@"Process id (?<pid>\d+) ran for \d+ ?ms and exited with exit code (?<code>-?\d+)")]
-    private static partial Regex ExitedLineRegex();
 
     private sealed class WatchedProject(
         DotnetProjectResource resource,
@@ -484,11 +438,10 @@ internal static partial class DotnetWatchCoordinator
                     watched.Resource.Annotations.Add(new EnvironmentCallbackAnnotation(async ctx =>
                     {
                         ctx.EnvironmentVariables[ForwardedEnvironmentNamesVariable] = string.Join(';', ctx.EnvironmentVariables.Keys
-                            .Where(k => k is not (ForwardedEnvironmentNamesVariable or RestoreEnvironmentNamesVariable or InstanceVariable)));
+                            .Where(k => k is not (ForwardedEnvironmentNamesVariable or RestoreEnvironmentNamesVariable)));
 
                         var prepared = await watched.Server.PrepareAsync(ctx.ExecutionContext.Services, ctx.CancellationToken).ConfigureAwait(false);
                         ctx.EnvironmentVariables[RestoreEnvironmentNamesVariable] = string.Join(';', prepared.WatcherOnlyNames);
-                        ctx.EnvironmentVariables[InstanceVariable] = $"{watched.Resource.Name}-{InstanceSuffixTemplate}";
                     }));
                 }
 
@@ -653,8 +606,8 @@ internal static partial class DotnetWatchCoordinator
 
     private sealed class WatchServer
     {
-        // How long a status event waits for the matching verbose log line (DCP streams logs with some delay).
-        private static readonly TimeSpan s_correlationTimeout = TimeSpan.FromSeconds(3);
+        // How long the Restart command waits for the watcher to relaunch the service.
+        private static readonly TimeSpan s_restartTimeout = TimeSpan.FromMinutes(1);
 
         private readonly WatchState _state;
         private readonly int _index;
@@ -669,13 +622,12 @@ internal static partial class DotnetWatchCoordinator
         private TaskCompletionSource _successfulBuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _noticeGate = new();
         private DotnetWatchEventInterpreter? _interpreter;
-        private bool _flushScheduled;
 
-        // Per-replica attribution of launches and exits, fed by the watcher's verbose log lines.
-        private readonly object _replicaGate = new();
-        private readonly Dictionary<int, string> _instanceByProcessId = [];
-        private readonly List<ReplicaEvent> _launches = [];
-        private readonly List<ReplicaEvent> _exits = [];
+        // The control pipe of the current watcher run; replaced with every prepare.
+        private DotnetWatchControlPipeServer? _control;
+
+        // Restart commands waiting for the watcher to relaunch their project (process_started).
+        private readonly List<(string ProjectPath, TaskCompletionSource Started)> _pendingRestarts = [];
 
         public WatchServer(WatchState state, string name, int index, string? sdkScope, DotnetProjectResource? dedicatedTo)
         {
@@ -749,7 +701,18 @@ internal static partial class DotnetWatchCoordinator
 
         public void Start(IServiceProvider services, CancellationToken stopping)
         {
-            _ = Task.Run(() => TailServerLogsAsync(services, stopping), CancellationToken.None);
+            var projectFileWatcher = new DotnetWatchProjectFileWatcher(Roots, changed => OnProjectFilesChanged(services, changed), s_projectFileDebounce);
+            projectFileWatcher.Start();
+            stopping.Register(() =>
+            {
+                projectFileWatcher.Dispose();
+                Interlocked.Exchange(ref _control, null)?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(5));
+            });
+
+            foreach (var project in Projects)
+            {
+                OverrideRestartCommand(project);
+            }
         }
 
         public Task<PreparedServer> PrepareAsync(IServiceProvider services, CancellationToken cancellationToken)
@@ -762,11 +725,9 @@ internal static partial class DotnetWatchCoordinator
                     _monitorCts = new CancellationTokenSource();
                     _ready = false;
                     _lastBuildError = null;
-                    var referencedDirectories = Projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal)
-                        .ToDictionary(p => p, DotnetWatchEventInterpreter.ReadReferencedDirectories, StringComparer.Ordinal);
                     lock (_noticeGate)
                     {
-                        _interpreter = new DotnetWatchEventInterpreter(Projects.Select(p => (p.ProjectPath, p.Resource.Name)), Resource.WorkingDirectory, referencedDirectories);
+                        _interpreter = new DotnetWatchEventInterpreter(Projects.Select(p => (p.ProjectPath, p.Resource.Name)));
                     }
 
                     if (_successfulBuild.Task.IsCompleted)
@@ -936,12 +897,14 @@ internal static partial class DotnetWatchCoordinator
                 ? $"aspire-watch-status-{_state.Id}-{_index}-{generation}"
                 : Path.Combine(_state.RunDirectory, $"status{_index}-{generation}.sock");
 
-            // --verbose adds the watcher's "Launched ... process id" / "Process id ... exited" lines, which attribute
-            // launches and crashes to replicas.
+            var controlPipeName = OperatingSystem.IsWindows()
+                ? $"aspire-watch-control-{_state.Id}-{_index}-{generation}"
+                : Path.Combine(_state.RunDirectory, $"control{_index}-{generation}.sock");
+
             var args = new List<string>
             {
                 "exec", watchHost, DotnetWatchHostProtocol.ServerCommand, "--", sdk.Muxer, "exec", toolDll, "server",
-                "--sdk", sdk.SdkDirectory, "--server", ResourcePipeName, "--status-pipe", statusPipeName, "--verbose"
+                "--sdk", sdk.SdkDirectory, "--server", ResourcePipeName, "--status-pipe", statusPipeName, "--control-pipe", controlPipeName
             };
             foreach (var root in roots)
             {
@@ -949,7 +912,14 @@ internal static partial class DotnetWatchCoordinator
                 args.Add(root);
             }
 
-            // The status pipe listener must exist before the watcher connects to it.
+            // The pipe listeners must exist before the watcher connects to them.
+            var control = new DotnetWatchControlPipeServer(controlPipeName);
+            control.Start();
+            if (Interlocked.Exchange(ref _control, control) is { } previous)
+            {
+                await previous.DisposeAsync().ConfigureAwait(false);
+            }
+
             _ = Task.Run(() => MonitorStatusAsync(services, logger, statusPipeName, successfulBuild, generation, monitorToken), CancellationToken.None);
 
             // Everything set only for the watcher must not leak into the services, which inherit its environment.
@@ -1016,48 +986,33 @@ internal static partial class DotnetWatchCoordinator
 
                     if (status.type == DotnetWatchStatusTypes.BuildComplete)
                     {
-                        string? error;
-                        lock (_noticeGate)
+                        if (status.success != true && _ready && RebuildFileBasedAppIfStuck(services, status.projects ?? []))
                         {
-                            error = _interpreter?.FirstError;
+                            continue;
                         }
 
-                        OnBuildComplete(status.success == true, error, successfulBuild);
+                        OnBuildComplete(status.success == true, DotnetWatchEventInterpreter.FailureDetail(status.error), successfulBuild);
                     }
 
                     IReadOnlyList<WatchNotice> notices;
                     lock (_noticeGate)
                     {
-                        notices = _interpreter?.OnStatus(status.type, projects, status.success, status.exitCode) ?? [];
+                        notices = _interpreter?.OnStatus(status.type, projects, status.success, status.exitCode, status.error) ?? [];
                     }
 
                     EmitNotices(services, notices);
 
-                    // Status events identify project paths only (plan 3.3). Launches and exits are attributed to a
-                    // replica through the verbose log lines; everything else applies to every resource with the path.
-                    foreach (var path in projects)
+                    foreach (var path in projects.Distinct(StringComparer.Ordinal))
                     {
                         if (status.type == DotnetWatchStatusTypes.ProcessStarted)
                         {
                             File.WriteAllBytes(GetLaunchMarkerPath(path, generation), []);
+                            CompletePendingRestarts(path);
                         }
 
-                        var targets = Projects.Where(p => string.Equals(p.ProjectPath, path, StringComparison.Ordinal)).ToList();
-                        if (targets.Count == 0)
+                        foreach (var target in Projects.Where(p => string.Equals(p.ProjectPath, path, StringComparison.Ordinal)))
                         {
-                            continue;
-                        }
-
-                        if (status.type is DotnetWatchStatusTypes.ProcessExited or DotnetWatchStatusTypes.ProcessStarted)
-                        {
-                            _ = Task.Run(() => PublishReplicaEventAsync(notifications, targets, status, cts.Token), CancellationToken.None);
-                        }
-                        else
-                        {
-                            foreach (var target in targets)
-                            {
-                                await PublishWatchEventAsync(notifications, target.Resource, resourceId: null, status).ConfigureAwait(false);
-                            }
+                            await PublishWatchEventAsync(notifications, target.Resource, status).ConfigureAwait(false);
                         }
                     }
                 }
@@ -1073,103 +1028,119 @@ internal static partial class DotnetWatchCoordinator
             }
         }
 
-        private async Task PublishReplicaEventAsync(ResourceNotificationService notifications, List<WatchedProject> targets, WatchStatus status, CancellationToken cancellationToken)
+        /// <summary>
+        /// Replaces the project's Restart command: a single running replica is restarted by the watcher (the control
+        /// pipe's <c>rebuild</c>), which relaunches it with its hot reload state. A DCP restart would only reconnect the
+        /// proxy and leave the watcher's process running.
+        /// </summary>
+        private void OverrideRestartCommand(WatchedProject project)
         {
+            var resource = project.Resource;
+            _state.Builder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, (e, _) =>
+            {
+                lock (resource.Annotations)
+                {
+                    var original = resource.Annotations.OfType<ResourceCommandAnnotation>()
+                        .SingleOrDefault(a => a.Name == KnownResourceCommands.RestartCommand);
+                    if (original is null || _restartCommands.Contains(original))
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    var restart = new ResourceCommandAnnotation(original.Name, original.DisplayName, original.UpdateState,
+                        ctx => RestartAsync(project, original, ctx), original.DisplayDescription, original.Arguments,
+                        original.ConfirmationMessage, original.IconName, original.IconVariant, original.IsHighlighted,
+                        original.Visibility, original.ValidateArguments);
+                    _restartCommands.Add(restart);
+                    resource.Annotations.Remove(original);
+                    resource.Annotations.Add(restart);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        private readonly HashSet<ResourceCommandAnnotation> _restartCommands = [];
+
+        private async Task<ExecuteCommandResult> RestartAsync(WatchedProject project, ResourceCommandAnnotation original, ExecuteCommandContext context)
+        {
+            // Several replicas share one project path, and the watcher restarts every running process of it; a crashed
+            // replica isn't relaunched by the watcher. DCP's restart is exact for both.
+            var notifications = context.Services.GetRequiredService<ResourceNotificationService>();
+            if (project.Resource.GetReplicaCount() != 1 ||
+                (notifications.TryGetCurrentState(context.ResourceName, out var current) && current.Snapshot.State?.Text == CrashedState) ||
+                !_ready || Volatile.Read(ref _control) is not { } control)
+            {
+                return await original.ExecuteCommand(context).ConfigureAwait(false);
+            }
+
+            var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            lock (_pendingRestarts)
+            {
+                _pendingRestarts.Add((project.ProjectPath, started));
+            }
+
             try
             {
-                var events = status.type == DotnetWatchStatusTypes.ProcessExited ? _exits : _launches;
-                var deadline = DateTime.UtcNow + s_correlationTimeout;
-                while (true)
+                if (!await control.SendRebuildAsync([project.ProjectPath], context.CancellationToken).ConfigureAwait(false))
                 {
-                    lock (_replicaGate)
-                    {
-                        foreach (var candidate in events)
-                        {
-                            if (candidate.Consumed || (status.type == DotnetWatchStatusTypes.ProcessExited && candidate.ExitCode != status.exitCode))
-                            {
-                                continue;
-                            }
-
-                            if (notifications.TryGetCurrentState(candidate.Instance, out var current)
-                                && targets.Find(t => t.Resource == current.Resource) is { } target)
-                            {
-                                candidate.Consumed = true;
-                                _ = PublishWatchEventAsync(notifications, target.Resource, candidate.Instance, status);
-                                return;
-                            }
-                        }
-                    }
-
-                    if (DateTime.UtcNow >= deadline)
-                    {
-                        break;
-                    }
-
-                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                    return new ExecuteCommandResult { Success = false, Message = $"The hot reload watcher '{Resource.Name}' isn't accepting commands." };
                 }
 
-                // No matching log line (for example, a renamed replica): fall back to every replica with the path.
-                foreach (var target in targets)
-                {
-                    await PublishWatchEventAsync(notifications, target.Resource, resourceId: null, status).ConfigureAwait(false);
-                }
+                await started.Task.WaitAsync(s_restartTimeout, context.CancellationToken).ConfigureAwait(false);
+                return new ExecuteCommandResult { Success = true, Message = $"Restarted '{project.Resource.Name}'." };
             }
-            catch (OperationCanceledException)
+            catch (TimeoutException)
             {
+                return new ExecuteCommandResult { Success = false, Message = $"The watcher didn't relaunch '{project.Resource.Name}' within {s_restartTimeout.TotalSeconds:0} seconds; see the 'dotnet-watch' resource logs." };
+            }
+            finally
+            {
+                lock (_pendingRestarts)
+                {
+                    _pendingRestarts.RemoveAll(r => r.Started == started);
+                }
             }
         }
 
-        private readonly HashSet<DotnetProjectResource> _pendingReferenceRebuilds = [];
-        private int _referenceRebuildGeneration;
+        private void CompletePendingRestarts(string projectPath)
+        {
+            lock (_pendingRestarts)
+            {
+                foreach (var (path, started) in _pendingRestarts)
+                {
+                    if (string.Equals(path, projectPath, StringComparison.Ordinal))
+                    {
+                        started.TrySetResult();
+                    }
+                }
+            }
+        }
+
+        private void OnProjectFilesChanged(IServiceProvider services, IReadOnlyList<string> changed)
+        {
+            if (!_ready)
+            {
+                // The watcher's next build (it waits for a change after a failed build) or its first build reads them.
+                return;
+            }
+
+            var roots = Roots;
+            EmitNotices(services, [new WatchNotice(WatchNoticeKind.ProjectFileChanged, LogLevel.Information,
+                $"📦 {string.Join(", ", changed.Select(Path.GetFileName))} changed.", roots)]);
+            _ = Task.Run(() => RestartWithServicesAsync(services, "to apply the project file changes"));
+        }
+
         private readonly SemaphoreSlim _restartLock = new(1, 1);
         private TaskCompletionSource? _stoppedForRestart;
 
         /// <summary>
-        /// The watcher reloads a changed project file but doesn't restore or rebuild it, so new package or project
-        /// references wouldn't reach the service. Restarts the watcher with its services once saves settle.
-        /// </summary>
-        private void ScheduleReferenceRebuild(IServiceProvider services, IEnumerable<WatchedProject> projects)
-        {
-            int generation;
-            lock (_pendingReferenceRebuilds)
-            {
-                foreach (var project in projects)
-                {
-                    _pendingReferenceRebuilds.Add(project.Resource);
-                }
-
-                if (_pendingReferenceRebuilds.Count == 0)
-                {
-                    return;
-                }
-
-                generation = ++_referenceRebuildGeneration;
-            }
-
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(s_referenceRebuildDebounce).ConfigureAwait(false);
-                lock (_pendingReferenceRebuilds)
-                {
-                    if (generation != _referenceRebuildGeneration)
-                    {
-                        return;
-                    }
-
-                    _pendingReferenceRebuilds.Clear();
-                }
-
-                await RestartWithServicesAsync(services, "to apply the package and project reference changes").ConfigureAwait(false);
-            });
-        }
-
-        /// <summary>
-        /// Stops this server's services, restarts the watcher and starts the services again. Building outside the
-        /// watcher (Aspire's Rebuild) isn't enough: the running watcher keeps its compilation baselines and replays its
-        /// hot reload delta history to every process it launches. After removing a package whose API an earlier edit
-        /// used, the rebuilt assembly matched the original (same MVID), the replayed deltas applied and the service
-        /// aborted at startup (MethodAccessException). A fresh watcher restores and builds the projects as its initial
-        /// build; the services wait for it as they do at startup.
+        /// Stops this server's services, restarts the watcher and starts the services again. The watcher re-evaluates
+        /// a changed project file but doesn't rebuild it, so a new package never reaches the service, and building
+        /// outside the watcher isn't enough: it keeps its compilation baselines and replays its hot reload delta
+        /// history to every process it launches (after removing a package an earlier edit used, the replayed deltas
+        /// applied to a matching assembly and the service aborted with MethodAccessException). A fresh watcher restores
+        /// and builds the projects as its initial build; the services wait for it as they do at startup.
         /// </summary>
         private async Task RestartWithServicesAsync(IServiceProvider services, string reason)
         {
@@ -1216,54 +1187,31 @@ internal static partial class DotnetWatchCoordinator
 
         // The watcher names a file-based app by its virtual project path (app.cs.csproj); the model has the .cs file.
         private string[] ToEntryPointPaths(string[] paths) =>
-            [.. paths.Select(path => path.EndsWith(".cs.csproj", StringComparison.OrdinalIgnoreCase) &&
-                Projects.FirstOrDefault(p => PathsEqual(p.ProjectPath, path[..^".csproj".Length])) is { } project
-                    ? project.ProjectPath
-                    : path)];
+            [.. paths.Select(path => ToFileBasedProject(path) is { } project ? project.ProjectPath : path)];
+
+        private WatchedProject? ToFileBasedProject(string path) =>
+            path.EndsWith(".cs.csproj", StringComparison.OrdinalIgnoreCase)
+                ? Projects.FirstOrDefault(p => PathsEqual(p.ProjectPath, path[..^".csproj".Length]))
+                : null;
 
         private readonly ConcurrentDictionary<string, byte> _fileBasedRebuilds = new(StringComparer.Ordinal);
 
-        private void OnReplicaLogLine(string line)
-        {
-            if (TryParseLaunchedLine(line, out var processId, out var instance))
-            {
-                lock (_replicaGate)
-                {
-                    _instanceByProcessId[processId] = instance;
-                    Record(_launches, new ReplicaEvent(instance, ExitCode: null));
-                }
-            }
-            else if (TryParseExitedLine(line, out processId, out var exitCode))
-            {
-                lock (_replicaGate)
-                {
-                    if (_instanceByProcessId.Remove(processId, out var exitedInstance))
-                    {
-                        Record(_exits, new ReplicaEvent(exitedInstance, exitCode));
-                    }
-                }
-            }
-
-            static void Record(List<ReplicaEvent> events, ReplicaEvent e)
-            {
-                events.RemoveAll(x => x.Consumed || DateTime.UtcNow - x.At > TimeSpan.FromMinutes(1));
-                events.Add(e);
-            }
-        }
-
         /// <summary>
-        /// The watcher (rc.2, and SDK main at the time of writing) rebuilds a restarted file-based app through its virtual
-        /// project path (<c>dotnet build ticker.cs.csproj</c>), which fails with MSB1009 and leaves the app stopped. A fresh
-        /// watcher builds the .cs file itself as its initial build, so restart the app's (dedicated) watcher instead.
+        /// The watcher (10.0.x, and SDK main at the time of writing) rebuilds a restarted file-based app through its
+        /// virtual project path (<c>dotnet build ticker.cs.csproj</c>), which fails (MSB1009) and leaves the app
+        /// stopped; its <c>build_complete</c> names that path. A fresh watcher builds the .cs file itself as its initial
+        /// build, so restart the app's (dedicated) watcher instead, which also reports a genuine compile error.
         /// </summary>
-        private void RebuildFileBasedAppIfStuck(IServiceProvider services, string line)
+        /// <returns>Whether the failure was handled (and its notice suppressed).</returns>
+        private bool RebuildFileBasedAppIfStuck(IServiceProvider services, string[] rawProjects)
         {
-            if (!TryParseVirtualProjectBuildFailure(line, out var entryPoint))
+            var fileBased = rawProjects.Select(ToFileBasedProject).ToArray();
+            if (fileBased.Length == 0 || fileBased.Any(p => p is null))
             {
-                return;
+                return false;
             }
 
-            foreach (var project in Projects.Where(p => ((IProjectMetadata)p.Metadata).IsFileBasedApp && PathsEqual(p.ProjectPath, entryPoint)))
+            foreach (var project in fileBased.OfType<WatchedProject>().DistinctBy(p => p.Resource))
             {
                 if (!_fileBasedRebuilds.TryAdd(project.Resource.Name, 0))
                 {
@@ -1283,66 +1231,12 @@ internal static partial class DotnetWatchCoordinator
                     }
                 });
             }
-        }
 
-        /// <summary>
-        /// Feeds the watcher's console output (build and compiler errors, changed files, apply times) to the
-        /// interpreter; the status protocol doesn't carry those details.
-        /// </summary>
-        private async Task TailServerLogsAsync(IServiceProvider services, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var loggers = services.GetRequiredService<ResourceLoggerService>();
-                await foreach (var batch in loggers.WatchAsync(Resource).WithCancellation(cancellationToken).ConfigureAwait(false))
-                {
-                    foreach (var line in batch)
-                    {
-                        OnReplicaLogLine(line.Content);
-                        RebuildFileBasedAppIfStuck(services, line.Content);
-
-                        IReadOnlyList<WatchNotice> notices;
-                        lock (_noticeGate)
-                        {
-                            notices = _interpreter?.OnLogLine(line.Content) ?? [];
-                            if (_interpreter?.FirstError is { } error && !_ready)
-                            {
-                                _lastBuildError = error;
-                            }
-                        }
-
-                        EmitNotices(services, notices);
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-            }
+            return true;
         }
 
         private void EmitNotices(IServiceProvider services, IReadOnlyList<WatchNotice> notices)
         {
-            lock (_noticeGate)
-            {
-                // A failure can wait for its first error line, which arrives through DCP's log stream after the status
-                // event. Don't hold the notice back for long if the line never comes.
-                if (_interpreter is { HasPending: true } interpreter && !_flushScheduled)
-                {
-                    _flushScheduled = true;
-                    _ = Task.Delay(TimeSpan.FromSeconds(2)).ContinueWith(_ =>
-                    {
-                        IReadOnlyList<WatchNotice> flushed;
-                        lock (_noticeGate)
-                        {
-                            _flushScheduled = false;
-                            flushed = ReferenceEquals(_interpreter, interpreter) ? interpreter.FlushPending() : [];
-                        }
-
-                        EmitNotices(services, flushed);
-                    }, TaskScheduler.Default);
-                }
-            }
-
             if (notices.Count == 0)
             {
                 return;
@@ -1353,18 +1247,6 @@ internal static partial class DotnetWatchCoordinator
             var projects = Projects;
             foreach (var notice in notices)
             {
-                if (notice.Kind == WatchNoticeKind.ProjectFileChanged)
-                {
-                    ScheduleReferenceRebuild(services, projects.Where(p => notice.ProjectPaths.Any(path => PathsEqual(p.ProjectPath, path))));
-                }
-
-                // The Rebuild command replaces the watcher's failed rebuild of a restarted file-based app; see RebuildFileBasedAppIfStuck.
-                if (notice.Kind == WatchNoticeKind.BuildFailed && notice.ProjectPaths.Count > 0 &&
-                    notice.ProjectPaths.All(path => projects.Any(p => _fileBasedRebuilds.ContainsKey(p.Resource.Name) && PathsEqual(p.ProjectPath, path))))
-                {
-                    continue;
-                }
-
 #pragma warning disable CA2254 // The notice text is the message; it has no structured parameters.
                 noticeLogger.Log(notice.Level, NoticeEventId(notice.Kind), notice.Message);
 #pragma warning restore CA2254
@@ -1380,55 +1262,47 @@ internal static partial class DotnetWatchCoordinator
             }
         }
 
-        private static async Task PublishWatchEventAsync(ResourceNotificationService notifications, DotnetProjectResource resource, string? resourceId, WatchStatus status)
+        /// <summary>
+        /// Mirrors a status event on the project resource. The events name project paths only, so a launch or crash is
+        /// shown on the resource's state when it has a single replica; with several replicas the watcher doesn't say
+        /// which one, and only the last-event property changes.
+        /// </summary>
+        private static async Task PublishWatchEventAsync(ResourceNotificationService notifications, DotnetProjectResource resource, WatchStatus status)
         {
             var stamp = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-            Func<CustomResourceSnapshot, CustomResourceSnapshot>? update = status.type switch
-            {
-                DotnetWatchStatusTypes.HotReloadApplied or DotnetWatchStatusTypes.Restarting => s => s with
-                {
-                    Properties = WithProperty(s.Properties, "dotnet-watch.last-event", $"{status.type} @ {stamp}")
-                },
+            var lastEvent = status.type == DotnetWatchStatusTypes.ProcessExited
+                ? $"process_exited({status.exitCode}) @ {stamp}"
+                : $"{status.type} @ {stamp}";
+            var singleReplica = resource.GetReplicaCount() == 1;
 
+            Func<CustomResourceSnapshot, CustomResourceSnapshot> update = status.type switch
+            {
                 // The resource pipe carries no exit status and the watcher keeps the proxy connected so it can
-                // relaunch the app on the next change. Surface the app's exit code on the replica instead.
-                DotnetWatchStatusTypes.ProcessExited => s => s with
+                // relaunch the app on the next change. Surface the app's exit code on the resource instead.
+                DotnetWatchStatusTypes.ProcessExited when singleReplica => s => s with
                 {
                     State = new ResourceStateSnapshot(CrashedState, KnownResourceStateStyles.Error),
                     ExitCode = status.exitCode,
-                    Properties = WithProperty(s.Properties, "dotnet-watch.last-event", $"process_exited({status.exitCode}) @ {stamp}")
+                    Properties = WithProperty(s.Properties, "dotnet-watch.last-event", lastEvent)
                 },
 
-                DotnetWatchStatusTypes.ProcessStarted => s => s.State?.Text == CrashedState
-                    ? s with { State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success), ExitCode = null }
-                    : s,
+                DotnetWatchStatusTypes.ProcessStarted when singleReplica => s => s.State?.Text == CrashedState
+                    ? s with
+                    {
+                        State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                        ExitCode = null,
+                        Properties = WithProperty(s.Properties, "dotnet-watch.last-event", lastEvent)
+                    }
+                    : s with { Properties = WithProperty(s.Properties, "dotnet-watch.last-event", lastEvent) },
 
-                _ => null
+                _ => s => s with { Properties = WithProperty(s.Properties, "dotnet-watch.last-event", lastEvent) }
             };
 
-            if (update is null)
-            {
-                return;
-            }
-
-            if (resourceId is null)
-            {
-                await notifications.PublishUpdateAsync(resource, update).ConfigureAwait(false);
-            }
-            else
-            {
-                await notifications.PublishUpdateAsync(resource, resourceId, update).ConfigureAwait(false);
-            }
+            await notifications.PublishUpdateAsync(resource, update).ConfigureAwait(false);
         }
 
         private static ImmutableArray<ResourcePropertySnapshot> WithProperty(ImmutableArray<ResourcePropertySnapshot> properties, string name, string value) =>
             [.. properties.Where(p => p.Name != name), new ResourcePropertySnapshot(name, value)];
-    }
-
-    private sealed record ReplicaEvent(string Instance, int? ExitCode)
-    {
-        public DateTime At { get; } = DateTime.UtcNow;
-        public bool Consumed { get; set; }
     }
 
     /// <summary>MSBuild properties the watcher's process environment carries for a server's projects.</summary>
