@@ -157,6 +157,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         Assert.Equal("HEAD", env["REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__METHODS__1"]);
         Assert.Equal("*", env["REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__HOSTS__0"]);
         Assert.Equal("/index.html", env["REVERSEPROXY__ROUTES__aspireSpaFallback__TRANSFORMS__0__PATHSET"]);
+        Assert.Equal("true", env["REVERSEPROXY__ROUTES__aspireSpaFallback__TRANSFORMS__1__REQUESTHEADERORIGINALHOST"]);
         Assert.Equal("http://127.0.0.1:{vite.bindings.http.targetPort}", env["REVERSEPROXY__CLUSTERS__aspireSpaFallback__DESTINATIONS__self__ADDRESS"]);
         Assert.False(env.ContainsKey("ASPNETCORE_URLS"));
         Assert.Equal("true", env["YARP_DISABLE_SPA_FALLBACK"]);
@@ -230,6 +231,38 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
 
         Assert.Equal("http://+:6200", env["ASPNETCORE_URLS"]);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PublishAsStaticWebsiteAvoidsUserConfiguredClusterNames(bool configureFirst)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path);
+
+        if (configureFirst)
+        {
+            ConfigureEnvironment();
+        }
+
+        nodeApp.PublishAsStaticWebsite();
+        if (!configureFirst)
+        {
+            ConfigureEnvironment();
+        }
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(nodeApp.Resource, DistributedApplicationOperation.Publish);
+
+        Assert.Equal("http://example.test", env["ReverseProxy__Clusters__aspireSpaFallback__Destinations__external__Address"]);
+        Assert.Equal("aspireSpaFallback1", env["REVERSEPROXY__ROUTES__aspireSpaFallback1__CLUSTERID"]);
+        Assert.Equal("http://127.0.0.1:{vite.bindings.http.targetPort}", env["REVERSEPROXY__CLUSTERS__aspireSpaFallback1__DESTINATIONS__self__ADDRESS"]);
+
+        void ConfigureEnvironment()
+        {
+            nodeApp.WithEnvironment("ReverseProxy__Clusters__aspireSpaFallback__Destinations__external__Address", "http://example.test");
+        }
     }
 
     [Fact]

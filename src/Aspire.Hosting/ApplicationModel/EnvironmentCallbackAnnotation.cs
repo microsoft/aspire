@@ -81,6 +81,11 @@ public class EnvironmentCallbackAnnotation : IResourceAnnotation, IEnvCallbackAn
     /// </summary>
     public Func<EnvironmentCallbackContext, Task> Callback { get; private set; }
 
+    /// <summary>
+    /// Gets whether this callback runs after callbacks without this flag.
+    /// </summary>
+    internal bool ExecuteAfterOtherCallbacks { get; init; }
+
     internal IEnvCallbackAnnotation AsCallbackAnnotation() => this;
 
     Task<Dictionary<string, object>> IEnvCallbackAnnotation.EvaluateOnceAsync(EnvironmentCallbackContext context)

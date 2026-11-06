@@ -62,6 +62,10 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
             .WithEnvironment("ASPNETCORE_URLS", "http://+:6200")
             .WithStaticFiles(frontendPath)
             .WithSpaFallback()
+            .WithEnvironment("ReverseProxy__Clusters__aspireSpaFallback__Destinations__external__Address", backend.GetEndpoint("http"))
+            .WithEnvironment("ReverseProxy__Routes__external__ClusterId", "aspireSpaFallback")
+            .WithEnvironment("ReverseProxy__Routes__external__Match__Path", "/external/{**catch-all}")
+            .WithEnvironment("ReverseProxy__Routes__external__Transforms__0__PathRemovePrefix", "/external")
             .WithConfiguration(config =>
             {
                 config.AddRoute("/api/{**catch-all}", backend.GetEndpoint("http"))
@@ -115,6 +119,7 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(HttpStatusCode.MethodNotAllowed, postResponse.StatusCode);
 
         Assert.Equal("backend response", await client.GetStringAsync("/api/api.txt"));
+        Assert.Equal("backend response", await client.GetStringAsync("/external/api.txt"));
         using var missingApi = await client.GetAsync("/api/missing");
         Assert.Equal(HttpStatusCode.NotFound, missingApi.StatusCode);
 
@@ -133,6 +138,57 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
         fallbackOrderClient.Timeout = TimeSpan.FromSeconds(15);
         Assert.Equal("backend response", await fallbackOrderClient.GetStringAsync("/api.txt"));
         Assert.Equal("<html>SPA index</html>", await fallbackOrderClient.GetStringAsync("/test"));
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public async Task SpaFallbackPreservesTheOriginalHostForHostFiltering()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "index.html"), "<html>SPA index</html>");
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        // Health probes use localhost, which the restricted host configuration rejects.
+        var yarp = builder.AddYarp("restricted")
+            .WithEnvironment("AllowedHosts", "example.com")
+            .WithStaticFiles(workspace.Path)
+            .WithSpaFallback()
+            .WithHttpHealthCheck("/index.html", statusCode: (int)HttpStatusCode.BadRequest, endpointName: "http");
+
+        using var app = builder.Build();
+        using var startTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        await app.StartAsync(startTimeout.Token);
+
+        using var readyTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(yarp.Resource.Name, readyTimeout.Token);
+
+        using var client = app.CreateHttpClient(yarp.Resource.Name, "http");
+        client.Timeout = TimeSpan.FromSeconds(15);
+
+        using var indexRequest = new HttpRequestMessage(HttpMethod.Get, "/index.html");
+        indexRequest.Headers.Host = "example.com";
+        using var indexResponse = await client.SendAsync(indexRequest);
+        Assert.Equal(HttpStatusCode.OK, indexResponse.StatusCode);
+        Assert.Equal("<html>SPA index</html>", await indexResponse.Content.ReadAsStringAsync());
+
+        using var navigationRequest = new HttpRequestMessage(HttpMethod.Get, "/nested/page");
+        navigationRequest.Headers.Host = "example.com";
+        using var navigationResponse = await client.SendAsync(navigationRequest);
+        Assert.Equal(HttpStatusCode.OK, navigationResponse.StatusCode);
+        Assert.Equal("<html>SPA index</html>", await navigationResponse.Content.ReadAsStringAsync());
+
+        using var headRequest = new HttpRequestMessage(HttpMethod.Head, "/nested/page");
+        headRequest.Headers.Host = "example.com";
+        using var headResponse = await client.SendAsync(headRequest);
+        Assert.Equal(HttpStatusCode.OK, headResponse.StatusCode);
+        Assert.Equal(string.Empty, await headResponse.Content.ReadAsStringAsync());
+
+        using var blockedRequest = new HttpRequestMessage(HttpMethod.Get, "/nested/page");
+        blockedRequest.Headers.Host = "not-allowed.test";
+        using var blockedResponse = await client.SendAsync(blockedRequest);
+        Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
 
         await app.StopAsync();
     }

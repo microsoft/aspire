@@ -45,12 +45,16 @@ internal static class YarpStaticFileFallback
             // Newer YARP images can add a native fallback when static files are enabled.
             // Disable that implicit route while Aspire controls fallback and its opt-out.
             environment["YARP_DISABLE_SPA_FALLBACK"] = "true";
+        });
 
+        builder.WithAnnotation(new EnvironmentCallbackAnnotation((EnvironmentCallbackContext context) =>
+        {
             if (annotation.Enabled is not true || !annotation.StaticFilesEnabled)
             {
                 return;
             }
 
+            var environment = context.EnvironmentVariables;
             var name = FindAvailableName(environment);
             var route = $"REVERSEPROXY__ROUTES__{name}";
             var cluster = $"REVERSEPROXY__CLUSTERS__{name}";
@@ -68,8 +72,13 @@ internal static class YarpStaticFileFallback
             // https://learn.microsoft.com/aspnet/core/fundamentals/servers/yarp/header-routing#precedence
             environment[$"{route}__MATCH__HOSTS__0"] = "*";
             environment[$"{route}__TRANSFORMS__0__PATHSET"] = "/index.html";
+            // Host filtering is applied again by the loopback request.
+            environment[$"{route}__TRANSFORMS__1__REQUESTHEADERORIGINALHOST"] = "true";
             environment[$"{cluster}__DESTINATIONS__self__ADDRESS"] = ReferenceExpression.Create(
                 $"http://127.0.0.1:{builder.Resource.GetEndpoint("http").Property(EndpointProperty.TargetPort)}");
+        })
+        {
+            ExecuteAfterOtherCallbacks = true
         });
 
         return annotation;
@@ -77,14 +86,17 @@ internal static class YarpStaticFileFallback
 
     private static string FindAvailableName(Dictionary<string, object> environment)
     {
+        // Environment keys such as ReverseProxy__Clusters__name__... and
+        // ReverseProxy:Clusters:name:... map to the same .NET configuration path.
+        var keys = environment.Keys.Select(static key => key.Replace("__", ":", StringComparison.Ordinal)).ToArray();
         var index = 0;
         while (true)
         {
             var name = index == 0 ? FallbackName : FallbackName + index.ToString(CultureInfo.InvariantCulture);
-            var routePrefix = $"REVERSEPROXY__ROUTES__{name}__";
-            var clusterPrefix = $"REVERSEPROXY__CLUSTERS__{name}__";
-            if (!environment.Keys.Any(key => key.StartsWith(routePrefix, StringComparison.OrdinalIgnoreCase) ||
-                                             key.StartsWith(clusterPrefix, StringComparison.OrdinalIgnoreCase)))
+            var routePrefix = $"REVERSEPROXY:ROUTES:{name}:";
+            var clusterPrefix = $"REVERSEPROXY:CLUSTERS:{name}:";
+            if (!keys.Any(key => key.StartsWith(routePrefix, StringComparison.OrdinalIgnoreCase) ||
+                                 key.StartsWith(clusterPrefix, StringComparison.OrdinalIgnoreCase)))
             {
                 return name;
             }

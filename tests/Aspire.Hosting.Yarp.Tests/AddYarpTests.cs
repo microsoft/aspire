@@ -227,27 +227,97 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
             "REVERSEPROXY__ROUTES__aspireSpaFallback__MATCH__PATH",
             "REVERSEPROXY__ROUTES__aspireSpaFallback__ORDER",
             "REVERSEPROXY__ROUTES__aspireSpaFallback__TRANSFORMS__0__PATHSET",
+            "REVERSEPROXY__ROUTES__aspireSpaFallback__TRANSFORMS__1__REQUESTHEADERORIGINALHOST",
         ], keys);
     }
 
-    [Fact]
-    public async Task VerifySpaFallbackAvoidsExistingRouteAndClusterNames()
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, true)]
+    [InlineData(DistributedApplicationOperation.Run, false)]
+    [InlineData(DistributedApplicationOperation.Publish, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false)]
+    public async Task VerifySpaFallbackAvoidsExistingRouteAndClusterNames(DistributedApplicationOperation operation, bool configureFirst)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var testProvider = new TestServiceProvider();
+        testProvider.AddService<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+            new List<X509Certificate2>(),
+            supportsContainerTrust: false,
+            trustCertificate: true,
+            tlsTerminate: false));
+        testProvider.AddService(new DistributedApplicationOptions());
+        testProvider.AddService(Options.Create(new DcpOptions()));
 
-        var yarp = builder.AddYarp("yarp")
-            .WithEnvironment("ReverseProxy__Routes__ASPIRESpaFallback__Match__Path", "/existing")
-            .WithEnvironment("ReverseProxy__Clusters__aspireSpaFallback1__Destinations__existing__Address", "http://example.test")
-            .WithStaticFiles()
-            .WithSpaFallback();
+        var yarp = builder.AddYarp("yarp");
+        var callbackCount = 0;
+        if (configureFirst)
+        {
+            ConfigureEnvironment();
+        }
 
-        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(yarp.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+        yarp.WithStaticFiles().WithSpaFallback();
+        if (!configureFirst)
+        {
+            ConfigureEnvironment();
+        }
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(yarp.Resource, operation, testProvider);
 
         Assert.Equal("/existing", env["ReverseProxy__Routes__ASPIRESpaFallback__Match__Path"]);
         Assert.Equal("http://example.test", env["ReverseProxy__Clusters__aspireSpaFallback1__Destinations__existing__Address"]);
         Assert.Equal("aspireSpaFallback2", env["REVERSEPROXY__ROUTES__aspireSpaFallback2__CLUSTERID"]);
         Assert.Equal("/{**path:nonfile}", env["REVERSEPROXY__ROUTES__aspireSpaFallback2__MATCH__PATH"]);
-        Assert.Equal("http://127.0.0.1:{yarp.bindings.http.targetPort}", env["REVERSEPROXY__CLUSTERS__aspireSpaFallback2__DESTINATIONS__self__ADDRESS"]);
+        Assert.Equal(
+            operation == DistributedApplicationOperation.Run ? "http://127.0.0.1:5000" : "http://127.0.0.1:{yarp.bindings.http.targetPort}",
+            env["REVERSEPROXY__CLUSTERS__aspireSpaFallback2__DESTINATIONS__self__ADDRESS"]);
+        Assert.Equal(1, callbackCount);
+
+        void ConfigureEnvironment()
+        {
+            yarp.WithEnvironment("ReverseProxy__Routes__ASPIRESpaFallback__Match__Path", "/existing")
+                .WithEnvironment(context =>
+                {
+                    callbackCount++;
+                    context.EnvironmentVariables["ReverseProxy__Clusters__aspireSpaFallback1__Destinations__existing__Address"] = "http://example.test";
+                });
+        }
+    }
+
+    [Theory]
+    [InlineData("ReverseProxy__Clusters__ASPIRESpaFallback__Destinations__external__Address")]
+    [InlineData("ReverseProxy:Clusters:ASPIRESpaFallback:Destinations:external:Address")]
+    [InlineData("ReverseProxy__Clusters:ASPIRESpaFallback__Destinations:external__Address")]
+    public async Task VerifySpaFallbackDoesNotShareAClusterConfiguredAfterIt(string clusterKey)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var yarp = builder.AddYarp("yarp")
+            .WithStaticFiles()
+            .WithSpaFallback()
+            .WithEnvironment(clusterKey, "http://example.test");
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(yarp.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+
+        Assert.Equal("http://example.test", env[clusterKey]);
+        Assert.Equal("aspireSpaFallback1", env["REVERSEPROXY__ROUTES__aspireSpaFallback1__CLUSTERID"]);
+        Assert.Equal("http://127.0.0.1:{yarp.bindings.http.targetPort}", env["REVERSEPROXY__CLUSTERS__aspireSpaFallback1__DESTINATIONS__self__ADDRESS"]);
+        Assert.Equal(
+            [clusterKey],
+            env.Keys.Where(key => key.Replace("__", ":", StringComparison.Ordinal)
+                .StartsWith("ReverseProxy:Clusters:aspireSpaFallback:", StringComparison.OrdinalIgnoreCase)).ToArray());
+    }
+
+    [Fact]
+    public async Task VerifyEnvironmentCanOverrideTheNativeFallbackFlagAfterSpaFallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var yarp = builder.AddYarp("yarp")
+            .WithStaticFiles()
+            .WithSpaFallback()
+            .WithEnvironment("YARP_DISABLE_SPA_FALLBACK", "false");
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(yarp.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+
+        Assert.Equal("false", env["YARP_DISABLE_SPA_FALLBACK"]);
     }
 
     [Fact]

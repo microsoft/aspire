@@ -1,0 +1,30 @@
+﻿services:
+  gateway:
+    image: "mcr.microsoft.com/dotnet/nightly/yarp:2.3-preview"
+    command:
+      - "/app/yarp.dll"
+    entrypoint:
+      - "dotnet"
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      YARP_ENABLE_STATIC_FILES: "true"
+      YARP_DISABLE_SPA_FALLBACK: "true"
+      ReverseProxy__Clusters__aspireSpaFallback__Destinations__external__Address: "http://example.test"
+      ReverseProxy__Routes__external__ClusterId: "aspireSpaFallback"
+      ReverseProxy__Routes__external__Match__Path: "/external/{**catch-all}"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__CLUSTERID: "aspireSpaFallback1"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__ORDER: "2147483647"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__MATCH__PATH: "/{**path:nonfile}"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__MATCH__METHODS__0: "GET"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__MATCH__METHODS__1: "HEAD"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__MATCH__HOSTS__0: "*"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__TRANSFORMS__0__PATHSET: "/index.html"
+      REVERSEPROXY__ROUTES__aspireSpaFallback1__TRANSFORMS__1__REQUESTHEADERORIGINALHOST: "true"
+      REVERSEPROXY__CLUSTERS__aspireSpaFallback1__DESTINATIONS__self__ADDRESS: "http://127.0.0.1:5000"
+    expose:
+      - "5000"
+    networks:
+      - "aspire"
+networks:
+  aspire:
+    driver: "bridge"
