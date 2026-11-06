@@ -1,0 +1,80 @@
+{
+  "run_id": 42288258477,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42288258477",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-06T21:13:11Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21845,
+    "title": "Retry transient GraphQL failures in milestone changelog fetch-data",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "fix/milestone-changelog-graphql-retry",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21845",
+    "merged_at": "2026-11-06T20:25:36Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "363db70eac9ade5a43ae35ed7890d3d6ba165ba6",
+    "failed_sha": "d47e6e8a51a92bebab4a33b1eebcfd3462d9d673",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "d47e6e8a51a92bebab4a33b1eebcfd3462d9d673",
+        "message": "Retry transient GraphQL failures in milestone changelog fetch-data (#21845) ## Failure The Milestone Changelog Generator's `fetch-data` job fails whenever GitHub's GraphQL gateway returns a transient **502/504** (or a truncated body) to one of its two `gh pr list --limit 5000` calls. Nothing retries, so one hiccup fails the whole scheduled run: **12 of 127 runs (~9%)** since 2026-10-06 (#21838). Failing runs: [37508147763](https://github.com/microsoft/aspire/actions/runs/37508147763) (504) · [37",
+        "html_url": "https://github.com/microsoft/aspire/commit/d47e6e8a51a92bebab4a33b1eebcfd3462d9d673",
+        "pull_request": {
+          "number": 21845,
+          "title": "Retry transient GraphQL failures in milestone changelog fetch-data",
+          "url": "https://github.com/microsoft/aspire/pull/21845",
+          "merged_at": "2026-11-06T20:25:36Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "id": 128140769245,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42288258477/job/128140769245",
+      "classification": "main-repository-breakage",
+      "reason": "Deterministic fake-timer unit assertion failed in spawnCliProcess tests on Windows; no transient evidence.",
+      "failed_steps": [
+        "Run tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, tree-actions)",
+      "id": 128147538335,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42288258477/job/128147538335",
+      "classification": "flaky-test",
+      "reason": "Tree-actions E2E failed with the recurring intermittent missing e2e-worker endpoint URL assertion.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out/test-e2e/test-e2e/treeActions.e2e.test.js:326:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same assertion and phase recorded intermittently in prior runs for this tree-actions test.",
+      "job_id": 128147538335,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing",
+    "vscode-unit-windows-spawncliprocess-taskkill-close-timers"
+  ]
+}

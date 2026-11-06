@@ -1,0 +1,15 @@
+{
+  "id": "vscode-unit-windows-spawncliprocess-taskkill-close-timers",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension Windows unit test 'rejects when a Windows child does not close after successful taskkill' fails strict equality 1 !== 0",
+  "error_pattern": "spawnCliProcess tests\nrejects when a Windows child does not close after successful taskkill:\nAssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n1 !== 0",
+  "occurrences": [
+    {
+      "run_id": 42288258477,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42288258477",
+      "job": "Tests / Run VS Code extension unit tests (Windows) / Run VS Code extension unit tests (Windows)",
+      "observed_at": "2026-11-06T21:13:11Z",
+      "pr_number": 0
+    }
+  ]
+}
