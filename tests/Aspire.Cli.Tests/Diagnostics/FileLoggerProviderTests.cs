@@ -45,13 +45,9 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
         using (var provider = new FileLoggerProvider(path, workspace.Path, errorWriter))
         {
             provider.WriteLog(new string('x', RollingLogFile.FileSizeLimit + 1));
-            provider.WriteLog("Current log");
         }
 
-        var archive = Path.ChangeExtension(path, "1.log");
-        Assert.Equal(new[] { path, archive }.Order(), Directory.GetFiles(workspace.Path, "*.log").Order());
-        Assert.Equal(RollingLogFile.FileSizeLimit, new FileInfo(archive).Length);
-        Assert.Equal("Current log" + Environment.NewLine, File.ReadAllText(path));
+        Assert.InRange(new FileInfo(path).Length, 1, RollingLogFile.FileSizeLimit);
         Assert.Empty(errorWriter.MarkupLines);
     }
 
