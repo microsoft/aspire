@@ -109,6 +109,9 @@ public static class AzureSandboxesExtensions
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = sandboxGroup.Id.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = sandboxGroup.Name.ToBicepExpression() });
             infrastructure.Add(new ProvisioningOutput("location", typeof(string)) { Value = sandboxGroup.Location.ToBicepExpression() });
+            // ADC requires an Entra ID-protected port to name the tenants allowed to sign in, so expose the tenant that owns the
+            // sandbox group. Compile the scope-function property directly; ToBicepExpression would reference an undeclared "tenant" resource.
+            infrastructure.Add(new ProvisioningOutput(AzureSandboxGroupResource.TenantIdOutputName, typeof(string)) { Value = BicepFunction.GetTenant().TenantId.Compile() });
             infrastructure.Add(new ProvisioningOutput(AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName, typeof(string))
             {
                 Value = imagePullIdentityClientId

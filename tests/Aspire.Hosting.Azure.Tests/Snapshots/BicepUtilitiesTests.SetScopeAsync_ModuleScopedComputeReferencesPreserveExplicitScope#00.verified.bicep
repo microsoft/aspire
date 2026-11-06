@@ -15,4 +15,6 @@ output name string = sandbox.name
 
 output location string = sandbox.location
 
+output tenantId string = tenant().tenantId
+
 output imagePullIdentityClientId string = identity_outputs_clientid

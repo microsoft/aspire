@@ -358,7 +358,7 @@ internal static class AzureSandboxContainerDeployment
                 var exposeTask = await context.ReportingStep.CreateTaskAsync($"Exposing sandbox port {endpoint.TargetPort}", context.CancellationToken).ConfigureAwait(false);
                 await using (exposeTask.ConfigureAwait(false))
                 {
-                    var addedPort = await AddPortAsync(context, client, dataPlaneScope, sandboxId, endpoint).ConfigureAwait(false);
+                    var addedPort = await AddPortAsync(context, client, resource.Parent, dataPlaneScope, sandboxId, endpoint).ConfigureAwait(false);
                     addedPorts.Add(endpoint);
 
                     var endpointUrl = addedPort.Url.ToString();
@@ -929,6 +929,7 @@ internal static class AzureSandboxContainerDeployment
     private static async Task<AzureDevComputeSandboxPort> AddPortAsync(
         PipelineStepContext context,
         IAzureDevComputeClient client,
+        AzureSandboxGroupResource sandboxGroup,
         AzureDevComputeResourceScope scope,
         string sandboxId,
         SandboxEndpoint endpoint)
@@ -940,7 +941,7 @@ internal static class AzureSandboxContainerDeployment
             {
                 Name = endpoint.Name,
                 Port = endpoint.TargetPort,
-                Auth = endpoint.IsExternal ? CreatePortAuthConfig(endpoint.Anonymous == true) : null,
+                Auth = endpoint.IsExternal ? CreatePortAuthConfig(endpoint.Anonymous == true, sandboxGroup) : null,
                 Protocol = endpoint.Protocol
             },
             context.CancellationToken).ConfigureAwait(false);
@@ -949,22 +950,30 @@ internal static class AzureSandboxContainerDeployment
             ?? throw new InvalidOperationException($"The ADC port add response did not contain port '{endpoint.TargetPort}' for sandbox '{sandboxId}'.");
     }
 
-    internal static AzureDevComputePortAuthConfig CreatePortAuthConfig(bool anonymous)
+    internal static AzureDevComputePortAuthConfig CreatePortAuthConfig(bool anonymous, AzureSandboxGroupResource sandboxGroup)
     {
+        if (anonymous)
+        {
+            return new AzureDevComputePortAuthConfig { Anonymous = true };
+        }
+
         // ADC requires at least one authentication provider to be enabled. Sending
         // `anonymous: false` alone is invalid, so the secure default enables Entra ID.
         // https://management.azuredevcompute.io/openapi/v1.json
-        return anonymous
-            ? new AzureDevComputePortAuthConfig { Anonymous = true }
-            : new AzureDevComputePortAuthConfig
+        //
+        // ADC also requires at least one tenant ID whenever Entra ID is enabled, so the default allows
+        // users from the tenant that owns the sandbox group. Otherwise it rejects the port with:
+        //   {"title":"One or more validation errors occurred.","status":400,
+        //    "errors":{"Auth.EntraId.TenantIds":["At least one tenant ID is required when Entra ID authentication is enabled"]}}
+        return new AzureDevComputePortAuthConfig
+        {
+            EntraId = new AzureDevComputePortEntraIdAuthConfig
             {
-                EntraId = new AzureDevComputePortEntraIdAuthConfig
-                {
-                    Enabled = true,
-                    ObjectIds = [],
-                    TenantIds = []
-                }
-            };
+                Enabled = true,
+                ObjectIds = [],
+                TenantIds = [GetRequiredOutput(sandboxGroup, AzureSandboxGroupResource.TenantIdOutputName)]
+            }
+        };
     }
 
     private static async Task<string> ResolveContainerImageAsync(PipelineStepContext context, AzureSandboxContainerResource resource)
