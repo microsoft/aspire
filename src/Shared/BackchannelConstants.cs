@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Buffers.Text;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Hashing;
@@ -411,11 +412,17 @@ internal static class BackchannelConstants
     /// <param name="pid">The process ID to check.</param>
     /// <returns><c>true</c> if the process exists and is running; otherwise, <c>false</c>.</returns>
     public static bool ProcessExists(int pid)
+        => ProcessExists(pid, static pid =>
+        {
+            using var process = Process.GetProcessById(pid);
+            return process.HasExited;
+        });
+
+    internal static bool ProcessExists(int pid, Func<int, bool> hasExited)
     {
         try
         {
-            using var process = Process.GetProcessById(pid);
-            return !process.HasExited;
+            return !hasExited(pid);
         }
         catch (ArgumentException)
         {
@@ -426,6 +433,13 @@ internal static class BackchannelConstants
         {
             // Process has exited
             return false;
+        }
+        catch (Win32Exception)
+        {
+            // The process exists but can't be queried (for example, access denied on Windows for an
+            // elevated process). That isn't evidence it exited, so treat it as running rather than
+            // deleting its socket or aborting discovery of other AppHosts.
+            return true;
         }
     }
 
