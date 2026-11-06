@@ -404,7 +404,9 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 message => message.Message.StartsWith(AgentCommandStrings.InitCommand_InstalledSkillsSummary, StringComparison.Ordinal)));
         }
 
-        await Verify(summary.Message).UseParameters(scope, playwrightOutcome);
+        await Verify(summary.Message)
+            .UseParameters(scope, playwrightOutcome == "installed" ? "installed" : "not-installed")
+            .DisableRequireUniquePrefix();
     }
 
     [Fact]

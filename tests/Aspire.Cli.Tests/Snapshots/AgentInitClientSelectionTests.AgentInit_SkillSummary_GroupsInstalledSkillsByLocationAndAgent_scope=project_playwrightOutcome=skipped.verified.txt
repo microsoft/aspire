@@ -1,4 +1,0 @@
-﻿Installed skills:
-  Skills: dotnet-inspect
-  Locations: .agents/skills (GitHub Copilot, OpenCode), .claude/skills (Claude Code)
-  [dim]Shared files may be discovered by agents that aren't selected.[/]
