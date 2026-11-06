@@ -152,13 +152,15 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void GoHostingChangesSelectExtensionE2e(bool hasAffectedProject)
+    [InlineData(true, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(false, "Aspire.Hosting.Go", "GoHostingExtensions.cs")]
+    [InlineData(true, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    [InlineData(false, "Aspire.Hosting.CodeGeneration.Go", "GoLanguageSupport.cs")]
+    public void GoRuntimeChangesSelectExtensionE2e(bool hasAffectedProject, string project, string fileName)
     {
-        const string path = "src/Aspire.Hosting.Go/GoHostingExtensions.cs";
+        var path = $"src/{project}/{fileName}";
         var result = hasAffectedProject
-            ? SelectWithRealMap(path, "Aspire.Hosting.Go")
+            ? SelectWithRealMap(path, project)
             : SelectWithRealMap(path);
 
         Assert.False(result.SelectsAll);
@@ -347,6 +349,10 @@ public sealed class TestTriggerMapTests
             ["job:native-dashboard-validation"]
         },
         {
+            "eng/scripts/test-native-tray.ps1",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             "eng/scripts/verify-native-dashboard-warnings.ps1",
             ["test:Infrastructure.Tests", "job:native-dashboard-validation"]
         },
@@ -419,6 +425,10 @@ public sealed class TestTriggerMapTests
         },
         {
             "tools/CreateLayout/verify-windows-tray-payload.ps1",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
+        },
+        {
+            "tools/CreateLayout/verify-linux-tray-payload.sh",
             ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests", "job:cli-starter-validation", "job:extension-e2e", "job:winget-installer", "job:homebrew-installer"]
         },
         {
@@ -540,12 +550,15 @@ public sealed class TestTriggerMapTests
     [InlineData(".mcp.json")]
     [InlineData("src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js")]
     [InlineData("src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js")]
+    [InlineData("src/Aspire.Dashboard/Components/Layout/ResourcesLayout.razor.js")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalWindow.test.mjs")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalTitle.test.mjs")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph-game.js")]
+    [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-dashboard-experience.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/DashboardExperience.test.mjs")]
     public void DashboardScriptInputsSelectInfrastructureTests(string path)
@@ -885,11 +898,12 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
-    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
-    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
-    public void GoModTemplatesSelectCliMinimumGoVersionGuard(string path)
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs", "Aspire.Hosting.CodeGeneration.Go")]
+    [InlineData("src/Aspire.Hosting.Go/GoVersionDetector.cs", "Aspire.Hosting.Go")]
+    public void GoVersionInputsSelectCliMinimumGoVersionGuard(string path, string affectedProject)
     {
-        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.Go");
+        var result = SelectWithRealMap(path, affectedProject);
 
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);

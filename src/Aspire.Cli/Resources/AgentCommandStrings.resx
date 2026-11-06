@@ -284,7 +284,7 @@
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
   <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
-    <value>Local Aspire skill files may override plugin skills:
+    <value>Local Aspire skill files may override plugin skills
 {0}</value>
     <comment>{0} lists the local skill entry-point paths, one per line.</comment>
   </data>

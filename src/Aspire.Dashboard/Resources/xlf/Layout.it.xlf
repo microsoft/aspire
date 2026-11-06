@@ -402,11 +402,6 @@
         <target state="new">Depends on {0}</target>
         <note>{0} lists logical resource names that this resource waits for.</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneExitFullCanvas">
-        <source>Return to resource sidebar</source>
-        <target state="new">Return to resource sidebar</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneExpand">
         <source>Expand resource list</source>
         <target state="new">Expand resource list</target>
@@ -420,11 +415,6 @@
       <trans-unit id="ResourcePaneFilterReset">
         <source>Reset</source>
         <target state="new">Reset</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneFullCanvas">
-        <source>Expand resource list to full canvas</source>
-        <target state="new">Expand resource list to full canvas</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneGroupReorderFailed">
@@ -502,6 +492,26 @@
         <target state="new">Nothing shown</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneNoMetrics">
+        <source>No metrics are currently available for this resource. Select to open its metrics view.</source>
+        <target state="new">No metrics are currently available for this resource. Select to open its metrics view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoMetricsLabel">
+        <source>No metrics</source>
+        <target state="new">No metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoStructuredLogs">
+        <source>No structured logs are currently available for this resource. Select to open its logs view.</source>
+        <target state="new">No structured logs are currently available for this resource. Select to open its logs view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoStructuredLogsLabel">
+        <source>No logs</source>
+        <target state="new">No logs</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneNoTagsDescription">
         <source>Add tags to a resource from its overview to group related resources here.</source>
         <target state="new">Add tags to a resource from its overview to group related resources here.</target>
@@ -510,6 +520,21 @@
       <trans-unit id="ResourcePaneNoTagsTitle">
         <source>No tags yet</source>
         <target state="new">No tags yet</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTraces">
+        <source>No traces are currently available for this resource. Select to open its traces view.</source>
+        <target state="new">No traces are currently available for this resource. Select to open its traces view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTracesLabel">
+        <source>No traces</source>
+        <target state="new">No traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNotApplicableLabel">
+        <source>Not applicable</source>
+        <target state="new">Not applicable</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneOpen">
@@ -525,6 +550,31 @@
       <trans-unit id="ResourcePaneParameterCountSingular">
         <source>{0} parameter</source>
         <target state="new">{0} parameter</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoConsoleLogs">
+        <source>Parameters do not produce console logs. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce console logs. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoMetrics">
+        <source>Parameters do not produce metrics. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce metrics. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoStructuredLogs">
+        <source>Parameters do not produce structured logs. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce structured logs. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTerminal">
+        <source>Parameters do not support terminal sessions. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not support terminal sessions. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTraces">
+        <source>Parameters do not produce traces. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce traces. Select to view this parameter's overview.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneReferences">

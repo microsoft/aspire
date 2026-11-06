@@ -1,0 +1,4 @@
+﻿config:
+  backend:
+    frontend_http_BrowserOrigins: "https://public.example,https://alias.example"
+    CONFIG: "origin=https://public.example,https://alias.example"
