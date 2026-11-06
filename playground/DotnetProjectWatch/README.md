@@ -113,7 +113,7 @@ pipe grows the missing fields ([dotnet/sdk issue](#upstream-asks)), these are go
 
 ### Upstream asks
 
-Filed on dotnet/sdk (link in the PR description): populate `error`; add `no_changes`, `apply_blocked` and `file_changed`
+Related: [dotnet/sdk#56966](https://github.com/dotnet/sdk/issues/56966). Asks: populate `error`; add `no_changes`, `apply_blocked` and `file_changed`
 events; add `elapsedMs`; and echo a request/replica id in the `process_*` events.
 
 ## Hot reload scenario matrix
