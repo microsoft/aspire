@@ -147,8 +147,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
-        <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="translated">Глобально (установить в домашний каталог; доступно во всех проектах)</target>
+        <source>Global (In your home directory, available across all projects)</source>
+        <target state="needs-review-translation">Глобально (установить в домашний каталог; доступно во всех проектах)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
@@ -192,9 +192,9 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Local Aspire skill files may override plugin skills:
+        <source>Local Aspire skill files may override plugin skills
 {0}</source>
-        <target state="new">Local Aspire skill files may override plugin skills:
+        <target state="new">Local Aspire skill files may override plugin skills
 {0}</target>
         <note>{0} lists the local skill entry-point paths, one per line.</note>
       </trans-unit>
@@ -224,8 +224,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
-        <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="translated">Проект (установить в корень рабочей области; изменения фиксируются вместе с проектом)</target>
+        <source>This project (In your workspace, ready to commit with your project)</source>
+        <target state="needs-review-translation">Проект (установить в корень рабочей области; изменения фиксируются вместе с проектом)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -239,8 +239,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
-        <source>Installation scope</source>
-        <target state="translated">Область установки</target>
+        <source>Where should skills and tools be installed?</source>
+        <target state="needs-review-translation">Область установки</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
@@ -266,8 +266,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
-        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</source>
+        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">

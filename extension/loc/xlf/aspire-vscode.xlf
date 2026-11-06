@@ -991,6 +991,9 @@
     <trans-unit id="command.installDebuggerExtension">
       <source xml:lang="en">Set up debugger support</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDebuggerSetupRequired">
+      <source xml:lang="en">Set up {0} debugging support before debugging this AppHost. You can run it without debugging instead.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debuggerSetupNotification">
       <source xml:lang="en">Set up {0} debugging support to debug resources in this app.</source>
     </trans-unit>
@@ -1113,6 +1116,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.denoAppHostRunCommandMissing">
       <source xml:lang="en">The Deno AppHost command does not contain the required &apos;run&apos; subcommand.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.denoAppHostInspectorNotReady">
+      <source xml:lang="en">The Deno AppHost inspector at {0} did not become ready within {1} seconds, so the debugger could not attach: {2}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.goAppHostCommandNotRecognized">
       <source xml:lang="en">The Go AppHost launch command was not recognized and cannot be debugged.</source>

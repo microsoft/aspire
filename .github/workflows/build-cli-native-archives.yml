@@ -106,6 +106,23 @@ jobs:
             exit $LASTEXITCODE
           }
 
+      - name: Smoke test packaged native tray
+        shell: pwsh
+        env:
+          TRAY_RID: ${{ matrix.targets.rids }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rid = $env:TRAY_RID
+          $hostOs = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
+          $hostArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+          if ($rid -ne "$hostOs-$hostArch") {
+            Write-Host "Skipping packaged tray launch check for $rid on $hostOs-$hostArch."
+            return
+          }
+          ./eng/scripts/test-native-tray.ps1 `
+            -ArchivePath "artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz" `
+            -Rid $rid
+
       - name: Smoke test bundled Native AOT TerminalHost
         if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
         shell: pwsh

@@ -43,6 +43,24 @@ MicroBuild treats each CLI archive as a signing container. It extracts signable 
 
 Because of that, the archive is the canonical payload after signing. Consumers that need the final native CLI binary should read it from the signed archive, not from `artifacts/obj/.../output` or another intermediate staging directory.
 
+### macOS tray notarization checks
+
+`src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj` staples and validates the restored,
+notarized tray app. `tools/CreateLayout/verify-tray-payload.sh` validates it again
+after extracting the packaged payload, between signature verification and
+Gatekeeper assessment. Both use `tools/CreateLayout/macos-stapler-with-retry.sh`.
+
+Apple's `stapler` requires internet access for both operations. The helper retries
+only failures containing `Error Domain=NSURLErrorDomain Code=-1005` (connection
+lost), with four total attempts and 5, 15, and 30 second delays. Each attempt's
+output and each retry are logged. Other failures stop immediately; exit 68 alone
+is not retryable because it can also mean missing notarization or an unexpected
+ticket-service response. Exhaustion propagates the final failing exit code.
+
+Retries repeat only the failed stapler operation, not signing, notarization
+submission, or the build. All signature, ticket, and Gatekeeper checks remain
+required; a network failure never turns verification into success.
+
 ## Dotnet-tool package signing constraints
 
 The native `aspire` binary has to be signed/notarized on the OS/arch-specific native jobs. That means the macOS native job can produce a signed/notarized `aspire` binary and archive, but it cannot produce a signed `.nupkg` because NuGet package signing only happens on Windows.

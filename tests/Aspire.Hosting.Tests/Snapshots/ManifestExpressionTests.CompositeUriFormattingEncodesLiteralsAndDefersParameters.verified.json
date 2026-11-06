@@ -1,0 +1,56 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ENCODED": "{cond-enabled-value-bad57fb4.connectionString}"
+      }
+    },
+    "enabled": {
+      "type": "parameter.v0",
+      "value": "{enabled.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "host": {
+      "type": "parameter.v0",
+      "value": "{host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "query": {
+      "type": "parameter.v0",
+      "value": "{query.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "cond-enabled-value-bad57fb4": {
+      "type": "value.v0",
+      "connectionString": "{value-35477f327b954668-uri-encoded.connectionString}"
+    },
+    "value-35477f327b954668-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "prefix%2F{value-0a3822277d4ff8b4-uri-encoded.value}%2F%7Bliteral%7D%3Fq%3D{value-126dbcdbcefaca31-uri-encoded.value}%26again%3D{value-0a3822277d4ff8b4-uri-encoded.value}"
+    },
+    "value-0a3822277d4ff8b4-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{host.value}",
+      "filter": "uri"
+    },
+    "value-126dbcdbcefaca31-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{query.value}",
+      "filter": "uri"
+    }
+  }
+}

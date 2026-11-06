@@ -14,6 +14,7 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,6 +25,13 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
+    public static void ToggleResourceList<T>(IRenderedComponent<T> component) where T : class, IComponent
+    {
+        var layout = component.Instance as ResourcesLayout ?? component.FindComponent<ResourcesLayout>().Instance;
+        var visible = !component.Find(".resources-layout").ClassList.Contains("pane-full-canvas");
+        component.InvokeAsync(() => layout.SetResourceListVisible(visible)).GetAwaiter().GetResult();
+    }
+
     public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient,
         Action<IServiceCollection>? configureServices = null)
     {
@@ -56,6 +64,8 @@ internal static class ResourceSetupHelpers
         module.SetupVoid("unregisterResourceContextMenu", _ => true).SetVoidResult();
         module.SetupVoid("registerPaneActivityVisibility", _ => true).SetVoidResult();
         module.SetupVoid("unregisterPaneActivityVisibility", _ => true).SetVoidResult();
+        module.SetupVoid("setResourcePickerOpen", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterResourcePicker", _ => true).SetVoidResult();
         module.SetupVoid("restoreResourceContextMenuFocus", _ => true).SetVoidResult();
         module.SetupVoid("startPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("focusPaneSelectionReveal", _ => true).SetVoidResult();

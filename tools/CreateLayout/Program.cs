@@ -72,6 +72,10 @@ public static class Program
         {
             Description = "Pre-built Windows tray publish directory (required for Windows; signed before layout assembly)"
         };
+        var linuxTrayOption = new Option<string?>("--tray-linux")
+        {
+            Description = "Pre-built Linux tray publish directory (required for glibc Linux x64/ARM64)"
+        };
 
         var dashboardOption = new Option<string?>("--dashboard")
         {
@@ -100,6 +104,7 @@ public static class Program
         rootCommand.Options.Add(archiveOption);
         rootCommand.Options.Add(trayAppOption);
         rootCommand.Options.Add(windowsTrayOption);
+        rootCommand.Options.Add(linuxTrayOption);
         rootCommand.Options.Add(dashboardOption);
         rootCommand.Options.Add(managedOption);
         rootCommand.Options.Add(terminalHostOption);
@@ -120,7 +125,8 @@ public static class Program
             {
                 using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, configuration, version, verbose,
                     parseResult.GetValue(trayAppOption), parseResult.GetValue(windowsTrayOption), parseResult.GetValue(dashboardOption),
-                    parseResult.GetValue(managedOption), parseResult.GetValue(terminalHostOption), parseResult.GetValue(appHostServerOption));
+                    parseResult.GetValue(managedOption), parseResult.GetValue(terminalHostOption), parseResult.GetValue(appHostServerOption),
+                    parseResult.GetValue(linuxTrayOption));
                 await builder.BuildAsync().ConfigureAwait(false);
 
                 if (createArchive)
@@ -163,9 +169,11 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly string? _managedPath;
     private readonly string? _terminalHostPath;
     private readonly string? _appHostServerPath;
+    private readonly string? _linuxTrayPath;
 
     public LayoutBuilder(string outputPath, string artifactsPath, string rid, string configuration, string version, bool verbose,
-        string? trayAppPath, string? windowsTrayPath, string? dashboardPath, string? managedPath, string? terminalHostPath, string? appHostServerPath)
+        string? trayAppPath, string? windowsTrayPath, string? dashboardPath, string? managedPath, string? terminalHostPath, string? appHostServerPath,
+        string? linuxTrayPath)
     {
         _outputPath = Path.GetFullPath(outputPath);
         _artifactsPath = Path.GetFullPath(artifactsPath);
@@ -179,6 +187,7 @@ internal sealed class LayoutBuilder : IDisposable
         _managedPath = managedPath;
         _terminalHostPath = terminalHostPath;
         _appHostServerPath = appHostServerPath;
+        _linuxTrayPath = linuxTrayPath;
     }
 
     public void Dispose()
@@ -213,6 +222,30 @@ internal sealed class LayoutBuilder : IDisposable
 
     internal void CopyTray()
     {
+        if (_rid is "linux-x64" or "linux-arm64")
+        {
+            if (string.IsNullOrWhiteSpace(_linuxTrayPath))
+            {
+                throw new InvalidOperationException("The Linux bundle requires --tray-linux pointing to the pre-built native tray publish directory.");
+            }
+            LinuxTrayPayload.Validate(_linuxTrayPath, _rid);
+            if (OperatingSystem.IsWindows())
+            {
+                throw new InvalidOperationException("Linux tray bundles must be assembled on Unix to preserve executable permissions.");
+            }
+            var destination = Path.Combine(_outputPath, "tray");
+            Directory.CreateDirectory(destination);
+            foreach (var name in new[] { LinuxTrayPayload.ExecutableName, LinuxTrayPayload.IconName })
+            {
+                var source = Path.Combine(_linuxTrayPath, name);
+                var target = Path.Combine(destination, name);
+                File.Copy(source, target, overwrite: true);
+                File.SetUnixFileMode(target, File.GetUnixFileMode(source));
+            }
+            Log("Copied Linux tray to tray/");
+            return;
+        }
+
         if (_rid.StartsWith("win-", StringComparison.Ordinal))
         {
             if (string.IsNullOrWhiteSpace(_windowsTrayPath))

@@ -7,7 +7,7 @@
 
     Outputs (one TargetRid per invocation):
     - artifacts/bundle/{rid}/: managed helper, AppHost Server, Dashboard,
-      TerminalHost, DCP, and platform tray (Windows/macOS only).
+      TerminalHost, DCP, and platform tray (Windows/macOS/glibc Linux).
     - artifacts/bundle/aspire-{version}-{rid}.tar.gz: component archive.
     - Native aspire[.exe] with the archive embedded.
     - Distribution mode: Dashboard NuGet/runtime ZIP, optional DCP NuGet,
@@ -22,7 +22,7 @@
       The bundle archive is not separately signed; new tool/npm containers are
       signed by the official Assemble stage, not this invocation.
     - BundleVersion: Archive version (product version plus VersionSuffix, or dev).
-    - TrayAppPath, WindowsTrayPath: Override platform tray output directories.
+    - TrayAppPath, WindowsTrayPath, LinuxTrayDirectory: Override platform tray output directories.
     - CliPublishDir: Override CLI output in non-distribution mode.
     - SkipAspireManagedPublish, SkipDashboardPublish, SkipTerminalHostPublish,
       SkipAppHostServerPublish, SkipTrayPublish: Reuse required prepared component
@@ -62,6 +62,7 @@
 
     <TrayAppPath Condition="'$(TrayAppPath)' == ''">$([MSBuild]::NormalizePath('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Mac', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'app', 'Aspire Tray.app'))</TrayAppPath>
     <WindowsTrayPath Condition="'$(WindowsTrayPath)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Windows', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</WindowsTrayPath>
+    <LinuxTrayDirectory Condition="'$(LinuxTrayDirectory)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Linux', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</LinuxTrayDirectory>
 
     <!-- Bundle version: use VersionSuffix from CI if provided, else dev version for local builds -->
     <!-- In GitHub Actions CI: VersionSuffix is set via /p:VersionSuffix=pr.XXXX.gSHA -->
@@ -327,8 +328,8 @@
           DependsOnTargets="_ValidateTrayPublishConfiguration;_PublishTrayCore" />
 
   <Target Name="_ValidateTrayPublishConfiguration" DependsOnTargets="_InitializeBundleBuild">
-    <Error Condition="!$(TargetRid.StartsWith('osx-')) and !$(TargetRid.StartsWith('win-'))"
-           Text="PublishTray requires a Windows or macOS TargetRid." />
+    <Error Condition="!$(TargetRid.StartsWith('osx-')) and !$(TargetRid.StartsWith('win-')) and '$(TargetRid)' != 'linux-x64' and '$(TargetRid)' != 'linux-arm64'"
+           Text="PublishTray requires a Windows, macOS, or glibc Linux TargetRid." />
     <Error Condition="'$(SkipTrayPublish)' == 'true'"
            Text="PublishTray cannot use SkipTrayPublish=true; it must publish a new tray payload." />
     <Error Condition="'$(Sign)' == 'true'"
@@ -337,17 +338,22 @@
            Text="macOS NativeAOT tray publishing requires a macOS build lane." />
     <Error Condition="$(TargetRid.StartsWith('win-')) and !$([MSBuild]::IsOSPlatform('Windows'))"
            Text="Windows NativeAOT tray publishing requires a Windows build lane." />
+    <Error Condition="$(TargetRid.StartsWith('linux-')) and !$([MSBuild]::IsOSPlatform('Linux'))"
+           Text="Linux NativeAOT tray publishing requires a Linux build lane." />
   </Target>
 
   <Target Name="_PublishTrayCore"
           DependsOnTargets="_InitializeBundleBuild"
-          Condition="'$(SkipTrayPublish)' != 'true' and ($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-')))">
+          Condition="'$(SkipTrayPublish)' != 'true' and ($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-')) or '$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64')">
     <PropertyGroup>
       <_TrayWindowsProjectPath Condition="'$(_TrayWindowsProjectPath)' == ''">$(_RepoRoot)src\Aspire.Tray\Windows\Aspire.Tray.Windows.csproj</_TrayWindowsProjectPath>
+      <_TrayLinuxProjectPath Condition="'$(_TrayLinuxProjectPath)' == ''">$(_RepoRoot)src\Aspire.Tray\Linux\Aspire.Tray.Linux.csproj</_TrayLinuxProjectPath>
     </PropertyGroup>
 
     <Error Condition="$(TargetRid.StartsWith('win-')) and !$([MSBuild]::IsOSPlatform('Windows'))"
            Text="Windows NativeAOT tray publishing requires a Windows build lane." />
+    <Error Condition="$(TargetRid.StartsWith('linux-')) and !$([MSBuild]::IsOSPlatform('Linux'))"
+           Text="Linux NativeAOT tray publishing requires a Linux build lane." />
 
     <Message Importance="high" Text="Publishing native tray for $(TargetRid)..." />
     <Exec Command="dotnet publish &quot;$(_TrayProjectPath)&quot; -r $(TargetRid) /p:TrayAppPath=&quot;$(TrayAppPath.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
@@ -357,6 +363,9 @@
     <Exec Command="dotnet publish &quot;$(_TrayWindowsProjectPath)&quot; -r $(TargetRid) --self-contained --output &quot;$(WindowsTrayPath.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
           Condition="$(TargetRid.StartsWith('win-'))" />
+    <Exec Command="dotnet publish &quot;$(_TrayLinuxProjectPath)&quot; -r $(TargetRid) --self-contained --output &quot;$(LinuxTrayDirectory.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
+          EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
+          Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'" />
   </Target>
 
   <Target Name="_SetTrayBuildProperties">
@@ -467,6 +476,8 @@
                                    Condition="$(TargetRid.StartsWith('win-'))" />
       <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(TrayAppPath)', 'Contents', 'MacOS', 'aspire-tray'));$([MSBuild]::NormalizePath('$(TrayAppPath)', 'Contents', 'Info.plist'));$([MSBuild]::NormalizePath('$(TrayAppPath)', 'Contents', 'Resources', 'Aspire.icns'))"
                                    Condition="$(TargetRid.StartsWith('osx-'))" />
+      <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(LinuxTrayDirectory)', 'aspire-tray'));$([MSBuild]::NormalizePath('$(LinuxTrayDirectory)', 'Aspire.png'))"
+                                   Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'" />
     </ItemGroup>
 
     <Error Condition="!Exists('%(_RequiredPreparedBundleFile.Identity)')"
@@ -505,6 +516,7 @@
       <_CreateLayoutArgs>--output "$(_BundleLayoutDirArg)" --artifacts "$(_ArtifactsDirArg)" --managed "$(_ManagedPublishDirArg)" --dashboard "$(_DashboardPublishDirArg)" --terminal-host "$(_TerminalHostPublishDirArg)" --apphost-server "$(_AppHostServerPublishDirArg)" --rid $(TargetRid) --configuration $(Configuration) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
       <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('osx-'))">$(_CreateLayoutArgs) --tray-app "$(TrayAppPath.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
       <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('win-'))">$(_CreateLayoutArgs) --tray-windows "$(WindowsTrayPath.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
+      <_CreateLayoutArgs Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'">$(_CreateLayoutArgs) --tray-linux "$(LinuxTrayDirectory.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout and archive..." />
@@ -515,6 +527,8 @@
           Condition="$(TargetRid.StartsWith('osx-'))" />
     <Exec Command="pwsh -NoProfile -File &quot;$(_RepoRoot)tools/CreateLayout/verify-windows-tray-payload.ps1&quot; -Archive &quot;$(_BundleArchivePath)&quot; -Rid &quot;$(TargetRid)&quot; -RequireSignature $(_RequireWindowsTraySignature)"
           Condition="$(TargetRid.StartsWith('win-'))" />
+    <Exec Command="bash &quot;$(_RepoRoot)tools/CreateLayout/verify-linux-tray-payload.sh&quot; &quot;$(_BundleArchivePath)&quot; &quot;$(TargetRid)&quot;"
+          Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'" />
   </Target>
 
   <Target Name="_FinalizeCliAndDistributionPackages">

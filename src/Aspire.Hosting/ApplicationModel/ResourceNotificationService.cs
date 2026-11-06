@@ -909,6 +909,17 @@ public class ResourceNotificationService : IDisposable
 
             newState = UpdateIcons(resource, newState);
 
+            if (resource.TryGetLastAnnotation<ResourceTypeDisplayNameAnnotation>(out var resourceTypeDisplayNameAnnotation))
+            {
+                newState = newState with { ResourceTypeDisplayName = resourceTypeDisplayNameAnnotation.ResourceTypeDisplayName };
+            }
+            else if (!newState.HasResourceTypeDisplayName() && resource is Resource modelResource &&
+                modelResource.ResourceTypeDisplayName != resource.GetResourceType())
+            {
+                // Keep the snapshot's own resource type as the fallback for custom snapshot producers.
+                newState = newState with { ResourceTypeDisplayName = modelResource.ResourceTypeDisplayName };
+            }
+
             newState = UpdateDashboardVisibility(resource, newState);
 
             if (resource.TryGetAnnotationsOfType<ExcludeFromMcpAnnotation>(out _))

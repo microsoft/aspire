@@ -3,53 +3,51 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
-/// Stores pinned metric instruments in the application settings database, independently of individual runs.
+/// Stores pinned metric instruments, independently of individual runs.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Pins are keyed by meter and instrument name, not by resource. Pinning <c>http.server.request.duration</c>
 /// once pins it for every service that reports it, which matches how the same instrument is compared across
 /// services, and keeps pins valid when resources are renamed or replicas get new instance names.
+/// </para>
+/// <para>
+/// Pins describe the application rather than a single run, so they're kept in the browser's local storage under a key
+/// scoped to the application name. The store is scoped to a circuit. Reads are synchronous and return nothing until
+/// <see cref="EnsureLoadedAsync"/> has read the stored pins, which raises <see cref="Changed"/>. Changes are merged
+/// with pins saved by other tabs of the same browser rather than replacing them.
+/// </para>
 /// </remarks>
 public sealed class MetricPinStore
 {
-    private const string SettingsName = "pinned metrics";
+    private readonly LocalStorageSetting<List<OtlpInstrumentKey>> _setting;
 
-    private readonly Lock _lock = new();
-    private readonly List<OtlpInstrumentKey> _pins = [];
-    private readonly DashboardSettingsDatabase _database;
-    private bool _loaded;
-
-    public MetricPinStore(IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
-        : this(DashboardSettingsDatabase.GetDatabasePath(options.Value), logger)
+    public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
-    }
-
-    internal MetricPinStore(string? databasePath, ILogger logger)
-    {
-        _database = new DashboardSettingsDatabase(databasePath, logger);
+        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger,
+            NormalizePins, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
     }
 
     /// <summary>
-    /// Raised after pins change. Handlers may run on any thread.
+    /// Raised after pins are loaded or change. Handlers may run on any thread.
     /// </summary>
     public event Action? Changed;
 
     /// <summary>
+    /// Reads the stored pins, once per circuit.
+    /// </summary>
+    public Task EnsureLoadedAsync() => _setting.EnsureLoadedAsync();
+
+    /// <summary>
     /// Gets the pinned instruments in the order they were pinned.
     /// </summary>
-    public IReadOnlyList<OtlpInstrumentKey> GetPins()
-    {
-        lock (_lock)
-        {
-            EnsureLoaded();
-            return [.. _pins];
-        }
-    }
+    public IReadOnlyList<OtlpInstrumentKey> GetPins() => _setting.Read(pins => pins.ToArray());
 
     /// <summary>
     /// Gets the pinned instruments among <paramref name="instruments"/>, in the order they were pinned.
@@ -62,88 +60,39 @@ public sealed class MetricPinStore
         return [.. GetPins().SelectMany(key => instrumentsByKey[key])];
     }
 
-    public bool IsPinned(OtlpInstrumentKey key)
-    {
-        lock (_lock)
-        {
-            EnsureLoaded();
-            return _pins.Contains(key);
-        }
-    }
+    public bool IsPinned(OtlpInstrumentKey key) => _setting.Read(pins => pins.Contains(key));
 
     /// <summary>
-    /// Pins or unpins an instrument. Returns <see langword="false"/> if the change couldn't be saved,
-    /// in which case the pins are unchanged.
+    /// Pins or unpins an instrument. Pinning an instrument again lists it last.
     /// </summary>
-    public bool SetPinned(OtlpInstrumentKey key, bool pinned)
+    public void SetPinned(OtlpInstrumentKey key, bool pinned)
     {
-        lock (_lock)
-        {
-            EnsureLoaded();
-            if (_pins.Contains(key) == pinned)
-            {
-                return true;
-            }
-            if (!Save(key, pinned))
-            {
-                return false;
-            }
+        _setting.Update(pins => pinned ? AddPin(pins, key) : pins.Remove(key));
+    }
 
-            if (pinned)
-            {
-                _pins.Add(key);
-            }
-            else
-            {
-                _pins.Remove(key);
-            }
+    private static bool AddPin(List<OtlpInstrumentKey> pins, OtlpInstrumentKey key)
+    {
+        if (pins.Contains(key))
+        {
+            return false;
         }
 
-        Changed?.Invoke();
+        pins.Add(key);
         return true;
     }
 
-    private void EnsureLoaded()
+    // Stored pins can be edited in the browser, so drop incomplete and repeated ones.
+    private static List<OtlpInstrumentKey> NormalizePins(List<OtlpInstrumentKey>? stored)
     {
-        if (_loaded)
+        var pins = new List<OtlpInstrumentKey>();
+        foreach (var key in stored ?? [])
         {
-            return;
-        }
-        _loaded = true;
-
-        _database.Load(SettingsName, connection =>
-        {
-            using var command = connection.CreateCommand();
-            // pin_id is the rowid, which increases with each insert, so ordering by it lists pins in the
-            // order they were pinned.
-            command.CommandText = """
-                CREATE TABLE IF NOT EXISTS metric_pins (
-                    pin_id INTEGER NOT NULL PRIMARY KEY,
-                    meter_name TEXT NOT NULL,
-                    instrument_name TEXT NOT NULL,
-                    UNIQUE (meter_name, instrument_name)
-                );
-                SELECT meter_name, instrument_name FROM metric_pins ORDER BY pin_id;
-                """;
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+            if (!string.IsNullOrEmpty(key.MeterName) && !string.IsNullOrEmpty(key.InstrumentName))
             {
-                _pins.Add(new OtlpInstrumentKey(reader.GetString(0), reader.GetString(1)));
+                AddPin(pins, key);
             }
-        });
-    }
+        }
 
-    private bool Save(OtlpInstrumentKey key, bool pinned)
-    {
-        return _database.TrySave(SettingsName, connection =>
-        {
-            using var command = connection.CreateCommand();
-            command.CommandText = pinned
-                ? "INSERT OR IGNORE INTO metric_pins (meter_name, instrument_name) VALUES ($meter, $instrument);"
-                : "DELETE FROM metric_pins WHERE meter_name = $meter AND instrument_name = $instrument;";
-            command.Parameters.AddWithValue("$meter", key.MeterName);
-            command.Parameters.AddWithValue("$instrument", key.InstrumentName);
-            command.ExecuteNonQuery();
-        });
+        return pins;
     }
 }

@@ -17,8 +17,8 @@
     --resource-row-icon-offset: 10px;
     --resource-row-depth-step: 24px;
     --resource-brand-soft: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
-    --resource-pane-motion-duration: var(--durationSlow, 280ms);
-    --resource-pane-motion-easing: var(--curveEasyEase, cubic-bezier(.2, .8, .2, 1));
+    --resource-pane-motion-duration: var(--durationNormal, 200ms);
+    --resource-pane-motion-easing: var(--curveEasyEase, cubic-bezier(.33, 0, .67, 1));
     display: flex;
     width: 100%;
     height: 100%;
@@ -59,8 +59,7 @@
     --resource-insight-failure-width: 40px;
 }
 
-/* Keep the pane mounted while its grid track closes. Visibility waits for motion to
-   finish; inert and pointer-events exclude it from interaction immediately. */
+/* The collapsed sidebar track is hidden; the popup overrides this for its own pane. */
 .resources-layout.pane-collapsed .resource-pane {
     visibility: hidden;
     pointer-events: none;
@@ -85,6 +84,75 @@
     display: none;
 }
 
+.resource-picker-popover {
+    position: fixed;
+    position-anchor: --resource-picker;
+    top: anchor(bottom);
+    left: anchor(left);
+    right: auto;
+    bottom: 12px;
+    margin: 6px 0 0;
+    position-try-fallbacks: flip-inline;
+    box-sizing: border-box;
+    width: min(var(--resource-pane-expanded-width, 290px), calc(100vw - 24px));
+    max-width: none;
+    height: max-content;
+    max-height: stretch;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
+    background: var(--aspire-page-background);
+    color: var(--colorNeutralForeground1);
+    box-shadow: var(--shadow16);
+    overflow: hidden;
+}
+
+.resource-picker-popover:popover-open {
+    display: flex;
+    flex-direction: column;
+}
+
+.resource-title:has(.resource-picker-button) {
+    overflow: visible;
+}
+
+.resource-title ::deep .resource-picker-button {
+    max-width: 100%;
+    font: inherit;
+    font-size: var(--fontSizeBase400);
+}
+
+.resource-picker-button > [slot="start"] {
+    display: flex;
+    align-items: center;
+}
+
+.resource-picker-button .resource-header-icon {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    background: transparent;
+}
+
+.resource-picker-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resources-layout.pane-collapsed .resource-pane-popup {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.resource-pane.resource-pane-popup {
+    flex: 0 1 auto;
+    width: 100%;
+    max-height: min(600px, calc(100dvh - 120px));
+    border-right: 0;
+}
+
 .resources-layout.pane-full-canvas .resource-content-foot {
     display: none;
 }
@@ -104,13 +172,6 @@
 
 .resources-layout.pane-full-canvas .resource-workspace-foot .resource-pane-foot {
     padding-inline-end: 6px;
-}
-
-/* Selection settles more gently than the toolbar toggle, using Fluent's deceleration
-   curve. The details retain their normal width while the real pane boundary moves. */
-.resources-layout.pane-selection-reveal {
-    --resource-pane-motion-duration: var(--durationSlower, 400ms);
-    --resource-pane-motion-easing: var(--curveDecelerateMid, cubic-bezier(.1, .9, .2, 1));
 }
 
 /* Animate the real region, so container-width disclosure follows the moving boundary.
@@ -579,6 +640,48 @@
     gap: 0;
 }
 
+.resource-row.resource-row-unavailable {
+    background: light-dark(var(--colorNeutralBackground3), color-mix(in srgb, var(--aspire-page-background) 90%, var(--aspire-shell-background)));
+}
+
+.resource-row.resource-row-unavailable:hover {
+    background: light-dark(color-mix(in srgb, var(--colorNeutralBackground3) 75%, var(--colorNeutralStroke1)), color-mix(in srgb, var(--aspire-control-background) 60%, var(--aspire-page-background)));
+}
+
+.resource-row.resource-row-unavailable:active {
+    background: light-dark(var(--colorNeutralBackground3Pressed), color-mix(in srgb, var(--aspire-page-background) 85%, var(--aspire-shell-background)));
+}
+
+.resource-row-unavailable > .resource-row-link,
+.resource-row-unavailable .resource-row-sub,
+.resource-row-unavailable .resource-row-type,
+.resource-row-unavailable .resource-row-kind-label {
+    color: var(--colorNeutralForeground3);
+}
+
+.resource-row-unavailable .resource-row-icon {
+    background: light-dark(var(--colorNeutralBackground3), var(--aspire-page-background));
+}
+
+.resource-row-availability {
+    display: inline-block;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    max-width: 65%;
+    height: 17px;
+    padding-inline: 5px;
+    overflow: hidden;
+    border: 1px solid var(--colorNeutralStrokeAccessible);
+    border-radius: 4px;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground2);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @media (forced-colors: active) {
     .resource-row {
         --resource-row-kind-accent: CanvasText;
@@ -613,6 +716,12 @@
 
     .resource-row.selected ::deep .resource-relationship-trigger {
         color: HighlightText;
+    }
+
+    .resource-row.selected .resource-row-availability {
+        background: Highlight;
+        color: HighlightText;
+        border-color: HighlightText;
     }
 }
 
@@ -722,7 +831,7 @@
     justify-content: center;
 }
 
-.resource-row.selected .resource-row-icon {
+.resource-row.selected:not(.resource-row-unavailable) .resource-row-icon {
     background: var(--resource-brand-soft);
 }
 
@@ -826,9 +935,28 @@
     background: var(--colorSubtleBackgroundPressed);
 }
 
-.resource-select-all-toggle.on,
+.resource-select-all-toggle.on {
+    background: var(--colorBrandBackground);
+    color: var(--colorNeutralForegroundOnBrand);
+}
+
 .resource-select-all-toggle.on:hover {
-    color: var(--colorBrandForeground1);
+    background: var(--colorBrandBackgroundHover);
+    color: var(--colorNeutralForegroundOnBrand);
+}
+
+.resource-select-all-toggle.on:active {
+    background: var(--colorBrandBackgroundPressed);
+}
+
+@media (forced-colors: active) {
+    .resource-select-all-toggle.on,
+    .resource-select-all-toggle.on:hover,
+    .resource-select-all-toggle.on:active {
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText;
+    }
 }
 .resource-row-all::after {
     content: "";
@@ -936,6 +1064,28 @@
     color: #fff;
     font-size: 11px;
     font-weight: 600;
+}
+
+/* In a flex row the link follows the row link, which fills the row up to the actions, so it lands where an inline
+   badge would. The sidebar and wide grids overlay it on the end of the row link's track instead (see below).
+   The margin matches the row link's end padding. */
+.resource-row-error-link {
+    margin-inline-end: 8px;
+    text-decoration: none;
+}
+
+.resource-row-error-link:hover {
+    background: var(--colorPaletteRedBackground3);
+}
+
+.resource-row-error-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+/* Only the grid layouts overlay the badge on the row link and need the spacer. */
+.error-badge-spacer {
+    display: none;
 }
 
 .resource-pane-foot {
@@ -1089,7 +1239,7 @@
 
     /* Preserve row geometry while the containing track shrinks; only the clip
        boundary moves. Full canvas still discloses metadata at its actual width. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-contents > * {
+    .resources-layout:not(.pane-full-canvas) .resource-pane:not(.resource-pane-popup) .resource-pane-contents > * {
         width: calc(var(--resource-pane-width) - 1px);
     }
 
@@ -1578,18 +1728,38 @@
         position: relative;
         inset: auto;
         z-index: 21;
-        width: calc(100% - 16px);
-        margin-inline: 8px;
+        width: 100%;
+        margin-inline: 0;
         height: 100%;
         border-right: 0;
     }
 
-    .resources-layout.pane-full-canvas .resource-pane {
-        margin-inline: 0;
+    .resources-layout.drawer-open .resource-content {
+        /* The details remain mounted, but their scrollbar must not show beside the drawer's list. */
+        display: none;
+    }
+
+    .resource-pane-head {
+        height: 44px;
+        padding: 6px 8px;
+    }
+
+    .resource-pane-kinds {
+        padding: 2px 8px 6px;
+    }
+
+    .resource-pane-list {
+        padding-inline: 8px;
+        overflow-x: hidden;
+    }
+
+    .resource-pane-foot {
+        flex: 0 0 auto;
+        padding-inline: 8px;
     }
 
     .resource-header {
-        padding: 8px 12px 0;
+        padding: 8px 8px 0;
         row-gap: 8px;
     }
 
@@ -1687,6 +1857,10 @@
         grid-row: 2;
         margin-top: 0;
         column-gap: 8px;
+    }
+
+    .resources-layout.drawer-open .resource-tabs {
+        grid-row: 1;
     }
 
     /* The footer is outside the scrolling tab body, so status stays visible without covering the last card. */
@@ -2062,6 +2236,22 @@
 
     .resource-row:has(> .resource-row-wide-metadata) > .resource-row-link {
         grid-column: identity;
+        /* Pinned so the explicitly placed error link below can't push it to an implicit second row. */
+        grid-row: 1;
+    }
+
+    /* The error link shares the identity track with the row link. The row link keeps a hidden copy of the
+       badge so the resource name stops before it instead of running underneath. */
+    .resource-row:has(> .resource-row-wide-metadata) > .resource-row-error-link {
+        grid-column: identity;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+    }
+
+    .resource-row:has(> .resource-row-wide-metadata) .error-badge-spacer {
+        display: inline-flex;
+        visibility: hidden;
     }
 
     .resource-row-health-detail,
@@ -2341,6 +2531,25 @@
     grid-template-columns: minmax(0, 1fr) 112px;
     column-gap: 4px;
     padding-inline-end: 12px;
+}
+
+/* The error link shares the identity track with the row link instead of taking the action rail's slot. The row
+   link keeps a hidden copy of the badge so the resource name stops before it instead of running underneath. */
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-error-link) > .resource-row-link {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-error-link {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+}
+
+.resources-layout:not(.pane-full-canvas) .error-badge-spacer {
+    display: inline-flex;
+    visibility: hidden;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-link {

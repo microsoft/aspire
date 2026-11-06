@@ -636,6 +636,25 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_BrowserUrlReferences()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var endpointOrigins = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins");
+        Assert.Equal("browserOrigins", endpointOrigins.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", endpointOrigins.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").BrowserOrigins);
+        var primaryOrigin = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin");
+        Assert.Equal("primaryBrowserOrigin", primaryOrigin.MethodName);
+        Assert.Equal(endpointOrigins.ReturnType.TypeId, primaryOrigin.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").PrimaryBrowserOrigin);
+    }
+
+    [Fact]
     public async Task Scanner_HostingAssembly_AddContainerCapability()
     {
         // Verify the addContainer capability from the real Aspire.Hosting assembly

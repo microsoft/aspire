@@ -248,6 +248,13 @@ jobs:
             condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
 
           - pwsh: >-
+              & "$(Build.SourcesDirectory)/eng/scripts/test-native-tray.ps1"
+              -ArchivePath "$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz"
+              -Rid "${{ targetRid }}"
+            displayName: 🟣Smoke test packaged native tray (${{ targetRid }})
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
+
+          - pwsh: >-
               & "$(Build.SourcesDirectory)/eng/scripts/test-native-terminalhost.ps1"
               -TerminalHostPath "$(Build.SourcesDirectory)/artifacts/bundle/${{ targetRid }}/terminalhost/Aspire.TerminalHost${{ iif(eq(parameters.agentOs, 'windows'), '.exe', '') }}"
             displayName: 🟣Smoke test bundled Native AOT TerminalHost

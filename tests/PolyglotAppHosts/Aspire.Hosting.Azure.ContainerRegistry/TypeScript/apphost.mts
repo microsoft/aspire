@@ -4,8 +4,8 @@ const builder = await createBuilder();
 
 const registry = await builder.addAzureContainerRegistry("containerregistry")
     .withPurgeTask("0 1 * * *", {
-        filter: "samples:*",
-        ago: 7,
+        filter: "samples:.*",
+        ago: 7 * 24 * 60 * 60 * 1000,
         keep: 5,
         taskName: "purge-samples"
     });
@@ -32,8 +32,8 @@ await environment.withContainerRegistryRoleAssignments(registry, [
 
 const registryFromEnvironment = await environment.getAzureContainerRegistry();
 await registryFromEnvironment.withPurgeTask("0 2 * * *", {
-    filter: "environment:*",
-    ago: 14,
+    filter: "environment:.*",
+    ago: 14 * 24 * 60 * 60 * 1000,
     keep: 2
 });
 

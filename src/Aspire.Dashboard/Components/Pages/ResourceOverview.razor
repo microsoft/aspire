@@ -161,7 +161,7 @@
                         <dd>@healthStatus.Humanize()</dd>
                     }
                     <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
-                    <dd>@resource.ResourceType</dd>
+                    <dd>@resource.ResourceTypeDisplayName</dd>
                     @if (resource.IsPersistentContainer)
                     {
                         <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsContainerLifetimeProperty)]</dt>
@@ -210,24 +210,28 @@
                     {
                         var url = group.Primary;
                         var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
-                        <li>
+                        var maskedUrl = DashboardUIHelpers.MaskUrlForDisplay(url.OriginalUrlString);
+                        <li class="overview-endpoint">
                             <span class="overview-list-label" data-tooltip="@label">@label</span>
-                            @if (url.Url is not null)
-                            {
-                                var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
-                                <a class="overview-list-value" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
-                            }
-                            else
-                            {
-                                <span class="overview-list-value overview-mono" data-tooltip="@url.Text">@url.Text</span>
-                            }
-                            @if (group.Secondary?.Url is { } secondaryUrl)
-                            {
-                                @* The secondary url (typically the internal address of the same endpoint) is shown as faint
-                                   supplementary text instead of a duplicate row, and hides first as space runs out. *@
-                                var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondaryUrl);
-                                <span class="overview-list-ghost overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
-                            }
+                            <div class="overview-endpoint-addresses">
+                                @if (url.DisplayName is { } friendlyName && friendlyName != label)
+                                {
+                                    <span class="overview-endpoint-name">@friendlyName</span>
+                                }
+                                @if (url.Url is not null)
+                                {
+                                    <a class="overview-endpoint-address overview-mono" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@maskedUrl</a>
+                                }
+                                else
+                                {
+                                    <span class="overview-endpoint-address overview-mono" data-tooltip="@maskedUrl" tabindex="0">@maskedUrl</span>
+                                }
+                                @if (group.Secondary is { } secondary)
+                                {
+                                    var maskedSecondaryUrl = DashboardUIHelpers.MaskUrlForDisplay(secondary.OriginalUrlString);
+                                    <span class="overview-endpoint-address overview-muted overview-mono" data-tooltip="@maskedSecondaryUrl" tabindex="0">@maskedSecondaryUrl</span>
+                                }
+                            </div>
                             @if (url.IsInternal)
                             {
                                 <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
@@ -501,7 +505,7 @@
                                     {
                                         <span class="overview-dot"></span>
                                     }
-                                    <a class="overview-list-value" href="@DashboardUrls.TraceDetailUrl(trace.TraceId)" data-tooltip="@trace.FullName">@trace.FullName</a>
+                                    <a class="overview-list-value" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">@trace.FullName</a>
                                     <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
                                 </li>
                             }
@@ -536,7 +540,7 @@
                 }
                 else
                 {
-                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceType, Url: null))"
+                    <ResourceRelationshipGraph Resource="@(new RelationshipGraphNode(resourceName, resource.ResourceTypeDisplayName, Url: null))"
                                                Incoming="@GetGraphNodes(relatedResources, incoming: true)"
                                                Outgoing="@GetGraphNodes(relatedResources, incoming: false)" />
                 }

@@ -49,33 +49,73 @@ test("render keeps the current dashboard visible and surfaces later load errors"
   assert.match(app.innerHTML, /GitHub accounts/);
 });
 
-test("Needs attention renders an ordered row-major queue with full-queue positions", () => {
+test("Needs attention renders only its prefix and offers a collapsed, action-free remainder for position lookup", () => {
   const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
-  const items = [1, 2, 12].map((position) => ({
-    queuePosition: position,
-    pr: { number: position, title: `PR ${position}`, url: `https://github.com/microsoft/aspire/pull/${position}`, repository: "microsoft/aspire", author: "davidfowl", review: { state: "waiting" } },
-    signals: [],
-  }));
-  api.setState({
-    authenticated: true, mode: "review", accounts: [], activeAccounts: [], notifications: [],
-    repos: ["microsoft/aspire"], counts: {}, errors: [],
-    attention: { focus: items, focusTotal: 20, focusMixed: true, forMe: [], focusExclusions: [], buckets: [] },
-  });
-  api.render();
-
-  const queue = app.innerHTML.match(/<ol class="focus-queue"[^>]*>([\s\S]*?)<\/ol>/);
-  assert.ok(queue);
-  assert.deepEqual([...queue[1].matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), [1, 2, 12]);
-  assert.deepEqual([...queue[1].matchAll(/class="card-title">([^<]+)</g)].map((match) => match[1]), ["PR 1", "PR 2", "PR 12"]);
-  assert.match(app.innerHTML, /First readiness, oldest first\. Blocked PRs keep their priority when they return\./);
+  for (const count of [0, 4, 10, 11, 25]) {
+    api.setState(reviewDashboard(count));
+    api.render();
+    const queue = app.innerHTML.match(/<ol class="focus-queue"[^>]*>([\s\S]*?)<\/ol>/);
+    const positions = Array.from({ length: count }, (_, index) => index + 1);
+    assert.deepEqual([...queue?.[1].matchAll(/<li value="(\d+)">/g) || []].map((match) => Number(match[1])), positions.slice(0, 10));
+    const remainder = app.innerHTML.match(/<section class="sect-group collapsible collapsed" data-sect="later-in-queue">([\s\S]*?)<\/section>/);
+    assert.equal(!!remainder, count > 10);
+    if (remainder) {
+      assert.match(remainder[1], /aria-controls="later-in-queue-body" aria-expanded="false"/);
+      assert.match(remainder[1], /id="later-in-queue-body" inert/);
+      assert.match(remainder[1], new RegExp('<span class="sect-count">' + (count - 10) + "</span>"));
+      assert.match(remainder[1], /Prioritize the first 10 in Needs attention for review/);
+      assert.deepEqual([...remainder[1].matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), positions.slice(10));
+      assert.equal([...remainder[1].matchAll(/<a href=/g)].length, count - 10);
+      assert.equal([...remainder[1].matchAll(/class="card-actions"/g)].length, 0);
+    }
+    assert.match(app.innerHTML, /First readiness, oldest first\. Blocked PRs keep their priority when they return\./);
+  }
   assert.match(STYLES, /\.focus-queue \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 280px\), 1fr\)\)/);
+});
+
+test("remainder expansion and collapse survive refresh, including a remainder that arrives after initial load", () => {
+  const body = { inert: true };
+  const section = {
+    classList: classList(),
+    querySelector: (selector) => selector === ".collapse-body" ? body : null,
+  };
+  section.classList.add("collapsed");
+  const button = {
+    dataset: { collapse: "later-in-queue" },
+    listeners: {},
+    addEventListener(event, handler) { this.listeners[event] = handler; },
+    closest: () => section,
+    setAttribute(name, value) { this[name] = value; },
+  };
+  const { app, api } = createRendererHarness({
+    fetch: () => new Promise(() => {}),
+    querySelectorAll: (selector) => selector === "[data-collapse]" ? [button] : [],
+  });
+  api.setPrefs(rendererPrefs());
+  api.setState(reviewDashboard(10));
+  api.render();
+  api.applyPushedState({ dashboard: { ...reviewDashboard(12), seq: 1 }, prefs: rendererPrefs() });
+  assert.match(app.innerHTML, /collapsible collapsed" data-sect="later-in-queue"/);
+  button.listeners.click();
+  assert.equal(button["aria-expanded"], "true");
+  assert.equal(body.inert, false);
+  api.applyPushedState({ dashboard: { ...reviewDashboard(13), seq: 2 }, prefs: rendererPrefs() });
+  assert.match(app.innerHTML, /collapsible" data-sect="later-in-queue"/);
+  assert.match(app.innerHTML, /id="later-in-queue-body"><div/);
+  button.listeners.click();
+  assert.equal(button["aria-expanded"], "false");
+  assert.equal(body.inert, true);
+  api.applyPushedState({ dashboard: { ...reviewDashboard(10), seq: 3 }, prefs: rendererPrefs() });
+  api.applyPushedState({ dashboard: { ...reviewDashboard(11), seq: 4 }, prefs: rendererPrefs() });
+  assert.match(app.innerHTML, /collapsible collapsed" data-sect="later-in-queue"/);
+  assert.match(app.innerHTML, /id="later-in-queue-body" inert/);
 });
 
 test("resizing the review board cannot redistribute Needs attention into masonry columns", () => {
   // Only legacy .grid panels participate in the JavaScript column redistribution.
   // The ordered list keeps its DOM/tab order at every responsive width.
   const queried = [];
-  const { api, document } = createRendererHarness({
+  const { app, api, document } = createRendererHarness({
     fetch: () => new Promise(() => {}),
     querySelectorAll: (selector) => { queried.push(selector); return []; },
   });
@@ -84,15 +124,35 @@ test("resizing the review board cannot redistribute Needs attention into masonry
     pr: { number: position, title: `PR ${position}`, url: `https://github.com/microsoft/aspire/pull/${position}`, repository: "microsoft/aspire", author: "davidfowl" },
   }));
   const markup = api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true });
+  api.setState(reviewDashboard(13));
+  api.render();
+  const board = app.innerHTML;
   for (const width of [280, 600, 900]) {
     document.documentElement.clientWidth = width;
     queried.length = 0;
     api.layoutGrids();
     assert.deepEqual(queried, [".grid"]);
     assert.equal(api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true }), markup);
+    api.render();
+    assert.equal(app.innerHTML, board);
   }
   const personal = api.queuePanel({ id: "for-you", title: "For you", items });
   assert.match(personal, /<div class="grid"><div class="card">/);
+});
+
+test("remainder lookup escapes PR text and rejects non-web links", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  const dashboard = reviewDashboard(11);
+  dashboard.attention.focusRemainder[0].pr = {
+    number: 11, title: '<script>alert("PR")</script>', repository: "<repo>",
+    url: "javascript:alert(1)",
+  };
+  api.setState(dashboard);
+  api.render();
+  const remainder = app.innerHTML.match(/data-sect="later-in-queue">([\s\S]*?)<\/section>/)[1];
+  assert.match(remainder, /<a href="#"/);
+  assert.match(remainder, /&lt;script&gt;alert\(&quot;PR&quot;\)&lt;\/script&gt;/);
+  assert.match(remainder, /&lt;repo&gt; #11/);
 });
 
 test("an unauthenticated initial load keeps Settings, Accounts, and Health navigation available", async () => {
@@ -346,19 +406,12 @@ test("laneCardActions keys breakdown-lane actions off the lane label", () => {
   assert.equal(unresolved[0].label, "Address feedback");
 });
 
-test("queuePanel reports an honest 'N shown' metric for a mixed (non-prefix) selection", () => {
+test("queuePanel reports the prefix count and the total queue size", () => {
   const { api } = createRendererHarness();
   const items = [1, 2, 3, 4].map((n) => ({ pr: { url: "", title: "t" + n, author: "a", repository: "o/r", number: n } }));
 
-  // A genuine prefix (top N of a larger sorted list) keeps the "top N of total" claim.
   assert.match(api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 9 }), /top 4 of 9/);
-
-  // A mixed selection (review-debt cards spilled past the cap, so `items` is not a prefix of the
-  // sorted list) must NOT claim "top N of total" — non-debt cards between retained debt cards were
-  // skipped, so that would be false. It reports the honest shown count instead.
-  const mixed = api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 9, exactCount: true });
-  assert.doesNotMatch(mixed, /top 4 of 9/);
-  assert.match(mixed, /4 shown/);
+  assert.match(api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 4 }), /4 shown/);
 });
 
 test("cardActionBtn re-renders a disabled button while its action's POST is still in flight", () => {
@@ -1772,6 +1825,19 @@ test("settings Enter shortcut leaves interactive controls to their native action
   assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "BUTTON", className: "pipeline-remove" } }), false);
   assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "INPUT", id: "release-input" } }), true);
 });
+
+function reviewDashboard(count) {
+  const items = Array.from({ length: count }, (_, index) => ({
+    queuePosition: index + 1,
+    pr: { number: index + 1, title: `PR ${index + 1}`, url: `https://github.com/microsoft/aspire/pull/${index + 1}`, repository: "microsoft/aspire", author: "davidfowl", review: { state: "waiting" } },
+    signals: [],
+  }));
+  return {
+    authenticated: true, mode: "review", accounts: [], activeAccounts: [], notifications: [],
+    repos: ["microsoft/aspire"], counts: {}, errors: [],
+    attention: { focus: items.slice(0, 10), focusRemainder: items.slice(10), focusTotal: count, forMe: [], focusExclusions: [], buckets: [] },
+  };
+}
 
 function rendererPrefs() {
   return {
