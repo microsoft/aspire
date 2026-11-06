@@ -32,12 +32,7 @@ public sealed class JavaPolyglotTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        // Picker order is C#, TypeScript, Go, Java (Python and Rust stay hidden without their flags), so Java is 3 down.
-        await auto.DownAsync();
-        await auto.DownAsync();
-        await auto.DownAsync();
-        await auto.WaitUntilTextAsync("> Java", timeout: TimeSpan.FromSeconds(5));
-        await auto.EnterAsync();
+        await auto.SelectAppHostLanguageAsync("Java");
         await auto.WaitUntilTextAsync("Created AppHost.java", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 

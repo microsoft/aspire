@@ -324,6 +324,7 @@ path_rules:
       - src/Aspire.Hosting.AppHost/**
       - src/Aspire.Hosting.Azure.Functions/**
       - src/Aspire.Hosting.Blazor/**
+      - src/Aspire.Hosting.CodeGeneration.Go/**
       - src/Aspire.Hosting.CodeGeneration.Java/**
       - src/Aspire.Hosting.CodeGeneration.TypeScript/**
       - src/Aspire.Hosting.Docker/**
@@ -454,8 +455,9 @@ path_rules:
   - paths:
       - src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs
       - src/Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs
+      - src/Aspire.Hosting.Go/GoVersionDetector.cs
     targets: [test:Aspire.Cli.Tests]
-    reason: GoAppHostToolingCheckTests reads the go.mod templates to guard the minimum Go version.
+    reason: GoAppHostToolingCheckTests reads the go.mod templates and hosting fallback to guard the minimum Go version.
   - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
@@ -630,8 +632,11 @@ affected_project_rules:
       - Aspire.Hosting.Dotnet
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.CodeGeneration.Go
+      - Aspire.Hosting.Go
+      - Aspire.Hosting.Redis
     targets: [job:cli-starter-validation]
-    reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
+    reason: direct executables, SDK, and hosting/code-generation packages used by the C#, TypeScript, and Go starter scenarios
   - projects: [Aspire.Hosting.Dotnet]
     targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests]
     reason: generated C# AppHosts use AddDotnetProject through a runtime-only package reference
@@ -724,6 +729,7 @@ affected_project_rules:
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.Azure.Functions
       - Aspire.Hosting.Blazor
+      - Aspire.Hosting.CodeGeneration.Go
       - Aspire.Hosting.CodeGeneration.Java
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker

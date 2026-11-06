@@ -43,10 +43,11 @@
     [Parameter]
     public bool Bordered { get; set; }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         // Another button for the same instrument (e.g. the card and the chart header) can change the pin.
         PinStore.Changed += OnPinsChanged;
+        await PinStore.EnsureLoadedAsync();
     }
 
     protected override void OnParametersSet()

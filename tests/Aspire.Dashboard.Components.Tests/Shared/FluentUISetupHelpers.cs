@@ -278,9 +278,10 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
-        context.Services.AddSingleton(new ResourceTagStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
-        context.Services.AddSingleton(new ResourceOrderStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
-        context.Services.AddSingleton(new MetricPinStore(databasePath: null, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance));
+        context.Services.AddSingleton<LocalStorageLocks>();
+        context.Services.AddScoped<ResourceTagStore>();
+        context.Services.AddScoped<ResourceOrderStore>();
+        context.Services.AddScoped<MetricPinStore>();
         context.Services.AddScoped<ResourcePaneState>();
         context.Services.AddScoped<Aspire.Dashboard.Components.Layout.TerminalDockState>();
         context.Services.AddScoped<DashboardViewPreferences>();
