@@ -283,6 +283,10 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests"]
         },
         {
+            "eng/scripts/run-bounded-image-build.ts",
+            ["test:Aspire.Cli.EndToEnd.Tests", "test:Infrastructure.Tests"]
+        },
+        {
             "eng/clipack/Common.projitems",
             [
                 "test:Aspire.Cli.Tests",

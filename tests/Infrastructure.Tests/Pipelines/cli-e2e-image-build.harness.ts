@@ -52,15 +52,26 @@ function stubDocker(): void {
         case 'cancelled':
             process.kill(process.pid, 'SIGTERM');
             return;
-        case 'external-cancel': {
+        case 'external-cancel':
+        case 'cleanup-cancel': {
+            let stopping = false;
             process.on('SIGTERM', () => {
-                console.error('Client handled external TERM and exited 1');
-                process.exit(1);
+                if (stopping) {
+                    return;
+                }
+                stopping = true;
+                if (scenario === 'cleanup-cancel') {
+                    console.error('Deadline cleanup started; sending external TERM to supervisor');
+                    process.kill(process.ppid, 'SIGTERM');
+                }
+                setTimeout(() => {
+                    console.error('Client handled external TERM and exited 1');
+                    process.exit(1);
+                }, 100);
             });
-            // Signal the real timeout supervisor, not the client or its wrapper.
-            // /proc/PID/stat starts "123 (bash) S 456 ...", where 456 is PPID.
-            const timeoutPid = Number(fs.readFileSync(`/proc/${process.ppid}/stat`, 'utf8').split(') ')[1].split(' ')[1]);
-            process.kill(timeoutPid, 'SIGTERM');
+            if (scenario === 'external-cancel') {
+                process.kill(process.ppid, 'SIGTERM');
+            }
             setInterval(() => {}, 1000);
             return;
         }
@@ -135,7 +146,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
         const output = result.stdout + result.stderr;
         const expectedStatus = scenario === 'fallback-failure' ? 42
             : scenario === 'forced-kill' ? 137
-            : scenario === 'cancelled' || scenario === 'external-cancel' ? 143 : 0;
+            : ['cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario) ? 143 : 0;
         assert.equal(result.status, expectedStatus, output);
         const trace = fs.readFileSync(path.join(workspace, 'trace'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
         if (orchestration) {
@@ -164,7 +175,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
             ]);
         } else {
             const expectedArgs = ['build', '-f', 'Dockerfile with spaces', '-t', 'test:primary'];
-            const noFallback = ['success', 'forced-kill', 'cancelled', 'external-cancel'].includes(scenario);
+            const noFallback = ['success', 'forced-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario);
             assert.deepEqual(trace.map(entry => entry.args), [
                 [...expectedArgs, '--build-arg', mirrorArg, '.'],
                 ...(noFallback ? [] : [[...expectedArgs, '.']])
@@ -179,11 +190,15 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
                 assert.match(output, /exceeded 5s; retrying with default Ubuntu apt sources/);
                 assert.ok(Date.now() - started < 15000, output);
             }
-            if (scenario === 'forced-kill' || scenario === 'cancelled' || scenario === 'external-cancel') {
+            if (['forced-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario)) {
                 assert.match(output, /not retrying after cancellation or timeout execution failure/);
             }
-            if (scenario === 'external-cancel') {
+            if (scenario === 'external-cancel' || scenario === 'cleanup-cancel') {
                 assert.match(output, /Client handled external TERM and exited 1/);
+            }
+            if (scenario === 'cleanup-cancel') {
+                assert.match(output, /Deadline cleanup started; sending external TERM to supervisor/);
+                assert.match(output, /Image build exceeded 5s/);
             }
         }
         const childPath = path.join(workspace, 'child-pid');

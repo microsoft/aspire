@@ -43,18 +43,18 @@ fallback builds, setup, saving and uploading images. This prevents a slow but
 successful apt transfer from consuming the entire job before fallback runs.
 Observed throttled transfers took 38-41 minutes for 82-108 MB.
 
-GNU `timeout` signals the Docker client's entire process group with `TERM` so
+The Node.js build supervisor signals the Docker client's process group with `TERM` so
 BuildKit can cancel the build session before fallback starts. If the client
-cannot stop within another 30 seconds, `timeout` kills the process group and the
+cannot stop within another 30 seconds, the supervisor kills the process group and the
 script fails without fallback: a forced kill cannot establish that the remote
-build acknowledged cancellation. Interrupts, termination and timeout execution
+build acknowledged cancellation. Interrupts, termination and supervisor execution
 errors also fail without retrying.
 
 The mirror configuration script preserves the base image's original Ubuntu
 sources before replacing them. An empty mirror restores those files, including
 in derived Java/Go images, without changing third-party repositories. A
-supervising shell preserves external cancellation as a signal exit even when
-the Docker client handles the signal and exits with an ordinary failure code.
+supervisor tracks external cancellation independently of its deadline, including
+signals during cleanup and clients that exit with an ordinary failure code.
 
 ## Cross-PR BuildKit cache
 

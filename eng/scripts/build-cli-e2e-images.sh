@@ -8,26 +8,8 @@ build_with_mirror_retry() {
     local status
 
     echo "Building $display_name with Azure Ubuntu apt mirror (limit: $primary_timeout)"
-    # Do not use --foreground: timeout must signal the entire client process group.
-    # TERM lets Docker cancel its BuildKit session before default-source fallback.
-    # Normalize external signals in a supervising shell: Docker may handle TERM
-    # and exit 1, which otherwise looks like an ordinary build failure to timeout.
-    # On a deadline timeout still returns 124; external cancellation returns 143/130.
-    if timeout --verbose --signal=TERM --kill-after=30s "$primary_timeout" \
-        bash -c '
-            cancel() {
-                trap "" INT TERM
-                if [[ -n "${client_pid:-}" ]]; then
-                    wait "$client_pid"
-                fi
-                exit "$1"
-            }
-            trap "cancel 143" TERM
-            trap "cancel 130" INT
-            "$@" &
-            client_pid=$!
-            wait "$client_pid"
-        ' bash "$@" --build-arg "UBUNTU_APT_MIRROR=http://azure.archive.ubuntu.com/ubuntu/" .; then
+    if node "$(dirname "${BASH_SOURCE[0]}")/run-bounded-image-build.ts" "$primary_timeout" \
+        "$@" --build-arg "UBUNTU_APT_MIRROR=http://azure.archive.ubuntu.com/ubuntu/" .; then
         return 0
     else
         status=$?

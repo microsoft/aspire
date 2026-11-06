@@ -17,12 +17,13 @@ public sealed class CliE2EImageBuildTests(ITestOutputHelper output)
     [InlineData("forced-kill")]
     [InlineData("cancelled")]
     [InlineData("external-cancel")]
+    [InlineData("cleanup-cancel")]
     [InlineData("all-images")]
     [InlineData("dotnet-only")]
-    [RequiresTools(["node", "bash", "timeout"])]
+    [RequiresTools(["node", "bash"])]
     public async Task ImageBuildPreservesFallbackAndCancellation(string scenario)
     {
-        Assert.SkipWhen(!OperatingSystem.IsLinux(), "GNU timeout process-group behavior requires Linux.");
+        Assert.SkipWhen(!OperatingSystem.IsLinux(), "Image build process-group behavior requires Linux.");
         using var command = new NodeCommand(output).WithTimeout(TimeSpan.FromMinutes(2));
         var result = await command.ExecuteScriptAsync(
             Path.Combine(RepoRoot.Path, "tests", "Infrastructure.Tests", "Pipelines", "cli-e2e-image-build.harness.ts"),
