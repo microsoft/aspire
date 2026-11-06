@@ -1,0 +1,126 @@
+{
+  "run_id": 42164303520,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42164303520",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-06T05:30:59Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21826,
+    "title": "Add Go AppHost editor support and debugger readiness coverage",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "ievangelist-go-editor-debug-readiness",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21826",
+    "merged_at": "2026-11-06T04:44:42Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "a8f33564e1f01c9399efd67b1563be317e68353d",
+    "failed_sha": "54b4929a235f9684a1dab460bbcd59f4f08412e1",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "6d45477ddc755b541d70738ecbb0759d16798b8e",
+        "message": "Keep service.instance.id when a resource sets OTEL_RESOURCE_ATTRIBUTES (#21101) ## Description In run mode the OTLP exporter callback assigned `OTEL_RESOURCE_ATTRIBUTES = service.instance.id=<DCP template>`. Environment callbacks run in registration order, and `AddProject` registers that callback before any call the AppHost makes, so: - a later `WithEnvironment(\"OTEL_RESOURCE_ATTRIBUTES\", ...)` replaced the value and dropped `service.instance.id`. The dashboard needs that id to match telemetry t",
+        "html_url": "https://github.com/microsoft/aspire/commit/6d45477ddc755b541d70738ecbb0759d16798b8e",
+        "pull_request": {
+          "number": 21101,
+          "title": "Keep service.instance.id when a resource sets OTEL_RESOURCE_ATTRIBUTES",
+          "url": "https://github.com/microsoft/aspire/pull/21101",
+          "merged_at": "2026-11-06T04:15:42Z"
+        }
+      },
+      {
+        "sha": "6a39bcfadc0a6ede45485745e9f530c31f0bb808",
+        "message": "Collapse full-width dashboard sidebar on tab navigation (#21836) ## Description Switching views while the resource sidebar is fully expanded should reveal the destination instead of leaving it covered by the full-width resource list. Tab navigation now immediately returns the pane to its normal narrow sidebar width, preserving the user's saved width and resource selection rather than waiting for the destination page to render. The tab strip, overflow menu, and compact navigation menu share the s",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a39bcfadc0a6ede45485745e9f530c31f0bb808",
+        "pull_request": {
+          "number": 21836,
+          "title": "Collapse full-width dashboard sidebar on tab navigation",
+          "url": "https://github.com/microsoft/aspire/pull/21836",
+          "merged_at": "2026-11-06T04:28:08Z"
+        }
+      },
+      {
+        "sha": "89188d0ea7733a5901636d691b10b147f02e80c3",
+        "message": "Fix responsive dashboard recording badge and navigation overflow (#21835) ## Description The recording timestamp badge was absolutely centered over the dashboard header, covering navigation tabs while viewing a past recording. At narrower widths, navigation labels such as **Metrics** and **Structured logs** could also be clipped instead of moving into the overflow menu. Keep the badge in the header's flex layout, right-aligned with the header actions immediately **to the left of the Recordings i",
+        "html_url": "https://github.com/microsoft/aspire/commit/89188d0ea7733a5901636d691b10b147f02e80c3",
+        "pull_request": {
+          "number": 21835,
+          "title": "Fix responsive dashboard recording badge and navigation overflow",
+          "url": "https://github.com/microsoft/aspire/pull/21835",
+          "merged_at": "2026-11-06T04:30:49Z"
+        }
+      },
+      {
+        "sha": "1b946a70114eaf152778109bd0b86df19ae47006",
+        "message": "Add Go AppHost initialization and stable restore E2E coverage (#21806) ## Description Adds focused Go AppHost E2E coverage for the initialization and package-resolution gaps identified while reviewing the Preview flag-removal PR. - Extends SDK-refresh coverage to interactive init, non-interactive `init --language go` in an empty directory, and non-interactive init alongside an existing Go application. The brownfield case verifies source preservation and wires the existing application through the",
+        "html_url": "https://github.com/microsoft/aspire/commit/1b946a70114eaf152778109bd0b86df19ae47006",
+        "pull_request": {
+          "number": 21806,
+          "title": "Add Go AppHost initialization and stable restore E2E coverage",
+          "url": "https://github.com/microsoft/aspire/pull/21806",
+          "merged_at": "2026-11-06T04:44:02Z"
+        }
+      },
+      {
+        "sha": "54b4929a235f9684a1dab460bbcd59f4f08412e1",
+        "message": "Add Go AppHost editor support and debugger readiness coverage (#21826) ## Description Adds Go AppHost resource parsing for CodeLens and gutter indicators, and offers the existing debugger setup flow before debugging a Go, Java, or Rust AppHost with missing debugger extensions. Selecting Set Up or dismissing the prompt cancels this launch without a duplicate launch-failure notification/history entry. Run Without Debugging remains available. Nested and parenthesized Go resource expressions retain ",
+        "html_url": "https://github.com/microsoft/aspire/commit/54b4929a235f9684a1dab460bbcd59f4f08412e1",
+        "pull_request": {
+          "number": 21826,
+          "title": "Add Go AppHost editor support and debugger readiness coverage",
+          "url": "https://github.com/microsoft/aspire/pull/21826",
+          "merged_at": "2026-11-06T04:44:42Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 127724709926,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42164303520/job/127724709926",
+      "classification": "flaky-test",
+      "reason": "Two Windows tree-actions E2E tests failed with timeout/missing endpoint symptoms; one matches a recurring recorded mechanism.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E keeps one durable operation per AppHost while a deploy session is in flight",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Timed out after 120000ms waiting for aspire-vscode.deployAppHost success outcome.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"b78a3a06-ebd9-44d5-9570-c55b90b5cf54\",\n  \"updatedAt\": \"2026-11-06T05:12:42.855Z\",\n  \"runId\": \"7708-1793941875635\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSe",
+      "stack_trace": "Error: Timed out after 120000ms waiting for aspire-vscode.deployAppHost success outcome.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"b78a3a06-ebd9-44d5-9570-c55b90b5cf54\",\n  \"updatedAt\": \"2026-11-06T05:12:42.855Z\",\n  \"runId\": \"7708-1793941875635\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [\n    {\n      \"command\": \"aspire-vscode.refreshAppHosts\",\n      \"outcome\": \"success\",\n      \"durationMs\": 7,\n      \"source\": \"tree\",\n      \"sequence\": 1\n    },\n    {\n      \"command\": \"aspire-vscode.runPipelineStepAppHost\",\n      \"outcome\": \"success\",\n      \"durationMs\": 845,\n      \"source\": \"tree\",\n      \"sequence\": 2\n    },\n    {\n      \"command\": \"aspire-vscode.runPipelineStepAppHost\",\n      \"outcome\": \"canceled\",\n      \"durationMs\": 730,\n      \"source\": \"tree\",\n      \"sequence\": 3\n    },\n    {\n      \"command\": \"aspire-vscode.debugPipelineStepAppHost\",\n      \"outcome\": \"canceled\",\n      \"durationMs\": 380,\n      \"source\": \"tree\",\n      \"sequence\": 4\n    },\n    {\n      \"command\": \"aspire-vscode.refreshAppHosts\",\n      \"outcome\": \"success\",\n      \"durationMs\": 10,\n      \"source\": \"tree\",\n      \"sequence\": 5\n    },\n    {\n      \"command\": \"aspire-vscode.runPipelineStepAppHost\",\n      \"outcome\": \"success\",\n      \"durationMs\": 8210,\n      \"sour",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timed out after 120s waiting for deployAppHost success outcome with no error, a timing-type failure.",
+      "job_id": 127724709926,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:326:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same assertion (e2e-worker endpoint URL missing) recurred in prior main runs.",
+      "job_id": 127724709926,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing",
+    "vscode-e2e-windows-tree-actions-deploy-session-timeout"
+  ]
+}

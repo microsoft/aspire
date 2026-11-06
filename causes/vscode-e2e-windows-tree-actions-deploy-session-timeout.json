@@ -1,0 +1,28 @@
+{
+  "id": "vscode-e2e-windows-tree-actions-deploy-session-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows, tree-actions) deploy session test times out waiting for deployAppHost success outcome",
+  "error_pattern": "Timed out after 120000ms waiting for aspire-vscode.deployAppHost success outcome.\nLast error: <none>",
+  "occurrences": [
+    {
+      "run_id": 42164303520,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42164303520",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "observed_at": "2026-11-06T05:30:59Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire tree action command E2E keeps one durable operation per AppHost while a deploy session is in flight",
+          "job_id": 127724709926,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+          "error": "Timed out after 120000ms waiting for aspire-vscode.deployAppHost success outcome.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"b78a3a06-ebd9-44d5-9570-c55b90b5cf54\",\n  \"updatedAt\": \"2026-11-06T05:12:42.855Z\",\n  \"runId\": \"7708-1793941875635\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSe",
+          "stack_trace": "Error: Timed out after 120000ms waiting for aspire-vscode.deployAppHost success outcome.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"b78a3a06-ebd9-44d5-9570-c55b90b5cf54\",\n  \"updatedAt\": \"2026-11-06T05:12:42.855Z\",\n  \"runId\": \"7708-1793941875635\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-liWi4I\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [\n    {\n      \"command\": \"aspire-vscode.refreshAppHosts\",\n      \"outcome\": \"success\",\n      \"durationMs\": 7,\n      \"source\": \"tree\",\n      \"sequence\": 1\n    },\n    {\n      \"command\": \"aspire-vscode.runPipelineStepAppHost\",\n      \"outcome\": \"success\",\n      \"durationMs\": 845,\n      \"source\": \"tree\",\n      \"sequence\": 2\n    },\n    {\n      \"command\": \"aspire-vscode.runPipelineStepAppHost\",\n      \"outcome\": \"canceled\",\n      \"durationMs\": 730,\n      \"source\": \"tree\",\n      \"sequence\": 3\n    },\n    {\n      \"command\": \"aspire-vscode.debugPipelineStepAppHost\",\n      \"outcome\": \"canceled\",\n      \"durationMs\": 380,\n      \"source\": \"tree\",\n      \"sequence\": 4\n    },\n    {\n      \"command\": \"aspire-vscode.refreshAppHosts\",\n      \"outcome\": \"success\",\n      \"durationMs\": 10,\n      \"source\": \"tree\",\n      \"sequence\": 5\n    },\n    {\n      \"command\": \"aspire-vscode.runPipelineStepAppHost\",\n      \"outcome\": \"success\",\n      \"durationMs\": 8210,\n      \"sour",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}
