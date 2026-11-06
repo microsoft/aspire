@@ -25,7 +25,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 1
             httpGet:
-              scheme: "http"
+              scheme: "HTTP"
               path: "/ready"
               port: 9000
           ports:
