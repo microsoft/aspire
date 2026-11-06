@@ -329,8 +329,12 @@ does not make .NET services watch.
 
 **Open:** the prebuilt-server path is unit-tested but not yet run against a published package. Payload signing in the official build and other SDK patch/preview versions of a major are unverified.
 
-**Evidence:** `DotnetWatchCoordinatorTests` (resolution, errors, shipped payload runtimeconfig matches its major) and the
-contract tests, which run against the shipped payload.
+Before starting the watcher, the resolver checks the selected muxer's `--list-runtimes` against the payload's
+runtimeconfig frameworks under the effective roll-forward policy (the more permissive of the file's and
+`DOTNET_ROLL_FORWARD`), and fails with the missing framework and how to fix it rather than a host error in the server log.
+
+**Evidence:** `DotnetWatchCoordinatorTests` (resolution, errors, shipped payload runtimeconfig matches its major),
+`DotnetWatchToolRuntimeTests` (runtime check) and the contract tests, which run against the shipped payload.
 
 ### Session 5 - Coordinated initial builds and output-bound launches
 
@@ -444,7 +448,14 @@ instance**. Keep infrastructure out of manifests and inappropriate user lifecycl
 intentional startup and shutdown ordering, rather than adding an explicit-start server with no owner to start it.
 
 Retain the coordinated initial-build contract, then accommodate the watcher's additional build and
-initialization before services use it. Use the existing launch-tool/program-argument seam rather than
+initialization before services use it.
+
+*Spike:* every project joins the coordinated build when added; at `BeforeStartEvent`, before the build plan is
+created, watched projects leave it (the watcher builds them) and excluded projects (`WithWatch(false)`,
+`WaitForCompletion` targets, ...) keep the coordinated build, build environment and launch. The watcher starts only
+after the excluded projects' coordinated build finished, and a watched project's
+`DotnetProgramBuildCompletionAnnotation` completes on the watcher's first successful build, so EF
+`--no-build` operations wait for its output. Use the existing launch-tool/program-argument seam rather than
 discarding all `WithArgs` or silently overwriting a custom tool launch such as the Blazor gateway.
 The AppHost still runs normally during this session.
 
@@ -586,7 +597,7 @@ single-instance-only restriction or silently fall back to non-watch behavior.
 | Gate | Required investigation/verification | Owner |
 |---|---|---|
 | Build/launch fidelity | The watcher takes one SDK per server and has no per-resource build-property/configuration/RID fields or precomputed run-command input. Establish which existing V2 build contexts round-trip correctly, including custom inputs, working directories, and solution properties introduced by its `.slnx` build. Multiple servers alone do not solve shared-output races or property precedence. Reject unsupported cases rather than launch a different output. | 4, 6 |
-| Exact entry point, arguments, profiles | Server graph lookup uses the requested path, but the standalone resource-launch construction does not explicitly pass `--project` or `--file`. Verify `.cs` apps and directories with multiple projects instead of inferring support from successful builds. Verify application-option forwarding and the three-state profile field across the actual wire serialization; parser-level tests alone are insufficient. | 6, 6a |
+| Exact entry point, arguments, profiles | Server graph lookup uses the requested path, but the standalone resource-launch construction does not explicitly pass `--project` or `--file` (the spike's proxy adds `--project` to the run options it sends; file-based apps are excluded from watching). Verify `.cs` apps and directories with multiple projects instead of inferring support from successful builds. Verify application-option forwarding and the three-state profile field across the actual wire serialization; parser-level tests alone are insufficient. | 6, 6a |
 | Per-instance control and completion | One proxy maps to one service instance, but status/control events identify project paths only. Verify replicas and duplicate paths without losing attribution or independently requested lifecycle actions. Reject known ambiguous independently controlled registrations and completion-sensitive cases when the contract cannot represent their outcome; do not claim proxy completion is `WaitForCompletion` parity. | 6, 6a |
 | Custom launches and framework resources | Resource type/metadata alone does not authorize replacing an integration's launch tool. Cover or explicitly reject custom invocation, persistent lifetime, and other unsupported combinations without taking back their normal non-watch behavior. | 6, 7 |
 | Pipe security, environment, startup, cleanup | Verify current-user-only pipe behavior on each OS, intended environment versus server inheritance, startup-only environment semantics, connection/readiness timeouts, concurrent instances, disconnects, and server/AppHost restarts. A successful connection/ACK is not application health. | 6, 6a, 9 |
