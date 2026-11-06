@@ -790,6 +790,16 @@
   }
 }
 
+@media (forced-colors: active) {
+  .app-title,
+  .counter-value,
+  .temp-value {
+    background: none;
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+}
+
 /* Focus visible support for better keyboard navigation */
 *:focus-visible {
   outline: 3px solid var(--accent-gradient-end);
