@@ -1,0 +1,21 @@
+{
+  "id": "azure.keyvault",
+  "safeFailFirstMax": 4,
+  "entries": [
+    {
+      "weight": 0.70,
+      "kind": "error",
+      "status": 429,
+      "contentType": "application/json",
+      "headers": { "Retry-After": "${retryAfterSeconds}" },
+      "paramRanges": { "retryAfterSeconds": [1, 8] },
+      "body": "{\"error\":{\"code\":\"Throttled\",\"message\":\"Throttled. Please retry after the suggested delay.\"}}"
+    },
+    {
+      "weight": 0.30,
+      "kind": "latency",
+      "minMs": 100,
+      "maxMs": 800
+    }
+  ]
+}
