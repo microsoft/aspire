@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -28,6 +29,18 @@ public partial class MeterOverview : LiveSparklinesBase
 
     [Parameter, EditorRequired]
     public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
+
+    [Parameter]
+    public Func<OtlpInstrumentSummary, MetricPinResourceKey>? GetPinResourceKey { get; set; }
+
+    [Parameter]
+    public MetricPinResourceKey? GroupPinResourceKey { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<OtlpResource>? Resources { get; set; }
+
+    [Parameter]
+    public EventCallback<OtlpInstrumentSummary> InstrumentSelected { get; set; }
 
     /// <summary>
     /// Gets or sets the resource label shown as a pill on each card. Null hides it, for lists of a single resource.
@@ -119,6 +132,11 @@ public partial class MeterOverview : LiveSparklinesBase
 
         return MaxCount is { } maxCount ? sorted.Take(maxCount) : sorted;
     }
+
+    private MetricPinResourceKey ResolvePinResourceKey(OtlpInstrumentSummary instrument) =>
+        GroupPinResourceKey ??
+        GetPinResourceKey?.Invoke(instrument) ??
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository);
 
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch
     {

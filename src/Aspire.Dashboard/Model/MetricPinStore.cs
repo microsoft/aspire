@@ -3,6 +3,8 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Model;
@@ -11,16 +13,16 @@ namespace Aspire.Dashboard.Model;
 /// Stores pinned metric instruments in the application settings database, independently of individual runs.
 /// </summary>
 /// <remarks>
-/// Pins are keyed by meter and instrument name, not by resource. Pinning <c>http.server.request.duration</c>
-/// once pins it for every service that reports it, which matches how the same instrument is compared across
-/// services, and keeps pins valid when resources are renamed or replicas get new instance names.
+/// New pins are scoped to the stable app-model resource and replica that report the instrument. Pins saved by
+/// dashboard versions before resource scoping are retained as global pins and continue to match every resource
+/// that reports the instrument.
 /// </remarks>
 public sealed class MetricPinStore
 {
     private const string SettingsName = "pinned metrics";
 
     private readonly Lock _lock = new();
-    private readonly List<OtlpInstrumentKey> _pins = [];
+    private readonly List<MetricPin> _pins = [];
     private readonly DashboardSettingsDatabase _database;
     private bool _loaded;
 
@@ -42,7 +44,7 @@ public sealed class MetricPinStore
     /// <summary>
     /// Gets the pinned instruments in the order they were pinned.
     /// </summary>
-    public IReadOnlyList<OtlpInstrumentKey> GetPins()
+    public IReadOnlyList<MetricPin> GetPins()
     {
         lock (_lock)
         {
@@ -55,19 +57,25 @@ public sealed class MetricPinStore
     /// Gets the pinned instruments among <paramref name="instruments"/>, in the order they were pinned.
     /// Pins for instruments that aren't in the list, such as ones only another resource reports, are skipped.
     /// </summary>
-    public List<OtlpInstrumentSummary> GetPinnedInstruments(IEnumerable<OtlpInstrumentSummary> instruments)
+    public List<OtlpInstrumentSummary> GetPinnedInstruments(
+        IEnumerable<OtlpInstrumentSummary> instruments,
+        Func<OtlpInstrumentSummary, MetricPinResourceKey> getResourceKey)
     {
-        // The same instrument can come from several resources, and each of them is pinned along with it.
-        var instrumentsByKey = instruments.ToLookup(i => i.GetKey());
-        return [.. GetPins().SelectMany(key => instrumentsByKey[key])];
+        var instrumentsByKey = instruments
+            .Select(instrument => (Instrument: instrument, ResourceKey: getResourceKey(instrument)))
+            .ToLookup(item => item.Instrument.GetKey());
+        return [.. GetPins()
+            .SelectMany(pin => instrumentsByKey[pin.InstrumentKey].Where(item => Matches(pin, item.ResourceKey, pin.InstrumentKey)))
+            .Select(item => item.Instrument)
+            .Distinct()];
     }
 
-    public bool IsPinned(OtlpInstrumentKey key)
+    public bool IsPinned(MetricPinResourceKey resourceKey, OtlpInstrumentKey instrumentKey)
     {
         lock (_lock)
         {
             EnsureLoaded();
-            return _pins.Contains(key);
+            return _pins.Any(pin => Matches(pin, resourceKey, instrumentKey));
         }
     }
 
@@ -75,27 +83,41 @@ public sealed class MetricPinStore
     /// Pins or unpins an instrument. Returns <see langword="false"/> if the change couldn't be saved,
     /// in which case the pins are unchanged.
     /// </summary>
-    public bool SetPinned(OtlpInstrumentKey key, bool pinned)
+    public bool SetPinned(MetricPinResourceKey resourceKey, OtlpInstrumentKey instrumentKey, bool pinned)
     {
         lock (_lock)
         {
             EnsureLoaded();
-            if (_pins.Contains(key) == pinned)
+            var resourcePin = new MetricPin(resourceKey, instrumentKey);
+            var existingPin = _pins.FirstOrDefault(pin => Matches(pin, resourceKey, instrumentKey));
+            if ((existingPin is not null) == pinned)
             {
                 return true;
             }
-            if (!Save(key, pinned))
+
+            // Unpinning an existing global pin removes that global record instead of silently replacing it with
+            // resource-scoped state. A later pin creates a new resource-scoped record.
+            var changedPin = pinned ? resourcePin : existingPin!;
+            var overlappingPins = pinned && resourceKey.IsGroup
+                ? _pins.Where(pin =>
+                    pin.ResourceKey is { } pinResource &&
+                    !pinResource.IsGroup &&
+                    string.Equals(pinResource.Name, resourceKey.Name, StringComparisons.ResourceName) &&
+                    pin.InstrumentKey == instrumentKey).ToList()
+                : [];
+            if (!Save(changedPin, pinned, overlappingPins))
             {
                 return false;
             }
 
+            _pins.RemoveAll(overlappingPins.Contains);
             if (pinned)
             {
-                _pins.Add(key);
+                _pins.Add(changedPin);
             }
             else
             {
-                _pins.Remove(key);
+                _pins.Remove(changedPin);
             }
         }
 
@@ -113,37 +135,221 @@ public sealed class MetricPinStore
 
         _database.Load(SettingsName, connection =>
         {
-            using var command = connection.CreateCommand();
-            // pin_id is the rowid, which increases with each insert, so ordering by it lists pins in the
-            // order they were pinned.
-            command.CommandText = """
-                CREATE TABLE IF NOT EXISTS metric_pins (
-                    pin_id INTEGER NOT NULL PRIMARY KEY,
-                    meter_name TEXT NOT NULL,
-                    instrument_name TEXT NOT NULL,
-                    UNIQUE (meter_name, instrument_name)
-                );
-                SELECT meter_name, instrument_name FROM metric_pins ORDER BY pin_id;
+            EnsureSchema(connection);
+
+            using var loadCommand = connection.CreateCommand();
+            // pin_id increases with each insert, so ordering by it lists pins in the order they were pinned.
+            loadCommand.CommandText = """
+                SELECT resource_name, resource_replica_index, resource_instance_id, meter_name, instrument_name
+                FROM metric_pins
+                ORDER BY pin_id;
                 """;
-            using var reader = command.ExecuteReader();
+            using var reader = loadCommand.ExecuteReader();
             while (reader.Read())
             {
-                _pins.Add(new OtlpInstrumentKey(reader.GetString(0), reader.GetString(1)));
+                var resourceKey = reader.IsDBNull(0)
+                    ? (MetricPinResourceKey?)null
+                    : new MetricPinResourceKey(
+                        reader.GetString(0),
+                        reader.IsDBNull(1) ? null : reader.GetInt32(1),
+                        reader.IsDBNull(2) ? null : reader.GetString(2));
+                _pins.Add(new MetricPin(resourceKey, new OtlpInstrumentKey(reader.GetString(3), reader.GetString(4))));
             }
         });
     }
 
-    private bool Save(OtlpInstrumentKey key, bool pinned)
+    private static void EnsureSchema(SqliteConnection connection)
+    {
+        using var tableExistsCommand = connection.CreateCommand();
+        tableExistsCommand.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'metric_pins';";
+        var tableExists = (long)tableExistsCommand.ExecuteScalar()! > 0;
+        if (!tableExists)
+        {
+            CreateTable(connection);
+            return;
+        }
+
+        using var columnsCommand = connection.CreateCommand();
+        columnsCommand.CommandText = "PRAGMA table_info(metric_pins);";
+        using var reader = columnsCommand.ExecuteReader();
+        var columns = new HashSet<string>(StringComparer.Ordinal);
+        while (reader.Read())
+        {
+            columns.Add(reader.GetString(1));
+        }
+
+        if (columns.Contains("resource_replica_index") && columns.Contains("resource_instance_id"))
+        {
+            return;
+        }
+        reader.Close();
+
+        using var transaction = connection.BeginTransaction();
+        using var migrationCommand = connection.CreateCommand();
+        migrationCommand.Transaction = transaction;
+        // Scoped schemas only existed in development builds of this change. Reset them rather than attempting to
+        // preserve unstable instance identities; SQLite retains the old index name when a table is renamed, which
+        // prevents an in-place migration from creating the replacement index.
+        migrationCommand.CommandText = columns.Contains("resource_name")
+            ? """
+            DROP TABLE metric_pins;
+            CREATE TABLE metric_pins (
+                pin_id INTEGER NOT NULL PRIMARY KEY,
+                resource_name TEXT NULL,
+                resource_replica_index INTEGER NULL,
+                resource_instance_id TEXT NULL,
+                meter_name TEXT NOT NULL,
+                instrument_name TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX metric_pins_identity ON metric_pins (
+                resource_name IS NULL,
+                IFNULL(resource_name, ''),
+                resource_replica_index IS NULL,
+                IFNULL(resource_replica_index, -1),
+                resource_instance_id IS NULL,
+                IFNULL(resource_instance_id, ''),
+                meter_name,
+                instrument_name
+            );
+            """
+            : """
+            ALTER TABLE metric_pins RENAME TO metric_pins_global;
+            CREATE TABLE metric_pins (
+                pin_id INTEGER NOT NULL PRIMARY KEY,
+                resource_name TEXT NULL,
+                resource_replica_index INTEGER NULL,
+                resource_instance_id TEXT NULL,
+                meter_name TEXT NOT NULL,
+                instrument_name TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX metric_pins_identity ON metric_pins (
+                resource_name IS NULL,
+                IFNULL(resource_name, ''),
+                resource_replica_index IS NULL,
+                IFNULL(resource_replica_index, -1),
+                resource_instance_id IS NULL,
+                IFNULL(resource_instance_id, ''),
+                meter_name,
+                instrument_name
+            );
+            INSERT INTO metric_pins (pin_id, resource_name, resource_replica_index, resource_instance_id, meter_name, instrument_name)
+                SELECT pin_id, NULL, NULL, NULL, meter_name, instrument_name FROM metric_pins_global;
+            DROP TABLE metric_pins_global;
+            """;
+        migrationCommand.ExecuteNonQuery();
+        transaction.Commit();
+    }
+
+    private static void CreateTable(SqliteConnection connection)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE TABLE IF NOT EXISTS metric_pins (
+                pin_id INTEGER NOT NULL PRIMARY KEY,
+                resource_name TEXT NULL,
+                resource_replica_index INTEGER NULL,
+                resource_instance_id TEXT NULL,
+                meter_name TEXT NOT NULL,
+                instrument_name TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS metric_pins_identity ON metric_pins (
+                resource_name IS NULL,
+                IFNULL(resource_name, ''),
+                resource_replica_index IS NULL,
+                IFNULL(resource_replica_index, -1),
+                resource_instance_id IS NULL,
+                IFNULL(resource_instance_id, ''),
+                meter_name,
+                instrument_name
+            );
+            """;
+        command.ExecuteNonQuery();
+    }
+
+    private bool Save(MetricPin pin, bool pinned, IReadOnlyList<MetricPin> overlappingPins)
     {
         return _database.TrySave(SettingsName, connection =>
         {
+            using var transaction = connection.BeginTransaction();
+            foreach (var overlappingPin in overlappingPins)
+            {
+                DeletePin(connection, transaction, overlappingPin);
+            }
+
             using var command = connection.CreateCommand();
+            command.Transaction = transaction;
             command.CommandText = pinned
-                ? "INSERT OR IGNORE INTO metric_pins (meter_name, instrument_name) VALUES ($meter, $instrument);"
-                : "DELETE FROM metric_pins WHERE meter_name = $meter AND instrument_name = $instrument;";
-            command.Parameters.AddWithValue("$meter", key.MeterName);
-            command.Parameters.AddWithValue("$instrument", key.InstrumentName);
+                ? """
+                    INSERT OR IGNORE INTO metric_pins (resource_name, resource_replica_index, resource_instance_id, meter_name, instrument_name)
+                    VALUES ($resource_name, $resource_replica_index, $resource_instance_id, $meter, $instrument);
+                    """
+                : """
+                    DELETE FROM metric_pins
+                    WHERE resource_name IS $resource_name
+                        AND resource_replica_index IS $resource_replica_index
+                        AND resource_instance_id IS $resource_instance_id
+                        AND meter_name = $meter
+                        AND instrument_name = $instrument;
+                    """;
+            AddPinParameters(command, pin);
             command.ExecuteNonQuery();
+            transaction.Commit();
         });
+    }
+
+    private static void DeletePin(SqliteConnection connection, SqliteTransaction transaction, MetricPin pin)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            DELETE FROM metric_pins
+            WHERE resource_name IS $resource_name
+                AND resource_replica_index IS $resource_replica_index
+                AND resource_instance_id IS $resource_instance_id
+                AND meter_name = $meter
+                AND instrument_name = $instrument;
+            """;
+        AddPinParameters(command, pin);
+        command.ExecuteNonQuery();
+    }
+
+    private static void AddPinParameters(SqliteCommand command, MetricPin pin)
+    {
+        command.Parameters.AddWithValue("$resource_name", (object?)pin.ResourceKey?.Name ?? DBNull.Value);
+        command.Parameters.AddWithValue("$resource_replica_index", (object?)pin.ResourceKey?.ReplicaIndex ?? DBNull.Value);
+        command.Parameters.AddWithValue("$resource_instance_id", (object?)pin.ResourceKey?.InstanceId ?? DBNull.Value);
+        command.Parameters.AddWithValue("$meter", pin.InstrumentKey.MeterName);
+        command.Parameters.AddWithValue("$instrument", pin.InstrumentKey.InstrumentName);
+    }
+
+    private static bool Matches(MetricPin pin, MetricPinResourceKey resourceKey, OtlpInstrumentKey instrumentKey) =>
+        pin.InstrumentKey == instrumentKey &&
+        (pin.ResourceKey is not { } pinResource ||
+            (string.Equals(pinResource.Name, resourceKey.Name, StringComparisons.ResourceName) &&
+             (pinResource.IsGroup ||
+              (pinResource.ReplicaIndex == resourceKey.ReplicaIndex &&
+               string.Equals(pinResource.InstanceId, resourceKey.InstanceId, StringComparison.Ordinal)))));
+}
+
+public sealed record MetricPin(MetricPinResourceKey? ResourceKey, OtlpInstrumentKey InstrumentKey);
+
+public readonly record struct MetricPinResourceKey(string Name, int? ReplicaIndex, string? InstanceId = null)
+{
+    public bool IsGroup => ReplicaIndex is null && InstanceId is null;
+
+    public static MetricPinResourceKey Resolve(
+        ResourceKey resourceKey,
+        IResourceRepository resourceRepository)
+    {
+        var resource = resourceRepository.GetResources().FirstOrDefault(resource =>
+            resourceKey.EqualsCompositeName(resource.Name));
+        if (resource is not null)
+        {
+            return new MetricPinResourceKey(resource.DisplayName, resource.ReplicaIndex);
+        }
+
+        // Telemetry-only resources have no stable replica index. List positions can change as instances arrive,
+        // so retain the instance ID rather than transferring a pin to another process.
+        return new MetricPinResourceKey(resourceKey.Name, ReplicaIndex: null, resourceKey.InstanceId);
     }
 }

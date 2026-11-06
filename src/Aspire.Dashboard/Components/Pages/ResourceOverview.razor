@@ -273,7 +273,7 @@
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMeters)]</span>
                         </div>
                     </div>
-                    var pinnedInstruments = PinStore.GetPinnedInstruments(telemetry.Instruments);
+                    var pinnedInstruments = PinStore.GetPinnedInstruments(telemetry.Instruments, GetPinResourceKey);
                     @if (pinnedInstruments.Count == 0)
                     {
                         <div class="overview-empty overview-metrics-empty">

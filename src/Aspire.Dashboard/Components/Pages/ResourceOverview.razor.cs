@@ -121,6 +121,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
+    private MetricPinResourceKey GetPinResourceKey(OtlpInstrumentSummary instrument) =>
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository);
+
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
     private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&

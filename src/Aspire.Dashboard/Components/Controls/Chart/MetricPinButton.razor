@@ -10,7 +10,9 @@
 @inject IStringLocalizer<MetricsResources> Loc
 
 @{
-    var label = _isPinned ? Loc[nameof(MetricsResources.MetricsUnpinInstrument)] : Loc[nameof(MetricsResources.MetricsPinInstrument)];
+    var label = ResourceKey.IsGroup
+        ? _isPinned ? Loc[nameof(MetricsResources.MetricsUnpinInstrumentForAllReplicas)] : Loc[nameof(MetricsResources.MetricsPinInstrumentForAllReplicas)]
+        : _isPinned ? Loc[nameof(MetricsResources.MetricsUnpinInstrument)] : Loc[nameof(MetricsResources.MetricsPinInstrument)];
 }
 
 @* The bordered variant matches the dashboard's other header icon buttons (word wrap, close): a square
@@ -34,6 +36,9 @@
     [Parameter, EditorRequired]
     public required OtlpInstrumentKey InstrumentKey { get; set; }
 
+    [Parameter, EditorRequired]
+    public required MetricPinResourceKey ResourceKey { get; set; }
+
     [Parameter]
     public string? Class { get; set; }
 
@@ -51,20 +56,20 @@
 
     protected override void OnParametersSet()
     {
-        _isPinned = PinStore.IsPinned(InstrumentKey);
+        _isPinned = PinStore.IsPinned(ResourceKey, InstrumentKey);
     }
 
     private void TogglePinned()
     {
-        PinStore.SetPinned(InstrumentKey, !_isPinned);
-        _isPinned = PinStore.IsPinned(InstrumentKey);
+        PinStore.SetPinned(ResourceKey, InstrumentKey, !_isPinned);
+        _isPinned = PinStore.IsPinned(ResourceKey, InstrumentKey);
     }
 
     private void OnPinsChanged()
     {
         _ = InvokeAsync(() =>
         {
-            _isPinned = PinStore.IsPinned(InstrumentKey);
+            _isPinned = PinStore.IsPinned(ResourceKey, InstrumentKey);
             StateHasChanged();
         });
     }

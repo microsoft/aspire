@@ -18,6 +18,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
+using Aspire.Tests.Shared.DashboardModel;
 using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
@@ -1403,7 +1404,9 @@ public partial class MetricsTests : DashboardTestContext
                 cut.Find(".metric-group.pinned").GetAttribute("href"));
             Assert.Equal("true", pinButton.Find("fluent-button").GetAttribute("aria-pressed"));
         });
-        Assert.Equal([new OtlpInstrumentKey("test-meter", "test-instrument-b")], Services.GetRequiredService<MetricPinStore>().GetPins());
+        Assert.Equal(
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null, InstanceId: "TestId"), new OtlpInstrumentKey("test-meter", "test-instrument-b"))],
+            Services.GetRequiredService<MetricPinStore>().GetPins());
 
         // Selecting the pinned group shows the pinned instruments as cards, grouped by their meter.
         cut.Find(".metric-group.pinned").Click();
@@ -1427,7 +1430,10 @@ public partial class MetricsTests : DashboardTestContext
     public async Task InitialLoad_WithPinnedInstruments_ShowsPinnedGroup()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
-        Services.GetRequiredService<MetricPinStore>().SetPinned(new OtlpInstrumentKey("test-meter", "test-instrument-b"), pinned: true);
+        Services.GetRequiredService<MetricPinStore>().SetPinned(
+            new MetricPinResourceKey("TestApp", ReplicaIndex: null),
+            new OtlpInstrumentKey("test-meter", "test-instrument-b"),
+            pinned: true);
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
@@ -1463,6 +1469,397 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Equal("Pinned", cut.Find(".metric-group.selected .metric-group-name").TextContent);
             Assert.Equal(["test-instrument-b"], GetCardNames(cut));
         });
+    }
+
+    [Fact]
+    public async Task ReplicaGroupChart_PinUsesEmittingResource()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(initialResources:
+        [
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-first", displayName: "TestApp", replicaIndex: 1),
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-second", displayName: "TestApp", replicaIndex: 2)
+        ]));
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first"),
+            CreateReplicaResourceMetrics("second")
+        });
+        var resourceKey = new ResourceKey("TestApp", InstanceId: null);
+        var resources = telemetryRepository.GetResources();
+        var summary = Assert.Single(telemetryRepository.GetInstrumentSummaries(resourceKey));
+
+        var cut = Render<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "shared-instrument");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ActiveView, MetricViewKind.Graph);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowRunningTotal, true);
+            builder.Add(component => component.OnShowRunningTotalChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.ShowChangePerIntervalOption, true);
+            builder.Add(component => component.Resources, resources);
+        });
+
+        cut.WaitForState(() => cut.FindComponents<MetricPinButton>().Count == 1);
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var pinStore = Services.GetRequiredService<MetricPinStore>();
+            var pinResourceKey = new MetricPinResourceKey("TestApp", ReplicaIndex: 1);
+            Assert.Equal([new MetricPin(pinResourceKey, summary.GetKey())], pinStore.GetPins());
+            Assert.Equal([summary], pinStore.GetPinnedInstruments([summary], _ => pinResourceKey));
+        });
+    }
+
+    [Fact]
+    public async Task ReplicaGroupMeterCard_PinUsesGroupIdentity()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first"),
+            CreateReplicaResourceMetrics("second")
+        });
+        var resourceKey = new ResourceKey("TestApp", InstanceId: null);
+        var summary = Assert.Single(telemetryRepository.GetInstrumentSummaries(resourceKey));
+
+        var cut = Render<MeterOverview>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resourceKey);
+            builder.Add(component => component.Instruments, new List<OtlpInstrumentSummary> { summary });
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ShowMeterName, false);
+            builder.Add(component => component.GetInstrumentUrl, _ => "/metrics");
+            builder.Add(component => component.GetPinResourceKey, _ => new MetricPinResourceKey("TestApp", ReplicaIndex: 1));
+            builder.Add(component => component.GroupPinResourceKey, new MetricPinResourceKey("TestApp", ReplicaIndex: null));
+        });
+
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+
+        Assert.Equal(
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null), summary.GetKey())],
+            Services.GetRequiredService<MetricPinStore>().GetPins());
+        Assert.Equal(
+            "Unpin metric for all replicas",
+            cut.FindComponent<MetricPinButton>().Find("fluent-button").GetAttribute("data-tooltip"));
+    }
+
+    [Fact]
+    public async Task ReplicaGroupFilterResult_PinUsesGroupIdentity()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var firstReplica = CreateReplicaResourceMetrics("first");
+        var secondReplica = CreateReplicaResourceMetrics("second");
+        firstReplica.ScopeMetrics[0].Metrics.Add(CreateSumMetric("already-pinned", s_testTime.AddMinutes(1)));
+        secondReplica.ScopeMetrics[0].Metrics.Add(CreateSumMetric("already-pinned", s_testTime.AddMinutes(1)));
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            firstReplica,
+            secondReplica
+        });
+        var groupKey = new MetricPinResourceKey("TestApp", ReplicaIndex: null);
+        Services.GetRequiredService<MetricPinStore>().SetPinned(
+            groupKey,
+            new OtlpInstrumentKey("test-meter", "already-pinned"),
+            pinned: true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            DashboardUrls.MetricsUrl(resource: "TestApp", pinned: true));
+        var cut = Render<Metrics>(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, "TestApp");
+            parameters.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var filterInput = cut.FindComponents<FluentTextInput>().Single(component => component.Instance.Class == "metric-groups-search");
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.PageViewModel.ShowPinned));
+        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync("shared"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.PageViewModel.ShowPinned);
+            Assert.True(cut.Instance.PageViewModel.ShowFilterResults);
+            Assert.Equal(
+                groupKey,
+                cut.FindComponent<MeterOverview>().Instance.GroupPinResourceKey);
+        });
+        cut.FindComponents<MetricPinButton>()
+            .Single(button => button.Instance.InstrumentKey.InstrumentName == "shared-instrument")
+            .Find("fluent-button")
+            .Click();
+
+        await cut.InvokeAsync(() => filterInput.Instance.ValueChanged.InvokeAsync(string.Empty));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.False(cut.Instance.PageViewModel.ShowFilterResults);
+            Assert.Equal(
+                [
+                    new MetricPin(groupKey, new OtlpInstrumentKey("test-meter", "already-pinned")),
+                    new MetricPin(groupKey, new OtlpInstrumentKey("test-meter", "shared-instrument"))
+                ],
+                Services.GetRequiredService<MetricPinStore>().GetPins());
+        });
+    }
+
+    [Fact]
+    public async Task ReplicaGroupAggregateChart_PinUsesGroupIdentity()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(initialResources:
+        [
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-first", displayName: "TestApp", replicaIndex: 1),
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-second", displayName: "TestApp", replicaIndex: 2)
+        ]));
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first"),
+            CreateReplicaResourceMetrics("second")
+        });
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "shared-instrument"));
+
+        var cut = Render<Metrics>(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, "TestApp");
+            parameters.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                new MetricPinResourceKey("TestApp", ReplicaIndex: null),
+                cut.FindComponent<MetricPinButton>().Instance.ResourceKey);
+        });
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+
+        Assert.Equal(
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
+            Services.GetRequiredService<MetricPinStore>().GetPins());
+    }
+
+    [Fact]
+    public async Task ReplicaGroupPinnedView_ShowsPinnedNonFirstReplica()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(initialResources:
+        [
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-first", displayName: "TestApp", replicaIndex: 1),
+            ModelTestHelpers.CreateResource(resourceName: "TestApp-second", displayName: "TestApp", replicaIndex: 2)
+        ]));
+        var now = new DateTime(2025, 12, 20, 23, 59, 50, DateTimeKind.Utc);
+        var browserTimeProvider = new TestTimeProvider { UtcNow = new DateTimeOffset(now) };
+        Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider);
+        Services.AddSingleton<TimeProvider>(new FakeTimeProvider(browserTimeProvider.UtcNow));
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first", now.AddMinutes(-1), value: 10),
+            CreateReplicaResourceMetrics("second", now.AddMinutes(-1), value: 20)
+        });
+        var pinStore = Services.GetRequiredService<MetricPinStore>();
+        var instrumentKey = new OtlpInstrumentKey("test-meter", "shared-instrument");
+        pinStore.SetPinned(new MetricPinResourceKey("TestApp", 1), instrumentKey, pinned: true);
+        pinStore.SetPinned(new MetricPinResourceKey("TestApp", 2), instrumentKey, pinned: true);
+
+        var resources = telemetryRepository.GetResources();
+        var firstResource = resources.Single(resource => resource.ResourceKey == new ResourceKey("TestApp", "first"));
+        var secondResource = resources.Single(resource => resource.ResourceKey == new ResourceKey("TestApp", "second"));
+        var firstResourceName = OtlpHelpers.GetResourceName(firstResource, resources);
+        var secondResourceName = OtlpHelpers.GetResourceName(secondResource, resources);
+
+        Services.GetRequiredService<NavigationManager>()
+            .NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", duration: 5, pinned: true));
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var cut = Render<Metrics>(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, "TestApp");
+            parameters.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("2", cut.Find(".metric-group.pinned .metric-group-count").TextContent);
+            var overview = cut.FindComponent<MeterOverview>();
+            Assert.Null(overview.Instance.ResourceKey);
+            Assert.Equal(
+                [new ResourceKey("TestApp", "first"), new ResourceKey("TestApp", "second")],
+                overview.Instance.Instruments.Select(instrument => instrument.ResourceView.ResourceKey));
+            Assert.Equal([firstResourceName, secondResourceName], cut.FindAll(".meter-card-resource-name").Select(element => element.TextContent));
+            Assert.Equal(["10", "20"], cut.FindAll(".meter-card-value-number").Select(element => element.TextContent));
+        });
+
+        var instrumentUrl = DashboardUrls.MetricsUrl(
+            resource: secondResourceName,
+            meter: "test-meter",
+            instrument: "shared-instrument",
+            duration: 5);
+        var secondCard = cut.FindAll(".meter-card").Single(card =>
+            card.QuerySelector(".meter-card-resource-name")?.TextContent == secondResourceName);
+        Assert.Equal(instrumentUrl, secondCard.QuerySelector(".meter-card-link")!.GetAttribute("href"));
+
+        var secondInstrument = cut.FindComponent<MeterOverview>().Instance.Instruments.Single(
+            instrument => instrument.ResourceView.ResourceKey == new ResourceKey("TestApp", "second"));
+        await cut.InvokeAsync(() => cut.FindComponent<MeterOverview>().Instance.InstrumentSelected.InvokeAsync(secondInstrument));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(instrumentUrl);
+        cut.Render(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, secondResourceName);
+        });
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(new ResourceKey("TestApp", "second"), cut.FindComponent<ChartContainer>().Instance.ResourceKey);
+            Assert.Equal(new MetricPinResourceKey("TestApp", 2), cut.FindComponent<MetricPinButton>().Instance.ResourceKey);
+            Assert.Equal("TestApp", cut.Instance.PageViewModel.ReturnTarget?.ResourceName);
+            Assert.Equal("Back to Pinned", cut.Find(".metrics-chart-back").GetAttribute("aria-label"));
+        });
+
+        cut.Find(".metrics-chart-back").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains("/metrics/resource/TestApp", Services.GetRequiredService<NavigationManager>().Uri);
+            Assert.Contains("pinned=true", Services.GetRequiredService<NavigationManager>().Uri);
+        });
+        cut.Render(parameters =>
+        {
+            parameters.Add(component => component.ResourceName, "TestApp");
+        });
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.PageViewModel.ShowPinned);
+            Assert.Equal("TestApp", cut.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal([firstResourceName, secondResourceName], cut.FindAll(".meter-card-resource-name").Select(element => element.TextContent));
+            Assert.Equal(["10", "20"], cut.FindAll(".meter-card-value-number").Select(element => element.TextContent));
+        });
+    }
+
+    [Fact]
+    public async Task AllResources_MatchingInstruments_PinIndependently()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics("FirstApp"),
+            CreateResourceMetrics("SecondApp")
+        });
+        var resources = telemetryRepository.GetResources().OrderBy(resource => resource.ResourceName, StringComparer.Ordinal).ToList();
+        var instruments = resources.SelectMany(resource => telemetryRepository.GetInstrumentSummaries(resource.ResourceKey)).ToList();
+
+        var cut = Render<MeterOverview>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, null);
+            builder.Add(component => component.Instruments, instruments);
+            builder.Add(component => component.Resources, resources);
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ShowMeterName, false);
+            builder.Add(component => component.SortBy, MetricSortBy.Resource);
+            builder.Add(component => component.GetResourceLabel, instrument => instrument.ResourceView.Resource.ResourceName);
+            builder.Add(component => component.GetInstrumentUrl, instrument => $"/metrics/{instrument.ResourceView.Resource.ResourceName}/{instrument.Name}");
+        });
+
+        var pinButtons = GetPinButtons();
+        Assert.Equal(["FirstApp", "SecondApp"], cut.FindAll(".meter-card-resource-name").Select(element => element.TextContent));
+        Assert.All(pinButtons, button => Assert.Equal("false", button.Find("fluent-button").GetAttribute("aria-pressed")));
+
+        pinButtons[0].Find("fluent-button").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var updatedButtons = GetPinButtons();
+            Assert.Equal("true", updatedButtons[0].Find("fluent-button").GetAttribute("aria-pressed"));
+            Assert.Equal("false", updatedButtons[1].Find("fluent-button").GetAttribute("aria-pressed"));
+        });
+
+        pinButtons = GetPinButtons();
+        pinButtons[1].Find("fluent-button").Click();
+        pinButtons = GetPinButtons();
+        pinButtons[0].Find("fluent-button").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var updatedButtons = GetPinButtons();
+            Assert.Equal("false", updatedButtons[0].Find("fluent-button").GetAttribute("aria-pressed"));
+            Assert.Equal("true", updatedButtons[1].Find("fluent-button").GetAttribute("aria-pressed"));
+        });
+
+        Assert.Equal(
+            [new MetricPin(new MetricPinResourceKey("SecondApp", ReplicaIndex: null, InstanceId: "TestId"), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
+            Services.GetRequiredService<MetricPinStore>().GetPins());
+
+        List<IRenderedComponent<MetricPinButton>> GetPinButtons() =>
+            [.. cut.FindComponents<MetricPinButton>().OrderBy(button => button.Instance.ResourceKey.Name, StringComparer.Ordinal)];
+
+        static ResourceMetrics CreateResourceMetrics(string resourceName) => new()
+        {
+            Resource = CreateResource(name: resourceName),
+            ScopeMetrics =
+            {
+                new ScopeMetrics
+                {
+                    Scope = CreateScope(name: "test-meter"),
+                    Metrics = { CreateSumMetric(metricName: "shared-instrument", startTime: s_testTime.AddMinutes(1)) }
+                }
+            }
+        };
+    }
+
+    [Fact]
+    public async Task TelemetryOnlyReplicas_EarlierSortingInstanceArrives_PinStaysOnOriginalInstance()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("second")
+        });
+        var resources = telemetryRepository.GetResources();
+        var instruments = resources
+            .SelectMany(resource => telemetryRepository.GetInstrumentSummaries(resource.ResourceKey))
+            .ToList();
+
+        var cut = Render<MeterOverview>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, null);
+            builder.Add(component => component.Instruments, instruments);
+            builder.Add(component => component.Resources, resources);
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ShowMeterName, false);
+            builder.Add(component => component.SortBy, MetricSortBy.Resource);
+            builder.Add(component => component.GetResourceLabel, instrument => instrument.ResourceView.ResourceKey.InstanceId!);
+            builder.Add(component => component.GetInstrumentUrl, _ => "/metrics");
+        });
+
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateReplicaResourceMetrics("first")
+        });
+        resources = telemetryRepository.GetResources();
+        Assert.Equal(["first", "second"], resources.Select(resource => resource.ResourceKey.InstanceId));
+        instruments = resources.SelectMany(resource => telemetryRepository.GetInstrumentSummaries(resource.ResourceKey)).ToList();
+        cut.Render(builder =>
+        {
+            builder.Add(component => component.Instruments, instruments);
+            builder.Add(component => component.Resources, resources);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var cards = cut.FindAll(".meter-card")
+                .ToDictionary(card => card.QuerySelector(".meter-card-resource-name")!.TextContent);
+            Assert.Equal("false", cards["first"].QuerySelector("fluent-button")!.GetAttribute("aria-pressed"));
+            Assert.Equal("true", cards["second"].QuerySelector("fluent-button")!.GetAttribute("aria-pressed"));
+        });
+        Assert.Equal(
+            [new MetricPin(new MetricPinResourceKey("TestApp", ReplicaIndex: null, InstanceId: "second"), new OtlpInstrumentKey("test-meter", "shared-instrument"))],
+            Services.GetRequiredService<MetricPinStore>().GetPins());
     }
 
     [Fact]
@@ -1752,7 +2149,10 @@ public partial class MetricsTests : DashboardTestContext
     public async Task InstrumentChart_Back_ReturnsToGroupItWasOpenedFrom()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
-        Services.GetRequiredService<MetricPinStore>().SetPinned(new OtlpInstrumentKey("test-meter2", "queue.length"), pinned: true);
+        Services.GetRequiredService<MetricPinStore>().SetPinned(
+            new MetricPinResourceKey("TestApp", ReplicaIndex: null),
+            new OtlpInstrumentKey("test-meter2", "queue.length"),
+            pinned: true);
         await AddTwoMetersAsync();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
@@ -1781,6 +2181,27 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Null(cut.Instance.PageViewModel.SelectedInstrument);
             Assert.Contains("pinned=true", navigationManager.Uri);
         });
+    }
+
+    [Fact]
+    public void ResolveUrlResourceName_RestoreUsesReturnTargetInsteadOfLayoutSelection()
+    {
+        Assert.Equal(
+            "TestApp",
+            Metrics.ResolveUrlResourceName(
+                hasResourcesLayout: true,
+                layoutSelectedResourceName: "TestApp-second",
+                layoutIsMultiSelection: false,
+                serializedResourceName: "TestApp",
+                restoringReturnResource: true));
+        Assert.Equal(
+            "TestApp-second",
+            Metrics.ResolveUrlResourceName(
+                hasResourcesLayout: true,
+                layoutSelectedResourceName: "TestApp-second",
+                layoutIsMultiSelection: false,
+                serializedResourceName: "TestApp",
+                restoringReturnResource: false));
     }
 
     [Fact]
@@ -1937,6 +2358,19 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal(MetricViewKind.Table, viewModel.SelectedViewKind);
         Assert.Equal(TimeSpan.FromMinutes(720), viewModel.SelectedDuration.Id);
     }
+
+    private static ResourceMetrics CreateReplicaResourceMetrics(string instanceId, DateTime? startTime = null, int? value = null) => new()
+    {
+        Resource = CreateResource(name: "TestApp", instanceId: instanceId),
+        ScopeMetrics =
+        {
+            new ScopeMetrics
+            {
+                Scope = CreateScope(name: "test-meter"),
+                Metrics = { CreateSumMetric(metricName: "shared-instrument", startTime: startTime ?? s_testTime.AddMinutes(1), value: value) }
+            }
+        }
+    };
 
     private sealed class SignalingFakeTimeProvider : FakeTimeProvider
     {

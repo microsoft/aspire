@@ -26,7 +26,7 @@ else
                                   aria-label="@BackLabel" />
                 }
                 <h3>@_instrument.Summary.Name</h3>
-                <MetricPinButton InstrumentKey="@_instrument.Summary.GetKey()" Bordered="true" />
+                <MetricPinButton ResourceKey="@ResolvePinResourceKey(_instrument.Summary)" InstrumentKey="@_instrument.Summary.GetKey()" Bordered="true" />
             </div>
             <p>@_instrument.Summary.Description</p>
 

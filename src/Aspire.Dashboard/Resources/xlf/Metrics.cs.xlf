@@ -167,6 +167,11 @@
         <target state="new">Pin metric</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsPinInstrumentForAllReplicas">
+        <source>Pin metric for all replicas</source>
+        <target state="new">Pin metric for all replicas</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsPinnedEmpty">
         <source>No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</source>
         <target state="new">No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</target>
@@ -225,6 +230,11 @@
       <trans-unit id="MetricsUnpinInstrument">
         <source>Unpin metric</source>
         <target state="new">Unpin metric</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsUnpinInstrumentForAllReplicas">
+        <source>Unpin metric for all replicas</source>
+        <target state="new">Unpin metric for all replicas</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsViewAttributesToolbar">

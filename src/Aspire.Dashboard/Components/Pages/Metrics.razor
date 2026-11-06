@@ -81,6 +81,7 @@
                                     PageViewModel="@PageViewModel"
                                     SelectGroupAsync="@SelectGroupAsync"
                                     GetGroupUrl="@GetGroupUrl"
+                                    GetPinResourceKey="@GetPinResourceKey"
                                     TextFilterChanged="@OnTextFilterChanged"/>
                             }
                         </FluentMultiSplitterPane>
@@ -115,6 +116,7 @@
                                             ShowChangePerIntervalOption="true"
                                             BackLabel="@GetBackLabel()"
                                             OnBackAsync="@NavigateBackAsync"
+                                            GetPinResourceKey="@(instrument => OverviewGroupPinResourceKey ?? GetPinResourceKey(instrument))"
                                             Resources="@_resources" />
                                     }
                                     else if (PageViewModel.ShowPinned && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
@@ -252,7 +254,11 @@
                                Duration="@PageViewModel.SelectedDuration.Id"
                                ShowMeterName="@showMeterName"
                                MaxCount="@maxCount"
-                               GetInstrumentUrl="@GetInstrumentUrl" />
+                               GetInstrumentUrl="@GetInstrumentUrl"
+                               GetPinResourceKey="@GetPinResourceKey"
+                               GroupPinResourceKey="@OverviewGroupPinResourceKey"
+                               Resources="@_resources"
+                               InstrumentSelected="@OnInstrumentSelected" />
             }
         </section>
     };
@@ -320,6 +326,7 @@
                 IncludeLabel="true"
                 SelectGroupAsync="@SelectGroupAsync"
                 GetGroupUrl="@GetGroupUrl"
+                GetPinResourceKey="@GetPinResourceKey"
                 TextFilterChanged="@OnTextFilterChanged"/>
         }
     }

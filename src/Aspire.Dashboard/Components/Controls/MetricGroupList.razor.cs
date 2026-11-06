@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
@@ -29,6 +30,9 @@ public partial class MetricGroupList : IDisposable
 
     [Parameter, EditorRequired]
     public required Func<Metrics.MetricGroupKind, string?, string> GetGroupUrl { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<OtlpInstrumentSummary, MetricPinResourceKey> GetPinResourceKey { get; set; }
 
     /// <summary>
     /// Raised when the filter text changes, so the page can filter the selected group's cards too.
@@ -68,9 +72,8 @@ public partial class MetricGroupList : IDisposable
         var filter = PageViewModel.TextFilter;
         var groups = new List<MetricGroup>();
 
-        // Pins are stored by meter and instrument name across resources, so count this resource's instruments
-        // that are pinned rather than the stored pins.
-        var pinnedCount = instruments.Count(i => MetricFilter.Matches(i, filter) && PinStore.IsPinned(i.GetKey()));
+        var pinnedCount = (PageViewModel.PinInstruments ?? instruments)
+            .Count(i => MetricFilter.Matches(i, filter) && PinStore.IsPinned(GetPinResourceKey(i), i.GetKey()));
 
         // Keep the pinned group while it's selected, even with no matches, so it doesn't disappear under the user.
         if (pinnedCount > 0 || PageViewModel.ShowPinned)

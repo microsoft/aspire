@@ -54,6 +54,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required List<OtlpResource> Resources { get; set; }
 
+    [Parameter]
+    public Func<OtlpInstrumentSummary, MetricPinResourceKey>? GetPinResourceKey { get; set; }
+
     /// <summary>
     /// Gets or sets whether a counter shows its running total instead of its change per interval.
     /// </summary>
@@ -109,6 +112,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     public ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; } = [];
     public string? PreviousMeterName { get; set; }
     public string? PreviousInstrumentName { get; set; }
+
+    private MetricPinResourceKey ResolvePinResourceKey(OtlpInstrumentSummary instrument) =>
+        GetPinResourceKey?.Invoke(instrument) ??
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository);
 
     protected override async Task OnInitializedAsync()
     {

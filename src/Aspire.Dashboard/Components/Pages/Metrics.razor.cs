@@ -39,6 +39,8 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private List<OtlpResource>? _aggregateResources;
     private Subscription? _resourcesSubscription;
     private Subscription? _metricsSubscription;
+    private MetricReturnTarget? _instrumentReturnTarget;
+    private bool _restoringReturnResource;
 
     public string BasePath => DashboardUrls.MetricsBasePath;
     public string SessionStorageKey => BrowserStorageKeys.MetricsPageState;
@@ -258,15 +260,15 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
         }
 
+        // Where an instrument is opened from, so its chart can go back there. Captured before the
+        // URL replaces the selection.
+        var openedFrom = viewModel.ReturnTarget ?? GetCurrentGroup(viewModel);
+        var showedFilterResults = viewModel.ShowFilterResults;
+
         viewModel.SelectedDuration = _durations.SingleOrDefault(d => (int)d.Id.TotalMinutes == DurationMinutes) ?? _durations.Single(d => d.Id == s_defaultDuration);
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _selectResource);
 
         UpdateInstruments(viewModel);
-
-        // Where an instrument is opened from, so its chart can go back there. Captured before the
-        // URL replaces the selection.
-        var openedFrom = viewModel.SelectedInstrument is null ? GetCurrentGroup(viewModel) : viewModel.ReturnTarget;
-        var showedFilterResults = viewModel.ShowFilterResults;
 
         viewModel.SelectedMeter = null;
         viewModel.SelectedInstrument = null;
@@ -299,9 +301,16 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         // Search results aren't part of the URL. Keep showing them across navigations that don't open an
         // instrument, e.g. going back to them from an instrument's chart. Opening an instrument hides them.
         viewModel.ShowFilterResults = showedFilterResults && viewModel.SelectedInstrument is null && viewModel.TextFilter.Trim().Length > 0;
-        viewModel.ReturnTarget = viewModel.SelectedInstrument is { } instrument
-            ? openedFrom ?? new MetricReturnTarget(MetricGroupKind.Meter, instrument.Parent.Name)
-            : null;
+        if (viewModel.SelectedInstrument is { } instrument)
+        {
+            viewModel.ReturnTarget = _instrumentReturnTarget ??
+                openedFrom ??
+                new MetricReturnTarget(MetricGroupKind.Meter, instrument.Parent.Name, CurrentResourceName);
+        }
+        else
+        {
+            viewModel.ReturnTarget = null;
+        }
 
         return Task.CompletedTask;
 
@@ -325,7 +334,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             return;
         }
 
-        if (PinStore.GetPinnedInstruments(instruments).Count > 0)
+        if (PinStore.GetPinnedInstruments(viewModel.PinInstruments ?? instruments, GetPinResourceKey).Count > 0)
         {
             viewModel.ShowPinned = true;
             return;
@@ -338,7 +347,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     {
         if (viewModel.SelectedResource.Id is null && _aggregateResources is not null)
         {
-            viewModel.Instruments = GetAggregateInstruments();
+            viewModel.Instruments = viewModel.PinInstruments = GetAggregateInstruments();
             return;
         }
 
@@ -349,11 +358,19 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             ResourceViewModel.TryGetResourceByName(ResourceName, layout.ResourceByName, out _))
         {
             // A resource from the app model that hasn't sent telemetry has no metrics, rather than being unknown.
-            viewModel.Instruments = [];
+            viewModel.Instruments = viewModel.PinInstruments = [];
             return;
         }
 
-        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentSummaries(selectedInstance.Value) : null;
+        if (selectedInstance is { } resourceKey)
+        {
+            viewModel.Instruments = TelemetryRepository.GetInstrumentSummaries(resourceKey);
+            viewModel.PinInstruments = GetPinInstruments(resourceKey);
+        }
+        else
+        {
+            viewModel.Instruments = viewModel.PinInstruments = null;
+        }
     }
 
     /// <summary>
@@ -366,6 +383,20 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private List<OtlpInstrumentSummary> GetAggregateInstruments() =>
         [.. (_aggregateResources ?? []).SelectMany(resource => TelemetryRepository.GetInstrumentSummaries(resource.ResourceKey))];
 
+    private List<OtlpInstrumentSummary> GetPinInstruments(ResourceKey resourceKey)
+    {
+        if (resourceKey.InstanceId is not null)
+        {
+            return TelemetryRepository.GetInstrumentSummaries(resourceKey);
+        }
+
+        // A replica-group summary list is deduplicated by instrument key for the normal meter groups. Query each
+        // emitting resource separately so a pin on a non-first replica still has a matching summary.
+        return [.. _resources
+            .Where(resource => string.Equals(resource.ResourceKey.Name, resourceKey.Name, StringComparisons.ResourceName))
+            .SelectMany(resource => TelemetryRepository.GetInstrumentSummaries(resource.ResourceKey))];
+    }
+
     private void UpdateAggregateResources()
     {
         _aggregateResources = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys
@@ -375,6 +406,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string GetInstrumentResourceLabel(OtlpInstrumentSummary instrument) =>
         OtlpHelpers.GetResourceName(instrument.ResourceView.Resource, _resources);
+
+    private MetricPinResourceKey GetPinResourceKey(OtlpInstrumentSummary instrument) =>
+        GetPinResourceKey(instrument.ResourceView.ResourceKey);
+
+    private MetricPinResourceKey GetPinResourceKey(ResourceKey resourceKey) =>
+        MetricPinResourceKey.Resolve(resourceKey, DataSource.ResourceRepository);
 
     private readonly HashSet<string> _collapsedSections = new(StringComparer.OrdinalIgnoreCase);
     private bool _organizeStateLoaded;
@@ -534,9 +571,21 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string? CurrentResourceName => PageViewModel.SelectedResource.Id is null ? null : PageViewModel.SelectedResource.Name;
 
-    private ResourceKey? OverviewResourceKey => PageViewModel.SelectedResource.Id?.GetResourceKey();
+    private ResourceKey? OverviewResourceKey =>
+        PageViewModel is { ShowPinned: true, ShowFilterResults: false }
+            ? null
+            : PageViewModel.SelectedResource.Id?.GetResourceKey();
 
-    private Func<OtlpInstrumentSummary, string>? ResourceLabelProvider => IsAggregate ? GetInstrumentResourceLabel : null;
+    private MetricPinResourceKey? OverviewGroupPinResourceKey =>
+        PageViewModel is not { ShowPinned: true, ShowFilterResults: false } &&
+        PageViewModel.SelectedResource.Id?.Type == OtlpResourceType.ResourceGrouping
+            ? new MetricPinResourceKey(PageViewModel.SelectedResource.Name, ReplicaIndex: null)
+            : null;
+
+    private Func<OtlpInstrumentSummary, string>? ResourceLabelProvider =>
+        IsAggregate || PageViewModel is { ShowPinned: true, ShowFilterResults: false, SelectedResource.Id.Type: OtlpResourceType.ResourceGrouping }
+            ? GetInstrumentResourceLabel
+            : null;
 
     /// <summary>
     /// Updates the resources the user can pick from when several resources are selected in the resource list.
@@ -708,6 +757,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
         public SelectViewModel<TimeSpan> SelectedDuration { get; set; } = null!;
         public List<OtlpInstrumentSummary>? Instruments { get; set; }
+        public List<OtlpInstrumentSummary>? PinInstruments { get; set; }
         public required MetricViewKind? SelectedViewKind { get; set; }
     }
 
@@ -740,28 +790,30 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         FilterResults
     }
 
-    public sealed record MetricReturnTarget(MetricGroupKind Kind, string? MeterName);
+    public sealed record MetricReturnTarget(MetricGroupKind Kind, string? MeterName, string? ResourceName);
 
     private static MetricReturnTarget? GetCurrentGroup(MetricsViewModel viewModel)
     {
+        var resourceName = viewModel.SelectedResource.Id is null ? null : viewModel.SelectedResource.Name;
         if (viewModel.ShowFilterResults)
         {
-            return new MetricReturnTarget(MetricGroupKind.FilterResults, viewModel.SelectedMeter);
+            return new MetricReturnTarget(MetricGroupKind.FilterResults, viewModel.SelectedMeter, resourceName);
         }
         if (viewModel.ShowPinned)
         {
-            return new MetricReturnTarget(MetricGroupKind.Pinned, null);
+            return new MetricReturnTarget(MetricGroupKind.Pinned, null, resourceName);
         }
         if (viewModel.ShowAll)
         {
-            return new MetricReturnTarget(MetricGroupKind.All, null);
+            return new MetricReturnTarget(MetricGroupKind.All, null, resourceName);
         }
 
-        return viewModel.SelectedMeter is { } meterName ? new MetricReturnTarget(MetricGroupKind.Meter, meterName) : null;
+        return viewModel.SelectedMeter is { } meterName ? new MetricReturnTarget(MetricGroupKind.Meter, meterName, resourceName) : null;
     }
 
     private Task SelectGroupAsync(MetricGroupKind kind, string? meterName)
     {
+        _instrumentReturnTarget = null;
         // Picking a group narrows the filter's matches to that group. Search results come back only through
         // the chart's back button, which returns to where the instrument was opened from.
         PageViewModel.ShowFilterResults = kind == MetricGroupKind.FilterResults;
@@ -773,15 +825,31 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
 
-    private Task NavigateBackAsync()
+    private async Task NavigateBackAsync()
     {
-        var target = PageViewModel.ReturnTarget ?? new MetricReturnTarget(MetricGroupKind.Meter, PageViewModel.SelectedMeter);
-        return SelectGroupAsync(target.Kind, target.MeterName);
+        var target = PageViewModel.ReturnTarget ?? new MetricReturnTarget(MetricGroupKind.Meter, PageViewModel.SelectedMeter, CurrentResourceName);
+        if (!string.Equals(CurrentResourceName, target.ResourceName, StringComparisons.ResourceName))
+        {
+            ResourceName = target.ResourceName;
+            PageViewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _selectResource);
+            UpdateInstruments(PageViewModel);
+        }
+
+        _instrumentReturnTarget = null;
+        _restoringReturnResource = true;
+        try
+        {
+            await SelectGroupAsync(target.Kind, target.MeterName);
+        }
+        finally
+        {
+            _restoringReturnResource = false;
+        }
     }
 
     private string GetBackLabel()
     {
-        var target = PageViewModel.ReturnTarget ?? new MetricReturnTarget(MetricGroupKind.Meter, PageViewModel.SelectedMeter);
+        var target = PageViewModel.ReturnTarget ?? new MetricReturnTarget(MetricGroupKind.Meter, PageViewModel.SelectedMeter, CurrentResourceName);
         var name = target.Kind switch
         {
             MetricGroupKind.Pinned => Loc[nameof(Dashboard.Resources.Metrics.MetricsPinnedHeader)].Value,
@@ -799,9 +867,12 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         // doesn't replace it. Without a single selected resource (all resources, or several), no resource is named
         // and the page lists the instruments of every selected resource. A remembered name could also be stale,
         // for example a replica from an earlier run.
-        var resourceName = ResourcesLayout is { } layout
-            ? (layout.IsMultiSelection ? null : layout.SelectedResourceName)
-            : serializable.ResourceName;
+        var resourceName = ResolveUrlResourceName(
+            ResourcesLayout is not null,
+            ResourcesLayout?.SelectedResourceName,
+            ResourcesLayout?.IsMultiSelection == true,
+            serializable.ResourceName,
+            _restoringReturnResource);
         var url = DashboardUrls.MetricsUrl(
             resource: resourceName,
             meter: serializable.MeterName,
@@ -814,6 +885,16 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
         return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
+
+    internal static string? ResolveUrlResourceName(
+        bool hasResourcesLayout,
+        string? layoutSelectedResourceName,
+        bool layoutIsMultiSelection,
+        string? serializedResourceName,
+        bool restoringReturnResource) =>
+        hasResourcesLayout && !restoringReturnResource
+            ? (layoutIsMultiSelection ? null : layoutSelectedResourceName)
+            : serializedResourceName;
 
     private async Task OnShowRunningTotalChangedAsync(bool showRunningTotal)
     {
@@ -835,7 +916,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         }
 
         var groupInstruments = PageViewModel.ShowPinned
-            ? PinStore.GetPinnedInstruments(instruments)
+            ? PinStore.GetPinnedInstruments(PageViewModel.PinInstruments ?? instruments, GetPinResourceKey)
             : [.. instruments.Where(i => i.Parent.Name == PageViewModel.SelectedMeter).OrderBy(i => i.Name, StringComparer.Ordinal)];
 
         return [.. groupInstruments.Where(i => MetricFilter.Matches(i, PageViewModel.TextFilter))];
@@ -878,9 +959,11 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
     private string GetInstrumentUrl(OtlpInstrumentSummary instrument)
     {
-        // A card in a list of several resources opens the chart of the resource it came from.
+        // A card in a list of several resources, including a replica group's pinned list, opens the chart of
+        // the resource it came from. Ordinary group cards keep opening an aggregate chart for the replica set.
+        var useInstrumentResource = IsAggregate || PageViewModel is { ShowPinned: true, ShowFilterResults: false };
         var url = DashboardUrls.MetricsUrl(
-            resource: IsAggregate ? GetInstrumentResourceLabel(instrument) : PageViewModel.SelectedResource.Name,
+            resource: useInstrumentResource ? GetInstrumentResourceLabel(instrument) : PageViewModel.SelectedResource.Name,
             meter: instrument.Parent.Name,
             instrument: instrument.Name,
             duration: DurationMinutes,
@@ -888,6 +971,8 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
 
         return (IsAggregate ? ResourcesLayout?.AddSelectionToUrl(url) : ResourcesLayout?.AddPaneToUrl(url)) ?? url;
     }
+
+    private void OnInstrumentSelected(OtlpInstrumentSummary _) => _instrumentReturnTarget = GetCurrentGroup(PageViewModel);
 
     private void UpdateSubscription()
     {
@@ -905,10 +990,17 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
                     var instruments = selectedResourceKey != null
                         ? TelemetryRepository.GetInstrumentSummaries(selectedResourceKey.Value)
                         : GetAggregateInstruments();
+                    var pinInstruments = selectedResourceKey != null
+                        ? GetPinInstruments(selectedResourceKey.Value)
+                        : instruments;
 
-                    if (PageViewModel.Instruments is null || instruments.Count != PageViewModel.Instruments.Count)
+                    if (PageViewModel.Instruments is null ||
+                        instruments.Count != PageViewModel.Instruments.Count ||
+                        PageViewModel.PinInstruments is null ||
+                        pinInstruments.Count != PageViewModel.PinInstruments.Count)
                     {
                         PageViewModel.Instruments = instruments;
+                        PageViewModel.PinInstruments = pinInstruments;
 
                         // Instruments can arrive after the page loads, e.g. when the resource has just started.
                         SelectDefaultView(PageViewModel);

@@ -241,6 +241,12 @@
   <data name="MetricsUnpinInstrument" xml:space="preserve">
     <value>Unpin metric</value>
   </data>
+  <data name="MetricsPinInstrumentForAllReplicas" xml:space="preserve">
+    <value>Pin metric for all replicas</value>
+  </data>
+  <data name="MetricsUnpinInstrumentForAllReplicas" xml:space="preserve">
+    <value>Unpin metric for all replicas</value>
+  </data>
   <data name="MetricsPinnedHeader" xml:space="preserve">
     <value>Pinned</value>
   </data>
