@@ -543,8 +543,6 @@ in non-watch runs, correct C#/guest signal delivery, existing option validation,
 
 ### Session 8 - C# AppHost watch through `host`
 
-**Out of scope for this spike** (owner decision: watch only running C# service resources, never the AppHost).
-
 **Not implemented; composition gate remains open.** Use the package-owned prelaunch ensure operation
 from Session 4, then launch the C# AppHost with the resolved tool's `host` command.
 Keep language-native AppHost watching for polyglot runs, including native-server configurations.
