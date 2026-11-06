@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -32,7 +33,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectPath = CreateProject(workspace.Path);
         using var builder = TestDistributedApplicationBuilder.Create(
-            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll", Protocol]);
+            ["AppHost:Run:WatchEnabled=true"]);
 
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(projectPath)!);
         var otherPath = Path.Combine(workspace.Path, "Other", "Other.csproj");
@@ -45,9 +46,13 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Contains(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(service.Resource);
-        var proxyIndex = args.IndexOf(DotnetWatchCoordinator.ProxyCommandName);
-        Assert.True(proxyIndex >= 1, string.Join(' ', args));
-        Assert.Equal("/opt/aspire/aspire.dll", args[proxyIndex - 1]);
+        var proxyIndex = args.IndexOf(DotnetWatchHostProtocol.ProxyCommand);
+        Assert.True(proxyIndex >= 2, string.Join(' ', args));
+
+        // No CLI involved: the project's own `dotnet` runs the watch host shipped with Aspire.Hosting.Dotnet.
+        Assert.Equal("exec", args[proxyIndex - 2]);
+        Assert.Equal(DotnetWatchHostProtocol.AssemblyFileName, Path.GetFileName(args[proxyIndex - 1]));
+        Assert.True(File.Exists(args[proxyIndex - 1]), args[proxyIndex - 1]);
         Assert.Equal("--server", args[proxyIndex + 1]);
         Assert.Equal("--entrypoint", args[proxyIndex + 3]);
         Assert.Equal(projectPath, args[proxyIndex + 4]);
@@ -68,7 +73,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectPath = CreateProject(workspace.Path);
         using var builder = TestDistributedApplicationBuilder.Create(
-            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll", Protocol]);
+            ["AppHost:Run:WatchEnabled=true"]);
 
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(projectPath)!);
         builder.Resources.Remove(service.Resource);
@@ -84,20 +89,37 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
     [Fact]
-    public async Task WatchWithoutProxyFailsTheRun()
+    public void WatchHostIsFoundFromAppHostMetadata()
+    {
+        // The test assembly carries the same 'aspiredotnetwatchhostdir' metadata that AppHosts get from the package.
+        var directory = DotnetWatchToolResolver.GetWatchHostDirectory(typeof(DotnetWatchCoordinatorTests).Assembly);
+        Assert.NotNull(directory);
+        Assert.True(File.Exists(DotnetWatchToolResolver.ResolveWatchHostPath(directory)));
+    }
+
+    [Fact]
+    public void MissingWatchHostFailsWithFix()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var builder = TestDistributedApplicationBuilder.Create(["AppHost:Run:WatchEnabled=true"]);
 
-        var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
+        var missing = Assert.Throws<DistributedApplicationException>(() => DotnetWatchToolResolver.ResolveWatchHostPath(workspace.Path));
+        Assert.Contains(DotnetWatchHostProtocol.AssemblyFileName, missing.Message);
+        Assert.Contains("--watch", missing.Message);
 
-        Assert.DoesNotContain(builder.Resources, r => r.Name == DotnetWatchCoordinator.ServerResourceName);
-        Assert.DoesNotContain(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetWatchServerResource);
+        var noMetadata = Assert.Throws<DistributedApplicationException>(() => DotnetWatchToolResolver.ResolveWatchHostPath(null));
+        Assert.Contains(DotnetWatchToolResolver.WatchHostDirectoryMetadataKey, noMetadata.Message);
+    }
 
-        using var app = builder.Build();
-        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
-        Assert.Contains("aspire run --watch", ex.Message);
-        Assert.Contains(DotnetWatchCoordinator.ProxyPathConfigurationKey, ex.Message);
+    [Fact]
+    public void PackageLayoutLocatesWatchHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var lib = Directory.CreateDirectory(Path.Combine(workspace.Path, "lib", "net10.0")).FullName;
+        var host = Directory.CreateDirectory(Path.Combine(workspace.Path, "tools", DotnetWatchToolResolver.WatchHostPackageFolder)).FullName;
+
+        Assert.Equal(
+            Path.TrimEndingDirectorySeparator(host),
+            Path.TrimEndingDirectorySeparator(DotnetWatchToolResolver.GetPackageToolsDirectory(Path.Combine(lib, "Aspire.Hosting.Dotnet.dll"), DotnetWatchToolResolver.WatchHostPackageFolder)!));
     }
 
     [Fact]
@@ -105,7 +127,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire", Protocol, "DEBUG_SESSION_PORT=12345"]);
+            ["AppHost:Run:WatchEnabled=true", "DEBUG_SESSION_PORT=12345"]);
 
         builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
 
@@ -227,7 +249,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire", Protocol]);
+            ["AppHost:Run:WatchEnabled=true"]);
 
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
 
@@ -244,32 +266,8 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.True(DotnetWatchCoordinator.HasCustomLaunch(other.Resource));
     }
 
-    private const string Protocol = $"{DotnetWatchCoordinator.ProxyProtocolConfigurationKey}=4";
-
     private static string[] WatchArgs(params string[] extra) =>
-        ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire", Protocol, .. extra];
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("1")]
-    [InlineData("2")]
-    [InlineData("3")]
-    public async Task OlderCliProtocolFailsTheRun(string? protocol)
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        string[] args = protocol is null
-            ? ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire"]
-            : ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire", $"{DotnetWatchCoordinator.ProxyProtocolConfigurationKey}={protocol}"];
-        using var builder = TestDistributedApplicationBuilder.Create(args);
-
-        builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
-
-        Assert.DoesNotContain(builder.Resources, r => r is DotnetWatchServerResource);
-
-        using var app = builder.Build();
-        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
-        Assert.Contains("too old", ex.Message);
-    }
+        ["AppHost:Run:WatchEnabled=true", .. extra];
 
     [Fact]
     public void BuildEnvironmentMovesTheProjectToADedicatedServer()

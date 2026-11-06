@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Dotnet.Tests;
@@ -16,7 +17,7 @@ namespace Aspire.Hosting.Dotnet.Tests;
 public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_watchConfig =
-        ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll", $"{DotnetWatchCoordinator.ProxyProtocolConfigurationKey}={DotnetWatchCoordinator.RequiredProxyProtocol}"];
+        ["AppHost:Run:WatchEnabled=true"];
 
     [Fact]
     public void WithWatchReplacesEarlierChoice()
@@ -43,7 +44,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
-        Assert.Contains(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(watched.Resource));
+        Assert.Contains(DotnetWatchHostProtocol.ProxyCommand, await ArgumentEvaluator.GetArgumentListAsync(watched.Resource));
         AssertWatchedOutsideCoordinatedBuild(watched);
 
         // The opted-out project gets Aspire's coordinated build and launch back, not the watcher's.
@@ -154,7 +155,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         AssertCoordinatedBuildAndLaunch(migrations);
-        Assert.Contains(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(api.Resource));
+        Assert.Contains(DotnetWatchHostProtocol.ProxyCommand, await ArgumentEvaluator.GetArgumentListAsync(api.Resource));
         AssertWatchedOutsideCoordinatedBuild(api);
     }
 
@@ -198,9 +199,9 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
             using var app = builder.Build();
             await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
-            Assert.Contains(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(service.Resource));
+            Assert.Contains(DotnetWatchHostProtocol.ProxyCommand, await ArgumentEvaluator.GetArgumentListAsync(service.Resource));
             var tickerArgs = await ArgumentEvaluator.GetArgumentListAsync(ticker.Resource);
-            Assert.DoesNotContain(DotnetWatchCoordinator.ProxyCommandName, tickerArgs);
+            Assert.DoesNotContain(DotnetWatchHostProtocol.ProxyCommand, tickerArgs);
             Assert.Contains(scriptPath, tickerArgs);
         }
     }
@@ -260,7 +261,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
             await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
             Assert.Contains("gateway", await ArgumentEvaluator.GetArgumentListAsync(gateway.Resource));
-            Assert.DoesNotContain(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(gateway.Resource));
+            Assert.DoesNotContain(DotnetWatchHostProtocol.ProxyCommand, await ArgumentEvaluator.GetArgumentListAsync(gateway.Resource));
             Assert.DoesNotContain(Model(app).Resources, r => r is DotnetWatchServerResource);
         }
     }
@@ -277,7 +278,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         Assert.DoesNotContain(Model(app).Resources, r => r is DotnetWatchServerResource);
-        Assert.DoesNotContain(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(service.Resource));
+        Assert.DoesNotContain(DotnetWatchHostProtocol.ProxyCommand, await ArgumentEvaluator.GetArgumentListAsync(service.Resource));
     }
 
     private static IResourceBuilder<DotnetProjectResource> AddProject(IDistributedApplicationBuilder builder, TemporaryWorkspace workspace, string name)

@@ -19,21 +19,16 @@
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
 
-  <!-- Watch contract tests: the fixture app is copied (not compiled) and launched through the real CLI proxy. -->
+  <!-- Watch contract tests: the fixture app is copied (not compiled) and launched through the real watch host. -->
   <ItemGroup>
     <Compile Remove="Watch\Fixtures\**" />
     <None Include="Watch\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Watch\Recordings\**" CopyToOutputDirectory="PreserveNewest" />
-    <ProjectReference Include="..\..\src\Aspire.Cli\Aspire.Cli.csproj"
-                      ReferenceOutputAssembly="false"
-                      SkipGetTargetFrameworkProperties="true"
-                      Private="false"
-                      ExcludeAssets="all" />
-    <AssemblyMetadata Include="AspireCliPath" Value="$(ArtifactsBinDir)Aspire.Cli\$(Configuration)\net11.0\aspire.dll" />
-    <!-- The muxer that builds the repo can run aspire.dll; the .NET 10 SDK the watched fixture uses may not. -->
-    <AssemblyMetadata Include="AspireCliHost" Value="$(DOTNET_HOST_PATH)" />
-    <!-- The watch tool Aspire.Hosting.Dotnet lays out at build (what AppHosts get as the same metadata). -->
+    <!-- Aliased so its source-shared internals don't clash with Aspire.Hosting.Dotnet's. -->
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet.WatchHost\Aspire.Hosting.Dotnet.WatchHost.csproj" Aliases="WatchHost" />
+    <!-- The watch tool and watch host Aspire.Hosting.Dotnet lays out at build (what AppHosts get as the same metadata). -->
     <AssemblyMetadata Include="aspiredotnetwatchtoolsdir" Value="$(AspireDotnetWatchToolsDir)" />
+    <AssemblyMetadata Include="aspiredotnetwatchhostdir" Value="$(AspireDotnetWatchHostDir)" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />

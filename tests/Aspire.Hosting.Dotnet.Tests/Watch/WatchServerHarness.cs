@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.IO.Pipes;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.Dotnet.Watch;
@@ -27,12 +26,13 @@ internal enum WatchObservationKind
 
 /// <summary>
 /// Runs the real <c>Microsoft.DotNet.HotReload.Watch.Aspire server</c> against a copy of a fixture project and launches
-/// it through the real <c>aspire __dotnet-watch-proxy</c>, the same way <see cref="DotnetWatchCoordinator"/> does.
+/// it through the real watch host proxy (<c>dotnet exec Aspire.Hosting.Dotnet.WatchHost.dll proxy</c>), the same way
+/// <see cref="DotnetWatchCoordinator"/> does.
 /// </summary>
 /// <remarks>
 /// Inputs (all optional): <c>ASPIRE_DOTNET_WATCH_TOOL_PATH</c> (watch tool folder or dll; otherwise the tool is
-/// acquired the same way <c>aspire run --watch</c> acquires it) and <c>ASPIRE_DOTNET_WATCH_PROXY_PATH</c> (the CLI
-/// <c>aspire.dll</c>/executable; defaults to the repo build output). Set <c>ASPIRE_WATCH_CONTRACT_RECORD_DIR</c> to
+/// acquired the same way <c>aspire run --watch</c> acquires it). The watch host comes from the repo layout that
+/// Aspire.Hosting.Dotnet writes at build (this assembly's <c>aspiredotnetwatchhostdir</c> metadata). Set <c>ASPIRE_WATCH_CONTRACT_RECORD_DIR</c> to
 /// save each run's observations as a recording for <see cref="DotnetWatchRecordedOutputTests"/>.
 /// </remarks>
 internal sealed class WatchServerHarness : IAsyncDisposable
@@ -155,39 +155,22 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         StartProcess(server, line => Record(WatchObservationKind.Output, line), "server");
     }
 
-    /// <summary>Path of the CLI that implements <c>__dotnet-watch-proxy</c>, or <see langword="null"/> when it isn't built.</summary>
-    public static string? FindProxy()
+    /// <summary>Path of the watch host, or <see langword="null"/> when Aspire.Hosting.Dotnet hasn't laid it out.</summary>
+    public static string? FindWatchHost()
     {
-        if (Environment.GetEnvironmentVariable(DotnetWatchCoordinator.ProxyPathConfigurationKey) is { Length: > 0 } configured)
-        {
-            return configured;
-        }
-
-        var path = typeof(WatchServerHarness).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
-            .FirstOrDefault(a => a.Key == "AspireCliPath")?.Value;
+        var directory = DotnetWatchToolResolver.GetWatchHostDirectory(typeof(WatchServerHarness).Assembly);
+        var path = directory is null ? null : Path.Combine(directory, "Aspire.Hosting.Dotnet.WatchHost.dll");
         return path is not null && File.Exists(path) ? path : null;
     }
 
     /// <summary>Launches one service instance through the real proxy, with the service environment set on the proxy process.</summary>
-    public Process LaunchThroughProxy(string proxyPath, IReadOnlyList<string> appArgs, IReadOnlyDictionary<string, string> environment, IReadOnlyCollection<string> forwardedNames)
+    public Process LaunchThroughProxy(string watchHostPath, IReadOnlyList<string> appArgs, IReadOnlyDictionary<string, string> environment, IReadOnlyCollection<string> forwardedNames)
     {
-        List<string> args = [];
-        var command = proxyPath;
-        if (proxyPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
-        {
-            // As in `aspire run`, the framework-dependent CLI runs on the muxer that hosts the CLI, not the watcher's.
-            command = Environment.GetEnvironmentVariable(DotnetWatchCoordinator.ProxyHostConfigurationKey) is { Length: > 0 } host
-                ? host
-                : typeof(WatchServerHarness).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "AspireCliHost")?.Value is { Length: > 0 } built
-                    ? built
-                    : "dotnet";
-            args.Add(proxyPath);
-        }
-
-        args.AddRange([DotnetWatchCoordinator.ProxyCommandName, "--server", ResourcePipe, "--entrypoint", ProjectPath, "--"]);
+        // As in the coordinator, the watch host runs on the watcher's muxer.
+        List<string> args = ["exec", watchHostPath, "proxy", "--server", ResourcePipe, "--entrypoint", ProjectPath, "--"];
         args.AddRange(appArgs);
 
-        var startInfo = CreateStartInfo(command, AppDirectory, args);
+        var startInfo = CreateStartInfo(Muxer, AppDirectory, args);
         foreach (var (key, value) in environment)
         {
             startInfo.Environment[key] = value;

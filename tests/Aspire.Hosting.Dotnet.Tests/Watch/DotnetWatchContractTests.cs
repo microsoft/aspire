@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Dotnet.Tests.Watch;
 
 /// <summary>
 /// Contract tests against the REAL <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> server, driven through the
-/// real <c>aspire __dotnet-watch-proxy</c>. They pin what the coordinator and the CLI proxy rely on: the resource pipe
+/// real watch host proxy. They pin what the coordinator and the proxy rely on: the resource pipe
 /// launch spec (args after <c>--</c>, forwarded environment, endpoints) and the status events and console lines the
 /// notices are derived from.
 /// </summary>
@@ -173,8 +173,8 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
 
     private static string RequireProxy()
     {
-        var proxy = WatchServerHarness.FindProxy();
-        Assert.SkipWhen(proxy is null, $"The Aspire CLI (aspire.dll) isn't built; build src/Aspire.Cli or set {DotnetWatchCoordinator.ProxyPathConfigurationKey}.");
+        var proxy = WatchServerHarness.FindWatchHost();
+        Assert.SkipWhen(proxy is null, "The watch host isn't laid out; build src/Aspire.Hosting.Dotnet.");
         return proxy!;
     }
 

@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-// Fixture for DotnetWatchContractTests: launched by the real watch server through the real `aspire __dotnet-watch-proxy`.
+// Fixture for DotnetWatchContractTests: launched by the real watch server through the real watch host proxy (Aspire.Hosting.Dotnet.WatchHost).
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 

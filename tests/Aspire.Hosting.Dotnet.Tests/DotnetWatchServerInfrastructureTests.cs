@@ -18,7 +18,7 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
-            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll", $"{DotnetWatchCoordinator.ProxyProtocolConfigurationKey}={DotnetWatchCoordinator.RequiredProxyProtocol}"]);
+            ["AppHost:Run:WatchEnabled=true"]);
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
 
         var server = Assert.Single(builder.Resources.OfType<DotnetWatchServerResource>());
