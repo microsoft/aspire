@@ -1065,7 +1065,7 @@ needed, create a draft PR with the actual documentation changes.
 
 ## Execution budget and completion
 
-Keep research bounded within the 50-invocation limit. Read the prepared
+Keep research bounded within the 80-invocation limit. Read the prepared
 `.pr-docs-check/` inputs together, batch related searches and file reads, and
 start finalizing by invocation 35 so editing and both safe outputs have room.
 Do not repeat searches once you have enough evidence for the smallest accurate
