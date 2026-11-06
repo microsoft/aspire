@@ -253,6 +253,12 @@ const (
 	// EndpointPropertyTlsEnabled indicates whether TLS is enabled on the endpoint.
 	// Returns TrueString or FalseString.
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
+	// EndpointPropertyBrowserOrigins - Comma-separated browser-facing origins for
+	// this endpoint.
+	EndpointPropertyBrowserOrigins EndpointProperty = "BrowserOrigins"
+	// EndpointPropertyPrimaryBrowserOrigin is the primary browser-facing origin for
+	// this endpoint.
+	EndpointPropertyPrimaryBrowserOrigin EndpointProperty = "PrimaryBrowserOrigin"
 )
 
 // InputType specifies the type of input for an [InteractionInput].
@@ -20502,6 +20508,16 @@ func (s *dotnetToolResource) WithoutHttpsCertificate() DotnetToolResource {
 type EndpointReference interface {
 	handleReference
 
+	// BrowserOrigins gets a deferred comma-separated list of browser-facing origins
+	// associated with this endpoint.
+	//
+	// Origins use finalized URL customization and are independent of this
+	// reference's service-discovery network context. Origins are distinct and
+	// ordered by display preference. The allocated HTTP(S) endpoint origin is
+	// included after display origins, even if its display links are removed. An
+	// endpoint without HTTP(S) origins resolves to an empty string.
+	BrowserOrigins() EndpointReferenceExpression
+
 	// EndpointName gets the name of the endpoint associated with the endpoint
 	// reference.
 	EndpointName() (string, error)
@@ -20571,6 +20587,16 @@ type EndpointReference interface {
 	// Port gets the port for this endpoint.
 	Port() (float64, error)
 
+	// PrimaryBrowserOrigin gets the deferred primary browser-facing origin
+	// associated with this endpoint.
+	//
+	// Returns the first origin in BrowserOrigins, following finalized URL display
+	// ordering. The allocated HTTP(S) endpoint origin is used when no display
+	// origins remain. An endpoint without HTTP(S) origins resolves to an empty
+	// string. This value is independent of this reference's service-discovery
+	// network context.
+	PrimaryBrowserOrigin() EndpointReferenceExpression
+
 	// Property gets the specified property expression of the endpoint.
 	//
 	// Parameters:
@@ -20612,6 +20638,26 @@ type endpointReference struct {
 // newEndpointReferenceFromHandle wraps an existing handle as EndpointReference.
 func newEndpointReferenceFromHandle(h *handle, c *client) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// BrowserOrigins gets a deferred comma-separated list of browser-facing origins
+// associated with this endpoint.
+func (s *endpointReference) BrowserOrigins() EndpointReferenceExpression {
+	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // EndpointName gets the name of the endpoint associated with the endpoint
@@ -20821,6 +20867,26 @@ func (s *endpointReference) Port() (float64, error) {
 		return zero, err
 	}
 	return decodeAs[float64](result)
+}
+
+// PrimaryBrowserOrigin gets the deferred primary browser-facing origin
+// associated with this endpoint.
+func (s *endpointReference) PrimaryBrowserOrigin() EndpointReferenceExpression {
+	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // Property gets the specified property expression of the endpoint.
@@ -35358,8 +35424,13 @@ func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName s
 // ResourceEndpointsAllocatedEvent - This event is raised by orchestrators to
 // signal to resources that their endpoints have been allocated.
 //
-// Any resources that customize their URLs via a ResourceUrlsCallbackAnnotation
-// will have their callbacks invoked during this event.
+// Resources that customize their URLs via a ResourceUrlsCallbackAnnotation have
+// their callbacks invoked before event handlers run. Browser URL references
+// contain the finalized values at that point. Endpoint and URL configuration
+// must be registered before this event is published. Browser-facing resource
+// allocators should complete allocation through
+// PublishResourceEndpointsAllocatedAsync so URL customization completes before
+// the notification is dispatched.
 type ResourceEndpointsAllocatedEvent interface {
 	handleReference
 

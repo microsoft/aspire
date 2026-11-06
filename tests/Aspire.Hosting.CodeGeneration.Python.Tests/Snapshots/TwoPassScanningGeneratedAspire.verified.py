@@ -1591,7 +1591,7 @@ ContainerTargetPlatform = typing.Literal["LinuxAmd64", "LinuxArm64", "AllLinux",
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
-EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
+EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled", "BrowserOrigins", "PrimaryBrowserOrigin"]
 
 HealthStatus = typing.Literal["Unhealthy", "Degraded", "Healthy"]
 
@@ -4940,6 +4940,24 @@ class EndpointReference:
             {'context': self._handle}
         )
         return typing.cast(str, result)
+
+    @_cached_property
+    def browser_origins(self) -> EndpointReferenceExpression:
+        """Gets a deferred comma-separated list of browser-facing origins associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+    @_cached_property
+    def primary_browser_origin(self) -> EndpointReferenceExpression:
+        """Gets the deferred primary browser-facing origin associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
 
     @_cached_property
     def error_message(self) -> str | None:

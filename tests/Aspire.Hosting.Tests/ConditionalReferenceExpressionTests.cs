@@ -2,10 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Text.Json;
+using Aspire.Hosting.Azure;
+using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
-public class ConditionalReferenceExpressionTests
+public class ConditionalReferenceExpressionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task GetValueAsync_ReturnsTrueValue_WhenConditionIsTrue()
@@ -93,6 +98,121 @@ public class ConditionalReferenceExpressionTests
     {
         var expr = ReferenceExpression.CreateConditional(new TestValueProvider(bool.TrueString), bool.TrueString, ReferenceExpression.Empty, ReferenceExpression.Empty);
         Assert.StartsWith("cond-", expr.Name);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ManifestSelectedBranchRetainsParameterReferences(bool conditionValue)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var publicHost = builder.AddParameter("public-host");
+        var expression = ReferenceExpression.CreateConditional(new TestValueProvider(conditionValue.ToString()), bool.TrueString,
+            ReferenceExpression.Create($"https://{publicHost}/signin-oidc"),
+            ReferenceExpression.Create($"http://{publicHost}/fallback"));
+        builder.AddContainer("backend", "image")
+            .WithEnvironment("DIRECT", expression)
+            .WithEnvironment("COMPOSITE", ReferenceExpression.Create($"redirect={expression}"));
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json")
+            .UseParameters(conditionValue);
+    }
+
+    [Fact]
+    public async Task ManifestSelectedBranchRetainsInfrastructureOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var infrastructure = builder.AddResource(new AzureBicepResource("infra",
+            templateString: "output publicHost string = 'public.example'"));
+        var publicHost = new BicepOutputReference("publicHost", infrastructure.Resource);
+        var expression = ReferenceExpression.CreateConditional(new TestValueProvider(bool.TrueString), bool.TrueString,
+            ReferenceExpression.Create($"https://{publicHost}"), ReferenceExpression.Empty);
+        builder.AddContainer("backend", "image").WithEnvironment("ORIGIN", expression);
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(
+            app.Services.GetRequiredService<DistributedApplicationModel>(), workspace.Path).DefaultTimeout();
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
+    }
+
+    [Fact]
+    public async Task ManifestCallbackRegistersReferencedConditionalValues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var publicHost = builder.AddParameter("public-host");
+        var expression = ReferenceExpression.CreateConditional(new TestValueProvider(bool.TrueString), bool.TrueString,
+            ReferenceExpression.Create($"https://{publicHost}"), ReferenceExpression.Empty);
+        var infrastructure = builder.AddResource(new AzureBicepResource("infra",
+            templateString: "param origin string"));
+        infrastructure.Resource.Parameters["origin"] = ReferenceExpression.Create($"origin={expression}");
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(
+            app.Services.GetRequiredService<DistributedApplicationModel>(), workspace.Path);
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
+    }
+
+    [Fact]
+    public async Task ManifestConditionMustResolveDuringPublication()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var condition = new ParameterResource("condition", _ =>
+            throw new InvalidOperationException("The condition is unavailable during publication."));
+        var expression = ReferenceExpression.CreateConditional(condition, bool.TrueString,
+            ReferenceExpression.Create($"selected-true"), ReferenceExpression.Create($"selected-false"));
+        builder.AddContainer("backend", "image").WithEnvironment("RESULT", expression);
+        using var app = builder.Build();
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifestForModel(
+            app.Services.GetRequiredService<DistributedApplicationModel>()));
+
+        Assert.Equal("The condition is unavailable during publication.", error.Message);
+    }
+
+    [Fact]
+    public async Task ManifestSelectedBranchReusesFormattedParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var path = new ParameterResource("path", _ =>
+            throw new InvalidOperationException("A deployment parameter must not be resolved during publication."));
+        var expression = ReferenceExpression.CreateConditional(new TestValueProvider(bool.TrueString), bool.TrueString,
+            ReferenceExpression.Create($"https://public.example/{path:uri}"), ReferenceExpression.Empty);
+        builder.AddContainer("backend", "image")
+            .WithEnvironment("PATH", ReferenceExpression.Create($"{path:uri}"))
+            .WithEnvironment("REDIRECT", expression);
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
+    }
+
+    [Fact]
+    public async Task ManifestOnlyEvaluatesSelectedNestedConditions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var publicHost = builder.AddParameter("public-host");
+        var unselectedCondition = new ParameterResource("unselected-condition", _ =>
+            throw new InvalidOperationException("An unselected condition must not be evaluated."));
+        var unselected = ReferenceExpression.CreateConditional(unselectedCondition, bool.TrueString,
+            ReferenceExpression.Create($"unused-true"), ReferenceExpression.Create($"unused-false"));
+        var selected = ReferenceExpression.CreateConditional(new TestValueProvider(bool.FalseString), bool.TrueString,
+            unselected, ReferenceExpression.Create($"https://{publicHost}"));
+        var expression = ReferenceExpression.CreateConditional(new TestValueProvider(bool.TrueString), bool.TrueString,
+            ReferenceExpression.Create($"{selected}/signin-oidc"), unselected);
+        builder.AddContainer("backend", "image").WithEnvironment("REDIRECT", expression);
+        using var app = builder.Build();
+
+        var manifest = await ManifestUtils.GetManifestForModel(app.Services.GetRequiredService<DistributedApplicationModel>());
+
+        await Verify(manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json");
     }
 
     private sealed class TestResourceWithEndpoints(string name) : Resource(name), IResourceWithEndpoints
