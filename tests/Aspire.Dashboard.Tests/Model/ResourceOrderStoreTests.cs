@@ -10,6 +10,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -19,6 +20,7 @@ public sealed class ResourceOrderStoreTests
     private static readonly string s_storageKey = BrowserStorageKeys.ResourceOrderKey("TestApp");
 
     private readonly InMemoryBrowserLocalStorage _browser = new();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     [Fact]
     public async Task AppHostDefaultsSeedOrderingAndSavedMovesTakePrecedence()
@@ -45,7 +47,7 @@ public sealed class ResourceOrderStoreTests
         store.EnsureResources([api, cache, worker]);
         Assert.Equal([api.PersistentKey, cache.PersistentKey, worker.PersistentKey],
             store.GetPositions().OrderBy(p => p.Value).Select(p => p.Key));
-        store.Move(cache.PersistentKey, api.PersistentKey, false);
+        Assert.True(store.TryMove(cache.PersistentKey, api.PersistentKey, false));
 
         store = await CreateLoadedStoreAsync();
         store.EnsureResources([api, cache, worker]);
@@ -61,9 +63,9 @@ public sealed class ResourceOrderStoreTests
         store.EnsureGroups("Tags", ["Container", "Untagged", ""]);
         store.EnsureGroups("ResourceType", ["Container", "Project"]);
         store.EnsureGroups("State", ["Running", "Waiting"]);
-        store.MoveGroup("Tags", "", "Container", after: false);
-        store.MoveGroup("ResourceType", "Project", "Container", after: false);
-        store.MoveGroup("State", "Waiting", "Running", after: false);
+        Assert.True(store.TryMoveGroup("Tags", "", "Container", after: false));
+        Assert.True(store.TryMoveGroup("ResourceType", "Project", "Container", after: false));
+        Assert.True(store.TryMoveGroup("State", "Waiting", "Running", after: false));
 
         Assert.Equal(
             """{"resources":["cache_0","api_0"],"groups":{"Tags":["","Container","Untagged"],"ResourceType":["Project","Container"],"State":["Waiting","Running"]},"customOrder":false}""",
@@ -98,7 +100,7 @@ public sealed class ResourceOrderStoreTests
     {
         var store = await CreateLoadedStoreAsync();
         store.EnsureResources(["api_0", "worker_0", "api_1"]);
-        store.Move("api_1", "worker_0", after: false);
+        Assert.True(store.TryMove("api_1", "worker_0", after: false));
 
         var reloaded = await CreateLoadedStoreAsync();
         reloaded.EnsureResources(["worker_0", "new_0", "api_0"]);
@@ -111,7 +113,7 @@ public sealed class ResourceOrderStoreTests
     {
         var store = await CreateLoadedStoreAsync();
         store.EnsureResources(["api_0", "worker_0"]);
-        store.Move("worker_0", "api_0", after: false);
+        Assert.True(store.TryMove("worker_0", "api_0", after: false));
         store.EnsureGroups("State", ["Running"]);
 
         // Positions assigned before the stored order is read must not replace it.
@@ -131,7 +133,7 @@ public sealed class ResourceOrderStoreTests
         var tabA = await CreateLoadedStoreAsync();
         tabA.EnsureResources(["api_0", "cache_0", "worker_0"]);
         var tabB = await CreateLoadedStoreAsync();
-        tabA.Move("worker_0", "api_0", after: false);
+        Assert.True(tabA.TryMove("worker_0", "api_0", after: false));
 
         // Tab B didn't see tab A's move. A new resource in tab B is added after the order tab A saved.
         tabB.EnsureResources(["new_0"]);
@@ -174,10 +176,10 @@ public sealed class ResourceOrderStoreTests
         var changes = 0;
         store.Changed += () => changes++;
         store.EnsureResources(["api_0", "cache_0", "worker_0"]);
-        store.Move("worker_0", "api_0", after: false);
+        Assert.True(store.TryMove("worker_0", "api_0", after: false));
         Assert.Equal(["worker_0", "api_0", "cache_0"], GetOrderedKeys(store));
-        store.Move("WORKER_0", "CACHE_0", after: true);
-        store.Move("api_0", "API_0", after: false);
+        Assert.True(store.TryMove("WORKER_0", "CACHE_0", after: true));
+        Assert.True(store.TryMove("api_0", "API_0", after: false));
         Assert.Equal(["api_0", "cache_0", "WORKER_0"], GetOrderedKeys(store));
         Assert.Equal(3, changes);
     }
@@ -204,12 +206,12 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
-    public void Move_UnknownKeyIsRejected()
+    public void TryMove_UnknownKeyIsRejected()
     {
         var store = CreateStore();
         store.EnsureResources(["api_0"]);
 
-        Assert.Throws<ArgumentException>(() => store.Move("missing_0", "api_0", after: false));
+        Assert.False(store.TryMove("missing_0", "api_0", after: false));
         Assert.Equal(["api_0"], GetOrderedKeys(store));
     }
 
@@ -220,7 +222,7 @@ public sealed class ResourceOrderStoreTests
         store.GetGroupPositions(grouping).OrderBy(pair => pair.Value).Select(pair => pair.Key).ToArray();
 
     private ResourceOrderStore CreateStore() =>
-        new(_browser.Storage, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceOrderStore>.Instance);
+        new(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceOrderStore>.Instance);
 
     private async Task<ResourceOrderStore> CreateLoadedStoreAsync()
     {

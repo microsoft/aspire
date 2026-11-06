@@ -9,6 +9,7 @@ using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -37,7 +38,8 @@ public class ResourceTagEditorTests : DashboardTestContext
         Assert.Equal(["backend"], store.GetTags("api"));
     }
 
-    private readonly ResourceTagStore _tagStore = new(new TestLocalStorage(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
+    private readonly TestLocalStorage _localStorage = new();
+    private readonly ResourceTagStore _tagStore;
 
     [Fact]
     public void AppHostTagsFromOtherResourcesCanBeAddedAsEditableUserTags()
@@ -55,9 +57,29 @@ public class ResourceTagEditorTests : DashboardTestContext
 
     public ResourceTagEditorTests()
     {
+        // Fake time keeps saves that fail from retrying in the background after a test.
+        _tagStore = new(_localStorage, new FakeTimeProvider(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         Services.AddLocalization();
         Services.AddSingleton(_tagStore);
+    }
+
+    [Fact]
+    public void UnreadableStorage_KeepsAddedTagsWithoutSavingThem()
+    {
+        // As while the circuit is disconnected: saving would replace stored tags that couldn't be read.
+        _localStorage.IsUnprotectedReadFailed = _ => true;
+        var savedKeys = new List<string>();
+        _localStorage.OnSetUnprotectedAsync = (key, _) => savedKeys.Add(key);
+        var cut = Render<ResourceTagEditor>(p => p.Add(c => c.ResourceName, "api"));
+
+        cut.Find(".tag-add").Click();
+        cut.Find(".tag-input").Input("backend");
+        cut.Find(".tag-input").KeyDown("Enter");
+
+        Assert.Equal(["backend"], cut.FindAll(".tag-chip-name").Select(c => c.TextContent));
+        Assert.Equal(["backend"], _tagStore.GetTags("api"));
+        Assert.Empty(savedKeys);
     }
 
     [Fact]

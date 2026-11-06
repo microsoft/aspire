@@ -23,7 +23,8 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 /// replace the stored value with one missing everything it contained. Writes are retried a few times with increasing
 /// delays, and again with the next change or when a view loads the setting. A stored value that can't be
 /// deserialized, for example because it was saved by another version of the dashboard, can't become readable, so it's
-/// copied to <c>{key}_Unreadable</c> and then replaced, rather than preventing the setting from being saved again.
+/// copied to <c>{key}_Unreadable</c>, unless a value was already copied there, and then replaced, rather than
+/// preventing the setting from being saved again.
 /// </para>
 /// <para>
 /// Settings are stored unprotected. Protected values are encrypted with the dashboard's data protection key, which
@@ -43,6 +44,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     private static readonly TimeSpan s_firstRetryDelay = TimeSpan.FromSeconds(1);
 
     private readonly ILocalStorage _localStorage;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
     private readonly Func<TValue?, TValue> _normalize;
     private readonly Func<TValue, TValue, bool> _equals;
@@ -58,6 +60,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     private long _saveCount;
 
     /// <param name="localStorage">The browser's local storage.</param>
+    /// <param name="timeProvider">Times the delays between save retries.</param>
     /// <param name="key">The local storage key.</param>
     /// <param name="logger">Logs values that can't be read or saved.</param>
     /// <param name="normalize">
@@ -66,9 +69,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     /// </param>
     /// <param name="equals">Returns whether two normalized values have the same content, to only notify real changes.</param>
     /// <param name="onChanged">Invoked, on any thread, after the in-memory value changes.</param>
-    public LocalStorageSetting(ILocalStorage localStorage, string key, ILogger logger, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
+    public LocalStorageSetting(ILocalStorage localStorage, TimeProvider timeProvider, string key, ILogger logger, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
     {
         _localStorage = localStorage;
+        _timeProvider = timeProvider;
         Key = key;
         _logger = logger;
         _normalize = normalize;
@@ -252,7 +256,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
                 return;
             }
 
-            await Task.Delay(s_firstRetryDelay * Math.Pow(2, failedAttempts - 1)).ConfigureAwait(false);
+            await Task.Delay(s_firstRetryDelay * Math.Pow(2, failedAttempts - 1), _timeProvider).ConfigureAwait(false);
         }
     }
 
@@ -267,15 +271,26 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         if (result.InvalidValue)
         {
             // Keep the value for the version of the dashboard that saved it, or for someone to recover it by hand.
-            // A value that isn't even JSON can't be copied, and can't be recovered either.
-            var unreadable = await _localStorage.GetUnprotectedAsync<JsonElement>(Key).ConfigureAwait(false);
-            if (unreadable.ReadFailed)
+            // A value that isn't even JSON can't be copied, and can't be recovered either. Only the first unreadable
+            // value is kept: dashboard versions that alternate on the same app would otherwise keep replacing each
+            // other's backup, until nothing of the first value is left.
+            var backupKey = $"{Key}_Unreadable";
+            var backup = await _localStorage.GetUnprotectedAsync<JsonElement>(backupKey).ConfigureAwait(false);
+            if (backup.ReadFailed)
             {
                 return false;
             }
-            if (unreadable.Success)
+            if (!backup.Success && !backup.InvalidValue)
             {
-                await _localStorage.SetUnprotectedAsync($"{Key}_Unreadable", unreadable.Value).ConfigureAwait(false);
+                var unreadable = await _localStorage.GetUnprotectedAsync<JsonElement>(Key).ConfigureAwait(false);
+                if (unreadable.ReadFailed)
+                {
+                    return false;
+                }
+                if (unreadable.Success)
+                {
+                    await _localStorage.SetUnprotectedAsync(backupKey, unreadable.Value).ConfigureAwait(false);
+                }
             }
         }
 

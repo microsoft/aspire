@@ -28,11 +28,11 @@ internal sealed class InMemoryBrowserLocalStorage
         // Matches the resolvers the dashboard registers, so a stored type missing from the context fails here too.
         circuitOptions.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
 #pragma warning restore ASPNETCORE9004
-        Storage = new LocalBrowserStorage(
+        Storage = new DelayedReadLocalStorage(new LocalBrowserStorage(
             jsRuntime,
             new ProtectedLocalStorage(jsRuntime, new EphemeralDataProtectionProvider()),
             NullLogger<LocalBrowserStorage>.Instance,
-            Options.Create(circuitOptions));
+            Options.Create(circuitOptions)), this);
     }
 
     /// <summary>
@@ -46,6 +46,12 @@ internal sealed class InMemoryBrowserLocalStorage
     public bool FailReads { get; set; }
 
     public ILocalStorage Storage { get; }
+
+    /// <summary>
+    /// Gets or sets a function awaited after a read of local storage and before its result is returned, to simulate
+    /// a response that arrives after later calls have completed.
+    /// </summary>
+    public Func<Task>? OnAfterReadAsync { get; set; }
 
     /// <summary>
     /// Waits until a key has a value, for saves that are retried after a delay.
@@ -86,5 +92,24 @@ internal sealed class InMemoryBrowserLocalStorage
                     throw new NotSupportedException($"Unexpected JavaScript call '{call.Identifier}'.");
             }
         }
+    }
+
+    private sealed class DelayedReadLocalStorage(ILocalStorage inner, InMemoryBrowserLocalStorage owner) : ILocalStorage
+    {
+        public async Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key)
+        {
+            var result = await inner.GetUnprotectedAsync<TValue>(key);
+            if (owner.OnAfterReadAsync is { } afterRead)
+            {
+                await afterRead();
+            }
+            return result;
+        }
+
+        public Task SetUnprotectedAsync<TValue>(string key, TValue value) => inner.SetUnprotectedAsync(key, value);
+
+        public Task<StorageResult<TValue>> GetAsync<TValue>(string key) => inner.GetAsync<TValue>(key);
+
+        public Task SetAsync<TValue>(string key, TValue value) => inner.SetAsync(key, value);
     }
 }

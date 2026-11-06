@@ -1333,7 +1333,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
             return false;
         }
-        OrderStore.Move(resource.PersistentKey, target.PersistentKey, after);
+        if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after))
+        {
+            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because a resource has no position.", resourceName, targetName);
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
+            return false;
+        }
 
         _orderStatus = string.Format(CultureInfo.CurrentCulture,
             Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
@@ -1357,7 +1362,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
             return false;
         }
-        OrderStore.MoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after);
+        if (!OrderStore.TryMoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after))
+        {
+            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because a group has no position.", groupKey, targetKey);
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
+            return false;
+        }
 
         _orderStatus = string.Format(CultureInfo.CurrentCulture,
             Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],

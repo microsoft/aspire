@@ -42,7 +42,7 @@ public sealed class TestLocalStorage : ILocalStorage
         }
 
         // Callbacks return (false, null) for keys they don't provide, so those keys fall back to saved values. Use
-        // RemoveUnprotected to simulate a missing key, and IsUnprotectedReadFailed to simulate a failed read.
+        // IsUnprotectedReadFailed to simulate a failed read.
         if (OnGetUnprotectedAsync is { } callback)
         {
             var (success, value) = callback(key);
@@ -63,17 +63,6 @@ public sealed class TestLocalStorage : ILocalStorage
         }
 
         return new StorageResult<T>(success: false, value: default);
-    }
-
-    /// <summary>
-    /// Removes a saved value, as if it had never been saved or was removed from the browser.
-    /// </summary>
-    public void RemoveUnprotected(string key)
-    {
-        lock (_unprotectedValues)
-        {
-            _unprotectedValues.Remove(key);
-        }
     }
 
     public Task SetAsync<T>(string key, T value)

@@ -30,9 +30,9 @@ public sealed class ResourceOrderStore
     private readonly Dictionary<string, long> _defaultPositions = new(StringComparers.ResourceName);
     private readonly LocalStorageSetting<ResourceOrderSettings> _setting;
 
-    public ResourceOrderStore(ILocalStorage localStorage, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
+    public ResourceOrderStore(ILocalStorage localStorage, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
     {
-        _setting = new(localStorage, BrowserStorageKeys.ResourceOrderKey(options.Value.GetApplicationNameOrDefault()), logger,
+        _setting = new(localStorage, timeProvider, BrowserStorageKeys.ResourceOrderKey(options.Value.GetApplicationNameOrDefault()), logger,
             Normalize, OrderEqual, () => Changed?.Invoke());
     }
 
@@ -86,22 +86,31 @@ public sealed class ResourceOrderStore
         _setting.Update(order => AppendMissing(GetScope(order, grouping), snapshot));
     }
 
-    public void Move(string resourceKey, string targetKey, bool after) => Move(grouping: null, resourceKey, targetKey, after);
+    /// <summary>
+    /// Moves a resource before or after another one.
+    /// </summary>
+    /// <returns>
+    /// <see langword="false"/> when either resource has no position. Positions can be missing for a moment after the
+    /// tab reads an order saved without them, for example after local storage was cleared, until the resources are
+    /// ensured again.
+    /// </returns>
+    public bool TryMove(string resourceKey, string targetKey, bool after) => TryMove(grouping: null, resourceKey, targetKey, after);
 
-    public void MoveGroup(string grouping, string groupKey, string targetKey, bool after) => Move(grouping, groupKey, targetKey, after);
+    /// <inheritdoc cref="TryMove(string, string, bool)"/>
+    public bool TryMoveGroup(string grouping, string groupKey, string targetKey, bool after) => TryMove(grouping, groupKey, targetKey, after);
 
-    private void Move(string? grouping, string key, string targetKey, bool after)
+    private bool TryMove(string? grouping, string key, string targetKey, bool after)
     {
         var hasPositions = _setting.Read(order =>
             (grouping is null ? order.Resources : order.Groups.GetValueOrDefault(grouping)) is { } keys &&
             keys.Contains(key, StringComparers.ResourceName) && keys.Contains(targetKey, StringComparers.ResourceName));
         if (!hasPositions)
         {
-            throw new ArgumentException("Both items must have an assigned position.");
+            return false;
         }
         if (StringComparers.ResourceName.Equals(key, targetKey))
         {
-            return;
+            return true;
         }
 
         _setting.Update(order =>
@@ -127,6 +136,7 @@ public sealed class ResourceOrderStore
             }
             return true;
         });
+        return true;
     }
 
     private static List<string> GetScope(ResourceOrderSettings order, string? grouping)

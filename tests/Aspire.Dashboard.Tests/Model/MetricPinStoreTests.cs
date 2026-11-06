@@ -9,6 +9,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -22,6 +23,7 @@ public sealed class MetricPinStoreTests
     private static readonly string s_storageKey = BrowserStorageKeys.MetricPinsKey("TestApp");
 
     private readonly InMemoryBrowserLocalStorage _browser = new();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     [Fact]
     public async Task SetPinned_PersistsInPinnedOrderAcrossStores()
@@ -131,7 +133,7 @@ public sealed class MetricPinStoreTests
     }
 
     private MetricPinStore CreateStore() =>
-        new(_browser.Storage, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<MetricPinStore>.Instance);
+        new(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<MetricPinStore>.Instance);
 
     private async Task<MetricPinStore> CreateLoadedStoreAsync()
     {

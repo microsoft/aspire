@@ -161,7 +161,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         // The Metrics card lists pinned instruments, which can be changed from the card's charts.
         PinStore.Changed += OnPinsChanged;
         TerminalDockState.Changed += OnTerminalDockStateChanged;
-        await PinStore.EnsureLoadedAsync();
+        // Not awaited, so the console preview and other cards don't start a browser round trip later. The Metrics card
+        // re-renders through OnPinsChanged when the pins are read. The load never faults.
+        _ = PinStore.EnsureLoadedAsync();
 
         // The console preview hides lines removed with the console logs page's "Remove" action, which are stored
         // as filters in session storage.

@@ -10,6 +10,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -19,6 +20,7 @@ public sealed class ResourceTagStoreTests
     private static readonly string s_storageKey = BrowserStorageKeys.ResourceTagsKey("TestApp");
 
     private readonly InMemoryBrowserLocalStorage _browser = new();
+    private readonly FakeTimeProvider _timeProvider = new();
 
     [Fact]
     public void AppHostTagsAreMergedWithoutPersistingDeclaredTags()
@@ -159,6 +161,29 @@ public sealed class ResourceTagStoreTests
     }
 
     [Fact]
+    public async Task Tags_LoadThatReadBeforeASaveDoesNotReplaceIt()
+    {
+        var store = await CreateLoadedStoreAsync();
+        store.AddTag("api", "backend");
+
+        // The load reads storage, but its response is held until a save made after it has completed.
+        var releaseLoad = new TaskCompletionSource();
+        _browser.OnAfterReadAsync = () => releaseLoad.Task;
+        var reloadedStore = CreateStore();
+        var load = reloadedStore.EnsureLoadedAsync();
+        _browser.OnAfterReadAsync = null;
+
+        reloadedStore.AddTag("worker", "db");
+        Assert.Equal("""{"api":["backend"],"worker":["db"]}""", _browser.Items[s_storageKey]);
+
+        // The load's older value must not replace the saved one in memory.
+        releaseLoad.SetResult();
+        await load.DefaultTimeout();
+        Assert.Equal(["db"], reloadedStore.GetTags("worker"));
+        Assert.Equal(["backend"], reloadedStore.GetTags("api"));
+    }
+
+    [Fact]
     public async Task Tags_UnreadableStorageIsNotOverwritten()
     {
         var store = await CreateLoadedStoreAsync();
@@ -177,6 +202,7 @@ public sealed class ResourceTagStoreTests
         _browser.FailReads = false;
         await reloadedStore.EnsureLoadedAsync().DefaultTimeout();
         Assert.Equal(["backend"], reloadedStore.GetTags("api"));
+        _timeProvider.Advance(TimeSpan.FromSeconds(1));
         await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend"],"worker":["core"]}""");
     }
 
@@ -192,6 +218,7 @@ public sealed class ResourceTagStoreTests
         Assert.Equal("""{"api":["backend"]}""", _browser.Items[s_storageKey]);
 
         _browser.FailReads = false;
+        _timeProvider.Advance(TimeSpan.FromSeconds(1));
         await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend","core"]}""");
     }
 
@@ -201,7 +228,7 @@ public sealed class ResourceTagStoreTests
         var store = await CreateLoadedStoreAsync();
         store.AddTag("api", "backend");
 
-        var otherApp = new ResourceTagStore(_browser.Storage, Options.Create(new DashboardOptions { ApplicationName = "Other App" }), NullLogger<ResourceTagStore>.Instance);
+        var otherApp = new ResourceTagStore(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "Other App" }), NullLogger<ResourceTagStore>.Instance);
         await otherApp.EnsureLoadedAsync().DefaultTimeout();
 
         Assert.Empty(otherApp.GetAllTags());
@@ -244,7 +271,7 @@ public sealed class ResourceTagStoreTests
     }
 
     private ResourceTagStore CreateStore() =>
-        new(_browser.Storage, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceTagStore>.Instance);
+        new(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceTagStore>.Instance);
 
     private async Task<ResourceTagStore> CreateLoadedStoreAsync()
     {
