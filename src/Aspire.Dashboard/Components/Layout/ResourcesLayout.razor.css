@@ -1239,7 +1239,7 @@
 
     /* Preserve row geometry while the containing track shrinks; only the clip
        boundary moves. Full canvas still discloses metadata at its actual width. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-contents > * {
+    .resources-layout:not(.pane-full-canvas) .resource-pane:not(.resource-pane-popup) .resource-pane-contents > * {
         width: calc(var(--resource-pane-width) - 1px);
     }
 

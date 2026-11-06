@@ -36,6 +36,34 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     : PlaywrightTestsBase<ResourcePaneResponsiveTests.MetadataResourcesFixture>(fixture)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CollapsedPicker_ControlsRemainReachableAtPopupWidth(bool savedWidth)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneCollapsed}', 'true')");
+            if (savedWidth)
+            {
+                await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneWidth}', '560')");
+            }
+            await page.GotoAsync("/resources/cache?pane=tags");
+            var picker = page.Locator("#resourcePanePickerButton");
+            await picker.ClickAsync();
+            var popup = page.Locator(".resource-picker-popover:popover-open");
+            var selectAll = popup.Locator(".resource-select-all-toggle");
+            await Assertions.Expect(selectAll).ToBeInViewportAsync(new() { Ratio = 1 });
+            await Assertions.Expect(popup.Locator(".resource-row[data-resource-name='cache'] .resource-row-actions").First)
+                .ToBeInViewportAsync(new() { Ratio = 1 });
+            await selectAll.ClickAsync();
+            await Assertions.Expect(picker).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/resources(?:\?.*)?$"));
+        });
+    }
+
+    [Theory]
     [InlineData(390, false)]
     [InlineData(390, true)]
     [InlineData(768, false)]
