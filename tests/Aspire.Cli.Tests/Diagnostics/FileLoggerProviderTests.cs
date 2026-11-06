@@ -4,11 +4,54 @@
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Diagnostics;
 
 public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task WriteLog_RotationFailureWarnsAndUnblocksQueuedProducers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var errorWriter = new TestStartupErrorWriter();
+        using (var provider = new FileLoggerProvider(workspace.Path, TimeProvider.System, errorWriter))
+        {
+            Directory.CreateDirectory(Path.ChangeExtension(provider.LogFilePath, "1.log"));
+            await Task.Run(() =>
+            {
+                for (var index = 0; index < 3000; index++)
+                {
+                    provider.WriteLog(new string('x', 1000));
+                }
+            }).DefaultTimeout();
+        }
+
+        Assert.Single(errorWriter.MarkupLines);
+        Assert.All(Directory.GetFiles(workspace.Path, "*.log"), file =>
+            Assert.InRange(new FileInfo(file).Length, 0, RollingLogFile.FileSizeLimit));
+    }
+
+    [Fact]
+    public void ExplicitLogFile_RemainsUnboundedAndDoesNotPruneOtherFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var oldPath = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+        File.WriteAllText(oldPath, "Previous log");
+        var customPath = Path.Combine(workspace.Path, "custom.log");
+        var message = new string('x', RollingLogFile.FileSizeLimit + 1);
+        var errorWriter = new TestStartupErrorWriter();
+        using (var provider = new FileLoggerProvider(customPath, workspace.Path, errorWriter, automaticLogFile: false))
+        {
+            provider.WriteLog(message);
+        }
+
+        Assert.Equal(message + Environment.NewLine, File.ReadAllText(customPath));
+        Assert.Equal("Previous log", File.ReadAllText(oldPath));
+        Assert.Equal(new[] { oldPath, customPath }.Order(), Directory.GetFiles(workspace.Path, "*.log").Order());
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
     [Fact]
     public void Constructor_AccessDenied_WarnsAndDisablesLogging()
     {

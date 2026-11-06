@@ -54,17 +54,9 @@ Candidate discovery and default selection are separate. Successful `aspire ls` r
 
 ### Background CLI lifecycle
 
-Running-AppHost status and resource watchers are active while the Aspire panel or an AppHost editor is visible, an AppHost run/debug session is active, or an explicit consumer holds a data lease. Open background tabs remain in workspace scope, but do not keep polling alive on their own. Editor visibility changes are debounced to avoid restarting watchers during quick tab switches.
+Status and resource watchers run while the Aspire panel or an AppHost editor is visible, a run/debug session is active, or an explicit consumer needs data. Background tabs alone do not keep polling alive. Active watchers keep the configured polling interval and refresh when monitoring resumes.
 
-Debugger-install hints observe the available resource data without holding a permanent data lease merely because an AppHost was discovered. With no active session or explicit consumer, hiding all Aspire UI stops the status/resource watchers and periodic reconciliation; reopening it resumes them and refreshes retained state. Workspace discovery can still run independently when files or configuration change.
-
-Normal status updates use the existing `ps --follow` stream, with authoritative snapshots at the configured polling interval to recover missed notifications (30 seconds by default, with a one-second minimum). Manual refresh and stop/resume reconciliation remain immediate. Failed, completed, or unsupported follow streams use the same configured polling interval.
-
-On Windows, background status/resource queries (both watchers and one-shot snapshots), AppHost discovery, and CLI metadata probes use the existing `--log-file` option with the Windows null device (`\\.\NUL`) instead of creating diagnostic files for routine queries. This also works with older CLIs without a CLI update or a new option. JSON results still go to stdout for the extension to consume, and failures remain visible in the existing **Aspire** Output channel. VS Code manages that channel's persistence; it is not a new CLI diagnostic file for each query. Run/debug sessions and user-invoked CLI commands retain their normal file logging.
-
-Linux and macOS retain their normal background diagnostic files: the CLI's Unix writer changes destination permissions and truncates the opened file, so `/dev/null` is not a safe replacement. All platforms receive the visibility-driven idle savings above.
-
-To collect detailed background CLI diagnostic files on Windows while reproducing a problem, enable the existing `aspire.enableAspireCliDebugLogging` setting. Active status/resource watchers restart to apply the setting, and subsequent background queries use normal CLI diagnostic files. Disable it afterward to stop per-query file creation. An explicit CLI `--log-file` also takes precedence over the null destination. This does not remove previously accumulated logs.
+CLI diagnostics remain file-backed with [bounded retention and rotation](../src/Aspire.Cli/README.md#diagnostic-log-retention) in updated CLIs. `aspire.enableAspireCliDebugLogging` adds console debug output.
 
 ## Building the full repository (extension + CLI)
 

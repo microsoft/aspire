@@ -1398,7 +1398,6 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(spawnStub.firstCall.args[1], '/global/bin/aspire');
             assert.deepStrictEqual(getCliPathStub.firstCall.args, [windowCliPathTarget]);
             assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
-            assert.strictEqual(spawnStub.firstCall.args[3].backgroundQuery, true);
 
             spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify([{
                 appHostPath: '/workspace/AppHost.csproj',
@@ -1415,7 +1414,6 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(spawnStub.secondCall.args[1], '/workspace/bin/aspire');
             assert.deepStrictEqual(getCliPathStub.secondCall.args, [target]);
             assert.strictEqual(spawnStub.secondCall.args[3].noExtensionVariables, true);
-            assert.strictEqual(spawnStub.secondCall.args[3].backgroundQuery, true);
 
             spawnStub.secondCall.args[3].stdoutCallback(JSON.stringify({
                 resources: [{
@@ -1695,7 +1693,6 @@ suite('AppHostDataRepository', () => {
             assert.deepStrictEqual(getCliPathStub.firstCall.args, [target]);
             assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
             assert.deepStrictEqual(spawnStub.firstCall.args[3].env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
-            assert.strictEqual(spawnStub.firstCall.args[3].backgroundQuery, undefined);
 
             resourceProcess.markExited(0);
             spawnStub.firstCall.args[3].exitCallback(0);
@@ -7140,56 +7137,7 @@ setInterval(() => {}, 1000);
         repository.dispose();
     });
 
-    for (const fileLoggingEnabled of [false, true]) {
-        test(`status snapshots preserve their cadence with file logging ${fileLoggingEnabled ? 'enabled' : 'disabled'}`, async () => {
-            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
-            const get = sinon.stub();
-            get.withArgs('appHostsPollingInterval', 30000).returns(30000);
-            get.withArgs('enableAspireCliDebugLogging', false).returns(fileLoggingEnabled);
-            const configuration = sinon.stub(vscode.workspace, 'getConfiguration');
-            configuration.withArgs('aspire').returns({
-                get,
-                inspect: () => ({}),
-            } as unknown as vscode.WorkspaceConfiguration);
-            getConfigInfoStub.resolves(null);
-            spawnStub.callsFake((_terminalProvider, _command, args: string[], options: cliModule.SpawnProcessOptions) => {
-                const child = new TestChildProcess();
-                if (args[0] === 'ps' && !args.includes('--follow')) {
-                    options.stdoutCallback?.('[]');
-                    child.markExited();
-                    options.exitCallback?.(0);
-                }
-                return child;
-            });
-            const repository = new AppHostDataRepository(terminalProvider);
-            try {
-                repository.setViewMode('global');
-                repository.setPanelVisible(true);
-                await waitForMicrotasks();
-                const follow = spawnStub.firstCall;
-                await clock.tickAsync(29999);
-                assert.strictEqual(spawnStub.callCount, 1);
-                await clock.tickAsync(1);
-                assert.strictEqual(spawnStub.callCount, 2);
-                const snapshot = spawnStub.secondCall;
-                assert.strictEqual(snapshot.args[3].backgroundQuery, true);
-                assert.strictEqual(follow.args[3].backgroundQuery, true);
-                assert.strictEqual(getConfigInfoStub.callCount, 0, 'File suppression must not require capability probes.');
-
-                repository.setPanelVisible(false);
-                await waitForMicrotasks();
-                repository.setPanelVisible(true);
-                await waitForMicrotasks();
-                assert.strictEqual(spawnStub.thirdCall.args[3].backgroundQuery, true);
-            } finally {
-                repository.dispose();
-                configuration.restore();
-                clock.restore();
-            }
-        });
-    }
-
-    test('describe watchers use background logging across AppHosts and restarts', async () => {
+    test('describe watchers preserve their arguments across AppHosts and restarts', async () => {
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const repository = new AppHostDataRepository(terminalProvider);
         try {
@@ -7206,24 +7154,19 @@ setInterval(() => {}, 1000);
             await waitForMicrotasks();
             const describes = spawnStub.getCalls().filter(call => call.args[2][0] === 'describe');
             assert.strictEqual(describes.length, 2);
-            for (const describe of describes) {
-                assert.strictEqual(describe.args[3].backgroundQuery, true);
-            }
-
             describes[0].returnValue.markExited(1);
             describes[0].args[3].exitCallback(1);
             await clock.tickAsync(5000);
             const restarted = spawnStub.getCalls().filter(call => call.args[2][0] === 'describe').at(-1);
             assert.ok(restarted);
-            assert.strictEqual(restarted.args[2].at(-1), describes[0].args[2].at(-1));
-            assert.strictEqual(restarted.args[3].backgroundQuery, true);
+            assert.deepStrictEqual(restarted.args[2], describes[0].args[2]);
         } finally {
             repository.dispose();
             clock.restore();
         }
     });
 
-    test('changing debug logging restarts status and resource watchers with the new file policy', async () => {
+    test('changing debug logging restarts status and resource watchers', async () => {
         const changes = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>();
         const changeStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration').callsFake(listener => changes.event(listener));
         const get = sinon.stub();
@@ -7252,9 +7195,6 @@ setInterval(() => {}, 1000);
                 await waitForMicrotasks();
                 const restarted = spawnStub.getCalls().slice(initialCalls);
                 assert.deepStrictEqual(restarted.map(call => call.args[2][0]).sort(), ['describe', 'ps']);
-                for (const call of restarted) {
-                    assert.strictEqual(call.args[3].backgroundQuery, true);
-                }
             }
         } finally {
             repository.dispose();
@@ -7465,7 +7405,6 @@ setInterval(() => {}, 1000);
             await clock.tickAsync(29000);
             assert.strictEqual(spawnStub.callCount, 1);
             assert.strictEqual(spawnStub.firstCall.args[1], '/current/aspire');
-            assert.strictEqual(spawnStub.firstCall.args[3].backgroundQuery, true);
 
             repository.setPanelVisible(false);
             await waitForMicrotasks();
@@ -7475,7 +7414,6 @@ setInterval(() => {}, 1000);
             repository.setPanelVisible(true);
             await waitForMicrotasks();
             assert.strictEqual(spawnStub.secondCall.args[1], '/older/aspire');
-            assert.strictEqual(spawnStub.secondCall.args[3].backgroundQuery, true);
 
             await clock.tickAsync(29999);
             assert.strictEqual(spawnStub.callCount, 2);

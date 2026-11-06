@@ -3,6 +3,9 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
+using System.Text.Json;
+using Aspire.Cli.Diagnostics;
+using Aspire.Hosting;
 
 namespace Aspire.Cli.Tests;
 
@@ -91,6 +94,27 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
         }, options: s_remoteInvokeOptions);
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
+
+    [Fact]
+    public void LogRetentionPreservesJsonOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var logsDirectory = workspace.CreateDirectory("logs").FullName;
+        for (var index = 0; index <= RollingLogFile.RetainedFileCount; index++)
+        {
+            File.WriteAllText(Path.Combine(logsDirectory, $"cli_20000101T000000_{index:x8}.log"), "old");
+        }
+
+        using var process = RemoteExecutor.Invoke(static async directory =>
+        {
+            Environment.SetEnvironmentVariable(KnownConfigNames.AspireHome, directory);
+            Assert.Equal(CliExitCodes.Success, await Program.Main(["ps", "--format", "json", "--nologo"]).DefaultTimeout());
+        }, workspace.Path, options: s_remoteInvokeOptions);
+
+        var output = process.Process.StandardOutput.ReadToEnd();
+        Assert.Equal(JsonValueKind.Array, JsonSerializer.Deserialize<JsonElement>(output).ValueKind);
+        Assert.Equal(RollingLogFile.RetainedFileCount, Directory.GetFiles(logsDirectory, "*.log").Length);
     }
 
     [Fact]

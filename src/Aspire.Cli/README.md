@@ -424,6 +424,10 @@ Prefix a path with `firefox=` or `chromium=` to apply the trust settings expecte
 
 The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
 
+## Diagnostic log retention
+
+Automatic CLI logs in `~/.aspire/logs` (under `ASPIRE_HOME` when set) are limited to 100 files of 1 MiB each, including up to two rotation archives per command. Use a custom `--log-file` name or directory to manage retention yourself.
+
 ## Diagnostic log privacy
 
 On Unix, CLI diagnostic log files use owner-only read/write permissions (`0600`), including when an existing log file is reused. The dedicated Aspire logs directory uses owner-only access (`0700`), repairing permissions if it already exists. Newly created custom log directories also use `0700`; existing custom parent directories and Windows file permission behavior are unchanged.

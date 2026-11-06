@@ -711,7 +711,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
                     createProcessGroup: true,
                     noExtensionVariables: true,
-                    backgroundQuery: true,
                     workingDirectory,
                     stdoutCallback: data => {
                         onActivity?.();

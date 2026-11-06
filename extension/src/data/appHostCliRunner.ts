@@ -19,7 +19,6 @@ export interface RunCliCommandOptions {
     env?: { name: string; value: string }[];
     target?: CliPathResolutionTarget;
     cliPath?: string;
-    backgroundQuery?: boolean;
 }
 
 export class AppHostCliRunner implements vscode.Disposable {
@@ -164,7 +163,6 @@ export class AppHostCliRunner implements vscode.Disposable {
                 createProcessGroup: true,
                 noExtensionVariables: true,
                 env: options.env,
-                backgroundQuery: options.backgroundQuery,
                 stdoutCallback: (data) => { stdout.append(data); },
                 stderrCallback: (data) => { stderr.append(data); },
                 processExitCallback: completionCallback,

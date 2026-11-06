@@ -76,7 +76,10 @@ public class Program
     /// <param name="DebugMode">Whether --debug or -d was specified.</param>
     /// <param name="LogsDirectory">The directory where log files are stored.</param>
     /// <param name="LogFilePath">The full path to the current session's log file.</param>
-    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath);
+    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath)
+    {
+        internal bool AutomaticLogFile { get; init; }
+    }
 
     /// <summary>
     /// Holds the objects created during early CLI startup, before DI is available.
@@ -135,9 +138,15 @@ public class Program
         }
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
-        var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var explicitLogFilePath = ParseLogFileOption(args);
+        var logFilePath = explicitLogFilePath ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
-        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
+        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath)
+        {
+            AutomaticLogFile = explicitLogFilePath is null
+                || (string.Equals(Environment.GetEnvironmentVariable(KnownConfigNames.CliRunDetached), "true", StringComparison.OrdinalIgnoreCase)
+                    && RollingLogFile.IsManagedLogFile(logFilePath, logsDirectory))
+        };
     }
 
     /// <summary>
@@ -161,6 +170,10 @@ public class Program
             if (args[i] == "--log-file" && i + 1 < args.Length)
             {
                 return args[i + 1];
+            }
+            if (args[i].StartsWith("--log-file=", StringComparison.Ordinal))
+            {
+                return args[i]["--log-file=".Length..];
             }
         }
 
@@ -236,7 +249,8 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(
+            loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter, loggingOptions.AutomaticLogFile);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -247,7 +261,7 @@ public class Program
                 logging.IncludeScopes = true;
             });
 
-            // Always capture complete CLI session details to disk for diagnostics
+            // Always capture CLI session details to disk for diagnostics.
             builder.AddProvider(fileLoggerProvider);
 
             // Configure log-level filters based on --log-level or --debug

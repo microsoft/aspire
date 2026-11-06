@@ -35,7 +35,6 @@ export interface SpawnProcessOptions {
     noDebug?: boolean;
     noExtensionVariables?: boolean;
     createProcessGroup?: boolean;
-    backgroundQuery?: boolean;
 }
 
 export type CliSpawnCommand = CmdShimSpawnCommand;
@@ -46,23 +45,6 @@ export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCo
     }
 
     return { command, args: args ?? [] };
-}
-
-export function getBackgroundCliArgs(args: string[], enableFileLogging: boolean, platform: NodeJS.Platform): string[] {
-    // The Unix CLI writer chmods and truncates its destination, so /dev/null is not safe.
-    // Windows' NUL device supports the existing --log-file implementation, including older CLIs.
-    if (platform !== 'win32' || enableFileLogging) {
-        return args;
-    }
-
-    const delimiter = args.indexOf('--');
-    const end = delimiter === -1 ? args.length : delimiter;
-    const rootArgs = args.slice(0, end);
-    if (rootArgs.some(arg => arg === '--log-file' || arg.startsWith('--log-file='))) {
-        return args;
-    }
-
-    return [...rootArgs, '--log-file', '\\\\.\\NUL', ...args.slice(end)];
 }
 
 export function getCliSpawnDiagnostics(command: string, args: string[] | undefined, workingDirectory: string, noDebug: boolean | undefined, debugSessionId: string | undefined, env: Record<string, string | undefined>): string {
@@ -91,14 +73,11 @@ export function mergeCliSpawnEnvironment(env: Record<string, string | undefined>
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
     const workingDirectory = options?.workingDirectory ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const env: Record<string, string | undefined> = {};
-    const cliArgs = options?.backgroundQuery
-        ? getBackgroundCliArgs(args ?? [], vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireCliDebugLogging', false), process.platform)
-        : args ?? [];
+    const cliArgs = args ?? [];
     const spawnCommand = getCliSpawnCommand(command, cliArgs);
 
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables, command));
     mergeCliSpawnEnvironment(env, options?.env);
-
     extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.diagnosticArgs ?? spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
     const createProcessGroup = process.platform !== 'win32' && options?.createProcessGroup === true;

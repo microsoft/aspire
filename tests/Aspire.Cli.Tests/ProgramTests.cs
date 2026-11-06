@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
@@ -106,6 +107,28 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         var result = Program.ParseLogFileOption(["run", "--log-file", "cli.log", "--", "--log-file", "app.log"]);
 
         Assert.Equal("cli.log", result);
+    }
+
+    [Fact]
+    public void ParseLogFileOption_ReturnsEqualsValue_WhenOptionAppearsBeforeDelimiter()
+    {
+        Assert.Equal("cli.log", Program.ParseLogFileOption(["ps", "--log-file=cli.log", "--", "--log-file=app.log"]));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ParseLoggingOptions_ManagesDetachedLogsInsideLogDirectory(bool detached)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var process = RemoteExecutor.Invoke(static (directory, detachedValue) =>
+        {
+            Environment.SetEnvironmentVariable(KnownConfigNames.AspireHome, directory);
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliRunDetached, detachedValue);
+            var childPath = Aspire.Cli.Commands.AppHostLauncher.GenerateChildLogFilePath(Path.Combine(directory, "logs"), TimeProvider.System);
+            Assert.Equal(bool.Parse(detachedValue), Program.ParseLoggingOptions(["run", "--log-file", childPath]).AutomaticLogFile);
+            Assert.False(Program.ParseLoggingOptions(["run", "--log-file", Path.Combine(directory, Path.GetFileName(childPath))]).AutomaticLogFile);
+        }, workspace.Path, detached.ToString());
     }
 
     [Fact]

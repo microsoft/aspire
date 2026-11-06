@@ -1198,7 +1198,6 @@ export class AppHostDataRepository {
         const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            backgroundQuery: true,
             lineCallback: (line) => {
                 if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
                     return;
@@ -1447,7 +1446,7 @@ export class AppHostDataRepository {
     }
 
     private async _runCliJson<T>(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<T> {
-        const { stdout } = await this._cliRunner.runCliCommand(command, args, { ...options, backgroundQuery: true });
+        const { stdout } = await this._cliRunner.runCliCommand(command, args, options);
 
         try {
             return parseCliJsonOutput<T>(stdout);

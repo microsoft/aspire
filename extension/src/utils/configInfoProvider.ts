@@ -489,7 +489,6 @@ export class ConfigInfoProvider {
                     createProcessGroup: true,
                     workingDirectory: options.workingDirectory,
                     env: options.env,
-                    backgroundQuery: true,
                     noExtensionVariables: true,
                     stdoutCallback: value => {
                         if (stdout.length + value.length > options.maxStdoutLength) {
@@ -701,7 +700,6 @@ export class ConfigInfoProvider {
                 try {
                     childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                         createProcessGroup: true,
-                        backgroundQuery: true,
                         stdoutCallback: (data) => {
                             output += data;
                         },

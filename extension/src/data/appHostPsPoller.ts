@@ -290,7 +290,6 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            backgroundQuery: true,
             stdoutCallback: (data) => {
                 psFollowStdout.append(data);
             },
@@ -573,7 +572,6 @@ export class AppHostPsPoller implements vscode.Disposable {
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, invocationArgs, {
             createProcessGroup: true,
             noExtensionVariables: true,
-            backgroundQuery: true,
             stdoutCallback: (data) => {
                 if (stdout.length === 0 && data.length > 0) {
                     options?.onFirstStdout?.();
