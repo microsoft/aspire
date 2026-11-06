@@ -496,7 +496,8 @@ warning is gone.
   or the `defaultWatchEnabled` feature (with `--watch false` as the way out).
 - IDE-owned runs (`ASPIRE_EXTENSION_DEBUG_SESSION_ID` or `DEBUG_SESSION_PORT`) never start the CLI
   watcher; the IDE's own watch/debug protocol applies, `--no-build` stays allowed, and an explicit
-  `--watch` prints a notice saying the IDE owns hot reload.
+  `--watch` prints a notice saying the IDE owns hot reload. A guest AppHost keeps its native AppHost watch
+  there (`AppHostProjectContext.WatchAppHost`), as before.
 - `aspire run` typed in the VS Code extension terminal delegates to a VS Code run session: `--watch` is
   not forwarded, an explicit `--watch` prints the same notice in the terminal, and `--no-build` is rejected
   because that session builds and watches services itself.

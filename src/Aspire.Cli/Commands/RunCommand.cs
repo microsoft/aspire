@@ -425,6 +425,7 @@ internal sealed class RunCommand : BaseCommand
             {
                 AppHostFile = effectiveAppHostFile,
                 Watch = serviceWatch,
+                WatchAppHost = watch,
                 Debug = parseResult.GetValue(RootCommand.DebugOption),
                 NoBuild = noBuild,
                 NoRestore = noBuild, // --no-build implies --no-restore

@@ -655,8 +655,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // Watch runs (aspire run --watch, or the defaultWatchEnabled feature) keep the guest runtime's native
             // AppHost watch and hot reload C# services through Aspire.Hosting.Dotnet. The AppHost server is the
             // process that hosts Aspire.Hosting, so the watch signal and proxy invocation go on its environment.
-            var enableHotReload = context.Watch;
-            if (enableHotReload)
+            // In IDE-owned runs only the guest's native AppHost watch applies (WatchAppHost); the IDE owns service watch.
+            var enableHotReload = context.Watch || context.WatchAppHost;
+            if (context.Watch)
             {
                 DotnetWatchRunEnvironment.Apply(launchSettingsEnvVars);
             }

@@ -3666,6 +3666,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var context = await RunWithTestAppHostProjectAsync(commandLine, "csharp", defaultWatchEnabled);
 
         Assert.Equal(expectWatch, context.Watch);
+        Assert.Equal(expectWatch, context.WatchAppHost);
     }
 
     [Theory]
@@ -3697,6 +3698,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             configuration: config => config["DEBUG_SESSION_PORT"] = "12345");
 
         Assert.False(context.Watch);
+        Assert.True(context.WatchAppHost, "A guest AppHost keeps its native AppHost watch under an IDE.");
         Assert.Contains(RunCommandStrings.WatchHandledByIde, messages);
     }
 
@@ -3712,6 +3714,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             configuration: config => config["DEBUG_SESSION_PORT"] = "12345");
 
         Assert.False(context.Watch);
+        Assert.True(context.WatchAppHost);
         Assert.True(context.NoBuild);
         Assert.DoesNotContain(RunCommandStrings.WatchHandledByIde, messages);
     }
