@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { findResource, waitForRunningResourceWithUrl } from '../test-e2e/helpers/assertions';
+import { findResource, waitForResourceState, waitForRunningResourceWithUrl } from '../test-e2e/helpers/assertions';
 import type { AspireExtensionE2EStateFile, AspireResourceState, AspireResourceUrlState } from '../types/extensionApi';
 
 suite('E2E resource URL readiness', () => {
@@ -124,6 +124,28 @@ suite('E2E resource URL readiness', () => {
 
         assert.deepStrictEqual(findResource(ready.state, runningResource.name), runningResource);
     });
+
+    for (const urls of [null, []]) {
+        test(`waits for worker HTTP metadata after Running with ${urls === null ? 'null' : 'empty'} URLs`, async () => {
+            const worker = { ...runningResource, name: 'e2e-worker-instance', displayName: 'e2e-worker', urls };
+            writeResources([worker]);
+
+            const running = await waitForResourceState('e2e-worker', ['Running'], 5000);
+            assert.deepStrictEqual(findResource(running.state, 'e2e-worker')?.urls, urls);
+
+            const pending = waitForRunningResourceWithUrl('e2e-worker', 'http:', 5000);
+            const readyWorker = {
+                ...worker,
+                urls: [{ ...httpsUrl, name: 'http', url: 'http://localhost:12345' }],
+            };
+            writeResources([readyWorker]);
+
+            const ready = await pending;
+            assert.deepStrictEqual(findResource(ready.state, 'e2e-worker'), readyWorker);
+            // Later state-file updates cannot refresh the snapshot captured by the Running-only wait.
+            assert.deepStrictEqual(findResource(running.state, 'e2e-worker')?.urls, urls);
+        });
+    }
 
     test('reports the requested endpoint and last state when HTTPS never appears', async () => {
         const resource = { ...runningResource, urls: [] };

@@ -121,6 +121,8 @@ The CLI's shared resource-wait budget is covered by `ResourceWaitServiceTests` a
 
 UI end-to-end tests live under `src/test-e2e`. They run a packaged VSIX in a real VS Code instance through ExTester, using a real Aspire CLI and a generated AppHost workspace.
 
+For endpoint actions, use `waitForRunningResourceWithUrl` and read the resource from its returned snapshot. A resource can be `Running` before its URL metadata arrives, and previously captured snapshots do not refresh when later updates are written.
+
 The `apphost-tree` group checks native follower ownership through panel visibility, background AppHost tabs, view switches, polling restarts, and window reload. A hidden panel can retain a follower through an open AppHost tab or the debugger-install hint service's background lease. Assert live process ownership, not just spawn counts. Restore settings through orderly reload/shutdown, never by signalling historical PIDs, and confirm follow mode remains active for subsequent scenarios.
 
 For read-only AppHosts tree assertions, use `waitForAppHostsTreePath` with exact labels (for example, `[appHostLabel, 'Run AppHost']`). It captures visible labels and parent/child relationships together; a `TreeItem` returned by a lookup can refer to a recycled row by the time a later `getLabel()` or child lookup runs. Repository readiness alone does not prevent this UI race. Keep handle-returning helpers for interactions, and do not wait for discovery completion when asserting streamed candidates.
