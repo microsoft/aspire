@@ -32,7 +32,7 @@ public partial class TraceIdButtonValue
         }
         else
         {
-            NavigationManager.NavigateTo(ResourcesLayout?.AddPaneToUrl(DashboardUrls.TraceDetailUrl(Value)) ?? DashboardUrls.TraceDetailUrl(Value));
+            NavigationManager.NavigateTo(ResourcesLayout?.GetTraceDetailUrl(Value) ?? DashboardUrls.TraceDetailUrl(Value));
         }
     }
 }
