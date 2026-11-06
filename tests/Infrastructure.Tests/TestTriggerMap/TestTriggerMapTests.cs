@@ -649,7 +649,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData("eng/scripts/verify-cli-npm-package.ps1")]
     [InlineData("eng/scripts/verify-cli-tool-nupkg.ps1")]
-    [InlineData("eng/scripts/stabilization-smoke-init-restore.sh")]
     [InlineData("eng/generate-catalog.ps1")]
     public void PathHandledOutsideSelectorDoesNotForceTestSelection(string path)
     {
@@ -658,6 +657,17 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);
         Assert.Empty(result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
+    [Fact]
+    public void StabilizationSmokeScriptSelectsItsWrapperCoverage()
+    {
+        var result = SelectWithRealMap("eng/scripts/stabilization-smoke-init-restore.sh");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
         Assert.Empty(result.Jobs);
     }
 

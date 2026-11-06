@@ -44,6 +44,51 @@ public sealed class BundleBuildWrapperTests(ITestOutputHelper output)
         Assert.Equal(arguments.Select(argument => "ARG|" + argument), PropertyArguments(workspace, "repository"));
     }
 
+    [Fact]
+    [RequiresTools(["bash"])]
+    public async Task StabilizationSmokeSkipsCliArtifactsWhenBuildingItsPayload()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The stabilization smoke requires a Unix host.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var root = workspace.CreateDirectory("repository with spaces").FullName;
+        var scripts = Directory.CreateDirectory(Path.Combine(root, "eng", "scripts")).FullName;
+        var script = Path.Combine(scripts, "stabilization-smoke-init-restore.sh");
+        File.Copy(Path.Combine(RepoRoot.Path, "eng", "scripts", "stabilization-smoke-init-restore.sh"), script);
+        var feed = workspace.CreateDirectory("stable feed").FullName;
+        foreach (var package in new[] { "Aspire.Hosting", "Aspire.ProjectTemplates", "Aspire.AppHost.Sdk" })
+        {
+            await File.WriteAllTextAsync(Path.Combine(feed, $"{package}.17.0.0.nupkg"), "");
+        }
+
+        var dotnet = Path.Combine(root, "dotnet.sh");
+        // Stop at the separate driver publish: this exercises the complete smoke
+        // entry point's bundle invocation without rebuilding product binaries.
+        await File.WriteAllTextAsync(dotnet, """
+            #!/usr/bin/env bash
+            case "$1" in
+              --info) printf ' RID: linux-x64\n' ;;
+              build) for arg in "$@"; do printf 'ARG|%s\n' "$arg"; done > "$TEST_ROOT/bundle" ;;
+              publish) exit 73 ;;
+              *) exit 74 ;;
+            esac
+            """);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(dotnet, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var result = await TestProcessRunner.RunAsync(
+            output, "bash", [script], root,
+            new Dictionary<string, string>
+            {
+                ["TEST_ROOT"] = workspace.Path,
+                ["STABILIZATION_SMOKE_FEED"] = feed
+            });
+
+        Assert.Equal(73, result.ExitCode);
+        Assert.Equal(["ARG|-p:SkipCliArtifacts=true"], PropertyArguments(workspace, "bundle"));
+    }
+
     private async Task ExecuteAsync(TemporaryWorkspace workspace, string shell, string[] arguments)
     {
         Assert.SkipWhen(shell == "bash" && OperatingSystem.IsWindows(), "The Bash wrapper requires a Unix host.");
