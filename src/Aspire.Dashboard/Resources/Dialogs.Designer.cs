@@ -246,6 +246,24 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Aspire Outage.
+        /// </summary>
+        public static string HelpDialogGameTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogGameTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph..
+        /// </summary>
+        public static string HelpDialogGameDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogGameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         public static string DialogCloseButtonText {
@@ -845,6 +863,24 @@ namespace Aspire.Dashboard.Resources {
         public static string HelpDialogCategoryPanels {
             get {
                 return ResourceManager.GetString("HelpDialogCategoryPanels", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource graph.
+        /// </summary>
+        public static string HelpDialogCategoryResourceGraph {
+            get {
+                return ResourceManager.GetString("HelpDialogCategoryResourceGraph", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Play Aspire Outage, when the graph has focus.
+        /// </summary>
+        public static string HelpDialogPlayGame {
+            get {
+                return ResourceManager.GetString("HelpDialogPlayGame", resourceCulture);
             }
         }
 

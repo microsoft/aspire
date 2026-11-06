@@ -407,22 +407,36 @@ a.overview-list-value:hover {
     font-variant-numeric: tabular-nums;
 }
 
-/* When a row has supplementary ghost text, the primary link keeps its natural width instead of growing to fill
-   the row, leaving the spare space for the ghost text. */
-.overview-list-value:has(+ .overview-list-ghost) {
-    flex: 0 1 auto;
+.overview-list .overview-endpoint {
+    align-items: flex-start;
 }
 
-/* Supplementary url text (e.g. the internal address of an endpoint already shown as the row's primary link).
-   It takes whatever room the primary link doesn't need, truncating/disappearing first as the card narrows so it
-   never forces the primary link to truncate. */
-.overview-list-ghost {
-    flex: 1 1 0;
+.overview-endpoint-addresses {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
     min-width: 0;
+}
+
+.overview-endpoint-address {
     overflow: hidden;
-    color: var(--colorNeutralForeground3);
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.overview-endpoint-name {
+    color: var(--colorNeutralForeground1);
+    overflow-wrap: anywhere;
+}
+
+a.overview-endpoint-address {
+    color: var(--colorBrandForegroundLink);
+    text-decoration: none;
+}
+
+a.overview-endpoint-address:hover {
+    text-decoration: underline;
 }
 
 .overview-level {

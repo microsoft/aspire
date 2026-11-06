@@ -84,6 +84,17 @@ const debuggerInstallHints = new Map<string, DebuggerInstallHint>([
 
 const notificationSuppressedKeyPrefix = 'aspire.debuggerInstallHint.suppressed.';
 
+export function getDebuggerInstallHintForAppHost(language: string): DebuggerInstallHint | undefined {
+    if (!['go', 'rust', 'java'].includes(language)) {
+        return undefined;
+    }
+
+    return getDebuggerInstallHintForResource({
+        state: null,
+        properties: { [launchConfigurationTypePropertyName]: language },
+    });
+}
+
 export function getDebuggerInstallHintForResource(
     resource: DebuggableResourceSnapshot,
     platform: NodeJS.Platform = process.platform

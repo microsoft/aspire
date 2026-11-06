@@ -653,6 +653,11 @@ aspire otel logs --dashboard-url {0}
         <target state="translated">面板</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogCategoryResourceGraph">
+        <source>Resource graph</source>
+        <target state="new">Resource graph</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogCategoryTelemetry">
         <source>Logs &amp; telemetry</source>
         <target state="new">Logs &amp; telemetry</target>
@@ -701,6 +706,16 @@ aspire otel logs --dashboard-url {0}
       <trans-unit id="HelpDialogDocumentationTab">
         <source>Documentation</source>
         <target state="new">Documentation</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGameDescription">
+        <source>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</source>
+        <target state="new">In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGameTitle">
+        <source>Aspire Outage</source>
+        <target state="new">Aspire Outage</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
@@ -787,6 +802,11 @@ aspire otel logs --dashboard-url {0}
         <source>Opens in a new tab</source>
         <target state="new">Opens in a new tab</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogPlayGame">
+        <source>Play Aspire Outage, when the graph has focus</source>
+        <target state="new">Play Aspire Outage, when the graph has focus</target>
+        <note>Aspire Outage is the name of a game.</note>
       </trans-unit>
       <trans-unit id="HelpDialogRepoDescription">
         <source>Source code, releases and issues on GitHub.</source>

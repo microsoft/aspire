@@ -30,6 +30,9 @@ builder.AddAzureSandboxGroup("sandboxes");
 var api = builder.AddDotnetProject("api", "../ApiService/ApiService.csproj");
 ```
 
+Browser-origin endpoint properties resolve from the exposed endpoint's deployed proxy URL, excluding navigation paths, queries, and fragments.
+Like the sandbox URL itself, the origin is unavailable until the producing sandbox has been deployed.
+
 Use `PublishAsAzureSandbox` only to customize sandbox runtime options:
 
 ```csharp

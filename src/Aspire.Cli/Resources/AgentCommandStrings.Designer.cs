@@ -323,7 +323,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Global (Install in your home directory; available across all projects).
+        ///   Looks up a localized string similar to Global (In your home directory, available across all projects).
         /// </summary>
         internal static string InitCommand_GlobalScope {
             get {
@@ -404,7 +404,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Local Aspire skill files may override plugin skills: {0}.
+        ///   Looks up a localized string similar to Local Aspire skill files may override plugin skills {0}.
         /// </summary>
         internal static string InitCommand_LocalSkillsConflict {
             get {
@@ -468,7 +468,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Project (Install in your workspace root; committed with your project).
+        ///   Looks up a localized string similar to This project (In your workspace, ready to commit with your project).
         /// </summary>
         internal static string InitCommand_ProjectScope {
             get {
@@ -495,7 +495,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installation scope.
+        ///   Looks up a localized string similar to Where should skills and tools be installed?.
         /// </summary>
         internal static string InitCommand_SelectScopePrompt {
             get {

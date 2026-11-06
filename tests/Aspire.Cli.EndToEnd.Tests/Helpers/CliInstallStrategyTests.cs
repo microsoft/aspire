@@ -1,14 +1,36 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Formats.Tar;
+using System.IO.Compression;
 using Hex1b;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 
 [Collection(CliInstallEnvironmentCollection.Name)]
-public class CliInstallStrategyTests
+public class CliInstallStrategyTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("hives/local/packages/Aspire.Hosting.17.0.99.nupkg", "17.0.99")]
+    [InlineData("./hives/local/packages/Aspire.Hosting.17.0.99.nupkg", "17.0.99")]
+    [InlineData("hives/local/packages/Aspire.Hosting.17.0.0-dev.nupkg", null)]
+    [InlineData("hives/local/packages/Aspire.Hosting.Go.17.0.99.nupkg", null)]
+    [InlineData("other/Aspire.Hosting.17.0.99.nupkg", null)]
+    public void TryGetStableAspireVersionFromArchive_UsesSelectedHive(string packageEntry, string? expectedVersion)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "selected.tar.gz");
+        using (var file = File.Create(archivePath))
+        using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
+        using (var tar = new TarWriter(gzip))
+        {
+            tar.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, packageEntry));
+        }
+
+        Assert.Equal(expectedVersion, CliE2ETestHelpers.TryGetStableAspireVersionFromArchive(archivePath));
+    }
+
     [Fact]
     public void GetPullRequestInstallArgs_ReturnsPrNumber()
     {

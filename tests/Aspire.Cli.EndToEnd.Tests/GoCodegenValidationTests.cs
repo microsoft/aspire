@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -13,9 +14,12 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class GoCodegenValidationTests(ITestOutputHelper output)
 {
-    [Fact]
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
     [CaptureWorkspaceOnFailure]
-    public async Task RestoreGeneratesSdkFiles()
+    public async Task RestoreGeneratesSdkFiles(bool nonInteractive, bool existingProject)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -28,9 +32,61 @@ public sealed class GoCodegenValidationTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
-        await auto.AspireInitGoAppHostAsync(counter);
+        var existingFiles = new Dictionary<string, string>();
+        if (existingProject)
+        {
+            var apiDirectory = workspace.CreateDirectory("api");
+            existingFiles[Path.Combine(apiDirectory.FullName, "go.mod")] = """
+                module example.com/existing-api
+
+                go 1.26
+                """;
+            existingFiles[Path.Combine(apiDirectory.FullName, "main.go")] = """
+                package main
+
+                import "fmt"
+
+                func main() {
+                    fmt.Println("existing Go application")
+                }
+                """;
+            foreach (var (path, content) in existingFiles)
+            {
+                await File.WriteAllTextAsync(path, content);
+            }
+        }
+
+        if (nonInteractive)
+        {
+            await auto.RunCommandAsync(
+                "aspire init --language go --non-interactive --suppress-agent-init < /dev/null",
+                counter,
+                TimeSpan.FromMinutes(3));
+        }
+        else
+        {
+            await auto.AspireInitGoAppHostAsync(counter);
+        }
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath));
+        Assert.NotNull(config);
+        Assert.Equal("go", config["appHost"]?["language"]?.GetValue<string>());
+        Assert.Equal("apphost.go", config["appHost"]?["path"]?.GetValue<string>());
+        Assert.False(string.IsNullOrEmpty(config["packages"]?["Aspire.Hosting.Go"]?.GetValue<string>()));
+
+        foreach (var (path, content) in existingFiles)
+        {
+            Assert.Equal(content, await File.ReadAllTextAsync(path));
+        }
+
+        if (existingProject)
+        {
+            GoAppHostTestHelpers.InsertBeforeBuild(
+                Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.go"),
+                """builder.AddGoApp("existing-api", "./api")""");
+        }
 
         await auto.AspireAddPackageAsync("Aspire.Hosting.Redis", counter);
         await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
@@ -80,5 +136,13 @@ public sealed class GoCodegenValidationTests(ITestOutputHelper output)
             "aspire.go does not contain AddSqlServer from Aspire.Hosting.SqlServer; restore did not refresh an already-populated .aspire/modules");
 
         Assert.NotEqual(initialCodegenHash, File.ReadAllText(codegenHashPath));
+
+        // Build the consumer and vet the generated module explicitly: ./... skips the hidden .aspire directory.
+        await auto.RunCommandAsync("go build -buildvcs=false ./... && go vet ./...", counter, TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync("(cd .aspire/modules && go vet ./...)", counter, TimeSpan.FromMinutes(3));
+        if (existingProject)
+        {
+            await auto.RunCommandAsync("(cd api && go build -buildvcs=false ./... && go vet ./...)", counter, TimeSpan.FromMinutes(3));
+        }
     }
 }

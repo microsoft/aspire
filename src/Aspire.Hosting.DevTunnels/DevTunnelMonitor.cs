@@ -630,7 +630,7 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
         var cancellationToken = _stopping.Token;
         try
         {
-            await _eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(port, _services), cancellationToken)
+            await _eventing.PublishResourceEndpointsAllocatedAsync(new ResourceEndpointsAllocatedEvent(port, _services), cancellationToken)
                 .WaitAsync(cancellationToken).ConfigureAwait(false);
             await InvokeAsync(async () =>
             {

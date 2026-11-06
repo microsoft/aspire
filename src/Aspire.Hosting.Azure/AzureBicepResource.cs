@@ -264,14 +264,14 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
 
                 var value = inputValue switch
                 {
-                    IManifestExpressionProvider output => output.ValueExpression,
+                    IManifestExpressionProvider output => context.GetManifestExpression(output),
                     object obj => obj.ToString(),
                     null => ""
                 };
 
                 context.Writer.WriteString(input.Key, value);
 
-                context.TryAddDependentResources(input.Value);
+                context.TryAddDependentResources(inputValue);
             }
             context.Writer.WriteEndObject();
         }

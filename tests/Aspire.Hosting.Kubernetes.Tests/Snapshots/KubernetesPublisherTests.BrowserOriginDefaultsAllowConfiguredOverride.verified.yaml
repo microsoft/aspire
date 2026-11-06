@@ -1,0 +1,6 @@
+﻿parameters: {}
+secrets: {}
+config:
+  consumer:
+    web_http_PrimaryBrowserOrigin: "https://primary.example"
+    web_http_BrowserOrigins: "https://override.example"
