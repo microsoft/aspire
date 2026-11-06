@@ -119,9 +119,16 @@
 .resource-title ::deep .resource-picker-button {
     max-width: 100%;
     font: inherit;
+    font-size: var(--fontSizeBase400);
+}
+
+.resource-picker-button > [slot="start"] {
+    display: flex;
+    align-items: center;
 }
 
 .resource-picker-button .resource-header-icon {
+    flex: 0 0 20px;
     width: 20px;
     height: 20px;
     border: 0;
