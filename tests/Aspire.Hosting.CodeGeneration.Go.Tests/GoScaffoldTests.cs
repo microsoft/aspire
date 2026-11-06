@@ -49,6 +49,7 @@ public class GoScaffoldTests(ITestOutputHelper outputHelper)
         Assert.NotEmpty(starterFiles);
 
         Assert.Empty(starterFiles
+            .Where(file => !string.Equals(Path.GetExtension(file), ".png", StringComparison.OrdinalIgnoreCase))
             .Where(file => File.ReadAllText(file).Contains('\r'))
             .Select(file => Path.GetRelativePath(starterRoot, file)));
     }

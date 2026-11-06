@@ -28,6 +28,12 @@ func main() {
 	api.WithReference(cache).WaitFor(cache)
 	resources = append(resources, cache)
 
+	// Run the Vite frontend after the API and inject the API URL for local proxying.
+	frontend := builder.AddViteApp("frontend", "./frontend", &aspire.AddViteAppOptions{}).
+		WithReference(api).
+		WaitFor(api)
+	resources = append(resources, frontend)
+
 	// Each call records its failure on the handle that it returns, so check every resource.
 	for _, resource := range resources {
 		if err := resource.Err(); err != nil {

@@ -18,7 +18,7 @@ public class GoAppHostTemplateTests
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-        Assert.Equal(["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript", "Aspire.Hosting.Redis"], packages);
+        Assert.Equal(["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript"], packages);
     }
 
     [Fact]

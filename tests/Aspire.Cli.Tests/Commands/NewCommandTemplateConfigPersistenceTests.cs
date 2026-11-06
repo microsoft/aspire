@@ -393,7 +393,9 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             });
 
         Assert.Equal(
-            usesRedis ? ["Aspire.Hosting.Go", "Aspire.Hosting.Redis"] : ["Aspire.Hosting.Go"],
+            usesRedis
+                ? ["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript", "Aspire.Hosting.Redis"]
+                : ["Aspire.Hosting.Go", "Aspire.Hosting.JavaScript"],
             packages);
         await Verify(appHost, "go").UseParameters(choice);
     }
