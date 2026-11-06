@@ -245,7 +245,7 @@ internal static class DotnetWatchCoordinator
             var server = new DotnetWatchServerResource(ServerResourceName, builder.AppHostDirectory);
             Server = builder.AddResource(server)
                 .WithIconName("ArrowSync")
-                .ExcludeFromManifest()
+                .AsWatchSystemResource()
                 .WithHealthCheck(healthCheckKey)
                 .WithArgs(async ctx =>
                 {
@@ -411,7 +411,7 @@ internal static class DotnetWatchCoordinator
         private async Task<PreparedServer> PrepareCoreAsync(IServiceProvider services, int generation, CancellationToken monitorToken, CancellationToken cancellationToken)
         {
             var logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(Server.Resource);
-            Directory.CreateDirectory(_runDirectory);
+            DotnetWatchServerInfrastructure.EnsurePrivateDirectory(_runDirectory);
 
             // TODO(spike): one SDK per server. Projects that select different SDKs (different global.json) should be
             // rejected or split into multiple servers; the spike uses the first project's SDK.
