@@ -461,6 +461,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal("dialog", button.GetAttribute("aria-haspopup"));
         Assert.Single(cut.FindAll($"#{MainLayout.RunSelectButtonId} .dashboard-run-indicator.live"));
         Assert.Empty(cut.FindAll(".application-run-select-text"));
+        Assert.False(button.ClassList.Contains("with-run-text"));
 
         await cut.InvokeAsync(() => button.Click());
 
@@ -549,6 +550,8 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(expectedHistoricalRunText, historicalRunButton.QuerySelector(".application-run-select-text")!.TextContent);
         Assert.Equal($"Recordings, viewing {expectedHistoricalRunText}", historicalRunButton.GetAttribute("aria-label"));
         Assert.Equal(expectedHistoricalRunText, historicalRunButton.GetAttribute("data-tooltip"));
+        // The stylesheet grows the square header button into a pill that fits the name through this class.
+        Assert.Contains("with-run-text", historicalRunButton.ClassList);
         Assert.Single(historicalRunButton.QuerySelectorAll(".dashboard-run-indicator.recording"));
 
         // The panel closes itself when a run is selected; the test dialog service doesn't render it, so close it here.

@@ -20,8 +20,7 @@ public partial class DashboardRunSelect : ComponentBase
     // A dot shows whether the live view or a recording is displayed. While a recording is displayed, the button also
     // names it when the window is wide enough (see the stylesheet); the tooltip and accessible label always state what
     // is being viewed because the name can be hidden.
-    private bool ShowsRunText => ShowSelectedRunText && !SelectedRunIsCurrent;
-    private string ButtonClass => ShowsRunText
+    private string ButtonClass => !SelectedRunIsCurrent
         ? "header-button application-run-select-button with-run-text"
         : "header-button application-run-select-button";
     private string RunSelectTitle => SelectedRunIsCurrent
@@ -37,12 +36,6 @@ public partial class DashboardRunSelect : ComponentBase
 
     [Parameter]
     public bool SelectedRunIsCurrent { get; set; }
-
-    /// <summary>
-    /// Whether the button names the displayed recording next to its icon. The mobile header doesn't have room for it.
-    /// </summary>
-    [Parameter, EditorRequired]
-    public required bool ShowSelectedRunText { get; set; }
 
     [Parameter]
     public DateTimeOffset SelectedRunStartedAtUtc { get; set; }

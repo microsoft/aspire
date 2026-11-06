@@ -17,16 +17,18 @@
     bottom: -1px;
 }
 
-/* On narrower windows the button stays icon-only (the dot still shows a recording is displayed, and the tooltip and
-   accessible label name it). Otherwise the date would squeeze the page's tabs in the header until even their compact
-   picker no longer fits and overlaps the header buttons. */
+/* On narrower windows, including the mobile header, the button stays icon-only (the dot still shows a recording is
+   displayed, and the tooltip and accessible label name it). Otherwise the date would squeeze the page's tabs in the
+   header until even their compact picker no longer fits and overlaps the header buttons. */
 .application-run-select ::deep .application-run-select-text {
     display: none;
 }
 
-/* 1200px fits the logo, the longest (truncated) application name, the full row of page tabs, the button with the
-   recording's date and the other header buttons. When a user profile button is shown too, the page tabs absorb the
-   difference by moving their last tab into their overflow menu. */
+/* 1200px fits the logo, the longest (truncated) application name, the full row of English page tabs, the button with
+   the recording's date and the other header buttons. A breakpoint is used rather than letting the date shrink first
+   because the tab row is a size container (see .resource-tabs-nav), so the header's flex layout can't see how much
+   room the tabs need: it never runs short and only hands the tab row less of the free space. When a user profile
+   button or longer localized tab labels need more room, the tabs move their last tabs into their overflow menu. */
 @media (min-width: 1200px) {
     /* The button grows from the header's square icon button into a warning-tinted pill that names the recording.
        These selectors are more specific than the layout's fixed 32px header-button rules. */
@@ -50,7 +52,8 @@
         width: 100%;
         min-width: 0;
         height: 26px;
-        padding: 0 12px 0 6px;
+        padding-block: 0;
+        padding-inline: 6px 12px;
         border-radius: 14px;
         overflow: hidden;
     }

@@ -39,7 +39,6 @@
                 <DashboardRunSelect ButtonId="@RunSelectButtonId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
                                     SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
-                                    ShowSelectedRunText="true"
                                     OnClick="@LaunchRecordingsAsync" />
             }
             @if (_navigationAvailability.HasResourceTerminals)
@@ -97,7 +96,6 @@
                 <DashboardRunSelect ButtonId="@RunSelectButtonId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
                                     SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
-                                    ShowSelectedRunText="false"
                                     OnClick="@LaunchRecordingsAsync" />
             }
             <UserProfile/>

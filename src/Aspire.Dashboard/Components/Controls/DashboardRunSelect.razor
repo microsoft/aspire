@@ -1,8 +1,8 @@
 @* The header button of the live view and recordings. It opens the recordings panel, like the notifications and
    settings buttons open theirs. A dot on the icon shows whether the live view or a recording is displayed. While a
-   recording is displayed, the button also names it so it's obvious the page isn't live. The name is part of the
-   button rather than placed separately in the header so it takes part in the header's layout and shrinks with an
-   ellipsis instead of overlapping the page's own header content. *@
+   recording is displayed on a wide enough window, the button also names it so it's obvious the page isn't live (see
+   the stylesheet). The name is part of the button rather than placed separately in the header so it takes part in
+   the header's layout instead of overlapping the page's own header content. *@
 <div class="application-run-select">
     <FluentButton Id="@ButtonId"
                   Class="@ButtonClass"
@@ -15,7 +15,7 @@
             <FluentIcon Value="@s_historyIcon" Color="Color.Default" />
             <DashboardRunIndicator IsLive="@SelectedRunIsCurrent" />
         </span>
-        @if (ShowsRunText)
+        @if (!SelectedRunIsCurrent)
         {
             <span class="application-run-select-text">@SelectedRunText</span>
         }
