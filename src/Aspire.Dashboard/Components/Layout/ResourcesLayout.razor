@@ -999,13 +999,44 @@
                @onclick:preventDefault="true">
                 <span class="resource-row-icon">
                     <span class="resource-row-glyph">
-                        <FluentIcon Width="16px"
+                        <FluentIcon Width="@(IsSpacious ? "20px" : "16px")"
                                     Color="Color.Custom"
                                     CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
-                                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
+                                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IsSpacious ? IconSize.Size20 : IconSize.Size16)" />
                     </span>
                     <PersistentContainerBadge Resource="@resource" />
                 </span>
+                @if (IsCompact)
+                {
+                    @* One line per resource: the name, then aligned columns for type and state, so they line up from
+                       row to row. The state is a dot; its name is in the tooltip and the link's accessible description.
+                       There is no room for the availability badge on one line, so an unavailable row relies on its muted
+                       colors and on the reason in its tooltip and accessible description. *@
+                    <span class="resource-row-text">
+                        <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
+                        @if (resource.IsResourceHidden(showHiddenResources: false))
+                        {
+                            <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())"
+                                        Class="resource-row-hidden-icon"
+                                        data-tooltip="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
+                                        aria-label="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
+                                        Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                        }
+                    </span>
+                    @if (errorCount > 0)
+                    {
+                        @* Reserves the badge's width before the columns. The real badge, a sibling link, is overlaid here. *@
+                        <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
+                    }
+                    <span class="resource-row-meta">
+                        <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
+                        <span class="resource-row-meta-state" data-tooltip="@stateViewModel.Text">
+                            <span class="state-dot @GetStateClass(resource)"></span>
+                        </span>
+                    </span>
+                }
+                else
+                {
                     <span class="resource-row-text">
                         <span class="resource-row-title">
                             <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
@@ -1040,12 +1071,38 @@
                                 <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" tabindex="0" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                             }
                         </span>
+                        @if (IsSpacious && !_isPaneFullCanvas && !resource.IsParameter)
+                        {
+                            @* The third line of a spacious row: whatever needs attention first, an unhealthy status, then
+                               where to reach the resource, then where it comes from. The full canvas has columns for these. *@
+                            @if (resource.HealthStatus is { } healthStatus &&
+                                 healthStatus != Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy)
+                            {
+                                <span class="resource-row-detail">
+                                    <span>@healthStatus.Humanize()</span>
+                                </span>
+                            }
+                            else if (primaryUrl is not null)
+                            {
+                                var maskedPrimaryAddress = DashboardUIHelpers.MaskQueryStringValues(primaryUrl.OriginalUrlString);
+                                <span class="resource-row-detail" data-tooltip="@maskedPrimaryAddress">
+                                    <span>@(primaryUrl.DisplayName is { Length: > 0 } primaryUrlName ? primaryUrlName : maskedPrimaryAddress)</span>
+                                </span>
+                            }
+                            else if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } detailSource)
+                            {
+                                <span class="resource-row-detail" data-tooltip="@detailSource.Tooltip">
+                                    <span>@detailSource.Value</span>
+                                </span>
+                            }
+                        }
                     </span>
                     @if (errorCount > 0)
                     {
-                        @* Reserves the badge's width in the wide grid, where the real badge overlays the end of this link. *@
+                        @* Reserves the badge's width in the grid layouts, where the real badge overlays the end of this link. *@
                         <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
                     }
+                }
             </a>
             @if (errorCount > 0)
             {

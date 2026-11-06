@@ -69,6 +69,32 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Empty(cut.FindAll("[data-resource-name='key'] .resource-row-availability"));
     }
 
+    [Fact]
+    public async Task CompactDensity_UnavailableRowKeepsReasonWithoutBadge()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test-TestId")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/structuredlogs");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.Single(cut.FindAll("[data-resource-name='test-TestId'] .resource-row-availability"));
+
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Compact));
+
+        // A single-line row has no room for the badge, so the row stays muted and keeps the reason in its tooltip
+        // and accessible description.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
+        var row = cut.Find("[data-resource-name='test-TestId']");
+        var link = row.QuerySelector(".resource-row-link")!;
+        Assert.Empty(row.QuerySelectorAll(".resource-row-availability"));
+        Assert.True(row.ClassList.Contains("resource-row-unavailable"));
+        Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogs, link.GetAttribute("data-tooltip"));
+        Assert.Contains(Resources.Layout.ResourcePaneNoStructuredLogs, link.GetAttribute("aria-description"));
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs, "/structuredlogs", "/structuredlogs/resource/test-TestId")]
     [InlineData(AspireDataType.Traces, "/traces", "/traces/resource/test-TestId")]

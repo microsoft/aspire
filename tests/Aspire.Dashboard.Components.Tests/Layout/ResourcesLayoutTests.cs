@@ -405,10 +405,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
+        var compact = density is ResourceListDensity.Compact;
         Assert.Empty(cut.FindAll(".resource-row-wide-metadata"));
-        Assert.Equal("Running", cut.Find("[data-resource-name='api'] .state-dot + span").TextContent);
-        Assert.Equal("10 minutes ago", cut.Find("[data-resource-name='api'] time").TextContent);
-        Assert.Equal("Finished", cut.Find("[data-resource-name='finished'] .state-dot + span").TextContent);
+        Assert.Equal("Running", GetStateText(cut.Find("[data-resource-name='api']")));
+        // A compact sidebar row is a single line without the start time. The expanded list below has a column for it.
+        Assert.Equal(compact ? [] : ["10 minutes ago"], cut.FindAll("[data-resource-name='api'] time").Select(time => time.TextContent));
+        Assert.Equal("Finished", GetStateText(cut.Find("[data-resource-name='finished']")));
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         ResourceSetupHelpers.ToggleResourceList(cut);
 
@@ -425,7 +427,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("+1", row.QuerySelector(".resource-row-more-endpoints")!.TextContent.Trim());
         var health = row.QuerySelector(".resource-row-health")!;
         Assert.Empty(row.QuerySelectorAll(".resource-row-health-status"));
-        Assert.Equal("Running", row.QuerySelector(".state-dot + span")!.TextContent);
+        Assert.Equal("Running", GetStateText(row));
         Assert.Contains("Healthy", row.QuerySelector(".resource-row-link")!.GetAttribute("aria-description"));
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         var time = health.QuerySelector(".resource-row-start-time time")!;
@@ -450,6 +452,11 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Equal("Started 11 minutes ago",
             cut.Find("[data-resource-name='api'] .resource-row-health time").TextContent.Trim()));
+
+        // Compact rows show the state as a dot that names it in its tooltip. The other densities spell it out.
+        string? GetStateText(AngleSharp.Dom.IElement resourceRow) => compact
+            ? resourceRow.QuerySelector(".resource-row-meta-state")!.GetAttribute("data-tooltip")
+            : resourceRow.QuerySelector(".state-dot + span")!.TextContent;
     }
 
     [Theory]
@@ -1100,7 +1107,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task CompactDensity_PreservesIdentityStatusAndPersistenceWithoutSidebarType()
+    public async Task CompactDensity_ShowsOneLineWithTypeAndStateColumns()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1121,13 +1128,26 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Compact));
 
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
-        Assert.Equal(2, cut.FindAll("[data-resource-name] .resource-row-sub").Count);
-        Assert.Empty(cut.FindAll(".resource-row-type"));
+        AssertCompactRows();
         Assert.Empty(cut.FindAll("[data-resource-name='api'] .persistent-container-badge"));
         Assert.Single(cut.FindAll("[data-resource-name='cache'] .persistent-container-badge"));
+        Assert.Equal("Running; Project; Health state: Healthy", cut.Find("[data-resource-name='api'] .resource-row-link").GetAttribute("aria-description"));
+
+        // The expanded resource list keeps the same single-line identity next to its metadata columns.
         ResourceSetupHelpers.ToggleResourceList(cut);
-        Assert.Equal("Project", cut.Find("[data-resource-name='api'] .resource-row-type").TextContent);
-        Assert.Equal("Container (persistent)", cut.Find("[data-resource-name='cache'] .resource-row-type").TextContent);
+        AssertCompactRows();
+
+        // One line per resource: the name, then the type and state columns, with no second line of state text.
+        void AssertCompactRows()
+        {
+            Assert.Empty(cut.FindAll("[data-resource-name] .resource-row-sub"));
+            Assert.Equal("Project", Assert.Single(cut.FindAll("[data-resource-name='api'] .resource-row-meta .resource-row-type")).TextContent);
+            var cacheType = Assert.Single(cut.FindAll("[data-resource-name='cache'] .resource-row-meta .resource-row-type"));
+            Assert.Equal("Container (persistent)", cacheType.TextContent);
+            Assert.True(cacheType.ClassList.Contains("resource-row-type-persistent"));
+            Assert.Equal(["Running", "Running"],
+                cut.FindAll("[data-resource-name] .resource-row-meta-state").Select(state => state.GetAttribute("data-tooltip")));
+        }
     }
 
     [Fact]
@@ -2077,7 +2097,9 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
 
-        Assert.Empty(cut.FindAll("[data-resource-name='cache'] .resource-row-type"));
+        // Only compact sidebar rows have a type column; the other densities show the start time instead.
+        Assert.Equal(density is ResourceListDensity.Compact ? [expectedType] : [],
+            cut.FindAll("[data-resource-name='cache'] .resource-row-type").Select(type => type.TextContent));
         Assert.Equal($"Running; {expectedType}; Health state: Healthy", cut.Find("[data-resource-name='cache'] .resource-row-link").GetAttribute("aria-description"));
         ResourceSetupHelpers.ToggleResourceList(cut);
         var type = cut.Find("[data-resource-name='cache'] .resource-row-type");

@@ -30,8 +30,16 @@
     background: var(--aspire-page-background);
 }
 
+/* Compact rows are a single line, so they're sized for the 28px row actions rather than for two text bands. */
 .resource-pane-list.density-compact {
-    --resource-row-height: var(--aspire-density-resource-row-height, 44px);
+    --resource-row-height: var(--aspire-density-resource-row-height, 32px);
+    --resource-row-icon-size: 22px;
+    /* The type column of the compact rows. See the persistent override below. */
+    --resource-row-meta-type-width: 64px;
+    /* The full canvas's identity column holds only the name in the other densities. A compact row also puts its type
+       and state columns there, so the column grows by their width (type + 8px gap + 10px state + 8px gap) rather
+       than taking it from the name. */
+    --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
     --resource-row-font-size: var(--fontSizeBase200);
     --resource-row-line-height: var(--lineHeightBase200);
     --resource-secondary-font-size: 11px;
@@ -44,8 +52,27 @@
     --resource-insight-failure-width: 32px;
 }
 
+/* Persistent types, such as "RabbitMQ (persistent)", are wider than the others, so every row's type column widens
+   together and the columns stay aligned. 100cqw is the width of the resource-pane container. The full canvas keeps
+   64px: its fixed tracks would otherwise have to give up endpoint width at the narrower breakpoints.
+   On touch screens the 112px action rail is always showing, so names come first: the column stays at 64px at the
+   default 420px pane width and only widens with the room a wider pane adds, reaching 128px at 484px. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
+    --resource-row-meta-type-width: clamp(64px, calc(100cqw - 356px), 128px);
+}
+
+/* Where rows can be hovered, a row at rest narrows the action rail to 20px (see "Compact sidebar rows show their
+   actions only while the row is hovered" below), which
+   leaves room for the full 128px column while still keeping about 180px for names at the default pane width. */
+@media (hover: hover) {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
+        --resource-row-meta-type-width: clamp(48px, calc(100cqw - 180px), 128px);
+    }
+}
+
 .resource-pane-list.density-spacious {
     --resource-row-height: var(--aspire-density-resource-row-height, 60px);
+    --resource-row-icon-size: 40px;
     --resource-row-font-size: var(--fontSizeBase400);
     --resource-row-line-height: var(--lineHeightBase400);
     --resource-secondary-font-size: var(--fontSizeBase300);
@@ -1953,17 +1980,17 @@
 }
 
 /* Compact density: one line per resource. The state, type and persistence move to fixed-width columns on the
-   right, so they line up from row to row. */
+   right, so they line up from row to row. The sidebar and full-canvas rules further down assume two text bands;
+   the "Compact density overrides" section after them puts everything back on one line. */
 .density-compact .resource-row-link {
     gap: 8px;
-    padding-top: 3px;
-    padding-bottom: 3px;
 }
 
 .density-compact .resource-row-icon {
     flex-basis: var(--resource-row-icon-size);
     width: var(--resource-row-icon-size);
     height: var(--resource-row-icon-size);
+    border-radius: 6px;
 }
 
 .density-spacious .resource-row-link {
@@ -1976,12 +2003,6 @@
     flex-basis: var(--resource-row-icon-size);
     width: var(--resource-row-icon-size);
     height: var(--resource-row-icon-size);
-}
-
-.density-compact .resource-row-text {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0;
 }
 
 .density-compact .resource-row-text ::deep .resource-row-hidden-icon {
@@ -2020,7 +2041,7 @@
 }
 
 .resource-row-meta .resource-row-type {
-    width: 64px;
+    width: var(--resource-row-meta-type-width);
     text-align: right;
     white-space: nowrap;
 }
@@ -2262,7 +2283,7 @@
 
 @container resource-pane (min-width: 540px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
+        --resource-row-tracks: [identity] minmax(calc(160px + var(--resource-row-identity-extra, 0px)), 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
     }
 
     .resource-row-endpoints {
@@ -2278,11 +2299,6 @@
     .resource-row-endpoint {
         grid-column: endpoint;
     }
-}
-
-/* Keep type columns aligned, reserving room for resource names when the pane is narrow. */
-.density-compact:has(.resource-row-type-persistent) .resource-row-meta .resource-row-type {
-    width: clamp(48px, calc(100cqw - 180px), 128px);
 }
 
 .density-compact .resource-row-toggle,
@@ -2430,7 +2446,7 @@
 
 @container resource-pane (min-width: 720px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(200px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 180px [end];
+        --resource-row-tracks: [identity] minmax(calc(200px + var(--resource-row-identity-extra, 0px)), 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 180px [end];
         column-gap: var(--spacingHorizontalM);
     }
 
@@ -2467,7 +2483,7 @@
 
 @container resource-pane (min-width: 960px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(220px, 320px) [status] 180px [endpoint] minmax(96px, 1fr) [source] 112px [insights actions] 244px [end];
+        --resource-row-tracks: [identity] minmax(calc(220px + var(--resource-row-identity-extra, 0px)), calc(320px + var(--resource-row-identity-extra, 0px))) [status] 180px [endpoint] minmax(96px, 1fr) [source] 112px [insights actions] 244px [end];
         column-gap: var(--spacingHorizontalS);
     }
 
@@ -2592,8 +2608,25 @@
     flex-shrink: 0;
 }
 
+/* A spacious sidebar row adds a third, smaller band for its health, endpoint or source. The row grows to fit it,
+   and rows without one (parameters) keep two bands centered in the same height. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-spacious {
+    --resource-row-height: var(--aspire-density-resource-row-height, calc(2 * var(--resource-row-line-height) + var(--resource-secondary-line-height) + 12px));
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-link:has(.resource-row-detail) {
+    padding-block: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height) - var(--resource-secondary-line-height)) / 2);
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-text:has(> .resource-row-detail) {
+    grid-template-rows: repeat(2, var(--resource-row-line-height)) var(--resource-secondary-line-height);
+}
+
 .resources-layout:not(.pane-full-canvas) .resource-row-detail {
-    display: none;
+    min-width: 0;
+    height: var(--resource-secondary-line-height);
+    font-size: var(--resource-secondary-font-size);
+    line-height: var(--resource-secondary-line-height);
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions {
@@ -2675,6 +2708,95 @@
     display: none;
 }
 
+/* Compact density overrides. The sidebar rules above and the full-canvas rules below lay a row's text out in two
+   fixed bands; a compact row has one. These selectors match the specificity of the sidebar ones and come after
+   them, so they win in both layouts. */
+.resource-pane-list.density-compact .resource-row-link {
+    padding-block: 0;
+}
+
+.resource-pane-list.density-compact .resource-row-text {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+}
+
+.resource-pane-list.density-compact .resource-row-name {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* Telemetry-only rows and the "All" row have no type/state columns. Their secondary label (the kind, or the counts)
+   moves to the end of the line, and the name gives way first when space runs out. */
+.resource-pane-list.density-compact .resource-row-title {
+    flex: 0 1 auto;
+    width: auto;
+    height: auto;
+}
+
+.resource-pane-list.density-compact .resource-row-sub {
+    flex: 0 0 auto;
+    height: auto;
+    margin-inline-start: auto;
+}
+
+/* The availability badge doesn't fit on one line. The row is muted instead, and its tooltip and accessible
+   description give the reason. App-model rows don't render the badge in compact density at all. */
+.resource-pane-list.density-compact .resource-row-availability {
+    display: none;
+}
+
+/* The error badge is overlaid on the row link (see .resource-row-error-link). In a compact row it goes over its
+   spacer, just before the type and state columns, instead of over the columns at the end of the link:
+   8px link end padding + type column + 8px gap + 10px state column + 8px gap. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-error-link {
+    margin-inline-end: calc(var(--resource-row-meta-type-width) + 34px);
+}
+
+@container resource-pane (min-width: 420px) {
+    .resource-pane-list.density-compact .resource-row:has(> .resource-row-wide-metadata) > .resource-row-error-link {
+        margin-inline-end: calc(var(--resource-row-meta-type-width) + 34px);
+    }
+}
+
+/* Compact sidebar rows show their actions only while the row is hovered or focused, or while one of its menus is
+   open, and then in place of the type and state columns. The rest of the time the action rail narrows to the
+   expand toggle (or the spacer that keeps the columns aligned), so the name gets the rail's room. The swap keeps the
+   name's width about the same: the 92px the rail gains is about the 90px the columns give up.
+   An open menu is matched by aria-haspopup as well as aria-expanded: a parent's expand toggle also sets
+   aria-expanded="true", and that must not keep its actions showing. Only the attribute's presence is tested
+   because Fluent's menu changes the button's aria-haspopup from "menu" to "true" while the menu is open.
+   Touch screens can't hover, so (hover: hover) leaves their actions always visible. The expanded list (the full
+   canvas) is excluded and keeps its fixed, always-visible action slots. */
+@media (hover: hover) {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) {
+        grid-template-columns: minmax(0, 1fr) 20px;
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions {
+        grid-template-columns: 20px;
+        width: 20px;
+        min-width: 20px;
+        max-width: 20px;
+    }
+
+    /* Every action has .resource-row-action. The menus also have a wrapper that occupies a grid slot. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions ::deep .resource-row-action,
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions ::deep .aspire-menu-button {
+        display: none;
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-meta {
+        display: none;
+    }
+
+    /* With the columns gone, the error badge's spacer ends the row link again, so the badge goes back to the end. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
+        margin-inline-end: 8px;
+    }
+}
+
 .resource-tree-guide,
 .resource-tree-stem {
     position: absolute;
@@ -2740,7 +2862,7 @@
 @container resource-pane (min-width: 1440px) {
     /* Only the endpoint track absorbs spare width; activity stays next to actions. */
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 260px [status] 180px [endpoint] minmax(200px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] calc(260px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(200px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
     }
 
     ::deep .resource-row-insights {
@@ -2779,13 +2901,13 @@
 
 @container resource-pane (min-width: 1600px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(280px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(280px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
         column-gap: var(--spacingHorizontalL);
     }
 }
 
 @container resource-pane (min-width: 1800px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(240px, 1fr) [source] 352px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(240px, 1fr) [source] 352px [insights] var(--resource-insight-width) [actions] 244px [end];
     }
 }
