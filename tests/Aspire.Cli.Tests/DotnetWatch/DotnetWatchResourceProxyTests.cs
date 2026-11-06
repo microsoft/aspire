@@ -20,12 +20,13 @@ public class DotnetWatchResourceProxyTests
         string[] args = [DotnetWatchResourceProxy.CommandName, "--server", "/tmp/aspw/res.sock", "--entrypoint", "/src/Api/Api.csproj", "--", "--urls", "http://localhost:5000", "--"];
 
         Assert.True(DotnetWatchResourceProxy.Matches(args));
-        Assert.True(DotnetWatchResourceProxy.TryParse(args, out var server, out var entryPoint, out var workingDirectory, out var appArgs, out var error));
+        Assert.True(DotnetWatchResourceProxy.TryParse(args, out var options, out var error));
         Assert.Null(error);
-        Assert.Equal("/tmp/aspw/res.sock", server);
-        Assert.Equal("/src/Api/Api.csproj", entryPoint);
-        Assert.Null(workingDirectory);
-        Assert.Equal(["--urls", "http://localhost:5000", "--"], appArgs);
+        Assert.Equal("/tmp/aspw/res.sock", options.Server);
+        Assert.Equal("/src/Api/Api.csproj", options.EntryPoint);
+        Assert.Null(options.WorkingDirectory);
+        Assert.Null(options.LaunchGate);
+        Assert.Equal(["--urls", "http://localhost:5000", "--"], options.AppArgs);
     }
 
     [Theory]
@@ -34,7 +35,7 @@ public class DotnetWatchResourceProxyTests
     [InlineData(new[] { "__dotnet-watch-proxy", "--server", "s", "--entrypoint", "e", "--bogus" }, "unexpected argument '--bogus'.")]
     public void RejectsInvalidArguments(string[] args, string expectedError)
     {
-        Assert.False(DotnetWatchResourceProxy.TryParse(args, out _, out _, out _, out _, out var error));
+        Assert.False(DotnetWatchResourceProxy.TryParse(args, out _, out var error));
         Assert.Equal(expectedError, error);
     }
 
@@ -78,7 +79,7 @@ public class DotnetWatchResourceProxyTests
     [Fact]
     public void EmptyApplicationArgumentsStayEmpty()
     {
-        var json = DotnetWatchResourceProxy.CreateRequestJson("/src/Api/Api.csproj", [], new Dictionary<string, string>());
+        var json = DotnetWatchResourceProxy.CreateRequestJson("/src/Api/Api.csproj", [], [], new Dictionary<string, string>());
 
         using var document = JsonDocument.Parse(json);
         Assert.Equal(0, document.RootElement.GetProperty("ApplicationArguments").GetArrayLength());
@@ -88,7 +89,7 @@ public class DotnetWatchResourceProxyTests
     public void RequestJsonMatchesTheWatcherProtocol()
     {
         var json = DotnetWatchResourceProxy.CreateRequestJson(
-            "/src/Api/Api.csproj", ["--flag", "value with spaces"], new Dictionary<string, string> { ["A"] = "1" });
+            "/src/Api/Api.csproj", [], ["--flag", "value with spaces"], new Dictionary<string, string> { ["A"] = "1" });
 
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
@@ -103,13 +104,14 @@ public class DotnetWatchResourceProxyTests
     }
 
     [Fact]
-    public void ParsesWorkingDirectory()
+    public void ParsesWorkingDirectoryAndLaunchGate()
     {
-        string[] args = [DotnetWatchResourceProxy.CommandName, "--server", "s", "--entrypoint", "/src/Api/Api.csproj", "--working-directory", "/data/run dir", "--"];
+        string[] args = [DotnetWatchResourceProxy.CommandName, "--server", "s", "--entrypoint", "/src/Api/Api.csproj", "--launch-gate", "/tmp/aspw/launched0-1-AB", "--working-directory", "/data/run dir", "--"];
 
-        Assert.True(DotnetWatchResourceProxy.TryParse(args, out _, out _, out var workingDirectory, out var appArgs, out _));
-        Assert.Equal("/data/run dir", workingDirectory);
-        Assert.Empty(appArgs);
+        Assert.True(DotnetWatchResourceProxy.TryParse(args, out var options, out _));
+        Assert.Equal("/data/run dir", options.WorkingDirectory);
+        Assert.Equal("/tmp/aspw/launched0-1-AB", options.LaunchGate);
+        Assert.Empty(options.AppArgs);
     }
 
     [Fact]
@@ -168,18 +170,32 @@ public class DotnetWatchResourceProxyTests
     }
 
     [Fact]
-    public void ServerHostParsesTheWrappedCommand()
+    public async Task ServerHostRejectsAMissingCommand()
     {
-        string[] args = [DotnetWatchServerHost.CommandName, "--", "/usr/bin/dotnet", "exec", "watch.dll", "server"];
+        Assert.True(DotnetWatchServerHost.Matches([DotnetWatchServerHost.CommandName, "--", "dotnet"]));
+        Assert.False(DotnetWatchServerHost.Matches([DotnetWatchResourceProxy.CommandName]));
 
-        Assert.True(DotnetWatchServerHost.Matches(args));
-        Assert.True(DotnetWatchServerHost.TryParse(args, out var fileName, out var arguments, out var error));
-        Assert.Null(error);
-        Assert.Equal("/usr/bin/dotnet", fileName);
-        Assert.Equal(["exec", "watch.dll", "server"], arguments);
+        Assert.Equal(DotnetWatchServerHost.ExitUsage, await DotnetWatchServerHost.RunAsync([DotnetWatchServerHost.CommandName, "/usr/bin/dotnet"]));
+        Assert.Equal(DotnetWatchServerHost.ExitUsage, await DotnetWatchServerHost.RunAsync([DotnetWatchServerHost.CommandName, "--"]));
+    }
 
-        Assert.False(DotnetWatchServerHost.TryParse([DotnetWatchServerHost.CommandName, "/usr/bin/dotnet"], out _, out _, out error));
-        Assert.NotNull(error);
+    [Fact]
+    public async Task ServerHostReportsALaunchFailure()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"aspire-watch-missing-{Guid.NewGuid():N}");
+
+        Assert.Equal(DotnetWatchServerHost.ExitLaunchFailed, await DotnetWatchServerHost.RunAsync([DotnetWatchServerHost.CommandName, "--", missing]));
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses /bin/sh.")]
+    public async Task ServerHostReturnsTheWatcherExitCode()
+    {
+        // Arguments after the executable reach it verbatim; stdin is empty and not a console.
+        var exitCode = await DotnetWatchServerHost.RunAsync([DotnetWatchServerHost.CommandName, "--", "/bin/sh", "-c", "if [ -t 0 ]; then exit 1; fi; if read -r line; then exit 2; fi; exit 7"])
+            .WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(7, exitCode);
     }
 
     [Theory]
@@ -194,10 +210,12 @@ public class DotnetWatchResourceProxyTests
     }
 
     [Fact]
-    public void ServerHostRegistersStopSignalsSupportedOnEveryPlatform()
+    public void StopSignalsAreSupportedOnEveryPlatform()
     {
         // PosixSignalRegistration maps these to console control events on Windows (Ctrl+C, Ctrl+Break, close, shutdown).
-        Assert.Equal([PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGQUIT, PosixSignal.SIGHUP], DotnetWatchServerHost.ShutdownSignals);
+        Assert.Equal([PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGQUIT, PosixSignal.SIGHUP], ShutdownSignal.Signals);
+        using var signal = new ShutdownSignal();
+        Assert.False(signal.Token.IsCancellationRequested);
     }
 
     [Fact]
@@ -224,7 +242,7 @@ public class DotnetWatchResourceProxyTests
             var childId = int.Parse(File.ReadAllText(pidFile).Trim(), System.Globalization.CultureInfo.InvariantCulture);
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-            await DotnetWatchServerHost.StopAsync(process, process.WaitForExitAsync(), TimeSpan.FromMilliseconds(200));
+            await DotnetWatchServerHost.StopAsync(process, TimeSpan.FromMilliseconds(200));
 
             Assert.True(process.HasExited);
             Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), stopwatch.Elapsed.ToString());
@@ -290,7 +308,7 @@ public class DotnetWatchResourceProxyTests
         DotnetWatchRunEnvironment.Apply(environment);
 
         Assert.Equal("true", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
-        Assert.Equal("3", environment[DotnetWatchRunEnvironment.ProxyProtocolVariable]);
+        Assert.Equal("4", environment[DotnetWatchRunEnvironment.ProxyProtocolVariable]);
         var path = environment[DotnetWatchRunEnvironment.ProxyPathVariable];
         Assert.True(File.Exists(path), path);
         if (path.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
@@ -322,42 +340,51 @@ public class DotnetWatchResourceProxyTests
     }
 
     [Fact]
-    public async Task RetriesWhenTheServerClosesTheConnectionBeforeTheApplicationStarts()
+    public async Task ForwardsOutputUntilTheServerDisconnects()
     {
         using var testPipe = TestPipe.Create();
         var pipeName = testPipe.Name;
-        var requests = new List<string>();
+        string? request = null;
         var server = Task.Run(async () =>
         {
-            // First request: ACK then close without output, like the watcher's failed concurrent web launch.
-            // Second request: ACK, one output record, then close (the server went away after the app started).
-            for (var i = 0; i < 2; i++)
-            {
-                await using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-                await pipe.WaitForConnectionAsync();
-                Assert.Equal(1, pipe.ReadByte());
-                requests.Add(await DotnetWatchResourceProxy.ReadStringAsync(pipe, CancellationToken.None));
-                pipe.WriteByte(1);
-                if (i == 1)
-                {
-                    pipe.WriteByte(1);
-                    await DotnetWatchResourceProxy.WriteStringAsync(pipe, "started", CancellationToken.None);
-                }
-
-                await pipe.FlushAsync();
-            }
+            await using var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            await pipe.WaitForConnectionAsync();
+            Assert.Equal(1, pipe.ReadByte());
+            request = await DotnetWatchResourceProxy.ReadStringAsync(pipe, CancellationToken.None);
+            pipe.WriteByte(1);
+            pipe.WriteByte(1);
+            await DotnetWatchResourceProxy.WriteStringAsync(pipe, "started", CancellationToken.None);
+            await pipe.FlushAsync();
         });
 
         var exitCode = await DotnetWatchResourceProxy.RunAsync([DotnetWatchResourceProxy.CommandName, "--server", pipeName, "--entrypoint", "/src/Api/Api.csproj"]).WaitAsync(TimeSpan.FromSeconds(30));
         await server.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(DotnetWatchResourceProxy.ExitServerDisconnected, exitCode);
-        Assert.Equal(2, requests.Count);
-        Assert.Equal(requests[0], requests[1]);
+        Assert.NotNull(request);
+        using var document = JsonDocument.Parse(request);
+        Assert.Equal("/src/Api/Api.csproj", document.RootElement.GetProperty("EntryPoint").GetString());
     }
 
     [Fact]
-    public async Task DoesNotRetryWhenTheServerRejectsTheRequest()
+    public async Task ConnectTimesOutWithoutAServer()
+    {
+        Environment.SetEnvironmentVariable(DotnetWatchResourceProxy.ConnectTimeoutVariable, "1");
+        try
+        {
+            var exitCode = await DotnetWatchResourceProxy.RunAsync([DotnetWatchResourceProxy.CommandName, "--server", $"aspire-proxy-test-{Guid.NewGuid():N}", "--entrypoint", "/src/Api/Api.csproj"])
+                .WaitAsync(TimeSpan.FromSeconds(30));
+
+            Assert.Equal(DotnetWatchResourceProxy.ExitConnectFailed, exitCode);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(DotnetWatchResourceProxy.ConnectTimeoutVariable, null);
+        }
+    }
+
+    [Fact]
+    public async Task FailsWhenTheServerRejectsTheRequest()
     {
         using var testPipe = TestPipe.Create();
         var pipeName = testPipe.Name;
@@ -375,6 +402,78 @@ public class DotnetWatchResourceProxyTests
         await server.WaitAsync(TimeSpan.FromSeconds(30));
 
         Assert.Equal(DotnetWatchResourceProxy.ExitRejected, exitCode);
+    }
+
+    [Fact]
+    public async Task LaunchGateAdmitsOneLaunchUntilTheProjectHasLaunched()
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-launch-gate-");
+        try
+        {
+            var marker = Path.Combine(directory.FullName, "launched0-1-AB");
+            var first = await LaunchGate.EnterAsync(marker, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.NotNull(first);
+
+            var second = LaunchGate.EnterAsync(marker, CancellationToken.None);
+            var release = first.ReleaseAfterLaunchAsync(new TaskCompletionSource().Task);
+            await Task.Delay(200);
+            Assert.False(second.IsCompleted);
+            Assert.False(release.IsCompleted);
+
+            await File.WriteAllBytesAsync(marker, []);
+            await release.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Null(await second.WaitAsync(TimeSpan.FromSeconds(30)));
+            Assert.Null(await LaunchGate.EnterAsync(marker, CancellationToken.None));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LaunchGatePassesOnWhenTheLaunchConnectionEnds()
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-launch-gate-");
+        try
+        {
+            var marker = Path.Combine(directory.FullName, "launched0-1-AB");
+            var first = await LaunchGate.EnterAsync(marker, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.NotNull(first);
+
+            var second = LaunchGate.EnterAsync(marker, CancellationToken.None);
+            var connection = new TaskCompletionSource();
+            var release = first.ReleaseAfterLaunchAsync(connection.Task);
+            connection.SetResult();
+            await release.WaitAsync(TimeSpan.FromSeconds(30));
+
+            using var next = await second.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.NotNull(next);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LaunchGateWaitIsCancelable()
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-launch-gate-");
+        try
+        {
+            var marker = Path.Combine(directory.FullName, "launched0-1-AB");
+            using var first = await LaunchGate.EnterAsync(marker, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+            using var cts = new CancellationTokenSource();
+            var second = LaunchGate.EnterAsync(marker, cts.Token);
+            cts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => second.WaitAsync(TimeSpan.FromSeconds(30)));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     /// <summary>

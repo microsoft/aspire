@@ -6,7 +6,7 @@
     <AspireDotnetWatchToolsDir Condition="'$(AspireDotnetWatchToolsDir)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'tools', 'dotnet-watch'))</AspireDotnetWatchToolsDir>
   </PropertyGroup>
 
-  <!-- Records where the hot reload watch tool payloads (<SDK major>/Microsoft.DotNet.HotReload.Watch.Aspire.dll) are,
+  <!-- Records where the hot reload watch tool (Microsoft.DotNet.HotReload.Watch.Aspire.dll) is,
        so the watch mode of 'aspire run' runs the shipped tool instead of acquiring one. -->
   <Target Name="_SetAspireDotnetWatchToolsAttribute" BeforeTargets="GetAssemblyAttributes" Condition="'$(IsAspireHost)' == 'true'">
     <ItemGroup>

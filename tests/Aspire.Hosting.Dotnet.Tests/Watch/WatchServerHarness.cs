@@ -110,9 +110,14 @@ internal sealed class WatchServerHarness : IAsyncDisposable
 
     private async Task StartCoreAsync(Action<string>? prepareApp)
     {
-        var sdk = await DotnetWatchToolResolver.ResolveSdkAsync(AppContext.BaseDirectory, _cts.Token).ConfigureAwait(false);
+        // Watch mode supports .NET 10 SDKs only: select the newest installed one for the fixture, then pin it exactly
+        // (as the coordinator does). Isolate the fixture from the repo build, whose global.json selects a newer SDK.
+        System.IO.Directory.CreateDirectory(Directory);
+        var globalJson = Path.Combine(Directory, "global.json");
+        File.WriteAllText(globalJson, $$"""{ "sdk": { "version": "{{DotnetWatchToolResolver.SupportedSdkMajor}}.0.100", "rollForward": "latestFeature" } }""");
+        var sdk = await DotnetWatchToolResolver.ResolveSdkAsync(Directory, _cts.Token).ConfigureAwait(false);
         Muxer = sdk.Muxer;
-        var major = sdk.SdkVersion.Split('.')[0];
+        File.WriteAllText(globalJson, $$"""{ "sdk": { "version": "{{sdk.SdkVersion}}", "rollForward": "disable" } }""");
 
         System.IO.Directory.CreateDirectory(AppDirectory);
         foreach (var file in System.IO.Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "Watch", "Fixtures", "ContractApp")))
@@ -120,15 +125,13 @@ internal sealed class WatchServerHarness : IAsyncDisposable
             File.Copy(file, Path.Combine(AppDirectory, Path.GetFileName(file)));
         }
 
-        // Isolate the fixture from the repo build and pin the SDK the server is told to use (as the coordinator does).
-        File.WriteAllText(Path.Combine(Directory, "global.json"), $$"""{ "sdk": { "version": "{{sdk.SdkVersion}}", "rollForward": "disable", "allowPrerelease": true } }""");
         File.WriteAllText(Path.Combine(Directory, "Directory.Build.props"), "<Project />");
         File.WriteAllText(Path.Combine(Directory, "Directory.Build.targets"), "<Project />");
         File.WriteAllText(Path.Combine(Directory, "Directory.Packages.props"), "<Project><PropertyGroup><ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally></PropertyGroup></Project>");
         File.WriteAllText(ProjectPath, $"""
             <Project Sdk="Microsoft.NET.Sdk.Web">
               <PropertyGroup>
-                <TargetFramework>net{major}.0</TargetFramework>
+                <TargetFramework>net{DotnetWatchToolResolver.SupportedSdkMajor}.0</TargetFramework>
                 <Nullable>enable</Nullable>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <NuGetAudit>false</NuGetAudit>
@@ -137,7 +140,11 @@ internal sealed class WatchServerHarness : IAsyncDisposable
             """);
         prepareApp?.Invoke(AppDirectory);
 
-        var toolDll = await AcquireToolAsync(sdk.SdkVersion).ConfigureAwait(false);
+        var toolDll = DotnetWatchToolResolver.ResolveToolPath(
+            Environment.GetEnvironmentVariable(DotnetWatchToolResolver.ToolPathConfigurationKey),
+            DotnetWatchToolResolver.GetToolsDirectory(typeof(WatchServerHarness).Assembly),
+            sdk.SdkVersion,
+            NullLogger.Instance);
         _output.WriteLine($"SDK {sdk.SdkVersion} ({sdk.SdkDirectory}); watch tool {toolDll}");
 
         // The listener must exist before the watcher connects to it.
@@ -147,13 +154,6 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         var server = CreateStartInfo(Muxer, Directory, ["exec", toolDll, "server", "--sdk", sdk.SdkDirectory, "--server", ResourcePipe, "--status-pipe", StatusPipe, "--resource", ProjectPath]);
         StartProcess(server, line => Record(WatchObservationKind.Output, line), "server");
     }
-
-    private static Task<string> AcquireToolAsync(string sdkVersion) =>
-        Task.FromResult(DotnetWatchToolResolver.ResolveToolPath(
-            Environment.GetEnvironmentVariable(DotnetWatchToolResolver.ToolPathConfigurationKey),
-            DotnetWatchToolResolver.GetToolsDirectory(typeof(WatchServerHarness).Assembly),
-            sdkVersion,
-            NullLogger.Instance));
 
     /// <summary>Path of the CLI that implements <c>__dotnet-watch-proxy</c>, or <see langword="null"/> when it isn't built.</summary>
     public static string? FindProxy()
@@ -175,7 +175,12 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         var command = proxyPath;
         if (proxyPath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
         {
-            command = Muxer;
+            // As in `aspire run`, the framework-dependent CLI runs on the muxer that hosts the CLI, not the watcher's.
+            command = Environment.GetEnvironmentVariable(DotnetWatchCoordinator.ProxyHostConfigurationKey) is { Length: > 0 } host
+                ? host
+                : typeof(WatchServerHarness).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "AspireCliHost")?.Value is { Length: > 0 } built
+                    ? built
+                    : "dotnet";
             args.Add(proxyPath);
         }
 

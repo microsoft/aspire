@@ -30,7 +30,9 @@
                       Private="false"
                       ExcludeAssets="all" />
     <AssemblyMetadata Include="AspireCliPath" Value="$(ArtifactsBinDir)Aspire.Cli\$(Configuration)\net11.0\aspire.dll" />
-    <!-- The watch tool payloads Aspire.Hosting.Dotnet lays out at build (what AppHosts get as the same metadata). -->
+    <!-- The muxer that builds the repo can run aspire.dll; the .NET 10 SDK the watched fixture uses may not. -->
+    <AssemblyMetadata Include="AspireCliHost" Value="$(DOTNET_HOST_PATH)" />
+    <!-- The watch tool Aspire.Hosting.Dotnet lays out at build (what AppHosts get as the same metadata). -->
     <AssemblyMetadata Include="aspiredotnetwatchtoolsdir" Value="$(AspireDotnetWatchToolsDir)" />
   </ItemGroup>
   <ItemGroup>

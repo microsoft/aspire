@@ -63,7 +63,7 @@ remaining work are recorded once, under their coding sessions.
 | D3 | **Activation is `aspire run --watch`**, a local-run sub-mode, not a new `aspire watch` command. The target includes C# service watching and C# AppHost watching through the tool's `host` command, with the latter gated as described in Session 8. |
 | D4 | **Implement only C# service watch here.** Retain a general language-package seam. For polyglot AppHosts, keep the guest runtime's native AppHost watching and separately watch its C# services; do not wrap a native AppHost server or guest program in the .NET `host` command. |
 | D5 | **Core exposes run configuration as state, not watch mechanics.** Integrations consume `ExecutionContext.RunConfiguration.WatchEnabled`. The .NET package owns service-watch coordination and tool acquisition; the CLI owns command UX, the infrastructure proxy command, and invocation of the AppHost wrapper. Shared core project defaults, publishing, and executable launch infrastructure remain reusable. |
-| D6 | **Ship the pinned watcher inside `Aspire.Hosting.Dotnet` (like DCP), never download it at run time.** One payload per SDK major; the AppHost finds it through `aspiredotnetwatchtoolsdir` assembly metadata. No fallback: a missing payload is an actionable error. Session 4 records the implementation. |
+| D6 | **Ship the pinned watcher inside `Aspire.Hosting.Dotnet` (like DCP), never download it at run time.** One payload, `10.0.403`, so watch mode supports .NET 10 SDKs only; the AppHost finds it through `aspiredotnetwatchtoolsdir` assembly metadata. No fallback: a missing payload or a non-.NET 10 SDK is an actionable error. Session 4 records the implementation. |
 | D7 | **Retain Aspire's coordinated initial-build barrier and accept the watcher's additional build for now.** Avoiding duplicate work through upstream `--no-build` support is a future improvement, not a prerequisite or an available option. |
 | D8 | **AppHost watch is a separate session.** Earlier service-watch work runs the AppHost normally. Package-based watching is for the CLI path, not IDE-owned runs; preserve IDE-native change tracking, service launch, and session-restart behavior. |
 | D9 | **Non-watch F5 parity is required and implemented.** Preserve capability negotiation and older-launcher behavior rather than forcing every IDE onto the coordinated-build path. |
@@ -109,7 +109,7 @@ framework are distinct compatibility checks.
 An ordinary `PackageReference` plus `GeneratePathProperty` is **not** a sufficient acquisition design
 for this package type ([NU1212][nu1212]). `PackageDownload` [does not flow transitively or become a packed
 dependency][package-download], so (like `eng/dcppack`) `Aspire.Hosting.Dotnet` `PackageDownload`s the payload and
-repacks it under `tools/dotnet-watch/<major>/`, with a `buildTransitive` targets file that stamps the path on the AppHost.
+repacks it under `tools/dotnet-watch/`, with a `buildTransitive` targets file that stamps the path on the AppHost.
 Package-backed polyglot hosts load integration assemblies without executing a C# AppHost's MSBuild targets, so they
 don't get that metadata (open gap; see Session 4).
 
@@ -312,28 +312,28 @@ does not make .NET services watch.
 
 **Implemented (packaging, no runtime download).**
 
-- `eng/Versions.props` pins one payload per SDK major: `MicrosoftDotNetHotReloadWatchAspireNet10Version` (10.0.403) and
-  `MicrosoftDotNetHotReloadWatchAspireNet11Version` (11.0.100-rc.2). `Aspire.Hosting.Dotnet.csproj` `PackageDownload`s both
-  (a `PackageReference` fails with NU1212), checks each payload is complete, lays it out under
-  `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/<major>/` and packs it as `tools/dotnet-watch/<major>/`.
+- `eng/Versions.props` pins the payload: `MicrosoftDotNetHotReloadWatchAspireVersion` (10.0.403). The watcher loads
+  MSBuild from the selected SDK, so it only works with .NET 10 SDKs, and watch mode supports .NET 10 SDKs only.
+  `Aspire.Hosting.Dotnet.csproj` `PackageDownload`s it (a `PackageReference` fails with NU1212), checks the payload is
+  complete, lays it out under `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/` and packs it as `tools/dotnet-watch/`.
 - `buildTransitive/Aspire.Hosting.Dotnet.targets` adds `AssemblyMetadata("aspiredotnetwatchtoolsdir", …)` to AppHosts
   (`IsAspireHost=true`). In-repo AppHosts import it through `Aspire.RepoTesting.targets` and the repo-mode polyglot server
   project, with `AspireDotnetWatchToolsDir` set in the root `Directory.Build.props`.
-- `DotnetWatchToolResolver.ResolveToolPath` picks `<toolsdir>/<sdk major>/Microsoft.DotNet.HotReload.Watch.Aspire.dll`.
-  Missing metadata, a missing payload, or an SDK major without a payload throws an actionable error (no fallback, no
+- `DotnetWatchToolResolver.ResolveToolPath` picks `<toolsdir>/Microsoft.DotNet.HotReload.Watch.Aspire.dll`.
+  Missing metadata, a missing payload, or a selected SDK that isn't .NET 10 throws an actionable error (no fallback, no
   network). `ASPIRE_DOTNET_WATCH_TOOL_PATH` is an explicit override only.
 
 - Package-backed polyglot AppHosts (prebuilt server) don't run the package's MSBuild targets, so there's no metadata; the
   resolver then looks for `tools/dotnet-watch/` next to the loaded `Aspire.Hosting.Dotnet.dll`, which the prebuilt server
   loads from the restored package (`<package>/lib/<tfm>/`).
 
-**Open:** the prebuilt-server path is unit-tested but not yet run against a published package. Payload signing in the official build and other SDK patch/preview versions of a major are unverified.
+**Open:** the prebuilt-server path is unit-tested but not yet run against a published package. Payload signing in the official build and .NET 10 SDK feature bands other than 10.0.4xx are unverified.
 
 Before starting the watcher, the resolver checks the selected muxer's `--list-runtimes` against the payload's
 runtimeconfig frameworks under the effective roll-forward policy (the more permissive of the file's and
 `DOTNET_ROLL_FORWARD`), and fails with the missing framework and how to fix it rather than a host error in the server log.
 
-**Evidence:** `DotnetWatchCoordinatorTests` (resolution, errors, shipped payload runtimeconfig matches its major),
+**Evidence:** `DotnetWatchCoordinatorTests` (resolution, errors, unsupported SDKs, shipped payload targets net10.0),
 `DotnetWatchToolRuntimeTests` (runtime check) and the contract tests, which run against the shipped payload.
 
 ### Session 5 - Coordinated initial builds and output-bound launches

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -8,13 +9,14 @@ using System.Text.Json.Nodes;
 namespace Aspire.Cli.DotnetWatch;
 
 /// <summary>
-/// SPIKE (plan D10 / Session 6a): hidden, infrastructure-only per-instance proxy between DCP and the pinned
+/// Plan D10 / Session 6a: hidden, infrastructure-only per-instance proxy between DCP and the pinned
 /// <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> server's resource pipe.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Usage (constructed by <c>Aspire.Hosting.Dotnet</c>, never by users):
-/// <c>aspire __dotnet-watch-proxy --server &lt;pipe&gt; --entrypoint &lt;path&gt; [--working-directory &lt;dir&gt;] -- [application args]</c>.
+/// <c>aspire __dotnet-watch-proxy --server &lt;pipe&gt; --entrypoint &lt;path&gt; [--launch-gate &lt;file&gt;] [--working-directory &lt;dir&gt;] -- [application args]</c>.
+/// <c>--launch-gate</c> serializes the first launch of a project across its replicas (see <see cref="LaunchGate"/>).
 /// </para>
 /// <para>
 /// The watcher launches every service as <c>dotnet run</c> from the project directory, with the watcher's own process
@@ -48,8 +50,6 @@ internal static class DotnetWatchResourceProxy
 
     // The proxy only starts after the server is healthy (WaitFor), so the pipe normally exists immediately.
     internal const int DefaultConnectTimeoutSeconds = 30;
-    internal const int RetryConnectTimeoutSeconds = 5;
-    internal const int MaxStartRetries = 3;
 
     private const byte ProtocolVersion = 1;
     private const byte OutputTypeStdout = 1;
@@ -66,146 +66,114 @@ internal static class DotnetWatchResourceProxy
 
     public static async Task<int> RunAsync(string[] args)
     {
-        if (!TryParse(args, out var server, out var entryPoint, out var workingDirectory, out var appArgs, out var error))
+        if (!TryParse(args, out var options, out var error))
         {
             Console.Error.WriteLine($"{CommandName}: {error}");
             return ExitUsage;
         }
 
-        using var shutdown = new CancellationTokenSource();
-        Console.CancelKeyPress += (_, e) =>
-        {
-            e.Cancel = true;
-            shutdown.Cancel();
-        };
-        using var sigterm = System.Runtime.InteropServices.PosixSignalRegistration.Create(
-            System.Runtime.InteropServices.PosixSignal.SIGTERM,
-            ctx =>
-            {
-                ctx.Cancel = true;
-                shutdown.Cancel();
-            });
-
+        using var shutdown = new ShutdownSignal();
         var environment = CollectForwardedEnvironment(
             Environment.GetEnvironmentVariable(ForwardedEnvironmentNamesVariable),
             Environment.GetEnvironmentVariable,
             Environment.GetEnvironmentVariables().Keys.Cast<string>());
         AddRestoredEnvironment(environment, Environment.GetEnvironmentVariable(RestoreEnvironmentNamesVariable), Environment.GetEnvironmentVariable);
-        var runOptions = GetRunOptions(entryPoint, workingDirectory, Environment.GetEnvironmentVariable(InstanceVariable));
-
+        var request = CreateRequestJson(options.EntryPoint, GetRunOptions(options.EntryPoint, options.WorkingDirectory, Environment.GetEnvironmentVariable(InstanceVariable)), options.AppArgs, environment);
         var timeout = TimeSpan.FromSeconds(
             int.TryParse(Environment.GetEnvironmentVariable(ConnectTimeoutVariable), out var seconds) && seconds > 0 ? seconds : DefaultConnectTimeoutSeconds);
 
-        var request = CreateRequestJson(entryPoint, runOptions, appArgs, environment);
-        for (var attempt = 1; ; attempt++)
-        {
-            var (exitCode, startFailed) = await RunOnceAsync(server, entryPoint, request, timeout, shutdown.Token).ConfigureAwait(false);
-            if (!startFailed || attempt > MaxStartRetries || shutdown.IsCancellationRequested)
-            {
-                return exitCode;
-            }
-
-            // The watcher (rc.2) races concurrent launches of the same web project: the second request fails with
-            // "Server not started" while the first one starts the browser refresh server, and the server closes the
-            // pipe before any output. Requests after the first launch succeed, so retry; if the server itself went
-            // away the reconnect fails within the short timeout.
-            Console.Error.WriteLine($"{CommandName}: watch server closed the connection before the application started; retrying ({attempt}/{MaxStartRetries}).");
-            timeout = TimeSpan.FromSeconds(RetryConnectTimeoutSeconds);
-            try
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt), shutdown.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return 0;
-            }
-        }
-    }
-
-    private static async Task<(int ExitCode, bool StartFailed)> RunOnceAsync(string server, string entryPoint, string request, TimeSpan timeout, CancellationToken shutdownToken)
-    {
-        await using var pipe = new NamedPipeClientStream(".", server, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        LaunchGate? gate = null;
+        await using var pipe = new NamedPipeClientStream(".", options.Server, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         try
         {
-            using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
+            if (options.LaunchGate is { } marker)
+            {
+                gate = await LaunchGate.EnterAsync(marker, shutdown.Token).ConfigureAwait(false);
+            }
+
+            using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
             connectTimeout.CancelAfter(timeout);
             await pipe.ConnectAsync(connectTimeout.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!shutdownToken.IsCancellationRequested)
-        {
-            Console.Error.WriteLine($"{CommandName}: timed out after {timeout.TotalSeconds:0}s connecting to the watch server.");
-            return (ExitConnectFailed, false);
-        }
         catch (OperationCanceledException)
         {
-            return (ExitConnectFailed, false);
-        }
-
-        var receivedOutput = false;
-        try
-        {
-            await pipe.WriteAsync(new[] { ProtocolVersion }, shutdownToken).ConfigureAwait(false);
-            await WriteStringAsync(pipe, request, shutdownToken).ConfigureAwait(false);
-            await pipe.FlushAsync(shutdownToken).ConfigureAwait(false);
-
-            var ack = await ReadByteOrEofAsync(pipe, shutdownToken).ConfigureAwait(false);
-            if (ack != 1)
+            gate?.Dispose();
+            if (!shutdown.Token.IsCancellationRequested)
             {
-                Console.Error.WriteLine($"{CommandName}: watch server rejected the launch request for '{entryPoint}'.");
-                return (ExitRejected, false);
+                Console.Error.WriteLine($"{CommandName}: timed out after {timeout.TotalSeconds:0}s connecting to the watch server.");
             }
 
-            // ACK precedes application launch and says nothing about application health (plan 3.3).
-            using var stdout = Console.OpenStandardOutput();
-            using var stderr = Console.OpenStandardError();
-            while (true)
-            {
-                var type = await ReadByteOrEofAsync(pipe, shutdownToken).ConfigureAwait(false);
-                if (type < 0)
-                {
-                    if (!receivedOutput)
-                    {
-                        return (ExitServerDisconnected, true);
-                    }
+            return ExitConnectFailed;
+        }
 
-                    // The server owns the process and its exit code is not represented on this pipe. While the server
-                    // is alive it keeps this pipe open across app exits so it can relaunch on the next change; app exit
-                    // codes reach the resource through the status pipe instead (hosting sets the "Crashed" state and
-                    // ExitCode). Reaching EOF means the server itself went away.
-                    Console.Error.WriteLine($"{CommandName}: watch server disconnected; the application's exit status is unknown.");
-                    return (ExitServerDisconnected, false);
+        using (gate)
+        {
+            try
+            {
+                await pipe.WriteAsync(new[] { ProtocolVersion }, shutdown.Token).ConfigureAwait(false);
+                await WriteStringAsync(pipe, request, shutdown.Token).ConfigureAwait(false);
+                await pipe.FlushAsync(shutdown.Token).ConfigureAwait(false);
+
+                if (await ReadByteOrEofAsync(pipe, shutdown.Token).ConfigureAwait(false) != 1)
+                {
+                    Console.Error.WriteLine($"{CommandName}: watch server rejected the launch request for '{options.EntryPoint}'.");
+                    return ExitRejected;
                 }
 
-                var line = await ReadStringAsync(pipe, shutdownToken).ConfigureAwait(false);
-                receivedOutput = true;
-                var target = type switch
+                // ACK precedes application launch and says nothing about application health (plan 3.3).
+                var forwarding = ForwardOutputAsync(pipe, shutdown.Token);
+                if (gate is not null)
                 {
-                    OutputTypeStdout => stdout,
-                    OutputTypeStderr => stderr,
-                    _ => throw new InvalidDataException($"Unexpected output record type 0x{type:X2}.")
-                };
-                var bytes = Encoding.UTF8.GetBytes(line + Environment.NewLine);
-                await target.WriteAsync(bytes, shutdownToken).ConfigureAwait(false);
-                await target.FlushAsync(shutdownToken).ConfigureAwait(false);
+                    await gate.ReleaseAfterLaunchAsync(forwarding).ConfigureAwait(false);
+                }
+
+                await forwarding.ConfigureAwait(false);
+
+                // The server owns the process and its exit code is not represented on this pipe. While the server is
+                // alive it keeps this pipe open across app exits so it can relaunch on the next change; app exit codes
+                // reach the resource through the status pipe instead (hosting sets the "Crashed" state and ExitCode).
+                // Reaching EOF means the server itself went away.
+                Console.Error.WriteLine($"{CommandName}: watch server disconnected; the application's exit status is unknown.");
+                return ExitServerDisconnected;
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // DCP stop / Ctrl+C. Disposing the pipe makes the server terminate the application process.
-            return (0, false);
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException)
-        {
-            Console.Error.WriteLine($"{CommandName}: {ex.Message}");
-            return (ExitServerDisconnected, !receivedOutput);
+            catch (OperationCanceledException)
+            {
+                // DCP stop / Ctrl+C. Disposing the pipe makes the server terminate the application process.
+                return 0;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException)
+            {
+                Console.Error.WriteLine($"{CommandName}: {ex.Message}");
+                return ExitServerDisconnected;
+            }
         }
     }
 
-    internal static bool TryParse(string[] args, out string server, out string entryPoint, out string? workingDirectory, out List<string> appArgs, out string? error)
+    private static async Task ForwardOutputAsync(Stream pipe, CancellationToken cancellationToken)
     {
-        server = entryPoint = string.Empty;
-        workingDirectory = null;
-        appArgs = [];
+        using var stdout = Console.OpenStandardOutput();
+        using var stderr = Console.OpenStandardError();
+        while (await ReadByteOrEofAsync(pipe, cancellationToken).ConfigureAwait(false) is var type and >= 0)
+        {
+            var target = type switch
+            {
+                OutputTypeStdout => stdout,
+                OutputTypeStderr => stderr,
+                _ => throw new InvalidDataException($"Unexpected output record type 0x{type:X2}.")
+            };
+            var line = await ReadStringAsync(pipe, cancellationToken).ConfigureAwait(false);
+            await target.WriteAsync(Encoding.UTF8.GetBytes(line + Environment.NewLine), cancellationToken).ConfigureAwait(false);
+            await target.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    internal sealed record Options(string Server, string EntryPoint, string? WorkingDirectory, string? LaunchGate, List<string> AppArgs);
+
+    internal static bool TryParse(string[] args, [NotNullWhen(true)] out Options? options, out string? error)
+    {
+        string? server = null, entryPoint = null, workingDirectory = null, launchGate = null;
+        var appArgs = new List<string>();
+        options = null;
         error = null;
 
         for (var i = 1; i < args.Length; i++)
@@ -221,6 +189,9 @@ internal static class DotnetWatchResourceProxy
                 case "--working-directory" when i + 1 < args.Length:
                     workingDirectory = args[++i];
                     break;
+                case "--launch-gate" when i + 1 < args.Length:
+                    launchGate = args[++i];
+                    break;
                 case "--":
                     appArgs.AddRange(args[(i + 1)..]);
                     i = args.Length;
@@ -231,12 +202,13 @@ internal static class DotnetWatchResourceProxy
             }
         }
 
-        if (server.Length == 0 || entryPoint.Length == 0)
+        if (string.IsNullOrEmpty(server) || string.IsNullOrEmpty(entryPoint))
         {
             error = "--server and --entrypoint are required.";
             return false;
         }
 
+        options = new Options(server, entryPoint, workingDirectory, launchGate, appArgs);
         return true;
     }
 
@@ -316,9 +288,6 @@ internal static class DotnetWatchResourceProxy
     // MSBuild splits -p values on ';' and ',' and unescapes %XX.
     internal static string EscapeMSBuildPropertyValue(string value) =>
         value.Replace("%", "%25", StringComparison.Ordinal).Replace(";", "%3B", StringComparison.Ordinal).Replace(",", "%2C", StringComparison.Ordinal);
-
-    internal static string CreateRequestJson(string entryPoint, IReadOnlyList<string> appArgs, IReadOnlyDictionary<string, string> environment)
-        => CreateRequestJson(entryPoint, [], appArgs, environment);
 
     internal static string CreateRequestJson(string entryPoint, IReadOnlyList<string> runOptions, IReadOnlyList<string> appArgs, IReadOnlyDictionary<string, string> environment)
     {

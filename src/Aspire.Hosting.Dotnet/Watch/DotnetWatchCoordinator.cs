@@ -9,6 +9,8 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -63,8 +65,9 @@ internal static partial class DotnetWatchCoordinator
     /// <summary>
     /// 2: <c>__dotnet-watch-server</c> host and proxy <c>--working-directory</c>, instance marker and restore list.
     /// 3: the proxy selects the project with <c>dotnet run --project</c> (a directory can hold several projects).
+    /// 4: proxy <c>--launch-gate</c> (replicas launch one at a time until the project has launched once).
     /// </summary>
-    internal const int RequiredProxyProtocol = 3;
+    internal const int RequiredProxyProtocol = 4;
 
     /// <summary>Process-environment variable naming the variables the proxy forwards to the service.</summary>
     internal const string ForwardedEnvironmentNamesVariable = "ASPIRE_DOTNET_WATCH_FORWARD_ENV";
@@ -298,7 +301,7 @@ internal static partial class DotnetWatchCoordinator
 
         if (metadata.IsFileBasedApp)
         {
-            // The watch server (11.0.100-rc.2) launches `dotnet run` from the file's directory without `--file`, so a
+            // The watch server launches `dotnet run` from the file's directory without `--file`, so a
             // file-based app exits with "Couldn't find a project to run".
             return new(WatchDecisionKind.Rejected,
                 $"'{resource.Name}' is a file-based C# app ({Path.GetFileName(metadata.ProjectPath)}), which hot reload doesn't support yet.");
@@ -591,6 +594,8 @@ internal static partial class DotnetWatchCoordinator
                 ctx.Args.Add(project.Server.ResourcePipeName);
                 ctx.Args.Add("--entrypoint");
                 ctx.Args.Add(projectPath);
+                ctx.Args.Add("--launch-gate");
+                ctx.Args.Add(project.Server.GetLaunchMarkerPath(projectPath));
                 if (executable.WorkingDirectoryExplicitlySet)
                 {
                     // The watcher launches `dotnet run` from the project directory; RunWorkingDirectory moves the app.
@@ -773,6 +778,18 @@ internal static partial class DotnetWatchCoordinator
         private List<WatchedProject> Projects => _state.Projects.Where(p => p.Server == this).ToList();
 
         private string[] Roots => Projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal).ToArray();
+
+        /// <summary>
+        /// The file that tells a project's proxies (<c>--launch-gate</c>) that the project launched once in the current
+        /// server generation. Until it exists, the proxies launch the project one at a time: the watcher hands a
+        /// concurrent launch of the same web project its browser refresh server before the first launch has started
+        /// it, and that launch fails ("Server not started", dotnet/sdk BrowserRefreshServerFactory).
+        /// </summary>
+        public string GetLaunchMarkerPath(string projectPath) => GetLaunchMarkerPath(projectPath, Volatile.Read(ref _generation));
+
+        private string GetLaunchMarkerPath(string projectPath, int generation) => Path.Combine(
+            _state.RunDirectory,
+            $"launched{_index}-{generation}-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(projectPath)), 0, 8)}");
 
         public void Start(IServiceProvider services, CancellationToken stopping)
         {
@@ -985,7 +1002,7 @@ internal static partial class DotnetWatchCoordinator
             }
 
             // The status pipe listener must exist before the watcher connects to it.
-            _ = Task.Run(() => MonitorStatusAsync(services, logger, statusPipeName, successfulBuild, monitorToken), CancellationToken.None);
+            _ = Task.Run(() => MonitorStatusAsync(services, logger, statusPipeName, successfulBuild, generation, monitorToken), CancellationToken.None);
 
             // Everything set only for the watcher must not leak into the services, which inherit its environment.
             return new PreparedServer(args, environment, [.. environment.Keys]);
@@ -1013,7 +1030,7 @@ internal static partial class DotnetWatchCoordinator
             return resolved;
         }
 
-        private async Task MonitorStatusAsync(IServiceProvider services, ILogger serverLogger, string statusPipeName, TaskCompletionSource successfulBuild, CancellationToken monitorToken)
+        private async Task MonitorStatusAsync(IServiceProvider services, ILogger serverLogger, string statusPipeName, TaskCompletionSource successfulBuild, int generation, CancellationToken monitorToken)
         {
             var notifications = services.GetRequiredService<ResourceNotificationService>();
             var diagnostics = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DotnetWatchCoordinator).FullName!);
@@ -1072,6 +1089,11 @@ internal static partial class DotnetWatchCoordinator
                     // replica through the verbose log lines; everything else applies to every resource with the path.
                     foreach (var path in projects)
                     {
+                        if (status.type == DotnetWatchStatusTypes.ProcessStarted)
+                        {
+                            File.WriteAllBytes(GetLaunchMarkerPath(path, generation), []);
+                        }
+
                         var targets = Projects.Where(p => string.Equals(p.ProjectPath, path, StringComparison.Ordinal)).ToList();
                         if (targets.Count == 0)
                         {

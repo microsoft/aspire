@@ -10,19 +10,19 @@ using Aspire.TestUtilities;
 namespace Aspire.Hosting.Dotnet.Tests.Watch;
 
 /// <summary>
-/// SPIKE: contract tests against the REAL <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> server, driven through the
+/// Contract tests against the REAL <c>Microsoft.DotNet.HotReload.Watch.Aspire</c> server, driven through the
 /// real <c>aspire __dotnet-watch-proxy</c>. They pin what the coordinator and the CLI proxy rely on: the resource pipe
 /// launch spec (args after <c>--</c>, forwarded environment, endpoints) and the status events and console lines the
 /// notices are derived from.
 /// </summary>
 /// <remarks>
-/// Outerloop: each test builds a web app with the watcher (tens of seconds) and acquires the watch tool from a NuGet
-/// feed unless <c>ASPIRE_DOTNET_WATCH_TOOL_PATH</c> is set. Run locally with
+/// Outerloop: each test builds a web app with the watcher (tens of seconds), using the watch tool Aspire.Hosting.Dotnet
+/// lays out (or <c>ASPIRE_DOTNET_WATCH_TOOL_PATH</c>) and a .NET 10 SDK installed next to the <c>dotnet</c> on PATH. Run locally with
 /// <c>dotnet test tests/Aspire.Hosting.Dotnet.Tests -- --filter-class *DotnetWatchContractTests</c>; set
 /// <c>ASPIRE_WATCH_CONTRACT_RECORD_DIR=tests/Aspire.Hosting.Dotnet.Tests/Watch/Recordings</c> to refresh the
 /// recordings replayed by <see cref="DotnetWatchRecordedOutputTests"/> in regular CI.
 /// </remarks>
-[OuterloopTest("Builds and hot reloads a real app with the dotnet-watch server; acquires the watch tool from a NuGet feed.")]
+[OuterloopTest("Builds and hot reloads a real app with the dotnet-watch server and a .NET 10 SDK.")]
 [RequiresTools(["dotnet"])]
 public class DotnetWatchContractTests(ITestOutputHelper output)
 {

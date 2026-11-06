@@ -23,7 +23,8 @@ internal static class DotnetWatchRunEnvironment
 
     // 2: __dotnet-watch-server host, proxy --working-directory/--instance/--restore-env.
     // 3: the proxy selects the project with `dotnet run --project`.
-    public const int ProxyProtocolVersion = 3;
+    // 4: proxy --launch-gate.
+    public const int ProxyProtocolVersion = 4;
 
     public static void Apply(IDictionary<string, string> environment)
     {
