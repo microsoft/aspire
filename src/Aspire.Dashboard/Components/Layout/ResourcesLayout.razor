@@ -27,6 +27,7 @@
 
     <div class="resources-layout @(showCollapsedPane ? "pane-collapsed" : string.Empty) @(_isPaneFullCanvas ? "pane-full-canvas" : string.Empty) @(_animatePaneTransition ? "pane-motion-enabled" : string.Empty) @(_isPaneSelectionReveal ? "pane-selection-reveal" : string.Empty) @(!isDesktop && _isDrawerOpen ? "drawer-open" : string.Empty)"
          data-pane-location="@_lastLocation"
+         data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
          style="@GetLayoutStyle()"
          @ref="_layoutElement">
         @* A single header keeps section subscriptions stable across viewport changes. *@
@@ -55,6 +56,10 @@
                         <div class="resource-tab-toolbar">
                             <SectionOutlet SectionName="@TabToolbarSectionName" />
                         </div>
+                    }
+                    @if (isDesktop && DetailParentUrl is { } parentUrl)
+                    {
+                        <DetailPageCloseButton ParentUrl="@parentUrl" OnClose="@(() => CloseDetailAsync(parentUrl))" />
                     }
                 </div>
             }
@@ -96,25 +101,12 @@
                                       Title="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneGrouping)]" />
                 }
 
-                @if (isDesktop)
-                {
-                    <FluentButton Class="resource-pane-button resource-pane-toggle-button resource-pane-canvas-toggle"
-                                  Appearance="ButtonAppearance.Default"
-                                  IconOnly="true"
-                                  IconStart="@(_isPaneFullCanvas ? new Icons.Regular.Size20.PanelLeftContract() : new Icons.Regular.Size20.PanelLeftExpand())"
-                                  OnClick="TogglePaneFullCanvas"
-                                  data-tooltip="@Loc[_isPaneFullCanvas ? nameof(Dashboard.Resources.Layout.ResourcePaneExitFullCanvas) : nameof(Dashboard.Resources.Layout.ResourcePaneFullCanvas)]"
-                                  data-tooltip-positioning="above"
-                                  aria-label="@Loc[_isPaneFullCanvas ? nameof(Dashboard.Resources.Layout.ResourcePaneExitFullCanvas) : nameof(Dashboard.Resources.Layout.ResourcePaneFullCanvas)]"
-                                  aria-expanded="@(_isPaneFullCanvas ? "true" : "false")" />
-                }
-
                 @if (!isDesktop)
                 {
-                    <FluentButton Class="resource-pane-button"
-                                  Appearance="ButtonAppearance.Transparent"
+                    <FluentButton Class="toolbar-button resource-pane-button"
+                                  Appearance="ButtonAppearance.Default"
                                   IconOnly="true"
-                                  IconStart="@(new Icons.Regular.Size16.Dismiss())"
+                                  IconStart="@(new Icons.Regular.Size20.Dismiss())"
                                   OnClick="CloseDrawer"
                                   data-tooltip="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClose)]"
                                   data-tooltip-positioning="above"
@@ -973,9 +965,19 @@
                     </span>
                     @if (errorCount > 0)
                     {
-                        <span class="error-badge" data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)">@errorCount</span>
+                        @* Reserves the badge's width in the wide grid, where the real badge overlays the end of this link. *@
+                        <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
                     }
             </a>
+            @if (errorCount > 0)
+            {
+                var errorsLabel = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount);
+                @* A sibling link, not nested in the row link: opening the error logs must not change the row selection. *@
+                <a class="error-badge resource-row-error-link"
+                   href="@DashboardUrls.StructuredLogsUrl(resourceName, logLevel: "error")"
+                   aria-label="@errorsLabel"
+                   data-tooltip="@errorsLabel">@errorCount</a>
+            }
             @if (_isPaneFullCanvas && !resource.IsParameter)
             {
                 @* Sibling links, not nested anchors: opening an endpoint must not change the row selection. *@

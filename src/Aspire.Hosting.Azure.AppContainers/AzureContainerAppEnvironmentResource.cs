@@ -24,6 +24,9 @@ public class AzureContainerAppEnvironmentResource :
     AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalIngressResource, IAzureCdnPrivateLinkTarget
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Container Apps Environment";
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
@@ -34,10 +37,10 @@ public class AzureContainerAppEnvironmentResource :
     ReferenceExpression IAzureInternalIngressResource.StaticIp => ReferenceExpression.Create($"{ContainerAppStaticIp}");
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Id => ContainerAppEnvironmentId;
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(IResource origin) => ContainerAppEnvironmentId;
 
     /// <inheritdoc />
-    BicepOutputReference IAzureCdnPrivateLinkTarget.Location => ContainerAppLocation;
+    BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(IResource origin) => ContainerAppLocation;
 
     /// <inheritdoc />
     string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId => "managedEnvironments";

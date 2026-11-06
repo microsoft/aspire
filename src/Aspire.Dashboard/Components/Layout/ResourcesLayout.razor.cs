@@ -62,8 +62,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _isPaneCollapsed;
     private bool _isDrawerOpen;
     private bool _isPaneFullCanvas;
+    private string? _fullCanvasNavigation;
     private bool _animatePaneTransition;
     private bool _isPaneSelectionReveal;
+    private Task? _paneInteractionsRegistration;
     private string? _animatedPaneNavigation;
     private string? _startPaneSelectionReveal;
     private string? _focusPaneSelectionReveal;
@@ -443,6 +445,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
+        // An unscoped page can restore saved filters, e.g. /traces -> /traces?type=server.
+        // That redirect must not reopen content the user just closed. Resource selections and
+        // navigation to another page still leave the full-canvas list normally.
+        // Browser back/forward can produce the same URL change, for example /metrics back to a
+        // directly opened /metrics?meter=Test, so only the redirect's history entry marker counts.
+        var previousUri = NavigationManager.ToAbsoluteUri(_lastLocation);
+        var currentUri = NavigationManager.ToAbsoluteUri(location);
+        var restoringPageState = _isPaneFullCanvas && IsAllSelected && previousUri.Query.Length == 0 &&
+            string.Equals(NavigationManager.HistoryEntryState, PageExtensions.RestoredPageStateHistoryEntryState, StringComparison.Ordinal) &&
+            string.Equals(previousUri.AbsolutePath, currentUri.AbsolutePath, StringComparisons.UrlPath) &&
+            ParseLocation(NavigationManager.ToBaseRelativePath(location)).SelectedResourceNames.Count == 0;
         _lastLocation = location;
         // Only a row selection owns this reveal. Tab changes and unrelated navigation
         // cancel it rather than replaying a stale full-canvas transition.
@@ -451,7 +464,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _startPaneSelectionReveal = _isPaneSelectionReveal ? location : null;
         _focusPaneSelectionReveal = null;
         _animatedPaneNavigation = null;
+        var showResourceList = restoringPageState || string.Equals(location, _fullCanvasNavigation, StringComparison.Ordinal);
         _isPaneFullCanvas = false;
+        _fullCanvasNavigation = null;
         ClearPaneActivity();
         _navigatingToTab = null;
         var previousTab = CurrentTab;
@@ -459,7 +474,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Closing the menu can yield a render. Publish the new selection first so
         // its reveal cannot briefly show the previous resource's heading.
         UpdateFromLocation(location);
-        _isDrawerOpen = false;
+        if (showResourceList)
+        {
+            SetResourceListVisible(true);
+        }
+        _isDrawerOpen = !ViewportInformation.IsDesktop && showResourceList;
         if (previousTab != CurrentTab || !previousSelection.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName))
         {
             // Reused pages must replace subscriptions and terminal state before an
@@ -502,9 +521,24 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
             if (!_isOrderingRegistered)
             {
-                await _jsModule.InvokeVoidAsync("registerResourceOrdering", _layoutElement, _selfRef);
-                await _jsModule.InvokeVoidAsync("registerResourceContextMenu", _layoutElement, _selfRef);
-                await _jsModule.InvokeVoidAsync("registerPaneActivityVisibility", _layoutElement, _selfRef);
+                // Re-renders can overlap asynchronous setup. Sharing the registration prevents
+                // handlers from being replaced while they hold the initiating selection control.
+                var registration = _paneInteractionsRegistration ??= RegisterPaneInteractionsAsync(_jsModule);
+                try
+                {
+                    await registration;
+                }
+                catch
+                {
+                    // A faulted shared task would fail every later render, so the handlers could never
+                    // register after the circuit reconnects. Only clear this attempt: an overlapping render
+                    // may already have started a newer one.
+                    if (ReferenceEquals(_paneInteractionsRegistration, registration))
+                    {
+                        _paneInteractionsRegistration = null;
+                    }
+                    throw;
+                }
                 _isOrderingRegistered = true;
             }
             if (registrationChanged && showResizer)
@@ -545,6 +579,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
+    private async Task RegisterPaneInteractionsAsync(IJSObjectReference jsModule)
+    {
+        await jsModule.InvokeVoidAsync("registerResourceOrdering", _layoutElement, _selfRef);
+        await jsModule.InvokeVoidAsync("registerResourceContextMenu", _layoutElement, _selfRef);
+        await jsModule.InvokeVoidAsync("registerPaneActivityVisibility", _layoutElement, _selfRef);
+    }
+
     /// <summary>
     /// Called by the tab strip when the tabs that no longer fit change. They move to the "..." menu.
     /// </summary>
@@ -580,27 +621,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ? string.Create(CultureInfo.InvariantCulture, $"--resource-pane-expanded-width: {width}px")
         : null;
 
-    private void TogglePaneFullCanvas()
+    internal void SetResourceListVisible(bool visible)
     {
-        // A click sent before the breakpoint changed can arrive after the toggle is removed.
-        if (!ViewportInformation.IsDesktop)
-        {
-            return;
-        }
-
         CancelPaneSelectionReveal();
         _animatedPaneNavigation = null;
         _animatePaneTransition = true;
-        _isPaneFullCanvas = !_isPaneFullCanvas;
+        _isPaneFullCanvas = ViewportInformation.IsDesktop && visible;
+        _isDrawerOpen = !ViewportInformation.IsDesktop && visible;
         if (_isPaneFullCanvas)
         {
-            // One bounded query feeds every row, including repeated tag memberships.
             QueuePaneActivityRefresh(immediate: true);
         }
         else
         {
             ClearPaneActivity();
         }
+        StateHasChanged();
     }
 
     private void CancelPaneSelectionReveal()
@@ -719,6 +755,119 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal string AddPaneToUrl(string url) => DashboardClient.IsEnabled && IsTelemetryPane ? DashboardUrls.AddTelemetryPane(url) : url;
 
+    internal string? DetailParentUrl
+    {
+        get
+        {
+            var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+            var path = NavigationManager.ToBaseRelativePath(uri.GetLeftPart(UriPartial.Path));
+            var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var query = HttpUtility.ParseQueryString(uri.Query);
+            // "pane=tags" is a legacy grouping shortcut, not a pane mode. Replaying it on
+            // parent navigation would overwrite grouping changes made in the current list.
+            if (string.Equals(query["pane"], "tags", StringComparisons.UrlPath))
+            {
+                query.Remove("pane");
+            }
+            string parentUrl;
+            if (CurrentTab == ResourceTab.Traces && segments.Length == 3 &&
+                string.Equals(segments[1], "detail", StringComparisons.UrlPath))
+            {
+                parentUrl = GetTabUrl(ResourceTab.Traces);
+                query.Remove("spanId");
+            }
+            else if (CurrentTab == ResourceTab.Metrics && segments.Length == 7 &&
+                string.Equals(segments[1], "resource", StringComparisons.UrlPath) &&
+                string.Equals(segments[3], "meter", StringComparisons.UrlPath) &&
+                string.Equals(segments[5], "instrument", StringComparisons.UrlPath))
+            {
+                parentUrl = "/" + string.Join('/', segments[..5]);
+                query.Remove("instrument");
+            }
+            else if (CurrentTab == ResourceTab.Metrics && query["instrument"] is not null)
+            {
+                parentUrl = "/" + path;
+                query.Remove("instrument");
+            }
+            else if (CurrentTab == ResourceTab.Metrics &&
+                (segments.Length == 5 && string.Equals(segments[1], "resource", StringComparisons.UrlPath) &&
+                    string.Equals(segments[3], "meter", StringComparisons.UrlPath) || query["meter"] is not null))
+            {
+                parentUrl = GetTabUrl(ResourceTab.Metrics);
+                query.Remove("meter");
+                query.Remove("instrument");
+            }
+            else if (RouteResourceName is not null || CurrentTab == ResourceTab.Overview)
+            {
+                parentUrl = GetTabUrl(CurrentTab == ResourceTab.Terminal ? ResourceTab.Overview : CurrentTab, []);
+                query.Remove(DashboardUrls.ResourceSelectionQueryName);
+                query.Remove(DashboardUrls.ResourceTerminalQueryName);
+            }
+            else
+            {
+                parentUrl = "/" + path;
+            }
+
+            var parentQueryIndex = parentUrl.IndexOf('?');
+            var parentQuery = HttpUtility.ParseQueryString(parentQueryIndex >= 0 ? parentUrl[(parentQueryIndex + 1)..] : string.Empty);
+            foreach (var key in query.AllKeys.OfType<string>())
+            {
+                // Selection is encoded by the parent route. Other query values, including repeated
+                // filters and the telemetry pane, keep their scope when closing a deep link.
+                if (key != DashboardUrls.ResourceSelectionQueryName || parentQuery[key] is null)
+                {
+                    parentQuery.Remove(key);
+                    foreach (var value in query.GetValues(key) ?? [])
+                    {
+                        parentQuery.Add(key, value);
+                    }
+                }
+            }
+
+            var parentPath = parentQueryIndex >= 0 ? parentUrl[..parentQueryIndex] : parentUrl;
+            return AddPaneToUrl(parentPath + (parentQuery.Count > 0 ? $"?{parentQuery}" : string.Empty));
+        }
+    }
+
+    private async Task CloseDetailAsync(string parentUrl)
+    {
+        if (ParseLocation(NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri)).SelectedResourceNames.Count == 0)
+        {
+            // An unscoped overview normally restores the previous selection. Closing explicitly
+            // clears it first, including on a freshly opened resource detail link.
+            await SetStoredSelectionAsync([]);
+        }
+
+        var target = NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri;
+        if (string.Equals(target, NavigationManager.Uri, StringComparison.Ordinal))
+        {
+            // Closing an unscoped tab changes presentation without changing its URL.
+            SetResourceListVisible(true);
+        }
+        else
+        {
+            _fullCanvasNavigation = target;
+        }
+    }
+
+    internal string GetTraceDetailUrl(string traceId, string? spanId = null)
+    {
+        var url = DashboardUrls.AddResourceSelection(DashboardUrls.TraceDetailUrl(traceId, spanId), _selectedResourceNames);
+        if (CurrentTab == ResourceTab.Traces)
+        {
+            var query = HttpUtility.ParseQueryString(NavigationManager.ToAbsoluteUri(NavigationManager.Uri).Query);
+            foreach (var key in new[] { "type", "filters" })
+            {
+                if (query[key] is { } value)
+                {
+                    url = QueryHelpers.AddQueryString(url, key, value);
+                }
+            }
+        }
+
+        return AddPaneToUrl(url);
+    }
+
     private async Task ApplyPaneModeFromLocationAsync(string location)
     {
         if (!DashboardClient.IsEnabled)
@@ -815,7 +964,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             segments.Length > 1 &&
             string.Equals(segments[1], "detail", StringComparisons.UrlPath))
         {
-            return new ResourceLocation(ResourceTab.Traces, RouteResourceName: null, SelectedResourceNames: [], KeepSelection: true);
+            var names = QueryHelpers.ParseQuery(query).TryGetValue(DashboardUrls.ResourceSelectionQueryName, out var selection)
+                ? selection.OfType<string>().Where(name => !string.IsNullOrEmpty(name)).Distinct(StringComparers.ResourceName).ToList()
+                : [];
+            return new ResourceLocation(ResourceTab.Traces, RouteResourceName: null, SelectedResourceNames: names, KeepSelection: names.Count == 0);
         }
 
         var tab = segments[0].ToLowerInvariant() switch
@@ -2112,8 +2264,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             if (_selectedResourceNames is [var only] && string.Equals(only, resourceName, StringComparisons.ResourceName))
             {
-                // Selecting the only selected row again deselects it, like toggling.
-                await ClearSelectionAsync();
+                if (_isPaneFullCanvas)
+                {
+                    // Closing a scoped detail can retain this selection and its filtered parent URL.
+                    SetResourceListVisible(false);
+                }
+                else
+                {
+                    // Selecting the only selected row again deselects it, like toggling.
+                    await ClearSelectionAsync();
+                }
                 return;
             }
 
@@ -2180,14 +2340,25 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task OnAllResourcesClickAsync()
     {
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        var path = NavigationManager.ToBaseRelativePath(uri.GetLeftPart(UriPartial.Path));
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        // A direct detail link can also have no resource selection. Preserve the URL only
+        // for top-level tab content, not a trace detail or a meter/instrument view.
+        var reopenCurrentContent = IsAllSelected &&
+            string.Equals(path.TrimEnd('/'), GetTabUrl(CurrentTab, []).TrimStart('/'), StringComparisons.UrlPath) &&
+            (CurrentTab != ResourceTab.Metrics || query["meter"] is null && query["instrument"] is null);
         _selectionAnchor = null;
 
         // Remember the cleared selection so entering the overview later doesn't select a resource again.
         await SetStoredSelectionAsync([]);
 
-        // On the overview, selecting everything shows the resource list. Other tabs stay where they are and list
-        // every resource.
-        NavigationManager.NavigateTo(DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
+        // Select all also opens the summary when the full-canvas list already has the same URL.
+        SetResourceListVisible(false);
+        if (!reopenCurrentContent)
+        {
+            NavigationManager.NavigateTo(DashboardClient.IsEnabled && CurrentTab == ResourceTab.Overview ? DashboardUrls.ResourceListUrl() : GetSelectionUrl([]));
+        }
     }
 
     /// <summary>

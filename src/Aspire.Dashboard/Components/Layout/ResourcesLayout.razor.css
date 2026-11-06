@@ -17,8 +17,8 @@
     --resource-row-icon-offset: 10px;
     --resource-row-depth-step: 24px;
     --resource-brand-soft: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
-    --resource-pane-motion-duration: var(--durationSlow, 280ms);
-    --resource-pane-motion-easing: var(--curveEasyEase, cubic-bezier(.2, .8, .2, 1));
+    --resource-pane-motion-duration: var(--durationNormal, 200ms);
+    --resource-pane-motion-easing: var(--curveEasyEase, cubic-bezier(.33, 0, .67, 1));
     display: flex;
     width: 100%;
     height: 100%;
@@ -104,13 +104,6 @@
 
 .resources-layout.pane-full-canvas .resource-workspace-foot .resource-pane-foot {
     padding-inline-end: 6px;
-}
-
-/* Selection settles more gently than the toolbar toggle, using Fluent's deceleration
-   curve. The details retain their normal width while the real pane boundary moves. */
-.resources-layout.pane-selection-reveal {
-    --resource-pane-motion-duration: var(--durationSlower, 400ms);
-    --resource-pane-motion-easing: var(--curveDecelerateMid, cubic-bezier(.1, .9, .2, 1));
 }
 
 /* Animate the real region, so container-width disclosure follows the moving boundary.
@@ -938,6 +931,28 @@
     font-weight: 600;
 }
 
+/* In a flex row the link follows the row link, which fills the row up to the actions, so it lands where an inline
+   badge would. The sidebar and wide grids overlay it on the end of the row link's track instead (see below).
+   The margin matches the row link's end padding. */
+.resource-row-error-link {
+    margin-inline-end: 8px;
+    text-decoration: none;
+}
+
+.resource-row-error-link:hover {
+    background: var(--colorPaletteRedBackground3);
+}
+
+.resource-row-error-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+/* Only the grid layouts overlay the badge on the row link and need the spacer. */
+.error-badge-spacer {
+    display: none;
+}
+
 .resource-pane-foot {
     container: resource-footer / inline-size;
     display: grid;
@@ -1578,18 +1593,38 @@
         position: relative;
         inset: auto;
         z-index: 21;
-        width: calc(100% - 16px);
-        margin-inline: 8px;
+        width: 100%;
+        margin-inline: 0;
         height: 100%;
         border-right: 0;
     }
 
-    .resources-layout.pane-full-canvas .resource-pane {
-        margin-inline: 0;
+    .resources-layout.drawer-open .resource-content {
+        /* The details remain mounted, but their scrollbar must not show beside the drawer's list. */
+        display: none;
+    }
+
+    .resource-pane-head {
+        height: 44px;
+        padding: 6px 8px;
+    }
+
+    .resource-pane-kinds {
+        padding: 2px 8px 6px;
+    }
+
+    .resource-pane-list {
+        padding-inline: 8px;
+        overflow-x: hidden;
+    }
+
+    .resource-pane-foot {
+        flex: 0 0 auto;
+        padding-inline: 8px;
     }
 
     .resource-header {
-        padding: 8px 12px 0;
+        padding: 8px 8px 0;
         row-gap: 8px;
     }
 
@@ -1687,6 +1722,10 @@
         grid-row: 2;
         margin-top: 0;
         column-gap: 8px;
+    }
+
+    .resources-layout.drawer-open .resource-tabs {
+        grid-row: 1;
     }
 
     /* The footer is outside the scrolling tab body, so status stays visible without covering the last card. */
@@ -2062,6 +2101,22 @@
 
     .resource-row:has(> .resource-row-wide-metadata) > .resource-row-link {
         grid-column: identity;
+        /* Pinned so the explicitly placed error link below can't push it to an implicit second row. */
+        grid-row: 1;
+    }
+
+    /* The error link shares the identity track with the row link. The row link keeps a hidden copy of the
+       badge so the resource name stops before it instead of running underneath. */
+    .resource-row:has(> .resource-row-wide-metadata) > .resource-row-error-link {
+        grid-column: identity;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+    }
+
+    .resource-row:has(> .resource-row-wide-metadata) .error-badge-spacer {
+        display: inline-flex;
+        visibility: hidden;
     }
 
     .resource-row-health-detail,
@@ -2341,6 +2396,25 @@
     grid-template-columns: minmax(0, 1fr) 112px;
     column-gap: 4px;
     padding-inline-end: 12px;
+}
+
+/* The error link shares the identity track with the row link instead of taking the action rail's slot. The row
+   link keeps a hidden copy of the badge so the resource name stops before it instead of running underneath. */
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-error-link) > .resource-row-link {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-error-link {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+}
+
+.resources-layout:not(.pane-full-canvas) .error-badge-spacer {
+    display: inline-flex;
+    visibility: hidden;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-link {

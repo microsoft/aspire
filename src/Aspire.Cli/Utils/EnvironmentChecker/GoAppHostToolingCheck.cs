@@ -153,8 +153,7 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
 
         // Look for apphost.go directly. DetectLanguageRecursiveAsync returns only the first language that
         // matches, and C# matches any *.csproj, so a Go AppHost beside an ordinary service project would be
-        // reported as C#. GetLanguageById returns null while experimentalPolyglotGo is off, which keeps the
-        // lookup gated on the flag.
+        // reported as C#. Resolve Go explicitly before recursive language detection.
         var goLanguage = _languageDiscovery.GetLanguageById(new LanguageId(KnownLanguageId.Go));
         var discoveredPath = goLanguage?.FindInDirectory(_executionContext.WorkingDirectory.FullName);
         return discoveredPath is not null ? new FileInfo(discoveredPath) : null;

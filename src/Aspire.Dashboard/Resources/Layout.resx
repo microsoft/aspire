@@ -405,12 +405,6 @@
   <data name="ResourcePaneResize" xml:space="preserve">
     <value>Resize resource list</value>
   </data>
-  <data name="ResourcePaneFullCanvas" xml:space="preserve">
-    <value>Expand resource list to full canvas</value>
-  </data>
-  <data name="ResourcePaneExitFullCanvas" xml:space="preserve">
-    <value>Return to resource sidebar</value>
-  </data>
   <data name="NavMenuTagsTab" xml:space="preserve">
     <value>Tags</value>
   </data>

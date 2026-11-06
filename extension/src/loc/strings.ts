@@ -208,6 +208,7 @@ export const updateAspireCliAction = vscode.l10n.t({ message: 'Update Aspire CLI
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const denoInspectorAddressUnavailable = vscode.l10n.t('Could not reserve a loopback address for the Deno inspector.');
 export const denoAppHostRunCommandMissing = vscode.l10n.t("The Deno AppHost command does not contain the required 'run' subcommand.");
+export const denoAppHostInspectorNotReady = (inspectorAddress: string, timeoutSeconds: number, reason: string) => vscode.l10n.t('The Deno AppHost inspector at {0} did not become ready within {1} seconds, so the debugger could not attach: {2}', inspectorAddress, timeoutSeconds, reason);
 export const failedToCleanUpMsBuildTemporaryDirectory = (directoryPath: string, error: string) => vscode.l10n.t("Failed to clean up temporary MSBuild directory '{0}': {1}", directoryPath, error);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');

@@ -102,3 +102,7 @@ resource slotConfigNames 'Microsoft.Web/sites/config@2025-03-01' = {
   }
   parent: webapp
 }
+
+output resourceId string = webapp.id
+
+output resourceLocation string = toLower(replace(webapp.location, ' ', ''))

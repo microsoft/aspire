@@ -781,24 +781,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Expand resource list to full canvas.
-        /// </summary>
-        public static string ResourcePaneFullCanvas {
-            get {
-                return ResourceManager.GetString("ResourcePaneFullCanvas", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Return to resource sidebar.
-        /// </summary>
-        public static string ResourcePaneExitFullCanvas {
-            get {
-                return ResourceManager.GetString("ResourcePaneExitFullCanvas", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Group resources.
         /// </summary>
         public static string ResourcePaneGrouping {

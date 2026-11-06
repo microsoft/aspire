@@ -10,7 +10,7 @@ The dashboard shows:
 
 ## Grouping resources
 
-Use **Group resources**, between **Filters** and **Collapse resource list** in the resources pane, to group
+Use **Group resources**, beside **Filters** in the resources pane, to group
 the list by **Tags**, **Resource type**, or **State**. **None** restores the default nested resource list.
 Groups can be collapsed or selected to view all of their resources together. Search matches group names as
 well as resources, and the grouping preference is remembered across navigation and reloads.
@@ -26,6 +26,27 @@ before or after a sibling. Alternatively, focus the handle and press **Alt+Up** 
 Children stay under their parent. Order is stored alongside tags in the AppHost's application settings database
 and survives dashboard and AppHost restarts; new resources are appended to their sibling list.
 Persistent containers show a pin after their state and resource type.
+
+## Closing detail pages
+
+Use the **Close view** (X) button at the top right of a detail page to return to its parent,
+not the previous browser history entry. Resource and parameter details return to the resource overview.
+Resource-scoped console logs, structured logs, traces and metrics return to the corresponding
+unscoped view. Resource terminal views return to the resource overview.
+Trace details return to the traces list with its resource selection and filters retained.
+Meter and instrument detail routes return to their parent metrics view.
+The same navigation works after opening a detail link directly or in a new tab; it does not stop resources
+or close their terminal sessions.
+
+On desktop, closing a detail page shows the resource list across the full canvas. Selecting a resource
+opens its details and restores the normal sidebar width. There is no separate full-canvas toggle;
+the normal sidebar can still be collapsed, reopened and resized.
+Sidebar transitions use brief, eased motion and honor the system's reduced-motion preference.
+All main-tab content panels have a close button, including the all-resources overview and unscoped
+console logs, terminals, structured logs, traces and metrics. **Select all** reopens the current tab's
+content from the full-canvas list; on Overview, this shows the all-resources summary.
+On layouts that use the resource dropdown (768px wide or narrower), use that dropdown instead of X
+to open the resource drawer. Its filters and footer stay outside the scrolling resource list.
 
 ## Exporting the resource graph
 

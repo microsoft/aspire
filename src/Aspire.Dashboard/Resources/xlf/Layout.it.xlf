@@ -402,11 +402,6 @@
         <target state="new">Depends on {0}</target>
         <note>{0} lists logical resource names that this resource waits for.</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneExitFullCanvas">
-        <source>Return to resource sidebar</source>
-        <target state="new">Return to resource sidebar</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneExpand">
         <source>Expand resource list</source>
         <target state="new">Expand resource list</target>
@@ -420,11 +415,6 @@
       <trans-unit id="ResourcePaneFilterReset">
         <source>Reset</source>
         <target state="new">Reset</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneFullCanvas">
-        <source>Expand resource list to full canvas</source>
-        <target state="new">Expand resource list to full canvas</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneGroupReorderFailed">

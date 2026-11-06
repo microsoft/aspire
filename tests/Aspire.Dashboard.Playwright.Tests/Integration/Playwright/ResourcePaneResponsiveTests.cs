@@ -65,7 +65,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             {
                 if (canvas)
                 {
-                    await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                    await ResourcePaneNavigation.ToggleResourceListAsync(page);
                     await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
                 }
                 foreach (var surface in new[] { "pane", "filter", "grouping", "context" })
@@ -132,7 +132,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = dark ? "Dark" : "Light", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
-                await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
                 var address = page.Locator(".resource-row[data-resource-name='api'] .resource-row-endpoint-address").First;
                 await Assertions.Expect(address).ToBeVisibleAsync();
                 var metrics = await address.EvaluateAsync<double[]>("""
@@ -153,7 +153,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 Assert.Equal([1d, 1d], metrics[8..]);
                 await Assertions.Expect(address).ToHaveAttributeAsync("data-tooltip",
                     DashboardUIHelpers.MaskQueryStringValues(MetadataResourcesFixture.Endpoint));
-                await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
             }
         });
     }
@@ -199,8 +199,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await AssertSavedWidthAsync(507);
             await page.Locator("#resourcePaneFilterButton").ClickAsync();
             await page.Keyboard.PressAsync("Escape");
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await AssertSavedWidthAsync(507);
             var collapse = page.Locator(".resource-header-row .resource-pane-toggle-button");
             await collapse.ClickAsync();
@@ -276,7 +276,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             ]);
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(56);
             await fixture.SeedActivityAsync(resources.Select(resource => (resource.Name, 20)).ToArray());
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resource-row-insight-requests")).ToHaveCountAsync(56);
             await Assertions.Expect(page.Locator(".resource-row-insight-latency")).ToHaveCountAsync(56);
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
@@ -382,7 +382,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 {
                     if (await page.Locator(".pane-full-canvas").CountAsync() > 0)
                     {
-                        await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                        await ResourcePaneNavigation.ToggleResourceListAsync(page);
                     }
                     await page.SetViewportSizeAsync(width <= 560 ? 2000 : width, 1000);
                     if (width <= 560)
@@ -393,7 +393,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     }
                     else
                     {
-                        await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                        await ResourcePaneNavigation.ToggleResourceListAsync(page);
                         var chrome = await page.EvaluateAsync<double>("() => innerWidth - document.querySelector('.resources-layout').getBoundingClientRect().width");
                         await page.SetViewportSizeAsync(width + (int)Math.Round(chrome), 1000);
                     }
@@ -461,9 +461,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 }
                 else if (stage == "canvas")
                 {
-                    await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                    await ResourcePaneNavigation.ToggleResourceListAsync(page);
                     await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
-                    await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                    await page.Locator(".resource-row[data-resource-name='cache'] .resource-row-link").First.ClickAsync();
                 }
                 else if (stage is "traces" or "overview")
                 {
@@ -534,7 +534,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(page.Locator("#tracesScrollContainer")).ToBeFocusedAsync();
             foreach (var name in new[] { "api", "frontend", "cache" })
             {
-                await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
                 await page.Locator($".resource-row[data-resource-name='{name}'] .resource-row-link").First.ClickAsync();
                 await page.WaitForURLAsync($"**/traces/resource/{name}");
@@ -574,7 +574,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             }
             if (fullCanvas)
             {
-                await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             }
             foreach (var filter in new[] { true, false })
@@ -698,7 +698,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     document.dispatchEvent(new Event('visibilitychange'));
                 }
                 """);
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("() => document.querySelector('.resource-pane').getBoundingClientRect().width===1440");
             Assert.True(await hint.EvaluateAsync<bool>("el => [...el.querySelectorAll('.resource-selection-instruction')].every(g=>g.getAnimations().length===0&&getComputedStyle(g).opacity==='1')"));
             var after = await hint.BoundingBoxAsync();
@@ -761,6 +761,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.GotoAsync("/resources/cache?pane=tags");
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name='cache']").First).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".resource-row:not(.selected)[data-resource-name]").First).ToBeVisibleAsync();
+            await page.Locator(".resource-select-all-toggle").ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            await Assertions.Expect(page.Locator(".resource-row:not(.selected)[data-resource-name]")).ToHaveCountAsync(0);
             foreach (var density in new[] { "Compact", "Comfortable", "Spacious" })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
@@ -768,10 +771,11 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.GetByRole(AriaRole.Button, new() { Name = dark ? "Dark" : "Light", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
                 var before = await ReadTilesAsync();
-                await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
                 Assert.Equal(before, await ReadTilesAsync());
-                await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                await Assertions.Expect(page.Locator(".resource-select-all-toggle")).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
                 Assert.Equal(before, await ReadTilesAsync());
             }
@@ -781,7 +785,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     const icon=row.querySelector('.resource-row-icon'), glyph=icon.querySelector('.resource-row-glyph svg');
                     const b=icon.getBoundingClientRect(), r=row.getBoundingClientRect(), g=glyph.getBoundingClientRect();
                     const badge=icon.querySelector('.persistent-container-badge')?.getBoundingClientRect(), style=getComputedStyle(icon);
-                    return {name:row.dataset.resourceName,selected:row.classList.contains('selected'),
+                    return {name:row.dataset.resourceName,
                         width:b.width,height:b.height,radius:style.borderRadius,background:style.backgroundColor,
                         border:style.border,glyphWidth:g.width,glyphHeight:g.height,
                         color:getComputedStyle(glyph).color,fill:getComputedStyle(glyph).fill,
@@ -860,11 +864,11 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.Mouse.MoveAsync(1, 1);
             await AssertSurfaceAsync(rest, "--colorNeutralBackground1");
             await AssertSurfaceAsync(selected, null);
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             await page.Mouse.MoveAsync(1, 1);
             await AssertSurfaceAsync(rest, "--colorNeutralBackground1");
-            await AssertSurfaceAsync(selected, null);
+            await AssertSurfaceAsync(selected, "--colorNeutralBackground1");
             await page.EmulateMediaAsync(new() { ForcedColors = ForcedColors.Active });
             Assert.True(await rest.EvaluateAsync<bool>("""
             row => {
@@ -949,7 +953,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     stage = $"{density}-{width}-expanded";
                     if (await page.Locator(".pane-full-canvas").CountAsync() > 0)
                     {
-                        await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                        await ResourcePaneNavigation.ToggleResourceListAsync(page);
                     }
                     await page.SetViewportSizeAsync(width <= 560 ? 1440 : width, 1000);
                     if (width <= 560)
@@ -961,7 +965,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     }
                     else
                     {
-                        await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                        await ResourcePaneNavigation.ToggleResourceListAsync(page);
                         var chromeWidth = await page.EvaluateAsync<double>("() => innerWidth - document.querySelector('.resources-layout').getBoundingClientRect().width");
                         await page.SetViewportSizeAsync(width + (int)Math.Round(chromeWidth), 1000);
                         await page.WaitForFunctionAsync("""
@@ -1053,7 +1057,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(28);
             stage = "all-nested-selected";
             await AssertGeometryAsync(60);
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
             stage = "all-nested-selected-sidebar";
             await AssertGeometryAsync(60);
             await page.Locator("#resourcePaneGroupingButton").ClickAsync();
@@ -1228,7 +1232,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.GotoAsync("/resources/cache?pane=tags");
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(8);
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             var original = page.Url;
             var row = page.Locator(".resource-row[data-resource-name='api']").First;
             var menu = page.Locator("fluent-menu[aria-labelledby='resource-pane-context-menu-header'] fluent-menu-list");
@@ -1262,8 +1266,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(menu).Not.ToBeVisibleAsync();
                 Assert.Equal(original, page.Url);
                 Assert.Equal(selection, await selected.EvaluateAllAsync<string[]>("links => links.map(link => link.parentElement.dataset.resourceName)"));
-                await Assertions.Expect(page.Locator("[data-resource-name='cache'] .resource-row-link").First)
-                    .ToHaveAttributeAsync("aria-current", "page");
+                await Assertions.Expect(page.Locator(".resource-select-all-toggle"))
+                    .ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
                 await page.Keyboard.PressAsync("Escape");
             }
             foreach (var target in new[] { row.Locator(".resource-row-icon"), row.Locator(".resource-row-wide-metadata") })
@@ -1292,8 +1296,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.SetViewportSizeAsync(2000, 1000);
             await page.GotoAsync("/resources/cache?pane=tags");
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(8);
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
-            var original = page.Url;
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             var row = page.Locator(".resource-row[data-resource-name='api']").First;
             var link = row.Locator(latency ? ".resource-row-insight-latency" : ".resource-row-insight-requests");
             await Assertions.Expect(link).ToBeVisibleAsync();
@@ -1343,9 +1346,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 .GetByRole(AriaRole.Button, new() { Name = "Filters", Exact = true })).ToBeVisibleAsync();
             Assert.Equal(0, await page.EvaluateAsync<int>("() => window.activityRowActivations"));
             await page.EvaluateAsync("() => history.back()");
-            await Assertions.Expect(page).ToHaveURLAsync(original);
-            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("cache");
-            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='cache'] .resource-row-link").First)
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources/api$"));
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("api");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='api'] .resource-row-link").First)
                 .ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(8);
         });
@@ -1365,7 +1368,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
             await page.GetByRole(AriaRole.Button, new() { Name = dark ? "Dark" : "Light", Exact = true }).ClickAsync();
             await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("""
                 () => document.querySelector('.resource-pane').getBoundingClientRect().width ===
                     document.querySelector('.resources-layout').getBoundingClientRect().width
@@ -1428,8 +1431,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             }
             await Assertions.Expect(row.Locator(".resource-relationship-summary")).ToHaveCountAsync(0);
             var selectAll = page.GetByRole(AriaRole.Button, new() { Name = "Select all", Exact = true });
-            await Assertions.Expect(selectAll).Not.ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
-            Assert.Null(await selectAll.GetAttributeAsync("aria-description"));
+            await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await selectAll.FocusAsync();
             await selectAll.PressAsync("Space");
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
@@ -1510,7 +1512,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"resource-tree-{theme}-{width}.png") });
                 Assert.False(await pane.EvaluateAsync<bool>("el => el.querySelector('.resource-pane-list').scrollWidth > el.querySelector('.resource-pane-list').clientWidth"));
             }
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             try
             {
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
@@ -1597,7 +1599,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.SetViewportSizeAsync(1440, 900);
                 if (await page.Locator(".resources-layout.pane-full-canvas").CountAsync() > 0)
                 {
-                    await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                    await ResourcePaneNavigation.ToggleResourceListAsync(page);
                     await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
                 }
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
@@ -1632,7 +1634,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 {
                     if (fullCanvas)
                     {
-                        await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+                        await ResourcePaneNavigation.ToggleResourceListAsync(page);
                         await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
                         await page.WaitForFunctionAsync("""
                             () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
@@ -1697,16 +1699,14 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             {
                 await page.Locator(".resource-picker").ClickAsync();
             }
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("""
                 () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
                     document.querySelector('.resources-layout').getBoundingClientRect().width) < 1
                 """);
             var row = page.Locator(".resource-row[data-resource-name='api']").First;
             var original = page.Url;
-            var box = await row.BoundingBoxAsync();
-            Assert.NotNull(box);
-            await row.ClickAsync(new() { Button = MouseButton.Right, Position = new() { X = box.Width - 4, Y = box.Height / 2 } });
+            await row.Locator(".resource-row-name").ClickAsync(new() { Button = MouseButton.Right });
             await Assertions.Expect(page.Locator("#resource-pane-context-menu-header")).ToBeVisibleAsync();
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(page.Locator("#resource-pane-context-menu-header")).ToBeHiddenAsync();
@@ -1731,7 +1731,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 """);
             var target = await row.Locator(".resource-row-link").GetAttributeAsync("href");
             Assert.NotNull(target);
-            box = await row.BoundingBoxAsync();
+            var box = await row.BoundingBoxAsync();
             Assert.NotNull(box);
             await row.ClickAsync(new() { Position = new() { X = box.Width - 4, Y = box.Height / 2 } });
             await Assertions.Expect(page).ToHaveURLAsync(new Regex($"{Regex.Escape(target)}$"));
@@ -1744,7 +1744,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             {
                 await page.Locator(".resource-picker").ClickAsync();
             }
-            await page.Locator(".resource-pane-canvas-toggle").ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await page.WaitForFunctionAsync("""
                 () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
@@ -1840,7 +1840,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             {
                 await page.Locator(".resource-picker").ClickAsync();
             }
-            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFullCanvas, Exact = true }).ClickAsync();
+            await page.Locator(".detail-page-close").ClickAsync();
 
             var pane = page.Locator(".resource-pane");
             foreach (var name in new[] { "cache", "frontend", "service-key" })
@@ -1892,7 +1892,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             {
                 await page.Locator(".resource-picker").ClickAsync();
             }
-            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFullCanvas, Exact = true }).ClickAsync();
+            await page.Locator(".detail-page-close").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             var pane = page.Locator(".resource-pane");
             var row = pane.Locator("[data-resource-name='frontend']");
@@ -1955,7 +1955,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             Assert.Equal(url, page.Url);
             Assert.Equal(rowOrder, await pane.Locator("[data-resource-name]").EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.resourceName)"));
 
-            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFullCanvas, Exact = true }).ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            url = page.Url;
             await Assertions.Expect(metadata.Locator(".resource-row-health-status")).ToHaveCountAsync(0);
             await Assertions.Expect(metadata.Locator("time")).ToBeVisibleAsync();
             await AssertBoundedEndpointAsync(pane);
@@ -1993,17 +1994,17 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var tcp = pane.Locator("[data-resource-name='queue'] span.resource-row-endpoint-address");
             await Assertions.Expect(tcp).ToHaveTextAsync(DashboardUIHelpers.MaskQueryStringValues(MetadataResourcesFixture.TcpEndpoint));
             await Assertions.Expect(tcp).ToHaveAttributeAsync("tabindex", "0");
-            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneExitFullCanvas, Exact = true }).ClickAsync();
+            await page.Locator(".resource-select-all-toggle").ClickAsync();
             await page.WaitForFunctionAsync("() => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width - 560) < 0.05");
 
             var target = api.Locator(".resource-row-link");
             var targetBox = await target.BoundingBoxAsync();
             Assert.NotNull(targetBox);
-            await pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneFullCanvas, Exact = true }).ClickAsync();
+            await page.Locator(".detail-page-close").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(layoutActions).Not.ToBeVisibleAsync();
             await AssertSelectedGapsAsync();
-            await pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneExitFullCanvas, Exact = true }).ClickAsync();
+            await pane.Locator(".resource-select-all-toggle").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await page.WaitForFunctionAsync("() => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width - 560) < 0.05");
             await Assertions.Expect(layoutActions).ToBeVisibleAsync();

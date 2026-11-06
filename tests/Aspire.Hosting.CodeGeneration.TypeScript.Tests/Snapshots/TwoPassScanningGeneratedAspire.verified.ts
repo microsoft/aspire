@@ -13238,6 +13238,16 @@ export interface ContainerRegistryResource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -13599,6 +13609,16 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -14402,6 +14422,29 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -15184,6 +15227,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withRelationship"]: () => ContainerRegistryResourcePromiseImpl,
     ["withParentRelationship"]: () => ContainerRegistryResourcePromiseImpl,
     ["withChildRelationship"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ContainerRegistryResourcePromiseImpl,
     ["withIconName"]: () => ContainerRegistryResourcePromiseImpl,
     ["excludeFromMcp"]: () => ContainerRegistryResourcePromiseImpl,
     ["withHidden"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15849,6 +15893,16 @@ export interface ContainerResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -16707,6 +16761,16 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -18854,6 +18918,29 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -19906,6 +19993,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withRelationship"]: () => ContainerResourcePromiseImpl,
     ["withParentRelationship"]: () => ContainerResourcePromiseImpl,
     ["withChildRelationship"]: () => ContainerResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ContainerResourcePromiseImpl,
     ["withIconName"]: () => ContainerResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ContainerResourcePromiseImpl,
     ["withHttpProbe"]: () => ContainerResourcePromiseImpl,
@@ -20418,6 +20506,16 @@ export interface CSharpAppResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -21116,6 +21214,16 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -22851,6 +22959,29 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -23898,6 +24029,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withRelationship"]: () => CSharpAppResourcePromiseImpl,
     ["withParentRelationship"]: () => CSharpAppResourcePromiseImpl,
     ["withChildRelationship"]: () => CSharpAppResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => CSharpAppResourcePromiseImpl,
     ["withIconName"]: () => CSharpAppResourcePromiseImpl,
     ["withComputeEnvironment"]: () => CSharpAppResourcePromiseImpl,
     ["withHttpProbe"]: () => CSharpAppResourcePromiseImpl,
@@ -24445,6 +24577,16 @@ export interface DotnetToolResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -25179,6 +25321,16 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -27012,6 +27164,29 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -28070,6 +28245,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withRelationship"]: () => DotnetToolResourcePromiseImpl,
     ["withParentRelationship"]: () => DotnetToolResourcePromiseImpl,
     ["withChildRelationship"]: () => DotnetToolResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => DotnetToolResourcePromiseImpl,
     ["withIconName"]: () => DotnetToolResourcePromiseImpl,
     ["withComputeEnvironment"]: () => DotnetToolResourcePromiseImpl,
     ["withExecutableDebugSupport"]: () => DotnetToolResourcePromiseImpl,
@@ -28585,6 +28761,16 @@ export interface ExecutableResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -29280,6 +29466,16 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -31003,6 +31199,29 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -32055,6 +32274,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withRelationship"]: () => ExecutableResourcePromiseImpl,
     ["withParentRelationship"]: () => ExecutableResourcePromiseImpl,
     ["withChildRelationship"]: () => ExecutableResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ExecutableResourcePromiseImpl,
     ["withIconName"]: () => ExecutableResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ExecutableResourcePromiseImpl,
     ["withExecutableDebugSupport"]: () => ExecutableResourcePromiseImpl,
@@ -32306,6 +32526,16 @@ export interface ExternalServiceResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -32673,6 +32903,16 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -33500,6 +33740,29 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -34283,6 +34546,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withRelationship"]: () => ExternalServiceResourcePromiseImpl,
     ["withParentRelationship"]: () => ExternalServiceResourcePromiseImpl,
     ["withChildRelationship"]: () => ExternalServiceResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ExternalServiceResourcePromiseImpl,
     ["withIconName"]: () => ExternalServiceResourcePromiseImpl,
     ["excludeFromMcp"]: () => ExternalServiceResourcePromiseImpl,
     ["withHidden"]: () => ExternalServiceResourcePromiseImpl,
@@ -34548,6 +34812,16 @@ export interface ParameterResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -34957,6 +35231,16 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -35864,6 +36148,29 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -36687,6 +36994,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withRelationship"]: () => ParameterResourcePromiseImpl,
     ["withParentRelationship"]: () => ParameterResourcePromiseImpl,
     ["withChildRelationship"]: () => ParameterResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ParameterResourcePromiseImpl,
     ["withIconName"]: () => ParameterResourcePromiseImpl,
     ["excludeFromMcp"]: () => ParameterResourcePromiseImpl,
     ["withHidden"]: () => ParameterResourcePromiseImpl,
@@ -37193,6 +37501,16 @@ export interface ProjectResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -37891,6 +38209,16 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -39627,6 +39955,29 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -40674,6 +41025,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withRelationship"]: () => ProjectResourcePromiseImpl,
     ["withParentRelationship"]: () => ProjectResourcePromiseImpl,
     ["withChildRelationship"]: () => ProjectResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ProjectResourcePromiseImpl,
     ["withIconName"]: () => ProjectResourcePromiseImpl,
     ["withComputeEnvironment"]: () => ProjectResourcePromiseImpl,
     ["withHttpProbe"]: () => ProjectResourcePromiseImpl,
@@ -41348,6 +41700,16 @@ export interface TestDatabaseResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -42206,6 +42568,16 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -44352,6 +44724,29 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -45404,6 +45799,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withRelationship"]: () => TestDatabaseResourcePromiseImpl,
     ["withParentRelationship"]: () => TestDatabaseResourcePromiseImpl,
     ["withChildRelationship"]: () => TestDatabaseResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestDatabaseResourcePromiseImpl,
     ["withIconName"]: () => TestDatabaseResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestDatabaseResourcePromiseImpl,
     ["withHttpProbe"]: () => TestDatabaseResourcePromiseImpl,
@@ -46093,6 +46489,16 @@ export interface TestRedisResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -47035,6 +47441,16 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -49285,6 +49701,29 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -50614,6 +51053,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withRelationship"]: () => TestRedisResourcePromiseImpl,
     ["withParentRelationship"]: () => TestRedisResourcePromiseImpl,
     ["withChildRelationship"]: () => TestRedisResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestRedisResourcePromiseImpl,
     ["withIconName"]: () => TestRedisResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestRedisResourcePromiseImpl,
     ["withHttpProbe"]: () => TestRedisResourcePromiseImpl,
@@ -51303,6 +51743,16 @@ export interface TestVaultResource {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -52163,6 +52613,16 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -54311,6 +54771,29 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -55378,6 +55861,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withRelationship"]: () => TestVaultResourcePromiseImpl,
     ["withParentRelationship"]: () => TestVaultResourcePromiseImpl,
     ["withChildRelationship"]: () => TestVaultResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => TestVaultResourcePromiseImpl,
     ["withIconName"]: () => TestVaultResourcePromiseImpl,
     ["withComputeEnvironment"]: () => TestVaultResourcePromiseImpl,
     ["withHttpProbe"]: () => TestVaultResourcePromiseImpl,
@@ -55909,6 +56393,16 @@ export interface Resource {
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise;
+    /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
      * @param options Additional options.
@@ -56270,6 +56764,16 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns A resource builder.
      */
     withChildRelationship(child: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise;
     /**
      * Specifies the icon to use when displaying the resource in the dashboard.
      * @param iconName The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.
@@ -57074,6 +57578,29 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _withResourceTypeDisplayNameInternal(resourceTypeDisplayName: string): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resourceTypeDisplayName };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withResourceTypeDisplayName',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Overrides the human-readable resource type label.
+     *
+     * When not specified, the resource class supplies the default label, falling back to the resource type.
+     * This setting affects the dashboard and CLI output, not resource identity, service discovery, or OpenTelemetry identity.
+     * Repeated calls replace the previous override.
+     * @param resourceTypeDisplayName The type label, such as Redis or PostgreSQL Server.
+     * @returns The resource builder.
+     */
+    withResourceTypeDisplayName(resourceTypeDisplayName: string): ResourcePromise {
+        return new ResourcePromiseImpl(this._withResourceTypeDisplayNameInternal(resourceTypeDisplayName), this._client);
+    }
+
+    /** @internal */
     private async _withIconNameInternal(iconName: string, iconVariant?: IconVariant): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, iconName };
         if (iconVariant !== undefined) rpcArgs.iconVariant = iconVariant;
@@ -57856,6 +58383,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withRelationship"]: () => ResourcePromiseImpl,
     ["withParentRelationship"]: () => ResourcePromiseImpl,
     ["withChildRelationship"]: () => ResourcePromiseImpl,
+    ["withResourceTypeDisplayName"]: () => ResourcePromiseImpl,
     ["withIconName"]: () => ResourcePromiseImpl,
     ["excludeFromMcp"]: () => ResourcePromiseImpl,
     ["withHidden"]: () => ResourcePromiseImpl,

@@ -7671,6 +7671,10 @@ class AbstractResource(abc.ABC):
         """Sets a child relationship"""
 
     @abc.abstractmethod
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+
+    @abc.abstractmethod
     def with_icon_name(self, icon_name: str, *, icon_variant: IconVariant = "Filled") -> typing.Self:
         """Specifies the icon to use when displaying the resource in the dashboard."""
 
@@ -8103,6 +8107,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     relationship: tuple[AbstractResource, str]
     parent_relationship: AbstractResource
     child_relationship: AbstractResource
+    resource_type_display_name: str
     icon_name: str | tuple[str, IconVariant]
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
@@ -8425,6 +8430,17 @@ class _BaseResource(AbstractResource):
         rpc_args['child'] = child
         result = self._client.invoke_capability(
             'Aspire.Hosting/withBuilderChildRelationship',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resourceTypeDisplayName'] = resource_type_display_name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withResourceTypeDisplayName',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9036,6 +9052,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBuilderChildRelationship', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'child_relationship'. Expected: AbstractResource")
+        if (_resource_type_display_name := kwargs.pop("resource_type_display_name", None)) is not None:
+            if _validate_type(_resource_type_display_name, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resourceTypeDisplayName"] = typing.cast(str, _resource_type_display_name)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withResourceTypeDisplayName', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'resource_type_display_name'. Expected: str")
         if (_icon_name := kwargs.pop("icon_name", None)) is not None:
             if _validate_type(_icon_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
