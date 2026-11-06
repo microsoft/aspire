@@ -75,5 +75,6 @@ child.once('exit', (code, signal) => {
     clearTimeout(deadline);
     clearTimeout(grace);
     const clientExitCode = code ?? (signal ? 128 + constants.signals[signal] : 1);
-    process.exit(forcedKill ? 137 : cancellationExitCode || (deadlineReached ? 124 : clientExitCode));
+    // An external kill/OOM during cleanup is not acknowledged cancellation.
+    process.exit(forcedKill || clientExitCode === 137 ? 137 : cancellationExitCode || (deadlineReached ? 124 : clientExitCode));
 });

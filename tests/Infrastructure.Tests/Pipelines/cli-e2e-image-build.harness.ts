@@ -52,6 +52,10 @@ function stubDocker(): void {
         case 'cancelled':
             process.kill(process.pid, 'SIGTERM');
             return;
+        case 'cleanup-kill':
+            process.on('SIGTERM', () => process.kill(process.pid, 'SIGKILL'));
+            setInterval(() => {}, 1000);
+            return;
         case 'external-cancel':
         case 'cleanup-cancel': {
             let stopping = false;
@@ -145,7 +149,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
         assert.ifError(result.error);
         const output = result.stdout + result.stderr;
         const expectedStatus = scenario === 'fallback-failure' ? 42
-            : scenario === 'forced-kill' ? 137
+            : scenario === 'forced-kill' || scenario === 'cleanup-kill' ? 137
             : ['cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario) ? 143 : 0;
         assert.equal(result.status, expectedStatus, output);
         const trace = fs.readFileSync(path.join(workspace, 'trace'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
@@ -175,7 +179,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
             ]);
         } else {
             const expectedArgs = ['build', '-f', 'Dockerfile with spaces', '-t', 'test:primary'];
-            const noFallback = ['success', 'forced-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario);
+            const noFallback = ['success', 'forced-kill', 'cleanup-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario);
             assert.deepEqual(trace.map(entry => entry.args), [
                 [...expectedArgs, '--build-arg', mirrorArg, '.'],
                 ...(noFallback ? [] : [[...expectedArgs, '.']])
@@ -190,7 +194,7 @@ exec "$IMAGE_BUILD_TEST_NODE" "$IMAGE_BUILD_TEST_HARNESS" --stub "$@"
                 assert.match(output, /exceeded 5s; retrying with default Ubuntu apt sources/);
                 assert.ok(Date.now() - started < 15000, output);
             }
-            if (['forced-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario)) {
+            if (['forced-kill', 'cleanup-kill', 'cancelled', 'external-cancel', 'cleanup-cancel'].includes(scenario)) {
                 assert.match(output, /not retrying after cancellation or timeout execution failure/);
             }
             if (scenario === 'external-cancel' || scenario === 'cleanup-cancel') {
