@@ -121,7 +121,8 @@ Git source headings append the configured repository and ref, for example
 `Company templates (https://github.com/example/templates @ release/templates)`.
 An omitted ref is shown as `default branch`, not a guessed branch name or the
 resolved commit. Directory sources append their local path instead, for example
-`Company templates (/work/templates)`. Headings are escaped as literal text and
+`Company templates (/work/templates)`. Configured source headings are green;
+built-in headings keep their default styling. Headings are escaped as literal text and
 cropped to the available terminal-cell width, just like template labels.
 Global overrides replace the entire inherited definition, including `displayName`;
 inherited values are never saved to global or generated-project configuration.

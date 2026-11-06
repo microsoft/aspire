@@ -209,6 +209,7 @@ public class ConsoleInteractionServiceTests
         var output = new StringBuilder();
         var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
         console.Profile.Width = width;
+        console.Profile.Capabilities.ColorSystem = ColorSystem.Standard;
         var interaction = CreateInteractionService(console);
         var template = CreateSearchableTemplate("first", null);
         var source = gitSource
@@ -217,7 +218,7 @@ public class ConsoleInteractionServiceTests
         var configured = new ConfiguredTemplate("source", template, "Team [templates]", source);
 
         var selected = await interaction.PromptForSelectionAsync("Select:", new[] { template }, item => item.Name,
-            _ => new SelectionChoiceGroup("source:source", NewCommand.FormatTemplateSourceGroupLabel(configured)),
+            _ => NewCommand.CreateTemplateSourceGroup(configured),
             item => NewCommand.FormatTemplateDisplayLabel(item).EscapeMarkup());
 
         Assert.Same(template, selected);

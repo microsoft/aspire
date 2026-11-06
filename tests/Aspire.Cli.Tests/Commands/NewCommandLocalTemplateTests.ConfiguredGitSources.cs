@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -50,7 +51,10 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, exitCode);
         var choice = Assert.Single(interaction.GroupedSelectionPromptCalls)[^1];
         Assert.Equal(new SelectionChoiceGroup("source:company",
-            $"{displayName ?? "company"} ({repository} @ {reference ?? ConfigSourceStrings.DefaultBranch})"), choice.Group);
+            $"{displayName ?? "company"} ({repository} @ {reference ?? ConfigSourceStrings.DefaultBranch})")
+        {
+            Style = new Style(Color.Green)
+        }, choice.Group);
         Assert.Equal("Sample template", choice.DisplayLabel);
         Assert.Equal("Remote: Hello", await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
         Assert.Single(GetGitFetches(git));

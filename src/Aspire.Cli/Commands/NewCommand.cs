@@ -394,11 +394,11 @@ internal sealed class NewCommand : BaseCommand
             var label = GetUniqueTemplateLabel(
                 $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}", labels);
             choices.Add(new(label, result.Template, true,
-                new SelectionChoiceGroup($"source:{result.SourceName}", FormatTemplateSourceGroupLabel(result))));
+                CreateTemplateSourceGroup(result)));
         }
     }
 
-    internal static string FormatTemplateSourceGroupLabel(ConfiguredTemplate template)
+    internal static SelectionChoiceGroup CreateTemplateSourceGroup(ConfiguredTemplate template)
     {
         var name = template.SourceDisplayName ?? template.SourceName;
         var source = template.Source;
@@ -408,7 +408,10 @@ internal sealed class NewCommand : BaseCommand
             ? source.Path
             : $"{source.Repository} @ {source.RepositoryRef ?? ConfigSourceStrings.DefaultBranch}";
 
-        return $"{name} ({location})";
+        return new($"source:{template.SourceName}", $"{name} ({location})")
+        {
+            Style = new Style(Color.Green)
+        };
     }
 
     internal static string FormatTemplateDisplayLabel(ITemplate template) =>
