@@ -8,17 +8,74 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
+
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Verifies terminal infrastructure retains normal startup during selection.
 
 public class WithTerminalTests : IAsyncLifetime
 {
     private readonly string _terminalRoot = Directory.CreateTempSubdirectory().FullName;
     private string _terminalDirectory => Path.Combine(_terminalRoot, "terminals");
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task LaunchGroupSelectionStartsTerminalHostsAndSupportsManualWorkloadStart(int replicas)
+    {
+        using var builder = CreateBuilder().WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        var shell = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/sh";
+        var selected = builder.AddExecutable("selected", shell, ".")
+            .WithTerminal().WithAnnotation(new ReplicaAnnotation(replicas)).WithLaunchGroup("catalog");
+        var excluded = builder.AddExecutable("excluded", shell, ".").WithTerminal();
+        builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
+        {
+            var hosts = context.Model.Resources.OfType<TerminalHostResource>().ToArray();
+            Assert.Equal(replicas + 1, hosts.Length);
+            Assert.All(hosts, host =>
+            {
+                Assert.False(host.HasAnnotationOfType<ExplicitStartupAnnotation>());
+                Assert.True(host.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
+            });
+            Assert.False(selected.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            Assert.True(excluded.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            return Task.CompletedTask;
+        });
+        await using var app = builder.Build();
+
+        using (var startup = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
+        {
+            await app.StartAsync(startup.Token);
+        }
+        using (var readiness = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
+        {
+            await Task.WhenAll(selected.Resource.GetResolvedResourceNames().Select(resourceId =>
+                app.ResourceNotifications.WaitForResourceAsync(selected.Resource.Name,
+                    resourceEvent => resourceEvent.ResourceId == resourceId && resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running,
+                    readiness.Token)));
+            foreach (var host in excluded.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts)
+            {
+                await app.ResourceNotifications.WaitForResourceAsync(host.Name, KnownResourceStates.Running, readiness.Token);
+            }
+            Assert.True(app.ResourceNotifications.TryGetCurrentState(excluded.Resource.Name, out var current));
+            Assert.Equal(KnownResourceStates.NotStarted, current.Snapshot.State?.Text);
+        }
+        using (var manualStart = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
+        {
+            var result = await app.ResourceCommands.ExecuteCommandAsync(excluded.Resource, KnownResourceCommands.StartCommand, manualStart.Token);
+            Assert.True(result.Success, result.Message);
+            await app.ResourceNotifications.WaitForResourceAsync(excluded.Resource.Name, KnownResourceStates.Running, manualStart.Token);
+        }
+        using var shutdown = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync(shutdown.Token);
+    }
 
     [Fact]
     public void TerminalImplementationTypesAreInternal()

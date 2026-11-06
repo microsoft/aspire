@@ -99,10 +99,14 @@ members. Launch groups do not introduce build deferral or build serialization.
 Resources marked with `ExcludeFromLaunchGroupSelectionAnnotation` keep their
 existing startup configuration regardless of group membership. The annotation
 does not remove an existing `WithExplicitStart` setting. It is currently applied
-only to the internal .NET coordinated build resources, so builds still run
-automatically before selected projects launch. The existing shared build plan may
-also build projects that are not selected to run; launch groups do not change
-which projects the build coordinator builds.
+to the internal .NET coordinated build resources, the framework dashboard, and
+per-replica terminal support hosts. Builds and the dashboard retain their normal
+automatic startup. Terminal hosts remain available even for unselected workloads,
+so those workloads can still be started manually later without starting hidden
+dependencies separately. Other hidden resources do not automatically opt out.
+
+The existing shared build plan may also build projects that are not selected to
+run; launch groups do not change which projects the build coordinator builds.
 
 The selection lasts for the AppHost session. Watch/rebuild of a running resource
 retains the selection; restarting/reloading the AppHost recomputes it. Editing the
