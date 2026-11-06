@@ -15,6 +15,7 @@ using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -252,6 +253,73 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("api", search.Instance.Value);
         Assert.Equal(groups, cut.FindAll(".resource-tag-group").Select(g => g.GetAttribute("data-resource-group-key")));
         Assert.Equal(1, client.ResourceSubscriptionCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FullCanvas_TabNavigationOpensContentBeforeDestinationRenders(bool initiallyCollapsed)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneCollapsed ? (true, initiallyCollapsed) : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/consolelogs/resource/api");
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => cut.Instance.SetPaneWidthAsync(440));
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        var traces = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Traces").Instance;
+
+        await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(traces));
+
+        Assert.Equal("http://localhost/traces/resource/api", navigation.Uri);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.Equal("--resource-pane-expanded-width: 440px", cut.Find(".resources-layout").GetAttribute("style"));
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+        Assert.Empty(JSInterop.Invocations["startPaneSelectionReveal"]);
+        cut.Render();
+        Assert.Equal(ResourceTab.Traces, cut.Instance.CurrentTab);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+    }
+
+    [Theory]
+    [InlineData("resource-tabs-overflow-button", "tab-Traces-menu-item", "/traces/resource/api")]
+    [InlineData("resource-tabs-overflow-button", "tab-Console-menu-item", "/consolelogs/resource/api")]
+    [InlineData("resource-tabs-compact-button", "tab-Traces-menu-item", "/traces/resource/api")]
+    [InlineData("resource-tabs-compact-button", "tab-Console-menu-item", "/consolelogs/resource/api")]
+    public async Task FullCanvas_TabMenuNavigationOpensContentBeforeDestinationRenders(string buttonClass, string menuItemId, string expectedPath)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/consolelogs/resource/api");
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        await cut.InvokeAsync(() => cut.Instance.SetOverflowTabs(["tab-Traces", "tab-Console"]));
+        var menuItem = header.FindComponents<AspireMenuButton>()
+            .Single(b => b.Instance.ButtonClass == buttonClass)
+            .Instance.ItemsProvider().Single(item => item.Id == menuItemId);
+
+        await header.InvokeAsync(menuItem.OnClick!);
+
+        Assert.Equal(expectedPath, "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-collapsed"));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+        Assert.Empty(JSInterop.Invocations["startPaneSelectionReveal"]);
     }
 
     [Fact]

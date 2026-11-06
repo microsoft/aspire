@@ -2561,8 +2561,25 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        // Tabs map to pages, so a tab change is a navigation. The tab URL keeps the current resource selection.
+        await NavigateToTabAsync(href);
+    }
+
+    private async Task NavigateToTabAsync(string href)
+    {
+        var persistExpandedPane = _isPaneFullCanvas && _isPaneCollapsed;
+        if (_isPaneFullCanvas)
+        {
+            // Reveal the destination as soon as navigation starts, even if its page is
+            // slow to render or the current tab's menu item doesn't change the URL.
+            _isPaneCollapsed = false;
+            SetResourceListVisible(false);
+        }
+
         NavigationManager.NavigateTo(href);
+        if (persistExpandedPane)
+        {
+            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneCollapsed, false);
+        }
     }
 
     private IEnumerable<TabItem> GetTabs()
@@ -2622,7 +2639,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 Role = MenuItemRole.Radio,
                 Checked = tab.Tab == CurrentTab,
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
-                OnClick = () => { NavigationManager.NavigateTo(tab.Href); return Task.CompletedTask; }
+                OnClick = () => NavigateToTabAsync(tab.Href)
             });
         }
 
