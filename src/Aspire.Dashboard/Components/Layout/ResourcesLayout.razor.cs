@@ -297,6 +297,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ViewPreferences.Changed += OnViewPreferencesChanged;
         OrderStore.Changed += OnOrderChanged;
 
+        // Start reading stored tags and order now, so the reads overlap the other storage reads and the connection.
+        var settingsLoaded = Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync());
+
         var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         if (showHiddenResources.Success)
         {
@@ -364,6 +367,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
+        // Wait for stored tags and order before showing resources, so the list doesn't first appear in another order.
+        await settingsLoaded;
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
         foreach (var resource in snapshot)
         {
@@ -1495,7 +1500,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after))
         {
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderFailed)]);
+            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because a resource has no position.", resourceName, targetName);
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
             return false;
         }
 
@@ -1523,7 +1529,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         if (!OrderStore.TryMoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after))
         {
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderFailed)]);
+            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because a group has no position.", groupKey, targetKey);
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
             return false;
         }
 

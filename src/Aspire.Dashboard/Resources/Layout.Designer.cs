@@ -1123,29 +1123,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Unable to save the resource order. Try again..
-        /// </summary>
-        public static string ResourcePaneReorderFailed {
-            get {
-                return ResourceManager.GetString("ResourcePaneReorderFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Clear search, filters and grouping, and move resources within the same parent..
         /// </summary>
         public static string ResourcePaneReorderUnavailable {
             get {
                 return ResourceManager.GetString("ResourcePaneReorderUnavailable", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Unable to save the group order. Try again..
-        /// </summary>
-        public static string ResourcePaneGroupReorderFailed {
-            get {
-                return ResourceManager.GetString("ResourcePaneGroupReorderFailed", resourceCulture);
             }
         }
 

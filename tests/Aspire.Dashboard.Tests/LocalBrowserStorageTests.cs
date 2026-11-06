@@ -1,11 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Serialization;
+using Aspire.Tests.Shared;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.DataProtection;
@@ -269,29 +269,6 @@ public class LocalBrowserStorageTests
         {
             RequestedType = type;
             return ((IJsonTypeInfoResolver)DashboardJsonSerializerContext.Default).GetTypeInfo(type, options);
-        }
-    }
-
-    private sealed class TestJSRuntime : IJSRuntime
-    {
-        public Func<(string Identifier, object?[]? Args), object?>? OnInvoke { get; set; }
-
-        public ValueTask<TValue> InvokeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] TValue>(string identifier, object?[]? args)
-        {
-            if (OnInvoke?.Invoke((identifier, args)) is TValue result)
-            {
-                return ValueTask.FromResult(result);
-            }
-            return default;
-        }
-
-        public ValueTask<TValue> InvokeAsync<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.PublicFields | DynamicallyAccessedMemberTypes.PublicProperties)] TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
-        {
-            if (OnInvoke?.Invoke((identifier, args)) is TValue result)
-            {
-                return ValueTask.FromResult(result);
-            }
-            return default;
         }
     }
 

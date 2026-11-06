@@ -417,11 +417,6 @@
         <target state="new">Reset</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneGroupReorderFailed">
-        <source>Unable to save the group order. Try again.</source>
-        <target state="new">Unable to save the group order. Try again.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneGroupReorderUnavailable">
         <source>Clear search and filters, and try reordering groups again.</source>
         <target state="new">Clear search and filters, and try reordering groups again.</target>
@@ -581,11 +576,6 @@
         <source>References {0}</source>
         <target state="new">References {0}</target>
         <note>{0} lists logical resource names referenced by this resource. A reference does not imply waiting for startup.</note>
-      </trans-unit>
-      <trans-unit id="ResourcePaneReorderFailed">
-        <source>Unable to save the resource order. Try again.</source>
-        <target state="new">Unable to save the resource order. Try again.</target>
-        <note />
       </trans-unit>
       <trans-unit id="ResourcePaneReorderUnavailable">
         <source>Clear search, filters and grouping, and move resources within the same parent.</source>
