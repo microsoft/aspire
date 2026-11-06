@@ -808,7 +808,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
 
     // Node reports assertions as "AssertionError [ERR_ASSERTION]: web entered FailedToStart"
     // with the useful message several lines before the final Actions exit-code annotation.
-    [GeneratedRegex(@"error [A-Z]{2,}[0-9]|##\[error\]|\bAssertionError(?:\s*\[[A-Z0-9_]+\])?:|\bFAILED\b|\bfailed!\b|Build FAILED|ECONNRESET|ECONNREFUSED|ENOTFOUND|Connection reset by peer|Could not resolve host|Operation timed out|The SSL connection could not be established|The requested URL returned error|403 Forbidden|exit code [1-9]|Process completed with exit code",
+    [GeneratedRegex(@"error [A-Z]{2,}[0-9]|##\[error\]|\bAssertionError(?:\s*\[[A-Z0-9_]+\])?:|Test session was aborted|additional results that were in flight at termination time may be missing|\bFAILED\b|\bfailed!\b|Build FAILED|ECONNRESET|ECONNREFUSED|ENOTFOUND|Connection reset by peer|Could not resolve host|Operation timed out|The SSL connection could not be established|The requested URL returned error|403 Forbidden|exit code [1-9]|Process completed with exit code",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex LogFailureRegex();
 
@@ -817,7 +817,10 @@ internal sealed partial class WorkflowRunEvidenceCollector
     [GeneratedRegex(@"^\s*(?:\d{4}-\d\d-\d\dT\S+\s+)?[\u2713\u2714]\s", RegexOptions.CultureInvariant)]
     private static partial Regex PassingTestRegex();
 
-    [GeneratedRegex(@"##\[error\]|\bAssertionError(?:\s*\[[A-Z0-9_]+\])?:|error [A-Z]{2,}[0-9]|Build FAILED",
+    // The test runner warns "Test session was aborted; recovered 8928 test result(s)
+    // ... (additional results that were in flight at termination time may be missing)."
+    // Keep this completeness caveat alongside host-exit diagnostics, ahead of noise.
+    [GeneratedRegex(@"##\[error\]|\bAssertionError(?:\s*\[[A-Z0-9_]+\])?:|Test session was aborted|additional results that were in flight at termination time may be missing|error [A-Z]{2,}[0-9]|Build FAILED",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ExplicitFailureRegex();
 }

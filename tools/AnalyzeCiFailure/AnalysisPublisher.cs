@@ -440,10 +440,16 @@ internal sealed partial class AnalysisPublisher
                 PullRequestNumberRegex().IsMatch(analysis.Run.PrNumbers)
                 ? JsonNode.Parse(analysis.Run.PrNumbers) : JsonValue.Create(value: 0)),
         };
-        if (!cause.Tests.IsDefault)
+        if (!cause.Tests.IsDefault || cause.Type == CauseType.Unresolved)
         {
             var collectedTests = analysis.Tests;
-            var tests = cause.Tests.Select(observation =>
+            // Unknown mechanism does not erase actual failed results. These are
+            // observations in affected jobs, not assertions that a test caused a crash.
+            var observations = cause.Type == CauseType.Unresolved
+                ? collectedTests.Where(test => cause.JobIds.Contains(AsNormalizedNumber(test.JobId)!.Value))
+                    .Select(test => new TestObservation(test.Name, AsNormalizedNumber(test.JobId)!.Value, test.ObservationId))
+                : cause.Tests;
+            var tests = observations.Select(observation =>
             {
                 var evidence = collectedTests.First(test => test.Name == observation.Name &&
                     AsNormalizedNumber(test.JobId) == observation.JobId &&

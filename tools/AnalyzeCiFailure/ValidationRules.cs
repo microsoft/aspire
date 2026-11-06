@@ -17,8 +17,8 @@ internal static class ValidationRules
     {
         var permitted = run.Scope switch
         {
-            RunScope.Main => analysis.Verdict is AnalysisVerdict.TransientInfrastructure or AnalysisVerdict.FlakyTest or AnalysisVerdict.MainRepositoryBreakage or AnalysisVerdict.Mixed,
-            RunScope.PullRequest => analysis.Verdict is AnalysisVerdict.TransientInfrastructure or AnalysisVerdict.FlakyTest or AnalysisVerdict.CodeIssue or AnalysisVerdict.Mixed,
+            RunScope.Main => analysis.Verdict is AnalysisVerdict.TransientInfrastructure or AnalysisVerdict.FlakyTest or AnalysisVerdict.MainRepositoryBreakage or AnalysisVerdict.Mixed or AnalysisVerdict.Unresolved,
+            RunScope.PullRequest => analysis.Verdict is AnalysisVerdict.TransientInfrastructure or AnalysisVerdict.FlakyTest or AnalysisVerdict.CodeIssue or AnalysisVerdict.Mixed or AnalysisVerdict.Unresolved,
             _ => false,
         };
         if (!permitted)
@@ -29,7 +29,7 @@ internal static class ValidationRules
 
     internal static void RequireExactJobCoverage(AnalysisReport analysis, ImmutableArray<FailedJob> jobs, ValidatedRun run)
     {
-        if (!(analysis.Jobs.Length > 0 && analysis.Jobs.All(j => j.Classification is JobClassification.TransientInfrastructure or JobClassification.FlakyTest or JobClassification.CodeIssue or JobClassification.MainRepositoryBreakage)))
+        if (!(analysis.Jobs.Length > 0 && analysis.Jobs.All(j => j.Classification is JobClassification.TransientInfrastructure or JobClassification.FlakyTest or JobClassification.CodeIssue or JobClassification.MainRepositoryBreakage or JobClassification.Unresolved)))
         {
             throw new ValidationException("Analysis must classify every failed job with a recognized classification");
         }
@@ -78,7 +78,7 @@ internal static class ValidationRules
         {
             throw new ValidationException($"Cause {Display(cause.FileName)} is not referenced by the analysis summary");
         }
-        if (!(cause.Type is CauseType.FlakyTest or CauseType.InfrastructureFailure || (run.Scope == RunScope.Main && cause.Type == CauseType.MainRepositoryBreakage)))
+        if (!(cause.Type is CauseType.FlakyTest or CauseType.InfrastructureFailure or CauseType.Unresolved || (run.Scope == RunScope.Main && cause.Type == CauseType.MainRepositoryBreakage)))
         {
             throw new ValidationException($"Cause {Display(cause.FileName)} type {EnumText(cause.Type)} is not permitted for run scope {EnumText(run.Scope)}");
         }
@@ -91,8 +91,9 @@ internal static class ValidationRules
             {
                 CauseType.InfrastructureFailure => classification == JobClassification.TransientInfrastructure,
                 CauseType.MainRepositoryBreakage => classification == JobClassification.MainRepositoryBreakage,
+                CauseType.Unresolved => classification == JobClassification.Unresolved,
                 CauseType.FlakyTest => classification == JobClassification.FlakyTest ||
-                    (classification is JobClassification.CodeIssue or JobClassification.MainRepositoryBreakage && hasFlakyTestInJob),
+                    (classification is JobClassification.CodeIssue or JobClassification.MainRepositoryBreakage or JobClassification.Unresolved && hasFlakyTestInJob),
                 _ => false,
             };
             if (!(job is not null && compatible))
@@ -132,8 +133,18 @@ internal static class ValidationRules
         var infraCauses = causes.Count(c => c.Type == CauseType.InfrastructureFailure);
         var flakyCauses = causes.Count(c => c.Type == CauseType.FlakyTest);
         var mainCauses = causes.Count(c => c.Type == CauseType.MainRepositoryBreakage);
+        var unresolved = analysis.Jobs.Any(job => job.Classification == JobClassification.Unresolved) ||
+            analysis.Tests.Any(test => test.Classification == TestClassification.Unresolved);
+        // Uncertainty is not mixed deterministic/transient evidence. Keep it visible
+        // even when other jobs have diagnosed mechanisms, and never authorize a rerun.
+        if (unresolved != (analysis.Verdict == AnalysisVerdict.Unresolved))
+        {
+            throw new ValidationException("Unresolved job or test observations require an unresolved verdict.");
+        }
         switch (analysis.Verdict)
         {
+            case AnalysisVerdict.Unresolved:
+                break;
             case AnalysisVerdict.TransientInfrastructure:
                 if (analysis.Tests.Any(test => test.Classification != TestClassification.TransientInfrastructure))
                 {
@@ -194,14 +205,17 @@ internal static class ValidationRules
     {
         var infraJobs = analysis.Jobs.Count(job => job.Classification == JobClassification.TransientInfrastructure);
         var mainJobs = analysis.Jobs.Count(job => job.Classification == JobClassification.MainRepositoryBreakage);
+        var unresolvedJobs = analysis.Jobs.Count(job => job.Classification == JobClassification.Unresolved);
         var hasFlakyEvidence = analysis.Jobs.Any(job => job.Classification == JobClassification.FlakyTest) ||
             analysis.Tests.Any(test => test.Classification == TestClassification.Flaky);
         var infraCauses = causes.Count(cause => cause.Type == CauseType.InfrastructureFailure);
         var flakyCauses = causes.Count(cause => cause.Type == CauseType.FlakyTest);
         var mainCauses = causes.Count(cause => cause.Type == CauseType.MainRepositoryBreakage);
+        var unresolvedCauses = causes.Count(cause => cause.Type == CauseType.Unresolved);
         if (!((infraJobs > 0) == (infraCauses > 0) &&
             hasFlakyEvidence == (flakyCauses > 0) &&
-            (mainJobs > 0) == (mainCauses > 0)))
+            (mainJobs > 0) == (mainCauses > 0) &&
+            (unresolvedJobs > 0) == (unresolvedCauses > 0)))
         {
             throw new ValidationException("Failed-job classifications and persisted cause types do not match");
         }
@@ -209,6 +223,14 @@ internal static class ValidationRules
 
     internal static void RequireCauseCoverage(AnalysisReport analysis, ImmutableArray<FailureCause> causes)
     {
+        foreach (var test in analysis.Tests.Where(test => test.Classification == TestClassification.Unresolved))
+        {
+            if (!analysis.Jobs.Any(job => job.NormalizedId == test.NormalizedJobId && job.Classification == JobClassification.Unresolved) ||
+                !causes.Any(cause => cause.Type == CauseType.Unresolved && cause.JobIds.Contains(test.NormalizedJobId!.Value)))
+            {
+                throw new ValidationException("Every unresolved test observation must belong to an unresolved job covered by an unresolved cause.");
+            }
+        }
         foreach (var test in analysis.Tests.Where(test => test.Classification == TestClassification.TransientInfrastructure))
         {
             if (!analysis.Jobs.Any(job => job.NormalizedId == test.NormalizedJobId && job.Classification == JobClassification.TransientInfrastructure) ||
@@ -224,11 +246,12 @@ internal static class ValidationRules
                 JobClassification.TransientInfrastructure => CauseType.InfrastructureFailure,
                 JobClassification.FlakyTest => CauseType.FlakyTest,
                 JobClassification.MainRepositoryBreakage => CauseType.MainRepositoryBreakage,
+                JobClassification.Unresolved => CauseType.Unresolved,
                 _ => null,
             };
             if (!(type is null || causes.Any(c => c.Type == type && c.JobIds.Contains(job.NormalizedId))))
             {
-                throw new ValidationException("Every transient, flaky, and main-breakage failed job must be covered by a matching cause");
+                throw new ValidationException("Every transient, flaky, main-breakage and unresolved failed job must be covered by a matching cause");
             }
         }
 
