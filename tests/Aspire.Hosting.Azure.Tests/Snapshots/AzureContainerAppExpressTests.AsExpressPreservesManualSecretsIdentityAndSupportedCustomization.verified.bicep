@@ -20,7 +20,7 @@ param storage_outputs_blobendpoint string
 
 param api_identity_outputs_clientid string
 
-resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
+resource api 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'api'
   location: location
   properties: {

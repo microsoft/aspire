@@ -38,7 +38,7 @@ resource express_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource express 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
+resource express 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('express${uniqueString(resourceGroup().id)}', 24)
   tags: tags
   location: location

@@ -5,7 +5,7 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-resource worker 'Microsoft.App/containerApps@2026-03-02-preview' = {
+resource worker 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'worker'
   location: location
   properties: {

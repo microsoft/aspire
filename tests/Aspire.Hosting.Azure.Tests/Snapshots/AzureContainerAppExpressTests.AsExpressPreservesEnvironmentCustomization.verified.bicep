@@ -38,7 +38,7 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource env 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('env${uniqueString(resourceGroup().id)}', 24)
   tags: tags
   location: location

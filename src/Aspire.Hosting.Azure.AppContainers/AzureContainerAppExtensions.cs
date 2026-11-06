@@ -413,7 +413,7 @@ public static class AzureContainerAppExtensions
 
             if (appEnvResource.IsExpress)
             {
-                AzureContainerAppExpressSupport.ConfigureEnvironment(containerAppEnvironment);
+                containerAppEnvironment.EnvironmentMode = ManagedEnvironmentMode.Express;
             }
             else
             {

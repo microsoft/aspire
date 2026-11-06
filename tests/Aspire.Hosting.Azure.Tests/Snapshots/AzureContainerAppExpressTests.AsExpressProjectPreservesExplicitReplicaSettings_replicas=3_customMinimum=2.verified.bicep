@@ -11,7 +11,7 @@ param env_outputs_azure_container_registry_managed_identity_id string
 
 param api_containerimage string
 
-resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
+resource api 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'api'
   location: location
   properties: {
