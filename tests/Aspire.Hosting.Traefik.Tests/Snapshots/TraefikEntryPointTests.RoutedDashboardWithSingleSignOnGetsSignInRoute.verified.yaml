@@ -1,0 +1,29 @@
+﻿http:
+  routers:
+    sso-proxy-1:
+      rule: Host(`traefik.dev.localhost`) && PathPrefix(`/oauth2`)
+      entryPoints:
+      - web
+      service: sso-proxy-1
+      priority: 1000000
+    traefik-dashboard:
+      rule: Host(`traefik.dev.localhost`)
+      entryPoints:
+      - web
+      service: api@internal
+      middlewares:
+      - sso
+  services:
+    sso-proxy-1:
+      loadBalancer:
+        servers:
+        - url: http://sso-proxy:4180
+  middlewares:
+    sso:
+      forwardAuth:
+        address: http://sso-proxy:4180/
+        authResponseHeaders:
+        - X-Auth-Request-User
+        - X-Auth-Request-Email
+        - X-Auth-Request-Preferred-Username
+        - X-Auth-Request-Groups

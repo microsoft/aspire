@@ -1,0 +1,20 @@
+﻿[
+  --entrypoints.web.address=:80,
+  --entrypoints.traefik.address=:8080,
+  --global.checknewversion=false,
+  --global.sendanonymoususage=false,
+  --ping=true,
+  --providers.file.directory=/etc/traefik/dynamic,
+  --tracing.otlp=true,
+  --tracing.otlp.grpc=true,
+  --tracing.otlp.grpc.endpoint=host.docker.internal:18889,
+  --tracing.otlp.grpc.headers.x-otlp-api-key=test-api-key,
+  --metrics.otlp=true,
+  --metrics.otlp.grpc=true,
+  --metrics.otlp.grpc.endpoint=host.docker.internal:18889,
+  --metrics.otlp.grpc.headers.x-otlp-api-key=test-api-key,
+  --tracing.servicename=traefik,
+  --metrics.otlp.servicename=traefik,
+  --metrics.otlp.addrouterslabels=true,
+  --metrics.otlp.pushinterval=1s
+]

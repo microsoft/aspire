@@ -1,0 +1,54 @@
+﻿http:
+  routers:
+    web:
+      rule: Host(`web.dev.localhost`)
+      entryPoints:
+      - web
+      service: web
+    api:
+      rule: Host(`api.dev.localhost`)
+      entryPoints:
+      - web
+      service: api
+    grpc:
+      rule: Host(`grpc.dev.localhost`)
+      entryPoints:
+      - web
+      service: grpc
+      middlewares:
+      - grpc-web
+  services:
+    web:
+      loadBalancer:
+        servers:
+        - url: http://web:8080
+        passHostHeader: false
+        sticky:
+          cookie:
+            name: affinity
+            secure: true
+            httpOnly: true
+            sameSite: lax
+            maxAge: 3600
+        healthCheck:
+          path: /ready
+          interval: 10s
+          timeout: 2s
+    api:
+      loadBalancer:
+        servers:
+        - url: http://api:8080
+        healthCheck:
+          path: /healthz
+          interval: 15s
+          status: 204
+          hostname: api.internal
+    grpc:
+      loadBalancer:
+        servers:
+        - url: h2c://grpc:8080
+  middlewares:
+    grpc-web:
+      grpcWeb:
+        allowOrigins:
+        - https://app.example.com
