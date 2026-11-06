@@ -595,7 +595,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             });
 
         Assert.True(result.ExitCode == 0, result.Output);
-        Assert.Contains("warning ASPIRE013", result.Output);
+        Assert.Contains("warning ASPIRE015", result.Output);
         Assert.Contains($"AspireCliInvocationMode={invocationMode} is ignored because AspireCliPath is set to '{aspireCliPath}'", result.Output);
 
         // AspireCliPath remains authoritative; the warning only makes the override visible.
@@ -612,7 +612,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("Path", null)]
-    [InlineData("DnxPinned", "ASPIRE013")]
+    [InlineData("DnxPinned", "ASPIRE015")]
     public async Task ComputeRunArgumentsDoesNotWarnWhenAspireCliPathDoesNotOverrideDnxMode(string invocationMode, string? noWarn)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -636,7 +636,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             });
 
         Assert.True(result.ExitCode == 0, result.Output);
-        Assert.DoesNotContain("ASPIRE013", result.Output);
+        Assert.DoesNotContain("ASPIRE015", result.Output);
     }
 
     [Fact]
