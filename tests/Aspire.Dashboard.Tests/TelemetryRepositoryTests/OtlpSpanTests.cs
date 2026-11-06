@@ -163,6 +163,43 @@ public class OtlpSpanTests
                     KeyValuePair.Create("http.status_code", "200")
                 }
             },
+            new object[]
+            {
+                "MSG kafka send orders",
+                "SpanName!",
+                OtlpSpanKind.Producer,
+                new KeyValuePair<string, string>[]
+                {
+                    KeyValuePair.Create("messaging.system", "kafka"),
+                    KeyValuePair.Create("messaging.operation.name", "send"),
+                    KeyValuePair.Create("messaging.destination.name", "orders")
+                }
+            },
+            new object[]
+            {
+                "MSG kafka send orders",
+                "SpanName!",
+                OtlpSpanKind.Producer,
+                new KeyValuePair<string, string>[]
+                {
+                    KeyValuePair.Create("messaging.system", "kafka"),
+                    KeyValuePair.Create("messaging.operation.name", "send"),
+                    KeyValuePair.Create("messaging.operation", "legacy-operation"),
+                    KeyValuePair.Create("messaging.destination.name", "orders")
+                }
+            },
+            new object[]
+            {
+                "MSG kafka legacy-operation orders",
+                "SpanName!",
+                OtlpSpanKind.Producer,
+                new KeyValuePair<string, string>[]
+                {
+                    KeyValuePair.Create("messaging.system", "kafka"),
+                    KeyValuePair.Create("messaging.operation", "legacy-operation"),
+                    KeyValuePair.Create("messaging.destination.name", "orders")
+                }
+            },
         };
 
     [Theory]

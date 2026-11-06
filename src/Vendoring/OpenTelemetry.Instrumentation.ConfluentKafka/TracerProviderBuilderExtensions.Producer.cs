@@ -70,7 +70,7 @@ internal static partial class TracerProviderBuilderExtensions
         Guard.ThrowIfNull(builder);
 
         return builder
-            .AddSource(ConfluentKafkaCommon.InstrumentationName)
+            .AddSource(ConfluentKafkaCommon.ActivitySource.Name)
             .AddInstrumentation(sp =>
             {
                 if (name == null)
