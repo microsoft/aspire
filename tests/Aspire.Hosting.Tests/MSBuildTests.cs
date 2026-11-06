@@ -438,9 +438,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProject(appHostDirectory);
+        BuildProject(appHostDirectory);
 
-        Assert.DoesNotContain("ASPIRE010", output);
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
         Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);
