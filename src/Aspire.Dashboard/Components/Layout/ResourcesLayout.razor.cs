@@ -498,7 +498,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             if (!_isTabOverflowRegistered)
             {
                 _isTabOverflowRegistered = true;
-                await _jsModule.InvokeVoidAsync("registerTabOverflow", _selfRef);
+                await _jsModule.InvokeVoidAsync("registerTabOverflow", _layoutElement, _selfRef);
             }
             if (!_isOrderingRegistered)
             {
@@ -2443,7 +2443,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 await module.InvokeVoidAsync("unregisterResourceContextMenu", _layoutElement);
                 await module.InvokeVoidAsync("unregisterPaneActivityVisibility", _layoutElement);
                 await module.InvokeVoidAsync("cancelPaneSelectionReveal", _layoutElement);
-                await module.InvokeVoidAsync("unregisterTabOverflow");
+                await module.InvokeVoidAsync("unregisterTabOverflow", _layoutElement);
             }
             catch (JSDisconnectedException)
             {
