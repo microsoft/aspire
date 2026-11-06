@@ -649,11 +649,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
                 if (expr is { Format: "{0}", ValueProviders.Count: 1 })
                 {
-                    var inner = await ProcessValueAsync(context, executionContext, expr.ValueProviders[0], embedded).ConfigureAwait(false);
-                    // When embedded in a larger format string, convert to string for interpolation.
-                    // When at the top level, preserve the original object (e.g., HelmValue with ValuesKey)
-                    // so ProcessEnvironmentHelmExpression handles it correctly.
-                    return embedded ? inner?.ToString() ?? string.Empty : inner;
+                    // Preserve the original object (e.g., HelmValue with ValuesKey) so callers can validate it:
+                    // ProcessEnvironmentHelmExpression needs it at the top level, and container args must reject
+                    // unsupported providers instead of emitting their placeholder. Embedded callers that
+                    // interpolate the value stringify it themselves.
+                    return await ProcessValueAsync(context, executionContext, expr.ValueProviders[0], embedded).ConfigureAwait(false);
                 }
 
                 var args = new object[expr.ValueProviders.Count];

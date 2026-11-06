@@ -577,6 +577,26 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void PublishAsync_SingleUnsupportedProviderArgIsRejected()
+    {
+        // Wrapping an unsupported manifest provider in a single-value ReferenceExpression must not
+        // turn it into its unresolved placeholder (for example "{test-value}") in the container args.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "nats", "2.11")
+            .WithArgs(context => context.Args.Add(ReferenceExpression.Create($"{new TestValueProvider("resolved-value")}")));
+
+        var app = builder.Build();
+
+        var error = Assert.Throws<AggregateException>(app.Run);
+        var exception = Assert.IsType<NotSupportedException>(error.InnerException?.InnerException);
+        Assert.Equal("Command line args must be strings", exception.Message);
+    }
+
+    [Fact]
     public async Task PublishAsync_CompositeArgsUseGoCompatibleStringLiterals()
     {
         // Go template string literals reject the UTF-16 surrogate escapes JSON emits for supplementary
