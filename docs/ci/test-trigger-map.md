@@ -209,7 +209,7 @@ global.json, NuGet.config
 Directory.Build.*, Directory.Packages.props
 eng/Build.props, eng/Testing.props, eng/Versions.props, eng/*.targets
 eng/common/**, eng/OuterPreBuild.proj
-tests/Shared/**/*.props, tests/Shared/**/*.targets, tests/Shared/Dockerfile*
+tests/Shared/RepoTesting/**/*.props, tests/Shared/RepoTesting/**/*.targets
 .github/workflows/tests.yml, run-tests.yml, ...
 ```
 
@@ -297,6 +297,11 @@ Highlights:
   `Infrastructure.Tests` guard instead of the expensive extension E2E matrix.
   Dedicated package-input directories use broad `/**` rules when enumerating
   files or RIDs would let a newly added input silently miss its consumers.
+
+Some shared files are consumed at runtime or in test archives rather than as
+evaluated project inputs, so the project graph cannot infer those dependencies.
+Keep explicit routes for these non-obvious consumers. Deleted shared inputs also
+need routes because they are absent from the HEAD-only graph.
 
 Native Dashboard validation is a custom job, not an MSBuild test-project
 selection. Its path rule explicitly covers the native browser fixture's shared
