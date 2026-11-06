@@ -141,6 +141,26 @@ Then, while it is running (in another terminal; `aspire` = `../../../dotnet.sh .
 - Ctrl+C: the CLI exits immediately; the watcher and services stop shortly after and `/tmp/aspw-*` is removed.
 - Start with a compile error already present: services wait with "Initial build failed"; fix it and they start.
 
+### Polyglot AppHosts
+
+`TypeScriptAppHost/` (`apphost.mts`) and `PythonAppHost/` (`apphost.py`) reference the same `WatchDemo.Api` with
+`addDotnetProject`/`add_dotnet_project`. `--watch` puts the watch signal into the AppHost server (where Aspire.Hosting runs),
+so the C# service is hot reloaded exactly as from the C# AppHost, while the guest runtime keeps watching the AppHost file
+itself (nodemon / Python reload). Run from the repo source with `ASPIRE_REPO_ROOT` (the AppHost server targets net10.0, so
+`.dotnet` needs the .NET 10 runtime that `./restore.sh` installs):
+
+```bash
+export ASPIRE_REPO_ROOT=$PWD   # repo root
+cd playground/DotnetProjectWatch/TypeScriptAppHost && npm install
+../../../dotnet.sh ../../../artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll run --watch
+# Python: features__experimentalPolyglotPython=true, from playground/DotnetProjectWatch/PythonAppHost
+```
+
+`defaultWatchEnabled` (`aspire config set features.defaultWatchEnabled true`) is the same as passing `--watch`; an
+explicit `--watch false` wins. `--no-build` with watch on is an error. Under an IDE (VS Code run/debug session, Visual
+Studio) the IDE owns hot reload: `--watch` prints a notice and isn't forwarded, and `--no-build` stays allowed inside the
+IDE session.
+
 ## Evidence
 
 Screenshots (dashboard) and terminal transcripts (`aspire run --watch` output, dashboard tokens redacted) from the runs above:
@@ -156,5 +176,7 @@ Screenshots (dashboard) and terminal transcripts (`aspire run --watch` output, d
   [initial failure and revert](docs/transcripts/05-initial-build-failure-revert.txt),
   [offline tool download](docs/transcripts/06-offline-tool-download.txt),
   [file-based app unwatched](docs/transcripts/07-file-based-app-unwatched.txt),
-  [restart preserves env/endpoints](docs/transcripts/08-restart-preserves-env-and-endpoints.txt)
+  [restart preserves env/endpoints](docs/transcripts/08-restart-preserves-env-and-endpoints.txt),
+  [TypeScript AppHost, --no-build errors, defaultWatchEnabled](docs/transcripts/09-typescript-apphost-watch.txt),
+  [Python AppHost](docs/transcripts/10-python-apphost-watch.txt)
 - Earlier spike screenshots: [01](docs/01-resources.png), [02](docs/02-api-console.png), [03](docs/03-worker-console.png), [04](docs/04-dotnet-watch-console.png)

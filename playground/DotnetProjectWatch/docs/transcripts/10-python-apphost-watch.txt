@@ -1,0 +1,28 @@
+# Python AppHost (playground/DotnetProjectWatch/PythonAppHost, experimentalPolyglotPython on) referencing WatchDemo.Api via add_dotnet_project.
+# Dashboard N/A: Aspire.Dashboard was not built in this checkout (unrelated to watch).
+$ aspire run --watch
+🔐 Trusting certificates...
+🚨 Developer certificates may not be fully trusted (trust exit code was: PartiallyFailedToTrustTheCertificate).
+⚙️ Preparing Aspire server...
+Connecting to AppHost...
+Starting dashboard...
+🚨 Aspire Dashboard failed to start or is disabled.
+
+     AppHost:  apphost.py
+
+   Dashboard:  N/A
+
+        Logs:  /root/.aspire/logs/cli_20261106T010315_bcd4b5d8.log
+
+       Watch:  🔥 Hot reload is on for C# services (preview). Save a file to apply changes.
+
+               Press CTRL+C to stop the AppHost and exit.
+01:03:41 👀 Watching api for changes. Edits are hot reloaded; changes that need a restart restart only the affected service.
+01:04:39 🔥 Hot reload applied to api in 3731 ms (Program.cs).
+01:04:39 🔥 Hot reload applied to api in 226 ms (Program.cs).
+
+# other terminal
+$ curl :5380/            -> api v1 | Hello from Shared v1   (api PID 9079)
+# edit services/WatchDemo.Api/Program.cs MapGet("/") string to "api v4 from Python AppHost | ..."
+$ curl :5380/  (after 4s) -> api v4 from Python AppHost | Hello from Shared v1   (api PID 9079, unchanged)
+# revert the edit (second "Hot reload applied" line)
