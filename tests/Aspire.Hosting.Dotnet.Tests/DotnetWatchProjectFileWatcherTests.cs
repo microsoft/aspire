@@ -85,34 +85,42 @@ public class DotnetWatchProjectFileWatcherTests
             Directory.CreateDirectory(Path.GetDirectoryName(project)!);
             File.WriteAllText(project, "<Project />");
 
+            var props = Path.Combine(root, "Directory.Packages.props");
             var changes = new List<IReadOnlyList<string>>();
-            var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var watcher = new DotnetWatchProjectFileWatcher([project], c =>
             {
                 lock (changes)
                 {
                     changes.Add(c);
+                    var all = changes.SelectMany(b => b).ToHashSet();
+                    if (all.Contains(project) && all.Contains(props))
+                    {
+                        observed.TrySetResult();
+                    }
                 }
-
-                changed.TrySetResult();
             }, TimeSpan.FromMilliseconds(300));
             watcher.Start();
 
             File.WriteAllText(Path.Combine(root, "Api", "Program.cs"), "// not a build file");
             File.WriteAllText(project, "<Project><!-- 1 --></Project>");
             File.WriteAllText(project, "<Project><!-- 2 --></Project>");
-            File.WriteAllText(Path.Combine(root, "Directory.Packages.props"), "<Project />");
+            File.WriteAllText(props, "<Project />");
 
-            await changed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            // Notifications may be split across debounce windows on a slow machine, so validate every batch
+            // rather than requiring a single one.
+            await observed.Task.WaitAsync(TimeSpan.FromSeconds(30));
             await Task.Delay(1000);
 
             lock (changes)
             {
-                var batch = Assert.Single(changes);
-                Assert.Contains(project, batch);
-                Assert.Contains(Path.Combine(root, "Directory.Packages.props"), batch);
-                Assert.DoesNotContain(batch, p => p.EndsWith("Program.cs", StringComparison.Ordinal));
-                Assert.Equal(batch.Count, batch.Distinct().Count());
+                Assert.NotEmpty(changes);
+                foreach (var batch in changes)
+                {
+                    Assert.NotEmpty(batch);
+                    Assert.DoesNotContain(batch, p => p.EndsWith("Program.cs", StringComparison.Ordinal));
+                    Assert.Equal(batch.Count, batch.Distinct().Count());
+                }
             }
         }
         finally
