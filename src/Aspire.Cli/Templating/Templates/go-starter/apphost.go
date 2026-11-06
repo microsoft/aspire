@@ -19,6 +19,7 @@ func main() {
 	api := builder.AddGoApp("api", "./api").
 		WithModTidy().
 		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
+		WithHttpHealthCheck(aspire.HttpHealthCheckPath("/health")).
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 

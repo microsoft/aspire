@@ -44,7 +44,8 @@ function App() {
     return new Date(dateString).toLocaleDateString(undefined, {
       weekday: 'short',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'UTC'
     });
   };
 
@@ -144,7 +145,7 @@ function App() {
                       <time dateTime={forecast.date}>{formatDate(forecast.date)}</time>
                     </h3>
                     <p className="weather-summary">{forecast.summary}</p>
-                    <div className="weather-temps" aria-label={`Temperature: ${useCelsius ? forecast.temperatureC : forecast.temperatureF} degrees ${useCelsius ? 'Celsius' : 'Fahrenheit'}`}>
+                    <div className="weather-temps" role="group" aria-label={`Temperature: ${useCelsius ? forecast.temperatureC : forecast.temperatureF} degrees ${useCelsius ? 'Celsius' : 'Fahrenheit'}`}>
                       <div className="temp-group">
                         <span className="temp-value" aria-hidden="true">
                           {useCelsius ? forecast.temperatureC : forecast.temperatureF}°

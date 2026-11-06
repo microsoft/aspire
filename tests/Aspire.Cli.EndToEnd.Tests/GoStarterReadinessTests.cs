@@ -10,10 +10,10 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class GoStarterReadinessTests(ITestOutputHelper output)
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
     [CaptureWorkspaceOnFailure]
-    public async Task StarterShipsTidyApiAndServesRequests(bool useRedisCache)
+    public async Task StarterShipsTidyApiAndServesRequests(bool useRedisCache, bool prebuildApplications)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -47,9 +47,12 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
         Assert.True(File.Exists(Path.Combine(projectRoot, "api", "go.sum")));
 
         await auto.RunCommandAsync("cd GoReady", counter);
-        // Build both user applications before any run/start can repair dependencies.
-        await auto.RunCommandAsync("(cd api && go build -mod=readonly -o /tmp/go-ready-api . && go mod tidy -diff)", counter, TimeSpan.FromMinutes(3));
-        await auto.RunCommandAsync("npm --prefix frontend ci && npm --prefix frontend run build", counter, TimeSpan.FromMinutes(3));
+        if (prebuildApplications)
+        {
+            // Prove both generated applications build without Aspire repairing dependencies.
+            await auto.RunCommandAsync("(cd api && go build -mod=readonly -o /tmp/go-ready-api . && go mod tidy -diff)", counter, TimeSpan.FromMinutes(3));
+            await auto.RunCommandAsync("npm --prefix frontend ci && npm --prefix frontend run build", counter, TimeSpan.FromMinutes(3));
+        }
         try
         {
             await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4));

@@ -69,7 +69,7 @@ internal enum AspireTemplate
     JavaEmptyAppHost,
 
     /// <summary>
-    /// Starter App (Go API + Redis, Go AppHost) — visible only when experimental Go support is enabled.
+    /// Starter App (Go API/React + Redis, Go AppHost) — visible only when experimental Go support is enabled.
     /// Prompts: template, project name, output path, URLs. No Redis or test project prompt because the template always includes Redis.
     /// </summary>
     GoStarter,
@@ -457,7 +457,7 @@ internal static class Hex1bTestHelpers
             case AspireTemplate.GoStarter:
                 // The list omits the C# starters when the image has no .NET SDK, so search by text instead of counting Downs.
                 var goStarterSelected = new CellPatternSearcher()
-                    .Find("> Starter App (Go API + Redis, Go AppHost)");
+                    .Find("> Starter App (Go API/React + Redis, Go AppHost)");
                 builder.Type("Go API")
                     .WaitUntil(s => goStarterSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
