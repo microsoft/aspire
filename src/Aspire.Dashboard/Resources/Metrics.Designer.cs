@@ -198,6 +198,18 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string MetricsPinInstrumentForAllReplicas {
+            get {
+                return ResourceManager.GetString("MetricsPinInstrumentForAllReplicas", resourceCulture);
+            }
+        }
+
+        public static string MetricsUnpinInstrumentForAllReplicas {
+            get {
+                return ResourceManager.GetString("MetricsUnpinInstrumentForAllReplicas", resourceCulture);
+            }
+        }
+
         public static string MetricsPinnedHeader {
             get {
                 return ResourceManager.GetString("MetricsPinnedHeader", resourceCulture);

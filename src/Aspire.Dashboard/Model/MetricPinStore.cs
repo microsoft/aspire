@@ -187,12 +187,12 @@ public sealed class MetricPinStore
         using var transaction = connection.BeginTransaction();
         using var migrationCommand = connection.CreateCommand();
         migrationCommand.Transaction = transaction;
-        // The shipped schema has no resource identity. Preserve those rows as explicit global pins rather than
-        // assigning them to whichever matching resource happens to report telemetry first. Development builds of
-        // the scoped schema used volatile instance IDs; retain their resource-name scope without that unstable ID.
-        migrationCommand.CommandText = columns.Contains("resource_replica_index")
+        // Scoped schemas only existed in development builds of this change. Reset them rather than attempting to
+        // preserve unstable instance identities; SQLite retains the old index name when a table is renamed, which
+        // prevents an in-place migration from creating the replacement index.
+        migrationCommand.CommandText = columns.Contains("resource_name")
             ? """
-            ALTER TABLE metric_pins RENAME TO metric_pins_previous;
+            DROP TABLE metric_pins;
             CREATE TABLE metric_pins (
                 pin_id INTEGER NOT NULL PRIMARY KEY,
                 resource_name TEXT NULL,
@@ -211,34 +211,6 @@ public sealed class MetricPinStore
                 meter_name,
                 instrument_name
             );
-            INSERT INTO metric_pins (pin_id, resource_name, resource_replica_index, resource_instance_id, meter_name, instrument_name)
-                SELECT pin_id, resource_name, resource_replica_index, NULL, meter_name, instrument_name FROM metric_pins_previous;
-            DROP TABLE metric_pins_previous;
-            """
-            : columns.Contains("resource_name")
-            ? """
-            ALTER TABLE metric_pins RENAME TO metric_pins_previous;
-            CREATE TABLE metric_pins (
-                pin_id INTEGER NOT NULL PRIMARY KEY,
-                resource_name TEXT NULL,
-                resource_replica_index INTEGER NULL,
-                resource_instance_id TEXT NULL,
-                meter_name TEXT NOT NULL,
-                instrument_name TEXT NOT NULL
-            );
-            CREATE UNIQUE INDEX metric_pins_identity ON metric_pins (
-                resource_name IS NULL,
-                IFNULL(resource_name, ''),
-                resource_replica_index IS NULL,
-                IFNULL(resource_replica_index, -1),
-                resource_instance_id IS NULL,
-                IFNULL(resource_instance_id, ''),
-                meter_name,
-                instrument_name
-            );
-            INSERT OR IGNORE INTO metric_pins (pin_id, resource_name, resource_replica_index, resource_instance_id, meter_name, instrument_name)
-                SELECT pin_id, resource_name, NULL, resource_instance_id, meter_name, instrument_name FROM metric_pins_previous;
-            DROP TABLE metric_pins_previous;
             """
             : """
             ALTER TABLE metric_pins RENAME TO metric_pins_global;
@@ -368,12 +340,35 @@ public readonly record struct MetricPinResourceKey(string Name, int? ReplicaInde
     public static MetricPinResourceKey Resolve(
         ResourceKey resourceKey,
         IResourceRepository resourceRepository,
-        ITelemetryRepository telemetryRepository)
+        IReadOnlyList<OtlpResource>? telemetryResources = null)
     {
         var resource = resourceRepository.GetResources().FirstOrDefault(resource =>
-            telemetryRepository.GetResourceByCompositeName(resource.Name)?.ResourceKey == resourceKey);
-        return resource is null
-            ? new MetricPinResourceKey(resourceKey.Name, ReplicaIndex: null, resourceKey.InstanceId)
-            : new MetricPinResourceKey(resource.DisplayName, resource.ReplicaIndex);
+            resourceKey.EqualsCompositeName(resource.Name));
+        if (resource is not null)
+        {
+            return new MetricPinResourceKey(resource.DisplayName, resource.ReplicaIndex);
+        }
+
+        if (telemetryResources is not null)
+        {
+            var replicaIndex = 0;
+            foreach (var telemetryResource in telemetryResources)
+            {
+                if (!string.Equals(telemetryResource.ResourceName, resourceKey.Name, StringComparisons.ResourceName))
+                {
+                    continue;
+                }
+
+                replicaIndex++;
+                if (telemetryResource.ResourceKey == resourceKey)
+                {
+                    // Telemetry-only resources have no app-model identity. Their position among same-name resources
+                    // remains usable when a process reports a new service.instance.id after the dashboard restarts.
+                    return new MetricPinResourceKey(resourceKey.Name, replicaIndex);
+                }
+            }
+        }
+
+        return new MetricPinResourceKey(resourceKey.Name, ReplicaIndex: null, resourceKey.InstanceId);
     }
 }

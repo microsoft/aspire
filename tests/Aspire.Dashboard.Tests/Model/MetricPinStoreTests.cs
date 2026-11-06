@@ -5,6 +5,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -205,6 +206,64 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     }
 
     [Fact]
+    public void Resolve_TelemetryOnlyResourceMatchesPositionAfterInstanceIdChanges()
+    {
+        var resourceRepository = new TestDashboardClient(initialResources: []);
+        var firstRunResource = CreateTelemetryResource(new ResourceKey("external-api", "first-run"));
+        var secondRunResource = CreateTelemetryResource(new ResourceKey("external-api", "second-run"));
+
+        var firstRunKey = MetricPinResourceKey.Resolve(firstRunResource.ResourceKey, resourceRepository, [firstRunResource]);
+        var secondRunKey = MetricPinResourceKey.Resolve(secondRunResource.ResourceKey, resourceRepository, [secondRunResource]);
+
+        Assert.Equal(new MetricPinResourceKey("external-api", ReplicaIndex: 1), firstRunKey);
+        Assert.Equal(firstRunKey, secondRunKey);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExistingDevelopmentSchema_IsResetWithoutIndexCollision(bool hasReplicaIndex)
+    {
+        var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath, Pooling = false }.ToString();
+        using (var connection = new SqliteConnection(connectionString))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            var identityColumn = hasReplicaIndex
+                ? "resource_replica_index INTEGER NULL"
+                : "resource_instance_id TEXT NULL";
+            var identityExpression = hasReplicaIndex
+                ? "IFNULL(resource_replica_index, -1)"
+                : "IFNULL(resource_instance_id, '')";
+            command.CommandText = $"""
+                CREATE TABLE metric_pins (
+                    pin_id INTEGER NOT NULL PRIMARY KEY,
+                    resource_name TEXT NOT NULL,
+                    {identityColumn},
+                    meter_name TEXT NOT NULL,
+                    instrument_name TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX metric_pins_identity ON metric_pins (
+                    resource_name,
+                    {identityExpression},
+                    meter_name,
+                    instrument_name
+                );
+                INSERT INTO metric_pins (resource_name, {(hasReplicaIndex ? "resource_replica_index" : "resource_instance_id")}, meter_name, instrument_name)
+                    VALUES ('api', {(hasReplicaIndex ? "1" : "'volatile-id'")}, 'System.Runtime', 'dotnet.process.cpu.time');
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var store = new MetricPinStore(databasePath, NullLogger.Instance);
+
+        Assert.Empty(store.GetPins());
+        Assert.True(store.SetPinned(s_api, s_cpu, pinned: true));
+        Assert.Equal([new MetricPin(s_api, s_cpu)], store.GetPins());
+    }
+
+    [Fact]
     public void ExistingGlobalPins_RemainGlobalUntilExplicitlyUnpinned()
     {
         var databasePath = Path.Combine(_workspace.Path, DashboardSettingsDatabase.DatabaseFileName);
@@ -255,7 +314,7 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
     private static OtlpInstrumentSummary CreateInstrument(ResourceKey resourceKey, OtlpInstrumentKey key)
     {
         var context = new OtlpContext { Options = new TelemetryLimitOptions(), Logger = NullLogger.Instance };
-        var resource = new OtlpResource(resourceKey.Name, resourceKey.InstanceId, uninstrumentedPeer: false, context);
+        var resource = CreateTelemetryResource(resourceKey, context);
 
         return new OtlpInstrumentSummary
         {
@@ -269,6 +328,9 @@ public sealed class MetricPinStoreTests(ITestOutputHelper testOutputHelper) : ID
             ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
         };
     }
+
+    private static OtlpResource CreateTelemetryResource(ResourceKey resourceKey, OtlpContext? context = null) =>
+        new(resourceKey.Name, resourceKey.InstanceId, uninstrumentedPeer: false, context ?? new OtlpContext { Options = new TelemetryLimitOptions(), Logger = NullLogger.Instance });
 
     public void Dispose() => _workspace.Dispose();
 }

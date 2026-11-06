@@ -10,7 +10,9 @@
 @inject IStringLocalizer<MetricsResources> Loc
 
 @{
-    var label = _isPinned ? Loc[nameof(MetricsResources.MetricsUnpinInstrument)] : Loc[nameof(MetricsResources.MetricsPinInstrument)];
+    var label = ResourceKey.IsGroup
+        ? _isPinned ? Loc[nameof(MetricsResources.MetricsUnpinInstrumentForAllReplicas)] : Loc[nameof(MetricsResources.MetricsPinInstrumentForAllReplicas)]
+        : _isPinned ? Loc[nameof(MetricsResources.MetricsUnpinInstrument)] : Loc[nameof(MetricsResources.MetricsPinInstrument)];
 }
 
 @* The bordered variant matches the dashboard's other header icon buttons (word wrap, close): a square

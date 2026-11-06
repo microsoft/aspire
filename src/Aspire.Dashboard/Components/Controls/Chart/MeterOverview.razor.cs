@@ -37,6 +37,9 @@ public partial class MeterOverview : LiveSparklinesBase
     public MetricPinResourceKey? GroupPinResourceKey { get; set; }
 
     [Parameter]
+    public IReadOnlyList<OtlpResource>? Resources { get; set; }
+
+    [Parameter]
     public EventCallback<OtlpInstrumentSummary> InstrumentSelected { get; set; }
 
     /// <summary>
@@ -133,7 +136,7 @@ public partial class MeterOverview : LiveSparklinesBase
     private MetricPinResourceKey ResolvePinResourceKey(OtlpInstrumentSummary instrument) =>
         GroupPinResourceKey ??
         GetPinResourceKey?.Invoke(instrument) ??
-        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository, DataSource.TelemetryRepository);
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository, Resources);
 
     private string? GetInstrumentTypeName(OtlpInstrumentType type) => type switch
     {

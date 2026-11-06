@@ -116,7 +116,7 @@
                                             ShowChangePerIntervalOption="true"
                                             BackLabel="@GetBackLabel()"
                                             OnBackAsync="@NavigateBackAsync"
-                                            GetPinResourceKey="@GetPinResourceKey"
+                                            GetPinResourceKey="@(instrument => OverviewGroupPinResourceKey ?? GetPinResourceKey(instrument))"
                                             Resources="@_resources" />
                                     }
                                     else if (PageViewModel.ShowPinned && (PageViewModel.SelectedResource.Id is not null || IsAggregate))
@@ -257,6 +257,7 @@
                                GetInstrumentUrl="@GetInstrumentUrl"
                                GetPinResourceKey="@GetPinResourceKey"
                                GroupPinResourceKey="@OverviewGroupPinResourceKey"
+                               Resources="@_resources"
                                InstrumentSelected="@OnInstrumentSelected" />
             }
         </section>

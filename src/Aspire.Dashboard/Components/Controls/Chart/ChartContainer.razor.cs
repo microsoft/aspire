@@ -115,7 +115,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private MetricPinResourceKey ResolvePinResourceKey(OtlpInstrumentSummary instrument) =>
         GetPinResourceKey?.Invoke(instrument) ??
-        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository, TelemetryRepository);
+        MetricPinResourceKey.Resolve(instrument.ResourceView.ResourceKey, DataSource.ResourceRepository, Resources);
 
     protected override async Task OnInitializedAsync()
     {

@@ -411,7 +411,7 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         GetPinResourceKey(instrument.ResourceView.ResourceKey);
 
     private MetricPinResourceKey GetPinResourceKey(ResourceKey resourceKey) =>
-        MetricPinResourceKey.Resolve(resourceKey, DataSource.ResourceRepository, TelemetryRepository);
+        MetricPinResourceKey.Resolve(resourceKey, DataSource.ResourceRepository, _resources);
 
     private readonly HashSet<string> _collapsedSections = new(StringComparer.OrdinalIgnoreCase);
     private bool _organizeStateLoaded;
@@ -577,7 +577,8 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             : PageViewModel.SelectedResource.Id?.GetResourceKey();
 
     private MetricPinResourceKey? OverviewGroupPinResourceKey =>
-        PageViewModel is { ShowPinned: false, SelectedResource.Id.Type: OtlpResourceType.ResourceGrouping }
+        PageViewModel is not { ShowPinned: true, ShowFilterResults: false } &&
+        PageViewModel.SelectedResource.Id?.Type == OtlpResourceType.ResourceGrouping
             ? new MetricPinResourceKey(PageViewModel.SelectedResource.Name, ReplicaIndex: null)
             : null;
 
