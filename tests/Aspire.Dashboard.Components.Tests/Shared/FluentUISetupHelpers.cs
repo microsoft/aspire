@@ -195,7 +195,7 @@ internal static class FluentUISetupHelpers
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.copyToShadow", _ => true);
         context.JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true);
         var tooltipModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/Tooltip/FluentTooltip.razor.js");
-        tooltipModule.SetupVoid("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", _ => true);
+        tooltipModule.SetupVoid("Microsoft.FluentUI.Blazor.Tooltip.FluentTooltipInitialize", _ => true).SetVoidResult();
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton(TimeProvider.System);
