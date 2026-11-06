@@ -150,9 +150,10 @@ public class ResourceProxyTests
     }
 
     [Fact]
-    public void RunOptionsDoNotSelectANonProjectEntryPoint()
+    public void FileBasedAppsAreLaunchedWithFile()
     {
-        Assert.Empty(ResourceProxy.GetRunOptions("/src/App/app.cs", null, null));
+        // The watcher runs `dotnet run` in the file's directory, which doesn't find a .cs entry point.
+        Assert.Equal(["--file", "/src/Scripts/ticker.cs"], ResourceProxy.GetRunOptions("/src/Scripts/ticker.cs", null, null));
     }
 
     [Fact]

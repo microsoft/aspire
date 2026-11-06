@@ -245,8 +245,9 @@ internal static class ResourceProxy
 
     /// <summary><c>dotnet run</c> options that precede the application arguments.</summary>
     /// <remarks>
-    /// The watcher runs <c>dotnet run --no-build</c> in the project's directory without selecting the project, which
-    /// fails when that directory holds more than one project. <c>--project</c> selects the requested one explicitly.
+    /// The watcher runs <c>dotnet run --no-build</c> in the entry point's directory without selecting it, which fails
+    /// when that directory holds more than one project and never finds a file-based app's .cs file. <c>--project</c>
+    /// or <c>--file</c> selects the requested one explicitly.
     /// </remarks>
     internal static List<string> GetRunOptions(string entryPoint, string? workingDirectory, string? instance)
     {
@@ -254,6 +255,11 @@ internal static class ResourceProxy
         if (IsProjectFile(entryPoint))
         {
             options.Add("--project");
+            options.Add(entryPoint);
+        }
+        else
+        {
+            options.Add("--file");
             options.Add(entryPoint);
         }
 
