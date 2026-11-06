@@ -25,11 +25,11 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         CreateComponentPublishOutput(selected, project, "selected");
         var output = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(output, workspace.Path, "linux-x64", "Debug", "1.0", false,
-            trayAppPath: null, windowsTrayPath: null,
+            trayDirectory: null,
             dashboardPath: project == "Aspire.Dashboard" ? selected : null,
             managedPath: project == "Aspire.Managed" ? selected : null,
             terminalHostPath: project == "Aspire.TerminalHost" ? selected : null,
-            appHostServerPath: project == "Aspire.Hosting.Native.Server" ? selected : null, linuxTrayPath: null);
+            appHostServerPath: project == "Aspire.Hosting.Native.Server" ? selected : null);
         Action copy = project switch
         {
             "Aspire.Managed" => builder.CopyManaged,
@@ -69,10 +69,10 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
             LayoutBuilder.GetComponentTargetFramework(project), "linux-x64", "publish");
         CreateComponentPublishOutput(discovered, project, "discovered");
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "linux-x64", "Debug", "1.0", false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null,
+            trayDirectory: null, dashboardPath: null,
             managedPath: project == "Aspire.Managed" ? selected : null,
             terminalHostPath: project == "Aspire.TerminalHost" ? selected : null,
-            appHostServerPath: project == "Aspire.Hosting.Native.Server" ? selected : null, linuxTrayPath: null);
+            appHostServerPath: project == "Aspire.Hosting.Native.Server" ? selected : null);
         Action copy = project switch
         {
             "Aspire.Managed" => builder.CopyManaged,
@@ -96,7 +96,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         CreateComponentPublishOutput(source, "Aspire.Managed", "managed");
         var output = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(output, workspace.Path, "linux-x64", "Debug", "1.0", false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         builder.CopyManaged();
 
@@ -121,7 +121,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         File.WriteAllText(Path.Combine(symbolDirectory, "symbols"), "symbols");
         var output = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(output, workspace.Path, rid, "Debug", "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         builder.CopyAppHostServer();
 
@@ -151,7 +151,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
         var output = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(output, workspace.Path, "linux-x64", "Debug", "1.0.0", false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var failure = Assert.Throws<InvalidOperationException>(builder.CopyAppHostServer);
 
@@ -181,7 +181,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
         File.WriteAllText(Path.Combine(publish, "Aspire.TerminalHost.pdb"), "symbols");
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, rid, "Debug", "1.0", false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
         builder.CopyTerminalHost();
         var target = Path.Combine(workspace.Path, "layout", "terminalhost");
         Assert.Equal(files.Order(StringComparer.Ordinal), Directory.GetFiles(target, "*", SearchOption.AllDirectories)
@@ -223,7 +223,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", configuration, "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
         var expectedPaths = GetPublishPaths(workspace.Path, configuration);
 
         foreach (var path in expectedPaths.Concat(GetPublishPaths(workspace.Path, otherConfiguration)))
@@ -245,7 +245,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
         var nonRidPath = GetPublishPaths(workspace.Path, "Debug")[^1];
         Directory.CreateDirectory(nonRidPath);
 
@@ -279,7 +279,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         var explicitPath = Path.Combine(workspace.Path, "missing prepared Dashboard");
         var outputPath = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0",
-            verbose: false, trayAppPath: null, windowsTrayPath: null, dashboardPath: explicitPath, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            verbose: false, trayDirectory: null, dashboardPath: explicitPath, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -328,7 +328,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
 
         var outputPath = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         builder.CopyDashboard();
 
@@ -351,7 +351,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         Directory.Delete(wwwrootPath, recursive: true);
         var outputPath = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -378,7 +378,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
 
         var outputPath = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -409,7 +409,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
 
         var outputPath = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -431,7 +431,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         File.WriteAllText(Path.Combine(explicitPath, "Aspire.Dashboard.dbg"), "symbols");
         var output = Path.Combine(workspace.Path, "layout");
         using var builder = new LayoutBuilder(output, workspace.Path, "win-x64", "Debug", "1.0", false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: explicitPath, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: explicitPath, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         builder.CopyDashboard();
 
@@ -452,7 +452,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         CreateDashboardPublishOutput(workspace.Path, "win-x64", "e_sqlite3.dll");
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path,
             "win-x64", "Debug", "1.0", false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: path, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: path, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -465,7 +465,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path,
             "win-x64", "Debug", "1.0", false,
-            trayAppPath: null, windowsTrayPath: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null, linuxTrayPath: null);
+            trayDirectory: null, dashboardPath: null, managedPath: null, terminalHostPath: null, appHostServerPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 

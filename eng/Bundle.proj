@@ -22,7 +22,7 @@
       The bundle archive is not separately signed; new tool/npm containers are
       signed by the official Assemble stage, not this invocation.
     - BundleVersion: Archive version (product version plus VersionSuffix, or dev).
-    - TrayAppPath, WindowsTrayPath, LinuxTrayDirectory: Override platform tray output directories.
+    - TrayDirectory: Override the platform tray directory (the .app itself on macOS).
     - CliPublishDir: Override CLI output in non-distribution mode.
     - SkipAspireManagedPublish, SkipDashboardPublish, SkipTerminalHostPublish,
       SkipAppHostServerPublish, SkipTrayPublish: Reuse required prepared component
@@ -58,11 +58,13 @@
 
     <!-- Shared project paths -->
     <_ManagedProjectPath>$(_RepoRoot)src\Aspire.Managed\Aspire.Managed.csproj</_ManagedProjectPath>
-    <_TrayProjectPath>$(_RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj</_TrayProjectPath>
+    <_TrayProjectPath Condition="$(TargetRid.StartsWith('osx-'))">$(_RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj</_TrayProjectPath>
+    <_TrayProjectPath Condition="$(TargetRid.StartsWith('win-'))">$(_RepoRoot)src\Aspire.Tray\Windows\Aspire.Tray.Windows.csproj</_TrayProjectPath>
+    <_TrayProjectPath Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'">$(_RepoRoot)src\Aspire.Tray\Linux\Aspire.Tray.Linux.csproj</_TrayProjectPath>
 
-    <TrayAppPath Condition="'$(TrayAppPath)' == ''">$([MSBuild]::NormalizePath('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Mac', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'app', 'Aspire Tray.app'))</TrayAppPath>
-    <WindowsTrayPath Condition="'$(WindowsTrayPath)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Windows', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</WindowsTrayPath>
-    <LinuxTrayDirectory Condition="'$(LinuxTrayDirectory)' == ''">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Linux', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</LinuxTrayDirectory>
+    <TrayDirectory Condition="'$(TrayDirectory)' == '' and $(TargetRid.StartsWith('osx-'))">$([MSBuild]::NormalizePath('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Mac', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'app', 'Aspire Tray.app'))</TrayDirectory>
+    <TrayDirectory Condition="'$(TrayDirectory)' == '' and $(TargetRid.StartsWith('win-'))">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Windows', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</TrayDirectory>
+    <TrayDirectory Condition="'$(TrayDirectory)' == '' and ('$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64')">$([MSBuild]::NormalizeDirectory('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Linux', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'publish'))</TrayDirectory>
 
     <!-- Bundle version: use VersionSuffix from CI if provided, else dev version for local builds -->
     <!-- In GitHub Actions CI: VersionSuffix is set via /p:VersionSuffix=pr.XXXX.gSHA -->
@@ -164,6 +166,15 @@
     <Error Condition="'@(_MatchingBundleRid)' == ''"
            Text="TargetRid must be exactly one supported bundle RID, not a RID list: '$(TargetRid)'. Supported RIDs: @(_SupportedBundleRid, ', ')." />
 
+    <!-- Validate producers before restoring or publishing any component.
+         Prepared tray inputs do not require a matching build host. -->
+    <Error Condition="'$(SkipTrayPublish)' != 'true' and $(TargetRid.StartsWith('osx-')) and !$([MSBuild]::IsOSPlatform('OSX'))"
+           Text="macOS NativeAOT tray publishing requires a macOS build lane." />
+    <Error Condition="'$(SkipTrayPublish)' != 'true' and $(TargetRid.StartsWith('win-')) and !$([MSBuild]::IsOSPlatform('Windows'))"
+           Text="Windows NativeAOT tray publishing requires a Windows build lane." />
+    <Error Condition="'$(SkipTrayPublish)' != 'true' and ('$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64') and !$([MSBuild]::IsOSPlatform('Linux'))"
+           Text="Linux NativeAOT tray publishing requires a Linux build lane." />
+
     <!-- These discrete values are forwarded to shell children, never parsed as
          command strings. Reject shell syntax before any child is launched. -->
     <Error Condition="'$(VersionSuffix)' != '' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(VersionSuffix)', '^[A-Za-z0-9][A-Za-z0-9.-]*$'))"
@@ -200,7 +211,7 @@
       <_BundleSigningArgs>$(_BundleSigningArgs) "/p:ArtifactsDir=$(_ArtifactsDir.TrimEnd('\').TrimEnd('/'))/"</_BundleSigningArgs>
       <_BundleSigningArgs Condition="'$(TeamName)' != ''">$(_BundleSigningArgs) "/p:TeamName=$(TeamName)"</_BundleSigningArgs>
       <_BundleSigningArgs Condition="'$(DotNetPublishUsingPipelines)' != ''">$(_BundleSigningArgs) /p:DotNetPublishUsingPipelines=$(DotNetPublishUsingPipelines)</_BundleSigningArgs>
-      <_BundleSigningArgs Condition="$(TargetRid.StartsWith('win-'))">$(_BundleSigningArgs) "/p:WindowsTrayPath=$(WindowsTrayPath.TrimEnd('\').TrimEnd('/'))/"</_BundleSigningArgs>
+      <_BundleSigningArgs Condition="$(TargetRid.StartsWith('win-'))">$(_BundleSigningArgs) "/p:TrayDirectory=$(TrayDirectory.TrimEnd('\').TrimEnd('/'))/"</_BundleSigningArgs>
 
       <_ComponentSigningResponseFile>$(_ArtifactsLogDir)SignBundleComponents.rsp</_ComponentSigningResponseFile>
     </PropertyGroup>
@@ -334,38 +345,19 @@
            Text="PublishTray cannot use SkipTrayPublish=true; it must publish a new tray payload." />
     <Error Condition="'$(Sign)' == 'true'"
            Text="PublishTray does not perform official signing or notarization. Use Sign=false, or the full bundle build for signing." />
-    <Error Condition="$(TargetRid.StartsWith('osx-')) and !$([MSBuild]::IsOSPlatform('OSX'))"
-           Text="macOS NativeAOT tray publishing requires a macOS build lane." />
-    <Error Condition="$(TargetRid.StartsWith('win-')) and !$([MSBuild]::IsOSPlatform('Windows'))"
-           Text="Windows NativeAOT tray publishing requires a Windows build lane." />
-    <Error Condition="$(TargetRid.StartsWith('linux-')) and !$([MSBuild]::IsOSPlatform('Linux'))"
-           Text="Linux NativeAOT tray publishing requires a Linux build lane." />
   </Target>
 
   <Target Name="_PublishTrayCore"
           DependsOnTargets="_InitializeBundleBuild"
           Condition="'$(SkipTrayPublish)' != 'true' and ($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-')) or '$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64')">
-    <PropertyGroup>
-      <_TrayWindowsProjectPath Condition="'$(_TrayWindowsProjectPath)' == ''">$(_RepoRoot)src\Aspire.Tray\Windows\Aspire.Tray.Windows.csproj</_TrayWindowsProjectPath>
-      <_TrayLinuxProjectPath Condition="'$(_TrayLinuxProjectPath)' == ''">$(_RepoRoot)src\Aspire.Tray\Linux\Aspire.Tray.Linux.csproj</_TrayLinuxProjectPath>
-    </PropertyGroup>
-
-    <Error Condition="$(TargetRid.StartsWith('win-')) and !$([MSBuild]::IsOSPlatform('Windows'))"
-           Text="Windows NativeAOT tray publishing requires a Windows build lane." />
-    <Error Condition="$(TargetRid.StartsWith('linux-')) and !$([MSBuild]::IsOSPlatform('Linux'))"
-           Text="Linux NativeAOT tray publishing requires a Linux build lane." />
-
     <Message Importance="high" Text="Publishing native tray for $(TargetRid)..." />
-    <Exec Command="dotnet publish &quot;$(_TrayProjectPath)&quot; -r $(TargetRid) /p:TrayAppPath=&quot;$(TrayAppPath.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
+    <Exec Command="dotnet publish &quot;$(_TrayProjectPath)&quot; -r $(TargetRid) /p:TrayAppPath=&quot;$(TrayDirectory.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
           Condition="$(TargetRid.StartsWith('osx-'))" />
 
-    <Exec Command="dotnet publish &quot;$(_TrayWindowsProjectPath)&quot; -r $(TargetRid) --self-contained --output &quot;$(WindowsTrayPath.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
+    <Exec Command="dotnet publish &quot;$(_TrayProjectPath)&quot; -r $(TargetRid) --self-contained --output &quot;$(TrayDirectory.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
           EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
-          Condition="$(TargetRid.StartsWith('win-'))" />
-    <Exec Command="dotnet publish &quot;$(_TrayLinuxProjectPath)&quot; -r $(TargetRid) --self-contained --output &quot;$(LinuxTrayDirectory.TrimEnd('\').TrimEnd('/'))/&quot; $(_BundleChildArgs) &quot;-bl:$(_ArtifactsLogDir)PublishTray.binlog&quot;"
-          EnvironmentVariables="$(_NuGetCacheEnvironmentVariables)"
-          Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'" />
+          Condition="!$(TargetRid.StartsWith('osx-'))" />
   </Target>
 
   <Target Name="_SetTrayBuildProperties">
@@ -374,7 +366,7 @@
          global properties; forward locally evaluated identity and cache values too. -->
     <PropertyGroup>
       <_TraySigningArchivePath Condition="'$(_TraySigningArchivePath)' == ''">$([MSBuild]::NormalizePath('$(_ArtifactsDir)', 'bin', 'Aspire.Tray.Mac', '$(Configuration)', '$(DefaultTargetFramework)', '$(TargetRid)', 'signing', 'AspireTray.zip'))</_TraySigningArchivePath>
-      <_TrayBuildProperties>Configuration=$(Configuration);TargetRid=$(TargetRid);RuntimeIdentifier=$(TargetRid);ContinuousIntegrationBuild=$(ContinuousIntegrationBuild);VersionPrefix=$(VersionPrefix);TrayAppPath=$(TrayAppPath);TraySigningArchive=$(_TraySigningArchivePath)</_TrayBuildProperties>
+      <_TrayBuildProperties>Configuration=$(Configuration);TargetRid=$(TargetRid);RuntimeIdentifier=$(TargetRid);ContinuousIntegrationBuild=$(ContinuousIntegrationBuild);VersionPrefix=$(VersionPrefix);TrayAppPath=$(TrayDirectory);TraySigningArchive=$(_TraySigningArchivePath)</_TrayBuildProperties>
       <_TrayBuildProperties Condition="'$(_BundleNuGetCache)' != ''"      >$(_TrayBuildProperties);RestorePackagesPath=$(_BundleNuGetCache);NuGetPackageRoot=$(_BundleNuGetCache)</_TrayBuildProperties>
       <_TrayBuildProperties Condition="'$(VersionSuffix)' != ''"          >$(_TrayBuildProperties);VersionSuffix=$(VersionSuffix)</_TrayBuildProperties>
       <_TrayBuildProperties Condition="'$(DotNetFinalVersionKind)' != ''" >$(_TrayBuildProperties);DotNetFinalVersionKind=$(DotNetFinalVersionKind)</_TrayBuildProperties>
@@ -472,11 +464,11 @@
       <_RequiredPreparedBundleFile Include="$(_TerminalHostExecutablePath)" />
       <_RequiredPreparedBundleFile Include="$(_AppHostServerExecutablePath);$([MSBuild]::NormalizePath('$(_AppHostServerPublishDir)', 'ats-contract.json'))" />
       <_RequiredPreparedBundleFile Include="$(_DashboardExecutablePath);$([MSBuild]::NormalizePath('$(_DashboardPublishDir)', 'wwwroot', '_framework', 'blazor.web.js'));$([MSBuild]::NormalizePath('$(_DashboardPublishDir)', '$(_PreparedSqliteLibrary)'))" />
-      <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(WindowsTrayPath)', 'aspire-tray.exe'));$([MSBuild]::NormalizePath('$(WindowsTrayPath)', 'Aspire.ico'))"
+      <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(TrayDirectory)', 'aspire-tray.exe'));$([MSBuild]::NormalizePath('$(TrayDirectory)', 'Aspire.ico'))"
                                    Condition="$(TargetRid.StartsWith('win-'))" />
-      <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(TrayAppPath)', 'Contents', 'MacOS', 'aspire-tray'));$([MSBuild]::NormalizePath('$(TrayAppPath)', 'Contents', 'Info.plist'));$([MSBuild]::NormalizePath('$(TrayAppPath)', 'Contents', 'Resources', 'Aspire.icns'))"
+      <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(TrayDirectory)', 'Contents', 'MacOS', 'aspire-tray'));$([MSBuild]::NormalizePath('$(TrayDirectory)', 'Contents', 'Info.plist'));$([MSBuild]::NormalizePath('$(TrayDirectory)', 'Contents', 'Resources', 'Aspire.icns'))"
                                    Condition="$(TargetRid.StartsWith('osx-'))" />
-      <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(LinuxTrayDirectory)', 'aspire-tray'));$([MSBuild]::NormalizePath('$(LinuxTrayDirectory)', 'Aspire.png'))"
+      <_RequiredPreparedBundleFile Include="$([MSBuild]::NormalizePath('$(TrayDirectory)', 'aspire-tray'));$([MSBuild]::NormalizePath('$(TrayDirectory)', 'Aspire.png'))"
                                    Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'" />
     </ItemGroup>
 
@@ -514,9 +506,7 @@
       <_AppHostServerPublishDirArg>$(_AppHostServerPublishDir.TrimEnd('\').TrimEnd('/'))</_AppHostServerPublishDirArg>
 
       <_CreateLayoutArgs>--output "$(_BundleLayoutDirArg)" --artifacts "$(_ArtifactsDirArg)" --managed "$(_ManagedPublishDirArg)" --dashboard "$(_DashboardPublishDirArg)" --terminal-host "$(_TerminalHostPublishDirArg)" --apphost-server "$(_AppHostServerPublishDirArg)" --rid $(TargetRid) --configuration $(Configuration) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
-      <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('osx-'))">$(_CreateLayoutArgs) --tray-app "$(TrayAppPath.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
-      <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('win-'))">$(_CreateLayoutArgs) --tray-windows "$(WindowsTrayPath.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
-      <_CreateLayoutArgs Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'">$(_CreateLayoutArgs) --tray-linux "$(LinuxTrayDirectory.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
+      <_CreateLayoutArgs Condition="'$(TargetRid)' != 'linux-musl-x64'">$(_CreateLayoutArgs) --tray "$(TrayDirectory.TrimEnd('\').TrimEnd('/'))/"</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout and archive..." />

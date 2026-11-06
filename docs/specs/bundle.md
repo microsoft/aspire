@@ -423,7 +423,7 @@ dotnet run --project tools/CreateLayout -- \
   --artifacts artifacts \
   --rid linux-x64 \
   --configuration Release \
-  --tray-linux artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
+  --tray artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
   --bundle-version local-test \
   --archive
 ```
@@ -432,8 +432,16 @@ dotnet run --project tools/CreateLayout -- \
 
 Use `--dashboard "/path/to/prepared/publish"` to select a Dashboard publish directory instead of discovering one under the artifacts directory. Invalid or incomplete input fails without falling back to discovery.
 
-Desktop layouts require their prepared tray input: `--tray-app` on macOS,
-`--tray-windows` on Windows, or `--tray-linux` on glibc Linux.
+Desktop layouts require `--tray <directory>` for their prepared tray input.
+Use the complete `.app` directory on macOS and the executable/icon publish
+directory on Windows or glibc Linux. The target RID selects the payload format;
+musl layouts have no tray input.
+
+`TrayDirectory` overrides the matching tray directory in `eng/Bundle.proj`.
+Publishing requires a matching host OS, validated before any component restore
+or publish. Cross-architecture builds on that OS remain supported.
+`SkipTrayPublish=true` reuses a prepared directory without requiring the
+publishing host OS; payload validation still applies before packaging.
 
 For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/README.md). CI packaging additionally uses [dashboardpack](../../eng/dashboardpack/Common.projitems), [clipack](../../eng/clipack/Common.projitems), signing targets, and the native-archive workflows.
 
@@ -445,7 +453,6 @@ macOS bundles contain the complete `Aspire Tray.app`, including its executable, 
 
 Linux x64 and ARM64 bundles contain `tray/aspire-tray` and `tray/Aspire.png`.
 The Linux archive verifier rejects extra entries and requires both files to be regular, non-symlink files.
-`LinuxTrayDirectory` overrides the pre-built Linux tray directory used by `eng/Bundle.proj`.
 
 Layout assembly validates ELF architecture and executable permissions. GTK 3 and
 an Ayatana/compatible AppIndicator library are dynamically loaded host

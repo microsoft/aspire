@@ -126,8 +126,8 @@
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe" />
     <!-- Bundle builds can reuse a tray published outside the standard artifacts tree. -->
-    <ItemsToSign Condition="'$(WindowsTrayPath)' != '' and $(TargetRid.StartsWith('win-'))"
-                 Include="$([MSBuild]::NormalizePath('$(WindowsTrayPath)', 'aspire-tray.exe'))"
+    <ItemsToSign Condition="'$(TrayDirectory)' != '' and $(TargetRid.StartsWith('win-'))"
+                 Include="$([MSBuild]::NormalizePath('$(TrayDirectory)', 'aspire-tray.exe'))"
                  Exclude="@(ItemsToSign)" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Tray.Linux/**/publish/aspire-tray" />
