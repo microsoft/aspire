@@ -37,6 +37,7 @@ public class GoStarterTemplateTests
         Assert.Contains("builder.AddViteApp(\"frontend\", \"./frontend\", nil)", appHost, StringComparison.Ordinal);
         Assert.Contains("WithReference(api).", appHost, StringComparison.Ordinal);
         Assert.Contains("WaitFor(api)", appHost, StringComparison.Ordinal);
+        Assert.Contains("WithHttpHealthCheck(&aspire.WithHttpHealthCheckOptions{Path: aspire.StringPtr(\"/health\")})", appHost, StringComparison.Ordinal);
         Assert.Contains("api.PublishWithContainerFiles(frontend, \"./static\")", appHost, StringComparison.Ordinal);
 
         var viteConfig = File.ReadAllText(Path.Combine(GetGoStarterDirectory(), "frontend", "vite.config.ts"));

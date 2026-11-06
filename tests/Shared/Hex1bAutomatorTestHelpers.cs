@@ -626,7 +626,7 @@ internal static class Hex1bAutomatorTestHelpers
                 // The list omits the C# starters when the image has no .NET SDK, so search by text instead of counting Downs.
                 await auto.TypeAsync("Go API");
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (Go API + Redis, Go AppHost)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (Go API/React + Redis, Go AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Go starter template selected");
                 await auto.EnterAsync();
