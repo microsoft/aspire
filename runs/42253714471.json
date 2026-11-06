@@ -1,0 +1,69 @@
+{
+  "run_id": 42253714471,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42253714471",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-06T17:21:03Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21861,
+    "title": "Add dashboard resource-selector dropdown",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/dashboard-resource-selector-dropdown",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21861",
+    "merged_at": "2026-11-06T16:34:49Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "5138b2a86ab20b3834b01983382a8b478d6b6a39",
+    "failed_sha": "52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3",
+        "message": "Add dashboard resource-selector dropdown (#21861) ## Description Make resource switching available while the dashboard sidebar is collapsed, without reopening the full sidebar. This extracts only the resource-selector dropdown from #21793. ### User-facing usage Click the resource-name button to open the searchable resource list. Normal selection closes it; Ctrl/Cmd/Shift selection keeps it open. Selecting all closes it. Mobile retains the existing drawer. ### Validation - Passed: **1,394 compone",
+        "html_url": "https://github.com/microsoft/aspire/commit/52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3",
+        "pull_request": {
+          "number": 21861,
+          "title": "Add dashboard resource-selector dropdown",
+          "url": "https://github.com/microsoft/aspire/pull/21861",
+          "merged_at": "2026-11-06T16:34:49Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Te... / Hosting-4 (windows-latest)",
+      "id": 128016281815,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42253714471/job/128016281815",
+      "classification": "transient-infra",
+      "reason": "Single test failed because DCP docker.exe --version dependency check timed out on Windows runner.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Backchannel.AuxiliaryBackchannelRpcTargetTests.GetResourceLogsAsync_ReturnsLogsForSingleReplica_WhenResolvedInstanceNameIsPassed",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-4, Hosting-4, tests/Aspire.Hosting.Te... / Hosting-4 (windows-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-06T16:42:39.150Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 5208, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n",
+      "stack_trace": "   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n   at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n   at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n   at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n   at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 490\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 197\n   at Aspire.Hosting.Backchannel.AuxiliaryBackchannelRpcTargetTests.GetResourceLogsAsync_ReturnsLogsForSingleReplica_WhenResolvedInstanceNameIsPassed() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\Backchannel\\AuxiliaryBackchannelRpcTargetTests.cs:line 2104\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-11-06T16:42:28] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.1.0-ci\n| [2026-11-06T16:42:28] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-11-06T16:42:28] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.TestUtilities\n| [2026-11-06T16:42:29] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-11-06T16:42:29] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-11-06T16:42:29] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-11-06T16:42:29] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAps3sapjy.5812\n| [2026-11-06T16:42:29] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAps3sapjy.5812\n| [2026-11-06T16:42:54] Microsoft.Extensions.Hosting.Internal.Host Error: Hosting failed to start\n| Aspire.Hosting.DistributedApplicationException: Application orchestrator dependency check returned an error: The operation has timed out. 2026-11-06T16:42:39.150Z\tinfo\tdcp.info.os-executor\tContext expired, stopping process...\t{\"PID\": 5208, \"Command\": \"C:\\\\Windows\\\\system32\\\\docker.exe\", \"Args\": [\"--version\"]}\n|    at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 116\n|    at Aspire.Hosting.Dcp.DcpDependencyCheck.GetDcpInfoAsync(Boolean force, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpDependencyCheck.cs:line 132\n|    at Aspire.Hosting.Dcp.DcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 81\n|    at Aspire.Hosting.Dcp.DcpHost.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Dcp/DcpHost.cs:line 72\n|    at Aspire.Hosting.Orchestrator.OrchestratorHostService.StartAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/Orchestrator/OrchestratorHostService.cs:line 39\n|    at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__14_1(IHostedService service, CancellationToken token)\n|    at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n| [2026-11-06T16:42:54] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcplbpevtji.hhx\n| [2026-11-06T16:43:04] Aspire.Hosting.FileSystemService Debug: Cleaning up 1 remaining temporary files/directories\n| [2026-11-06T16:43:04] Aspire.Hosting.FileSystemService Debug: Cleaned up temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcplbpevtji.hhx\n",
+      "standard_error": "",
+      "classification": "transient-infra",
+      "reason": "Orchestrator startup failed on docker --version dependency check timeout, not test logic.",
+      "job_id": 128016281815,
+      "execution_id": "fc8ffbc9-743b-4780-aa1d-007244c34f21",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dcp-docker-version-dependency-check-timeout-windows"
+  ]
+}
