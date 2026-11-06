@@ -11,6 +11,6 @@ internal static class StorageEmulatorContainerImageTags
     /// <remarks>azure-storage/azurite</remarks>
     public const string Image = "azure-storage/azurite";
 
-    /// <remarks>3.35.0</remarks>
-    public const string Tag = "3.35.0";
+    /// <remarks>3.37.0</remarks>
+    public const string Tag = "3.37.0";
 }
