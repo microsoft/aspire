@@ -63,7 +63,7 @@ remaining work are recorded once, under their coding sessions.
 | D3 | **Activation is `aspire run --watch`**, a local-run sub-mode, not a new `aspire watch` command. The target includes C# service watching and C# AppHost watching through the tool's `host` command, with the latter gated as described in Session 8. |
 | D4 | **Implement only C# service watch here.** Retain a general language-package seam. For polyglot AppHosts, keep the guest runtime's native AppHost watching and separately watch its C# services; do not wrap a native AppHost server or guest program in the .NET `host` command. |
 | D5 | **Core exposes run configuration as state, not watch mechanics.** Integrations consume `ExecutionContext.RunConfiguration.WatchEnabled`. The .NET package owns service-watch coordination and tool acquisition; the CLI owns command UX, the infrastructure proxy command, and invocation of the AppHost wrapper. Shared core project defaults, publishing, and executable launch infrastructure remain reusable. |
-| D6 | **Acquire the pinned watcher at watch-run time, owned by `Aspire.Hosting.Dotnet`, not bundled in the CLI.** The CLI invokes the package-owned ensure operation before C# AppHost `host` launch. Session 4 defines the acquisition requirements. |
+| D6 | **Ship the pinned watcher inside `Aspire.Hosting.Dotnet` (like DCP), never download it at run time.** One payload per SDK major; the AppHost finds it through `aspiredotnetwatchtoolsdir` assembly metadata. No fallback: a missing payload is an actionable error. Session 4 records the implementation. |
 | D7 | **Retain Aspire's coordinated initial-build barrier and accept the watcher's additional build for now.** Avoiding duplicate work through upstream `--no-build` support is a future improvement, not a prerequisite or an available option. |
 | D8 | **AppHost watch is a separate session.** Earlier service-watch work runs the AppHost normally. Package-based watching is for the CLI path, not IDE-owned runs; preserve IDE-native change tracking, service launch, and session-restart behavior. |
 | D9 | **Non-watch F5 parity is required and implemented.** Preserve capability negotiation and older-launcher behavior rather than forcing every IDE onto the coordinated-build path. |
@@ -107,10 +107,11 @@ proof that these requirements are satisfied. Tool runtime, selected MSBuild SDK,
 framework are distinct compatibility checks.
 
 An ordinary `PackageReference` plus `GeneratePathProperty` is **not** a sufficient acquisition design
-for this package type ([NU1212][nu1212]). `PackageDownload` is a possible acquisition primitive, but
-[does not flow transitively or become a packed dependency][package-download]. Neither mechanism alone
-implements D6. Runtime acquisition must also work for package-backed polyglot hosts, which load integration
-assemblies without executing a C# AppHost's MSBuild targets.
+for this package type ([NU1212][nu1212]). `PackageDownload` [does not flow transitively or become a packed
+dependency][package-download], so (like `eng/dcppack`) `Aspire.Hosting.Dotnet` `PackageDownload`s the payload and
+repacks it under `tools/dotnet-watch/<major>/`, with a `buildTransitive` targets file that stamps the path on the AppHost.
+Package-backed polyglot hosts load integration assemblies without executing a C# AppHost's MSBuild targets, so they
+don't get that metadata (open gap; see Session 4).
 
 ### 3.2 Commands
 
@@ -307,30 +308,26 @@ does not make .NET services watch.
 **Evidence:** `RunConfiguration.cs`, execution-context/options and builder source,
 `OperationModesTests`, and the polyglot codegen snapshots.
 
-### Session 4 - Runtime-only watcher acquisition and resolution
+### Session 4 - Packaged watcher acquisition and resolution
 
-**Not implemented.** There is no watcher pin/reference, acquisition implementation, tool-path target,
-or runtime resolver in `Aspire.Hosting.Dotnet`.
+**Implemented (packaging, no runtime download).**
 
-Implement D6 using the verified package contract in section 3:
+- `eng/Versions.props` pins one payload per SDK major: `MicrosoftDotNetHotReloadWatchAspireNet10Version` (10.0.403) and
+  `MicrosoftDotNetHotReloadWatchAspireNet11Version` (11.0.100-rc.2). `Aspire.Hosting.Dotnet.csproj` `PackageDownload`s both
+  (a `PackageReference` fails with NU1212), checks each payload is complete, lays it out under
+  `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/<major>/` and packs it as `tools/dotnet-watch/<major>/`.
+- `buildTransitive/Aspire.Hosting.Dotnet.targets` adds `AssemblyMetadata("aspiredotnetwatchtoolsdir", …)` to AppHosts
+  (`IsAspireHost=true`). In-repo AppHosts import it through `Aspire.RepoTesting.targets` and the repo-mode polyglot server
+  project, with `AspireDotnetWatchToolsDir` set in the root `Directory.Build.props`.
+- `DotnetWatchToolResolver.ResolveToolPath` picks `<toolsdir>/<sdk major>/Microsoft.DotNet.HotReload.Watch.Aspire.dll`.
+  Missing metadata, a missing payload, or an SDK major without a payload throws an actionable error (no fallback, no
+  network). `ASPIRE_DOTNET_WATCH_TOOL_PATH` is an explicit override only.
 
-- Pin the verified `10.0.403` baseline and acquire its complete payload from approved/configured sources only when
-  an effective CLI watch run needs it. Reuse a compatible cache entry; handle concurrent ensure requests,
-  interrupted acquisition, version mismatch, and missing runtimes with explicit diagnostics.
-- Keep acquisition logic owned by `Aspire.Hosting.Dotnet`, usable during AppHost startup before the
-  service-watch server starts. Do not add a build/restore/publish or ordinary-run download prerequisite.
-- Expose a package-owned **launch-time ensure/resolution entry point** that the CLI can invoke from the
-  already-restored C# AppHost project **before** launching the AppHost through `host`. Otherwise there is
-  a circular dependency: AppHost startup cannot acquire the tool needed to start that AppHost.
-- Establish path/configuration precedence and pass the same resolved installation to both launch paths.
-  C# MSBuild metadata may expose information where useful, but cannot be the sole runtime contract for
-  direct-loaded polyglot packages. The exact ensure entry point, cache layout, and tool-compatible
-  acquisition primitive remain implementation work, not an assumed ordinary `PackageReference`.
+**Open:** package-backed polyglot AppHosts don't run the package's MSBuild targets, so they need the tool in the CLI bundle
+(or the override). Payload signing in the official build and other SDK patch/preview versions of a major are unverified.
 
-**Acceptance:** watch-only acquisition and cache reuse work for C# and package-backed TypeScript
-AppHosts; non-watch/build/restore/publish do not acquire the tool; the resolved installation executes
-`--help` and meets runtime requirements. Cover failures, cancellation, concurrent callers, and approved
-feed selection without modifying repository `NuGet.config`.
+**Evidence:** `DotnetWatchCoordinatorTests` (resolution, errors, shipped payload runtimeconfig matches its major) and the
+contract tests, which run against the shipped payload.
 
 ### Session 5 - Coordinated initial builds and output-bound launches
 

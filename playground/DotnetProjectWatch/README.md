@@ -9,11 +9,13 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
   (plus `ASPIRE_DOTNET_WATCH_PROXY_HOST=<dotnet muxer>` when the CLI is a framework-dependent `aspire.dll`).
 - In watch runs, `AddDotnetProject` skips Aspire's coordinated build and registers every service with one
   `dotnet-watch` executable resource (`Aspire.Hosting.Dotnet/Watch/DotnetWatchCoordinator.cs`). The watcher's build is the only build. That resource:
-  - resolves the SDK the services use and acquires the **matching** `Microsoft.DotNet.HotReload.Watch.Aspire` version
-    (the same version as the SDK; SDK 10.x uses 10.0.403) into `~/.aspire/dotnet-watch/<version>`. The package is downloaded
-    from nuget.org and its SHA-512 is checked against a pinned hash (10.0.403) or the nuget.org catalog `packageHash`;
-    only versions that aren't on nuget.org fall back to the dnceng `dotnet-public` feed, with a warning that the hash wasn't verified.
-    Override with `ASPIRE_DOTNET_WATCH_TOOL_VERSION` or `ASPIRE_DOTNET_WATCH_TOOL_PATH`.
+  - resolves the SDK the services use and picks the `Microsoft.DotNet.HotReload.Watch.Aspire` payload for that SDK's
+    **major** version (10 → 10.0.403, 11 → 11.0.100-rc.2). Nothing is downloaded at run time: like DCP, the payloads are
+    `PackageDownload`ed when `Aspire.Hosting.Dotnet` builds, packed into its nupkg under `tools/dotnet-watch/<major>/`, and
+    `buildTransitive/Aspire.Hosting.Dotnet.targets` stamps that directory on the AppHost as `aspiredotnetwatchtoolsdir`
+    assembly metadata (in-repo AppHosts use `artifacts/obj/Aspire.Hosting.Dotnet/dotnet-watch/`). A missing payload, missing
+    metadata, or an SDK major with no payload fails with an error that says how to fix it; there is no fallback.
+    `ASPIRE_DOTNET_WATCH_TOOL_PATH` points at an explicit tool directory instead (for testing a different watcher build).
   - runs `dotnet exec <tool> server --sdk <sdk> --server <pipe> --status-pipe <pipe> --resource <each project>` from a
     per-run directory `/tmp/aspw-<id>`, which is deleted on shutdown. The directory is created `0700` (an existing or
     symlinked one is rejected) and every pipe/socket is `CurrentUserOnly` (`0600` sockets, peer UID checked).
@@ -68,8 +70,8 @@ In the dashboard:
 - Each service's console log has the same `[watch]` notices (filter the log by `[watch]`).
 - A service that exits with a non-zero code shows **Crashed** with the exit code (property `dotnet-watch.last-event`); the next save, or Restart, relaunches it.
 - **Stop**/**Start**/**Restart** work as usual. **Rebuild** stops the service, runs `dotnet build`, and starts it again; use it after adding a package or project reference.
-- If the watch tool can't be downloaded (offline), the terminal says why and what to do; after fixing it, **Start** `dotnet-watch`
-  (`aspire resource dotnet-watch start`) and the services start.
+- If the watch tool can't be resolved (payload missing, unsupported SDK major), the terminal says why and what to do; after fixing it,
+  **Start** `dotnet-watch` (`aspire resource dotnet-watch start`) and the services start.
 
 ## Hot reload scenario matrix
 
@@ -98,7 +100,7 @@ Measured on Linux (2 cores) with SDK 11.0.100-rc.2 and the playground; latency i
 | App arguments (`WithArgs`) | fixed | The watcher appends arguments directly to `dotnet run`; the proxy now prefixes them with `--`, so `WithArgs("--Demo:Greeting", "from args")` reaches the app (`/config` → `from args`) | |
 | `WithReplicas(2)` | works | Shared edit reaches both replicas; rude edit restarts both. [transcript](docs/transcripts/03-replicas-csproj-static.txt) | #13738 |
 | File-based C# app (`AddDotnetProject("x", "app.cs")`) | not supported | rc.2 watch server runs `dotnet run` without `--file` ("Couldn't find a project to run"), so `aspire run --watch` fails until the app calls `.WithWatch(false)`, then it runs plain. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | |
-| Watch tool download offline | fixed | Actionable terminal error; services wait; `aspire resource dotnet-watch start` recovers. [transcript](docs/transcripts/06-offline-tool-download.txt) | |
+| Watch tool acquisition | fixed | Shipped in `Aspire.Hosting.Dotnet` (no download); missing payload or unsupported SDK major is an actionable terminal error. | |
 | Plain `dotnet run` of the AppHost / IDE debug | fixed | IDE: notice, the IDE owns hot reload. `WatchEnabled` without the CLI: error | #15710 |
 | Per-resource opt-out | fixed | `.WithWatch(false)`: terminal and resource-log notice, plain `dotnet run`. [transcript](docs/transcripts/11-watch-opt-out-and-rejection.txt) | #20702 |
 | Run-to-completion / persistent | fixed | `WaitForCompletion` targets run once unwatched (notice); persistent lifetime is an error (unit-tested) | #9756 |
@@ -112,7 +114,9 @@ Measured on Linux (2 cores) with SDK 11.0.100-rc.2 and the playground; latency i
   the AppHost is shutting down can leave relaunched services behind (seen once).
 - **Crashed** is a custom state, so the dashboard summary counts it as "Inactive" rather than "needs attention".
 - Session 8 (AppHost watch) isn't implemented; the TMPDIR/global.json multi-root workaround is still a `HACK(spike)`.
-- Only Linux was tested; daily/preview SDK versions without a published watch package need `ASPIRE_DOTNET_WATCH_TOOL_VERSION`/`_PATH`.
+- Only Linux was tested. One payload is shipped per SDK major (10.0.403, 11.0.100-rc.2); other SDKs of the same major use it unverified.
+- Package-backed polyglot AppHosts (no MSBuild targets run for the server) have no `aspiredotnetwatchtoolsdir` metadata and fail
+  with the actionable error unless `ASPIRE_DOTNET_WATCH_TOOL_PATH` is set; the tool should move into the CLI bundle for them.
 - The watcher builds and launches with its default configuration and from the project directory: `AppHost:BuildConfiguration`,
   `WithBuildEnvironment` and `WithWorkingDirectory` aren't honored in watch mode yet (the launch protocol has no fields
   for them).
@@ -190,7 +194,6 @@ Screenshots (dashboard) and terminal transcripts (`aspire run --watch` output, d
   [replicas, csproj/Rebuild, static files](docs/transcripts/03-replicas-csproj-static.txt),
   [edit, compile error, crash](docs/transcripts/04-edit-compile-error-crash.txt),
   [initial failure and revert](docs/transcripts/05-initial-build-failure-revert.txt),
-  [offline tool download](docs/transcripts/06-offline-tool-download.txt),
   [restart preserves env/endpoints](docs/transcripts/08-restart-preserves-env-and-endpoints.txt),
   [TypeScript AppHost, --no-build errors, defaultWatchEnabled](docs/transcripts/09-typescript-apphost-watch.txt),
   [Python AppHost](docs/transcripts/10-python-apphost-watch.txt),
