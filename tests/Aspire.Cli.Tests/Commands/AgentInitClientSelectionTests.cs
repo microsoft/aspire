@@ -410,6 +410,42 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AgentInit_SkillSummary_IncludesOnlySuccessfulPlaywrightDestinations()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.cs"), string.Empty);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var blockedSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "playwright-cli");
+        await AgentConfigurationTestContext.WriteAsync(blockedSkillPath, "blocked destination");
+        var interaction = new TestInteractionService();
+        var version = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+            options.InteractionServiceFactory = _ => interaction;
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new NpmPackageInfo { Version = version })
+            };
+            options.PlaywrightCliRunnerFactory = _ => new FakePlaywrightCliRunner { InstalledVersion = version };
+        });
+        using var provider = services.BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot,claude,opencode --scope project --skills playwright-cli --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Empty(interaction.DisplayedErrors);
+        var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+        Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_InstalledWithMirrorWarnings, warning.Message);
+        Assert.Equal("# Playwright CLI Skill", await File.ReadAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "playwright-cli", "SKILL.md")));
+        Assert.Equal("blocked destination", await File.ReadAllTextAsync(blockedSkillPath));
+        var summary = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message.StartsWith(AgentCommandStrings.InitCommand_InstalledSkillsSummary, StringComparison.Ordinal));
+        await Verify(summary.Message);
+    }
+
+    [Fact]
     public async Task AgentInit_PromptsForAgentsBeforeAssetsAndScope()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
