@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <!-- No published baseline exists for this package yet; skip the repo's package validation. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <MinCodeCoverage>0</MinCodeCoverage>
+    <!-- Reference drop: these files keep their original Chaos copyright headers and
+         doc-comment coverage. Aspire's header convention and full XML docs belong to
+         the contribution path, not this read-only branch. -->
+    <NoWarn>$(NoWarn);CS1591;IDE0073</NoWarn>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aspire.Chaos.Client</RootNamespace>
+    <AssemblyName>Aspire.Chaos.Client</AssemblyName>
+    <Description>Thin HTTP client + ChaosPolicy domain model for talking to a running Aspire.Hosting.Chaos proxy. Has NO AppHost / Aspire.Hosting dependencies — safe to reference from test runners, scripts, CLIs, and other harness code that needs to install / inspect / clear chaos policies at runtime.</Description>
+    <PackageTags>aspire chaos client fault-injection testing harness</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Intentionally NO Aspire.Hosting reference — this is the pure client surface. -->
+    <PackageReference Include="System.Text.Json" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
