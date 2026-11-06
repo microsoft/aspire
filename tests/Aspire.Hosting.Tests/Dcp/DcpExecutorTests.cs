@@ -9471,6 +9471,362 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(true, false, false, "aspire-dashboard", OtlpProtocol.Grpc)]
+    [InlineData(false, true, false, "aspire-dashboard", OtlpProtocol.HttpProtobuf)]
+    [InlineData(true, true, false, "aspire-dashboard", OtlpProtocol.Grpc)]
+    [InlineData(true, true, false, "aspire-dashboard", OtlpProtocol.HttpProtobuf)]
+    [InlineData(true, true, true, "aspire-dashboard", OtlpProtocol.Grpc)]
+    [InlineData(true, true, false, "ASPIRE-DASHBOARD", OtlpProtocol.Grpc)]
+    public async Task DashboardTunnelAutomaticallyExposesOnlyOtlpEndpoints(bool includeGrpc, bool includeHttp, bool useProject, string dashboardName, OtlpProtocol protocol)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        IResourceBuilder<IResourceWithEndpoints> dashboard = useProject
+            ? builder.AddProject<Projects.ServiceA>(dashboardName, launchProfileName: null)
+            : builder.AddExecutable(dashboardName, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc, includeHttp);
+        builder.AddContainer("telemetry", "image").WithOtlpExporter(protocol);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var expectedEndpoints = new List<string>();
+        if (includeGrpc)
+        {
+            expectedEndpoints.Add(KnownEndpointNames.OtlpGrpcEndpointName);
+        }
+        if (includeHttp)
+        {
+            expectedEndpoints.Add(KnownEndpointNames.OtlpHttpEndpointName);
+        }
+
+        var tunnelServices = AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, [.. expectedEndpoints]);
+        var exporterEndpointName = protocol == OtlpProtocol.Grpc
+            ? KnownEndpointNames.OtlpGrpcEndpointName
+            : KnownEndpointNames.OtlpHttpEndpointName;
+        var exporterService = Assert.Single(tunnelServices, service => service.EndpointName == exporterEndpointName);
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Env);
+        Assert.Equal(
+            $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{exporterService.AllocatedPort}",
+            Assert.Single(container.Spec.Env, variable => variable.Name == KnownOtelConfigNames.ExporterOtlpEndpoint).Value);
+        Assert.Equal(
+            protocol == OtlpProtocol.Grpc ? "grpc" : "http/protobuf",
+            Assert.Single(container.Spec.Env, variable => variable.Name == KnownOtelConfigNames.ExporterOtlpProtocol).Value);
+
+        var frontendUrl = await dashboard.GetEndpoint("http").GetValueAsync().DefaultTimeout();
+        Assert.Equal("http://localhost:18888", frontendUrl);
+    }
+
+    [Theory]
+    [InlineData("environment", false)]
+    [InlineData("environment", true)]
+    [InlineData("arguments", true)]
+    [InlineData("expression", true)]
+    [InlineData("property", true)]
+    [InlineData("reference", true)]
+    [InlineData("all-references", true)]
+    [InlineData("excluded-reference", true)]
+    [InlineData("host-url", true)]
+    public async Task DashboardTunnelPreservesExplicitReferences(string referenceKind, bool withExporter)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        IResourceBuilder<IResourceWithEndpoints> dashboard = referenceKind == "all-references"
+            ? builder.AddProject<Projects.ServiceA>(KnownResourceNames.AspireDashboard, launchProfileName: null)
+            : builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        var container = builder.AddContainer("consumer", "image");
+        if (withExporter)
+        {
+            container.WithOtlpExporter();
+        }
+
+        switch (referenceKind)
+        {
+            case "environment":
+                container.WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http"));
+                break;
+            case "arguments":
+                container.WithArgs(dashboard.GetEndpoint("http"));
+                break;
+            case "expression":
+                container.WithEnvironment("DASHBOARD_UI", ReferenceExpression.Create($"{dashboard.GetEndpoint("http")}/path"));
+                break;
+            case "property":
+                container.WithEnvironment("DASHBOARD_PORT", dashboard.GetEndpoint("http").Property(EndpointProperty.Port));
+                break;
+            case "reference":
+                container.WithReference(dashboard.GetEndpoint("http"));
+                break;
+            case "all-references":
+                container.WithReference(dashboard);
+                break;
+            case "excluded-reference":
+                container.WithReference(dashboard.GetEndpoint("diagnostics"));
+                break;
+            case "host-url":
+                container.WithEnvironment("DASHBOARD_UI", new HostUrl("http://localhost:18888/path"));
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected reference kind '{referenceKind}'.");
+        }
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var expectedEndpoints = new List<string>
+        {
+            KnownEndpointNames.OtlpGrpcEndpointName,
+            KnownEndpointNames.OtlpHttpEndpointName,
+            referenceKind == "excluded-reference" ? "diagnostics" : "http"
+        };
+        if (referenceKind == "all-references")
+        {
+            expectedEndpoints.Add("https");
+        }
+
+        var tunnelServices = AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, [.. expectedEndpoints]);
+        var referencedEndpointName = referenceKind == "excluded-reference" ? "diagnostics" : "http";
+        var referencedService = Assert.Single(tunnelServices, service => service.EndpointName == referencedEndpointName);
+        var expectedUrl = $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{referencedService.AllocatedPort}";
+        var dcpContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(dcpContainer.Spec.Env);
+
+        switch (referenceKind)
+        {
+            case "environment":
+                Assert.Equal(expectedUrl, Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+                break;
+            case "arguments":
+                Assert.Equal([expectedUrl], dcpContainer.Spec.Args);
+                break;
+            case "expression":
+            case "host-url":
+                Assert.Equal($"{expectedUrl}/path", Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+                break;
+            case "property":
+                Assert.Equal(referencedService.AllocatedPort.ToString(), Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == "DASHBOARD_PORT").Value);
+                break;
+            case "reference":
+            case "all-references":
+            case "excluded-reference":
+                Assert.Equal(
+                    expectedUrl,
+                    Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == $"services__{dashboard.Resource.Name}__{referencedEndpointName}__0").Value);
+                break;
+        }
+    }
+
+    [Fact]
+    public async Task DashboardTunnelUsesEffectiveCachedConfiguration()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        var environmentCalls = 0;
+        var argumentCalls = 0;
+        builder.AddContainer("telemetry", "image")
+            .WithOtlpExporter()
+            .WithEnvironment(context =>
+            {
+                Interlocked.Increment(ref environmentCalls);
+                context.EnvironmentVariables["DASHBOARD_UI"] = dashboard.GetEndpoint("http");
+                context.EnvironmentVariables["DASHBOARD_STATE"] = "enabled";
+            })
+            .WithEnvironment(context => context.EnvironmentVariables.Remove("DASHBOARD_UI"))
+            .WithArgs(context =>
+            {
+                Interlocked.Increment(ref argumentCalls);
+                context.Args.Add(dashboard.GetEndpoint("https"));
+            })
+            .WithArgs(context => context.Args.Clear());
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName);
+        Assert.Equal(1, environmentCalls);
+        Assert.Equal(1, argumentCalls);
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Env);
+        Assert.Equal(
+            [("DASHBOARD_STATE", "enabled")],
+            container.Spec.Env
+                .Where(variable => variable.Name is { } name && name.StartsWith("DASHBOARD_", StringComparison.Ordinal))
+                .Select(variable => (variable.Name, variable.Value)));
+        Assert.Empty(container.Spec.Args ?? []);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelPreservesExplicitLocalhostReferenceWithoutTunnelingIt()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("telemetry", "image")
+            .WithOtlpExporter()
+            .WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http", KnownNetworkIdentifiers.LocalhostNetwork));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName);
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Env);
+        Assert.Equal("http://localhost:18888", Assert.Single(container.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelAccumulatesExplicitEndpointsAcrossConsumers()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("telemetry", "image").WithOtlpExporter();
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithExplicitStart()
+            .WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName);
+
+        var reference = executor.GetResource(DcpExecutor.GetDcpInstance(consumer.Resource, instanceIndex: 0).Name);
+        await executor.StartResourceAsync(reference, CancellationToken.None).DefaultTimeout();
+
+        var tunnelServices = AssertTunnelEndpoints(
+            kubernetesService,
+            dashboard.Resource.Name,
+            KnownEndpointNames.OtlpGrpcEndpointName,
+            KnownEndpointNames.OtlpHttpEndpointName,
+            "http");
+        var uiService = Assert.Single(tunnelServices, service => service.EndpointName == "http");
+        var dcpConsumer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), container => container.AppModelResourceName == consumer.Resource.Name);
+        Assert.NotNull(dcpConsumer.Spec.Env);
+        Assert.Equal(
+            $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{uiService.AllocatedPort}",
+            Assert.Single(dcpConsumer.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelPreservesExplicitExecutableReference()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("container", "image");
+        var consumer = builder.AddExecutable("consumer", "command", "")
+            .WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelService = Assert.Single(AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, "http"));
+        var executable = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), resource => resource.AppModelResourceName == consumer.Resource.Name);
+        Assert.NotNull(executable.Spec.Env);
+        Assert.Equal(
+            $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{tunnelService.AllocatedPort}",
+            Assert.Single(executable.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelDoesNotCreateTunnelWhenNoEndpointsAreSelected()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: false, includeHttp: false);
+        builder.AddContainer("container", "image").WaitFor(dashboard);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.Equal(
+            ["diagnostics", "http", "https"],
+            kubernetesService.CreatedResources.OfType<Service>()
+                .Select(service => service.EndpointName)
+                .Order(StringComparers.EndpointAnnotationName));
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+    }
+
+    [Fact]
+    public async Task DashboardTunnelPreservesLegacyMode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("telemetry", "image").WithOtlpExporter();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService,
+            dcpOptions: new DcpOptions { EnableAspireContainerTunnel = false });
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        var containerNetworkServices = kubernetesService.CreatedResources.OfType<Service>()
+            .Where(service => service.AppModelResourceName == dashboard.Resource.Name &&
+                service.Metadata.Annotations.ContainsKey(CustomResource.ContainerNetworkAnnotation));
+        Assert.Equal(
+            new[] { "diagnostics", "http", "https", KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName }.Order(StringComparers.EndpointAnnotationName),
+            containerNetworkServices.Select(service => service.EndpointName).Order(StringComparers.EndpointAnnotationName));
+        Assert.Equal(
+            "http://host.docker.internal:18888",
+            await dashboard.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).GetValueAsync().DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task ContainerTunnelPreservesAllNonDashboardHostEndpoints()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var executable = builder.AddExecutable("program", "command", "")
+            .WithEndpoint(name: "http", scheme: "http", port: 18888, targetPort: 11888, isProxied: true)
+            .WithEndpoint(name: "admin", port: 18889, targetPort: 11889, isProxied: true)
+            .WithEndpoint(name: KnownEndpointNames.OtlpGrpcEndpointName, port: 4317, targetPort: 14317, isProxied: true);
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("PROGRAM_URL", executable.GetEndpoint("http"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, executable.Resource.Name, "http", "admin", KnownEndpointNames.OtlpGrpcEndpointName);
+    }
+
     [Fact]
     public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge()
     {
@@ -11111,6 +11467,48 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         volume.Status = new ContainerVolumeStatus { State = ContainerVolumeState.Ready };
 
         DcpExecutor.EnsureContainerVolumesReady([volume]);
+    }
+
+    private static void AddDashboardTunnelEndpoints<T>(IResourceBuilder<T> dashboard, bool includeGrpc, bool includeHttp) where T : IResourceWithEndpoints
+    {
+        dashboard
+            .WithEndpoint(name: "http", scheme: "http", port: 18888, targetPort: 11888, isProxied: true)
+            .WithEndpoint(name: "https", scheme: "https", port: 18889, targetPort: 11889, isProxied: true)
+            .WithEndpoint(name: "diagnostics", scheme: "http", port: 18890, targetPort: 11890, isProxied: true)
+            .WithEndpoint("diagnostics", endpoint => endpoint.ExcludeReferenceEndpoint = true);
+        if (includeGrpc)
+        {
+            dashboard.WithEndpoint(name: KnownEndpointNames.OtlpGrpcEndpointName, scheme: "http", port: 4317, targetPort: 14317, isProxied: true);
+        }
+        if (includeHttp)
+        {
+            dashboard.WithEndpoint(name: KnownEndpointNames.OtlpHttpEndpointName, scheme: "http", port: 4318, targetPort: 14318, isProxied: true);
+        }
+    }
+
+    private static Service[] AssertTunnelEndpoints(TestKubernetesService kubernetesService, string resourceName, params string[] expectedEndpoints)
+    {
+        var services = kubernetesService.CreatedResources.OfType<Service>()
+            .Where(service => StringComparers.ResourceName.Equals(service.AppModelResourceName, resourceName) &&
+                service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName))
+            .ToArray();
+        Assert.Equal(
+            expectedEndpoints.Order(StringComparers.EndpointAnnotationName),
+            services.Select(service => service.EndpointName).Order(StringComparers.EndpointAnnotationName));
+
+        var proxy = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.NotNull(proxy.Spec.Tunnels);
+        Assert.Equal(
+            services.Select(service => service.Metadata.Name).Order(StringComparer.Ordinal),
+            proxy.Spec.Tunnels.Select(tunnel => tunnel.ClientServiceName).Order(StringComparer.Ordinal));
+        foreach (var service in services)
+        {
+            var tunnel = Assert.Single(proxy.Spec.Tunnels, tunnel => tunnel.ClientServiceName == service.Metadata.Name);
+            Assert.Equal(service.Metadata.Name, tunnel.Name);
+            Assert.Equal(service.Metadata.Annotations[CustomResource.PrimaryServiceNameAnnotation], tunnel.ServerServiceName);
+        }
+
+        return services;
     }
 
     private static DcpExecutor CreateAppExecutor(
