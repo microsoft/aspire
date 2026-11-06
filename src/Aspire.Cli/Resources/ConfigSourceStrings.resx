@@ -130,6 +130,9 @@
     <value>{0} must be a nonempty absolute HTTP or HTTPS URL without control characters.</value>
     <comment>{0} is the environment variable name.</comment>
   </data>
+  <data name="DefaultBranch" xml:space="preserve">
+    <value>default branch</value>
+  </data>
   <data name="EmployeeOrigin" xml:space="preserve">
     <value>Microsoft employee default</value>
   </data>

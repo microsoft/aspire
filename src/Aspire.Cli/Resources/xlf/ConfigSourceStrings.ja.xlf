@@ -52,6 +52,11 @@
         <target state="new">A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
         <note>Do not translate "--use-config-source" or "false".</note>
       </trans-unit>
+      <trans-unit id="DefaultBranch">
+        <source>default branch</source>
+        <target state="new">default branch</target>
+        <note />
+      </trans-unit>
       <trans-unit id="EmployeeOrigin">
         <source>Microsoft employee default</source>
         <target state="new">Microsoft employee default</target>
