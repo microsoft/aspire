@@ -6,6 +6,7 @@ extern alias HostingDotnet;
 #pragma warning disable ASPIREEXTENSION001, ASPIREWATCH001
 
 using System.IO.Pipes;
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
@@ -18,12 +19,28 @@ using Microsoft.Extensions.Logging.Abstractions;
 using DotnetWatchStatus = HostingDotnet::Aspire.Shared.DotnetWatchStatus;
 using DotnetWatchJsonContext = HostingDotnet::Aspire.Shared.DotnetWatchJsonContext;
 using DotnetWatchConfiguration = HostingDotnet::Aspire.Shared.DotnetWatchConfiguration;
+using DotnetWatchProtocol = HostingDotnet::Aspire.Shared.DotnetWatchProtocol;
 using TimestampParser = HostingDotnet::Aspire.Shared.ConsoleLogs.TimestampParser;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
 public class DotnetWatchGroupTests(ITestOutputHelper output)
 {
+    public static TheoryData<string, bool> InvalidProtocolCases
+    {
+        get
+        {
+            var cases = new TheoryData<string, bool>();
+            foreach (var frame in new[] { "invalid-json", "null-status", "null-projects", "empty-project",
+                "unknown-event", "missing-build-result", "missing-exit-code", "oversized-record" })
+            {
+                cases.Add(frame, false);
+                cases.Add(frame, true);
+            }
+            return cases;
+        }
+    }
+
     [Fact]
     public async Task ServerIsHiddenAndUsesTheSelectedSdkAndExactCliProxy()
     {
@@ -374,34 +391,123 @@ public class DotnetWatchGroupTests(ITestOutputHelper output)
         }));
     }
 
-    [Fact]
-    public async Task InvalidActiveProtocolFailsOnlyItsGroupRatherThanDowngradingIt()
+    [Theory]
+    [MemberData(nameof(InvalidProtocolCases))]
+    public async Task InvalidProtocolCleansUpOnlyItsGroupAndCompletesReadiness(string invalidFrame, bool active)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(output);
         var (registration, root) = DotnetWatchGroupTestServices.AddResource(builder, workspace.Path);
-        var unrelated = builder.AddExecutable("unrelated", "dotnet", workspace.Path);
+        var (unrelated, unrelatedRoot) = DotnetWatchGroupTestServices.AddResource(
+            builder, workspace.CreateDirectory("unrelated").FullName, "unrelated");
         using var app = builder.Build();
         await using var group = DotnetWatchGroupTestServices.CreateGroup(builder, app.Services, registration, root);
-        group.Configure(app.Services.GetRequiredService<DistributedApplicationModel>());
+        await using var unrelatedGroup = DotnetWatchGroupTestServices.CreateGroup(builder, app.Services, unrelated, unrelatedRoot, 2);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        group.Configure(model);
+        unrelatedGroup.Configure(model);
         var server = builder.Resources.Single(resource => resource.Name == "__dotnet-watch-1");
-        var arguments = await ArgumentEvaluator.GetArgumentListAsync(server, app.Services);
-        using var status = CreateClient(arguments[arguments.IndexOf("--status-pipe") + 1]);
-        using var control = CreateClient(arguments[arguments.IndexOf("--control-pipe") + 1]);
+        var unrelatedServer = builder.Resources.Single(resource => resource.Name == "__dotnet-watch-2");
+        var stopped = new ConcurrentQueue<string>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
-        await Task.WhenAll(status.ConnectAsync(timeout.Token), control.ConnectAsync(timeout.Token));
-        Assert.True(await group.WaitUntilReadyAsync(timeout.Token));
+        var scopePaths = new Dictionary<string, string>();
+        foreach (var (resource, owner) in new[] { (registration.Resource, server), (unrelated.Resource, unrelatedServer) })
+        {
+            resource.Annotations.OfType<ResourceLifecycleCommandOverrideAnnotation>()
+                .Single(annotation => annotation.CommandName == "stop").Factory(CreateCommand("stop", () => stopped.Enqueue(resource.Name)));
+            var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(owner, serviceProvider: app.Services);
+            var completedPath = environment[DotnetWatchConfiguration.ScopeCompletionPath];
+            scopePaths[owner.Name] = completedPath;
+            owner.Annotations.OfType<ResourceLifecycleCommandOverrideAnnotation>().Single(annotation => annotation.CommandName == "stop")
+                .Factory(new("stop", "stop", _ => ResourceCommandState.Enabled, async context =>
+                {
+                    stopped.Enqueue(owner.Name);
+                    await File.WriteAllTextAsync(completedPath, "", context.CancellationToken);
+                    return new ExecuteCommandResult { Success = true };
+                }, null, arguments: null, null, null, null, false));
+            await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(owner, app.Services), timeout.Token);
+            await notifications.PublishUpdateAsync(owner, _ => CreateSnapshot("Running"));
+            await notifications.PublishUpdateAsync(resource, _ => CreateSnapshot("Running"));
+        }
+        var arguments = await ArgumentEvaluator.GetArgumentListAsync(server, app.Services);
+        var statusName = arguments[arguments.IndexOf("--status-pipe") + 1];
+        var controlName = arguments[arguments.IndexOf("--control-pipe") + 1];
+        using var status = CreateClient(statusName);
+        using var control = CreateClient(controlName);
+        var unrelatedArguments = await ArgumentEvaluator.GetArgumentListAsync(unrelatedServer, app.Services);
+        using var unrelatedStatus = CreateClient(unrelatedArguments[unrelatedArguments.IndexOf("--status-pipe") + 1]);
+        using var unrelatedControl = CreateClient(unrelatedArguments[unrelatedArguments.IndexOf("--control-pipe") + 1]);
+        await Task.WhenAll(status.ConnectAsync(timeout.Token), unrelatedStatus.ConnectAsync(timeout.Token), unrelatedControl.ConnectAsync(timeout.Token));
+        Assert.True(await unrelatedGroup.WaitUntilReadyAsync(timeout.Token));
+        await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(unrelated.Resource, app.Services), timeout.Token);
+        var ready = group.WaitUntilReadyAsync(timeout.Token);
+        if (active)
+        {
+            await control.ConnectAsync(timeout.Token);
+            Assert.True(await ready);
+            await builder.Eventing.PublishAsync(new BeforeResourceStartedEvent(registration.Resource, app.Services), timeout.Token);
+        }
+        else
+        {
+            Assert.False(ready.IsCompleted);
+        }
+        var cleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var stoppingRegistration = group.StoppingToken.Register(() => cleanup.TrySetResult());
 
-        await status.WriteAsync("{invalid json}\n"u8.ToArray(), timeout.Token);
+        var frame = invalidFrame switch
+        {
+            "invalid-json" => "{invalid json}",
+            "null-status" => "null",
+            "null-projects" => """{"type":"building","projects":null}""",
+            "empty-project" => """{"type":"building","projects":[""]}""",
+            "unknown-event" => """{"type":"unknown","projects":[]}""",
+            "missing-build-result" => """{"type":"build_complete","projects":[]}""",
+            "missing-exit-code" => """{"type":"process_exited","projects":[]}""",
+            "oversized-record" => new string('a', DotnetWatchProtocol.MaximumMessageBytes + 1),
+            _ => throw new ArgumentOutOfRangeException(nameof(invalidFrame))
+        };
+        await status.WriteAsync(Encoding.UTF8.GetBytes(frame + "\n"), timeout.Token);
+        await cleanup.Task.WaitAsync(timeout.Token);
 
-        var failure = await app.Services.GetRequiredService<ResourceNotificationService>().WaitForResourceAsync(
-            registration.Resource.Name, @event => @event.Snapshot.State?.Text == KnownResourceStates.FailedToStart, timeout.Token);
-        Assert.True(group.Failed);
-        Assert.True(group.Enabled);
-        Assert.Equal("experimental", failure.Snapshot.Properties.Single(property => property.Name == "watch.mode").Value);
-        Assert.Empty(unrelated.Resource.Annotations.OfType<ResourceSnapshotProjectionAnnotation>());
-        Assert.Equal("/exact/aspire", registration.Resource.Annotations.OfType<ExecutableAnnotation>().Last().Command);
+        Assert.Equal(active, group.Enabled);
+        Assert.Equal(active, group.Failed);
+        if (active)
+        {
+            await Assert.ThrowsAsync<DistributedApplicationException>(() => group.WaitUntilReadyAsync(timeout.Token));
+            var failure = await notifications.WaitForResourceAsync(
+                registration.Resource.Name, @event => @event.Snapshot.State?.Text == KnownResourceStates.FailedToStart, timeout.Token);
+            Assert.Equal("experimental", failure.Snapshot.Properties.Single(property => property.Name == "watch.mode").Value);
+            Assert.Equal("/exact/aspire", registration.Resource.Command);
+        }
+        else
+        {
+            Assert.False(await ready);
+            Assert.Equal("dotnet", registration.Resource.Command);
+        }
+        Assert.Equal(active ? ["service", "__dotnet-watch-1"] : ["__dotnet-watch-1"], stopped);
+        Assert.True(unrelatedGroup.Enabled);
+        Assert.False(unrelatedGroup.Failed);
+        Assert.False(unrelatedGroup.StoppingToken.IsCancellationRequested);
+        Assert.True(await unrelatedGroup.WaitUntilReadyAsync(timeout.Token));
+        await unrelatedGroup.RestartAsync(unrelatedRoot.Metadata.ProjectPath, timeout.Token);
+        using var controlReader = new StreamReader(unrelatedControl, leaveOpen: true);
+        using var request = JsonDocument.Parse((await controlReader.ReadLineAsync(timeout.Token))!);
+        Assert.Equal("rebuild", request.RootElement.GetProperty("type").GetString());
+        Assert.Equal(unrelatedRoot.Metadata.ProjectPath, Assert.Single(request.RootElement.GetProperty("projects").EnumerateArray()).GetString());
+
+        await group.DisposeAsync().AsTask().WaitAsync(timeout.Token);
+        Assert.False(Directory.Exists(Path.GetDirectoryName(scopePaths[server.Name])));
+        using var releasedStatus = new NamedPipeServerStream(statusName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        using var releasedControl = new NamedPipeServerStream(controlName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await unrelatedGroup.DisposeAsync().AsTask().WaitAsync(timeout.Token);
+        Assert.False(Directory.Exists(Path.GetDirectoryName(scopePaths[unrelatedServer.Name])));
+        Assert.Equal(active
+            ? ["service", "__dotnet-watch-1", "unrelated", "__dotnet-watch-2"]
+            : ["__dotnet-watch-1", "unrelated", "__dotnet-watch-2"], stopped);
     }
 
     [Fact]

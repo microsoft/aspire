@@ -576,6 +576,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string WatchDcpUnavailable {
+            get {
+                return ResourceManager.GetString("WatchDcpUnavailable", resourceCulture);
+            }
+        }
+
+        internal static string WatchDcpShutdownFailed {
+            get {
+                return ResourceManager.GetString("WatchDcpShutdownFailed", resourceCulture);
+            }
+        }
+
         internal static string WatchNativeServerUnsupported {
             get {
                 return ResourceManager.GetString("WatchNativeServerUnsupported", resourceCulture);

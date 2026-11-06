@@ -2105,6 +2105,7 @@ public class GuestAppHostProjectTests : IDisposable
 
     [Theory]
     [InlineData(false, false)]
+    [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
     public async Task RunAsync_ExplicitWatchIsProjectedIntoOnlyTheFinalManagedServer(bool watch, bool native)
@@ -2132,7 +2133,8 @@ public class GuestAppHostProjectTests : IDisposable
             serverSessionFactory: sessions,
             configuration: new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["features:defaultWatchEnabled"] = "true"
+                ["features:defaultWatchEnabled"] = "true",
+                [DotnetWatchConfiguration.WatchEnabled] = "true"
             }).Build());
         var context = new AppHostProjectContext
         {
@@ -2158,18 +2160,21 @@ public class GuestAppHostProjectTests : IDisposable
                 Assert.Equal("", environment[DotnetWatchConfiguration.HostControlPipe]);
                 Assert.Equal("", environment[DotnetWatchConfiguration.HostSession]);
             }
-            else if (watch)
+            else
             {
                 Assert.Equal("false", environment[DotnetWatchLaunchEnvironment.WatchEnabledVariable]);
                 Assert.Equal("", environment[DotnetWatchConfiguration.LaunchOwner]);
-            }
-            else
-            {
-                Assert.False(environment.ContainsKey(DotnetWatchConfiguration.LaunchOwner));
+                Assert.Equal("", environment[DotnetWatchConfiguration.HostControlPipe]);
+                Assert.Equal("", environment[DotnetWatchConfiguration.HostSession]);
             }
         });
         Assert.Equal(new Dictionary<string, string> { ["guest-only"] = "value" }, context.EnvironmentVariables);
         Assert.Equal(native && watch, interaction.DisplayedMessages.Any(message => message.Message == RunCommandStrings.WatchNativeServerUnsupported));
+        if (!watch || native)
+        {
+            await ProcessTestHelpers.AssertWatchDisabledWithInheritedEnvironmentAsync(
+                Assert.IsType<Dictionary<string, string>>(sessions.CapturedEnvironmentVariables), root);
+        }
     }
 
     [Fact]

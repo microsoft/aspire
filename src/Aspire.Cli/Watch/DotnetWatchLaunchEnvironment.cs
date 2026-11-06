@@ -22,8 +22,8 @@ internal static class DotnetWatchLaunchEnvironment
 
     internal static void Disable(IDictionary<string, string> environment)
     {
-        // Explicit empty values also override inherited private state when a discovery server is
-        // launched from inside a watch run. Discovery/code generation must never acquire a watcher.
+        // Absent keys do not clear inherited state in the process factory. Discovery servers and
+        // ordinary launches inside a watch run must not acquire its watcher or generation.
         environment[WatchEnabledVariable] = "false";
         environment[DotnetWatchConfiguration.LaunchOwner] = "";
         environment[DotnetWatchConfiguration.CliExecutable] = "";

@@ -710,6 +710,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     DotnetWatchLaunchEnvironment.Apply(launchSettingsEnvVars, CliSelfInvocation.Current());
                 }
             }
+            else
+            {
+                DotnetWatchLaunchEnvironment.Disable(launchSettingsEnvVars);
+            }
 
             // Step 4: Start the AppHost server process. The linked stop CTS is the only termination
             // trigger we hand to the session; cancelling it (here or via the outer cancellationToken)

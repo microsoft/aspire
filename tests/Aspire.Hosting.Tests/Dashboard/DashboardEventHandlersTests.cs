@@ -301,6 +301,42 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedTelemetryOptOut?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.EnvVarName));
     }
 
+    [Theory]
+    [InlineData("true", "aspire", false)]
+    [InlineData("true", null, true)]
+    [InlineData("true", "ide", true)]
+    [InlineData("false", "aspire", true)]
+    [InlineData(null, "aspire", true)]
+    [InlineData(null, null, true)]
+    public async Task ConfigureEnvironmentVariables_PreservesDebugSettingsUnlessWatchIsCliOwned(
+        string? watch, string? owner, bool externalLauncherActive)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [DotnetWatchConfiguration.WatchEnabled] = watch,
+            [DotnetWatchConfiguration.LaunchOwner] = owner,
+            ["DEBUG_SESSION_PORT"] = "localhost:12345",
+            ["DEBUG_SESSION_TOKEN"] = "session-token",
+            ["DEBUG_SESSION_SERVER_CERTIFICATE"] = "session-certificate"
+        }).Build();
+        await using var hook = CreateHook(new ResourceLoggerService(), ResourceNotificationServiceTestHelpers.Create(), configuration);
+        var resource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(new DistributedApplicationModel([resource]))
+        });
+        var environment = new Dictionary<string, object>();
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: environment, resource: resource));
+
+        Assert.Equal(externalLauncherActive ? 12345 : (int?)null,
+            environment.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName));
+        Assert.Equal(externalLauncherActive ? "session-token" : null,
+            environment.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName));
+        Assert.Equal(externalLauncherActive ? "session-certificate" : null,
+            environment.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName));
+    }
+
     [Fact]
     public async Task ConfigureEnvironmentVariables_HasAspireDashboardEnvVars_CopiedToDashboard()
     {

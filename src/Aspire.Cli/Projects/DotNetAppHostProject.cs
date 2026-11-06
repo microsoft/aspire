@@ -56,6 +56,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
     private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
+    private readonly ILayoutDiscovery _layoutDiscovery;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -87,6 +88,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         IDotNetSdkInstaller sdkInstaller,
         IBundleService bundleService,
         IEnvironment environment,
+        ILayoutDiscovery layoutDiscovery,
         AppHostConfigurationProjector appHostConfigurationProjector,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
@@ -108,6 +110,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         _sdkInstaller = sdkInstaller;
         _bundleService = bundleService;
         _environment = environment;
+        _layoutDiscovery = layoutDiscovery;
         _appHostConfigurationProjector = appHostConfigurationProjector;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
@@ -1649,6 +1652,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             if (directRun is not null)
             {
                 await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(directRun.Environment, appHostDirectory, cancellationToken);
+                if (!context.Watch)
+                {
+                    DotnetWatchLaunchEnvironment.Disable(directRun.Environment);
+                }
 
                 // The direct command line has no "--" separator, so the forwarded-argument boundary
                 // has to be carried alongside it for logging. Clone rather than mutate because the
@@ -1669,6 +1676,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
 
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
+            if (!context.Watch)
+            {
+                DotnetWatchLaunchEnvironment.Disable(env);
+            }
 
             return await _runner.RunAsync(
                 effectiveAppHostFile,

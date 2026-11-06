@@ -180,6 +180,13 @@ internal sealed class RunCommand : BaseCommand
 
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        if (parseResult.GetValue(s_watchOption) && !parseResult.GetValue(s_detachOption))
+        {
+            // The first signal must leave the handler alive long enough to observe DCP retirement
+            // (up to 30s), not abandon it under the ordinary 5s grace + 5s final drain budget.
+            // The existing second-signal path still expires grace and keeps the final drain bounded.
+            _cancellationManager.ConfigureForCommand(DcpForkProcessExecution.ShutdownTimeout);
+        }
         if (!parseResult.GetValue(s_watchOption) || parseResult.GetValue(s_detachOption))
         {
             return ExecuteGenerationAsync(parseResult, generation: null, cancellationToken);
@@ -745,6 +752,12 @@ internal sealed class RunCommand : BaseCommand
                     _logger.LogDebug(ex, "AppHost log capture ended while the run command was exiting early.");
                 }
             }
+        }
+        catch (Exception ex) when (DcpForkShutdownException.ContainsFailure(ex))
+        {
+            Telemetry.SetActivityProperty(runActivity, TelemetryConstants.Tags.ErrorType, "watch_cleanup_failed");
+            _logger.LogError(ex, "DCP watcher cleanup failed; cancellation cannot be reported as success.");
+            return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, RunCommandStrings.WatchDcpShutdownFailed);
         }
         catch (OperationCanceledException ex) when (
             ex.CancellationToken == cancellationToken ||
@@ -1602,6 +1615,12 @@ internal sealed class RunCommand : BaseCommand
         try
         {
             await pendingRun.WaitAsync(timeout, _timeProvider, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (DcpForkShutdownException.ContainsFailure(ex))
+        {
+            // This drain can run in finally after a successful cancellation result was selected.
+            // Surface the failed watch retirement instead of allowing that result to hide it.
+            throw new DcpForkShutdownException(ex);
         }
         catch (OperationCanceledException)
         {

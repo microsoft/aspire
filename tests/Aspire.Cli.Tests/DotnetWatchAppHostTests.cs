@@ -5,6 +5,7 @@ using System.Buffers.Binary;
 using System.IO.Pipes;
 using System.Text.Json;
 using Aspire.Cli.Commands;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Watch;
@@ -172,9 +173,13 @@ public class DotnetWatchAppHostTests(ITestOutputHelper outputHelper)
         var arguments = launch.CreateArguments(appHost, new() { NoLaunchProfile = excludeProfile, LaunchProfile = profile },
             ["--environment", "two words", "", "--project", "app-input"]);
 
-        await VerifyJson(JsonSerializer.Serialize(arguments))
-            .UseParameters(excludeProfile, profile ?? "default")
-            .ScrubLinesWithReplace(line => line.Replace(appHost.FullName.Replace("\\", "\\\\", StringComparison.Ordinal), "AppHost.csproj", StringComparison.Ordinal));
+        Assert.Equal("--entrypoint", arguments[5]);
+        Assert.Equal(appHost.FullName, arguments[6]);
+        var snapshotArguments = arguments.ToArray();
+        // Normalize the structured entrypoint before Verify scrubs Windows current-directory paths.
+        snapshotArguments[6] = appHost.Name;
+        await VerifyJson(JsonSerializer.Serialize(snapshotArguments))
+            .UseParameters(excludeProfile, profile ?? "default");
     }
 
     [Fact]
@@ -328,6 +333,46 @@ public class DotnetWatchAppHostTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, restartCount);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedForkCleanupDoesNotBecomeSuccessfulCancellationOrReplacement(bool invalidate)
+    {
+        using var shutdown = new TestGracefulShutdownWindow();
+        using var cancellation = new CancellationTokenSource();
+        var started = new TaskCompletionSource<DotnetWatchAppHostGeneration>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var restartCount = 0;
+        var session = new DotnetWatchAppHostSession(shutdown, TimeSpan.FromSeconds(5), TimeProvider.System, NullLogger.Instance);
+        var run = session.RunAsync(async (generation, token) =>
+        {
+            generation.ApplyEnvironment(new Dictionary<string, string>());
+            started.TrySetResult(generation);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            catch (OperationCanceledException exception)
+            {
+                throw new OperationCanceledException(exception.Message, new DcpForkShutdownException(), token);
+            }
+            return CommandResult.Success();
+        }, () => restartCount++, cancellation.Token);
+        var first = await started.Task.DefaultTimeout();
+        if (invalidate)
+        {
+            await SendAsync(first, new() { Session = first.Session });
+        }
+        else
+        {
+            await cancellation.CancelAsync();
+        }
+
+        var result = await run.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
+        Assert.Equal(RunCommandStrings.WatchDcpShutdownFailed, result.ErrorMessage);
+        Assert.Equal(0, restartCount);
+    }
     [Fact]
     public async Task GenerationShutdownDoesNotExpireTheCommandOrFollowingGeneration()
     {

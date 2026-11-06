@@ -302,6 +302,16 @@
         <target state="new">The restored AppHost must reference an Aspire.Hosting.Dotnet version with the EnsureAspireDotnetWatchTool target, and that target must successfully resolve the watcher.</target>
         <note>Aspire.Hosting.Dotnet and EnsureAspireDotnetWatchTool must not be localized.</note>
       </trans-unit>
+      <trans-unit id="WatchDcpShutdownFailed">
+        <source>DCP did not confirm watcher shutdown. Check the diagnostic logs before starting another AppHost generation.</source>
+        <target state="new">DCP did not confirm watcher shutdown. Check the diagnostic logs before starting another AppHost generation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchDcpUnavailable">
+        <source>C# AppHost watching requires a compatible DCP fork-process with --enable-child-cleanup, --skip-descendants, and application output forwarding. Use a compatible ASPIRE_DCP_PATH override until a supporting DCP release is bundled.</source>
+        <target state="new">C# AppHost watching requires a compatible DCP fork-process with --enable-child-cleanup, --skip-descendants, and application output forwarding. Use a compatible ASPIRE_DCP_PATH override until a supporting DCP release is bundled.</target>
+        <note>DCP, fork-process, --enable-child-cleanup, --skip-descendants, and ASPIRE_DCP_PATH must not be localized.</note>
+      </trans-unit>
       <trans-unit id="WatchNativeServerUnsupported">
         <source>The native AppHost server cannot run managed .NET service watching in this preview. The guest AppHost retains its language-native watching.</source>
         <target state="new">The native AppHost server cannot run managed .NET service watching in this preview. The guest AppHost retains its language-native watching.</target>

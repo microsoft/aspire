@@ -260,7 +260,7 @@ internal sealed class DotnetWatchGroup : IAsyncDisposable
         {
             _ready.TrySetResult(false);
         }
-        catch (Exception exception) when (exception is IOException or JsonException or InvalidOperationException or ArgumentException)
+        catch (Exception exception) when (exception is IOException or InvalidDataException or JsonException or UnauthorizedAccessException or ArgumentException)
         {
             if (!_stopping)
             {

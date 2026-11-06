@@ -120,6 +120,134 @@ public class RunCommandWatchTests(ITestOutputHelper outputHelper)
         Assert.Contains(interaction.DisplayedMessages, message => message.Message == RunCommandStrings.ExperimentalWatchNotice);
     }
 
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    public async Task GuardBudgetOutlivesLegacyDeadlineWithoutChangingOrdinaryOrSecondSignalPolicy(
+        bool watch, bool legacyDefault, bool secondSignal)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHost.FullName, "<Project />");
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var project = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, token) =>
+            {
+                context.BuildCompletionSource!.TrySetResult(true);
+                context.BackchannelCompletionSource!.TrySetResult(new TestAppHostBackchannel());
+                started.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                finally
+                {
+                    await finishCleanup.Task;
+                }
+                return 0;
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostProjectFactory = _ => project;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHost, [appHost]))
+            };
+            options.ConfigurationCallback += values => values["features:defaultWatchEnabled"] = legacyDefault.ToString();
+        });
+        services.Replace(ServiceDescriptor.Singleton(new ConsoleCancellationManager(TimeSpan.FromMilliseconds(50))));
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<ConsoleCancellationManager>();
+        var run = provider.GetRequiredService<RootCommand>().Parse(watch ? "run --watch --non-interactive" : "run --non-interactive")
+            .InvokeAsync(cancellationToken: manager.Token);
+        try
+        {
+            await started.Task.DefaultTimeout();
+            manager.Cancel(130);
+            if (secondSignal)
+            {
+                manager.Cancel(130);
+                Assert.True(manager.GracefulShutdownToken.IsCancellationRequested);
+                Assert.Equal(130, await manager.ProcessTerminationCompletionSource.Task.DefaultTimeout());
+            }
+            else if (watch)
+            {
+                // Cross the old full 5s+5s forced-exit threshold while the real handler stays active.
+                await Task.Delay(TimeSpan.FromSeconds(11), TestContext.Current.CancellationToken);
+                Assert.False(manager.GracefulShutdownToken.IsCancellationRequested);
+                Assert.False(manager.ProcessTerminationCompletionSource.Task.IsCompleted);
+                Assert.False(run.IsCompleted);
+            }
+            else
+            {
+                Assert.Equal(130, await manager.ProcessTerminationCompletionSource.Task.WaitAsync(TimeSpan.FromSeconds(8)));
+            }
+            finishCleanup.TrySetResult();
+            Assert.Equal(watch && !secondSignal ? CliExitCodes.Success : 130, await run.DefaultTimeout());
+        }
+        finally
+        {
+            finishCleanup.TrySetResult();
+            manager.Expire();
+            await run.DefaultTimeout();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedForkRetirementIsNotReportedAsSuccessfulUserCancellation(bool beforeBackchannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellation = new CancellationTokenSource();
+        var appHost = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHost.FullName, "<Project />");
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var project = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, token) =>
+            {
+                context.BuildCompletionSource!.TrySetResult(true);
+                if (!beforeBackchannel)
+                {
+                    context.BackchannelCompletionSource!.TrySetResult(new TestAppHostBackchannel());
+                }
+                started.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException exception)
+                {
+                    throw new OperationCanceledException(exception.Message, new DcpForkShutdownException(), token);
+                }
+                return 0;
+            }
+        };
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostProjectFactory = _ => project;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHost, [appHost]))
+            };
+        }).BuildServiceProvider();
+        var run = provider.GetRequiredService<RootCommand>().Parse("run --watch --non-interactive")
+            .InvokeAsync(cancellationToken: cancellation.Token);
+
+        await started.Task.DefaultTimeout();
+        await cancellation.CancelAsync();
+
+        Assert.NotEqual(CliExitCodes.Success, await run.DefaultTimeout());
+    }
+
     [Fact]
     public async Task DetachedWatchForwardsTheOptionWithoutConsumingAppHostArguments()
     {

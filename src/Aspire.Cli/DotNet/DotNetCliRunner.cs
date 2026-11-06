@@ -82,6 +82,7 @@ internal sealed class ProcessInvocationOptions
     public bool DisableExtensionLaunch { get; set; }
 
     public string? DotNetExecutablePath { get; set; }
+    public DcpForkInvocation? DcpFork { get; set; }
 
     /// <summary>
     /// When true, suppresses logging of process output to the logger.
@@ -191,6 +192,7 @@ internal sealed class ProcessInvocationOptions
         Debug = Debug,
         DisableExtensionLaunch = DisableExtensionLaunch,
         DotNetExecutablePath = DotNetExecutablePath,
+        DcpFork = DcpFork,
         SuppressLogging = SuppressLogging,
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
@@ -308,7 +310,7 @@ internal sealed class DotNetCliRunner(
         var outputCounters = new ProcessOutputCounters();
         var instrumentedOptions = CreateInstrumentedProcessOptions(options, processActivity, outputCounters);
 
-        // Do not use 'await using' here: StartBackchannelAsync runs fire-and-forget and
+        // Ordinary launches intentionally do not use 'await using': StartBackchannelAsync runs fire-and-forget and
         // accesses execution.HasExited / ExitCode after this method returns. Disposing
         // the underlying Process while the backchannel task is still polling would
         // cause ObjectDisposedException. We intentionally never dispose this execution:
@@ -340,7 +342,8 @@ internal sealed class DotNetCliRunner(
                     await options.ExtensionAppHostLaunchCompletedAsync().ConfigureAwait(false);
                 }
 
-                await StartBackchannelAsync(null, socketPath!, backchannelCompletionSource, backchannelParentContext, cancellationToken).ConfigureAwait(false);
+                await StartBackchannelAsync(null, socketPath!, backchannelCompletionSource, backchannelParentContext,
+                    cancellationIsExpected: false, cancellationToken).ConfigureAwait(false);
                 var backchannel = await backchannelCompletionSource.Task.ConfigureAwait(false);
 
                 // The extension launched the AppHost process, so there is no local Process to await.
@@ -353,24 +356,74 @@ internal sealed class DotNetCliRunner(
             }
         }
 
-        var started = await execution.StartAsync(cancellationToken).ConfigureAwait(false);
-        processActivity.AddDotNetProcessStartResult(started, started ? execution.ProcessId : null);
-
-        if (!started)
+        using var forkBackchannelCancellation = options.DcpFork is not null
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : null;
+        Task? backchannelTask = null;
+        Exception? operationFailure = null;
+        try
         {
-            processActivity.SetError("Process failed to start.");
-            return CliExitCodes.FailedToDotnetRunAppHost;
-        }
+            var started = await execution.StartAsync(cancellationToken).ConfigureAwait(false);
+            processActivity.AddDotNetProcessStartResult(started, started ? execution.ProcessId : null);
 
-        if (backchannelCompletionSource is not null && socketPath is not null)
+            if (!started)
+            {
+                processActivity.SetError("Process failed to start.");
+                return CliExitCodes.FailedToDotnetRunAppHost;
+            }
+
+            if (backchannelCompletionSource is not null && socketPath is not null)
+            {
+                backchannelTask = StartBackchannelAsync(execution, socketPath, backchannelCompletionSource, backchannelParentContext,
+                    cancellationIsExpected: forkBackchannelCancellation is not null, forkBackchannelCancellation?.Token ?? cancellationToken);
+            }
+
+            var exitCode = await execution.WaitForExitAsync(cancellationToken);
+            processActivity.SetDotNetCompleted(exitCode, outputCounters.StdoutLineCount, outputCounters.StderrLineCount);
+
+            return exitCode;
+        }
+        catch (Exception exception)
         {
-            _ = StartBackchannelAsync(execution, socketPath, backchannelCompletionSource, backchannelParentContext, cancellationToken);
+            operationFailure = exception;
+            throw;
         }
-
-        var exitCode = await execution.WaitForExitAsync(cancellationToken);
-        processActivity.SetDotNetCompleted(exitCode, outputCounters.StdoutLineCount, outputCounters.StderrLineCount);
-
-        return exitCode;
+        finally
+        {
+            if (forkBackchannelCancellation is not null)
+            {
+                // The fork owns its transport handles. Settle the backchannel poll before disposing
+                // them so generation replacement cannot race an inspection of a disposed Process.
+                try
+                {
+                    await forkBackchannelCancellation.CancelAsync().ConfigureAwait(false);
+                    if (backchannelTask is not null)
+                    {
+                        await backchannelTask.ConfigureAwait(false);
+                    }
+                }
+                catch (OperationCanceledException) when (forkBackchannelCancellation.IsCancellationRequested)
+                {
+                }
+                finally
+                {
+                    try
+                    {
+                        await execution.DisposeAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception cleanupFailure) when (operationFailure is not null)
+                    {
+                        logger.LogError(cleanupFailure, "DCP fork disposal also failed after the watch operation failed.");
+                        var combined = new AggregateException(operationFailure, cleanupFailure);
+                        if (operationFailure is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                        {
+                            throw new OperationCanceledException(operationFailure.Message, combined, cancellationToken);
+                        }
+                        throw combined;
+                    }
+                }
+            }
+        }
     }
 
     private static bool IsDotNetMuxerCommand(string command)
@@ -466,6 +519,7 @@ internal sealed class DotNetCliRunner(
             Detached = options.Detached,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             EnvironmentVariables = options.EnvironmentVariables,
+            DcpFork = options.DcpFork,
             // Without this the redaction boundary is lost between the runner and the process
             // factory, and a direct AppHost launch would log its forwarded arguments verbatim.
             AppHostArgumentStartIndex = options.AppHostArgumentStartIndex,
@@ -565,6 +619,7 @@ internal sealed class DotNetCliRunner(
         string socketPath,
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
         ActivityContext parentContext,
+        bool cancellationIsExpected,
         CancellationToken cancellationToken)
     {
         using var activity = profilingTelemetry.StartBackchannelConnect(socketPath, parentContext);
@@ -652,6 +707,11 @@ internal sealed class DotNetCliRunner(
                 backchannelCompletionSource.SetException(ex);
 
                 throw;
+            }
+            catch (OperationCanceledException) when (cancellationIsExpected && cancellationToken.IsCancellationRequested)
+            {
+                backchannelCompletionSource.TrySetCanceled(cancellationToken);
+                return;
             }
             catch (Exception ex)
             {

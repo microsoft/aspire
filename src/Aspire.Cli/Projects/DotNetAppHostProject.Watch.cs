@@ -6,10 +6,12 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Watch;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -71,6 +73,18 @@ internal sealed partial class DotNetAppHostProject
         ProcessInvocationOptions options,
         CancellationToken cancellationToken)
     {
+        var explicitPath = GetEffectiveEnvironmentValue(environment, "DcpPublisher__CliPath");
+        var directory = GetEffectiveEnvironmentValue(environment, BundleDiscovery.DcpPathEnvVar);
+        using var dcp = !string.IsNullOrWhiteSpace(explicitPath)
+            ? new DcpExecutableResolution(explicitPath, null)
+            : !string.IsNullOrWhiteSpace(directory)
+                ? new DcpExecutableResolution(BundleDiscovery.GetDcpExecutablePath(directory), null)
+                : await DcpExecutableResolver.TryGetDcpExecutableAsync(
+                    _layoutDiscovery, _bundleService, _executionContext, "dotnet-watch-fork", cancellationToken).ConfigureAwait(false);
+        if (dcp is null)
+        {
+            throw new InvalidOperationException(RunCommandStrings.WatchDcpUnavailable);
+        }
         generation.ApplyEnvironment(environment);
         environment[KnownConfigNames.SuppressCliRunHook] = "true";
         environment["DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER"] = "true";
@@ -78,6 +92,7 @@ internal sealed partial class DotNetAppHostProject
         var watchOptions = options.Clone();
         watchOptions.DotNetExecutablePath = launch.DotnetPath;
         watchOptions.DisableExtensionLaunch = true;
+        watchOptions.DcpFork = new(dcp.ExecutablePath, Path.GetFileName(launch.SdkDirectory));
         using var stopAttempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var watchBackchannel = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
         // The runner's connection poll can report a failed wrapper after its process task has

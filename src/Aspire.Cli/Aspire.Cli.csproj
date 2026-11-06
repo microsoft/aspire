@@ -190,6 +190,7 @@
     <Compile Include="$(SharedDir)DotnetWatchProtocol.cs" Link="Utils\DotnetWatchProtocol.cs" />
     <Compile Include="$(SharedDir)DotnetWatchHostProtocol.cs" Link="Utils\DotnetWatchHostProtocol.cs" />
     <Compile Include="$(SharedDir)DcpKubeconfigData.cs" Link="Utils\DcpKubeconfigData.cs" />
+    <Compile Include="..\Aspire.Hosting\Dcp\DcpProcessMonitor.cs" Link="Utils\DcpProcessMonitor.cs" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="TrayCliProtocol.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
     <Compile Include="$(SharedDir)AspireCliIdentityEnvVars.cs" Link="Acquisition\AspireCliIdentityEnvVars.cs" />

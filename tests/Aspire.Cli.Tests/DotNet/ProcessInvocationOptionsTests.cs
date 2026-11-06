@@ -27,6 +27,9 @@ public sealed class ProcessInvocationOptionsTests
             LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,
+            DisableExtensionLaunch = true,
+            DotNetExecutablePath = "selected-dotnet",
+            DcpFork = new("selected-dcp", "10.0.403"),
             SuppressLogging = true,
             // Non-default: this property initializes to true, so false is the "changed" value.
             KillEntireProcessTreeOnCancel = false,

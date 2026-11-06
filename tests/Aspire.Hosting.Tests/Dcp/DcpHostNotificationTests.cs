@@ -12,6 +12,7 @@ using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Shared;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
@@ -644,6 +645,11 @@ public sealed class DcpHostNotificationTests
             [KnownAspNetCoreConfigNames.Environment] = "Development",
             [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
             ["aspire_loglevel"] = "Debug",
+            ["AppHost__Run__WatchEnabled"] = "true",
+            [DotnetWatchConfiguration.WatchEnabled] = "true",
+            [DotnetWatchConfiguration.LaunchOwner] = "aspire",
+            [DotnetWatchConfiguration.HostControlPipe] = "parent-control",
+            [DotnetWatchConfiguration.HostSession] = "parent-generation",
         };
 
         var options = new RemoteInvokeOptions();
@@ -674,6 +680,11 @@ public sealed class DcpHostNotificationTests
                 KnownAspNetCoreConfigNames.Environment,
                 KnownAspNetCoreConfigNames.DotNetEnvironment,
                 "aspire_loglevel",
+                "AppHost__Run__WatchEnabled",
+                DotnetWatchConfiguration.WatchEnabled,
+                DotnetWatchConfiguration.LaunchOwner,
+                DotnetWatchConfiguration.HostControlPipe,
+                DotnetWatchConfiguration.HostSession,
             ];
 
             foreach (var key in expectedExcluded)

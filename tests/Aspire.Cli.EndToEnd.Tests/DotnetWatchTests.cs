@@ -80,6 +80,12 @@ public sealed class DotnetWatchTests(ITestOutputHelper output)
             project.Save(path);
         }
         await auto.RunCommandAsync("aspire add Aspire.Hosting.Dotnet --non-interactive", counter);
+        var hostingVersion = language == "csharp"
+            ? CliE2ETestHelpers.GetAppHostVersion(await File.ReadAllTextAsync(
+                Path.Combine(workspace.Path, "Watch.AppHost", "Watch.AppHost.csproj")))
+            : (Assert.IsType<JsonObject>(JsonNode.Parse(await File.ReadAllTextAsync(
+                Path.Combine(workspace.Path, "aspire.config.json"))))["sdk"]?["version"]?.GetValue<string>()
+                ?? throw new InvalidOperationException("The TypeScript fixture must identify its Hosting package version."));
         var shared = Directory.CreateDirectory(Path.Combine(workspace.Path, "Shared"));
         await File.WriteAllTextAsync(Path.Combine(shared.FullName, "Shared.csproj"), """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -129,16 +135,32 @@ public sealed class DotnetWatchTests(ITestOutputHelper output)
             }
             """);
         }
-        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "ordinary.cs"), """
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "ordinary.cs"), $$"""
             #:sdk Microsoft.NET.Sdk.Web
             #:property PublishAot=true
+            #:package Aspire.Hosting@{{hostingVersion}}
 
+            using Aspire.Hosting;
+            using System.Text.Json.Serialization;
+
+            using var hostingProbe = DistributedApplication.CreateBuilder(
+                new DistributedApplicationOptions { DisableDashboard = true }).Build();
             var builder = WebApplication.CreateBuilder(args);
             var app = builder.Build();
             app.MapGet("/health", () => "ok");
-            // Preserve the ordinary file app's AOT defaults without reflection-based JSON.
-            app.MapGet("/", () => Results.Text($"{{\"pid\":{Environment.ProcessId}}}", "application/json"));
+            app.MapGet("/", () => Results.Json(new OrdinaryProbe(
+                Environment.ProcessId, true,
+                Environment.GetEnvironmentVariable("ASPIRE_DOTNET_WATCH_LAUNCH_OWNER"),
+                Environment.GetEnvironmentVariable("AppHost__Run__WatchEnabled"),
+                Environment.GetEnvironmentVariable("ASPIRE_DOTNET_WATCH_HOST_CONTROL"),
+                Environment.GetEnvironmentVariable("ASPIRE_DOTNET_WATCH_HOST_SESSION")),
+                OrdinaryJsonContext.Default.OrdinaryProbe));
             app.Run();
+
+            record OrdinaryProbe(int Pid, bool HostingLoaded, string? WatchOwner, string? WatchEnabled, string? HostControl, string? HostSession);
+            [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+            [JsonSerializable(typeof(OrdinaryProbe))]
+            partial class OrdinaryJsonContext : JsonSerializerContext;
             """);
         if (language == "typescript")
         {
@@ -162,6 +184,14 @@ public sealed class DotnetWatchTests(ITestOutputHelper output)
         {
             var path = Path.Combine(workspace.Path, "Watch.AppHost", "AppHost.cs");
             await File.WriteAllTextAsync(path, """
+                if (Environment.GetEnvironmentVariable("WATCH_STARTUP_GATE") is { } gate)
+                {
+                    File.WriteAllText(gate + ".entered", Environment.ProcessId.ToString());
+                    while (!File.Exists(gate + ".release"))
+                    {
+                        await Task.Delay(25);
+                    }
+                }
                 var builder = DistributedApplication.CreateBuilder(args);
                 builder.AddDotnetProject("api", "../Api/Api.csproj")
                     .WithHttpEndpoint(env: "ASPNETCORE_HTTP_PORTS")
@@ -173,6 +203,12 @@ public sealed class DotnetWatchTests(ITestOutputHelper output)
                 builder.AddDotnetProject("ordinary", "../ordinary.cs")
                     .WithHttpEndpoint(env: "ASPNETCORE_HTTP_PORTS")
                     .WithHttpHealthCheck("/health");
+                if (Environment.GetEnvironmentVariable("WATCH_VERIFY_WORKLOAD") == "true")
+                {
+                    builder.AddContainer("watch-owned-workload", "mcr.microsoft.com/dotnet/sdk", "10.0")
+                        .WithEntrypoint("/bin/sh")
+                        .WithArgs("-c", "sleep 600");
+                }
                 builder.Build().Run();
                 """);
         }

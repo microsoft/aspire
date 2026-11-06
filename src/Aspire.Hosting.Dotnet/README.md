@@ -102,7 +102,9 @@ aspire run --watch --detach
 This is an experimental CLI-owned mode, not watch debugging or a replacement for existing
 IDE watch/debug sessions. Omitting `--watch` preserves ordinary execution and the existing
 `features.defaultWatchEnabled` implementation. It does not acquire or start the package-backed
-watcher. Discovery, SDK generation, restore, build, and publish do not activate it either.
+watcher. Ordinary launches explicitly disable inherited private preview ownership
+and generation settings without changing legacy `DOTNET_WATCH` or IDE debugging.
+Discovery, SDK generation, restore, build, and publish do not activate it either.
 
 For compatible single-instance C# projects and managed file-based apps, Aspire retains the initial
 coordinated build, starts hidden watch servers for isolated SDK/build components, and launches
@@ -120,6 +122,21 @@ language-native watching; their managed Hosting server owns C# service watch. Na
 servers cannot load this managed integration and report reduced coverage instead.
 File-based C# AppHosts run normally in this preview; their independently compatible services can
 still watch, but AppHost source edits do not replace the model automatically.
+
+Private preview ownership and generation-control settings are excluded from ambient DCP inheritance,
+so an ordinary child that loads Hosting cannot announce a false AppHost start or invalidate its parent.
+
+C# AppHost watching requires a DCP `fork-process` that supports `--enable-child-cleanup`,
+`--skip-descendants`, cleanup-mode application output forwarding, and a helper-owned private Unix
+session for graceful startup-descendant cleanup. The CLI checks PID framing and output support
+with the resolved SDK before starting the watcher, then monitors the **long-lived CLI** rather than
+the detached foreground launcher. The first fork PID line is consumed internally; application
+output and exit codes remain observable. The managed AppHost retains its orphan detector and DCP
+workload cleanup. Failed retirement is an error, not permission to start another generation.
+
+The pinned DCP **0.27.3 does not provide this contract**. A supporting DCP release and bundle update
+are required; compatible local prototypes can be selected with `ASPIRE_DCP_PATH` (the DCP directory).
+There is no watch/status-file protocol or separate watcher supervisor.
 
 Inspect `watch.mode` (`experimental` or `ordinary`) and `watch.reason` in resource details or
 `aspire describe --format json`. Unsupported resources run normally with a per-resource warning.

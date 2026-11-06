@@ -1746,6 +1746,53 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(77, exitCode);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task RunAsync_OrdinaryLaunchDisablesInheritedPreviewWithoutChangingLegacyWatch(bool legacyWatch, bool direct)
+    {
+        var appHost = CreateProjectAppHost();
+        var command = CreateBuiltAppHostCommand("AppHost");
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, CreateAppHostInfoJson(runCommand: direct ? command.FullName : null)),
+            RunAsyncCallback = async (_, watch, _, _, _, environment, _, options, _) =>
+            {
+                Assert.False(direct);
+                Assert.Equal(legacyWatch, watch);
+                Assert.False(options.DisableExtensionLaunch);
+                Assert.True(options.StartDebugSession);
+                await ProcessTestHelpers.AssertWatchDisabledWithInheritedEnvironmentAsync(
+                    Assert.IsAssignableFrom<IDictionary<string, string>>(environment), _workspace.WorkspaceRoot);
+                return 77;
+            },
+            RunAppHostCommandAsyncCallback = async (_, _, _, _, environment, _, options, _) =>
+            {
+                Assert.True(direct);
+                Assert.False(options.DisableExtensionLaunch);
+                Assert.True(options.StartDebugSession);
+                await ProcessTestHelpers.AssertWatchDisabledWithInheritedEnvironmentAsync(
+                    Assert.IsAssignableFrom<IDictionary<string, string>>(environment), _workspace.WorkspaceRoot);
+                return 77;
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+        {
+            options.EnabledFeatures = legacyWatch ? [KnownFeatures.DefaultWatchEnabled] : [];
+            options.ConfigurationCallback = values => values[DotnetWatchConfiguration.WatchEnabled] = "true";
+        });
+
+        Assert.Equal(77, await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            StartDebugSession = true
+        }, TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task RunAsync_ExplicitWatchUsesPackageHostAndResolvedSdkAfterPreparation()
     {
@@ -1782,6 +1829,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                 Assert.Equal(appHost.DirectoryName, directory.FullName);
                 Assert.Equal(payload.DotnetPath, options.DotNetExecutablePath);
                 Assert.True(options.DisableExtensionLaunch);
+                Assert.NotNull(options.DcpFork);
+                Assert.Equal("10.0.403", options.DcpFork.SdkVersion);
                 Assert.Equal(["exec", payload.ToolPath, "host", "--sdk", payload.SdkDirectory, "--entrypoint", appHost.FullName,
                     "--launch-profile=https", "--", "--", "--environment", "Staging", ""], arguments);
                 Assert.NotNull(environment);
@@ -5121,11 +5170,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             configureServices?.Invoke(options);
         });
 
-        if (environment is not null)
+        environment ??= new TestEnvironment(new Dictionary<string, string?>
         {
-            services.RemoveAll<IEnvironment>();
-            services.AddSingleton(environment);
-        }
+            ["DcpPublisher__CliPath"] = Path.Combine(_workspace.Path, "test-dcp")
+        });
+        services.RemoveAll<IEnvironment>();
+        services.AddSingleton(environment);
 
         if (appHostInfoResolver is not null)
         {

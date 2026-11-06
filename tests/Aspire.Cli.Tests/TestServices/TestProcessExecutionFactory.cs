@@ -217,7 +217,7 @@ internal sealed class TestProcessExecution : IProcessExecution
                 throw new InvalidOperationException("Process has not been started.");
             }
 
-            return _hasExited;
+            return HasExitedCallback?.Invoke() ?? _hasExited;
         }
     }
 
@@ -232,6 +232,7 @@ internal sealed class TestProcessExecution : IProcessExecution
     public Exception? StartException { get; init; }
 
     public bool ThrowOnHasExitedBeforeStart { get; init; }
+    public Func<bool>? HasExitedCallback { get; init; }
 
     public Func<ProcessInvocationOptions, CancellationToken, Task<int>>? WaitForExitAsyncCallback { get; init; }
 

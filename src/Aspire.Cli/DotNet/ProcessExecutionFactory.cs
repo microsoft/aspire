@@ -82,7 +82,9 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             }
         }
 
-        return new ProcessExecution(startInfo, effectiveLogger, options, _environment);
+        return options.DcpFork is { } fork
+            ? new DcpForkProcessExecution(startInfo, fork, options, this, effectiveLogger, _environment.IsWindows(), DcpForkChildProcess.Open)
+            : new ProcessExecution(startInfo, effectiveLogger, options, _environment);
     }
 
     public IProcessExecution CreateExecution(ProcessStartInfo startInfo, ProcessInvocationOptions options)
@@ -121,7 +123,9 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         // through the caller's parent-seeded environment.
         RemoveInheritedEnvironmentVariables(childStartInfo.Environment, options.EnvironmentVariableFilter);
 
-        return new ProcessExecution(childStartInfo, effectiveLogger, options, _environment);
+        return options.DcpFork is { } fork
+            ? new DcpForkProcessExecution(childStartInfo, fork, options, this, effectiveLogger, _environment.IsWindows(), DcpForkChildProcess.Open)
+            : new ProcessExecution(childStartInfo, effectiveLogger, options, _environment);
     }
 
     /// <summary>

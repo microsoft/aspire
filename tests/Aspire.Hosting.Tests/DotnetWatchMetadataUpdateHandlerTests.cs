@@ -21,32 +21,59 @@ public class DotnetWatchMetadataUpdateHandlerTests
     }
 
     [Theory]
-    [InlineData(null, null, null, null)]
-    [InlineData("true", null, "pipe", "session")]
-    [InlineData("false", "aspire", "pipe", "session")]
-    [InlineData("true", "ide", "pipe", "session")]
-    [InlineData("true", "aspire", "", "session")]
-    [InlineData("true", "aspire", "pipe", "")]
-    public async Task InactiveOrUnownedUpdatesDoNotOpenAControlConnection(string? watch, string? owner, string? pipe, string? session)
-    {
-        var environment = new Dictionary<string, string?>
-        {
-            ["AppHost__Run__WatchEnabled"] = watch,
-            [DotnetWatchConfiguration.LaunchOwner] = owner,
-            [DotnetWatchConfiguration.HostControlPipe] = pipe,
-            [DotnetWatchConfiguration.HostSession] = session
-        };
-
-        await DotnetWatchMetadataUpdateHandler.NotifyAsync(
-            name => environment.GetValueOrDefault(name), TestContext.Current.CancellationToken).DefaultTimeout();
-    }
-
-    [Fact]
-    public async Task ExplicitHostGenerationReceivesTypedVersionedInvalidation()
+    [InlineData(false, null, "aspire", true, true)]
+    [InlineData(true, null, "aspire", true, true)]
+    [InlineData(false, "true", null, true, true)]
+    [InlineData(true, "true", null, true, true)]
+    [InlineData(false, "false", "aspire", true, true)]
+    [InlineData(true, "false", "aspire", true, true)]
+    [InlineData(false, "true", "ide", true, true)]
+    [InlineData(true, "true", "ide", true, true)]
+    [InlineData(false, "invalid", "aspire", true, true)]
+    [InlineData(true, "invalid", "aspire", true, true)]
+    [InlineData(false, "true", "aspire", false, true)]
+    [InlineData(true, "true", "aspire", false, true)]
+    [InlineData(false, "true", "aspire", true, false)]
+    [InlineData(true, "true", "aspire", true, false)]
+    public async Task InactiveOrUnownedUpdatesDoNotOpenAControlConnection(
+        bool startup, string? watch, string? owner, bool includePipe, bool includeSession)
     {
         var pipeName = $"ah{Guid.NewGuid():N}"[..16];
         await using var server = new NamedPipeServerStream(pipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        using var connectionCancellation = CancellationTokenSource.CreateLinkedTokenSource(timeout.Token);
+        var connection = server.WaitForConnectionAsync(connectionCancellation.Token);
+        var environment = new Dictionary<string, string?>
+        {
+            ["AppHost__Run__WatchEnabled"] = watch,
+            [DotnetWatchConfiguration.LaunchOwner] = owner,
+            [DotnetWatchConfiguration.HostControlPipe] = includePipe ? pipeName : "",
+            [DotnetWatchConfiguration.HostSession] = includeSession ? "current-generation" : ""
+        };
+
+        await (startup
+            ? DotnetWatchMetadataUpdateHandler.NotifyStartedAsync(name => environment.GetValueOrDefault(name), timeout.Token)
+            : DotnetWatchMetadataUpdateHandler.NotifyAsync(name => environment.GetValueOrDefault(name), timeout.Token)).WaitAsync(timeout.Token);
+
+        // The client can finish writing before the server's accept continuation runs. Let the
+        // pending accept settle instead of letting immediate cancellation hide a real connection.
+        connectionCancellation.CancelAfter(TimeSpan.FromSeconds(1));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
+        Assert.False(server.IsConnected);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExplicitHostGenerationReceivesTypedVersionedNotifications(bool startup)
+    {
+        var pipeName = $"ah{Guid.NewGuid():N}"[..16];
+        await using var server = new NamedPipeServerStream(pipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
         var environment = new Dictionary<string, string?>
         {
             ["AppHost__Run__WatchEnabled"] = "true",
@@ -54,15 +81,25 @@ public class DotnetWatchMetadataUpdateHandlerTests
             [DotnetWatchConfiguration.HostControlPipe] = pipeName,
             [DotnetWatchConfiguration.HostSession] = "current-generation"
         };
-        var notification = DotnetWatchMetadataUpdateHandler.NotifyAsync(
-            name => environment.GetValueOrDefault(name), TestContext.Current.CancellationToken);
-        await server.WaitForConnectionAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        var notification = startup
+            ? DotnetWatchMetadataUpdateHandler.NotifyStartedAsync(name => environment.GetValueOrDefault(name), timeout.Token)
+            : DotnetWatchMetadataUpdateHandler.NotifyAsync(name => environment.GetValueOrDefault(name), timeout.Token);
+        await server.WaitForConnectionAsync(timeout.Token);
 
-        var message = await DotnetWatchHostProtocol.ReadAsync(server, TestContext.Current.CancellationToken).DefaultTimeout();
-        await notification.DefaultTimeout();
+        var message = await DotnetWatchHostProtocol.ReadAsync(server, timeout.Token);
+        await notification.WaitAsync(timeout.Token);
 
         Assert.Equal(1, message.Version);
+        Assert.Equal(startup ? DotnetWatchHostProtocol.HostStarted : DotnetWatchHostProtocol.ModelInvalidated, message.Kind);
         Assert.Equal("current-generation", message.Session);
+        if (startup)
+        {
+            Assert.NotEmpty(message.Instance!);
+        }
+        else
+        {
+            Assert.Null(message.Instance);
+        }
     }
 
     [Fact]
@@ -82,28 +119,4 @@ public class DotnetWatchMetadataUpdateHandlerTests
             name => environment.GetValueOrDefault(name), cancellation.Token).DefaultTimeout();
     }
 
-    [Fact]
-    public async Task StartupNotificationIdentifiesTheActualHostForRudeEditGenerationReplacement()
-    {
-        var pipeName = $"ah{Guid.NewGuid():N}"[..16];
-        await using var server = new NamedPipeServerStream(pipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-        var environment = new Dictionary<string, string?>
-        {
-            ["AppHost__Run__WatchEnabled"] = "true",
-            [DotnetWatchConfiguration.LaunchOwner] = "aspire",
-            [DotnetWatchConfiguration.HostControlPipe] = pipeName,
-            [DotnetWatchConfiguration.HostSession] = "current-generation"
-        };
-        var notification = DotnetWatchMetadataUpdateHandler.NotifyStartedAsync(
-            name => environment.GetValueOrDefault(name), TestContext.Current.CancellationToken);
-        await server.WaitForConnectionAsync(TestContext.Current.CancellationToken).DefaultTimeout();
-
-        var message = await DotnetWatchHostProtocol.ReadAsync(server, TestContext.Current.CancellationToken).DefaultTimeout();
-        await notification.DefaultTimeout();
-
-        Assert.Equal(DotnetWatchHostProtocol.HostStarted, message.Kind);
-        Assert.NotEmpty(message.Instance!);
-        Assert.Equal("current-generation", message.Session);
-    }
 }

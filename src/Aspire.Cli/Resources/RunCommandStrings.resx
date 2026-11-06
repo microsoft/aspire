@@ -309,6 +309,13 @@
   <data name="WatchAppHostInitializationFailed" xml:space="preserve">
     <value>The watcher host exited during initialization before connecting to the AppHost.</value>
   </data>
+  <data name="WatchDcpUnavailable" xml:space="preserve">
+    <value>C# AppHost watching requires a compatible DCP fork-process with --enable-child-cleanup, --skip-descendants, and application output forwarding. Use a compatible ASPIRE_DCP_PATH override until a supporting DCP release is bundled.</value>
+    <comment>DCP, fork-process, --enable-child-cleanup, --skip-descendants, and ASPIRE_DCP_PATH must not be localized.</comment>
+  </data>
+  <data name="WatchDcpShutdownFailed" xml:space="preserve">
+    <value>DCP did not confirm watcher shutdown. Check the diagnostic logs before starting another AppHost generation.</value>
+  </data>
   <data name="WatchAppHostRestarting" xml:space="preserve">
     <value>The C# AppHost model changed. Replacing the complete watch generation...</value>
   </data>
