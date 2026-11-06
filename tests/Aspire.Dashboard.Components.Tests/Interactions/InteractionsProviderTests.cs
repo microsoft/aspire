@@ -434,7 +434,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
 
         var notification = new InteractionNotification { Intent = MessageIntent.Warning };
-        notification.UnresolvedParameterNames.Add(["first", "second"]);
+        notification.RelatedResourceNames.Add(["first", "second"]);
         await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
         {
             InteractionId = 1,

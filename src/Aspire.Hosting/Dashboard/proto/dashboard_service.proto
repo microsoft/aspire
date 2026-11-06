@@ -411,10 +411,11 @@ message InteractionNotification {
     optional bool result = 2;
     string link_text = 3;
     string link_url = 4;
-    // Set when the notification asks the user to provide values for these unresolved parameters. A dashboard can
-    // use it to offer its own way of entering the values; the notification still works as a normal notification
-    // for clients that ignore it.
-    repeated string unresolved_parameter_names = 5;
+    // The resources the notification is about. A client can offer to show these resources, where the user can act on
+    // them, in place of the notification's primary button. Showing them doesn't answer the notification: the client
+    // answers it as usual, for example once its UI for those resources takes over. The notification still works as a
+    // normal notification for clients that ignore it.
+    repeated string related_resource_names = 5;
 }
 // Represents a progress interaction, which is a modal dialog with an indeterminate progress indicator.
 message InteractionPromptProgress {

@@ -1556,7 +1556,7 @@ public class ParameterProcessorTests
         var options = Assert.IsType<NotificationInteractionOptions>(notificationInteraction.Options);
         Assert.Equal(InteractionStrings.ParametersBarPrimaryButtonText, options.PrimaryButtonText);
         Assert.Null(options.LinkUrl);
-        Assert.Equal(["firstParam", "secondParam"], options.UnresolvedParameterNames);
+        Assert.Equal(["firstParam", "secondParam"], options.RelatedResourceNames);
     }
 
     [Fact]

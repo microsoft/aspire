@@ -359,10 +359,10 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             }
         };
 
-    private static string GetParametersUrl(IReadOnlyList<string> parameterNames) =>
-        parameterNames.Count == 1
-            ? DashboardUrls.ResourceOverviewUrl(parameterNames[0])
-            : DashboardUrls.AddResourceSelection(DashboardUrls.ResourceListUrl(), parameterNames);
+    private static string GetRelatedResourcesUrl(IReadOnlyList<string> relatedResourceNames) =>
+        relatedResourceNames.Count == 1
+            ? DashboardUrls.ResourceOverviewUrl(relatedResourceNames[0])
+            : DashboardUrls.AddResourceSelection(DashboardUrls.ResourceListUrl(), relatedResourceNames);
 
     private void OnParameterInteractionReleased(InteractionsInputsDialogViewModel interaction)
     {
@@ -468,13 +468,14 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                             break;
                         }
 
-                        // The AppHost names the parameters of the unresolved parameters notification. The modern dashboard
-                        // enters their values in the parameter form of the resources page: its button opens the form,
-                        // and the form accepts the notification once it shows every parameter. The legacy dashboard,
-                        // and older AppHosts that don't send the names, use the notification's button and the dialog.
-                        var parameterNames = notification.UnresolvedParameterNames.ToList();
-                        var parametersUrl = IsNewDashboard && parameterNames.Count > 0
-                            ? GetParametersUrl(parameterNames)
+                        // The AppHost names the resources a notification is about, e.g. the parameters of the unresolved
+                        // parameters notification. The modern dashboard's button shows those resources instead. Showing
+                        // them doesn't answer the notification: the parameter form accepts it once it shows every
+                        // parameter, and enters their values. The legacy dashboard, and older AppHosts that don't send the
+                        // names, use the notification's button and the dialog.
+                        var relatedResourceNames = notification.RelatedResourceNames.ToList();
+                        var relatedResourcesUrl = IsNewDashboard && relatedResourceNames.Count > 0
+                            ? GetRelatedResourcesUrl(relatedResourceNames)
                             : null;
 
                         DashboardMessageBarReference? message = null;
@@ -501,7 +502,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                                     // new tab. Following it doesn't answer the notification.
                                     LinkAsAction = notification.LinkUrl?.StartsWith('/') == true,
                                     PrimaryAction = primaryButtonText,
-                                    PrimaryActionUrl = parametersUrl,
+                                    PrimaryActionUrl = relatedResourcesUrl,
                                     SecondaryAction = secondaryButtonText
                                 },
                                 MapMessageIntent(notification.Intent),
@@ -511,10 +512,10 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         Debug.Assert(message != null, "Message should have been created in UI thread.");
                         _openMessageBars.Add(new InteractionMessageBarReference(item.InteractionId, message, CreateTelemetryContext(TelemetryComponentIds.InteractionMessageBar)));
 
-                        if (parametersUrl is not null)
+                        if (relatedResourcesUrl is not null)
                         {
                             var parameterNotification = notification.Clone();
-                            await InvokeAsync(() => ParameterInteractionState.SetNotification(item.InteractionId, parameterNames, async () =>
+                            await InvokeAsync(() => ParameterInteractionState.SetNotification(item.InteractionId, relatedResourceNames, async () =>
                             {
                                 // The parameter form accepts the notification while it renders, so a lost connection
                                 // must not fail the page. The form still sets values with commands without it.

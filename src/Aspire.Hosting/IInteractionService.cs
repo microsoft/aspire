@@ -976,9 +976,10 @@ public class NotificationInteractionOptions : InteractionOptions
     /// </summary>
     public string? LinkUrl { get; set; }
 
-    // Identifies the unresolved parameters notification to the dashboard through the protocol, so the dashboard
-    // doesn't have to recognize it from its text or link. Internal because only the parameter processor sends it.
-    internal IReadOnlyList<string>? UnresolvedParameterNames { get; init; }
+    // The resources the notification is about, which the dashboard can offer to show. The parameter processor names
+    // the unresolved parameters, so the dashboard doesn't have to recognize that notification from its text or link.
+    // Internal because only the parameter processor sends it.
+    internal IReadOnlyList<string>? RelatedResourceNames { get; init; }
 }
 
 /// <summary>

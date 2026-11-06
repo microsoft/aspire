@@ -728,7 +728,7 @@ public sealed class ParameterProcessor(
                     {
                         Intent = MessageIntent.Warning,
                         PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText,
-                        UnresolvedParameterNames = [.. GetUnresolvedParametersSnapshot(unresolvedParameters).Select(p => p.Parameter.Name)]
+                        RelatedResourceNames = [.. GetUnresolvedParametersSnapshot(unresolvedParameters).Select(p => p.Parameter.Name)]
                     },
                     allParametersResolvedToken).ConfigureAwait(false);
 
