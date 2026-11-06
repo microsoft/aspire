@@ -5304,7 +5304,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8449,7 +8449,7 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *cSharpAppResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11647,7 +11647,7 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *containerRegistryResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15051,7 +15051,7 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *containerResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20175,7 +20175,7 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *dotnetToolResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20643,7 +20643,7 @@ func newEndpointReferenceFromHandle(h *handle, c *client) EndpointReference {
 // BrowserOrigins gets a deferred comma-separated list of browser-facing origins
 // associated with this endpoint.
 func (s *endpointReference) BrowserOrigins() EndpointReferenceExpression {
-	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20872,7 +20872,7 @@ func (s *endpointReference) Port() (float64, error) {
 // PrimaryBrowserOrigin gets the deferred primary browser-facing origin
 // associated with this endpoint.
 func (s *endpointReference) PrimaryBrowserOrigin() EndpointReferenceExpression {
-	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -24479,7 +24479,7 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *executableResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26553,7 +26553,7 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *externalServiceResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30485,7 +30485,7 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *parameterResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34275,7 +34275,7 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *projectResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39765,7 +39765,7 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *testDatabaseResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43899,7 +43899,7 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 
 // WithResourceTypeDisplayName overrides the human-readable resource type label.
 func (s *testRedisResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
