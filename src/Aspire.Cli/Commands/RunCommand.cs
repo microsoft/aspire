@@ -134,6 +134,30 @@ internal sealed class RunCommand : BaseCommand
         Description = RunCommandStrings.WatchOptionDescription
     };
 
+    /// <summary>
+    /// Resolves whether a run uses watch. An explicit <c>--watch</c> (or <c>--watch false</c>) wins; otherwise the
+    /// <c>defaultWatchEnabled</c> feature supplies the default.
+    /// </summary>
+    internal static bool ResolveWatch(ParseResult parseResult, IFeatures features, out bool explicitlySet)
+    {
+        if (parseResult.GetResult(s_watchOption) is { Implicit: false })
+        {
+            explicitlySet = true;
+            return parseResult.GetValue(s_watchOption);
+        }
+
+        explicitlySet = false;
+        return features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+    }
+
+    /// <summary>
+    /// Whether an IDE owns this run: the CLI was started by a VS Code Aspire session, or DCP is handed an IDE session
+    /// endpoint. The IDE then launches services and handles their change tracking and restarts.
+    /// </summary>
+    internal static bool IsIdeOwnedRun(IConfiguration configuration) =>
+        !string.IsNullOrEmpty(configuration[KnownConfigNames.ExtensionDebugSessionId]) ||
+        !string.IsNullOrEmpty(configuration["DEBUG_SESSION_PORT"]);
+
     /// <summary>AppHost logger category (and prefix) for the concise notices of <c>aspire run --watch</c>.</summary>
     internal const string WatchNoticeCategory = "Aspire.Hosting.Dotnet.Watch";
 
@@ -204,18 +228,44 @@ internal sealed class RunCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
         }
 
-        // Validate that --no-build is not used when watch mode would be enabled.
-        // The extension terminal path enables watch mode by delegating to VS Code
-        // before an Aspire debug session exists. Once VS Code starts the session,
-        // the child CLI has ASPIRE_EXTENSION_DEBUG_SESSION_ID and can honor
-        // forwarded options from the original terminal command without recursing.
+        // Watch selection: an explicit --watch / --watch false wins; otherwise the defaultWatchEnabled feature
+        // supplies the default. Watch means Aspire-controlled hot reload of C# services (plus the guest runtime's
+        // native AppHost watch for polyglot AppHosts); the C# AppHost itself runs normally.
+        var watch = ResolveWatch(parseResult, _features, out var watchExplicit);
+
+        // IDE-owned runs (a VS Code debug/run session, or any launch that hands DCP an IDE session endpoint) keep the
+        // IDE's own service launch, change tracking and restart protocol, so the CLI never starts its watcher there.
+        var ideOwnsRun = IsIdeOwnedRun(_configuration);
+
+        // The extension terminal path delegates to VS Code before an Aspire debug session exists. Once VS Code
+        // starts the session, the child CLI has ASPIRE_EXTENSION_DEBUG_SESSION_ID and can honor forwarded options
+        // from the original terminal command without recursing.
         var extensionTerminalRunWithoutDebugSession = isExtensionHost
             && !startDebugSession
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
-        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession;
-        if (noBuild && watchModeEnabled)
+
+        // An interactive `aspire run` in a VS Code Aspire terminal is handed to VS Code (see below).
+        var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
+        var delegatesToExtension = !nonInteractive
+            && isExtensionHost
+            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
+        var serviceWatch = watch && !ideOwnsRun && !delegatesToExtension;
+
+        if (noBuild)
         {
-            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
+            // Hot reload builds services whenever they change, so it can't honor --no-build.
+            if (serviceWatch)
+            {
+                return CommandResult.Failure(
+                    CliExitCodes.InvalidCommand,
+                    watchExplicit ? RunCommandStrings.NoBuildNotSupportedWithWatchOption : RunCommandStrings.NoBuildNotSupportedWithDefaultWatch);
+            }
+
+            // A VS Code run session (no debugger) launches services with the IDE's own watch.
+            if (extensionTerminalRunWithoutDebugSession)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
+            }
         }
 
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
@@ -233,20 +283,25 @@ internal sealed class RunCommand : BaseCommand
         // VS Code to start a debug session using the current directory.
         // Skip this when running in non-interactive mode (e.g. as a child of `aspire start`)
         // to avoid delegating back to the extension instead of launching the AppHost directly.
-        var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
-        if (!nonInteractive
-            && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
-            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
+        if (delegatesToExtension
+            && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
+            // VS Code owns service launch, change tracking and restarts for the session it starts, so --watch isn't
+            // forwarded and the CLI watcher doesn't run there. Say so in the terminal rather than dropping it silently.
             var debugSessionArguments = ParseResultHelper.GetForwardedArguments(
                 parseResult,
                 AppHostLauncher.s_appHostOption.InnerOption,
                 AppHostLauncher.s_appHostOption.LegacyOption,
                 AppHostLauncher.s_formatOption,
                 s_detachOption,
+                s_watchOption,
                 RootCommand.StartDebugSessionOption,
                 RootCommand.NonInteractiveOption);
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
+            if (watch && watchExplicit)
+            {
+                extensionInteractionService.DisplayConsolePlainText(RunCommandStrings.WatchHandledByIde);
+            }
             await extensionInteractionService.StartDebugSessionAsync(
                 ExecutionContext.WorkingDirectory.FullName,
                 passedAppHostProjectFile?.FullName,
@@ -369,7 +424,7 @@ internal sealed class RunCommand : BaseCommand
             context = new AppHostProjectContext
             {
                 AppHostFile = effectiveAppHostFile,
-                Watch = false,
+                Watch = serviceWatch,
                 Debug = parseResult.GetValue(RootCommand.DebugOption),
                 NoBuild = noBuild,
                 NoRestore = noBuild, // --no-build implies --no-restore
@@ -393,16 +448,14 @@ internal sealed class RunCommand : BaseCommand
             context.EnvironmentVariables[KnownConfigNames.AspireUserSecretsId] =
                 await _aspireSecretsStoreResolver.ResolveAppHostIdAsync(effectiveAppHostFile, project, cancellationToken);
 
-            // TODO(spike): wire --watch through the guest AppHost server so polyglot AppHosts can hot reload C# services.
-            if (parseResult.GetValue(s_watchOption) && project.LanguageId != KnownLanguageId.CSharp)
+            if (watch && ideOwnsRun && watchExplicit)
             {
-                InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, RunCommandStrings.WatchNotSupportedForAppHostLanguage);
+                InteractionService.DisplayMessage(KnownEmojis.Information, RunCommandStrings.WatchHandledByIde);
             }
-            else if (parseResult.GetValue(s_watchOption))
-            {
-                DotnetWatch.DotnetWatchRunEnvironment.Apply(context.EnvironmentVariables);
-                _watchRequested = true;
-            }
+
+            // The AppHost project projects AppHost:Run:WatchEnabled into the process that hosts Aspire.Hosting
+            // (the C# AppHost, or the AppHost server for polyglot AppHosts).
+            _watchRequested = serviceWatch;
 
             // Start the project run as a pending task - we'll handle UX while it runs
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
@@ -1576,9 +1629,11 @@ internal sealed class RunCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
-        if (parseResult.GetValue(s_watchOption))
+        // Forward an explicit choice either way so the child resolves watch exactly like this command did,
+        // even if its configuration has a different defaultWatchEnabled.
+        if (parseResult.GetResult(s_watchOption) is { Implicit: false })
         {
-            additionalArgs.Add("--watch");
+            additionalArgs.Add(parseResult.GetValue(s_watchOption) ? "--watch" : "--watch=false");
         }
 
         if (!string.IsNullOrEmpty(launchProfile))

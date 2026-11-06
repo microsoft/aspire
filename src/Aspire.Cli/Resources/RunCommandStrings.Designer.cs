@@ -519,9 +519,21 @@ namespace Aspire.Cli.Resources {
             }
         }
         
-        internal static string WatchNotSupportedForAppHostLanguage {
+        internal static string NoBuildNotSupportedWithWatchOption {
             get {
-                return ResourceManager.GetString("WatchNotSupportedForAppHostLanguage", resourceCulture);
+                return ResourceManager.GetString("NoBuildNotSupportedWithWatchOption", resourceCulture);
+            }
+        }
+        
+        internal static string NoBuildNotSupportedWithDefaultWatch {
+            get {
+                return ResourceManager.GetString("NoBuildNotSupportedWithDefaultWatch", resourceCulture);
+            }
+        }
+        
+        internal static string WatchHandledByIde {
+            get {
+                return ResourceManager.GetString("WatchHandledByIde", resourceCulture);
             }
         }
     }
