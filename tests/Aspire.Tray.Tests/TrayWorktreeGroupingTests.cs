@@ -8,7 +8,80 @@ namespace Aspire.Tray.Tests;
 
 public class TrayWorktreeGroupingTests
 {
-    private static AppHostMenuItem Host(string path, int pid) => TrayPanelSamples.Running(path, pid) with { Checkout = TrayGitCheckout.Read(path) };
+    private static AppHostMenuItem Host(string path, int pid) => TrayPanelSamples.Running(path, pid) with { Checkout = TrayGitCheckoutReader.Read(path) };
+
+    [Theory]
+    [InlineData("apphost.cs")]
+    [InlineData("AppHost/apphost.cs")]
+    public void BareRepositoryWorktreesUseTheRepositoryName(string relativePath)
+    {
+        using var repo = new TrayWorktreeRepository(bare: true);
+        var main = Host(repo.CreateHost("main", "main", relativePath), 1);
+        var cart = Host(repo.CreateHost("cart", "feature/cart", relativePath), 2);
+        var group = Assert.Single(TrayAppHostGroup.Create([main, cart]));
+        Assert.True(group.IsGroup);
+        Assert.Equal("Shop", group.Name);
+        Assert.Equal("Shop", Assert.Single(TrayAppHostGroup.Create([cart, main])).Name);
+    }
+
+    [Fact]
+    public async Task StartAfterDisposalDoesNotPublishOrExposeCacheErrors()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var path = repo.CreateHost("main", "main");
+        var client = new TestAppHostClient();
+        var controller = new TrayController(client);
+        await controller.DisposeAsync();
+        var changes = 0;
+        controller.Changed += () => changes++;
+        var error = Assert.Throws<ObjectDisposedException>(() => controller.RequestStart(path));
+        Assert.Equal(typeof(TrayController).FullName, error.ObjectName);
+        Assert.Equal(0, changes);
+        Assert.Empty(client.StartRequests);
+    }
+
+    [Fact]
+    public async Task RemovingAndReaddingAPathInvalidatesCachedMetadataImmediately()
+    {
+        using var repo = new TrayWorktreeRepository();
+        var path = repo.CreateHost("main", "main");
+        var checkout = TrayGitCheckoutReader.Read(path);
+        Assert.NotNull(checkout);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var result = new TaskCompletionSource<(TrayGitCheckout? Removed, TrayGitCheckout? Readded)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reads = 0;
+        await using var cache = new TrayGitCheckoutCache(new FakeTimeProvider(), _ =>
+        {
+            if (Interlocked.Increment(ref reads) > 1)
+            {
+                release.Task.GetAwaiter().GetResult();
+            }
+            return checkout;
+        });
+        cache.Changed += () =>
+        {
+            if (result.Task.IsCompleted)
+            {
+                return;
+            }
+            cache.SetPaths([]);
+            var removed = cache.Get(path);
+            cache.SetPaths([path]);
+            result.TrySetResult((removed, cache.Get(path)));
+        };
+        cache.SetPaths([path]);
+        cache.Start();
+        try
+        {
+            var values = await result.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Null(values.Removed);
+            Assert.Null(values.Readded);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+    }
 
     [Fact]
     public void GitCanReplaceHeadWhileTheTrayReadsIt()
@@ -16,7 +89,7 @@ public class TrayWorktreeGroupingTests
         using var repo = new TrayWorktreeRepository();
         repo.CreateHost("main", "main");
         var head = Path.Combine(repo.CommonDirectory, "HEAD");
-        using var read = TrayGitCheckout.OpenMetadata(head);
+        using var read = TrayGitCheckoutReader.OpenMetadata(head);
         File.WriteAllText(head + ".lock", "ref: refs/heads/feature/cart");
         File.Replace(head + ".lock", head, null);
         Assert.Equal("ref: refs/heads/feature/cart", File.ReadAllText(head));
@@ -33,19 +106,20 @@ public class TrayWorktreeGroupingTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var client = new TestAppHostClient();
-        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, TimeProvider.System, hostPath =>
+        TrayGitCheckout? ReadCheckout(string hostPath)
         {
             started.TrySetResult();
             try
             {
                 release.Task.GetAwaiter().GetResult();
-                return TrayGitCheckout.Read(hostPath);
+                return TrayGitCheckoutReader.Read(hostPath);
             }
             finally
             {
                 finished.TrySetResult();
             }
-        });
+        }
+        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, TimeProvider.System, ReadCheckout);
         Assert.False(started.Task.IsCompleted);
         controller.Start();
         var host = new AppHostInfo(path, 1, "https://localhost:1234/") { ProcessStartTimeUnixMilliseconds = 1001 };
@@ -80,24 +154,25 @@ public class TrayWorktreeGroupingTests
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var blockedReads = 0;
         var client = new TestAppHostClient();
-        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time, path =>
+        TrayGitCheckout? ReadCheckout(string path)
         {
             if (!TrayAppHostPath.Comparer.Equals(path, blockedPath))
             {
-                return TrayGitCheckout.Read(path);
+                return TrayGitCheckoutReader.Read(path);
             }
             Interlocked.Increment(ref blockedReads);
             started.TrySetResult();
             try
             {
                 release.Task.GetAwaiter().GetResult();
-                return TrayGitCheckout.Read(path);
+                return TrayGitCheckoutReader.Read(path);
             }
             finally
             {
                 finished.TrySetResult();
             }
-        });
+        }
+        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time, ReadCheckout);
         var blocked = new AppHostInfo(blockedPath, 1, null) { ProcessStartTimeUnixMilliseconds = 1001 };
         var healthy = new AppHostInfo(healthyPath, 2, null) { ProcessStartTimeUnixMilliseconds = 1002 };
         controller.Start();
@@ -111,7 +186,7 @@ public class TrayWorktreeGroupingTests
             {
                 var branch = $"feature/cart-{index}";
                 File.WriteAllText(Path.Combine(repo.CommonDirectory, "worktrees", "cart", "HEAD"), "ref: refs/heads/" + branch);
-                time.Advance(TrayController.CheckoutRefreshInterval);
+                time.Advance(TrayGitCheckoutCache.RefreshInterval);
                 await TestAppHostClient.WaitForStateAsync(controller,
                     state => state.AppHosts.FirstOrDefault(host => host.Id == healthy.Id)?.Checkout?.Label == branch);
             }
@@ -190,11 +265,12 @@ public class TrayWorktreeGroupingTests
         var time = new FakeTimeProvider();
         var reads = 0;
         var client = new TestAppHostClient();
-        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time, hostPath =>
+        TrayGitCheckout? ReadCheckout(string hostPath)
         {
             Interlocked.Increment(ref reads);
-            return TrayGitCheckout.Read(hostPath);
-        });
+            return TrayGitCheckoutReader.Read(hostPath);
+        }
+        await using var controller = new TrayController(client, new MemoryTraySavedStateStore(), 10, time, ReadCheckout);
         controller.Start();
         var host = new AppHostInfo(path, 1, "https://localhost:1234/") { ProcessStartTimeUnixMilliseconds = 1001 };
         client.Publish(new([host], DiscoveryState.Live));
@@ -205,7 +281,7 @@ public class TrayWorktreeGroupingTests
         controller.SetPinned(path, true);
         Assert.Equal(initialReads, Volatile.Read(ref reads));
         Assert.Equal("main", Assert.Single(controller.State.AppHosts).Checkout!.Label);
-        time.Advance(TrayController.CheckoutRefreshInterval);
+        time.Advance(TrayGitCheckoutCache.RefreshInterval);
         await TestAppHostClient.WaitForStateAsync(controller, state => state.AppHosts.SingleOrDefault()?.Checkout?.Label == "feature/cart");
         Assert.True(Volatile.Read(ref reads) > initialReads);
     }
@@ -221,7 +297,7 @@ public class TrayWorktreeGroupingTests
         controller.Start();
         await TestAppHostClient.WaitForStateAsync(controller, state => state.RecentAppHosts.SingleOrDefault()?.Checkout?.Label == "main");
         File.WriteAllText(Path.Combine(repo.CommonDirectory, "HEAD"), "ref: refs/heads/feature/cart");
-        time.Advance(TrayController.CheckoutRefreshInterval);
+        time.Advance(TrayGitCheckoutCache.RefreshInterval);
         await TestAppHostClient.WaitForStateAsync(controller, state => state.RecentAppHosts.SingleOrDefault()?.Checkout?.Label == "feature/cart");
     }
 
@@ -314,8 +390,8 @@ public class TrayWorktreeGroupingTests
         var originalPointer = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(original))!, ".git");
         var copyPointer = Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(copy))!, ".git");
         File.WriteAllText(copyPointer, pointAtMain ? "gitdir: " + repo.CommonDirectory : File.ReadAllText(originalPointer));
-        Assert.NotNull(TrayGitCheckout.Read(original));
-        Assert.Null(TrayGitCheckout.Read(copy));
+        Assert.NotNull(TrayGitCheckoutReader.Read(original));
+        Assert.Null(TrayGitCheckoutReader.Read(copy));
         var groups = TrayAppHostGroup.Create([Host(original, 1), Host(copy, 2)]);
         Assert.Equal(2, groups.Count);
         Assert.All(groups, group => Assert.False(group.IsGroup));
@@ -327,9 +403,9 @@ public class TrayWorktreeGroupingTests
         using var repo = new TrayWorktreeRepository();
         var path = repo.CreateHost("main", "main");
         var removed = Path.Combine(Path.GetDirectoryName(repo.CommonDirectory)!, "removed", "apphost.cs");
-        Assert.Null(TrayGitCheckout.Read(removed));
+        Assert.Null(TrayGitCheckoutReader.Read(removed));
         File.Delete(Path.Combine(repo.CommonDirectory, "HEAD"));
-        Assert.Null(TrayGitCheckout.Read(path));
+        Assert.Null(TrayGitCheckoutReader.Read(path));
     }
 
     [Fact]
@@ -450,7 +526,7 @@ public class TrayWorktreeGroupingTests
         var second = Host(path, 2);
         Assert.Null(first.Checkout);
         Assert.Equal(2, TrayAppHostGroup.Create([first, second]).Count);
-        Assert.Null(TrayGitCheckout.Read(Path.Combine(repo.CommonDirectory, "..", "..", "missing", "apphost.cs")));
+        Assert.Null(TrayGitCheckoutReader.Read(Path.Combine(repo.CommonDirectory, "..", "..", "missing", "apphost.cs")));
     }
 
     [Fact]
