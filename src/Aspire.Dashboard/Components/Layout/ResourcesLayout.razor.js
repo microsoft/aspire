@@ -94,10 +94,10 @@ export function unregisterPaneActivityVisibility(layoutElement) {
 // Priority+ overflow for the tab strip in the header. Tabs that no longer fit are marked with data-tab-overflow (hidden
 // by CSS) from the right, and their ids are reported to .NET, which lists them in the "..." menu. Hiding is done in the
 // DOM, rather than by rendering, so resizing never waits for a server round trip.
-const tabOverflowRegistrations = new WeakMap();
+const tabOverflowRegistrations = new Map();
 
-export function registerTabOverflow(layoutElement, dotNetRef) {
-    unregisterTabOverflow(layoutElement);
+export function registerTabOverflow(registrationId, dotNetRef) {
+    unregisterTabOverflow(registrationId);
 
     const state = { dotNetRef, nav: null, tablist: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0 };
     const schedule = () => {
@@ -181,17 +181,17 @@ export function registerTabOverflow(layoutElement, dotNetRef) {
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
     // Recording switches can mount the new layout before the old layout finishes disposing.
-    // Each layout must release only its own observers, not the replacement's registration.
-    tabOverflowRegistrations.set(layoutElement, state);
+    // Use a per-layout ID: Blazor cannot resolve an ElementReference after its DOM element is removed.
+    tabOverflowRegistrations.set(registrationId, state);
     schedule();
 }
 
-export function unregisterTabOverflow(layoutElement) {
-    const state = tabOverflowRegistrations.get(layoutElement);
+export function unregisterTabOverflow(registrationId) {
+    const state = tabOverflowRegistrations.get(registrationId);
     if (!state) {
         return;
     }
-    tabOverflowRegistrations.delete(layoutElement);
+    tabOverflowRegistrations.delete(registrationId);
     cancelAnimationFrame(state.frame);
     state.resizeObserver.disconnect();
     state.tabsObserver.disconnect();

@@ -28,6 +28,25 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class ResourcesLayoutTests : DashboardTestContext
 {
+    [Fact]
+    public async Task TabOverflowRegistration_UsesStableLayoutIdForCleanup()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(JSInterop.Invocations["registerTabOverflow"]));
+
+        var registration = Assert.Single(JSInterop.Invocations["registerTabOverflow"]);
+        var registrationId = Assert.IsType<string>(registration.Arguments[0]);
+        Assert.NotEmpty(registrationId);
+
+        await DisposeComponentsAsync();
+
+        var cleanup = Assert.Single(JSInterop.Invocations["unregisterTabOverflow"]);
+        Assert.Equal(registrationId, Assert.IsType<string>(Assert.Single(cleanup.Arguments)));
+    }
+
     [Theory]
     [InlineData(KnownResourceTypes.Project, KnownProperties.Project.Path, "MyFrontend.csproj")]
     [InlineData(KnownResourceTypes.Container, KnownProperties.Container.Image, "postgres:17")]

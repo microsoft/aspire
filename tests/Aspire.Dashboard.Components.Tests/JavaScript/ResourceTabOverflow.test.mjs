@@ -8,7 +8,7 @@ import { registerTabOverflow, unregisterTabOverflow } from "../../../src/Aspire.
 const globals = new Map();
 let frames;
 let observers;
-let owners;
+let registrationIds;
 let nav;
 
 function setGlobal(name, value) {
@@ -19,7 +19,7 @@ function setGlobal(name, value) {
 beforeEach(() => {
     frames = new Map();
     observers = [];
-    owners = [];
+    registrationIds = [];
     let frameId = 0;
     class Observer {
         constructor(callback) {
@@ -50,8 +50,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-    for (const owner of owners) {
-        unregisterTabOverflow(owner);
+    for (const registrationId of registrationIds) {
+        unregisterTabOverflow(registrationId);
     }
     for (const [name, descriptor] of globals) {
         if (descriptor) {
@@ -86,10 +86,10 @@ function flushFrames() {
 }
 
 function register() {
-    const owner = {};
-    owners.push(owner);
+    const registrationId = `layout-${registrationIds.length}`;
+    registrationIds.push(registrationId);
     const reports = [];
-    registerTabOverflow(owner, {
+    registerTabOverflow(registrationId, {
         invokeMethodAsync(method, ids) {
             assert.equal(method, "SetOverflowTabs");
             reports.push(ids);
@@ -97,13 +97,13 @@ function register() {
         },
     });
     flushFrames();
-    return { owner, reports, resize: observers.at(-3), tabs: observers.at(-2), body: observers.at(-1) };
+    return { registrationId, reports, resize: observers.at(-3), tabs: observers.at(-2), body: observers.at(-1) };
 }
 
 test("disposing a replaced recording layout keeps the new navigation responsive", () => {
     const previous = register();
     const current = register();
-    unregisterTabOverflow(previous.owner);
+    unregisterTabOverflow(previous.registrationId);
 
     nav.clientWidth = 250;
     for (const observer of observers.filter(observer => observer.targets.has(nav))) {
@@ -114,6 +114,24 @@ test("disposing a replaced recording layout keeps the new navigation responsive"
     assert.deepEqual(current.reports, [["tab-2"]]);
     assert.equal(current.resize.targets.has(nav), true);
     assert.equal(previous.resize.targets.size, 0);
+});
+
+test("cleanup after DOM removal disconnects observers and cancels pending measurements", () => {
+    const previous = register();
+    nav = null;
+    previous.body.callback();
+    assert.equal(frames.size, 1);
+
+    unregisterTabOverflow(previous.registrationId);
+
+    assert.equal(previous.resize.targets.size, 0);
+    assert.equal(previous.tabs.targets.size, 0);
+    assert.equal(previous.body.targets.size, 0);
+    assert.equal(frames.size, 0);
+    window.dispatchEvent(new Event("resize"));
+    assert.equal(frames.size, 0);
+    flushFrames();
+    assert.deepEqual(previous.reports, []);
 });
 
 test("navigation that replaces only the tab list reconnects its content observer", () => {
@@ -146,7 +164,7 @@ test("fractional widths move whole tabs into overflow and restore them when spac
     assert.deepEqual(current.reports, [["tab-2"], []]);
     assert.deepEqual(tabs.map(tab => tab.overflow), [false, false, false]);
 
-    unregisterTabOverflow(current.owner);
+    unregisterTabOverflow(current.registrationId);
     assert.equal(current.resize.targets.size, 0);
     assert.equal(current.tabs.targets.size, 0);
     assert.equal(current.body.targets.size, 0);

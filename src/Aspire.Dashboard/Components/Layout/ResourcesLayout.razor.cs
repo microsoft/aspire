@@ -50,6 +50,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly CancellationTokenSource _cts = new();
     private readonly List<MenuButtonItem> _paneMenuItems = [];
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
+    private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
 
     private Task? _resourceSubscriptionTask;
     private Task? _ageRefreshTask;
@@ -498,7 +499,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             if (!_isTabOverflowRegistered)
             {
                 _isTabOverflowRegistered = true;
-                await _jsModule.InvokeVoidAsync("registerTabOverflow", _layoutElement, _selfRef);
+                await _jsModule.InvokeVoidAsync("registerTabOverflow", _tabOverflowRegistrationId, _selfRef);
             }
             if (!_isOrderingRegistered)
             {
@@ -2443,7 +2444,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 await module.InvokeVoidAsync("unregisterResourceContextMenu", _layoutElement);
                 await module.InvokeVoidAsync("unregisterPaneActivityVisibility", _layoutElement);
                 await module.InvokeVoidAsync("cancelPaneSelectionReveal", _layoutElement);
-                await module.InvokeVoidAsync("unregisterTabOverflow", _layoutElement);
+                await module.InvokeVoidAsync("unregisterTabOverflow", _tabOverflowRegistrationId);
             }
             catch (JSDisconnectedException)
             {
