@@ -100,6 +100,23 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
         Assert.Throws<DistributedApplicationException>(() => DotnetWatchServerInfrastructure.EnsurePrivateDirectory(link));
     }
 
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task StatusSocketIsOwnerOnly()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix sockets.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var socket = Path.Combine(workspace.Path, "s.sock");
+        await using var pipe = new System.IO.Pipes.NamedPipeServerStream(
+            socket, System.IO.Pipes.PipeDirection.In, 1, System.IO.Pipes.PipeTransmissionMode.Byte,
+            System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly);
+
+        DotnetWatchServerInfrastructure.RestrictSocketToCurrentUser(socket);
+
+        Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(socket));
+    }
+
     private static string CreateProject(string root)
     {
         var path = Path.Combine(root, "Service", "Service.csproj");

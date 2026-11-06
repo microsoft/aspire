@@ -611,6 +611,7 @@ internal static class DotnetWatchCoordinator
             {
                 var pipe = new NamedPipeServerStream(
                     statusPipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                DotnetWatchServerInfrastructure.RestrictSocketToCurrentUser(statusPipeName);
                 await using var pipeScope = pipe.ConfigureAwait(false);
                 await pipe.WaitForConnectionAsync(cts.Token).ConfigureAwait(false);
                 using var reader = new StreamReader(pipe);

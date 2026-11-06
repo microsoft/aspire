@@ -87,6 +87,19 @@ internal static class DotnetWatchServerInfrastructure
         return server;
     }
 
+    /// <summary>
+    /// Makes a Unix socket created by <see cref="System.IO.Pipes.NamedPipeServerStream"/> owner-only (0600). With
+    /// <c>CurrentUserOnly</c>, .NET 10 rejects connections from other users but leaves the socket file at the umask
+    /// default (0755); newer runtimes chmod it themselves. The run directory is 0700 as well.
+    /// </summary>
+    internal static void RestrictSocketToCurrentUser(string socketPath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
     internal static string FormatStoppedNotice(string serverName, int? exitCode) =>
         string.Format(CultureInfo.InvariantCulture,
             "❌ The hot reload watcher stopped{0}. Edits aren't applied, and watched services can't (re)start until it runs again. Start it again with 'aspire resource {1} start' or from the dashboard (show hidden resources).",

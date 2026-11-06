@@ -15,7 +15,8 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
     only versions that aren't on nuget.org fall back to the dnceng `dotnet-public` feed, with a warning that the hash wasn't verified.
     Override with `ASPIRE_DOTNET_WATCH_TOOL_VERSION` or `ASPIRE_DOTNET_WATCH_TOOL_PATH`.
   - runs `dotnet exec <tool> server --sdk <sdk> --server <pipe> --status-pipe <pipe> --resource <each project>` from a
-    per-run directory `/tmp/aspw-<id>`, which is deleted on shutdown.
+    per-run directory `/tmp/aspw-<id>`, which is deleted on shutdown. The directory is created `0700` (an existing or
+    symlinked one is rejected) and every pipe/socket is `CurrentUserOnly` (`0600` sockets, peer UID checked).
   - reads the status pipe and the watcher's output, becomes healthy after the first successful build, and turns
     build/hot-reload/restart/exit events into short notices (`DotnetWatchEventInterpreter`). Notices go to the affected
     service's console log (prefixed `[watch]`) and to the `aspire run` terminal. Raw status JSON is debug-level only.
@@ -58,8 +59,12 @@ Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the s
 ```
 
 In the dashboard:
-- `dotnet-watch` (sync icon) is the watcher. It's **Running (Unhealthy)** with the first build error in its health report until
-  the first build succeeds; services show **Waiting** until then.
+- `dotnet-watch` (sync icon) is the watcher. It's **hidden** infrastructure like the rebuilders (dashboard: show hidden
+  resources; CLI: `aspire describe --include-hidden`), out of the manifest, and has no Stop/Restart; **Start** appears only
+  while it's stopped. It's **Running (Unhealthy)** with the first build error in its health report until the first build
+  succeeds; services show **Waiting** until then, and the error is in the terminal and each service's log.
+- If the watcher stops unexpectedly, the terminal and every watched service's log say so
+  (`❌ The hot reload watcher stopped (exit code N) … 'aspire resource dotnet-watch start'`).
 - Each service's console log has the same `[watch]` notices (filter the log by `[watch]`).
 - A service that exits with a non-zero code shows **Crashed** with the exit code (property `dotnet-watch.last-event`); the next save, or Restart, relaunches it.
 - **Stop**/**Start**/**Restart** work as usual. **Rebuild** stops the service, runs `dotnet build`, and starts it again; use it after adding a package or project reference.
