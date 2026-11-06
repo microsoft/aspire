@@ -45,7 +45,9 @@ if: >-
 # The prompt reserves the final calls for completion, queues the notification
 # before terminal PR creation, and prohibits retrying deterministic failures.
 # Keep the cap as a backstop; incomplete output still fails outcome validation.
-max-turns: 50
+# Raised from 50 to 80 after large docs PRs hit "Maximum LLM invocations
+# exceeded (50 / 50)" (#21157).
+max-turns: 80
 
 checkout:
   # Check out aspire.dev EXACTLY ONCE, as the current workspace, because that is
