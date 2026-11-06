@@ -73,11 +73,6 @@ public sealed record CustomResourceSnapshot
     internal EventSnapshot? ResourceReadyEvent { get; init; }
 
     /// <summary>
-    /// Identifies the model-wide readiness attempt shared by active replicas.
-    /// </summary>
-    internal object? ReadinessGeneration { get; init; }
-
-    /// <summary>
     /// Gets the health status of the resource.
     /// </summary>
     /// <remarks>
@@ -192,7 +187,6 @@ public sealed record CustomResourceSnapshot
             State != other.State ||
             ExitCode != other.ExitCode ||
             ResourceReadyEvent != other.ResourceReadyEvent ||
-            !ReferenceEquals(ReadinessGeneration, other.ReadinessGeneration) ||
             IsHidden != other.IsHidden ||
             SupportsDetailedTelemetry != other.SupportsDetailedTelemetry ||
             IconName != other.IconName ||

@@ -169,7 +169,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The launch group to start, including its required dependencies.
+        ///   Looks up a localized string similar to The launch group whose resources start automatically; all other resources require explicit start.
         /// </summary>
         internal static string LaunchGroupOptionDescription {
             get {

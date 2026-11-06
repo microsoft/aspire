@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="LaunchGroupOptionDescription">
-        <source>The launch group to start, including its required dependencies</source>
-        <target state="new">The launch group to start, including its required dependencies</target>
+        <source>The launch group whose resources start automatically; all other resources require explicit start</source>
+        <target state="new">The launch group whose resources start automatically; all other resources require explicit start</target>
         <note />
       </trans-unit>
       <trans-unit id="LaunchProfileNotSupported">

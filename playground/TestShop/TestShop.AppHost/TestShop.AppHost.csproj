@@ -20,6 +20,12 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Redis" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.PostgreSQL" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Yarp" />
+    <ProjectReference Include="..\ActivityGenerator\ActivityGenerator.csproj" />
+    <ProjectReference Include="..\BasketService\BasketService.csproj" />
+    <ProjectReference Include="..\CatalogDb\CatalogDb.csproj" />
+    <ProjectReference Include="..\CatalogService\CatalogService.csproj" />
+    <ProjectReference Include="..\MyFrontend\MyFrontend.csproj" />
+    <ProjectReference Include="..\OrderProcessor\OrderProcessor.csproj" />
   </ItemGroup>
 
 </Project>

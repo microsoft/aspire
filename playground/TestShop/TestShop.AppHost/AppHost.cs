@@ -12,10 +12,13 @@ var builder = DistributedApplication.CreateBuilder(args);
 // together: Frontend/Storefront for the frontend, Backend/API for the catalog service, and Backend/Checkout for the
 // basket service.
 var storefrontPromotion = builder.AddParameter("storefront-promotion", "Free shipping over $50")
+                                .WithLaunchGroup("frontend")
                                 .WithTags("Frontend", "Storefront");
 var lowStockThreshold = builder.AddParameter("low-stock-threshold", "5")
+                         .WithLaunchGroups("catalog", "frontend")
                          .WithTags("Backend", "API");
 var checkoutSigningKey = builder.AddParameter("checkout-signing-key", () => Guid.NewGuid().ToString(), secret: true)
+                          .WithLaunchGroups("basket", "frontend")
                           .WithTags("Backend", "Checkout");
 builder.AddParameter("support-contact-email")
        .WithDescription("The customer support email address displayed by the storefront.")
@@ -88,17 +91,18 @@ builder.AddParameter("storefront-certificate")
        });
 
 var catalogDb = builder.AddPostgres("postgres")
-                       .WithLaunchGroup("catalog")
+                       .WithLaunchGroups("catalog", "frontend")
                        .WithDataVolume()
                        .WithPgAdmin(resource =>
                        {
                            resource.WithLaunchGroup("catalog");
                            resource.WithUrlForEndpoint("http", u => u.DisplayText = "PG Admin");
                        })
-                       .AddDatabase("catalogdb");
+                       .AddDatabase("catalogdb")
+                       .WithLaunchGroups("catalog", "frontend");
 
 var basketCache = builder.AddRedis("basketcache")
-                         .WithLaunchGroup("basket")
+                         .WithLaunchGroups("basket", "frontend")
                          .WithDataVolume();
 
 #if !SKIP_DASHBOARD_REFERENCE
@@ -117,7 +121,7 @@ basketCache.WithRedisCommander(c =>
 #endif
 
 var catalogDbApp = builder.AddDotnetProject("catalogdbapp", "../CatalogDb/CatalogDb.csproj")
-                          .WithLaunchGroup("catalog")
+                          .WithLaunchGroups("catalog", "frontend")
                           .WithReference(catalogDb)
                           .WaitFor(catalogDb)
                           .WithHttpHealthCheck("/health");
@@ -168,7 +172,7 @@ var catalogService = builder.AddDotnetProject("catalogservice", "../CatalogServi
                             .WithReplicas(2);
 
 var messaging = builder.AddRabbitMQ("messaging")
-                       .WithLaunchGroups("basket", "orders")
+                       .WithLaunchGroups("basket", "orders", "frontend")
                        .WithDataVolume()
                        .WithPersistentLifetime()
                        .WithManagementPlugin()

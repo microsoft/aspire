@@ -27,8 +27,8 @@ public static class LaunchGroupExtensions
     /// <returns>The resource builder.</returns>
     /// <remarks>
     /// Membership is additive. Select one group with the <c>Aspire:LaunchGroup</c> configuration setting.
-    /// Dependencies of selected resources are included even if they belong to another group.
-    /// Ungrouped children inherit their parent's membership.
+    /// Selecting a group marks every resource without that membership for explicit start, including ungrouped resources.
+    /// Dependencies and children must be assigned membership explicitly; selection does not change lifecycle commands.
     /// Valid group names are inferred from membership unless explicitly defined in <c>Aspire:LaunchGroups</c>.
     /// Use the <c>Aspire__LaunchGroup</c> environment variable or <c>dotnet run -- Aspire:LaunchGroup=catalog</c>
     /// to select a group. No selection preserves normal startup, and publishing is unaffected.

@@ -25,9 +25,6 @@ public class ResourceNotificationService : IDisposable
 {
     // Resource state is keyed by the unique name of the resource. This could be the name of the resource, or a replica ID.
     private readonly ConcurrentDictionary<string, ResourceNotificationState> _resourceNotificationStates = new();
-    // Readiness is model-wide. Serialize replica publications so concurrent preparations cannot
-    // both observe only terminal siblings and reserve different generations for the same restart.
-    private readonly ConcurrentDictionary<string, object> _resourceNotificationLocks = new();
     private readonly ILogger<ResourceNotificationService> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly CancellationTokenSource _disposing = new();
@@ -505,10 +502,7 @@ public class ResourceNotificationService : IDisposable
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task.</returns>
     /// <exception cref="DistributedApplicationException"></exception>
-    public Task WaitForDependenciesAsync(IResource resource, CancellationToken cancellationToken) =>
-        WaitForDependenciesAsync(resource, resourceId: null, cancellationToken);
-
-    internal async Task WaitForDependenciesAsync(IResource resource, string? resourceId, CancellationToken cancellationToken)
+    public async Task WaitForDependenciesAsync(IResource resource, CancellationToken cancellationToken)
     {
         if (!resource.TryGetAnnotationsOfType<WaitAnnotation>(out var waitAnnotations))
         {
@@ -552,7 +546,7 @@ public class ResourceNotificationService : IDisposable
                 return;
             }
 
-            await PublishWaitingForDependenciesAsync(resource, resourceId, pendingDependencyCounts.Keys).ConfigureAwait(false);
+            await PublishWaitingForDependenciesAsync(resource, pendingDependencyCounts.Keys).ConfigureAwait(false);
 
             using var pendingDependencyLock = new SemaphoreSlim(1, 1);
 
@@ -579,11 +573,11 @@ public class ResourceNotificationService : IDisposable
 
                     if (waitingFor.Length > 0)
                     {
-                        await PublishWaitingForDependenciesAsync(resource, resourceId, waitingFor).ConfigureAwait(false);
+                        await PublishWaitingForDependenciesAsync(resource, waitingFor).ConfigureAwait(false);
                     }
                     else
                     {
-                        await ClearWaitingForDependenciesAsync(resource, resourceId).ConfigureAwait(false);
+                        await ClearWaitingForDependenciesAsync(resource).ConfigureAwait(false);
                     }
                 }
                 finally
@@ -627,7 +621,7 @@ public class ResourceNotificationService : IDisposable
 
             if (clearRemainingDependencies)
             {
-                await ClearWaitingForDependenciesAsync(resource, resourceId).ConfigureAwait(false);
+                await ClearWaitingForDependenciesAsync(resource).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException ex)
@@ -650,7 +644,7 @@ public class ResourceNotificationService : IDisposable
     private static Exception[] GetDependencyFailures(Task allDependencies) =>
         allDependencies.Exception?.InnerExceptions.Where(static ex => ex is not OperationCanceledException).ToArray() ?? [];
 
-    private Task PublishWaitingForDependenciesAsync(IResource resource, string? resourceId, IEnumerable<string> dependencyNames)
+    private Task PublishWaitingForDependenciesAsync(IResource resource, IEnumerable<string> dependencyNames)
     {
         var waitingFor = dependencyNames
             .Where(static dependencyName => !string.IsNullOrWhiteSpace(dependencyName))
@@ -663,16 +657,14 @@ public class ResourceNotificationService : IDisposable
         // so they are always allowed to transition to Waiting if they are waiting on dependencies.
         var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() || !resource.TryGetInstances(out _);
 
-        return resourceId is null ? PublishUpdateAsync(resource, UpdateSnapshot) : PublishUpdateAsync(resource, resourceId, UpdateSnapshot);
-
-        CustomResourceSnapshot UpdateSnapshot(CustomResourceSnapshot s) =>
+        return PublishUpdateAsync(resource, s =>
             CanTransitionToWaiting(s.State?.Text, allowNotStarted)
                 ? s with
                 {
                     State = KnownResourceStates.Waiting,
                     Properties = s.Properties.SetResourceProperty(KnownProperties.Resource.WaitingFor, waitingFor)
                 }
-                : s;
+                : s);
     }
 
     private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
@@ -681,14 +673,12 @@ public class ResourceNotificationService : IDisposable
         || state == KnownResourceStates.Starting
         || state == KnownResourceStates.Waiting;
 
-    private Task ClearWaitingForDependenciesAsync(IResource resource, string? resourceId)
+    private Task ClearWaitingForDependenciesAsync(IResource resource)
     {
-        return resourceId is null ? PublishUpdateAsync(resource, UpdateSnapshot) : PublishUpdateAsync(resource, resourceId, UpdateSnapshot);
-
-        static CustomResourceSnapshot UpdateSnapshot(CustomResourceSnapshot s) => s with
+        return PublishUpdateAsync(resource, s => s with
         {
             Properties = s.Properties.RemoveResourceProperty(KnownProperties.Resource.WaitingFor)
-        };
+        });
     }
 
     /// <summary>
@@ -883,88 +873,6 @@ public class ResourceNotificationService : IDisposable
         }
     }
 
-    internal async Task<IDisposable> BeginResourceStartAsync(IResource resource, string resourceId)
-    {
-        var notificationState = GetResourceNotificationState(resourceId, resource);
-        var attempt = new PendingResourceStart(notificationState);
-        try
-        {
-            await PublishUpdateAsync(resource, resourceId, snapshot =>
-            {
-                notificationState.PendingStart = attempt;
-                // A nonterminal sibling keeps the model's monitor valid, including while its ready
-                // callback is pending. After all replicas stop, reserve a new generation even if the
-                // health service has not consumed the terminal events. Later preparations join it.
-                var sibling = resource.GetResolvedResourceNames()
-                    .Where(name => name != resourceId)
-                    .Select(name => TryGetCurrentState(name, out var current) ? current : null)
-                    .FirstOrDefault(current => current is not null &&
-                        !KnownResourceStates.TerminalStates.Contains(current.Snapshot.State?.Text));
-                var generation = sibling is not null ? sibling.Snapshot.ReadinessGeneration : new object();
-                var readiness = sibling is null ? null
-                    : ReferenceEquals(generation, snapshot.ReadinessGeneration)
-                        ? snapshot.ResourceReadyEvent ?? sibling.Snapshot.ResourceReadyEvent
-                        : sibling.Snapshot.ResourceReadyEvent;
-                return snapshot with
-                {
-                    State = KnownResourceStates.Starting,
-                    ExitCode = null,
-                    StartTimeStamp = null,
-                    StopTimeStamp = null,
-                    ReadinessGeneration = generation,
-                    ResourceReadyEvent = readiness,
-                    HealthReports = [.. snapshot.HealthReports.Select(report => new HealthReportSnapshot(report.Name, null, null, null))]
-                };
-            }).ConfigureAwait(false);
-
-            return attempt;
-        }
-        catch
-        {
-            // Publication invokes user callbacks before the caller can take ownership of the guard.
-            attempt.Dispose();
-            throw;
-        }
-    }
-
-    internal void CompleteResourceStart(IResource resource, string resourceId)
-    {
-        var notificationState = GetResourceNotificationState(resourceId, resource);
-        lock (notificationState.SyncRoot)
-        {
-            notificationState.PendingStart = null;
-        }
-    }
-
-    internal bool IsResourceStartPending(IResource resource, string resourceId)
-    {
-        var notificationState = GetResourceNotificationState(resourceId, resource);
-        lock (notificationState.SyncRoot)
-        {
-            return notificationState.PendingStart is not null;
-        }
-    }
-
-    internal async Task<bool> TryPublishDcpUpdateAsync(IResource resource, string resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
-    {
-        var notificationState = GetResourceNotificationState(resourceId, resource);
-        var published = false;
-        await PublishUpdateAsync(resource, resourceId, snapshot =>
-        {
-            // A launch-group start has reserved the next attempt, but DCP may still be deleting the old
-            // object. OnResourceStarting releases this guard after deletion and UID supersession finish.
-            if (notificationState.PendingStart is not null)
-            {
-                return snapshot;
-            }
-
-            published = true;
-            return stateFactory(snapshot);
-        }).ConfigureAwait(false);
-
-        return published;
-    }
-
     /// <summary>
     /// Updates the snapshot of the <see cref="CustomResourceSnapshot"/> for a resource.
     /// </summary>
@@ -983,7 +891,7 @@ public class ResourceNotificationService : IDisposable
             throw new InvalidOperationException($"Resource instance doesn't match resource previously registered with specified resource id '{resourceId}'.");
         }
 
-        lock (notificationState.SyncRoot)
+        lock (notificationState)
         {
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
@@ -1414,8 +1322,7 @@ public class ResourceNotificationService : IDisposable
     }
 
     private ResourceNotificationState GetResourceNotificationState(string resourceId, IResource resource) =>
-        _resourceNotificationStates.GetOrAdd(resourceId, _ =>
-            new ResourceNotificationState(resource, _resourceNotificationLocks.GetOrAdd(resource.Name, static _ => new object())));
+        _resourceNotificationStates.GetOrAdd(resourceId, _ => new ResourceNotificationState(resource));
 
     private string BuildCancellationErrorMessage(string cancellationMessage, string resourceName)
     {
@@ -1533,27 +1440,11 @@ public class ResourceNotificationService : IDisposable
         _disposing.Cancel();
     }
 
-    private sealed class PendingResourceStart(ResourceNotificationState state) : IDisposable
-    {
-        public void Dispose()
-        {
-            lock (state.SyncRoot)
-            {
-                if (ReferenceEquals(state.PendingStart, this))
-                {
-                    state.PendingStart = null;
-                }
-            }
-        }
-    }
-
     /// <summary>
     /// The annotation that allows publishing and subscribing to changes in the state of a resource.
     /// </summary>
-    private sealed class ResourceNotificationState(IResource resource, object syncRoot)
+    private sealed class ResourceNotificationState(IResource resource)
     {
-        public object SyncRoot { get; } = syncRoot;
-        public PendingResourceStart? PendingStart { get; set; }
         private long _lastVersion = 1;
         public long GetNextVersion() => _lastVersion++;
         public CustomResourceSnapshot? LastSnapshot { get; set; }

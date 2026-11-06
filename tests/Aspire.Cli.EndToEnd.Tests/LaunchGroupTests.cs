@@ -46,11 +46,13 @@ public sealed class LaunchGroupTests(ITestOutputHelper output)
             ? """
               await builder.addExecutable("catalog", "sleep", ".", ["600"]).withLaunchGroup("catalog");
               await builder.addExecutable("basket", "sleep", ".", ["600"]).withLaunchGroup("basket");
+              await builder.addExecutable("ungrouped", "sleep", ".", ["600"]);
               """
             : """
               #pragma warning disable ASPIRELAUNCHGROUPS001
               builder.AddExecutable("catalog", "sleep", ".", "600").WithLaunchGroup("catalog");
               builder.AddExecutable("basket", "sleep", ".", "600").WithLaunchGroup("basket");
+              builder.AddExecutable("ungrouped", "sleep", ".", "600");
               """;
         await File.WriteAllTextAsync(appHostPath, source.Replace(builderDeclaration, $"{builderDeclaration}\n{resources}", StringComparison.Ordinal),
             TestContext.Current.CancellationToken);
@@ -63,9 +65,11 @@ public sealed class LaunchGroupTests(ITestOutputHelper output)
         await auto.RunCommandAsync("aspire wait catalog --status up --timeout 60 --non-interactive", counter);
         await auto.RunCommandAsync("aspire describe --format json --non-interactive > resources.json", counter);
         await auto.RunCommandAsync(
-            "jq -e '.resources | map(select(.displayName == \"catalog\" or .displayName == \"basket\") | {displayName, state}) | sort_by(.displayName) | " +
-            ". == [{displayName: \"basket\", state: \"NotStarted\"}, {displayName: \"catalog\", state: \"Running\"}]' resources.json",
+            "jq -e '.resources | map(select(.displayName == \"catalog\" or .displayName == \"basket\" or .displayName == \"ungrouped\") | {displayName, state}) | sort_by(.displayName) | " +
+            ". == [{displayName: \"basket\", state: \"NotStarted\"}, {displayName: \"catalog\", state: \"Running\"}, {displayName: \"ungrouped\", state: \"NotStarted\"}]' resources.json",
             counter);
+        await auto.RunCommandAsync("aspire resource basket start --non-interactive", counter);
+        await auto.RunCommandAsync("aspire wait basket --status up --timeout 60 --non-interactive", counter);
         await auto.AspireStopAsync(counter);
     }
 }

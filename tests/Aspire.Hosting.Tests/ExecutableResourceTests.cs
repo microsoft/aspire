@@ -56,13 +56,9 @@ public class ExecutableResourceTests
             );
 
         Assert.True(exe2.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
-        // Constructor and WithArgs values record references; callback-only references are not discovered.
+        // We don't yet process relationships set via the callbacks
+        // so we don't see the testResource2 nor exe1
         Assert.Collection(relationships,
-            r =>
-            {
-                Assert.Equal("Reference", r.Type);
-                Assert.Same(exe1.Resource, r.Resource);
-            },
             r =>
             {
                 Assert.Equal("Reference", r.Type);

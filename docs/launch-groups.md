@@ -13,7 +13,7 @@ Suppress `ASPIRELAUNCHGROUPS001` to opt in when calling them from C#.
 var database = builder.AddPostgres("database").WithLaunchGroup("catalog");
 var cache = builder.AddRedis("cache").WithLaunchGroup("basket");
 var catalog = builder.AddDotnetProject("catalog", "../Catalog/Catalog.csproj")
-    .WithLaunchGroups("catalog", "frontend")
+    .WithLaunchGroup("catalog")
     .WithReference(database)
     .WaitFor(database);
 ```
@@ -70,38 +70,35 @@ For IDE run/debug, put `"Aspire__LaunchGroup": "catalog"` in the AppHost launch 
 whether the CLI, Visual Studio, or VS Code launches the AppHost. The CLI option is
 also preserved when an Aspire terminal delegates run/debug to VS Code.
 
-Omit the selection to preserve the existing full-application run. Ungrouped
-resources always participate. Ungrouped children inherit their parent's membership;
-explicit child membership overrides that inheritance.
+Omit the selection to preserve the existing full-application run.
 
-## Dependencies and additional starts
+## Startup behavior
 
-Selection includes the transitive closure of wait dependencies, reference
-relationships, parents, and connection-string redirects/expressions. This can
-include resources assigned to other groups. Existing `WaitFor`, `WaitForStart`,
-and `WaitForCompletion` relationships continue to control readiness and ordering;
-references alone do not add a health wait.
+Selecting a launch group only mutates the application model before startup.
+Every resource without explicit membership in the selected group is marked with
+`WithExplicitStart`, including resources in other groups and resources with no
+group membership. Existing explicit-start settings are preserved, even for
+members of the selected group.
 
-Runtime environment/argument callbacks are not evaluated during selection, since
-they can wait on values that only exist after startup. If a callback introduces
-resource references, declare them with `WithReferenceRelationship` or a wait
-relationship as well.
+Membership is not inherited from parents or inferred from dependencies,
+references, or connection strings. Assign every resource that should start to the
+group explicitly. Use `WithLaunchGroups` for resources shared by multiple groups.
+Selection does not evaluate environment or argument callbacks.
 
-Unselected resources remain visible as **Not started**, with their normal lifecycle
-commands. Starting an additional resource from the dashboard or CLI starts it and
-its not-started/stopped dependencies, without restarting running dependencies or
-replaying successful completed tasks. Starts are scheduled together, with existing
-wait relationships controlling readiness; references alone do not impose startup
-ordering. It does not select the entire resource's group. Intentional `WithExplicitStart`
-settings remain in effect at initial startup, even for group members or dependencies;
-explicit late starts include their dependencies.
+After selection, normal explicit-start behavior applies. Existing `WaitFor`,
+`WaitForStart`, and `WaitForCompletion` relationships still control readiness and
+ordering, but do not select or automatically start dependencies. A selected
+resource can therefore wait for an unselected dependency until that dependency is
+started manually.
 
-`AddDotnetProject` uses Project Resource v2's coordinated build plan. Only initially
-selected projects are included in the startup batch, with their MSBuild project
-references. Excluded projects have dormant build resources and build when started.
-Initial builds, late builds, and project rebuilds are serialized during partial runs
-to avoid racing on shared outputs. Launch groups do not provide file isolation:
-projects intentionally sharing incompatible output paths remain unsupported.
+Start, stop, restart, health monitoring, persistent-resource reuse, and project
+builds behave exactly as they do with ordinary `WithExplicitStart` resources.
+Starting an excluded resource does not start its dependencies or other group
+members. Launch groups do not introduce build deferral or build serialization.
+Support resources already present in the model, such as a shared .NET build
+resource, are also marked for explicit start unless assigned to the selected
+group. Projects waiting on such a build remain waiting until it is started
+manually.
 
 The selection lasts for the AppHost session. Watch/rebuild of a running resource
 retains the selection; restarting/reloading the AppHost recomputes it. Editing the
@@ -109,15 +106,22 @@ configuration does not dynamically switch groups in an already running AppHost.
 
 ## TestShop
 
-The `catalog` group starts PostgreSQL, its admin resource, catalog initialization,
+The `catalog` group contains PostgreSQL, its admin resource, catalog initialization,
 and the replicated catalog service. Redis, messaging, basket, orders, frontend,
-and the gateway remain unstarted.
+and the gateway are marked for explicit start.
 
-The `basket` group starts Redis and its admin resources, messaging, and the basket
+The `basket` group contains Redis and its admin resources, messaging, and the basket
 service. The `frontend` group includes the frontend and gateway, both services,
 and their database/cache/messaging dependencies, but not the order processor.
-The `orders` group starts messaging and the order processor.
+The `orders` group contains messaging and the order processor.
 
-Start `basketservice` after a catalog-only run to exercise expansion into Redis
-and messaging and a deferred .NET build. Stop and clear `Aspire:LaunchGroup` (or choose
+The shared .NET build resource has no group membership, so it requires an explicit
+start before the selected projects can run:
+
+```powershell
+aspire resource __dotnet-project-build start --include-hidden --non-interactive
+```
+
+To start `basketservice` after a catalog-only run, manually start its dependencies
+(`basketcache` and `messaging`) as well. Stop and clear `Aspire:LaunchGroup` (or choose
 the ordinary `https` launch profile) for a full run.

@@ -27,49 +27,20 @@ public class LaunchGroupTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task TestShopPartialRunSupportsAdditionalResourceStarts()
+    public async Task TestShopFrontendDependenciesHaveExplicitMembership()
     {
         var builder = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.TestShop_AppHost), output);
-        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        foreach (var name in new[]
+        {
+            "postgres", "catalogdb", "catalogdbapp", "catalogservice", "basketcache",
+            "basketservice", "messaging", "frontend", "apigateway",
+            "storefront-promotion", "low-stock-threshold", "checkout-signing-key"
+        })
+        {
+            var resource = Assert.Single(builder.Resources, resource => resource.Name == name);
+            Assert.Contains(resource.Annotations.OfType<LaunchGroupAnnotation>(),
+                annotation => annotation.LaunchGroupName == "frontend");
+        }
         await using var app = await builder.BuildAsync();
-
-        using (var startup = new CancellationTokenSource(TimeSpan.FromMinutes(3)))
-        {
-            await app.StartAsync(startup.Token);
-        }
-
-        using (var readiness = new CancellationTokenSource(TimeSpan.FromMinutes(3)))
-        {
-            await Task.WhenAll(new[] { "postgres", "catalogdbapp", "catalogservice" }
-                .Select(name => app.ResourceNotifications.WaitForResourceHealthyAsync(name, readiness.Token)));
-        }
-
-        var unselected = new[] { "basketcache", "basketservice", "messaging", "frontend", "orderprocessor", "apigateway" }
-            .Concat(builder.Resources.Where(resource => resource.Name is "rediscommander" or "redisinsight").Select(resource => resource.Name));
-        foreach (var name in unselected)
-        {
-            Assert.True(app.ResourceNotifications.TryGetCurrentState(name, out var current));
-            Assert.Equal(KnownResourceStates.NotStarted, current.Snapshot.State?.Text);
-        }
-
-        using (var expansion = new CancellationTokenSource(TimeSpan.FromMinutes(3)))
-        {
-            var result = await app.ResourceCommands.ExecuteCommandAsync("basketservice", KnownResourceCommands.StartCommand, expansion.Token);
-            Assert.True(result.Success, result.Message);
-        }
-        using (var readiness = new CancellationTokenSource(TimeSpan.FromMinutes(3)))
-        {
-            await Task.WhenAll(new[] { "basketcache", "basketservice", "messaging" }
-                .Select(name => app.ResourceNotifications.WaitForResourceHealthyAsync(name, readiness.Token)));
-        }
-
-        foreach (var name in new[] { "frontend", "orderprocessor", "apigateway" })
-        {
-            Assert.True(app.ResourceNotifications.TryGetCurrentState(name, out var current));
-            Assert.Equal(KnownResourceStates.NotStarted, current.Snapshot.State?.Text);
-        }
-
-        using var shutdown = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-        await app.StopAsync(shutdown.Token);
     }
 }

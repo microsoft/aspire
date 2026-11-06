@@ -1855,7 +1855,7 @@ public static class ResourceExtensions
         }
     }
 
-    internal static void VisitReferences(object? value, HashSet<object> visitedValues, Action<object> visitor)
+    private static void VisitReferences(object? value, HashSet<object> visitedValues, Action<object> visitor)
     {
         if (value is null || !visitedValues.Add(value))
         {
