@@ -39,13 +39,10 @@ public sealed class TestTriggerMapTests
         Assert.Empty(result.Jobs);
     }
 
-    [Theory]
-    [InlineData(".github/workflows/parse-command-line.py")]
-    [InlineData(".github/workflows/enumerate-test-metadata.sh")]
-    [InlineData(".github/workflows/write-test-matrix.ps1")]
-    public void SharedWorkflowScriptsSelectAllConsumers(string path)
+    [Fact]
+    public void SharedArgumentParserSelectsAllConsumers()
     {
-        var result = SelectWithRealMap(path);
+        var result = SelectWithRealMap(".github/workflows/parse-command-line.py");
 
         Assert.True(result.SelectsAll);
         Assert.Empty(result.UnmatchedFiles);

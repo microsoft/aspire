@@ -136,10 +136,8 @@ ignore:
 path_rules:
   - paths:
       - .github/workflows/parse-command-line.py
-      - .github/workflows/enumerate-test-metadata.sh
-      - .github/workflows/write-test-matrix.ps1
     targets: [ALL]
-    reason: shared argument parsing and test matrix generation
+    reason: shared argument parsing
 
   - paths:
       - Aspire.slnx

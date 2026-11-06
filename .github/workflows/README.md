@@ -37,8 +37,6 @@ arbitrary Unicode or end-to-end safety.
 Large matrices must travel through files rather than executable here-strings or
 environment variables, which are subject to per-variable OS size limits.
 `enumerate-tests` writes `artifacts/github-test-matrix.json` for `tests.yml`.
-Metadata enumeration and matrix-file transport live in `enumerate-test-metadata.sh`
-and `write-test-matrix.ps1`; behavior tests execute these scripts directly.
 
 ## Agentic workflow maintenance
 
