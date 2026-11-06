@@ -678,6 +678,63 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         Assert.Equal(string.Empty, viewModel.Inputs[0].Value);
     }
 
+    // https://github.com/microsoft/aspire/issues/18663
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Render_FileInputAfterUpload_BrowseButtonRemainsAvailableToReplaceFiles(bool allowMultipleFiles)
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        var interaction = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = new InteractionInputsDialog()
+        };
+        interaction.InputsDialog.InputItems.Add(new InteractionInput
+        {
+            Name = "artifact",
+            Label = "Artifact",
+            InputType = InputType.File,
+            AllowMultipleFiles = allowMultipleFiles,
+            Placeholder = "Browse files"
+        });
+        var viewModel = new InteractionsInputsDialogViewModel
+        {
+            Interaction = interaction,
+            Message = string.Empty,
+            DashboardClient = new TestDashboardClient(),
+            OnSubmitCallback = (_, _) => Task.CompletedTask
+        };
+        await dialogService.ShowDialogAsync<InteractionsInputDialog>(viewModel, new DialogParameters
+        {
+            Title = "Upload"
+        });
+        var cut = getCut();
+        var inputFile = cut.FindComponent<FluentInputFile>();
+
+        await cut.InvokeAsync(() => inputFile.Instance.OnInputFileChange.InvokeAsync(new InputFileChangeEventArgs([new TestBrowserFile("first.txt")])));
+
+        cut.WaitForAssertion(() =>
+        {
+            var uploadedFile = Assert.Single(cut.FindAll(".uploaded-file-container"));
+            Assert.Contains("first.txt", uploadedFile.TextContent, StringComparison.Ordinal);
+
+            // FluentInputFile opens the file picker from its anchor, so the anchor must stay rendered after an upload.
+            var browseButton = cut.Find("fluent-button[aria-label='Artifact']");
+            Assert.Equal(inputFile.Instance.AnchorId, browseButton.Id);
+            Assert.Contains("Browse files", browseButton.TextContent, StringComparison.Ordinal);
+        });
+
+        await cut.InvokeAsync(() => inputFile.Instance.OnInputFileChange.InvokeAsync(new InputFileChangeEventArgs([new TestBrowserFile("second.txt")])));
+
+        cut.WaitForAssertion(() =>
+        {
+            var uploadedFile = Assert.Single(cut.FindAll(".uploaded-file-container"));
+            Assert.Contains("second.txt", uploadedFile.TextContent, StringComparison.Ordinal);
+            Assert.Single(cut.FindAll("fluent-button[aria-label='Artifact']"));
+        });
+    }
+
     [Theory]
     [InlineData(InteractionHelpers.MaxFileCount, true)]
     [InlineData(InteractionHelpers.MaxFileCount + 1, false)]
