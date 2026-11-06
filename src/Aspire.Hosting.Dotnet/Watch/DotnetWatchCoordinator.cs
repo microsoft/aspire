@@ -71,10 +71,13 @@ internal static class DotnetWatchCoordinator
         builder.ExecutionContext.IsRunMode && builder.ExecutionContext.RunConfiguration.WatchEnabled;
 
     /// <summary>
-    /// Whether <c>AddDotnetProject</c> should route this run through the watch server. Watch requested without the
-    /// CLI proxy (plain <c>dotnet run</c> of the AppHost) or under an IDE debug session falls back to a normal run
-    /// with a warning instead of failing.
+    /// Whether <c>AddDotnetProject</c> should route this run through the watch server.
     /// </summary>
+    /// <remarks>
+    /// Under an IDE debug session the IDE owns change tracking (D8): no service is watched, and the terminal and each
+    /// service's log say so. Watch requested without the CLI proxy (a plain <c>dotnet run</c> of the AppHost with
+    /// <c>AppHost:Run:WatchEnabled=true</c>) fails the run instead of silently running services without hot reload.
+    /// </remarks>
     internal static bool ShouldWatch(IDistributedApplicationBuilder builder)
     {
         if (!IsWatchRun(builder))
@@ -82,17 +85,24 @@ internal static class DotnetWatchCoordinator
             return false;
         }
 
-        // D8: IDE-owned runs keep IDE-native change tracking.
         if (!string.IsNullOrEmpty(builder.Configuration["DEBUG_SESSION_PORT"]))
         {
-            WarnOnce(builder, "Service watch is disabled because the AppHost is running under an IDE debug session; the IDE owns change tracking.");
+            OnceForBuilder(builder, () => builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
+            {
+                e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogWarning(
+                    "Hot reload of .NET services is handled by the IDE: the AppHost is running under an IDE debug session, so 'aspire run --watch' doesn't watch them.");
+                return Task.CompletedTask;
+            }));
             return false;
         }
 
         if (string.IsNullOrEmpty(builder.Configuration[ProxyPathConfigurationKey]))
         {
-            // TODO(spike): Session 7 owns the UX.
-            WarnOnce(builder, $"Service watch was requested (AppHost:Run:WatchEnabled=true), but the AppHost was not started by 'aspire run --watch' ({ProxyPathConfigurationKey} is not set). Services run without watch.");
+            OnceForBuilder(builder, () => builder.Eventing.Subscribe<BeforeStartEvent>((_, _) =>
+                throw new DistributedApplicationException(
+                    "Hot reload was requested (AppHost:Run:WatchEnabled=true), but this AppHost wasn't started by 'aspire run --watch', " +
+                    $"so .NET services can't be watched ({ProxyPathConfigurationKey} is not set). Start it with 'aspire run --watch', " +
+                    "or remove AppHost:Run:WatchEnabled to run without hot reload.")));
             return false;
         }
 
@@ -100,31 +110,31 @@ internal static class DotnetWatchCoordinator
     }
 
     /// <summary>Per-resource variant of <see cref="ShouldWatch(IDistributedApplicationBuilder)"/>.</summary>
-    internal static bool ShouldWatch(IDistributedApplicationBuilder builder, string resourceName, IProjectMetadata metadata)
+    /// <remarks>
+    /// Whether the resource is actually watched is decided once the model is final (see <see cref="Evaluate"/>), because
+    /// <c>WithWatch</c>, <c>WaitForCompletion</c>, lifetimes and launch tools are configured after <c>AddDotnetProject</c>.
+    /// </remarks>
+    internal static bool ShouldWatch(IDistributedApplicationBuilder builder, string resourceName)
     {
-        if (!ShouldWatch(builder))
+        var watch = ShouldWatch(builder);
+        if (!watch && IsWatchRun(builder) && !string.IsNullOrEmpty(builder.Configuration["DEBUG_SESSION_PORT"]))
         {
-            return false;
-        }
-
-        if (metadata.IsFileBasedApp)
-        {
-            // TODO(spike): the watch server (11.0.100-rc.2) launches `dotnet run` from the file's directory without
-            // `--file`, so a file-based app exits with "Couldn't find a project to run". Run it normally until it can.
             builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
             {
-                e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogWarning(
-                    "'{Resource}' is a file-based C# app ({File}); hot reload doesn't support those yet, so it runs without watch. Restart it to pick up changes.",
-                    resourceName, Path.GetFileName(metadata.ProjectPath));
+                if (e.Model.Resources.FirstOrDefault(r => r.Name == resourceName) is { } resource)
+                {
+                    e.Services.GetRequiredService<ResourceLoggerService>().GetLogger(resource).LogInformation(
+                        "[watch] Hot reload is handled by the IDE debug session; 'aspire run --watch' doesn't watch this service.");
+                }
+
                 return Task.CompletedTask;
             });
-            return false;
         }
 
-        return true;
+        return watch;
     }
 
-    private static void WarnOnce(IDistributedApplicationBuilder builder, string message)
+    private static void OnceForBuilder(IDistributedApplicationBuilder builder, Action action)
     {
         if (s_warned.TryGetValue(builder, out _))
         {
@@ -132,11 +142,7 @@ internal static class DotnetWatchCoordinator
         }
 
         s_warned.Add(builder, new object());
-        builder.Eventing.Subscribe<BeforeStartEvent>((e, _) =>
-        {
-            e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory).LogWarning("{Message}", message);
-            return Task.CompletedTask;
-        });
+        action();
     }
 
     internal static void Configure(
@@ -164,7 +170,12 @@ internal static class DotnetWatchCoordinator
             ctx.Args.Add("--entrypoint");
             ctx.Args.Add(((IProjectMetadata)metadata).ProjectPath);
             ctx.Args.Add("--");
-        }, showInCommandLine: true);
+        },
+        // Owning the proxy with the project's launch configuration type lets HasCustomLaunch tell, through the public
+        // HasLaunchToolArgsOwnedBy, whether a later launch tool replaced it. It also matches the SDK-selected tool: an
+        // IDE project launch performs the invocation itself (watch never runs under an IDE).
+        ownedByLaunchConfigurationType: GetProjectLaunchConfigurationType(resource.Resource),
+        showInCommandLine: true);
 
         // The watcher's own initial build is the build barrier in watch runs (Aspire's coordinated build is skipped).
         resource.WaitFor(state.Server);
@@ -176,26 +187,177 @@ internal static class DotnetWatchCoordinator
         state.Add(resource.Resource, metadata, resource.Resource.Annotations.Where(a => !existing.Contains(a)).ToArray());
     }
 
+    private static string? GetProjectLaunchConfigurationType(IResource resource) =>
+        resource.Annotations.OfType<SupportsDebuggingAnnotation>().LastOrDefault()?.LaunchConfigurationType;
+
     /// <summary>
     /// Whether something other than the watch coordinator owns this resource's launch (for example, the Blazor
-    /// gateway runs the Gateway CLI tool). Such resources can't be launched through the watch proxy.
+    /// gateway runs the Gateway CLI tool, MAUI overrides the <c>dotnet</c> arguments). Such resources can't be
+    /// launched through the watch proxy.
     /// </summary>
-    internal static bool HasCustomLaunch(IResource resource, IReadOnlyCollection<IResourceAnnotation> watchAnnotations)
+    internal static bool HasCustomLaunch(IResource resource)
     {
-        // HACK(spike): the launch-tool and forced-process annotations are internal to Aspire.Hosting.
-        static bool IsLaunchTool(IResourceAnnotation a) => a.GetType().Name == "LaunchToolArgsCallbackAnnotation";
-
-        if (resource.Annotations.Any(a => a is ProjectLaunchArgsOverrideAnnotation || a.GetType().Name == "ForceProcessExecutionAnnotation"))
+        if (resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>().Any())
         {
             return true;
         }
 
-        // The last launch tool wins: the SDK-selected `dotnet run` comes before the watch proxy; anything after it
-        // replaced the proxy.
-        var annotations = resource.Annotations.ToList();
-        var watchIndex = annotations.FindLastIndex(a => IsLaunchTool(a) && watchAnnotations.Contains(a));
-        return watchIndex >= 0 && annotations.Skip(watchIndex + 1).Any(IsLaunchTool);
+        // The last launch tool wins. The watch proxy is owned by the project launch configuration type (see Configure),
+        // so any launch tool declared after it, which replaced it, isn't.
+        return resource.Annotations.OfType<SupportsDebuggingAnnotation>().LastOrDefault() is { } debugSupport
+            && !resource.HasLaunchToolArgsOwnedBy(debugSupport);
     }
+
+    /// <summary>
+    /// Decides whether a registered project is watched, once the model is final.
+    /// </summary>
+    /// <remarks>
+    /// <list type="bullet">
+    /// <item><description><c>WithWatch(false)</c> always wins: the project runs without hot reload, and says so.</description></item>
+    /// <item><description>A project that another resource waits on with <c>WaitForCompletion</c> runs to completion. The watcher
+    /// relaunches a watched service when it exits instead of letting it complete (#9756), so it's excluded, visibly; with an
+    /// explicit <c>WithWatch(true)</c> the run fails instead.</description></item>
+    /// <item><description>File-based apps, persistent lifetimes and custom launches can't be watched and fail the run with
+    /// an error that names the opt-out.</description></item>
+    /// </list>
+    /// </remarks>
+    internal static WatchDecision Evaluate(DotnetProjectResource resource, IProjectMetadata metadata, IEnumerable<IResource> model)
+    {
+        var requested = resource.Annotations.OfType<DotnetProjectWatchAnnotation>().LastOrDefault()?.Enabled;
+        if (requested == false)
+        {
+            return new(WatchDecisionKind.Excluded, $"'{resource.Name}' runs without hot reload (WithWatch(false)).");
+        }
+
+        var awaitedBy = model
+            .Where(r => !ReferenceEquals(r, resource) && r.Annotations.OfType<WaitAnnotation>().Any(w =>
+                ReferenceEquals(w.Resource, resource) && w.WaitType == WaitType.WaitForCompletion))
+            .Select(r => $"'{r.Name}'")
+            .ToArray();
+        if (awaitedBy.Length > 0)
+        {
+            var waiters = string.Join(", ", awaitedBy);
+            return requested == true
+                ? new(WatchDecisionKind.Rejected,
+                    $"'{resource.Name}' requires hot reload (WithWatch(true)), but {waiters} waits for it to complete (WaitForCompletion), " +
+                    "and a watched service is relaunched instead of completing. Remove WithWatch(true) to run it once without hot reload.")
+                : new(WatchDecisionKind.Excluded,
+                    $"'{resource.Name}' runs without hot reload because {waiters} waits for it to complete (WaitForCompletion); " +
+                    "a watched service would be relaunched instead of completing.");
+        }
+
+        if (metadata.IsFileBasedApp)
+        {
+            // The watch server (11.0.100-rc.2) launches `dotnet run` from the file's directory without `--file`, so a
+            // file-based app exits with "Couldn't find a project to run".
+            return new(WatchDecisionKind.Rejected,
+                $"'{resource.Name}' is a file-based C# app ({Path.GetFileName(metadata.ProjectPath)}), which hot reload doesn't support yet.");
+        }
+
+        if (HasPersistentLifetime(resource, []))
+        {
+            return new(WatchDecisionKind.Rejected,
+                $"'{resource.Name}' has a persistent lifetime, but a watched service belongs to this run's watch server and can't outlive it.");
+        }
+
+        if (HasCustomLaunch(resource))
+        {
+            return new(WatchDecisionKind.Rejected,
+                $"'{resource.Name}' uses a custom launch (WithLaunchToolArgs or ProjectLaunchArgsOverrideAnnotation), which the watcher can't run.");
+        }
+
+        return new(WatchDecisionKind.Watched, null);
+    }
+
+#pragma warning disable ASPIREPERSISTENCE001 // PersistenceAnnotation is experimental.
+    private static bool HasPersistentLifetime(IResource resource, HashSet<IResource> visited)
+    {
+        if (!visited.Add(resource))
+        {
+            return false;
+        }
+
+        if (resource.Annotations.OfType<PersistenceAnnotation>().LastOrDefault() is { } persistence)
+        {
+            return persistence.Mode switch
+            {
+                PersistenceMode.Persistent or PersistenceMode.ParentProcess => true,
+                PersistenceMode.Resource => persistence.SourceResource is { } source && HasPersistentLifetime(source, visited),
+                _ => false
+            };
+        }
+
+        return resource.Annotations.OfType<ContainerLifetimeAnnotation>().LastOrDefault()?.Lifetime == ContainerLifetime.Persistent;
+    }
+#pragma warning restore ASPIREPERSISTENCE001
+
+    /// <summary>
+    /// Applies <see cref="Evaluate"/> to every registered project at <see cref="BeforeStartEvent"/>: excluded projects
+    /// get their normal launch back and a notice in the terminal and their log; unsupported ones fail the run together.
+    /// </summary>
+    /// <remarks>
+    /// An excluded project keeps waiting for the watch server while other projects are watched, so its own
+    /// <c>dotnet run</c> build doesn't race the watcher's initial build over shared project outputs.
+    /// </remarks>
+    private static void ApplyEligibility(
+        List<(DotnetProjectResource Resource, DotnetProjectMetadata Metadata)> projects,
+        Dictionary<DotnetProjectResource, IResourceAnnotation[]> watchAnnotations,
+        IResource server,
+        DistributedApplicationModel model,
+        IServiceProvider services)
+    {
+        var errors = new List<string>();
+        var excluded = new List<(DotnetProjectResource Resource, string Reason)>();
+        foreach (var (resource, metadata) in projects)
+        {
+            var decision = Evaluate(resource, metadata, model.Resources);
+            if (decision.Kind == WatchDecisionKind.Rejected)
+            {
+                errors.Add(decision.Reason!);
+            }
+            else if (decision.Kind == WatchDecisionKind.Excluded)
+            {
+                excluded.Add((resource, decision.Reason!));
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            throw new DistributedApplicationException(
+                "'aspire run --watch' can't hot reload these .NET projects:" + Environment.NewLine +
+                string.Concat(errors.Select(e => $"  - {e}{Environment.NewLine}")) +
+                "Call WithWatch(false) on a project to run it without hot reload.");
+        }
+
+        projects.RemoveAll(p => excluded.Any(x => ReferenceEquals(x.Resource, p.Resource)));
+        var keepServerWait = projects.Count > 0;
+        var noticeLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
+        var loggers = services.GetRequiredService<ResourceLoggerService>();
+        foreach (var (resource, reason) in excluded)
+        {
+            foreach (var annotation in watchAnnotations[resource])
+            {
+                var waitsForServer = annotation is WaitAnnotation wait && ReferenceEquals(wait.Resource, server)
+                    || annotation is ResourceRelationshipAnnotation relationship && ReferenceEquals(relationship.Resource, server);
+                if (!(keepServerWait && waitsForServer))
+                {
+                    resource.Annotations.Remove(annotation);
+                }
+            }
+
+            noticeLogger.LogInformation("{Notice}", reason);
+            loggers.GetLogger(resource).LogInformation("[watch] {Notice}", reason);
+        }
+    }
+
+    internal enum WatchDecisionKind
+    {
+        Watched,
+        Excluded,
+        Rejected
+    }
+
+    internal readonly record struct WatchDecision(WatchDecisionKind Kind, string? Reason);
 
     private sealed class WatchState
     {
@@ -278,28 +440,11 @@ internal static class DotnetWatchCoordinator
 
             builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) =>
             {
-                var noticeLogger = e.Services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
-
                 // Resources removed or replaced after registration must not be built or watched.
                 _projects.RemoveAll(p => !e.Model.Resources.Contains(p.Resource));
 
-                foreach (var project in _projects.ToArray())
-                {
-                    var added = _watchAnnotations[project.Resource];
-                    if (HasCustomLaunch(project.Resource, added))
-                    {
-                        // TODO(spike): watch custom launch tools (Blazor gateway) once the watcher can launch them.
-                        foreach (var annotation in added)
-                        {
-                            project.Resource.Annotations.Remove(annotation);
-                        }
-
-                        _projects.Remove(project);
-                        noticeLogger.LogWarning(
-                            "'{Resource}' uses a custom launch tool (for example, the Blazor gateway) and isn't watched; restart it to pick up changes.",
-                            project.Resource.Name);
-                    }
-                }
+                // Opt-outs, run-to-completion and unsupported projects can only be decided on the final model.
+                ApplyEligibility(_projects, _watchAnnotations, Server.Resource, e.Model, e.Services);
 
                 if (_projects.Count == 0)
                 {

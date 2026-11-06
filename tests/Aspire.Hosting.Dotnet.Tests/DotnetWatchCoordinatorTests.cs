@@ -55,24 +55,6 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void FileBasedAppsRunWithoutWatch()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var projectPath = CreateProject(workspace.Path);
-        var scriptPath = Path.Combine(workspace.Path, "ticker.cs");
-        File.WriteAllText(scriptPath, "Console.WriteLine(1);");
-        using var builder = TestDistributedApplicationBuilder.Create(
-            ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire.dll"]);
-
-        var service = builder.AddDotnetProject("service", Path.GetDirectoryName(projectPath)!);
-        var script = builder.AddDotnetProject("ticker", scriptPath);
-
-        var server = Assert.Single(builder.Resources.OfType<DotnetWatchServerResource>());
-        Assert.Contains(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
-        Assert.DoesNotContain(script.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
-    }
-
-    [Fact]
     public async Task RemovedProjectsAreNotWatched()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -94,7 +76,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
     [Fact]
-    public void WatchWithoutProxyFallsBackToNormalRun()
+    public async Task WatchWithoutProxyFailsTheRun()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(["AppHost:Run:WatchEnabled=true"]);
@@ -103,10 +85,15 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
 
         Assert.DoesNotContain(builder.Resources, r => r.Name == DotnetWatchCoordinator.ServerResourceName);
         Assert.DoesNotContain(service.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetWatchServerResource);
+
+        using var app = builder.Build();
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+        Assert.Contains("aspire run --watch", ex.Message);
+        Assert.Contains(DotnetWatchCoordinator.ProxyPathConfigurationKey, ex.Message);
     }
 
     [Fact]
-    public void WatchUnderIdeDebugSessionFallsBackToNormalRun()
+    public void WatchUnderIdeDebugSessionDefersToTheIde()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -143,30 +130,28 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
             ["AppHost:Run:WatchEnabled=true", $"{DotnetWatchCoordinator.ProxyPathConfigurationKey}=/opt/aspire/aspire"]);
 
         var service = builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!);
-        IResourceAnnotation[] watchLaunchTool = [service.Resource.Annotations.Last(a => a.GetType().Name == "LaunchToolArgsCallbackAnnotation")];
 
-        Assert.False(DotnetWatchCoordinator.HasCustomLaunch(service.Resource, watchLaunchTool));
+        Assert.False(DotnetWatchCoordinator.HasCustomLaunch(service.Resource));
 
         // A launch tool registered after the watch proxy (for example, the Blazor gateway) owns the launch.
         service.WithLaunchToolArgs(ctx => ctx.Args.Add("gateway"));
-        Assert.True(DotnetWatchCoordinator.HasCustomLaunch(service.Resource, watchLaunchTool));
+        Assert.True(DotnetWatchCoordinator.HasCustomLaunch(service.Resource));
 
         var otherPath = Path.Combine(workspace.Path, "Other", "Other.csproj");
         CreateProjectFile(otherPath);
         var other = builder.AddDotnetProject("other", Path.GetDirectoryName(otherPath)!);
-        IResourceAnnotation[] otherLaunchTool = [other.Resource.Annotations.Last(a => a.GetType().Name == "LaunchToolArgsCallbackAnnotation")];
         other.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["run"]));
-        Assert.True(DotnetWatchCoordinator.HasCustomLaunch(other.Resource, otherLaunchTool));
+        Assert.True(DotnetWatchCoordinator.HasCustomLaunch(other.Resource));
     }
 
-    private static string CreateProject(string root)
+    internal static string CreateProject(string root)
     {
         var path = Path.Combine(root, "Service", "Service.csproj");
         CreateProjectFile(path);
         return path;
     }
 
-    private static void CreateProjectFile(string path)
+    internal static void CreateProjectFile(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, "<Project />");
