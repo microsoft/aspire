@@ -8,6 +8,8 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Xunit;
@@ -332,8 +334,10 @@ public class FrontendBrowserTokenAuthTests
     [Theory]
     [InlineData(FrontendAuthMode.BrowserToken, "TestKey123!", HttpStatusCode.OK, true)]
     [InlineData(FrontendAuthMode.BrowserToken, "Wrong!", HttpStatusCode.OK, false)]
+    [InlineData(FrontendAuthMode.BrowserToken, "", HttpStatusCode.OK, false)]
+    [InlineData(FrontendAuthMode.BrowserToken, null, HttpStatusCode.OK, false)]
     [InlineData(FrontendAuthMode.Unsecured, "Wrong!", HttpStatusCode.NotFound, null)]
-    public async Task Post_ValidateTokenApi_AvailableBasedOnOptions(FrontendAuthMode authMode, string requestToken, HttpStatusCode statusCode, bool? result)
+    public async Task Post_ValidateTokenApi_AvailableBasedOnOptions(FrontendAuthMode authMode, string? requestToken, HttpStatusCode statusCode, bool? result)
     {
         // Arrange
         var apiKey = "TestKey123!";
@@ -357,6 +361,86 @@ public class FrontendBrowserTokenAuthTests
             var actualResult = await response.Content.ReadFromJsonAsync<bool>();
             Assert.Equal(result, actualResult);
         }
+
+        if (result == true)
+        {
+            var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
+            Assert.Contains("expires=", cookie, StringComparison.OrdinalIgnoreCase);
+
+            var authenticatedResponse = await client.GetAsync(DashboardUrls.TracesUrl()).DefaultTimeout();
+            Assert.Equal(HttpStatusCode.OK, authenticatedResponse.StatusCode);
+            Assert.Equal(DashboardUrls.TracesUrl(), authenticatedResponse.RequestMessage!.RequestUri!.PathAndQuery);
+        }
+        else
+        {
+            Assert.False(response.Headers.Contains("Set-Cookie"));
+        }
+    }
+
+    [Theory]
+    [InlineData("""{"Token":"TestKey123!"}""", "application/json", HttpStatusCode.OK, "true")]
+    [InlineData("""{"token":""", "application/json", HttpStatusCode.BadRequest, "")]
+    [InlineData("null", "application/json", HttpStatusCode.BadRequest, "")]
+    [InlineData("""{"token":"TestKey123!"}""", "text/plain", HttpStatusCode.UnsupportedMediaType, "")]
+    public async Task Post_ValidateTokenApi_RequestValidation(string body, string contentType, HttpStatusCode statusCode, string expectedBody)
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = "TestKey123!";
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}") };
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, contentType);
+        var response = await client.PostAsync("/api/validatetoken", content).DefaultTimeout();
+
+        Assert.Equal(statusCode, response.StatusCode);
+        Assert.Equal(expectedBody, await response.Content.ReadAsStringAsync().DefaultTimeout());
+        Assert.Equal(statusCode == HttpStatusCode.OK, response.Headers.Contains("Set-Cookie"));
+    }
+
+    [Fact]
+    public async Task Login_ConfigurationReload_UsesUpdatedToken()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = "initial-token";
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        using var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
+        {
+            BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}")
+        };
+        var initialResponse = await client.GetAsync("/login?t=initial-token").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.Redirect, initialResponse.StatusCode);
+        Assert.True(initialResponse.Headers.Contains("Set-Cookie"));
+
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+        configuration[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = "updated-token";
+        ((IConfigurationRoot)configuration).Reload();
+
+        var staleResponse = await client.GetAsync("/login?t=initial-token").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.Redirect, staleResponse.StatusCode);
+        Assert.Equal("/login", staleResponse.Headers.Location?.OriginalString);
+        Assert.False(staleResponse.Headers.Contains("Set-Cookie"));
+
+        var updatedResponse = await client.GetAsync("/login?t=updated-token").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.Redirect, updatedResponse.StatusCode);
+        Assert.Equal("/", updatedResponse.Headers.Location?.OriginalString);
+        Assert.True(updatedResponse.Headers.Contains("Set-Cookie"));
+
+        var staleFormResponse = await client.PostAsJsonAsync("/api/validatetoken", new { Token = "initial-token" }).DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, staleFormResponse.StatusCode);
+        Assert.False(await staleFormResponse.Content.ReadFromJsonAsync<bool>().DefaultTimeout());
+        Assert.False(staleFormResponse.Headers.Contains("Set-Cookie"));
+
+        var updatedFormResponse = await client.PostAsJsonAsync("/api/validatetoken", new { Token = "updated-token" }).DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, updatedFormResponse.StatusCode);
+        Assert.True(await updatedFormResponse.Content.ReadFromJsonAsync<bool>().DefaultTimeout());
+        Assert.True(updatedFormResponse.Headers.Contains("Set-Cookie"));
     }
 
     [Fact]
