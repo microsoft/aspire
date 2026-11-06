@@ -4,7 +4,7 @@
   "description": "Šablona projektu pro vytvoření prázdné aplikace Aspire.",
   "symbols/Framework/description": "Cílová architektura pro projekt",
   "symbols/Framework/choices/net10.0/description": "Cíl net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "Cílový net11.0",
   "symbols/AspireVersion/description": "Verze Aspire, která se má použít.",
   "symbols/AspireVersion/displayName": "Verze Aspire",
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",

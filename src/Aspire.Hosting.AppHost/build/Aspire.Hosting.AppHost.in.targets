@@ -322,6 +322,7 @@ namespace Projects%3B
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliSetupExitCode" />
       <Output TaskParameter="TimedOut" PropertyName="_AspireCliSetupTimedOut" />
       <Output TaskParameter="FailureMessage" PropertyName="_AspireCliSetupFailureMessage" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_AspireCliSetupOutput" />
     </RunAspireCliCommand>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
@@ -385,6 +386,7 @@ namespace Projects%3B
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliFallbackDnxSetupExitCode" />
       <Output TaskParameter="TimedOut" PropertyName="_AspireCliFallbackDnxSetupTimedOut" />
       <Output TaskParameter="FailureMessage" PropertyName="_AspireCliFallbackDnxSetupFailureMessage" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_AspireCliFallbackDnxSetupOutput" />
     </RunAspireCliCommand>
 
     <ResolveAspireCliBundle AspireCliBundlePath="$(AspireCliBundlePath)"
@@ -426,6 +428,11 @@ namespace Projects%3B
         $(_AspireCliBundleNotFoundError)
         Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
       </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupOutput)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Output from '$(_AspireCliSetupDiagnosticCommand)':
+        $(_AspireCliSetupOutput)
+      </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' != ''">
         $(_AspireCliBundleNotFoundError)
         Paired Aspire CLI bundle setup through DNX failed: $(_AspireCliFallbackDnxSetupFailureMessage) Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
@@ -433,6 +440,11 @@ namespace Projects%3B
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupFailureMessage)' == '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '' and '$(_AspireCliFallbackDnxSetupExitCode)' != '0'">
         $(_AspireCliBundleNotFoundError)
         Paired Aspire CLI bundle setup through DNX failed with exit code $(_AspireCliFallbackDnxSetupExitCode). Run '$(_AspireCliFallbackDnxSetupDiagnosticCommand)' to diagnose the failure.
+      </_AspireCliBundleNotFoundError>
+      <_AspireCliBundleNotFoundError Condition="'$(_AspireCliFallbackDnxSetupOutput)' != ''">
+        $(_AspireCliBundleNotFoundError)
+        Output from '$(_AspireCliFallbackDnxSetupDiagnosticCommand)':
+        $(_AspireCliFallbackDnxSetupOutput)
       </_AspireCliBundleNotFoundError>
     </PropertyGroup>
 
@@ -695,6 +707,29 @@ namespace Projects%3B
                          Condition=" '$(AspireTerminalHostInvocationArgs)' != '' ">
         <_Parameter1>aspireterminalhostinvocationargs</_Parameter1>
         <_Parameter2>$(AspireTerminalHostInvocationArgs)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
+  <!--
+    The dotnet CLI artifacts path option (or `-p:ArtifactsPath=...`) passes ArtifactsPath as a global property, which flows
+    to the referenced project resources so their output lands under the artifacts directory. The AppHost later launches
+    those projects without rebuilding them, which would otherwise look for the output in the default location.
+    Global properties can't be overridden during evaluation, so assigning a sentinel and checking whether it took effect
+    detects that case without misinterpreting values that come from project files or environment variables.
+  -->
+  <PropertyGroup Condition=" '$(IsAspireHost)' == 'true' and '$(ArtifactsPath)' != '' ">
+    <_AspireOriginalArtifactsPath>$(ArtifactsPath)</_AspireOriginalArtifactsPath>
+    <ArtifactsPath>__AspireGlobalArtifactsPathProbe__</ArtifactsPath>
+    <_AspireGlobalArtifactsPath Condition=" '$(ArtifactsPath)' != '__AspireGlobalArtifactsPathProbe__' ">$(_AspireOriginalArtifactsPath)</_AspireGlobalArtifactsPath>
+    <ArtifactsPath>$(_AspireOriginalArtifactsPath)</ArtifactsPath>
+  </PropertyGroup>
+
+  <Target Name="EmbedAppHostGlobalArtifactsPath" BeforeTargets="GetAssemblyAttributes" Condition=" '$(IsAspireHost)' == 'true' and '$(_AspireGlobalArtifactsPath)' != '' ">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>apphostglobalartifactspath</_Parameter1>
+        <_Parameter2>$(_AspireGlobalArtifactsPath)</_Parameter2>
       </AssemblyAttribute>
     </ItemGroup>
   </Target>

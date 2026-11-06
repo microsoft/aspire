@@ -1,10 +1,10 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Aspire Test Projesi (MSTest)",
   "description": "Aspire AppHost projesinin MSTest tümleştirme testlerini içeren bir proje.",
   "symbols/Framework/description": "Projenin hedef çerçevesi.",
   "symbols/Framework/choices/net10.0/description": "Hedef net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "Hedef net11.0",
   "symbols/skipRestore/description": "Belirtilirse, oluşturma sırasında projenin otomatik geri yüklenmesini atlar.",
   "postActions/restore/description": "Bu projenin gerektirdiği NuGet paketlerini geri yükleyin.",
   "postActions/restore/manualInstructions/default/text": "'dotnet restore' çalıştır"

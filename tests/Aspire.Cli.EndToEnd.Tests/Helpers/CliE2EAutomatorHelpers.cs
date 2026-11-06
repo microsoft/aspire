@@ -40,6 +40,29 @@ internal static class CliE2EAutomatorHelpers
     internal static TimeSpan AspireRunReadyTimeout => TimeSpan.FromSeconds(AspireRunStartupBudgetSeconds + 60);
 
     /// <summary>
+    /// Minimum age of an npm release before npm range resolution in the E2E containers will select it.
+    /// </summary>
+    /// <remarks>
+    /// TypeScript AppHosts declare floating ranges (for example <c>typescript-eslint ^8.57.1</c>), so a CI run that
+    /// installs minutes after an upstream publish can resolve the new version from registry metadata before its
+    /// tarball is downloadable and fail with <c>npm error code E404</c>. Ignoring releases younger than this keeps
+    /// installs on settled versions. Dependabot pins in the E2E npm manifest use a 7-day cooldown, so they stay
+    /// older than this cutoff.
+    /// </remarks>
+    internal static TimeSpan NpmReleaseSettleTime => TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// Builds the shell command that restricts npm resolution to releases published at least
+    /// <see cref="NpmReleaseSettleTime"/> before <paramref name="now"/>, using npm's
+    /// <see href="https://docs.npmjs.com/cli/v10/using-npm/config#before"><c>before</c></see> setting.
+    /// </summary>
+    internal static string GetSettledNpmReleasesCommand(DateTimeOffset now)
+    {
+        var cutoff = (now - NpmReleaseSettleTime).UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        return $"export npm_config_before={cutoff}";
+    }
+
+    /// <summary>
     /// Builds the shell command that launches <c>aspire run</c> with an explicit AppHost startup budget so cold
     /// daily-feed restores don't trip the CLI's default 120s startup timeout. See <see cref="AspireRunStartupBudgetSeconds"/>.
     /// </summary>
@@ -54,11 +77,20 @@ internal static class CliE2EAutomatorHelpers
     /// <summary>
     /// Prepares the Docker environment by setting up prompt counting, umask, and environment variables.
     /// </summary>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="counter">The prompt sequence counter.</param>
+    /// <param name="workspace">The workspace to change into, if any.</param>
+    /// <param name="enableDcpDiagnostics">Whether to enable verbose DCP diagnostics logging.</param>
+    /// <param name="useSettledNpmReleases">
+    /// Whether npm range resolution should ignore releases newer than <see cref="NpmReleaseSettleTime"/>.
+    /// Pass <see langword="false"/> only for tests whose subject is acquiring the newest published version of a package.
+    /// </param>
     internal static async Task PrepareDockerEnvironmentAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         TemporaryWorkspace? workspace = null,
-        bool enableDcpDiagnostics = false)
+        bool enableDcpDiagnostics = false,
+        bool useSettledNpmReleases = true)
     {
         // Wait for container to be ready (root prompt)
         await auto.WaitUntilTextAsync("# ", timeout: TimeSpan.FromSeconds(60));
@@ -76,6 +108,11 @@ internal static class CliE2EAutomatorHelpers
 
         // Set environment variables
         await auto.RunCommandAsync(AspireCliShellCommandHelpers.GetPrepareAspireEnvironmentCommand(), counter);
+
+        if (useSettledNpmReleases)
+        {
+            await auto.RunCommandAsync(GetSettledNpmReleasesCommand(DateTimeOffset.UtcNow), counter);
+        }
 
         if (enableDcpDiagnostics)
         {
@@ -275,6 +312,36 @@ internal static class CliE2EAutomatorHelpers
             effectiveTimeout);
     }
 
+    /// <summary>
+    /// Creates a Go empty AppHost using the direct <c>aspire new aspire-go-empty</c> command.
+    /// </summary>
+    internal static async Task AspireNewGoEmptyAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        SequenceCounter counter,
+        string? outputPath = null,
+        string? channel = null,
+        bool useLocalhostTld = false,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+        var command = BuildAspireNewEmptyAppHostCommand(
+            "aspire-go-empty",
+            projectName,
+            outputPath,
+            channel,
+            useLocalhostTld);
+
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForAspireNewEmptyAppHostCompletionAsync(
+            projectName,
+            "Go",
+            counter,
+            AppHostLanguagePromptSelection.Go,
+            effectiveTimeout);
+    }
+
     private static string BuildAspireNewEmptyAppHostCommand(
         string templateName,
         string projectName,
@@ -386,6 +453,16 @@ internal static class CliE2EAutomatorHelpers
                 await auto.EnterAsync();
                 return;
 
+            case AppHostLanguagePromptSelection.Go:
+                // Search by text so the selection does not depend on which other languages the picker lists.
+                await auto.TypeAsync("Go");
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> Go").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "Go AppHost language selected");
+                await auto.EnterAsync();
+                return;
+
             default:
                 throw new InvalidOperationException($"Unexpected AppHost language prompt selection: {languagePromptSelection}.");
         }
@@ -427,6 +504,19 @@ internal static class CliE2EAutomatorHelpers
         }
 
         counter.Increment();
+    }
+
+    /// <summary>
+    /// Runs <c>aspire add &lt;packageName&gt;</c> and waits for it to finish, answering the version picker when it appears.
+    /// </summary>
+    internal static async Task AspireAddPackageAsync(
+        this Hex1bTerminalAutomator auto,
+        string packageName,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync($"aspire add {packageName}");
+        await auto.EnterAsync();
+        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     /// <summary>
@@ -746,6 +836,21 @@ internal static class CliE2EAutomatorHelpers
         await auto.TypeAsync("aspire config set features:experimentalPolyglotJava true --global --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Creates a Go AppHost in the current directory through the interactive <c>aspire init</c> language picker.
+    /// </summary>
+    internal static async Task AspireInitGoAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire init");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
+        await auto.SelectAppHostLanguageAsync(AppHostLanguagePromptSelection.Go);
+        await auto.WaitUntilTextAsync("Created apphost.go", timeout: TimeSpan.FromMinutes(2));
+        await auto.DeclineAgentInitPromptAsync(counter);
     }
 
     /// <summary>
@@ -1239,6 +1344,7 @@ internal static class CliE2EAutomatorHelpers
     private enum AppHostLanguagePromptSelection
     {
         DefaultCSharp,
-        TypeScript
+        TypeScript,
+        Go
     }
 }

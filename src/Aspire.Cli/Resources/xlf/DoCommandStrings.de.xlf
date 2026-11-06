@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Execute a specific pipeline step and its dependencies</source>
-        <target state="needs-review-translation">Führen Sie einen bestimmten Pipelineschritt und seine Abhängigkeiten aus. (Vorschau)</target>
+        <target state="translated">Führen Sie einen bestimmten Pipelineschritt und seine Abhängigkeiten aus.</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="ListStepsRequiresStep">
         <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
-        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
+        <target state="translated">Das Argument „step“ ist bei Verwendung von --list-steps erforderlich. Beispiel: „aspire do deploy --list-steps“. Häufige Einstiegsschritte sind „build“, „publish“ und „deploy“. Eine vollständige Liste der Pipelineschritte finden Sie unter https://aspire.dev/reference/cli/commands/aspire-do/.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCanceled">
@@ -34,17 +34,17 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The optional output path for artifacts</source>
-        <target state="needs-review-translation">Der optionale Ausgabepfad für Artefakte.</target>
+        <target state="translated">Der optionale Ausgabepfad für Artifacts.</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
-        <target state="needs-review-translation">Der Name des auszuführenden Schritts.</target>
+        <target state="translated">Der Name des auszuführenden Schritts.</target>
         <note />
       </trans-unit>
       <trans-unit id="StepArgumentRequired">
         <source>The 'step' argument is required.</source>
-        <target state="new">The 'step' argument is required.</target>
+        <target state="translated">Das Argument „step“ ist erforderlich.</target>
         <note />
       </trans-unit>
     </body>

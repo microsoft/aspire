@@ -44,7 +44,6 @@ public class TrayControllerSavedStateTests
         Assert.False(row.IsStarting);
         Assert.False(row.IsRunning);
         Assert.False(controller.State.HasActiveAppHosts);
-        Assert.True(controller.State.ShowStatus);
         Assert.Equal([path], client.StartRequests.ToArray());
 
         controller.RequestStart(path);
@@ -88,7 +87,6 @@ public class TrayControllerSavedStateTests
         Assert.True(row.IsRunning);
         Assert.True(row.CanOpenDashboard);
         Assert.Null(row.Error);
-        Assert.False(controller.State.ShowStatus);
         Assert.Empty(controller.State.RecentAppHosts);
         Assert.Throws<InvalidOperationException>(() => controller.RequestStart(path));
         Assert.Equal([path], client.StartRequests.ToArray());
@@ -113,12 +111,10 @@ public class TrayControllerSavedStateTests
         time.Advance(TrayController.StartReconciliationTimeout);
         await WaitForStateAsync(controller, state => state.Status ==
             "Start was not confirmed by discovery. The AppHost may still start; check before retrying.");
-        Assert.True(controller.State.ShowStatus);
         Assert.Empty(controller.State.RecentAppHosts);
         Assert.False(controller.State.HasActiveAppHosts);
 
         await client.PublishAndWaitAsync(controller, new([Host(42) with { AppHostPath = path }], DiscoveryState.Live));
-        Assert.False(controller.State.ShowStatus);
         Assert.Null(Assert.Single(controller.State.AppHosts).Error);
         Assert.True(controller.State.HasActiveAppHosts);
     }
@@ -507,14 +503,12 @@ public class TrayControllerSavedStateTests
         var controller = new TrayController(client, new FileTraySavedStateStore(directory.StatePath));
         await using var lifetime = controller.ConfigureAwait(true);
         Assert.Equal("Unable to load saved AppHosts. The saved file was left unchanged.", controller.State.Status);
-        Assert.True(controller.State.ShowStatus);
         controller.Start();
         var host = Host(42);
         await client.PublishAndWaitAsync(controller, new([host], DiscoveryState.Live));
 
         Assert.Equal(host.Id, Assert.Single(controller.State.AppHosts).Id);
         Assert.Equal("Unable to save AppHost history. The saved file was left unchanged.", controller.State.Status);
-        Assert.True(controller.State.ShowStatus);
         Assert.Throws<InvalidOperationException>(() => controller.SetPinned(host.AppHostPath, true));
         Assert.False(Assert.Single(controller.State.AppHosts).IsPinned);
         Assert.Equal("{corrupt", File.ReadAllText(directory.StatePath));
@@ -526,43 +520,32 @@ public class TrayControllerSavedStateTests
         var client = new TestAppHostClient();
         var controller = new TrayController(client);
         await using var lifetime = controller.ConfigureAwait(true);
-        Assert.True(controller.State.ShowStatus);
         controller.Start();
         var host = Host(42);
         await client.PublishAndWaitAsync(controller, new([host], DiscoveryState.Live));
-        Assert.False(controller.State.ShowStatus);
 
         controller.ReportActionError("Unable to open the dashboard.");
-        Assert.True(controller.State.ShowStatus);
         Assert.Equal("Unable to open the dashboard.", controller.State.Status);
         controller.GetDashboardUri(host.Id);
-        Assert.False(controller.State.ShowStatus);
 
         controller.RequestStop(host.Id);
         await client.NextStopAsync();
-        Assert.False(controller.State.ShowStatus);
         client.CompleteStop(host.Id, new(StopOutcome.Failed, 7));
         await WaitForStateAsync(controller, state => state.AppHosts[0].Error is not null);
-        Assert.True(controller.State.ShowStatus);
         Assert.Equal("1 AppHost needs attention", controller.State.Status);
 
         controller.RequestStop(host.Id);
         await client.NextStopAsync();
-        Assert.False(controller.State.ShowStatus);
         client.CompleteStop(host.Id, new(StopOutcome.Stopped, 0));
         await WaitForStateAsync(controller, state => !state.AppHosts[0].IsStopping);
         await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
-        Assert.True(controller.State.ShowStatus);
 
         var replacement = Host(42, 2000);
         await client.PublishAndWaitAsync(controller, new([replacement], DiscoveryState.Live));
-        Assert.False(controller.State.ShowStatus);
         await client.PublishAndWaitAsync(controller, new([replacement], DiscoveryState.Disconnected));
-        Assert.True(controller.State.ShowStatus);
-        Assert.Equal("Discovery unavailable. Reconnecting...", controller.State.Status);
+        Assert.Equal("Discovery is unavailable. Reconnecting\u2026", controller.State.Status);
         await client.PublishAndWaitAsync(controller, new([replacement], DiscoveryState.Incompatible));
-        Assert.True(controller.State.ShowStatus);
-        Assert.Equal("Incompatible CLI. Use the matching Aspire build.", controller.State.Status);
+        Assert.Equal("This tray does not match the installed Aspire CLI. Use the matching Aspire build.", controller.State.Status);
     }
 
     [Fact]

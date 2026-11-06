@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="AddingAppHostProjectToSolution">
         <source>Adding AppHost project to solution...</source>
-        <target state="needs-review-translation">Přidává se projekt AppHost do řešení...</target>
+        <target state="translated">Přidává se projekt AppHost do řešení...</target>
         <note />
       </trans-unit>
       <trans-unit id="AddingProjectsToSolution">
@@ -19,12 +19,12 @@
       </trans-unit>
       <trans-unit id="AppHostCreatedRunOne">
         <source>Aspire AppHost created! To complete setup, run:</source>
-        <target state="new">Aspire AppHost created! To complete setup, run:</target>
+        <target state="translated">Hostitel Aspire AppHost byl vytvořen! Nastavení dokončíte spuštěním následujícího příkazu:</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostCreatedRunOneOf">
         <source>Aspire AppHost created! To complete setup, run one of:</source>
-        <target state="new">Aspire AppHost created! To complete setup, run one of:</target>
+        <target state="translated">Hostitel Aspire AppHost byl vytvořen! Nastavení dokončíte spuštěním jednoho z následujících příkazů:</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireInitializationComplete">
@@ -34,17 +34,17 @@
       </trans-unit>
       <trans-unit id="CreatedFile">
         <source>Created {0}</source>
-        <target state="new">Created {0}</target>
+        <target state="translated">Vytvořen soubor {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingAppHostFromTemplate">
         <source>Creating AppHost from template...</source>
-        <target state="new">Creating AppHost from template...</target>
+        <target state="translated">Vytváří se hostitel AppHost ze šablony...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingAppHostProject">
         <source>Creating AppHost project...</source>
-        <target state="needs-review-translation">Vytváří se projekt AppHost...</target>
+        <target state="translated">Vytváří se projekt AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CreatingServiceDefaultsProject">
@@ -54,52 +54,52 @@
       </trans-unit>
       <trans-unit id="DeprecatedOptionWarning">
         <source>`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</source>
-        <target state="new">`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</target>
+        <target state="translated">Možnost `aspire init {0}` je zastaralá a už nemá vliv na generované hostitele AppHost. Přijímá se kvůli kompatibilitě a v budoucí verzi bude odebrána.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Initialize Aspire in an existing codebase</source>
-        <target state="needs-review-translation">Inicializujte podporu Aspire v existujícím řešení nebo vytvořte AppHost s jedním souborem.</target>
+        <target state="translated">Inicializujte Aspire v existujícím základu kódu.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToCreateAppHostFromTemplate">
         <source>Failed to create AppHost from template (exit code {0}).</source>
-        <target state="new">Failed to create AppHost from template (exit code {0}).</target>
+        <target state="translated">Nepovedlo se vytvořit AppHost ze šablony (ukončovací kód {0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToParseExistingConfig">
         <source>Failed to parse existing {0} at '{1}': {2}</source>
-        <target state="new">Failed to parse existing {0} at '{1}': {2}</target>
+        <target state="translated">Nepodařilo se analyzovat existující {0} v '{1}': {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="FileAlreadyExistsSkipping">
         <source>{0} already exists — skipping.</source>
-        <target state="new">{0} already exists — skipping.</target>
+        <target state="translated">Soubor {0} už existuje. Přeskakuje se.</target>
         <note />
       </trans-unit>
       <trans-unit id="FileBasedOptionDescription">
         <source>Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</source>
-        <target state="new">Create apphost.cs in the current directory, skipping .NET solution discovery. Requires C#.</target>
+        <target state="translated">Vytvořit soubor apphost.cs v aktuálním adresáři a přeskočit vyhledávání řešení .NET. Vyžaduje C#.</target>
         <note />
       </trans-unit>
       <trans-unit id="FileBasedRequiresCSharp">
         <source>The --file-based option requires C#. Select --language csharp or omit --file-based.</source>
-        <target state="new">The --file-based option requires C#. Select --language csharp or omit --file-based.</target>
+        <target state="translated">Možnost --file-based vyžaduje C#. Vyberte --language csharp nebo vynechte --file-based.</target>
         <note />
       </trans-unit>
       <trans-unit id="FixOrRemoveConfigAndRerun">
         <source>Fix or remove {0} and re-run `aspire init`.</source>
-        <target state="new">Fix or remove {0} and re-run `aspire init`.</target>
+        <target state="translated">Opravte nebo odeberte {0} a znovu spusťte `aspire init`.</target>
         <note />
       </trans-unit>
       <trans-unit id="InstallingAspireProjectTemplates">
         <source>Installing Aspire project templates...</source>
-        <target state="new">Installing Aspire project templates...</target>
+        <target state="translated">Instalují se šablony projektů Aspire...</target>
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost (csharp, typescript)</source>
-        <target state="new">The programming language for the AppHost (csharp, typescript)</target>
+        <target state="translated">Programovací jazyk pro AppHost (csharp, typescript)</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleSolutionsFound">
@@ -109,7 +109,7 @@
       </trans-unit>
       <trans-unit id="NoSolutionFoundCreatingSingleFileAppHost">
         <source>No solution file found. Creating single-file AppHost...</source>
-        <target state="needs-review-translation">Nenašel se žádný soubor řešení. Vytváří se AppHost s jedním souborem...</target>
+        <target state="translated">Nenašel se žádný soubor řešení. Vytváří se AppHost s jedním souborem...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -129,7 +129,7 @@
       </trans-unit>
       <trans-unit id="SolutionAndProjectInSameDirectory">
         <source>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</source>
-        <target state="new">The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</target>
+        <target state="translated">Soubor řešení '{0}' a soubor projektu '{1}' jsou ve stejném adresáři. Projekty AppHost a ServiceDefaults nelze vytvořit uvnitř existujícího adresáře projektu. Přesuňte soubor řešení do nadřazeného adresáře nebo soubor projektu do podadresáře.</target>
         <note />
       </trans-unit>
     </body>

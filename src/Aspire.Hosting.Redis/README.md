@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Redis` integration with the
 
 ```bash
 aspire add Aspire.Hosting.Redis
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a Redis resource and reference it from another resource with
 ```csharp
 var redis = builder.AddRedis("redis");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(redis);
 ```
 

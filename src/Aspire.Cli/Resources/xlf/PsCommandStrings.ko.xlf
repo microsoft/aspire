@@ -4,17 +4,17 @@
     <body>
       <trans-unit id="Description">
         <source>List running AppHosts</source>
-        <target state="needs-review-translation">실행 중인 Aspire AppHost를 나열합니다.</target>
+        <target state="translated">실행 중인 AppHost를 나열합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</source>
-        <target state="new">Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</target>
+        <target state="translated">계속 실행하면서 실행 중인 AppHost가 변경될 때마다 업데이트를 출력합니다. JSON 출력은 기본적으로 변경된 AppHost 레코드를 줄바꿈으로 구분해 표시하며, --output snapshot을 사용하면 전체 스냅샷을 표시합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowRequiresJson">
         <source>The --follow option only supports JSON output. Use --format json.</source>
-        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
+        <target state="translated">--follow` 옵션은 JSON 출력만 지원합니다. --format json을 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -39,27 +39,27 @@
       </trans-unit>
       <trans-unit id="HeaderSdk">
         <source>SDK</source>
-        <target state="new">SDK</target>
+        <target state="translated">SDK</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidOutputMode">
         <source>The --output option must be default or snapshot.</source>
-        <target state="new">The --output option must be default or snapshot.</target>
+        <target state="translated">--output 옵션은 default 또는 snapshot이어야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">JSON 형식의 출력입니다.</target>
+        <target state="translated">출력 형식(테이블 또는 Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputOptionDescription">
         <source>Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</source>
-        <target state="new">Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</target>
+        <target state="translated">출력 모드: 기본값은 표준 AppHost 출력을 유지합니다. 스냅샷은 리소스 상태, 하트비트, 오류가 포함된 전체 AppHost 스냅샷을 출력합니다. 스냅샷을 사용하려면 --follow --format json이 필요합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SnapshotRequiresFollowJson">
         <source>The --output snapshot option requires --follow --format json.</source>
-        <target state="new">The --output snapshot option requires --follow --format json.</target>
+        <target state="translated">--output snapshot 옵션을 사용하려면 --follow --format json이 필요합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

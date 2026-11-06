@@ -1,0 +1,17 @@
+﻿.error-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 40px;
+}
+
+.error-code {
+    --error-code-font-size: 90px;
+    font-size: var(--error-code-font-size);
+    line-height: var(--error-code-font-size);
+}
+
+.error-description {
+    font-size: var(--fontSizeHero900);
+    line-height: var(--lineHeightHero900);
+}

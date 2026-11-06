@@ -38,7 +38,7 @@ namespace Aspire.Hosting.Python;
 ///     .WithHttpEndpoint(port: 5000)
 ///     .WithArgs("--host", "0.0.0.0");
 /// 
-/// builder.AddProject&lt;Projects.Frontend&gt;("frontend")
+/// builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
 ///     .WithReference(python);
 /// 
 /// builder.Build().Run();
@@ -60,4 +60,8 @@ namespace Aspire.Hosting.Python;
 /// of your Python project containing your main script and any local modules.
 /// </param>
 public class PythonAppResource(string name, string executablePath, string appDirectory)
-    : ExecutableResource(name, executablePath, appDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource;
+    : ExecutableResource(name, executablePath, appDirectory), IResourceWithServiceDiscovery, IContainerFilesDestinationResource
+{
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Python";
+}

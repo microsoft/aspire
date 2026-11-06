@@ -1,0 +1,76 @@
+@namespace Aspire.Dashboard.Components
+
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Otlp.Model
+@using MetricsResources = Aspire.Dashboard.Resources.Metrics
+
+@implements IDisposable
+
+@inject MetricPinStore PinStore
+@inject IStringLocalizer<MetricsResources> Loc
+
+@{
+    var label = _isPinned ? Loc[nameof(MetricsResources.MetricsUnpinInstrument)] : Loc[nameof(MetricsResources.MetricsPinInstrument)];
+}
+
+@* The bordered variant matches the dashboard's other header icon buttons (word wrap, close): a square
+   bordered button that turns primary while active. Cards use the quieter transparent variant. *@
+<FluentButton Appearance="@(Bordered ? (_isPinned ? ButtonAppearance.Primary : ButtonAppearance.Default) : ButtonAppearance.Transparent)"
+              IconOnly="true"
+              Class="@($"metric-pin-button{(Bordered ? " aspire-button" : null)}{(_isPinned ? " pinned" : null)} {Class}")"
+              data-tooltip="@label"
+              aria-label="@label"
+              aria-pressed="@(_isPinned ? "true" : "false")"
+              OnClick="TogglePinned">
+    <FluentIcon Value="@(_isPinned ? s_pinnedIcon : s_unpinnedIcon)" Color="Color.Custom" CustomColor="currentColor" />
+</FluentButton>
+
+@code {
+    private static readonly Icon s_pinnedIcon = new Icons.Filled.Size16.Pin();
+    private static readonly Icon s_unpinnedIcon = new Icons.Regular.Size16.Pin();
+
+    private bool _isPinned;
+
+    [Parameter, EditorRequired]
+    public required OtlpInstrumentKey InstrumentKey { get; set; }
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the button has a square border, for headers next to other icon buttons.
+    /// </summary>
+    [Parameter]
+    public bool Bordered { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // Another button for the same instrument (e.g. the card and the chart header) can change the pin.
+        PinStore.Changed += OnPinsChanged;
+    }
+
+    protected override void OnParametersSet()
+    {
+        _isPinned = PinStore.IsPinned(InstrumentKey);
+    }
+
+    private void TogglePinned()
+    {
+        PinStore.SetPinned(InstrumentKey, !_isPinned);
+        _isPinned = PinStore.IsPinned(InstrumentKey);
+    }
+
+    private void OnPinsChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            _isPinned = PinStore.IsPinned(InstrumentKey);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        PinStore.Changed -= OnPinsChanged;
+    }
+}

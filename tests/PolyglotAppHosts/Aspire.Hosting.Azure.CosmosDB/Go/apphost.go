@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// 1) AddAzureCosmosDB
@@ -20,14 +20,14 @@ func main() {
 		bypassResourceID := infrastructure.CreateCosmosDBResourceIdentifier(
 			"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass")
 		if err := account.NetworkAclBypassResourceIds().Add(bypassResourceID); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 
 	// 2) WithDefaultAzureSku
 	cosmos.WithDefaultAzureSku()
 	if cosmos.Err() != nil {
-		log.Fatalf(aspire.FormatError(cosmos.Err()))
+		log.Fatal(aspire.FormatError(cosmos.Err()))
 	}
 
 	// 3) AddCosmosDatabase
@@ -35,7 +35,7 @@ func main() {
 		DatabaseName: aspire.StringPtr("appdb"),
 	})
 	if db.Err() != nil {
-		log.Fatalf(aspire.FormatError(db.Err()))
+		log.Fatal(aspire.FormatError(db.Err()))
 	}
 
 	// 4) AddContainer (single partition key path)
@@ -43,7 +43,7 @@ func main() {
 		ContainerName: aspire.StringPtr("orders-container"),
 	})
 	if container.Err() != nil {
-		log.Fatalf(aspire.FormatError(container.Err()))
+		log.Fatal(aspire.FormatError(container.Err()))
 	}
 
 	// 5) AddContainer (IEnumerable<string> export)
@@ -74,7 +74,7 @@ func main() {
 		},
 	})
 	if cosmosEmulator.Err() != nil {
-		log.Fatalf(aspire.FormatError(cosmosEmulator.Err()))
+		log.Fatal(aspire.FormatError(cosmosEmulator.Err()))
 	}
 
 	// 12) RunAsClassicEmulator + 13) WithPartitionCount
@@ -85,14 +85,14 @@ func main() {
 		},
 	})
 	if cosmosClassic.Err() != nil {
-		log.Fatalf(aspire.FormatError(cosmosClassic.Err()))
+		log.Fatal(aspire.FormatError(cosmosClassic.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

@@ -11,6 +11,24 @@ namespace Aspire.Cli.Tests.Configuration;
 public class KnownFeaturesTests
 {
     [Theory]
+    [InlineData(null, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void AppHostServerV2_RequiresExplicitProjectOptIn(bool? enabled, bool expected)
+    {
+        var config = new Aspire.Cli.Configuration.AspireConfigFile();
+        if (enabled is { } value)
+        {
+            config.Features = new Dictionary<string, bool> { [KnownFeatures.AppHostServerV2] = value };
+        }
+
+        Assert.False(KnownFeatures.GetFeatureMetadata(KnownFeatures.AppHostServerV2)!.DefaultValue);
+        Assert.True(KnownFeatures.GetFeatureMetadata(KnownFeatures.AppHostServerV2)!.ProjectOnly);
+        Assert.Equal(expected, KnownFeatures.IsAppHostServerV2Enabled(config));
+        Assert.False(KnownFeatures.IsAppHostServerV2Enabled(null));
+    }
+
+    [Theory]
     [InlineData(false, null, false)]
     [InlineData(true, null, true)]
     [InlineData(false, true, true)]

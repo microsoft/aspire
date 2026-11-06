@@ -1,0 +1,37 @@
+﻿{
+  "resources": {
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "REDIRECT": "{cond-test-condition-2dffd3e2.connectionString}"
+      }
+    },
+    "unselected-condition": {
+      "type": "parameter.v0",
+      "value": "{unselected-condition.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "cond-test-condition-2dffd3e2": {
+      "type": "value.v0",
+      "connectionString": "{cond-test-condition-ad4be1f5.connectionString}/signin-oidc"
+    },
+    "cond-test-condition-ad4be1f5": {
+      "type": "value.v0",
+      "connectionString": "https://{public-host.value}"
+    }
+  }
+}

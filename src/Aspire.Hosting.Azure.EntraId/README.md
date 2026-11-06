@@ -16,15 +16,22 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.EntraId` integration 
 
 ```bash
 aspire add Aspire.Hosting.Azure.EntraId
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
 
-Then, in the AppHost, add an Entra ID application resource and reference it from another resource.
+Then, in a C# or TypeScript AppHost, add an Entra ID application resource and reference it from another resource.
+
+### Polyglot AppHosts
+
+The integration is available in TypeScript, Python, Go, Java, and Rust AppHosts, with the same behavior as C#. Method names follow each language's conventions, and optional arguments are passed as options objects or keyword arguments; for example, Python's generator abbreviates `Application` to `app` (`add_entra_id_app`, `with_app_owners`). The TypeScript examples in this README show the shapes. `withReference` applies the same configuration rules as C#, and `withEntraIdReference` is the explicit form that also sets the `DownstreamApis` prefix. Neither configures authentication middleware in the workload.
 
 ### Create registrations
 
 `AddEntraIdApplication` creates a registration and its service principal using the Microsoft Graph Bicep extension:
+
+**C#**
 
 ```csharp
 var entraApi = builder.AddEntraIdApplication("entra-api");
@@ -33,12 +40,30 @@ var entraWeb = builder.AddEntraIdApplication("entra-web")
                           "https://localhost:7123/signin-oidc",
                           "https://localhost:7123/signout-callback-oidc");
 
-builder.AddProject<Projects.Api>("api")
+builder.AddDotnetProject("api", "../Api/Api.csproj")
        .WithReference(entraApi);
 
-builder.AddProject<Projects.Web>("web")
+builder.AddDotnetProject("web", "../Web/Web.csproj")
        .WithReference(entraWeb);
 ```
+
+**TypeScript**
+
+```typescript
+import { createBuilder } from './.aspire/modules/aspire.mjs';
+
+const builder = await createBuilder();
+const entraWeb = await builder.addEntraIdApplication("entra-web")
+    .withRedirectUris("https://localhost:7123/signin-oidc");
+
+await builder.addContainer("web", "my-web-image")
+    .withReference(entraWeb, { connectionName: "AUTH" });
+
+await builder.build().run();
+```
+
+The TypeScript example supplies portable `AUTH_*` environment variables. The workload must read them into its
+authentication library's options; adding a reference does not install or configure a language-specific authentication library.
 
 For .NET program resources, `WithReference` injects environment variables in the form `AzureAd__{Key}` — for example `AzureAd__Instance`, `AzureAd__TenantId`, and `AzureAd__ClientId`. .NET's configuration system maps these to the `AzureAd` configuration section, so the referencing resource reads them as ordinary configuration with no glue code.
 
@@ -79,7 +104,35 @@ Changing the name or suffix targets another registration and leaves the previous
 Existing registrations with different `uniqueName` values are not automatically adopted: reference their IDs with
 `AddExistingEntraApplication` or explicitly clean them up when migrating.
 
-Configure callback URIs with `WithRedirectUris`; Aspire does not discover them automatically.
+Configure callback URIs with `WithRedirectUris`. To derive the scheme, host, and port from a resource's endpoint, pass the endpoint and the
+callback paths. When running locally the finalized preferred browser origin is used; when publishing or deploying, the host comes from the resource's
+compute environment. The callback path can't be discovered, so it must match the path configured in the consuming app:
+
+```csharp
+entraWeb.WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc", "/signout-callback-oidc");
+```
+
+Local redirects use the finalized browser URL, including friendly `*.dev.localhost` names and URL customizations,
+regardless of whether those customizations are configured before or after `WithRedirectUris`.
+For a different public origin, supply the callback URLs explicitly or through parameters.
+
+When only the host name varies per environment (for example, a custom domain supplied at deployment time), pass a parameter for the host
+and the fixed callback paths. Each URI is `https://{host}{path}`:
+
+```csharp
+var host = builder.AddParameter("web-host");
+entraWeb.WithRedirectUris(host, "/signin-oidc", "/signout-callback-oidc");
+```
+
+To supply the externally visible
+URIs per environment at deployment time (for example, behind a gateway or custom domain), pass parameters instead of literals.
+Each parameter value may contain several URIs separated by commas (split in the generated Bicep, so URIs can't contain commas
+and entries must not have surrounding whitespace). Literal and parameter-backed URIs can be mixed and are registered in call order:
+
+```csharp
+var redirectUris = builder.AddParameter("web-redirect-uris");
+entraWeb.WithRedirectUris(redirectUris);
+```
 
 For OpenID Connect sign-in flows that request an ID token directly from the authorization endpoint, explicitly enable ID-token issuance:
 
@@ -89,7 +142,278 @@ entraWeb.WithIdTokenIssuance();
 
 ID-token issuance through implicit or hybrid flows is disabled by default. `WithIdTokenIssuance` enables only ID-token issuance, not implicit access-token issuance, and only affects registrations created by Aspire. For existing registrations, enable **ID tokens (used for implicit and hybrid flows)** in their **Authentication** settings instead. It is not needed for authorization-code-only flows. For new production applications, prefer authorization code flow with PKCE and configure a confidential-client credential when the application redeems codes.
 
-Creating a registration does not protect a workload's routes or authorize API requests. Configure authentication and authorization in the consuming application using Microsoft.Identity.Web or the corresponding library for that language. A web-to-API flow additionally requires an API identifier URI, exposed scopes, client permissions/consent, a client credential, and scope or role validation in the API. These are not provisioned by this initial increment.
+A registration doesn't protect routes or authorize requests. Configure authentication and authorization in the consuming app with Microsoft.Identity.Web or the equivalent library for its language, and validate scopes or roles in the API.
+
+### Customize the generated infrastructure
+
+`ConfigureInfrastructure` callbacks can edit the Microsoft Graph resources that Aspire generates for registrations it creates; references to existing registrations aren't provisioned. The models are public in `Aspire.Hosting.Azure.EntraId.Provisioning`. The primary declarations have the Bicep identifiers `application` and `servicePrincipal`. An API registration that uses the default application ID URI declares the application a second time, so select by identifier rather than assuming there is one `MicrosoftGraphApplication`.
+
+**C#**
+
+```csharp
+using Aspire.Hosting.Azure.EntraId.Provisioning;
+
+var entra = builder.AddEntraIdApplication("entra")
+    .ConfigureInfrastructure(infrastructure =>
+    {
+        var application = infrastructure.GetProvisionableResources()
+            .OfType<MicrosoftGraphApplication>()
+            .Single(r => r.BicepIdentifier == "application");
+        application.Tags.Add("department:engineering");
+        application.ServiceManagementReference = "your-service-management-reference";
+
+        var principal = infrastructure.GetProvisionableResources()
+            .OfType<MicrosoftGraphServicePrincipal>().Single();
+        principal.Tags.Add("department:engineering");
+    });
+```
+
+**TypeScript**
+
+TypeScript AppHosts also need the experimental `Aspire.Hosting.Azure.Provisioning.EntraId` integration, which uses the [shared Bicep expression APIs](../Aspire.Hosting.Azure.Provisioning/README.md) to keep parameters and references deferred.
+
+```typescript
+const serviceReference = await builder.addParameter("service-reference");
+const entra = await builder.addEntraIdApplication("entra");
+await entra.configureInfrastructure(async infrastructure => {
+    const application = await infrastructure.getMicrosoftGraphApplicationByIdentifier("application");
+    const tags = await application.tags.get();
+    await tags.add("department:engineering");
+    await application.serviceManagementReference.set(infrastructure.bicep().parameter(serviceReference));
+
+    const principal = await infrastructure.getMicrosoftGraphServicePrincipalByIdentifier("servicePrincipal");
+    const principalTags = await principal.tags.get();
+    await principalTags.add("department:engineering");
+});
+```
+
+* **Tags are strings.** Microsoft Graph [application](https://learn.microsoft.com/graph/templates/bicep/reference/applications) and [service principal](https://learn.microsoft.com/graph/templates/bicep/reference/serviceprincipals) tags are string arrays, not Azure key/value tags. Add the exact string you need. Applications also have a `serviceManagementReference` property for a reference to a service or asset management database.
+* **Add to the service principal's tags.** Don't replace them: Aspire sets `WindowsAzureActiveDirectoryIntegratedApp`, which keeps the service principal in the Enterprise applications list.
+
+### Expose an API and call it
+
+A registration becomes an API by exposing scopes, which you declare explicitly: Aspire doesn't derive them from caller permissions. A client registration declares the permissions it needs, and consent is granted only if you ask for it. Declaration, consent and pre-authorization are separate, and Aspire never combines them.
+
+```csharp
+var entraApi = builder.AddEntraIdApplication("entra-api")
+                      .WithScope("Weather.Read", "Allows the app to read weather forecasts on behalf of the signed-in user.")
+                      .WithScope("Weather.Read.All", "Allows the app to read the forecasts of all users.", scope => scope.RequiresAdminConsent = true);
+
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .WithRedirectUris("https://localhost:7123/signin-oidc")
+                      // Lists the scope under the client's API permissions. Grants nothing.
+                      .WithApiPermissions(entraApi, "Weather.Read")
+                      // Optional: consent for all users, so that nobody is prompted.
+                      .WithAdminConsent(entraApi, "Weather.Read");
+
+var apiService = builder.AddDotnetProject("apiservice", "../Api/Api.csproj")
+       .WithReference(entraApi);
+
+builder.AddDotnetProject("webfrontend", "../Web/Web.csproj")
+       .WithReference(entraWeb)
+       .WithReference(apiService);
+```
+
+* **Scope names.** How to design scopes, including the `Resource.Operation[.Constraint]` naming used above, is covered in the [Entra guidance](https://learn.microsoft.com/entra/identity-platform/quickstart-configure-app-expose-web-apis#add-a-scope-requiring-admin-and-user-consent).
+* **Configuration flows automatically.** Referencing the client registration gives the consumer a `DownstreamApis` entry for each API the client declared permissions to:
+  * Delegated permissions: `DownstreamApis__{name}__Scopes__{index}` (here `api://{clientId}/Weather.Read`).
+  * Application permissions: a separate `{name}AppOnly` entry with the `/.default` scope and `RequestAppToken=true`, because a token request covers one resource and one flow.
+  * `{name}` is the name of each resource that references the API registration (`apiservice`), or the registration's own name if none does. First-party APIs use `MicrosoftGraph`, `AzureResourceManager`, `AzureStorage`, or the display name passed to `EntraIdApi.FromApplicationId`.
+  * `downstreamApisPrefix` on `WithReference` changes the `DownstreamApis` prefix. Other languages get uppercase snake case, for example `ENTRA_WEBFRONTEND_ENTRA_DOWNSTREAM_APIS_APISERVICE_SCOPES_0`.
+  * Entries that would collide are rejected before anything starts. Reference API registrations that one client calls from different resources, and give one of two registrations that call the same API its own `downstreamApisPrefix`.
+* **Use the entry in the app.** The entry holds scopes, not the API's URL, so set the client's address yourself, for example with service discovery. Pass the API's entry to `AddMicrosoftIdentityMessageHandler`:
+
+  ```csharp
+  builder.Services.AddHttpClient<WeatherApiClient>(client => client.BaseAddress = new("https+http://apiservice"))
+      .AddMicrosoftIdentityMessageHandler(
+          builder.Configuration.GetSection("DownstreamApis:apiservice"), "DownstreamApis:apiservice");
+  ```
+
+  `AddDownstreamApis(builder.Configuration.GetSection("DownstreamApis"))` registers every entry for `IDownstreamApi` by name instead.
+* **The API's own settings.** Referencing a registration that exposes scopes also sets `AzureAd__Scopes` to its enabled scope names. `[RequiredScope]` doesn't read that key unless you name it, and it enforces nothing without `[Authorize]`:
+
+  ```csharp
+  [Authorize]
+  [RequiredScope(RequiredScopesConfigurationKey = "AzureAd:Scopes")]
+  public class WeatherController : ControllerBase { /* ... */ }
+  ```
+
+  A minimal API endpoint takes the same two attributes on its handler.
+* **Application ID URI.** A registration with scopes uses `api://{clientId}`. The client ID exists only after creation, so Aspire sets the URI in a second update of the registration in the same deployment. `WithApplicationIdUri("api://contoso-orders")` sets a custom URI, which must be unique in the tenant. Aspire always sets `requestedAccessTokenVersion` to 2, which exempts the URI from the tenant's default policy, but a stricter policy fails the deployment ([details](https://aka.ms/identifier-uri-formatting-error)). `GetScopeUri` returns the full scope name.
+* **Stable scope IDs.** Scope IDs derive from the registration and scope names, so they are the same in every deployment and tenant. Set `EntraIdScope.Id` to adopt an existing scope.
+* **Retiring a scope.** Graph rejects removing or renaming an enabled scope, so retire it in two deployments. In the first, set `IsEnabled = false` in `WithScope`'s callback and remove every `WithApiPermissions`, `WithAdminConsent` and `WithPreAuthorizedApplication` reference to the scope: a disabled scope can't be requested, declared or pre-authorized, and Aspire fails the deployment if a reference remains. In the second, remove the scope. When retiring the last scope, keep `WithApplicationIdUri()` for the second deployment so the empty scope list is still sent.
+* **What a deployment removes.** Graph keeps properties that a deployment omits. While a registration is declared as an API (it has scopes or a `WithApplicationIdUri` call), its application ID URIs, scopes and pre-authorized clients are sent in full, even when empty, and Graph replaces each list: anything not listed is removed, such as a client pre-authorized in the portal. Removing the last `WithPreAuthorizedApplication` call therefore revokes it. Once nothing declares the API, nothing is sent, and earlier scopes, URIs, pre-authorized clients and `WithApiPermissions` declarations stay in the tenant, so remove pre-authorized clients first and keep `WithApplicationIdUri()` for one deployment.
+* **What consent replaces.** `WithAdminConsent` declares the all-users grant from a client to an API in full: the grant is set to exactly the scopes passed for that pair. Scopes granted to the pair in the portal are therefore revoked, and so is a scope that you remove from `WithAdminConsent` while others remain. Once no `WithAdminConsent` call remains for a pair, nothing is sent and the existing grant stays. Application permissions are granted differently, as one app role assignment per permission: Aspire creates an assignment when you consent to an application permission, but doesn't delete it if you later remove that consent, so remove it in the [Microsoft Entra admin center](https://entra.microsoft.com).
+* **One resource per token.** A token request covers the scopes of one API. Request the API's scopes and Microsoft Graph's separately; mixing them fails with `AADSTS28000`.
+
+#### Call Microsoft Graph and other first-party APIs
+
+An API that isn't an Aspire resource is identified by its application ID. `EntraIdApi.MicrosoftGraph`, `AzureResourceManager` and `AzureStorage` know their common permissions by name; pass other permissions with their ID. For other APIs use `EntraIdApi.FromApplicationId(displayName, applicationId, resourceUri)`, where `resourceUri` is the API's application ID URI (the prefix of its scopes). Pass `baseUrl` to have Aspire set the API's `BaseUrl` in its `DownstreamApis` entry. Unknown names are rejected when you write the AppHost.
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+    // Delegated permissions (scopes) act on behalf of a signed-in user.
+    .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Delegated("User.Read"))
+    // Application permissions (app roles) act as the application itself. They are separate permissions from
+    // delegated ones, even with the same name.
+    .WithApiPermissions(EntraIdApi.MicrosoftGraph, EntraIdApiPermission.Application("User.Read.All"))
+    // Opt in to consent. Delegated permissions become a grant for all users, application permissions
+    // become an app role assignment to the registration's service principal.
+    .WithAdminConsent(
+        EntraIdApi.MicrosoftGraph,
+        EntraIdApiPermission.Delegated("User.Read"),
+        EntraIdApiPermission.Application("User.Read.All"));
+```
+
+Consent needs a deploying identity that can grant it:
+
+* **Delegated permissions:** a directory role such as Privileged Role Administrator, Cloud Application Administrator or Application Administrator, or the `DelegatedPermissionGrant.ReadWrite.All` Graph permission.
+* **Graph application permissions:** Privileged Role Administrator or a custom role, or `AppRoleAssignment.ReadWrite.All` for an application. Cloud Application Administrator and Application Administrator are not enough.
+
+See [grant tenant-wide admin consent](https://learn.microsoft.com/entra/identity/enterprise-apps/grant-admin-consent#prerequisites). Without `WithAdminConsent`, nothing is granted and no extra privileges are needed. Declare a permission before consenting to it, and only what the application needs: application permissions such as `Directory.Read.All` reach the whole tenant.
+
+#### Pre-authorize a client
+
+`WithPreAuthorizedApplication` lets a trusted client request some of the API's scopes without a consent prompt. It is separate from the client's declaration and from consent:
+
+```csharp
+var entraApi = builder.AddEntraIdApplication("entra-api")
+                      .WithScope("Weather.Read", "Allows the app to read weather forecasts on behalf of the signed-in user.")
+                      .WithPreAuthorizedApplication(entraDaemon, "Weather.Read");
+```
+
+Each registration deploys as its own module. Pre-authorization makes the API's module wait for the client's ID, while a declaration makes the client's module wait for the API's ID, so a pair of registrations can't use both and Aspire rejects the second call. Use a declaration with `WithAdminConsent` on the client, or pre-authorization alone.
+
+#### Existing registrations
+
+Aspire does not modify existing registrations. To reference an existing API's scopes, supply its registered URI with `WithApplicationIdUri("api://the-registered-uri")` and describe its scopes with `WithScope`. Set `EntraIdScope.Id` to the registered scope ID when callers declare permissions. The parameterless `WithApplicationIdUri()` is only for new registrations.
+
+Consumer settings, including credentials, audiences, and `WithApiPermissions` for `DownstreamApis`, remain supported. They must match the existing registration; they do not register credentials, change supported account types, or grant permissions.
+
+Methods that change a registration, such as redirect URI, owner, role, consent, and certificate or federation provisioning methods, throw on existing references. Configure those settings in the [Microsoft Entra admin center](https://entra.microsoft.com) instead. `AsExistingApplication` also rejects registration-only settings applied before conversion.
+
+Use `AddExistingEntraApplication` to avoid enabling Azure provisioning. `AddEntraIdApplication(...).AsExistingApplication(...)` retains Azure setup but does not provision the registration.
+
+#### TypeScript
+
+The generated SDK exposes the same scopes, permissions, consent and pre-authorization. Optional arguments use an options object, and scope and permission names are passed as arrays:
+
+```typescript
+import { EntraIdPermissionType, EntraIdWellKnownApi } from './.aspire/modules/aspire.mjs';
+
+const entraApi = await builder.addEntraIdApplication("entra-api")
+    .withApplicationIdUri()
+    .withScope("Weather.Read", "Allows the app to read weather forecasts on behalf of the signed-in user.")
+    .withScope("Weather.Read.All", "Allows the app to read the forecasts of all users.", { requiresAdminConsent: true });
+
+const entraWeb = await builder.addEntraIdApplication("entra-web")
+    .withApiPermissions(entraApi, ["Weather.Read"])
+    .withAdminConsent(entraApi, ["Weather.Read"])
+    .withExternalApiPermissions(EntraIdWellKnownApi.MicrosoftGraph, [
+        { name: "User.Read" },
+        { name: "User.Read.All", type: EntraIdPermissionType.Application },
+    ])
+    .withExternalApiAdminConsent(EntraIdWellKnownApi.MicrosoftGraph, [{ name: "User.Read" }]);
+
+const entraDaemon = await builder.addEntraIdApplication("entra-daemon");
+await entraApi.withPreAuthorizedApplication(entraDaemon, ["Weather.Read"]);
+
+const scopeUri = await entraApi.getScopeUri("Weather.Read");
+```
+
+`withExternalApiPermissions` and `withExternalApiAdminConsent` take a well-known API (`EntraIdWellKnownApi`) or a custom API, given as `{ displayName, applicationId, resourceUri, baseUrl }`. A permission is delegated unless its `type` is `EntraIdPermissionType.Application`. A permission that a well-known API doesn't list by name, and every permission of a custom API, needs its `id`. `withScope` takes `{ displayName, userConsentDisplayName, userConsentDescription, requiresAdminConsent, isEnabled, id }` as options.
+
+`withReference` uses the default `DownstreamApis` prefix. To change it, reference the registration with `withEntraIdReference(entraWeb, { connectionName, downstreamApisPrefix })` instead.
+
+### Assign explicit owners
+
+By default Aspire assigns no owners, so Microsoft Entra's default ownership behavior applies. To opt in, pass directory object IDs (users or service principals) as literals or parameters. Application and service principal ownership are configured separately:
+
+```csharp
+var ownerId = builder.AddParameter("entra-owner-id");
+
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .WithOwners(ownerId);
+```
+
+`WithOwners` sets both; use `WithApplicationOwners` / `WithServicePrincipalOwners` to configure them independently.
+
+Owners are appended; existing owners are never removed. Owners can manage the registration, and the deploying identity needs permission to manage owners (for example `Application.ReadWrite.All`). Existing registrations are not modified.
+
+### Declare application roles
+
+Application roles (for example `User` and `Admin`) appear in the `roles` claim of tokens issued for the API. They are distinct from delegated scopes, consent, and Azure RBAC roles. `WithAppRole` only declares roles on registrations created by Aspire; it does not assign them to any user, group, or application:
+
+```csharp
+var entraApi = builder.AddEntraIdApplication("entra-api")
+                      .WithAppRole(new EntraIdAppRole("User", "User", "Can use the API."))
+                      .WithAppRole(new EntraIdAppRole("Admin", "Administrator", "Can administer the API.",
+                          ["User", "Application"]));
+```
+
+In TypeScript, pass the role's values directly. The optional member types, ID, and enabled state go in an options object:
+
+```typescript
+const entraApi = await builder.addEntraIdApplication("entra-api")
+    .withAppRole("User", "User", "Can use the API.")
+    .withAppRole("Admin", "Administrator", "Can administer the API.", {
+        allowedMemberTypes: ["User", "Application"],
+    });
+```
+
+Role IDs are derived from the resource name and role value (or supplied with the `id` argument), so they stay stable across deployments. Changing a role's value or ID creates a different role. A role's value can be at most 120 characters, can't start with a period, and can contain only ASCII letters, digits and the punctuation that [Microsoft Graph allows](https://learn.microsoft.com/graph/api/resources/approle), so spaces and quotation marks are rejected when you write the AppHost.
+
+Whenever the application declares at least one role, Aspire sends the complete `appRoles` collection and Microsoft Graph replaces what is stored, so include every role you want to keep, including ones that were added outside the AppHost. A role that is left out fails the deployment if it is still enabled (`CannotDeleteOrUpdateEnabledEntitlement`) and is deleted if it is already disabled. When the application declares no roles, Aspire doesn't send `appRoles`, so roles that the AppHost never declared are left alone.
+
+To retire a role, remove its `PublishWithAppRoleAssignment` calls, deploy it with `isEnabled: false` and leave it declared. A disabled role can't be assigned to anyone new, but Microsoft Entra [keeps issuing it in tokens for existing assignments](https://learn.microsoft.com/entra/identity-platform/howto-add-app-roles-in-apps#app-roles-ui), so disabling isn't access revocation; remove the existing assignments separately. A role can be removed from the AppHost only after a deployment has disabled it, and only while other roles remain declared. Existing registrations are never modified.
+
+### Assign API roles directly to managed identities
+
+`PublishWithAppRoleAssignment` grants a user-assigned managed identity (UAMI) an application role on an Aspire-created API registration. The role must be declared, enabled, and allow `Application` members. Callers authenticate directly as their managed identities; no caller registration or federated credential is needed.
+
+**C#**
+
+```csharp
+var callerIdentity = builder.AddAzureUserAssignedIdentity("caller-identity");
+var caller = builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
+    .WithAzureUserAssignedIdentity(callerIdentity);
+
+var apiRegistration = builder.AddEntraIdApplication("entra-api")
+    .WithApplicationIdUri()
+    .WithAppRole(new EntraIdAppRole("Orders.Read", "Read orders", "Read orders.", ["Application"]))
+    .PublishWithAppRoleAssignment(callerIdentity, "Orders.Read");
+
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
+    .WithReference(apiRegistration);
+
+// Alternatively, pass the workload instead of callerIdentity.
+apiRegistration.PublishWithAppRoleAssignment(caller, "Orders.Read");
+```
+
+**TypeScript**
+
+```typescript
+const caller = await builder.addContainer("worker", "my-worker-image");
+const apiRegistration = await builder.addEntraIdApplication("entra-api")
+    .withApplicationIdUri()
+    .withAppRole("Orders.Read", "Read orders", "Read orders.", {
+        allowedMemberTypes: ["Application"],
+    })
+    .publishWithAppRoleAssignment(caller, ["Orders.Read"]);
+
+const api = await builder.addContainer("api", "my-api-image")
+    .withReference(apiRegistration);
+```
+
+Assignments apply **only during publish/deploy**, not local run. The workload overload uses its attached UAMI or lets a supported Azure deployment environment create one.
+
+Configure the caller to use its UAMI and request a token for the API's application ID URI plus `/.default` (by default, `api://{apiClientId}/.default`). Reference `apiRegistration` from the API workload, not the caller: its settings identify the API registration. Pass the API URL and target application ID URI separately to the caller.
+
+The API must validate tokens and require the assigned role on protected routes. An unassigned identity can receive a token without roles, so authentication alone does not grant access.
+
+**Deployment privileges.** The deployer needs `AppRoleAssignment.ReadWrite.All` and `Application.Read.All` (or a higher permission covering reads). Application permissions require administrator consent; delegated deployments also require a [supported Entra directory role](https://learn.microsoft.com/graph/api/serviceprincipal-post-approleassignedto#permissions). Azure subscription Owner/Contributor alone is insufficient. Callers do not need these Graph permissions.
+
+**Revoking access.** Removing an assignment call, changing its target, or excluding a caller **does not revoke existing grants**. Remove them explicitly through Microsoft Graph or the Entra admin center. Disabling a role is not revocation. Existing tokens remain valid until expiration, and managed-identity token caches can delay observed changes.
 
 ### Clean up created registrations
 
@@ -114,7 +438,7 @@ var apiClientId = builder.AddParameter("EntraApiClientId");
 var entraApi = builder.AddEntraIdApplication("entra-api")
                       .AsExistingApplication(tenantId: tenantId, clientId: apiClientId);
 
-var api = builder.AddProject<Projects.Api>("api")
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
                  .WithReference(entraApi);
 ```
 
@@ -134,6 +458,68 @@ var entraApi = builder.AddExistingEntraApplication("entra-api", tenantId: tenant
 This factory accepts parameters or literal IDs and does not enable Azure provisioning. Other Azure resources in the
 same AppHost still enable their normal provisioning behavior.
 
+In TypeScript, each ID independently accepts a literal or a parameter, so mixed inputs are supported:
+
+```typescript
+const clientId = await builder.addParameter("entra-client");
+const clientSecret = await builder.addParameter("entra-secret", { secret: true });
+
+const entraApi = await builder.addExistingEntraApplication(
+    "entra-api", "aaaabbbb-0000-cccc-1111-dddd2222eeee", clientId)
+    .withClientSecret(clientSecret);
+
+await builder.addExecutable("worker", "node", ".", ["worker.mjs"])
+    .withReference(entraApi, { connectionName: "AUTH" });
+```
+
+This top-level factory requires no Azure or Graph access. In contrast,
+`builder.addEntraIdApplication("entra-api").asExistingApplication(tenantId, clientId)` retains the Azure setup
+enabled by `addEntraIdApplication`, just like the C# fluent API.
+
+### TypeScript configuration
+
+The generated SDK supports the same sign-in audiences, consumer settings, credentials, owners, and deferred redirect
+values as the C# API. Optional arguments use an options object. Owner and redirect calls append in order; call them
+repeatedly for multiple values:
+
+```typescript
+import { EntraIdSignInAudience } from './.aspire/modules/aspire.mjs';
+
+// Assumes `entraWeb`, a registration created by Aspire with `addEntraIdApplication`, and `entraApi`,
+// an existing registration created with `addExistingEntraApplication`, as in the examples above.
+const ownerId = await builder.addParameter("entra-owner");
+const redirectUris = await builder.addParameter("redirect-uris");
+const redirectHost = await builder.addParameter("redirect-host");
+const certificatePassword = await builder.addParameter("certificate-password", { secret: true });
+
+await entraWeb.withSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
+    .withOwners(ownerId)
+    .withRedirectUris(redirectUris)
+    .withRedirectUris(redirectHost, { callbackPaths: ["/signin-oidc"] });
+
+const web = await builder.addContainer("frontend", "my-web-image")
+    .withHttpEndpoint({ targetPort: 8080 })
+    .withReference(entraWeb);
+
+await entraWeb.withRedirectUris(await web.getEndpoint("http"), {
+    callbackPaths: ["/signin-oidc", "/signout-callback-oidc"],
+});
+await entraWeb.publishWithFederatedManagedIdentityCredential({ identity: web });
+
+await entraApi.withCertificateFromFile("/certs/client.pfx", { password: certificatePassword });
+await entraApi.withSignedAssertionFile({ filePath: "/tokens/assertion" });
+```
+
+Endpoint redirects remain deferred: local run uses the allocated endpoint URL, while publish/deploy uses the compute
+environment's host. A parameter without callback paths contains comma-separated full URIs; with callback paths it contains
+a host name and produces HTTPS URIs. Certificate and assertion paths refer to files on the consumer, not the AppHost.
+Omit the signed assertion file path to use the consumer's `AZURE_FEDERATED_TOKEN_FILE` setting.
+
+For managed identity federation, omit `identity` to trust each referencing workload's identity, or pass an explicit
+user-assigned identity instead of a compute resource. Publishing federation is only supported for registrations created
+by Aspire and does not apply during local run. For an existing registration with trust configured separately, use
+`entraApi.withFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444", { tokenExchangeUrl: "api://AzureADTokenExchange" })`.
+
 ### Custom environment variable names
 
 `WithReference` automatically uses `"AzureAd"` with `"__"` separators for .NET program resources.
@@ -141,7 +527,7 @@ For a different .NET configuration section, set `connectionName`. Colons in nest
 to double underscores; for example, `"Authentication:AzureAd"` produces `Authentication__AzureAd__ClientId`:
 
 ```csharp
-var customApi = builder.AddProject<Projects.Api>("custom-api")
+var customApi = builder.AddDotnetProject("custom-api", "../Api/Api.csproj")
                        .WithReference(entraApi, connectionName: "Authentication:AzureAd");
 ```
 
@@ -187,6 +573,37 @@ For the audiences other than `AzureADMyOrg`, the home tenant ID is injected as `
 
 An application that acquires tokens for itself needs a client credential. Each `With*` call appends an entry to the injected `AzureAd__ClientCredentials__{index}__*` variables, and multiple credentials can be configured as a fallback chain.
 
+### Local developer certificate
+
+For registrations created by Aspire, opt in to a local certificate instead of copying a client secret:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .RunWithLocalDeveloperCertificateCredential()
+                      .PublishWithFederatedManagedIdentityCredential();
+
+builder.AddDotnetProject("web", "../Web/Web.csproj")
+       .WithReference(entraWeb);
+```
+
+In a TypeScript AppHost, call `runWithLocalDeveloperCertificateCredential()` on the registration (`await entraWeb.runWithLocalDeveloperCertificateCredential();`); other languages use their usual naming (for example, Python's `run_with_local_developer_certificate_credential()`). The behavior is the same as in C#.
+
+**Use separate Entra registrations for development and production.** Give each developer a distinct `Azure:TenantResourceSuffix`, and use a different suffix or registration name for production. Registrations are tenant-scoped: different resource groups do not isolate them. The local method does nothing when publishing, but that does **not** revoke a public key previously trusted by the registration. Never use a production registration for this feature.
+
+Aspire creates a dedicated, self-signed RSA certificate valid for **48 hours**. On a subsequent AppHost run, it reuses the certificate when more than **24 hours** remain, otherwise it generates a replacement and updates the registration's public key credentials. Renewal invalidates the Azure provisioning cache. There is no background renewal or running-workload credential reload: restart development sessions before their certificate expires.
+
+The passwordless PFX, including its private key, is stored under the **AppHost-specific Aspire store** at `dev-certs/Entra/<resource-name>.pfx`, not in the user's global HTTPS certificate directory. The store honors `Aspire:Store:Path` / `ASPIRE__STORE__PATH`. The directory and PFX are restricted to the current user. Renewal atomically **overwrites the same PFX file**; it does not retain private-key generations. It neither installs a certificate in an OS store nor trusts it as an HTTPS certificate. Missing or incompatible local material is regenerated; filesystem and Graph failures surface as errors. A failed Graph update leaves the new PFX available for retry.
+
+Only the **public DER certificate** is embedded in the run-mode Bicep template and sent to Entra through the Microsoft Graph Bicep extension. Aspire owns the registration's entire `keyCredentials` collection: deployment replaces it with the selected certificate, without reading or preserving existing keys. Renewal removes the previous public key, so older sessions using that certificate must restart. Do not add independently managed certificate credentials to this development registration; use developer-specific registration suffixes.
+
+Graph assigns the registration's certificate credential ID; Aspire does not set `keyId` when submitting the public certificate. This avoids targeting an immutable existing credential during redeployment. The local certificate remains reusable independently of that Graph-assigned ID.
+
+`WithReference` supplies `SourceType = Base64Encoded` and `Base64EncodedValue` containing the private PFX through a **secret parameter**, using the normal configuration naming conventions for .NET and other resources. Projects using Microsoft.Identity.Web receive `AzureAd__ClientCredentials__{index}__SourceType` and `AzureAd__ClientCredentials__{index}__Base64EncodedValue`. Container and other non-.NET resources retain their existing upper-snake-case naming convention. No certificate path, store access, bind mount, or image-build secret is needed. **Base64 is not encryption**: these are sensitive runtime environment values, accessible to the workload and to sufficiently privileged local/container tooling. Do not log them. Local credentials and paths are excluded from published manifests and deployment artifacts.
+
+The provisioning identity needs the existing registration-creation/update permissions. For delegated Graph access, `Application.ReadWrite.All` permits this; an application identity can use `Application.ReadWrite.OwnedBy` for registrations it owns, subject to tenant policy and consent. Aspire does not make a separate Graph request to read certificate credentials. The workloads do not need these Graph management permissions. See [Update application](https://learn.microsoft.com/graph/api/application-update) and [Certificate credentials](https://learn.microsoft.com/entra/identity-platform/certificate-credentials).
+
+AppHost shutdown and Azure resource-group deletion do not delete the local PFX or the tenant-scoped registration. Delete the registration/service principal separately when finished; remove the resource's PFX from the AppHost store if you also want to discard its local credential. A public key may remain until a subsequent deployment replaces it. Existing registrations remain caller-managed: this API rejects `AddExistingEntraApplication` and conversion with `AsExistingApplication`.
+
 ### Client secret
 
 ```csharp
@@ -200,24 +617,98 @@ The parameter must be created with `secret: true`.
 
 ### Federated identity credential with managed identity
 
-For deployed applications, use a federated identity credential so that no secret is stored:
+For deployed applications, use a federated managed identity credential so that no secret is stored. Aspire creates the registration, and the registration trusts the managed identity of each workload that references it:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .PublishWithFederatedManagedIdentityCredential();
+
+builder.AddDotnetProject("web", "../Web/Web.csproj")
+       .WithReference(entraWeb);
+```
+
+Referencing the registration makes the workload need a user-assigned managed identity when published, the same way referencing an Azure resource does. The workload uses the identity it already has (for example from `WithAzureUserAssignedIdentity`), or the Azure environment creates one. The federated credential uses the tenant's v2.0 issuer, the identity's **object (principal) ID** as the subject, and the token-exchange audience of the application's cloud (Azure public, US Government and China are supported; other clouds fail with an error). The workload receives the identity's **client ID** as `ManagedIdentityClientId`. Deployment order is identity, then registration, then workload.
+
+To trust only specific workloads, or a specific identity, pass them. A workload passed this way must also reference the registration, and only it receives the credential:
+
+```csharp
+var entraWeb = builder.AddEntraIdApplication("entra-web");
+var web = builder.AddDotnetProject("web", "../Web/Web.csproj").WithReference(entraWeb);
+
+entraWeb.PublishWithFederatedManagedIdentityCredential(web);
+```
+
+```csharp
+var identity = builder.AddAzureUserAssignedIdentity("web-identity");
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .PublishWithFederatedManagedIdentityCredential(identity);
+
+builder.AddDotnetProject("web", "../Web/Web.csproj")
+       .WithAzureUserAssignedIdentity(identity)
+       .WithReference(entraWeb);
+```
+The federated credential only changes how the app authenticates as itself. Interactive user sign-in still needs a redirect URI registered on the app registration. Derive it from the web app's endpoint with `WithRedirectUris(web.GetEndpoint("https"), "/signin-oidc")`, which uses the compute environment's host when deployed, so it does not make the registration depend on the web app.
+
+Managed identities exist only in Azure, so `PublishWithFederatedManagedIdentityCredential` is not used when running locally. For Aspire-created registrations, combine it with `RunWithLocalDeveloperCertificateCredential` as shown above; the local workload does not probe an unavailable managed identity.
+
+#### Existing registrations
+
+Aspire never modifies an existing registration, so `PublishWithFederatedManagedIdentityCredential` throws for `AddExistingEntraApplication`. Create the trust yourself, then use `WithFederatedManagedIdentityCredential` with the managed identity's client ID. It only configures the app, and applies when running locally as well as when publishing:
 
 ```csharp
 var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId: tenantId, clientId: webClientId)
-                      .WithFicMsi("00001111-aaaa-2222-bbbb-3333cccc4444");
+                      .WithFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444");
 ```
 
-Pass the **Client ID of a user-assigned managed identity**, not its object (principal) ID or Azure resource ID. The identity must be assigned to the workload and belong to the same tenant as the registration. Entra's managed-identity federation scenario supports user-assigned identities only; a system-assigned identity is not a supported replacement.
-
-`WithFicMsi` configures Microsoft.Identity.Web; it does **not** create the managed identity, assign it to the workload, or add a federated credential to the registration. Configure that trust first, using the identity's **object (principal) ID** as the subject, the tenant's v2 issuer, and the token-exchange audience for the cloud. See [Configure an application to trust a managed identity](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity).
-
+Add a federated credential to the registration with the tenant's v2.0 issuer (`https://login.microsoftonline.com/<tenant-id>/v2.0` in the Azure public cloud), the identity's **principal (object) ID** as the subject, and `api://AzureADTokenExchange` as the audience. Pass the identity's **client ID**, not its principal ID, to `WithFederatedManagedIdentityCredential`. See [Configure an application to trust a managed identity](https://learn.microsoft.com/entra/workload-id/workload-identity-federation-config-app-trust-managed-identity).
 Federation authenticates as the app registration using a managed identity assertion. It is different from acquiring a token directly as the managed identity. It also does not enable mTLS proof-of-possession: that requires downstream API `ProtocolScheme = "MTLS_POP"` and the transport/certificate support described in Microsoft's [bound-credentials guidance](https://github.com/AzureAD/microsoft-identity-web/tree/master/.github/skills/boundcredentials).
 
 ### Certificate from Azure Key Vault
 
+Reference a Key Vault modeled in the AppHost instead of hard-coding its URL:
+
+**C#**
+
 ```csharp
+var vault = builder.AddAzureKeyVault("vault");
 var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId: tenantId, clientId: webClientId)
-                      .WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
+                      .WithCertificateFromKeyVault(vault, "MyCert");
+
+builder.AddProject<Projects.Web>("web").WithReference(entraWeb);
+```
+
+**TypeScript**
+
+```typescript
+const vault = await builder.addAzureKeyVault("vault");
+const entraWeb = await builder.addExistingEntraApplication("entra-web", tenantId, webClientId)
+    .withCertificateFromKeyVault(vault, "MyCert");
+
+await builder.addContainer("web", "my-web-image").withReference(entraWeb);
+```
+
+The vault URI remains a deferred resource reference: local runs resolve the vault output (or its emulator
+endpoint), while published configuration retains the vault output reference. Workloads need the
+**Key Vault Certificate User** role to read the certificate with its private key. When running locally, the
+vault's default roles are extended with it for the developer identity. When publishing, each workload that
+references the Entra application receives it, so the publish target must support role assignments (for example
+`AddAzureContainerAppEnvironment`); otherwise publishing fails.
+Use `WithRoleAssignments` on a workload before referencing the Entra application to replace its assignment, including an
+empty role list to manage access yourself. When running locally, roles come from the vault's defaults instead of
+the workload, so call `ClearDefaultRoleAssignments` on the vault before `WithCertificateFromKeyVault` to stop Aspire
+from granting any roles to your developer identity, and assign them yourself. An existing vault can be modeled with `RunAsExisting` or
+`PublishAsExisting`, and its access policies or RBAC configuration must allow certificate retrieval.
+
+The certificate must already exist in the vault, have an exportable private key, and have its public key
+registered on the Entra application. This helper neither creates the certificate nor uploads it to the
+registration. Microsoft.Identity.Web always retrieves the latest certificate version; it has no setting to select
+a specific one. See the [Microsoft.Identity.Web Key Vault loader](https://github.com/AzureAD/microsoft-identity-web/blob/master/src/Microsoft.Identity.Web.Certificate/KeyVaultCertificateLoader.cs).
+
+When the vault is managed outside the AppHost, pass its URL instead. In that case, configure access and
+identity yourself:
+
+```csharp
+entraWeb.WithCertificateFromKeyVault("https://myvault.vault.azure.net", "MyCert");
 ```
 
 ### Certificate from the certificate store
@@ -247,15 +738,25 @@ var entraApi = builder.AddExistingEntraApplication("entra-api", tenantId: tenant
                       .WithInstance("https://login.microsoftonline.us/");
 ```
 
+`EntraIdApi.MicrosoftGraph` and the other built-in APIs use their global-cloud URLs. In a sovereign cloud, define the API yourself with the cloud's resource URI and base URL, and request its permissions by ID:
+
+```csharp
+var graph = EntraIdApi.FromApplicationId(
+    "Microsoft Graph", "00000003-0000-0000-c000-000000000000", "https://graph.microsoft.us", baseUrl: "https://graph.microsoft.us/v1.0");
+
+var entraWeb = builder.AddEntraIdApplication("entra-web")
+                      .WithApiPermissions(graph, EntraIdApiPermission.Delegated("User.Read", new Guid("e1fe6dd8-ba31-4d61-89e7-88639da4683d")));
+```
+
 ## Current limitations
 
 The integration can reference existing registrations or create registrations and service principals. It doesn't yet:
 
-* Automatically add the referencing resources' URLs as redirect URIs.
-* Expose API scopes or grant API permissions.
+* Assign application roles to users, groups, or applications, including granting a client an app role that an Aspire-modeled API declares with `WithAppRole`.
+* Delete the last application role. When no roles are declared, Aspire doesn't send `appRoles`, so keep the last role declared with `isEnabled: false`, or delete it in the Microsoft Entra admin center.
 * Create, store, or rotate client secrets and certificates.
 
-Existing registrations are never modified. Continue configuring their redirect URIs, API permissions, and credentials in the [Microsoft Entra admin center](https://entra.microsoft.com).
+Existing registrations are never modified. Continue configuring their redirect URIs, exposed scopes, API permissions, and credentials in the [Microsoft Entra admin center](https://entra.microsoft.com).
 
 ## Additional documentation
 

@@ -14,6 +14,12 @@ public class OtlpInstrumentSummary
     public required string Unit { get; init; }
     public required OtlpInstrumentType Type { get; init; }
     public required OtlpAggregationTemporality AggregationTemporality { get; init; }
+
+    /// <summary>
+    /// Gets whether a <see cref="OtlpInstrumentType.Sum"/> only increases (a counter) rather than
+    /// going up and down (an up-down counter). Always <see langword="false"/> for other types.
+    /// </summary>
+    public required bool IsMonotonic { get; init; }
     public required OtlpScope Parent { get; init; }
     public required OtlpResourceView ResourceView { get; init; }
 

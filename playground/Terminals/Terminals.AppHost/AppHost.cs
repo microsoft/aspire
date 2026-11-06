@@ -17,11 +17,7 @@ builder.AddCSharpApp("palette-test", "Scripts/palette-test.cs")
     });
 
 builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
-    .WithTerminal(options =>
-    {
-        options.Columns = 120;
-        options.Rows = 32;
-    });
+    .WithTerminal();
 #pragma warning restore CS0618
 
 builder.AddPostgres("postgres").WithRepl();
@@ -35,7 +31,7 @@ builder.AddSqlServer("sqlserver").WithRepl();
 // own pseudo-terminal and the dashboard can attach to any of them via
 // `/api/terminal?resource=<instance-name>`. The replica index is forwarded as
 // an environment variable so the REPL can stamp it on its banner.
-builder.AddProject<Projects.Terminals_Repl>("repl")
+builder.AddDotnetProject("repl", "../Terminals.Repl/Terminals.Repl.csproj")
     .WithReplicas(2)
     .WithEnvironment("ASPIRE_RESOURCE_NAME", "repl")
     .WithTerminal(options =>
@@ -114,6 +110,19 @@ else
         .WithTerminal();
 }
 
+foreach (var (columns, rows) in new[] { (80, 24), (90, 30) })
+{
+    var name = $"shell{columns}x{rows}";
+    var shell = OperatingSystem.IsWindows()
+        ? builder.AddExecutable(name, "cmd.exe", ".")
+        : builder.AddExecutable(name, "/bin/bash", ".", "-i", "-l");
+    shell.WithTerminal(options =>
+    {
+        options.Columns = columns;
+        options.Rows = rows;
+    });
+}
+
 builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
     .WithTerminal(options =>
     {
@@ -130,7 +139,7 @@ builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 #endif
 
 builder.Build().Run();

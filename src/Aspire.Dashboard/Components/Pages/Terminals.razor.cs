@@ -69,6 +69,9 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
+
     [Parameter]
     public string? ResourceName { get; set; }
 
@@ -116,13 +119,30 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
             return;
         }
 
+        if (ResourcesLayout is not null)
+        {
+            var location = ResourcesLayout.ParseLocation(NavigationManager.ToBaseRelativePath(NavigationManager.Uri));
+            // The outgoing page can receive cascading parameters while the layout already shows the next route.
+            // Don't canonicalize its stale resource back into the URL during navigation or browser history changes.
+            if (location.Tab != ResourceTab.Terminal ||
+                !string.Equals(location.RouteResourceName, ResourceName, StringComparisons.ResourceName))
+            {
+                return;
+            }
+        }
+
         if (!_resourceByName.Values.Any(ResourceSelectHelpers.HasUsableTerminal))
         {
             RedirectToResources();
             return;
         }
 
-        if (await this.InitializeViewModelAsync())
+        // The modern resource list owns selection; a saved terminal must not override its URL.
+        if (ResourcesLayout is not null)
+        {
+            await UpdateViewModelFromQueryAsync(PageViewModel);
+        }
+        else if (await this.InitializeViewModelAsync())
         {
             return;
         }
@@ -201,10 +221,13 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
 
     public async Task UpdateViewModelFromQueryAsync(TerminalsViewModel viewModel)
     {
+        var location = NavigationManager.Uri;
         viewModel.SelectedResource = FindResource(ResourceName);
         var url = GetUrlFromSerializableViewModel(ConvertViewModelToSerializable());
         await SessionStorage.SetAsync(SessionStorageKey, ConvertViewModelToSerializable());
-        if (NavigationManager.ToBaseRelativePath(NavigationManager.Uri) != url.TrimStart('/'))
+        // Persisting state yields to navigation. Never canonicalize an earlier route over a newer selection.
+        if (string.Equals(location, NavigationManager.Uri, StringComparison.Ordinal) &&
+            NavigationManager.ToBaseRelativePath(location) != url.TrimStart('/'))
         {
             NavigationManager.NavigateTo(url, new NavigationOptions { ReplaceHistoryEntry = true });
         }
@@ -213,6 +236,13 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
     public string GetUrlFromSerializableViewModel(TerminalsPageState serializable)
     {
         var resource = FindResource(serializable.SelectedResource);
+        if (ResourcesLayout is not null && GetResourceName(resource) is { } resourceName)
+        {
+            var location = new Uri(NavigationManager.Uri);
+            return DashboardUrls.SetResourceTerminalFocus(
+                DashboardUrls.ResourceOverviewUrl(resourceName) + location.Query + location.Fragment, focused: true);
+        }
+
         return DashboardUrls.TerminalsUrl(GetResourceName(resource));
     }
 
@@ -260,7 +290,7 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
                     .Take(DashboardUIHelpers.MaxHighlightedCommands));
             }
             ResourceMenuBuilder.AddMenuItems(_resourceMenuItems, resource, _resourceByName,
-                EventCallback.Factory.Create(this, () => NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(resource: resource.Name))),
+                EventCallback.Factory.Create(this, () => NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(resource.Name))),
                 EventCallback.Factory.Create<CommandViewModel>(this, ExecuteResourceCommandAsync),
                 (r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name),
                 showViewDetails: true, showTerminalItem: false, showConsoleLogsItem: true, showUrls: true);

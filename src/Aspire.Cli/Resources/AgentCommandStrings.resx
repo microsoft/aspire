@@ -118,16 +118,19 @@
     <value>MCP: {0}</value>
   </data>
   <data name="InitCommand_SelectScopePrompt" xml:space="preserve">
-    <value>Installation scope</value>
+    <value>Where should skills and tools be installed?</value>
   </data>
   <data name="InitCommand_NoConfigurationSelected" xml:space="preserve">
     <value>No agent configuration selected. Existing configuration was left unchanged.</value>
   </data>
+  <data name="ConfigurationWriteRefused" xml:space="preserve">
+    <value>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</value>
+  </data>
   <data name="InitCommand_ProjectScope" xml:space="preserve">
-    <value>Project (Install in your workspace root; committed with your project)</value>
+    <value>This project (In your workspace, ready to commit with your project)</value>
   </data>
   <data name="InitCommand_GlobalScope" xml:space="preserve">
-    <value>Global (Install in your home directory; available across all projects)</value>
+    <value>Global (In your home directory, available across all projects)</value>
   </data>
   <data name="InitCommand_EnvironmentLocationDescription" xml:space="preserve">
     <value>{0}: {1}</value>
@@ -136,7 +139,7 @@
     <value>Configure Aspire MCP for {0} at {1}</value>
   </data>
   <data name="InitCommand_SelectSkills" xml:space="preserve">
-    <value>Which skills should be installed?</value>
+    <value>Which skills and tools do you want to configure?</value>
   </data>
   <data name="InitCommand_ConfigureMcpServerPrompt" xml:space="preserve">
     <value>Configure the Aspire MCP server for selected agent environments?</value>
@@ -168,23 +171,18 @@
   <data name="InitCommand_TelemetryHookSkippedUnexpectedShape" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration has an unexpected shape.</value>
   </data>
+  <data name="TelemetryHookScriptUpdateFailed" xml:space="preserve">
+    <value>Could not update the telemetry hook script '{0}': {1}</value>
+    <comment>{0} is the hook script path. {1} is the underlying error message.</comment>
+  </data>
   <data name="InitCommand_TelemetryHookWriteFailed" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration could not be written.</value>
-  </data>
-  <data name="SkillDescription_Aspire" xml:space="preserve">
-    <value>Aspire CLI commands and workflows for distributed apps</value>
-  </data>
-  <data name="SkillDescription_AspireDeployment" xml:space="preserve">
-    <value>Aspire deployment target selection, preflight, publish, and deploy workflows</value>
   </data>
   <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
     <value>Browser automation and functional testing</value>
   </data>
   <data name="SkillDescription_DotnetInspect" xml:space="preserve">
     <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
-  </data>
-  <data name="SkillDescription_Aspireify" xml:space="preserve">
-    <value>One-time setup: wire up AppHost with discovered projects</value>
   </data>
   <data name="Environment_Copilot" xml:space="preserve">
     <value>GitHub Copilot</value>
@@ -194,36 +192,6 @@
   </data>
   <data name="Environment_OpenCode" xml:space="preserve">
     <value>OpenCode</value>
-  </data>
-  <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
-    <value>Installing Aspire skills...</value>
-  </data>
-  <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
-    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>
-  </data>
-  <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
-    <value>The Aspire skills bundle is invalid: {0}</value>
-  </data>
-  <data name="AspireSkillsInstaller_InvalidMetadata" xml:space="preserve">
-    <value>Embedded Aspire skills bundle metadata is invalid: {0}</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataVersion" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a version.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MetadataRepositoryMismatch" xml:space="preserve">
-    <value>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataTag" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a GitHub release tag.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataAssetName" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify a release asset name.</value>
-  </data>
-  <data name="AspireSkillsInstaller_MissingMetadataSha512" xml:space="preserve">
-    <value>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</value>
-  </data>
-  <data name="AspireSkillsInstaller_ArchiveHashVerificationFailed" xml:space="preserve">
-    <value>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</value>
   </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
@@ -271,7 +239,7 @@
     <value>Invalid scope '{0}'. Use 'project' or 'global'.</value>
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
-    <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+    <value>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</value>
   </data>
   <data name="InitCommand_McpOptionDescription" xml:space="preserve">
     <value>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</value>
@@ -299,5 +267,42 @@
   </data>
   <data name="AgentTelemetryCommand_TimestampDescription" xml:space="preserve">
     <value>The timestamp recorded for the event</value>
+  </data>
+  <data name="InitCommand_ExistingConfigurationConflict" xml:space="preserve">
+    <value>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</value>
+    <comment>{0} identifies the conflicting JSON setting or environment override.</comment>
+  </data>
+  <data name="InitCommand_InvalidSkills" xml:space="preserve">
+    <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
+  </data>
+  <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
+    <value>Agent assets from configured skill sources</value>
+  </data>
+  <data name="InitCommand_FailedTarget" xml:space="preserve">
+    <value>Failed to configure Aspire plugin:
+  {0}</value>
+    <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
+  </data>
+  <data name="InitCommand_LocalSkillsConflict" xml:space="preserve">
+    <value>Local Aspire skill files may override plugin skills
+{0}</value>
+    <comment>{0} lists the local skill entry-point paths, one per line.</comment>
+  </data>
+  <data name="InitCommand_SkillSources" xml:space="preserve">
+    <value>Skill sources:
+{0}</value>
+    <comment>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</comment>
+  </data>
+  <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
+    <value>Configured Aspire plugin:
+  {0}</value>
+    <comment>{0} lists one agent per line, with that agent's configuration paths comma-separated.</comment>
+  </data>
+  <data name="InitCommand_ConfigurationTarget" xml:space="preserve">
+    <value>{0}: {1}</value>
+    <comment>{0} is the agent name, and {1} lists its configuration paths separated by commas.</comment>
+  </data>
+  <data name="LocalSkills_ReadFailed" xml:space="preserve">
+    <value>Could not check local Aspire skills at '{0}': {1}</value>
   </data>
 </root>

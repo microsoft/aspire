@@ -12,8 +12,9 @@ using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 
-public class PlaywrightCliInstallerTests
+public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
 {
+    private readonly AgentConfigurationTestContext _context = new(output);
     private static readonly IReadOnlySet<string> s_emptySkillDirs = new HashSet<string>();
 
     private static string CreateTestRepoRoot()
@@ -49,7 +50,7 @@ public class PlaywrightCliInstallerTests
                 InstallSkillsResult = true,
                 OnInstallSkills = stagingRoot =>
                 {
-                    var directory = Path.Combine(stagingRoot, PlaywrightCliInstaller.s_primarySkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
+                    var directory = Path.Combine(stagingRoot, FakePlaywrightCliRunner.SkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
                     Directory.CreateDirectory(Path.Combine(directory, "references"));
                     File.WriteAllText(Path.Combine(directory, "SKILL.md"), "generated skill");
                     File.WriteAllText(Path.Combine(directory, "references", "commands.md"), "generated commands");
@@ -61,7 +62,7 @@ public class PlaywrightCliInstallerTests
                     }
                 }
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
                 new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
             var sharedDirectory = Path.Combine(root.FullName, scope, ".agents", "skills");
             var destinations = new HashSet<string>
@@ -102,7 +103,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner { ResolveResult = new NpmPackageInfo { Version = version } };
             var playwrightRunner = new TestPlaywrightCliRunner { InstalledVersion = version, InstallSkillsResult = false };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
                 new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, message) = await installer.InstallSelectedAsync(
@@ -139,7 +140,7 @@ public class PlaywrightCliInstallerTests
             var version = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
             var npmRunner = new TestNpmRunner { ResolveResult = new NpmPackageInfo { Version = version } };
             var playwrightRunner = new TestPlaywrightCliRunner { InstalledVersion = version, InstallSkillsResult = true };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
                 new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, message) = await installer.InstallSelectedAsync(selectedDirectories, CancellationToken.None);
@@ -176,7 +177,7 @@ public class PlaywrightCliInstallerTests
                 InstallSkillsResult = true,
                 OnInstallSkills = _ => { }
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
                 new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, message) = await installer.InstallSelectedAsync(
@@ -212,7 +213,7 @@ public class PlaywrightCliInstallerTests
                 OnInstallSkills = directory =>
                 {
                     stagingRoot = directory;
-                    var skillDirectory = Path.Combine(directory, PlaywrightCliInstaller.s_primarySkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
+                    var skillDirectory = Path.Combine(directory, FakePlaywrightCliRunner.SkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
                     Directory.CreateDirectory(skillDirectory);
                     var skillFile = Path.Combine(skillDirectory, "SKILL.md");
                     File.WriteAllText(skillFile, "# Playwright CLI Skill");
@@ -221,7 +222,7 @@ public class PlaywrightCliInstallerTests
                     File.SetAttributes(readOnlyFile, FileAttributes.ReadOnly);
                 }
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(),
                 new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
             var destination = Path.Combine(root.FullName, "skills");
 
@@ -260,7 +261,7 @@ public class PlaywrightCliInstallerTests
                 ResolveResult = null
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -293,7 +294,7 @@ public class PlaywrightCliInstallerTests
                 InstalledVersion = version,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -329,7 +330,7 @@ public class PlaywrightCliInstallerTests
                 InstalledVersion = version,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -363,7 +364,7 @@ public class PlaywrightCliInstallerTests
                 InstalledVersion = installedVersion,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, _) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -394,7 +395,7 @@ public class PlaywrightCliInstallerTests
                 PackResult = null
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -433,7 +434,7 @@ public class PlaywrightCliInstallerTests
             {
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
@@ -478,7 +479,7 @@ public class PlaywrightCliInstallerTests
             };
             var provenanceChecker = new TestNpmProvenanceChecker();
             var playwrightRunner = new TestPlaywrightCliRunner { InstallSkillsResult = true };
-            var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
             var repoRoot = CreateTestRepoRoot();
 
             try
@@ -521,7 +522,7 @@ public class PlaywrightCliInstallerTests
                 InstallGlobalResult = false
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
@@ -569,7 +570,7 @@ public class PlaywrightCliInstallerTests
                 InstalledVersion = installedVersion,
                 InstallSkillsResult = true
             };
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
@@ -630,7 +631,7 @@ public class PlaywrightCliInstallerTests
             };
             var provenanceChecker = new TestNpmProvenanceChecker();
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -668,7 +669,7 @@ public class PlaywrightCliInstallerTests
             };
             var provenanceChecker = new TestNpmProvenanceChecker { ProvenanceOutcome = ProvenanceVerificationOutcome.SourceRepositoryMismatch };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -711,7 +712,7 @@ public class PlaywrightCliInstallerTests
                     [PlaywrightCliInstaller.DisablePackageValidationKey] = "true"
                 })
                 .Build();
-            var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
 
             var repoRoot = CreateTestRepoRoot();
             try
@@ -756,7 +757,7 @@ public class PlaywrightCliInstallerTests
                     [PlaywrightCliInstaller.VersionOverrideKey] = "0.2.0"
                 })
                 .Build();
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
 
             // PackAsync returns null by default — we only care about the resolved range
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
@@ -795,7 +796,7 @@ public class PlaywrightCliInstallerTests
                     [PlaywrightCliInstaller.VersionOverrideKey] = invalidVersion
                 })
                 .Build();
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
 
             var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
@@ -826,7 +827,7 @@ public class PlaywrightCliInstallerTests
                 ResolveResult = new NpmPackageInfo { Version = version }
             };
             var playwrightRunner = new TestPlaywrightCliRunner();
-            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+            var installer = new PlaywrightCliInstaller(_context.Clients, npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
 
             // PackAsync returns null by default — we only care about the resolved range
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
@@ -871,6 +872,7 @@ public class PlaywrightCliInstallerTests
             };
 
             var installer = new PlaywrightCliInstaller(
+                _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
@@ -967,6 +969,7 @@ public class PlaywrightCliInstallerTests
             };
 
             var installer = new PlaywrightCliInstaller(
+                _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
@@ -1018,6 +1021,7 @@ public class PlaywrightCliInstallerTests
             };
 
             var installer = new PlaywrightCliInstaller(
+                _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
@@ -1068,6 +1072,7 @@ public class PlaywrightCliInstallerTests
             };
 
             var installer = new PlaywrightCliInstaller(
+                _context.Clients,
                 npmRunner, new TestNpmProvenanceChecker(), playwrightRunner,
                 new TestInteractionService(), new ConfigurationBuilder().Build(),
                 NullLogger<PlaywrightCliInstaller>.Instance);
@@ -1225,6 +1230,8 @@ public class PlaywrightCliInstallerTests
         }
     }
 
+    public void Dispose() => _context.Dispose();
+
     private sealed class TestNpmRunner : INpmRunner
     {
         public bool IsAvailable => true;
@@ -1309,7 +1316,7 @@ public class PlaywrightCliInstallerTests
             }
             else if (InstallSkillsResult)
             {
-                var directory = Path.Combine(workingDirectory, PlaywrightCliInstaller.s_primarySkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
+                var directory = Path.Combine(workingDirectory, FakePlaywrightCliRunner.SkillBaseDirectory, PlaywrightCliInstaller.PlaywrightCliSkillName);
                 Directory.CreateDirectory(directory);
                 File.WriteAllText(Path.Combine(directory, "SKILL.md"), "# Playwright CLI Skill");
             }

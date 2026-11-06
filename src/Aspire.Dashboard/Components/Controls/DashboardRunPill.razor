@@ -1,0 +1,11 @@
+@* Shown in the middle of the header while a recording is displayed, so it's obvious the page isn't live. It
+   opens the recordings panel, like the recordings button. *@
+<button type="button"
+        class="dashboard-run-pill"
+        data-tooltip="@Title"
+        aria-label="@AccessibleLabel"
+        aria-haspopup="dialog"
+        @onclick="@OnClick">
+    <DashboardRunIndicator IsLive="false" />
+    <span class="dashboard-run-pill-text">@RunText</span>
+</button>

@@ -46,7 +46,14 @@ public class AuxiliaryBackchannelMonitorTests(ITestOutputHelper outputHelper)
                 await cancellation.CancelAsync();
             }
 
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+            try
+            {
+                // Cancellation can complete the watcher channel before its pending read is canceled.
+                Assert.False(await next.DefaultTimeout());
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+            }
         }
         finally
         {

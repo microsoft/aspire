@@ -1,0 +1,2656 @@
+.resources-layout {
+    /* --resource-pane-expanded-width is set inline once the user resizes the pane. */
+    --resource-pane-width: var(--resource-pane-expanded-width, 420px);
+    --resource-row-height: var(--aspire-density-resource-row-height, 52px);
+    --resource-row-icon-size: 32px;
+    --resource-row-font-size: var(--fontSizeBase300);
+    --resource-row-line-height: var(--lineHeightBase300);
+    --resource-secondary-font-size: var(--fontSizeBase200);
+    --resource-secondary-line-height: 18px;
+    --resource-insight-height: 28px;
+    --resource-insight-icon-size: 14px;
+    --resource-insight-padding: 6px;
+    --resource-insight-gap: var(--spacingHorizontalXS);
+    --resource-insight-request-width: 132px;
+    --resource-insight-latency-width: 120px;
+    --resource-insight-failure-width: 36px;
+    --resource-row-icon-offset: 10px;
+    --resource-row-depth-step: 24px;
+    --resource-brand-soft: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
+    --resource-pane-motion-duration: var(--durationNormal, 200ms);
+    --resource-pane-motion-easing: var(--curveEasyEase, cubic-bezier(.33, 0, .67, 1));
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    container: resource-workspace / inline-size;
+    background: var(--aspire-page-background);
+}
+
+.resource-pane-list.density-compact {
+    --resource-row-height: var(--aspire-density-resource-row-height, 44px);
+    --resource-row-font-size: var(--fontSizeBase200);
+    --resource-row-line-height: var(--lineHeightBase200);
+    --resource-secondary-font-size: 11px;
+    --resource-secondary-line-height: 16px;
+    --resource-insight-height: 24px;
+    --resource-insight-icon-size: 12px;
+    --resource-insight-padding: var(--spacingHorizontalXS);
+    --resource-insight-request-width: 116px;
+    --resource-insight-latency-width: 108px;
+    --resource-insight-failure-width: 32px;
+}
+
+.resource-pane-list.density-spacious {
+    --resource-row-height: var(--aspire-density-resource-row-height, 60px);
+    --resource-row-font-size: var(--fontSizeBase400);
+    --resource-row-line-height: var(--lineHeightBase400);
+    --resource-secondary-font-size: var(--fontSizeBase300);
+    --resource-secondary-line-height: 20px;
+    --resource-insight-height: 32px;
+    --resource-insight-icon-size: 16px;
+    --resource-insight-padding: var(--spacingHorizontalS);
+    --resource-insight-gap: 6px;
+    --resource-insight-request-width: 156px;
+    --resource-insight-latency-width: 136px;
+    --resource-insight-failure-width: 40px;
+}
+
+/* Keep the pane mounted while its grid track closes. Visibility waits for motion to
+   finish; inert and pointer-events exclude it from interaction immediately. */
+.resources-layout.pane-collapsed .resource-pane {
+    visibility: hidden;
+    pointer-events: none;
+    border-right: 0;
+}
+
+.resources-layout.pane-collapsed .resource-pane-foot {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* A presentation of the same pane, not a second list or a saved navigation preference. */
+.resources-layout.pane-full-canvas .resource-pane {
+    position: relative;
+    inset: auto;
+    flex: 1 1 auto;
+    width: 100%;
+    border-right: 0;
+}
+
+.resources-layout.pane-full-canvas .resource-pane::after {
+    display: none;
+}
+
+.resources-layout.pane-full-canvas .resource-content-foot {
+    display: none;
+}
+
+.resources-layout.pane-full-canvas .resource-content {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.resources-layout.pane-full-canvas .resource-workspace-foot {
+    grid-template-columns: minmax(0, 100%) minmax(0, 0fr);
+}
+
+.resources-layout.pane-full-canvas .resource-pane-foot {
+    border-right: 0;
+}
+
+.resources-layout.pane-full-canvas .resource-workspace-foot .resource-pane-foot {
+    padding-inline-end: 6px;
+}
+
+/* Animate the real region, so container-width disclosure follows the moving boundary.
+   Unrelated navigation cancels motion; pointer resizing must remain immediate. */
+.resources-layout,
+.resource-pane,
+.resource-content,
+.resource-workspace-foot {
+    /* General-purpose transitions must not continue a canceled reveal or animate a deep link. */
+    transition: none;
+}
+
+.resources-layout.pane-motion-enabled,
+.resources-layout.pane-motion-enabled .resource-workspace-foot {
+    transition: grid-template-columns var(--resource-pane-motion-duration) var(--resource-pane-motion-easing);
+}
+
+.resources-layout.pane-motion-enabled .resource-pane {
+    transition: width var(--resource-pane-motion-duration) var(--resource-pane-motion-easing),
+        margin-inline var(--resource-pane-motion-duration) var(--resource-pane-motion-easing),
+        visibility 0s;
+}
+
+.resources-layout.pane-motion-enabled.pane-collapsed .resource-pane {
+    transition-delay: 0s, 0s, var(--resource-pane-motion-duration);
+}
+
+.resources-layout:has(.resource-pane-resizer.resizing),
+.resources-layout:has(.resource-pane-resizer.resizing) .resource-workspace-foot {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .resources-layout.pane-motion-enabled,
+    .resources-layout.pane-motion-enabled .resource-workspace-foot,
+    .resources-layout.pane-motion-enabled .resource-pane {
+        transition: none;
+    }
+}
+
+/* Resource pane */
+
+.resource-pane {
+    container: resource-pane / inline-size;
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 var(--resource-pane-width);
+    width: var(--resource-pane-width);
+    min-width: 0;
+    position: relative;
+    border-right: 1px solid var(--colorNeutralStroke3);
+    background: var(--aspire-page-background);
+}
+
+/* Clip the moving boundary without clipping the resizer outside the pane edge. */
+.resource-pane-contents {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* The resizer straddles the pane's right border so it's easy to grab. */
+.resource-pane-resizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    z-index: 5;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.resource-pane-resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    transition: background-color .15s;
+}
+
+.resource-pane-resizer:hover::after,
+.resource-pane-resizer.resizing::after,
+.resource-pane-resizer:focus-visible::after {
+    background: var(--colorBrandStroke1);
+}
+
+.resource-pane-resizer:focus-visible {
+    outline: none;
+}
+
+.resource-pane-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 12px 8px;
+    box-sizing: border-box;
+    height: 52px;
+    flex-shrink: 0;
+}
+
+.resource-pane-head ::deep .aspire-menu-container:has(.resource-grouping-menu-item) fluent-menu-list {
+    /* Match the filter's viewport-bounded anchor area, including inline/block
+       collision fallbacks. Fluent supplies the button's position-anchor. */
+    inset: auto !important;
+    position-area: bottom span-right;
+    justify-self: start;
+    margin: 4px 0 12px;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    position-try-order: most-height;
+    box-sizing: border-box;
+    min-width: min(220px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100% - 16px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
+    border: 1px solid var(--colorNeutralStroke1);
+}
+
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item {
+    width: calc(100% - 8px);
+    height: 34px;
+    min-height: 34px;
+}
+
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item[checked] {
+    background: var(--colorSubtleBackgroundHover);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item > .aspire-menu-item-indicator {
+    color: var(--colorBrandForeground1);
+}
+
+::deep .resource-pane-search {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+::deep .resource-pane-search > fluent-text-input,
+::deep fluent-text-input.resource-pane-search {
+    width: 100%;
+}
+
+.state-dot {
+    display: inline-block;
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--colorNeutralForeground3);
+}
+
+.state-dot.state-success {
+    background: var(--success);
+}
+
+.state-dot.state-error {
+    background: var(--error);
+}
+
+.state-dot.state-warning {
+    background: var(--warning);
+}
+
+.state-dot.state-pending {
+    background: transparent;
+    border: 1.5px solid var(--warning);
+}
+
+.state-dot.state-neutral {
+    background: var(--colorNeutralStroke1);
+}
+
+.resource-pane-list {
+    --resource-insight-width: calc(var(--resource-insight-request-width) + var(--resource-insight-latency-width) + var(--resource-insight-failure-width) + var(--spacingHorizontalS));
+    --resource-group-boundary-gap: var(--spacingVerticalXS);
+    --resource-group-header-gap: var(--spacingVerticalXS);
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-inline: 6px;
+    overflow: auto;
+}
+
+.resource-pane-section-label {
+    padding: 12px 6px 5px;
+    color: var(--colorNeutralForeground3);
+    font-size: 11px;
+    font-weight: var(--fontWeightSemibold);
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+.resource-pane-section-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: var(--resource-group-boundary-gap) 0 var(--resource-group-header-gap);
+    padding: 8px 6px 5px;
+    border: 0;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    font: inherit;
+    font-size: 11px;
+    font-weight: var(--fontWeightSemibold);
+    line-height: 16px;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.resource-pane-section-header:hover {
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-pane-section-count {
+    min-width: 20px;
+    margin-left: 6px;
+    padding-inline: 5px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    line-height: 18px;
+    text-align: center;
+}
+
+.resource-pane-section-chevron {
+    display: inline-flex;
+    margin-left: auto;
+    transition: transform .15s ease;
+}
+
+.resource-pane-section-chevron.collapsed {
+    transform: rotate(-90deg);
+}
+
+.resource-pane-message {
+    display: flex;
+    justify-content: center;
+    padding: 16px 8px;
+    color: var(--colorNeutralForeground2);
+    font-size: 13px;
+}
+
+.resource-pane-group {
+    margin: 10px 6px 4px;
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.resource-tag-group {
+    /* Contain the last row's margin instead of collapsing it between groups. */
+    display: flow-root;
+    position: relative;
+    padding: 0;
+}
+
+.resource-tag-group + .resource-tag-group {
+    margin-top: var(--resource-group-boundary-gap);
+}
+
+.resource-tag-group > .resource-row:last-child {
+    margin-bottom: 0;
+}
+
+.resource-pane-list > .resource-row:has(+ .resource-pane-section-header) {
+    margin-bottom: 0;
+}
+
+.resource-tag-header {
+    display: flex;
+    align-items: center;
+    position: relative;
+    margin-bottom: var(--resource-group-header-gap);
+    border-radius: 8px;
+}
+
+.resource-tag-header:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+}
+
+.resource-tag-header.selected {
+    background: var(--aspire-control-background);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.resource-tag-header.selected::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--colorBrandBackground);
+}
+
+/* Matches the resource row link so the tag icon lines up with the resource icons below it. */
+.resource-tag-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    min-height: 30px;
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: var(--colorNeutralForeground1);
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.resource-tag-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-tag-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.untagged .resource-tag-name {
+    color: var(--colorNeutralForeground2);
+    font-weight: 400;
+}
+
+.resource-tag-count {
+    flex: 0 0 auto;
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+}
+
+/* Rows of a group are indented under its header so the grouping reads at a glance. */
+.resource-tag-group .resource-row-link {
+    padding-inline-start: calc(var(--resource-row-icon-offset) + 8px);
+}
+
+.resource-tags-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 8px 4px 12px;
+    padding: 16px 12px;
+    border: 1px dashed var(--colorNeutralStroke2);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.resource-tags-empty-title {
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.resource-tags-empty-description {
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.resource-row {
+    /* The global status colors are fixed; Fluent's semantic foregrounds also
+       retain indicator contrast against the dashboard's dark hover surface. */
+    --success: var(--colorPaletteGreenForeground1);
+    --warning: var(--colorPaletteDarkOrangeForeground1);
+    --error: var(--colorPaletteRedForeground1);
+    display: flex;
+    align-items: center;
+    position: relative;
+    box-sizing: border-box;
+    height: var(--resource-row-height);
+    min-height: var(--resource-row-height);
+    max-height: var(--resource-row-height);
+    flex-shrink: 0;
+    margin-bottom: var(--aspire-density-resource-row-gap, 1px);
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+    --resource-tree-icon-center: calc(var(--resource-row-icon-offset) + var(--resource-row-icon-size) / 2);
+}
+
+.resource-row-kind-resource {
+    --resource-row-kind-accent: var(--colorBrandForeground1);
+}
+
+.resource-row-kind-parameter {
+    --resource-row-kind-accent: var(--colorPaletteDarkOrangeForeground2);
+}
+
+.resource-row-kind-telemetry {
+    --resource-row-kind-accent: var(--colorPaletteBlueForeground2);
+}
+
+.resource-row.selected {
+    background: var(--colorNeutralBackground1);
+}
+
+.resource-row:hover {
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 2px;
+    background: transparent;
+    pointer-events: none;
+}
+
+.resource-row.selected::before {
+    width: 3px;
+    background: var(--resource-row-kind-accent, var(--colorBrandForeground1));
+}
+
+.resource-row.selected:hover {
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row:active {
+    background: var(--colorNeutralBackground1Pressed);
+}
+
+.resource-row.selected:active {
+    background: var(--colorNeutralBackground1Pressed);
+}
+
+.resource-row:has(> .resource-row-link:focus-visible) {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-row-kind-label,
+.resource-row-kind-parameter .resource-row-type {
+    color: var(--resource-row-kind-accent);
+}
+
+.resource-row-kind-telemetry .resource-row-text {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+@media (forced-colors: active) {
+    .resource-row {
+        --resource-row-kind-accent: CanvasText;
+    }
+
+    .resource-row.selected,
+    .resource-row:hover,
+    .resource-row:focus-within {
+        outline: 1px solid Highlight;
+    }
+
+    .resource-row.selected {
+        --resource-row-kind-accent: HighlightText;
+        --colorNeutralForeground1: HighlightText;
+        --colorNeutralForeground2: HighlightText;
+        --colorNeutralForeground3: HighlightText;
+        --colorBrandForeground1: HighlightText;
+        --success: HighlightText;
+        --warning: HighlightText;
+        --error: HighlightText;
+        /* Preserve the system-color pair without automatic text backplates.
+           https://drafts.csswg.org/css-color-adjust-1/#forced-color-adjust-prop */
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText;
+    }
+
+    .resource-row.selected:hover,
+    .resource-row.selected:active {
+        background: Highlight;
+    }
+
+    .resource-row.selected ::deep .resource-relationship-trigger {
+        color: HighlightText;
+    }
+}
+
+.resource-dragging {
+    opacity: .5;
+}
+
+.resource-drop-before::after,
+.resource-drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--colorBrandBackground);
+    pointer-events: none;
+}
+
+.resource-drop-before::after {
+    top: -1px;
+}
+
+.resource-drop-after::after {
+    bottom: -1px;
+}
+
+/* The expand toggle sits on the right so resource icons stay aligned with the filter box above the list. */
+.resource-row-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--colorNeutralForeground2);
+    cursor: pointer;
+}
+
+.resource-row-toggle:hover {
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row-toggle.collapsed ::deep svg {
+    transform: rotate(-90deg);
+}
+
+.resource-row-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    /* Nested resources are indented by their depth in the tree. */
+    padding: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2) 8px calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2) calc(var(--resource-row-icon-offset) + var(--resource-row-depth, 0) * var(--resource-row-depth-step));
+    border-radius: 0;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.resource-row-link:focus-visible {
+    outline: none;
+}
+
+.resource-row-link:focus-visible .resource-row-name {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+}
+
+.pane-full-canvas .resource-row[data-resource-name],
+.pane-full-canvas .resource-row-kind-telemetry {
+    cursor: pointer;
+}
+
+.pane-full-canvas .resource-row:has(> .resource-row-link:focus-visible) {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.pane-full-canvas .resource-row-link:focus-visible {
+    outline: none;
+}
+
+.resource-row-icon {
+    --persistent-badge-inline-end: -4px;
+    --persistent-badge-bottom: -3px;
+    display: inline-flex;
+    flex: 0 0 var(--resource-row-icon-size);
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: var(--resource-row-icon-size);
+    height: var(--resource-row-icon-size);
+    border-radius: 8px;
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.resource-row.selected .resource-row-icon {
+    background: var(--resource-brand-soft);
+}
+
+/* The "All resources" row clears the selection, so it's separated from the resources it stands for. */
+.resource-row-all {
+    margin-bottom: 9px;
+}
+
+/* The toggles sit between the search row and the list, outside the scrolling list. A scrollbar in the list never
+   changes their width (which would change which labels fit), and the divider marks where the scrolling begins. */
+.resource-pane-kinds {
+    display: flex;
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    /* The same inline padding as the search row, so the toggles line up with the search box on the left and the
+       grouping button on the right. */
+    padding: 2px 12px 10px;
+    border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+/* Toggles for the kinds of items the pane lists. They look like the layout switcher in the page header: a quiet
+   tray with icon buttons, where an on button is the raised one with a brand-colored icon. Every button is the same
+   size in both states, so toggling never shifts the list. The name and count are in the tooltip. */
+/* The trays and buttons have the same sizes as the icon toggles in the settings and the layout switcher. */
+.resource-kind-toggles {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 8px;
+    background: var(--colorNeutralBackground2);
+}
+
+.resource-kind-toggle {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    cursor: pointer;
+}
+
+.resource-kind-toggle:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-kind-toggle.on {
+    background: var(--colorNeutralBackground1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .15);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-kind-toggle.on:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+    color: var(--colorBrandForeground1);
+}
+
+.resource-kind-toggle:focus-visible,
+.resource-select-all-toggle:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+.resource-select-all {
+    display: inline-flex;
+}
+
+.resource-select-all-toggle {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--borderRadiusMedium);
+    background: transparent;
+    color: var(--colorNeutralForeground2);
+    font: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.resource-select-all-toggle:hover {
+    background: var(--colorSubtleBackgroundHover);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-select-all-toggle:active {
+    background: var(--colorSubtleBackgroundPressed);
+}
+
+.resource-select-all-toggle.on,
+.resource-select-all-toggle.on:hover {
+    color: var(--colorBrandForeground1);
+}
+.resource-row-all::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: -5px;
+    height: 1px;
+    background: var(--colorNeutralStroke2);
+}
+
+/* Give "All resources" a brand-tinted icon at rest (not just when selected) so it reads as the
+   primary entry point in the pane rather than just another resource row. */
+.resource-row-all .resource-row-icon {
+    background: var(--resource-brand-soft);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-row-all .resource-row-name {
+    font-weight: 700;
+}
+
+.resource-row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.resource-row-name {
+    overflow: hidden;
+    font-size: var(--resource-row-font-size);
+    line-height: var(--resource-row-line-height);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-row-sub {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-row-font-size);
+    line-height: var(--resource-row-line-height);
+    white-space: nowrap;
+}
+
+.resource-row-detail {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    color: var(--colorNeutralForeground3);
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+.resource-row-detail > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-row-endpoint {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-row-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-pane-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.resource-pane-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+}
+
+.resource-pane-count ::deep svg {
+    color: var(--colorNeutralForeground3);
+}
+
+.error-badge {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--error);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+/* In a flex row the link follows the row link, which fills the row up to the actions, so it lands where an inline
+   badge would. The sidebar and wide grids overlay it on the end of the row link's track instead (see below).
+   The margin matches the row link's end padding. */
+.resource-row-error-link {
+    margin-inline-end: 8px;
+    text-decoration: none;
+}
+
+.resource-row-error-link:hover {
+    background: var(--colorPaletteRedBackground3);
+}
+
+.resource-row-error-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+/* Only the grid layouts overlay the badge on the row link and need the spacer. */
+.error-badge-spacer {
+    display: none;
+}
+
+.resource-pane-foot {
+    container: resource-footer / inline-size;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    padding: 4px 6px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.resource-pane-foot > span:first-child {
+    min-width: 0;
+    padding-inline-start: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-selection-hint {
+    display: inline-grid;
+    grid-column: 2;
+    grid-template-columns: max-content;
+    align-items: center;
+    white-space: nowrap;
+    font-size: 12px;
+    line-height: 14px;
+}
+
+.resource-selection-instruction {
+    display: inline-flex;
+    grid-area: 1 / 1;
+    align-items: center;
+    gap: 3px;
+    animation: resource-selection-hint 10s linear infinite;
+}
+
+.resource-selection-instruction + .resource-selection-instruction {
+    animation-delay: -5s;
+}
+
+/* Compositor-only rotation reserves both instructions' footprint without a timer,
+   DOM updates, or screen-reader announcements. Each instruction dwells for 4.5s. */
+@keyframes resource-selection-hint {
+    0%, 45%, 100% { opacity: 1; }
+    50%, 95% { opacity: 0; }
+}
+
+.resource-selection-hint:hover .resource-selection-instruction,
+.resource-selection-hint:focus-within .resource-selection-instruction,
+.resources-layout[data-document-hidden] .resource-selection-instruction {
+    animation-play-state: paused;
+}
+
+.resource-selection-hint:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
+.resource-selection-hint kbd {
+    padding: 0 2px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: var(--borderRadiusSmall);
+    font: inherit;
+    line-height: 12px;
+}
+
+.resource-pane-foot-actions {
+    grid-column: 3;
+    justify-self: end;
+}
+
+@container resource-footer (min-width: 640px) {
+    .resource-selection-hint {
+        display: inline-flex;
+        gap: 16px;
+    }
+
+    .resource-selection-instruction {
+        animation: none;
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .resource-selection-instruction {
+        animation-timing-function: steps(1, end);
+    }
+}
+
+/* Identity links are selection controls; keep copyable source and popover content selectable. */
+.resource-row-link {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+::deep .resource-pane-toggle-button {
+    --aspire-control-height: 32px;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+}
+
+.resource-pane-foot-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.resource-workspace-foot {
+    display: block;
+}
+
+/* Resource content */
+
+.resource-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+@media (min-width: 769px) {
+    .resources-layout {
+        display: grid;
+        grid-template-columns: minmax(0, var(--resource-pane-width)) minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) 34px;
+    }
+
+    .resources-layout.pane-collapsed {
+        grid-template-columns: minmax(0, 0px) minmax(0, 1fr);
+    }
+
+    .resources-layout.pane-full-canvas {
+        grid-template-columns: minmax(0, 100%) minmax(0, 0fr);
+    }
+
+    .resources-layout.pane-full-canvas .resource-context-header {
+        padding: 0;
+    }
+
+    .resource-pane {
+        grid-column: 1;
+        grid-row: 1 / 3;
+        width: auto;
+    }
+
+    /* Preserve row geometry while the containing track shrinks; only the clip
+       boundary moves. Full canvas still discloses metadata at its actual width. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-contents > * {
+        width: calc(var(--resource-pane-width) - 1px);
+    }
+
+    .resource-context-header {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .resource-content {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    /* A real border imposes a 1px minimum while the grid track is opening from zero. */
+    .resource-pane {
+        border-right: 0;
+    }
+
+    .resource-pane::after {
+        content: "";
+        position: absolute;
+        inset: 0 0 0 auto;
+        border-right: 1px solid var(--colorNeutralStroke3);
+        pointer-events: none;
+    }
+
+    /* Only selecting from full canvas reveals rigid details. Ordinary pane motion
+       keeps the details anchored to the workspace's right edge and lets them reflow. */
+    .resources-layout.pane-selection-reveal .resource-content {
+        width: calc(100cqw - var(--resource-pane-width));
+        max-width: none;
+    }
+
+    .resources-layout.pane-collapsed .resource-content {
+        width: 100%;
+    }
+
+    .resource-workspace-foot {
+        display: grid;
+        grid-column: 1 / -1;
+        grid-row: 3;
+        grid-template-columns: minmax(0, var(--resource-pane-width)) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        min-width: 0;
+        border-top: 1px solid var(--colorNeutralStroke3);
+        background: var(--aspire-page-background);
+    }
+
+    .resources-layout.pane-collapsed .resource-workspace-foot {
+        grid-template-columns: minmax(0, 0px) minmax(0, 1fr);
+    }
+
+    .resource-workspace-foot .resource-pane-foot {
+        min-width: 0;
+        padding: 0 5px 0 6px;
+        border-top: 0;
+        border-right: 1px solid var(--colorNeutralStroke3);
+    }
+}
+
+.resource-content-foot {
+    display: flex;
+    grid-column: 2;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 2px 8px;
+}
+
+.resource-footer-status {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 4px 10px;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.resource-footer-status .state-pill {
+    flex: 0 0 auto;
+    padding-block: 1px;
+}
+
+.resource-footer-status .resource-header-urls {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-footer-page-status {
+    flex: 0 0 auto;
+    min-width: 0;
+    margin-left: auto;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.resource-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+    padding: 12px var(--layout-right-padding) 0 var(--layout-left-padding);
+    background: var(--aspire-page-background);
+    /* Header actions condense against the full header width without moving their section outlet on resize. */
+    container-type: inline-size;
+}
+
+.resource-header-row {
+    display: flex;
+    align-self: start;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.resource-header-icon {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--resource-brand-soft);
+}
+
+.resource-header-icon.neutral {
+    border: 1px dashed var(--colorNeutralStroke1);
+    background: transparent;
+}
+
+.resource-header-icon.scope {
+    background: transparent;
+}
+
+.resource-header-text {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    min-height: 32px;
+}
+
+.resource-header-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.resource-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-header-controls {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-left: auto;
+}
+
+.resource-title {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--aspire-font-display);
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 24px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 10px;
+    min-width: 0;
+    min-height: 20px;
+    margin-top: 2px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12.5px;
+}
+
+.resource-header-urls {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.state-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 9px;
+    border-radius: 10px;
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Status colors don't reach text contrast on the tinted pill, so only the icon carries the state color. */
+.state-pill.state-success {
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-success ::deep svg {
+    color: var(--success);
+}
+
+.state-pill.state-error {
+    background: color-mix(in srgb, var(--error) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-error ::deep svg {
+    color: var(--error);
+}
+
+.state-pill.state-warning,
+.state-pill.state-pending {
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-warning ::deep svg,
+.state-pill.state-pending ::deep svg {
+    color: var(--warning);
+}
+
+.resource-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+}
+
+.resource-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: 10px;
+    min-width: 0;
+}
+
+.resource-tabs > .resource-tab-toolbar {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+}
+
+.resource-header-controls > .resource-tab-toolbar {
+    margin-left: 0;
+}
+
+.resource-tab-toolbar:empty {
+    display: none;
+}
+
+/* The toolbar's controls keep their size, so when they don't fit they wrap onto another line instead of painting over
+   the tab picker. */
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar,
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar > .toolbar-end {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: 8px;
+}
+
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar {
+    padding: 0;
+}
+
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-search {
+    flex-basis: 9rem;
+    width: 9rem;
+    min-width: 7rem;
+}
+
+/* The span type options are short ("Messaging" is the longest), so this dropdown is narrower than Fluent's 160px default. */
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact,
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact > fluent-dropdown {
+    --aspire-dropdown-min-width: 0px;
+    width: 8rem;
+    min-width: 0;
+}
+
+/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
+   focus can scroll the selected tab into view when space is limited. */
+.resource-tabs-nav ::deep .resources-tab-header {
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+}
+
+/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
+.resource-tabs-nav ::deep fluent-tab[data-tab-overflow] {
+    display: none;
+}
+
+.resource-tabs-overflow {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-tabs-overflow.has-overflow {
+    display: flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .aspire-menu-button {
+    display: inline-flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .resource-tabs-overflow-button {
+    color: var(--colorNeutralForeground2);
+}
+
+/* The current page's tab is in the menu, so the button takes the active tab's accent. */
+.resource-tabs-overflow.has-active ::deep .resource-tabs-overflow-button {
+    color: var(--colorBrandForeground1);
+}
+
+/* Wraps the tab row in its own layout container so a container query can react to the row's
+   actual available width - which depends on sibling pane/toolbar state, not just viewport width -
+   rather than letting FluentTabs grow a horizontal scrollbar once labels no longer fit. */
+.resource-tabs-nav {
+    container-type: inline-size;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* The compact tab picker is a single bordered control, like the dropdowns in the toolbar, with the chevron at the end. */
+.resource-tabs-nav ::deep .aspire-menu-button {
+    display: none;
+    align-items: center;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button {
+    justify-content: flex-start;
+    min-width: 160px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button::part(content) {
+    flex: 1 1 auto;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="end"] {
+    margin-inline-start: auto;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="start"] {
+    width: 18px !important;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px !important;
+    margin-right: var(--spacingHorizontalXS);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list {
+    width: max-content;
+    min-width: anchor-size(width);
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-control-radius);
+    background-color: var(--colorNeutralBackground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
+    grid-template-columns: minmax(0, 1fr) 32px;
+    width: auto;
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-control-radius);
+    background-color: transparent;
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item::part(content) {
+    grid-column: 1;
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item > .aspire-menu-item-indicator {
+    grid-column: 2;
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item[checked] {
+    border-color: var(--colorNeutralStroke1);
+    background-color: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):hover,
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):state(active),
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):focus-visible {
+    background-color: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item .aspire-menu-item-label {
+    gap: var(--spacingHorizontalXS);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item .aspire-menu-item-label svg {
+    width: 18px !important;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px !important;
+    color: var(--colorBrandForeground1);
+}
+
+@container (max-width: 200px) {
+    .resource-tabs-nav ::deep .resources-tab-header {
+        display: none;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-button {
+        display: inline-flex;
+    }
+
+    .resource-tabs-nav .resource-tabs-overflow.has-overflow {
+        display: none;
+    }
+}
+
+.resource-tabs-nav ::deep .resource-tab-error-count {
+    background: color-mix(in srgb, var(--error) 14%, transparent);
+    color: var(--error);
+}
+
+.resource-tab-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Mobile: the resource pane is a full-screen sheet over the content. It's opaque, so it needs no scrim. The breakpoint
+   matches ViewportInformation.MobileCutoffPixelWidth, which decides what the layout renders. */
+
+@media (max-width: 768px) {
+    /* Reserve the same mobile header/navigation above both the sheet and the details. */
+    .resources-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .resource-context-header {
+        grid-area: 1 / 1;
+    }
+
+    .resource-content {
+        grid-area: 2 / 1;
+    }
+
+    .resource-pane {
+        grid-area: 2 / 1;
+        position: relative;
+        inset: auto;
+        z-index: 21;
+        width: 100%;
+        margin-inline: 0;
+        height: 100%;
+        border-right: 0;
+    }
+
+    .resources-layout.drawer-open .resource-content {
+        /* The details remain mounted, but their scrollbar must not show beside the drawer's list. */
+        display: none;
+    }
+
+    .resource-pane-head {
+        height: 44px;
+        padding: 6px 8px;
+    }
+
+    .resource-pane-kinds {
+        padding: 2px 8px 6px;
+    }
+
+    .resource-pane-list {
+        padding-inline: 8px;
+        overflow-x: hidden;
+    }
+
+    .resource-pane-foot {
+        flex: 0 0 auto;
+        padding-inline: 8px;
+    }
+
+    .resource-header {
+        padding: 8px 8px 0;
+        row-gap: 8px;
+    }
+
+    .resource-header-row {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .resource-header-controls {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    .resource-header-icon {
+        display: none;
+    }
+
+    .resource-header-text {
+        display: block;
+        min-height: 0;
+    }
+
+    .resource-header-title {
+        gap: 0;
+    }
+
+    /* The title is the control that opens the resource list. It spans the content width, like the page content
+       below it, and has the outline and chevron of a select so it reads as something to change. The heading's
+       own overflow clipping is lifted so the focus ring isn't cut off. */
+    .resource-title {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: visible;
+    }
+
+    .resource-picker {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) 16px;
+        align-items: center;
+        column-gap: 8px;
+        width: 100%;
+        min-height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--colorNeutralStroke1);
+        border-radius: var(--aspire-control-radius);
+        background: color-mix(in srgb, var(--colorBrandBackground) 5%, var(--aspire-control-background));
+        color: var(--colorNeutralForeground1);
+        font: inherit;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 22px;
+        text-align: start;
+        cursor: pointer;
+    }
+
+    .resource-picker-leading-icon,
+    .resource-picker-chevron {
+        display: block;
+        flex: 0 0 auto;
+    }
+
+    .resource-picker-chevron {
+        justify-self: center;
+        color: var(--colorNeutralForeground2);
+        transition: transform .15s ease;
+    }
+
+    .resource-picker[aria-expanded="true"] .resource-picker-chevron {
+        transform: rotate(180deg);
+    }
+
+    .resource-picker:hover {
+        background: var(--aspire-menu-item-hover-background);
+    }
+
+    .resource-picker:active {
+        background: var(--colorNeutralBackground3);
+    }
+
+    .resource-picker:focus-visible {
+        outline: 2px solid var(--colorStrokeFocus2);
+        outline-offset: 1px;
+    }
+
+    .resource-picker-text {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .resource-tabs {
+        grid-column: 1;
+        grid-row: 2;
+        margin-top: 0;
+        column-gap: 8px;
+    }
+
+    .resources-layout.drawer-open .resource-tabs {
+        grid-row: 1;
+    }
+
+    /* The footer is outside the scrolling tab body, so status stays visible without covering the last card. */
+    .resource-workspace-foot {
+        grid-area: 3 / 1;
+        flex: 0 0 auto;
+        min-width: 0;
+        min-height: 32px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        border-top: 1px solid var(--colorNeutralStroke3);
+        background: var(--aspire-page-background);
+    }
+
+    .resources-layout.drawer-open .resource-workspace-foot {
+        display: none;
+    }
+
+    .resource-content-foot {
+        min-height: 32px;
+        padding-inline: 12px;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-button {
+        flex: 1 1 auto;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        min-height: 34px;
+        padding: 0 10px;
+        border-color: var(--colorNeutralStroke2);
+        background: var(--aspire-page-background);
+        color: var(--colorNeutralForeground1);
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button::part(control) {
+        min-height: 34px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="end"] {
+        width: 16px !important;
+        min-width: 16px;
+        max-width: 16px;
+        height: 16px !important;
+        margin-inline-start: auto;
+        color: var(--colorNeutralForeground2) !important;
+        transition: transform .15s ease;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button[aria-expanded="true"] > svg[slot="end"] {
+        transform: rotate(180deg);
+    }
+
+    /* The tab picker's menu is a sheet as wide as the page content, directly under its trigger, so the options are
+       large targets that line up with everything else. The popover's backdrop dims the page behind it, and a tap
+       there closes the menu. */
+    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list {
+        left: var(--layout-left-padding);
+        right: var(--layout-right-padding);
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        margin-top: 4px;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list::backdrop {
+        background: rgba(0, 0, 0, .35);
+    }
+
+    .resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
+        height: 44px;
+        min-height: 44px;
+        padding: 0 16px;
+        font-size: var(--fontSizeBase400);
+    }
+
+}
+
+/* Fluent UI has no 16px GroupList icon. Draw the 20px one at 16px so the grouping button matches the
+   filter and collapse buttons next to it. FluentIcon sets the width inline, hence !important. */
+.resource-pane-head ::deep #resourcePaneGroupingButton svg {
+    width: 16px !important;
+}
+
+/* Compact density: one line per resource. The state, type and persistence move to fixed-width columns on the
+   right, so they line up from row to row. */
+.density-compact .resource-row-link {
+    gap: 8px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+}
+
+.density-compact .resource-row-icon {
+    flex-basis: var(--resource-row-icon-size);
+    width: var(--resource-row-icon-size);
+    height: var(--resource-row-icon-size);
+}
+
+.density-spacious .resource-row-link {
+    gap: 10px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+}
+
+.density-spacious .resource-row-icon {
+    flex-basis: var(--resource-row-icon-size);
+    width: var(--resource-row-icon-size);
+    height: var(--resource-row-icon-size);
+}
+
+.density-compact .resource-row-text {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+.density-compact .resource-row-text ::deep .resource-row-hidden-icon {
+    flex-shrink: 0;
+}
+
+.resource-row-meta {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.resource-row-meta-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.resource-row-title {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.resource-row-toggle-spacer {
+    flex: 0 0 20px;
+    margin-right: 6px;
+}
+
+.resource-row-meta-state {
+    width: 10px;
+}
+
+.resource-row-meta .resource-row-type {
+    width: 64px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Disclosure follows the pane itself, including divider resizing and the mobile sheet.
+   The compact name/state/type row remains unchanged below the first threshold. */
+.resource-row-wide-metadata {
+    display: none;
+    min-width: 0;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-row-font-size);
+    line-height: var(--resource-row-line-height);
+}
+
+::deep .resource-row-insights {
+    display: none;
+    min-width: 0;
+}
+
+.resource-row-source {
+    display: none;
+    min-width: 0;
+}
+
+.resource-row-source-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-secondary-font-size);
+}
+
+.resource-row-source-value:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+::deep .resource-row-insight {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--resource-insight-gap);
+    min-width: 0;
+    box-sizing: border-box;
+    height: var(--resource-insight-height);
+    padding: 0 var(--resource-insight-padding);
+    border: 0;
+    border-radius: var(--borderRadiusSmall);
+    background: color-mix(in srgb, var(--colorBrandBackground2) 25%, var(--colorNeutralBackground1));
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-secondary-font-size);
+    line-height: var(--resource-secondary-line-height);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+::deep .resource-row-insight:hover {
+    background: var(--colorBrandBackground2);
+    color: var(--colorNeutralForeground1);
+    text-decoration: underline;
+}
+
+::deep .resource-row-insight > span {
+    flex-shrink: 0;
+}
+
+::deep .resource-row-insight svg {
+    flex-shrink: 0;
+}
+
+::deep .resource-row-insight:focus-visible {
+    outline: 2px solid var(--colorBrandStroke1);
+    outline-offset: 2px;
+}
+
+::deep .resource-row-insight-failed {
+    background: var(--colorPaletteRedBackground1);
+    color: var(--colorPaletteRedForeground1);
+}
+
+@media (forced-colors: active) {
+    ::deep .resource-row-insight {
+        border-color: LinkText;
+        background: Canvas;
+        color: LinkText;
+    }
+}
+
+.resource-row-health,
+.resource-row-start-time {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.resource-row-start-time {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-secondary-font-size);
+    flex-shrink: 0;
+}
+
+.resource-row-endpoints {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
+    min-width: 0;
+}
+
+.resource-row-endpoint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 0;
+    min-width: 0;
+    container: resource-endpoint / inline-size;
+}
+
+.resource-row-endpoint-name {
+    display: none;
+    flex: 0 1 40%;
+    min-width: 0;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@container resource-endpoint (min-width: 480px) {
+    .resource-row-endpoint-name {
+        display: block;
+    }
+}
+
+.resource-row-started-prefix {
+    display: none;
+}
+
+.resource-row-endpoint-address {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-row-start-time > time {
+    display: inline-flex;
+    gap: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.resource-row-endpoint-address {
+    flex: 1 1 0;
+    min-width: 0;
+    font-family: var(--aspire-font-mono);
+    font-size: var(--resource-secondary-font-size);
+    line-height: var(--resource-secondary-line-height);
+    font-weight: var(--fontWeightRegular);
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-row-endpoint-name {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-row-font-size);
+}
+
+.resource-row-wide-metadata .resource-row-start-time {
+    display: flex;
+    height: var(--resource-row-line-height);
+}
+
+@container resource-pane (min-width: 420px) {
+    .resource-row:has(> .resource-row-wide-metadata) {
+        /* Identity and lifecycle actions take priority over secondary metadata. */
+        --resource-row-tracks: [identity] minmax(0, 1fr) [status] 104px [endpoint source insights actions] 98px [end];
+        --resource-row-actions-column: actions;
+        display: grid;
+        grid-template-columns: var(--resource-row-tracks);
+        column-gap: var(--spacingHorizontalS);
+        padding-inline-end: 12px;
+    }
+
+    .resource-row-wide-metadata {
+        display: contents;
+    }
+
+    .resource-row-health {
+        grid-column: status;
+        grid-row: 1;
+        display: grid;
+        grid-template-rows: var(--resource-row-line-height);
+        align-content: center;
+        gap: 0;
+    }
+
+    .resource-row-wide-metadata .resource-row-start-time {
+        grid-row: 1;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .resource-row-health .resource-row-start-time > time {
+        flex-shrink: 0;
+        overflow: visible;
+    }
+
+    .resource-row-endpoints {
+        display: none;
+        padding-block: 0;
+        grid-row: 1;
+    }
+
+    .resource-row:has(> .resource-row-wide-metadata) > .resource-row-link {
+        grid-column: identity;
+        /* Pinned so the explicitly placed error link below can't push it to an implicit second row. */
+        grid-row: 1;
+    }
+
+    /* The error link shares the identity track with the row link. The row link keeps a hidden copy of the
+       badge so the resource name stops before it instead of running underneath. */
+    .resource-row:has(> .resource-row-wide-metadata) > .resource-row-error-link {
+        grid-column: identity;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+    }
+
+    .resource-row:has(> .resource-row-wide-metadata) .error-badge-spacer {
+        display: inline-flex;
+        visibility: hidden;
+    }
+
+    .resource-row-health-detail,
+    .resource-row-endpoint-detail {
+        display: none;
+    }
+}
+
+@container resource-pane (min-width: 540px) {
+    .resource-row:has(> .resource-row-wide-metadata) {
+        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
+    }
+
+    .resource-row-endpoints {
+        display: grid;
+        grid-template-columns: subgrid;
+        grid-template-rows: var(--resource-row-line-height);
+        column-gap: inherit;
+        grid-column: endpoint;
+        align-items: center;
+        height: var(--resource-row-line-height);
+    }
+
+    .resource-row-endpoint {
+        grid-column: endpoint;
+    }
+}
+
+/* Keep type columns aligned, reserving room for resource names when the pane is narrow. */
+.density-compact:has(.resource-row-type-persistent) .resource-row-meta .resource-row-type {
+    width: clamp(48px, calc(100cqw - 180px), 128px);
+}
+
+.density-compact .resource-row-toggle,
+.density-compact .resource-row-toggle-spacer {
+    margin-right: 2px;
+}
+
+/* A resource's actions: labeled buttons in the overview, icons on the rows of the resource list. */
+.resource-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px;
+}
+
+.resource-row-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+    margin-right: 12px;
+}
+
+.resource-row-actions ::deep .resource-row-toggle,
+.resource-row-actions ::deep .resource-row-toggle::part(control) {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    margin: 0;
+    padding: 0;
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+}
+
+.resource-row-actions ::deep .resource-row-toggle.collapsed svg {
+    transform: rotate(-90deg);
+}
+
+.resource-row-actions ::deep .resource-row-action {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    /* Fluent UI buttons default to a 32px minimum, which would make the row taller than the others. */
+    min-height: 24px;
+}
+
+.resource-row-actions ::deep .resource-row-action::part(control) {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
+}
+
+/* Let container-query disclosure override the native link's default display, just like Fluent buttons. */
+.resource-row-actions > :where(a).resource-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: var(--colorBrandForeground1);
+    text-decoration: none;
+}
+
+.resource-row-actions > a.resource-row-action:hover {
+    background: var(--colorSubtleBackgroundHover);
+}
+
+/* Override the direct-anchor display rule as well as Fluent button styles when disclosing actions. */
+@container resource-pane (max-width: 239px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-0 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 299px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-1 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 359px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-2 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 419px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-3 {
+        display: none;
+    }
+}
+
+.resource-row-actions ::deep .resource-row-output,
+.resource-row-actions ::deep .resource-row-json,
+.resource-row-actions ::deep .resource-row-wide-command,
+.resource-row-actions ::deep .aspire-menu-button:has(.resource-row-more-endpoints) {
+    display: none;
+}
+
+@container resource-pane (min-width: 420px) {
+    /* Fixed action slots reserve missing endpoints/output just like missing metadata.
+       Narrower panes retain lifecycle commands in the existing overflow menu. */
+    .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+        display: grid;
+        grid-template-columns: 20px repeat(3, 24px);
+        grid-column: var(--resource-row-actions-column);
+        grid-row: 1;
+        gap: 2px;
+        margin-right: 0;
+    }
+
+    .resource-row-actions .resource-row-toggle,
+    .resource-row-actions .resource-row-toggle-spacer {
+        grid-column: 1;
+        grid-row: 1;
+        margin-right: 0;
+    }
+
+    .resource-row-actions ::deep .resource-row-action.resource-row-highlighted {
+        display: inline-flex;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .resource-row-command-slot-0 {
+        grid-column: 2;
+    }
+
+    .resource-row-actions ::deep .resource-row-command-slot-1 {
+        grid-column: 3;
+    }
+
+    .resource-row-actions ::deep .aspire-menu-button:not(:has(.resource-row-more-endpoints)) {
+        grid-column: 4;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .resource-row-primary-endpoint,
+    .resource-row-actions ::deep .resource-row-terminal {
+        display: none;
+    }
+}
+
+@container resource-pane (min-width: 720px) {
+    .resource-row:has(> .resource-row-wide-metadata) {
+        --resource-row-tracks: [identity] minmax(200px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 180px [end];
+        column-gap: var(--spacingHorizontalM);
+    }
+
+    .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+        grid-template-columns: 20px repeat(5, 28px);
+        gap: 4px;
+    }
+
+    .resource-row-actions ::deep .resource-row-action,
+    .resource-row-actions ::deep .resource-row-action::part(control) {
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
+        min-height: 28px;
+    }
+
+    .resource-row-actions ::deep .resource-row-primary-endpoint {
+        display: inline-flex;
+        grid-column: 4;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .resource-row-output,
+    .resource-row-actions ::deep .resource-row-terminal {
+        display: inline-flex;
+        grid-column: 5;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .aspire-menu-button:not(:has(.resource-row-more-endpoints)) {
+        grid-column: 6;
+    }
+}
+
+@container resource-pane (min-width: 960px) {
+    .resource-row:has(> .resource-row-wide-metadata) {
+        --resource-row-tracks: [identity] minmax(220px, 320px) [status] 180px [endpoint] minmax(96px, 1fr) [source] 112px [insights actions] 244px [end];
+        column-gap: var(--spacingHorizontalS);
+    }
+
+    .resource-row-started-prefix {
+        display: inline;
+    }
+
+    .resource-row-health {
+        gap: 0;
+    }
+
+    .resource-row-wide-metadata .resource-row-start-time {
+        display: flex;
+    }
+
+    .resource-row-started {
+        display: none;
+    }
+
+    .resource-row-source {
+        display: flex;
+        grid-column: source;
+        grid-row: 1;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+        grid-template-columns: 20px repeat(7, 28px);
+        width: 244px;
+        justify-self: end;
+    }
+
+    .resource-row-actions ::deep .aspire-menu-button:has(.resource-row-more-endpoints) {
+        display: inline-flex;
+        grid-column: 5;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .resource-row-output,
+    .resource-row-actions ::deep .resource-row-terminal {
+        grid-column: 6;
+    }
+
+    .resource-row-actions ::deep .resource-row-json {
+        display: inline-flex;
+        grid-column: 7;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .aspire-menu-button:not(:has(.resource-row-more-endpoints)) {
+        grid-column: 8;
+    }
+}
+
+/* A sidebar row has two fixed text bands and a reserved action rail. Missing
+   endpoints/commands leave their slots empty instead of changing identity width.
+   Full-canvas metadata has a separate track layout above, never sidebar breakpoints. */
+.resources-layout:not(.pane-full-canvas) .resource-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    column-gap: 4px;
+    padding-inline-end: 12px;
+}
+
+/* The error link shares the identity track with the row link instead of taking the action rail's slot. The row
+   link keeps a hidden copy of the badge so the resource name stops before it instead of running underneath. */
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-error-link) > .resource-row-link {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-error-link {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+}
+
+.resources-layout:not(.pane-full-canvas) .error-badge-spacer {
+    display: inline-flex;
+    visibility: hidden;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-link {
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--resource-row-height);
+    padding-block: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2);
+    gap: 8px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-text {
+    display: grid;
+    grid-template-rows: repeat(2, var(--resource-row-line-height));
+    align-items: center;
+    gap: 0;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-title {
+    min-width: 0;
+    height: var(--resource-row-line-height);
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-name {
+    display: block;
+    min-width: 0;
+    line-height: var(--resource-row-line-height);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-sub {
+    height: var(--resource-row-line-height);
+    line-height: var(--resource-row-line-height);
+    flex-wrap: nowrap;
+    column-gap: 8px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-health-status {
+    flex-shrink: 0;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-detail {
+    display: none;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions {
+    display: grid;
+    grid-template-columns: 20px repeat(3, 28px);
+    justify-content: end;
+    align-items: center;
+    column-gap: 2px;
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+    margin: 0;
+    overflow: visible;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-toggle,
+.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-toggle-spacer {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-primary-endpoint {
+    display: inline-flex;
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-command-slot-0 {
+    display: inline-flex;
+    grid-column: 3;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .aspire-menu-button:not(:has(.resource-row-more-endpoints)) {
+    display: inline-flex;
+    grid-column: 4;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-action {
+    --aspire-control-height: 28px;
+    width: 28px;
+    min-width: 0;
+    height: 28px;
+    padding: 0;
+}
+
+/* Preserve both author-highlighted custom commands within the same protected rail.
+   Their 22px targets plus 2px separation keep neighboring target centers 24px apart. */
+.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) {
+    grid-template-columns: 16px repeat(4, 22px);
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) ::deep .resource-row-action {
+    width: 22px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-action::part(control) {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-command-slot-1 {
+    display: inline-flex;
+    grid-column: 4;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) ::deep .aspire-menu-button:not(:has(.resource-row-more-endpoints)) {
+    grid-column: 5;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-output,
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-terminal,
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-json,
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .aspire-menu-button:has(.resource-row-more-endpoints) {
+    display: none;
+}
+
+.resource-tree-guide,
+.resource-tree-stem {
+    position: absolute;
+    inset-inline-start: calc(var(--resource-tree-icon-center) + var(--tree-level, 0) * var(--resource-row-depth-step));
+    /* Each segment spans the inter-row gap so the tree stays continuous in every density. */
+    top: calc(-1 * var(--aspire-density-resource-row-gap, 1px));
+    bottom: 0;
+    border-inline-start: 1px dotted var(--colorNeutralStrokeAccessible);
+    pointer-events: none;
+}
+
+.resource-tree-guide.branch:not(.continuing) {
+    bottom: 50%;
+}
+
+.resource-tree-guide.branch::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    top: calc(var(--resource-row-height) / 2 + var(--aspire-density-resource-row-gap, 1px));
+    width: calc(var(--resource-row-icon-offset) + var(--resource-row-depth-step) - var(--resource-tree-icon-center));
+    border-top: 1px dotted var(--colorNeutralStrokeAccessible);
+}
+
+.resource-tree-stem {
+    inset-inline-start: calc(var(--resource-tree-icon-center) + var(--resource-row-depth, 0) * var(--resource-row-depth-step));
+    top: calc(50% + var(--resource-row-icon-size) / 2);
+    bottom: calc(-1 * var(--aspire-density-resource-row-gap, 1px));
+}
+
+@media (forced-colors: active) {
+    .resource-tree-guide,
+    .resource-tree-guide.branch::after,
+    .resource-tree-stem {
+        border-color: CanvasText;
+    }
+
+    .resource-row.selected,
+    .resource-row:hover,
+    .resource-row:focus-within,
+    .pane-full-canvas .resource-row:has(> .resource-row-link:focus-visible) {
+        outline: 1px solid Highlight;
+        outline-offset: -1px;
+    }
+}
+
+/* Full canvas uses the same fixed two-band identity as the sidebar. */
+.pane-full-canvas .resource-row-title {
+    width: 100%;
+    height: var(--resource-row-line-height);
+}
+
+.pane-full-canvas .resource-row-sub {
+    height: var(--resource-row-line-height);
+}
+
+.pane-full-canvas .resource-row-link {
+    box-sizing: border-box;
+    height: var(--resource-row-height);
+    padding-block: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2);
+}
+
+@container resource-pane (min-width: 1440px) {
+    /* Only the endpoint track absorbs spare width; activity stays next to actions. */
+    .resource-row:has(> .resource-row-wide-metadata) {
+        --resource-row-tracks: [identity] 260px [status] 180px [endpoint] minmax(200px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
+    }
+
+    ::deep .resource-row-insights {
+        position: relative;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: [requests] var(--resource-insight-request-width) [latency] var(--resource-insight-latency-width);
+        padding-inline-start: var(--resource-insight-failure-width);
+        grid-column: insights;
+        grid-row: 1;
+        align-items: center;
+        column-gap: var(--spacingHorizontalS);
+    }
+
+    ::deep .resource-row-insight {
+        grid-row: 1;
+    }
+
+    ::deep .resource-row-insight-requests {
+        grid-column: requests;
+    }
+
+    ::deep .resource-row-insight-latency {
+        grid-column: latency;
+    }
+
+    ::deep .resource-row-insight-failed {
+        position: absolute;
+        inset-inline-start: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: var(--resource-insight-height);
+        justify-content: center;
+    }
+}
+
+@container resource-pane (min-width: 1600px) {
+    .resource-row:has(> .resource-row-wide-metadata) {
+        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(280px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
+        column-gap: var(--spacingHorizontalL);
+    }
+}
+
+@container resource-pane (min-width: 1800px) {
+    .resource-row:has(> .resource-row-wide-metadata) {
+        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(240px, 1fr) [source] 352px [insights] var(--resource-insight-width) [actions] 244px [end];
+    }
+}

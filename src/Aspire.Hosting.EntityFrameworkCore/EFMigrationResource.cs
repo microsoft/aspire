@@ -21,6 +21,9 @@ namespace Aspire.Hosting.EntityFrameworkCore;
 [AspireExport(ExposeProperties = true)]
 public class EFMigrationResource : ContainerResource
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Entity Framework Core Migration";
+
     private readonly ProjectResource? _legacyProjectResource;
 
     /// <summary>
@@ -34,7 +37,18 @@ public class EFMigrationResource : ContainerResource
     {
     }
 
-    internal EFMigrationResource(
+    /// <summary>
+    /// Initializes a new instance of the <see cref="EFMigrationResource"/> class for a .NET program resource.
+    /// </summary>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="startupProjectResource">The startup .NET program resource that contains the DbContext configuration.</param>
+    /// <param name="dbContextTypeName">The fully qualified name of the DbContext type, or null to auto-detect.</param>
+    /// <remarks>
+    /// This constructor captures resource data only. Use <c>AddEFMigrations</c> on a startup project builder
+    /// to register the resource and configure its tools, commands, relationships, and publishing pipeline.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="startupProjectResource"/> is null.</exception>
+    public EFMigrationResource(
         string name,
         IDotnetProgramResource startupProjectResource,
         string? dbContextTypeName)

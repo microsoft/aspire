@@ -44,6 +44,13 @@ suite('E2E addWorkspaceFolder guard', () => {
         assert.strictEqual(getE2eAddableWorkspaceFolderPath(folderPath), folderPath);
     });
 
+    test('accepts a contained folder whose name begins with two dots', () => {
+        const folderPath = path.join(workspaceRoot, '..services');
+        fs.mkdirSync(folderPath, { recursive: true });
+
+        assert.strictEqual(getE2eAddableWorkspaceFolderPath(folderPath), folderPath);
+    });
+
     test('rejects a folder outside every configured root', () => {
         const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-addfolder-outside-'));
 

@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="Description">
         <source>Restore dependencies and generate SDK code for an AppHost</source>
-        <target state="new">Restore dependencies and generate SDK code for an AppHost</target>
+        <target state="translated">还原依赖项并为 AppHost 生成 SDK 代码</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedAppHostType">
         <source>Unrecognized AppHost type.</source>
-        <target state="new">Unrecognized AppHost type.</target>
+        <target state="translated">无法识别的 AppHost 类型。</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoringSdkCode">
         <source>Restoring SDK code...</source>
-        <target state="new">Restoring SDK code...</target>
+        <target state="translated">正在还原 SDK 代码...</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoreSucceeded">
         <source>SDK code restored successfully for {0}.</source>
-        <target state="new">SDK code restored successfully for {0}.</target>
+        <target state="translated">已成功还原 {0} 的 SDK 代码。</target>
         <note>{0} is the AppHost project file name.</note>
       </trans-unit>
     </body>

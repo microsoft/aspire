@@ -31,18 +31,11 @@ internal sealed class NativeSmokeHarness
     private int _lastLoggedPhase = -1;
     private int _dashboardCalls;
     private int _documentationCalls;
-    private int _confirmations;
     private int _errors;
     private readonly List<string> _copiedPaths = [];
-    private bool _accept;
     private bool _finished;
-    private bool _replaceDuringConfirmation;
-    private bool _tooltipSelectionRequested;
-    private bool _tooltipHideRequested;
-    private int _retainedStop;
-    private nint _trackingMenu;
+    private AppHostMenuItem? _staleHost;
     private nint _oldIcon;
-    private IReadOnlyList<AppHostId> _trackingRows = [];
     private Task? _restore;
     private Task? _quit;
 
@@ -98,26 +91,6 @@ internal sealed class NativeSmokeHarness
                 }
             },
             CopyPathForSmoke = path => _copiedPaths.Add(path),
-            ConfirmForSmoke = (title, detail, flags) =>
-            {
-                Require(flags == NativeMethods.SafeConfirmation && (flags & 0x100) != 0, "Confirmation must default to Cancel.");
-                Require(!string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(detail), "Confirmation has no context.");
-                if (title == "Stop AppHost")
-                {
-                    Require(!detail.Contains(_directory.FullName, StringComparison.Ordinal)
-                        && detail.Contains("PID", StringComparison.Ordinal)
-                        && detail.Contains("running resources", StringComparison.Ordinal),
-                        "Stop confirmation must explain its consequence without the AppHost path.");
-                }
-                _confirmations++;
-                if (_replaceDuringConfirmation)
-                {
-                    _replaceDuringConfirmation = false;
-                    Publish([Replacement(_hosts[0]), Replacement(_hosts[1]), _hosts[2], _hosts[3]]);
-                    _application.DialogReadyForSmoke = () => _controller.State.AppHosts.Any(host => host.Id == Replacement(_hosts[1]).Id);
-                }
-                return _accept;
-            },
             ErrorForSmoke = error =>
             {
                 Require(error is InvalidOperationException, "Unexpected action failure in smoke.");
@@ -175,6 +148,7 @@ internal sealed class NativeSmokeHarness
                 Require(_application.IconAddFailuresForSmoke == 0, "Readiness was acknowledged before icon creation recovered.");
                 _application.VerifyNativeStateForSmoke();
                 Require(state.Discovery == DiscoveryState.Connecting && !state.HasActiveAppHosts, "Initial native state is incorrect.");
+                _application.VerifyActivationForSmoke();
                 VerifySettings();
                 _phase = 1;
                 Publish(_hosts);
@@ -185,31 +159,24 @@ internal sealed class NativeSmokeHarness
                     return;
                 }
                 _application.VerifyNativeStateForSmoke();
-                Require(_client.Starts.IsEmpty, "A recent submenu started an AppHost automatically.");
-                var paths = state.AppHosts.Concat(state.RecentAppHosts).Select(host => host.Id).ToArray();
-                foreach (var id in paths)
+                Require(_client.Starts.IsEmpty, "Listing a recent AppHost started it automatically.");
+                foreach (var id in state.AppHosts.Concat(state.RecentAppHosts).Select(host => host.Id))
                 {
-                    Invoke("CopyPath", id);
+                    _application.PickRowActionForSmoke(id, PanelTargetKind.CopyPath);
                 }
                 Require(_copiedPaths.SequenceEqual(_hosts.Select(host => host.AppHostPath)
                     .Concat([_pinned, _missingPin, _recent, _missing]).Select(Path.GetDirectoryName)),
-                    "Copy Path must copy the exact containing folder for live, pinned, and missing recent AppHosts.");
-                Invoke("Dashboard", _hosts[0].Id);
-                Require(_dashboardCalls == 1, "Native dashboard dispatch did not reach the URL handler.");
-                Invoke("Documentation");
+                    "Copy path must copy the exact containing folder for live, pinned, and missing recent AppHosts.");
+                _application.ClickPanelForSmoke(PanelTargetKind.Dashboard, _hosts[0].Id);
+                Require(_dashboardCalls == 1, "The panel's Dashboard button did not reach the URL handler.");
+                _application.ClickPanelForSmoke(PanelTargetKind.Documentation);
                 Require(_documentationCalls == 1, "Documentation did not use aspire.dev.");
                 _application.ShowMessageForSmoke();
-                _retainedStop = _application.CaptureActionForSmoke("Stop", _hosts[0].Id);
-                _application.SuppressStopForSmoke = true;
-                _application.InvokeActionForSmoke(_retainedStop);
-                Require(_confirmations == 1, "The stop confirmation was not shown exactly once.");
-                Require(_client.Stops.IsEmpty, "Cancel dispatched a stop operation.");
-                Require(_controller.ConfirmStop && _store.Load().ConfirmStop, "Cancel persisted the suppression checkbox.");
-                _application.SuppressStopForSmoke = false;
-                Invoke("TogglePin", _hosts[0].Id);
-                Require(_controller.State.AppHosts.Single(host => host.Id == _hosts[0].Id).IsPinned, "Pin action did not persist.");
-                _accept = true;
-                _application.InvokeActionForSmoke(_retainedStop);
+                _application.VerifyActionListForSmoke(_hosts[1].Id);
+                _application.PickRowActionForSmoke(_hosts[0].Id, PanelTargetKind.TogglePin);
+                Require(_controller.State.AppHosts.Single(host => host.Id == _hosts[0].Id).IsPinned, "Pin from the action list did not persist.");
+                _staleHost = _controller.State.AppHosts.Single(host => host.Id == _hosts[0].Id);
+                _application.ClickPanelForSmoke(PanelTargetKind.Stop, _hosts[0].Id);
                 _phase = 2;
                 break;
             case 2:
@@ -219,77 +186,33 @@ internal sealed class NativeSmokeHarness
                 }
                 _application.VerifyNativeStateForSmoke();
                 _phase = 3;
-                _application.TrackForSmoke(_hosts[0].Id);
-                Require(_phase == 5, "Native menu tracking ended before retained actions were verified.");
-                _application.VerifyNoTooltipForSmoke();
-                break;
-            case 3:
-                Require(_application.IsTrackingForSmoke, "The actual TrackPopupMenuEx loop is not active.");
-                if (!_tooltipSelectionRequested)
-                {
-                    _application.SelectMenuDetailsForSmoke(_hosts[0].Id, details: true);
-                    _tooltipSelectionRequested = true;
-                    return;
-                }
-                if (!_application.IsTooltipVisibleForSmoke)
-                {
-                    return;
-                }
-                _application.VerifyMenuDetailsForSmoke(_hosts[0].Id,
-                    $"{_hosts[0].AppHostPath} \u00b7 Stopping AppHost...");
-                _application.VerifyDetailsTooltipForSmoke(_hosts[0].Id,
-                    $"{_hosts[0].AppHostPath} \u00b7 Stopping AppHost...");
-                _trackingMenu = _application.MenuForSmoke;
-                _trackingRows = _application.RowIdsForSmoke;
-                _phase = 4;
                 Publish([_hosts[3], _hosts[2], _hosts[1], Replacement(_hosts[0])]);
                 break;
-            case 4:
+            case 3:
                 if (!state.AppHosts.Any(host => host.Id == Replacement(_hosts[0]).Id))
                 {
                     return;
                 }
-                Require(_application.MenuForSmoke == _trackingMenu && _application.RowIdsForSmoke.SequenceEqual(_trackingRows),
-                    "A tracked HMENU or row identity was replaced.");
-                _application.VerifyNativeStateForSmoke(retained: true);
-                _application.VerifyMenuDetailsForSmoke(_hosts[0].Id,
-                    $"{_hosts[0].AppHostPath} \u00b7 AppHost no longer available");
-                if (!_tooltipHideRequested)
-                {
-                    _application.VerifyDetailsTooltipForSmoke(_hosts[0].Id,
-                        $"{_hosts[0].AppHostPath} \u00b7 AppHost no longer available");
-                    _application.SelectMenuDetailsForSmoke(_hosts[0].Id, details: false);
-                    _tooltipHideRequested = true;
-                    return;
-                }
-                _application.VerifyNoTooltipForSmoke();
-                _application.InvokeActionForSmoke(_retainedStop);
-                Require(_errors == 1 && _confirmations == 2 && _client.Stops.Count == 1, "A stale sender stopped or confirmed a replacement lifetime.");
-                _application.SelectMenuDetailsForSmoke(_hosts[0].Id, details: true);
-                _phase = 5;
-                _application.EndTrackingForSmoke();
-                break;
-            case 5:
                 _application.VerifyNativeStateForSmoke();
-                _replaceDuringConfirmation = true;
-                _application.SuppressStopForSmoke = true;
-                Invoke("Stop", _hosts[1].Id);
-                Require(_errors == 2 && _client.Stops.Count == 1, "A lifetime replaced during a native confirmation was stopped.");
-                Require(_controller.ConfirmStop && _store.Load().ConfirmStop, "A stale confirmation changed the saved preference.");
-                Invoke("Stop", _hosts[2].Id);
-                Require(!_controller.ConfirmStop && !_store.Load().ConfirmStop, "Accepted Stop did not persist the suppression checkbox.");
+                // An action from a scene drawn before the lifetime was replaced must be rejected.
+                _application.RunPanelActionForSmoke(new(PanelActionKind.Stop, _staleHost));
+                Require(_errors == 1 && _client.Stops.Count == 1, "A stale action stopped a replacement lifetime.");
+                // Stopping isn't confirmed: the request goes out at once, here through UI Automation.
+                _application.PressPanelForSmoke(PanelTargetKind.Stop, _hosts[2].Id);
+                Require(_client.Stops.Count == 2, "Stop did not send its request without a dialog.");
                 var missing = state.RecentAppHosts.Single(host => TrayAppHostPath.Comparer.Equals(host.Id.AppHostPath, _missing));
-                _accept = false;
-                Invoke("Start", missing.Id);
+                _application.ClickPanelForSmoke(PanelTargetKind.Start, missing.Id);
+                Require(_application.PanelForSmoke.Confirmation == PanelConfirmKind.RemoveMissing, "A missing recent AppHost was not offered for removal inline.");
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmCancel, missing.Id);
                 Require(_controller.State.RecentAppHosts.Any(host => host.Id == missing.Id), "Cancel removed a missing recent path.");
-                _accept = true;
-                Invoke("Start", missing.Id);
+                _application.ClickPanelForSmoke(PanelTargetKind.Start, missing.Id);
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmAccept, missing.Id);
                 Require(_controller.State.RecentAppHosts.All(host => host.Id != missing.Id), "Missing recent path was not removed.");
                 var pinned = state.AppHosts.Single(host => TrayAppHostPath.Comparer.Equals(host.Id.AppHostPath, _pinned));
-                Invoke("Start", pinned.Id);
-                _phase = 6;
+                _application.ClickPanelForSmoke(PanelTargetKind.Start, pinned.Id);
+                _phase = 4;
                 break;
-            case 6:
+            case 4:
                 if (_client.Starts.Count != 1 || _client.Stops.Count != 2)
                 {
                     return;
@@ -297,41 +220,40 @@ internal sealed class NativeSmokeHarness
                 Require(_client.Starts.Single() == _pinned, "Explicit Start did not preserve the selected path and casing.");
                 _application.VerifyNativeStateForSmoke();
                 var saved = _store.Load();
-                _accept = false;
-                Invoke("ClearRecent");
+                _application.ClickPanelForSmoke(PanelTargetKind.ClearRecent);
+                Require(_application.PanelForSmoke.Confirmation == PanelConfirmKind.ClearRecent, "Clear did not ask inline.");
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmCancel);
                 Require(ReferenceEquals(saved, _store.Load()), "Cancel changed recent history.");
-                _accept = true;
-                Invoke("ClearRecent");
+                _application.ClickPanelForSmoke(PanelTargetKind.ClearRecent);
+                _application.ClickPanelForSmoke(PanelTargetKind.ConfirmAccept);
                 Require(_store.Load().AppHosts.All(host => host.IsPinned && !host.IsRecent)
                     && _store.Load().AppHosts.Any(host => TrayAppHostPath.Comparer.Equals(host.AppHostPath, _pinned)), "Clear Recent did not preserve pins.");
                 File.Delete(_missingPin);
-                _phase = 7;
+                _application.ReopenPanelForSmoke();
+                _phase = 5;
                 break;
-            case 7:
+            case 5:
                 if (state.AppHosts.Any(host => TrayAppHostPath.Comparer.Equals(host.Id.AppHostPath, _missingPin)))
                 {
                     return;
                 }
                 Require(_store.Load().AppHosts.All(host => !TrayAppHostPath.Comparer.Equals(host.AppHostPath, _missingPin)),
                     "Missing offline pin was not persistently pruned.");
-                var confirmations = _confirmations;
-                Invoke("Stop", _hosts[3].Id);
-                Require(_confirmations == confirmations, "Stop prompted despite the saved opt-out.");
                 _application.RestartExplorerForSmoke();
                 _oldIcon = _application.IconForSmoke;
                 _application.InvalidateArtworkForSmoke();
-                _phase = 8;
+                _phase = 6;
                 break;
-            case 8:
+            case 6:
                 if (_application.IconForSmoke == _oldIcon)
                 {
                     return;
                 }
                 _application.VerifyNativeStateForSmoke();
                 _restore = Task.Run(() => _application.RestoreIconAsync(_shutdown.Token));
-                _phase = 9;
+                _phase = 7;
                 break;
-            case 9:
+            case 7:
                 if (_restore?.IsCompleted != true)
                 {
                     return;
@@ -340,30 +262,30 @@ internal sealed class NativeSmokeHarness
                 _client.CompleteStart();
                 // A successful start remains pending until discovery sees its instance.
                 Publish([new(_pinned, 42001, "http://localhost:19001/") { ProcessStartTimeUnixMilliseconds = 1_700_000_000_100 }]);
-                _phase = 10;
+                _phase = 8;
                 break;
-            case 10:
+            case 8:
                 if (!state.AppHosts.Any(host => host.IsRunning && TrayAppHostPath.Comparer.Equals(host.Id.AppHostPath, _pinned)))
                 {
                     return;
                 }
                 _application.VerifyNativeStateForSmoke();
-                Invoke("Dashboard", state.AppHosts.Single(host => host.IsRunning).Id);
-                Require(_dashboardCalls == 2, "A started AppHost did not gain an actionable dashboard menu entry.");
+                _application.ClickPanelForSmoke(PanelTargetKind.Dashboard, state.AppHosts.Single(host => host.IsRunning).Id);
+                Require(_dashboardCalls == 2, "A started AppHost did not gain an actionable dashboard button.");
                 // Disconnection preserves the last live rows. Observe an empty live
                 // snapshot before checking the disconnected, inactive presentation.
                 Publish([]);
-                _phase = 11;
+                _phase = 9;
                 break;
-            case 11:
+            case 9:
                 if (state.HasActiveAppHosts)
                 {
                     return;
                 }
                 Publish([], DiscoveryState.Disconnected);
-                _phase = 12;
+                _phase = 10;
                 break;
-            case 12:
+            case 10:
                 if (state.Discovery != DiscoveryState.Disconnected || state.HasActiveAppHosts)
                 {
                     return;
@@ -371,116 +293,72 @@ internal sealed class NativeSmokeHarness
                 _application.VerifyNativeStateForSmoke();
                 Require(state.AppHosts.All(host => !host.CanStop && !host.CanStart), "Disconnected rows allow lifecycle actions.");
                 _finished = true;
-                _phase = 13;
-                Program.Log("Windows native smoke passed: AppHost health icons, Documentation/Settings command icons, running AppHost dashboard actions, divided actions, separate status/path details, full-value details tooltips, live/stale refresh, tooltip focus/dismissal, compact names without status suffixes, menu tracking, immutable actions, native stop checkbox/opt-out, original-case Copy path, pins/history, discovery icons, artwork invalidation, Explorer recovery, activation, terminal arguments, compact modeless Settings with About logo and isolated startup preferences.");
+                _phase = 11;
+                Program.Log("Windows native smoke passed: every icon activation opens the flyout (left, right, keyboard with focus) and repeats keep it open, Ctrl+comma and the Settings view with isolated startup preferences, panel rows matching the view state, Dashboard and Documentation buttons, action list items with UI Automation and keyboard, original-case Copy path for live/pinned/recent rows, pin from the action list, unconfirmed Stop by click and UI Automation with stale-lifetime safety, inline missing-file removal and Clear, pin pruning, discovery icons, artwork invalidation, Explorer recovery, activation, terminal arguments.");
                 Program.Log("Not covered by synthetic smoke: real per-monitor DPI transitions; verify these on the Windows desktop.");
                 if (_interactiveSmoke)
                 {
                     // Keep the isolated fake client/store; never connect preview gestures
                     // to a real CLI or the account's startup registration.
-                    _controller.SetConfirmStop(true);
                     Publish(_hosts.Select(host => host with
                     {
                         ProcessStartTimeUnixMilliseconds = host.ProcessStartTimeUnixMilliseconds + 1000
                     }).ToArray());
                     _application.BeginInteractivePreviewForSmoke();
-                    Program.Log("Windows native preview ready: fake AppHosts and in-memory preferences only. Quit Aspire to exit.");
+                    Program.Log("Windows native preview ready: fake AppHosts and in-memory preferences only. Exit in the panel to close it.");
                 }
                 else
                 {
                     _quit = Task.Run(_application.RequestQuit);
                 }
                 break;
-            case 13:
+            case 11:
                 _quit?.GetAwaiter().GetResult();
                 break;
         }
     }
 
-    private void Invoke(string kind, AppHostId id = default)
-        => _application.InvokeActionForSmoke(_application.CaptureActionForSmoke(kind, id));
-
+    /// <summary>
+    /// Drives the panel's Settings view against the isolated startup settings, including the
+    /// unavailable, failed-write, partial-write and failed-read states.
+    /// </summary>
     private void VerifySettings()
     {
-        const string off = "Launch at sign-in is off.";
-        const string on = "Launch at sign-in is on.";
         Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 0, "Smoke startup preferences must default off.");
-        Invoke("Settings");
-        _application.VerifySettingsForSmoke(0, true, "");
-        var firstWindow = _application.SettingsWindowForSmoke;
-        Invoke("Settings");
-        Require(_application.SettingsWindowForSmoke == firstWindow && _startupSettings.WriteCount == 0,
-            "Opening Settings created a duplicate window or registered startup.");
-        _application.ClickSettingsControlForSmoke("Startup");
-        _application.VerifySettingsForSmoke(1, true, "");
-        Require(_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 1, "The native checkbox did not enable the isolated setting.");
-        _application.CloseSettingsForSmoke();
-        Invoke("Settings");
-        _application.VerifySettingsForSmoke(1, true, "");
-        Require(_startupSettings.WriteCount == 1, "Reopening Settings changed startup registration.");
-        _application.ClickSettingsControlForSmoke("Startup");
-        _application.VerifySettingsForSmoke(0, true, "");
-        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 2, "The native checkbox did not disable the setting.");
+        _application.VerifySettingsViewForSmoke(false, true, TraySettingsText.StartupDescription);
+        _application.ToggleLaunchAtSignInForSmoke();
+        _application.VerifySettingsViewForSmoke(true, true, TraySettingsText.StartupDescription);
+        Require(_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 1, "The switch did not enable the isolated setting.");
+        _application.ToggleLaunchAtSignInForSmoke();
+        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 2, "The switch did not disable the setting.");
 
         _startupSettings.CanEnable = false;
-        _application.RefreshSettingsForSmoke();
-        _application.VerifySettingsForSmoke(0, false,
-            "Launch at sign-in requires a stable native CLI installation.");
-        _application.ClickSettingsControlForSmoke("Startup");
+        _application.VerifySettingsViewForSmoke(false, false, TraySettingsText.StableNativeInstallationRequired);
+        _application.ToggleLaunchAtSignInForSmoke();
         Require(_startupSettings.WriteCount == 2, "An unavailable startup setting was enabled.");
         _startupSettings.Store.SetEnabled(true);
-        _application.RefreshSettingsForSmoke();
-        _application.VerifySettingsForSmoke(1, true,
-            "Launch at sign-in requires a stable native CLI installation.");
-        _application.ClickSettingsControlForSmoke("Startup");
+        _application.VerifySettingsViewForSmoke(true, true, TraySettingsText.StableNativeInstallationRequired);
+        _application.ToggleLaunchAtSignInForSmoke();
         Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 3,
             "An existing registration could not be disabled when enabling was unavailable.");
 
         _startupSettings.CanEnable = true;
         _startupSettings.FailWrite = true;
-        _application.RefreshSettingsForSmoke();
-        _application.ClickSettingsControlForSmoke("Startup");
-        _application.VerifySettingsForSmoke(0, true,
-            $"Could not change launch at sign-in: Simulated startup write failure.\r\n{off}");
-        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 4,
-            "A failed write produced a phantom enabled setting.");
+        _application.VerifySettingsViewForSmoke(false, true, TraySettingsText.StartupDescription);
+        _application.ToggleLaunchAtSignInForSmoke();
+        Require(!_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 4, "A failed write produced a phantom enabled setting.");
+        Require(_application.PanelForSmoke.Scene.Accessibility.Single(element => element.Target?.Kind == PanelTargetKind.LaunchAtSignIn)
+            .Description!.Contains("Simulated startup write failure.", StringComparison.Ordinal), "A failed write was not reported under the switch.");
         _startupSettings.FailWrite = false;
-        _startupSettings.FailAfterWrite = true;
-        _application.ClickSettingsControlForSmoke("Startup");
-        _application.VerifySettingsForSmoke(1, true,
-            $"Could not change launch at sign-in: Simulated partial startup write failure.\r\n{on}");
-        Require(_startupSettings.Store.Read().Enabled && _startupSettings.WriteCount == 5,
-            "A partially completed write was not re-read from the backing store.");
-        _startupSettings.FailAfterWrite = false;
-        _application.ClickSettingsControlForSmoke("Startup");
-        _application.VerifySettingsForSmoke(0, true, "");
         _startupSettings.FailRead = true;
-        _application.RefreshSettingsForSmoke();
-        const string unknown = "Could not read launch at sign-in: Simulated startup read failure.\r\nClose and reopen Settings to retry.";
-        _application.VerifySettingsForSmoke(2, false, unknown);
-        _application.CloseSettingsForSmoke();
-        Invoke("Settings");
-        _application.VerifySettingsForSmoke(2, false, unknown);
-        Require(_startupSettings.WriteCount == 6, "Opening an unknown startup state attempted registration.");
+        _application.VerifySettingsViewForSmoke(false, false,
+            "Could not read launch at sign-in: Simulated startup read failure. Close and reopen Settings to retry.");
+        Require(_startupSettings.WriteCount == 4, "Opening an unknown startup state attempted registration.");
         _startupSettings.FailRead = false;
-        _startupSettings.FailWrite = false;
-        _application.RefreshSettingsForSmoke();
-        _application.VerifySettingsForSmoke(0, true, "");
-        _startupSettings.CanEnable = false;
-        _startupSettings.Detail = string.Join(" ", Enumerable.Repeat(
-            "Launch at sign-in requires a verified stable native CLI installation; development builds cannot register startup.", 8));
-        _application.RefreshSettingsForSmoke();
-        _application.VerifySettingsForSmoke(0, false,
-            "Launch at sign-in requires a stable native CLI installation.");
-        _startupSettings.Detail = null;
-        _startupSettings.CanEnable = true;
-        _application.RefreshSettingsForSmoke();
-        _application.VerifySettingsForSmoke(0, true, "");
-        _application.VerifySettingsScrollingForSmoke();
+        _application.VerifySettingsViewForSmoke(false, true, TraySettingsText.StartupDescription);
+        _application.CloseSettingsViewForSmoke();
         Require(_documentationCalls == 0, "Settings unexpectedly opened documentation.");
-        _application.CloseSettingsForSmoke();
-        Require(_startupSettings.WriteCount == 6 && !_startupSettings.Store.Read().Enabled,
-            "Closing Settings changed startup state.");
+        Require(_startupSettings.WriteCount == 4 && !_startupSettings.Store.Read().Enabled, "Closing Settings changed startup state.");
     }
 
     private void Publish(IReadOnlyList<AppHostInfo> hosts, DiscoveryState discovery = DiscoveryState.Live)

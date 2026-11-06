@@ -6,7 +6,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
@@ -15,7 +14,7 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper));
 
     public void Dispose() => _loggerFactory.Dispose();
 
@@ -24,7 +23,8 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
-            processExecutionFactory: processExecutionFactory ?? TestProcessExecutionFactory.CreateForCliGuardian(new TestEnvironment()));
+            processExecutionFactory: processExecutionFactory ?? TestProcessExecutionFactory.CreateForCliGuardian(
+                new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
 
     [Fact]
     public async Task LaunchAsync_WithIsolatedConsoleForGracefulShutdown_RequestsKillOnParentExit()
@@ -100,6 +100,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
         var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal callback: killing process tree {pid}.");
             try
             {
                 using var proc = Process.GetProcessById(pid);
@@ -110,6 +111,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
                 // Already exited; treat as graceful success.
             }
 
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal callback finished for process {pid}.");
             return Task.FromResult(true);
         });
 
@@ -138,20 +140,20 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18880")]
     public async Task LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget()
     {
         // Regression coverage for DCP's stop-process-tree behavior: the graceful signaler can
         // deliver the signal quickly and then block until the target exits. The ladder must wait
-        // for process exit in parallel with that signaler instead of awaiting the signaler first.
+        // for process exit in parallel with that signaler instead of awaiting the signaler first,
+        // and must cancel the still-blocked signaler once the child is gone.
         var launcher = CreateLauncher();
         var (command, args) = GetLongRunningCommand();
 
         using var cts = new CancellationTokenSource();
         using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the launcher routes through the ladder.
-        var signalerNeverCompletes = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var signaler = new RecordingGracefulSignaler(onSignal: pid =>
+        var signalerCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var signaler = new RecordingGracefulSignaler(onSignal: async (pid, cancellationToken) =>
         {
             try
             {
@@ -163,7 +165,17 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
                 // Already exited; treat as graceful success.
             }
 
-            return signalerNeverCompletes.Task;
+            // Like DCP's stop-process-tree run, block until the caller cancels the request.
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                signalerCancelled.TrySetResult();
+                throw;
+            }
+            return true;
         });
 
         var options = new GuestLaunchOptions(
@@ -189,6 +201,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.NotEqual(0, exitCode);
         Assert.Single(signaler.Pids);
+        Assert.True(signalerCancelled.Task.IsCompleted, "Expected the ladder to cancel the still-blocked signaler after the child exited.");
         Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5),
             $"Expected process exit to win over the still-blocked signaler but it took {stopwatch.Elapsed}.");
@@ -213,8 +226,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         // Escalation is driven by the explicit Expire() below, not by the budget elapsing.
 
         var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var signaler = new RecordingGracefulSignaler(onSignal: _ =>
+        var signaler = new RecordingGracefulSignaler(onSignal: pid =>
         {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal requested for process {pid}; leaving it running.");
             signaled.TrySetResult();
             // Pretend the OS signal was delivered but the process is a bad citizen and refuses to exit.
             return Task.FromResult(true);
@@ -235,6 +249,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             cts.Token);
 
         var descendantPid = await WaitForPidFileAsync(descendantPidFile);
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Descendant {descendantPid} started; requesting launch cancellation.");
 
         try
         {
@@ -245,11 +260,14 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             // ordering rather than the escalation path.
             await signaled.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Graceful signal observed; expiring shutdown window.");
             shutdownService.Expire();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Shutdown window expired; waiting for tree termination.");
 
             var stopwatch = Stopwatch.StartNew();
             var (exitCode, _) = await launchTask.WaitAsync(TimeSpan.FromSeconds(30));
             stopwatch.Stop();
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Launch returned {exitCode} after {stopwatch.Elapsed}; checking descendant {descendantPid}.");
 
             Assert.NotEqual(0, exitCode);
             Assert.True(WaitForProcessExit(descendantPid, TimeSpan.FromSeconds(10)), $"Expected descendant process {descendantPid} to be killed with the root process tree.");
@@ -258,7 +276,9 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         }
         finally
         {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Cleaning up descendant {descendantPid}.");
             TryKillProcess(descendantPid);
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Descendant cleanup returned.");
         }
     }
 

@@ -88,6 +88,9 @@ internal static class BundleDiscovery
     /// </summary>
     public const string ManagedDirectoryName = "managed";
 
+    /// <summary>Directory containing AppHost Server v2.</summary>
+    public const string AppHostServerDirectoryName = "apphost-server";
+
     /// <summary>
     /// Directory name for the Dashboard executable and static assets in the bundle layout.
     /// </summary>
@@ -113,6 +116,9 @@ internal static class BundleDiscovery
     /// Executable name for the unified managed binary.
     /// </summary>
     public const string ManagedExecutableName = "aspire-managed";
+
+    /// <summary>Executable name for AppHost Server v2.</summary>
+    public const string AppHostServerExecutableName = "aspire-apphost-server";
 
     /// <summary>
     /// Executable name for the Native AOT Dashboard.

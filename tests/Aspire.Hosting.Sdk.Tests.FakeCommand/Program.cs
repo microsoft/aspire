@@ -36,6 +36,18 @@ var setupInstallPath = forwardedArgs switch
 };
 if (setupInstallPath is not null)
 {
+    var setupExitCodePath = Path.Combine(AppContext.BaseDirectory, "setup-exit-code");
+    if (File.Exists(setupExitCodePath))
+    {
+        Console.WriteLine("Acquiring Aspire CLI; package source: 'test-feed'.");
+        Console.Error.WriteLine("error: Unable to load 'test-feed'; response: 401 (Unauthorized).");
+        Environment.ExitCode = int.Parse(File.ReadAllText(setupExitCodePath), CultureInfo.InvariantCulture);
+        if (Environment.ExitCode != 0)
+        {
+            return;
+        }
+    }
+
     var dcpDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dcp"));
     var managedDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "managed"));
     var dashboardDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dashboard"));

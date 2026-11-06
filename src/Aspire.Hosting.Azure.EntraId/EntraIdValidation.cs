@@ -104,6 +104,56 @@ internal static class EntraIdValidation
         return "Expected an absolute HTTPS URL with no query string or fragment, such as 'https://login.microsoftonline.com/'.";
     }
 
+    /// <summary>
+    /// Validates an application ID URI, which must be an absolute URI without a query string or fragment.
+    /// </summary>
+    internal static string? ValidateApplicationIdUri(string? uri)
+    {
+        if (string.IsNullOrEmpty(uri))
+        {
+            return NoValueError;
+        }
+
+        // Microsoft Graph limits identifier URIs to 255 characters and rejects ones that contain whitespace. A rooted path such as
+        // "/orders" parses as an absolute file:// URI on Linux and macOS but not on Windows, so file URIs are rejected explicitly to
+        // give the same answer on every platform.
+        if (uri.Length <= 255 &&
+            !uri.Any(char.IsWhiteSpace) &&
+            !uri.Contains('?') &&
+            !uri.Contains('#') &&
+            Uri.TryCreate(uri, UriKind.Absolute, out var parsed) &&
+            !parsed.IsFile)
+        {
+            return null;
+        }
+
+        return "Expected an absolute URI of at most 255 characters with no whitespace, query string or fragment, such as 'api://contoso-orders' or 'https://contoso.onmicrosoft.com/orders'.";
+    }
+
+    /// <summary>
+    /// Validates the value of a delegated permission (scope) or application permission (app role), which appears in the token's
+    /// <c>scp</c> or <c>roles</c> claim.
+    /// </summary>
+    /// <remarks>
+    /// The rule is Microsoft Graph's for <c>permissionScope.value</c>, which app role values follow as well:
+    /// at most 120 characters from the ranges 0-9, A-Z and a-z and from the punctuation <c>:!#$%&amp;'()*+,-./;&lt;=&gt;?@[]^_`{|}~</c>,
+    /// and it can't begin with a period. A space is not allowed, which also keeps the space-separated <c>scope</c> of a consent grant unambiguous.
+    /// See https://learn.microsoft.com/graph/api/resources/permissionscope.
+    /// </remarks>
+    internal static string? ValidateScopeName(string? name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return NoValueError;
+        }
+
+        if (name.Length <= 120 && name[0] != '.' && name.All(static c => char.IsAsciiLetterOrDigit(c) || ":!#$%&'()*+,-./;<=>?@[]^_`{|}~".Contains(c)))
+        {
+            return null;
+        }
+
+        return "Expected at most 120 ASCII letters, digits or punctuation (but no spaces), not beginning with '.', such as 'access_as_user'.";
+    }
     private static EntraIdSignInAudience? GetSignInAudienceForKeyword(string tenantId)
     {
         if (string.Equals(tenantId, "organizations", StringComparison.OrdinalIgnoreCase))

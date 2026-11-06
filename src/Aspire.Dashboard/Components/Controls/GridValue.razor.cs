@@ -87,6 +87,13 @@ public partial class GridValue
     [Parameter]
     public string? ToolTip { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether hovering the value shows it in a tooltip. Rows of lists that grow without bound, such as
+    /// structured logs, turn it off: every row would otherwise carry a copy of its text for the tooltip.
+    /// </summary>
+    [Parameter]
+    public bool ShowToolTip { get; set; } = true;
+
     [Parameter]
     public string PreCopyToolTip { get; set; } = null!;
 

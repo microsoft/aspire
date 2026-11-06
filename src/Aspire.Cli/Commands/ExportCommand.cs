@@ -110,7 +110,7 @@ internal sealed class ExportCommand : BaseCommand
 
         if (dashboardApi.BaseUrl is null)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, ExportCommandStrings.DashboardNotAvailable);
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, ExportCommandStrings.DashboardNotAvailable);
         }
 
         try

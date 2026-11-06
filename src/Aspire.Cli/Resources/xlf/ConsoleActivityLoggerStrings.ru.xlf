@@ -4,57 +4,57 @@
     <body>
       <trans-unit id="ActivityStarting">
         <source>Starting...</source>
-        <target state="new">Starting...</target>
+        <target state="translated">Начинаем...</target>
         <note />
       </trans-unit>
       <trans-unit id="ActivityStartingWithName">
         <source>Starting {0}...</source>
-        <target state="new">Starting {0}...</target>
+        <target state="translated">Запуск {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineFailed">
         <source>Pipeline failed</source>
-        <target state="new">Pipeline failed</target>
+        <target state="translated">Сбой конвейера</target>
         <note />
       </trans-unit>
       <trans-unit id="PipelineSucceeded">
         <source>Pipeline succeeded</source>
-        <target state="new">Pipeline succeeded</target>
+        <target state="translated">Конвейер выполнен</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryFailed">
         <source>{0} failed</source>
-        <target state="new">{0} failed</target>
+        <target state="translated">Сбой {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryLogLevelHelp">
         <source>For more details, add --pipeline-log-level debug/trace to the command.</source>
-        <target state="new">For more details, add --pipeline-log-level debug/trace to the command.</target>
+        <target state="translated">Для получения подробных сведений добавьте в команду --pipeline-log-level debug/trace.</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryStepsSucceeded">
         <source>{0} steps succeeded</source>
-        <target state="new">{0} steps succeeded</target>
+        <target state="translated">Шагов выполнено: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryStepsSucceededWithTotal">
         <source>{0}/{1} steps succeeded</source>
-        <target state="new">{0}/{1} steps succeeded</target>
+        <target state="translated">Выполнены шаги: {0}/{1}</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryTotalTime">
         <source>Total time: {0}</source>
-        <target state="new">Total time: {0}</target>
+        <target state="translated">Суммарное время: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryWarningsPlural">
         <source>{0} warnings</source>
-        <target state="new">{0} warnings</target>
+        <target state="translated">Предупреждений: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryWarningsSingular">
         <source>{0} warning</source>
-        <target state="new">{0} warning</target>
+        <target state="translated">Предупреждение: {0}</target>
         <note />
       </trans-unit>
     </body>

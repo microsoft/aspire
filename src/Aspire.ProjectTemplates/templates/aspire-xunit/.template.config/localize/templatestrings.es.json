@@ -1,10 +1,10 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Proyecto de prueba de Aspire (xUnit)",
   "description": "Un proyecto que contiene pruebas de integración de xUnit.net de un proyecto AppHost de Aspire.",
   "symbols/Framework/description": "Marco de destino del proyecto.",
   "symbols/Framework/choices/net10.0/description": "Destino net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "Destino net11.0",
   "symbols/XUnitVersion/description": "La versión de xUnit.net que se utilizará.",
   "symbols/XUnitVersion/displayName": "Versión de xUnit.net",
   "symbols/XUnitVersion/choices/v2/displayName": "v2",

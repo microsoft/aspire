@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
+using Aspire.Cli.Resources;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -12,6 +15,34 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static class ConsoleHelpers
 {
+    public static void DisplaySourceTrustWarning(this IInteractionService interactionService, CliExecutionContext executionContext)
+    {
+        // An init source can lead straight into Git template discovery in "aspire new".
+        // Share the warning across both paths for this invocation, without skipping either consent prompt.
+        if (!executionContext.TryMarkSourceTrustWarningDisplayed())
+        {
+            return;
+        }
+
+        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{SharedCommandStrings.SourceTrustWarning.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+    }
+
+    public static void DisplayNuGetSearchLimitWarning(this IInteractionService interactionService)
+    {
+        var message = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NuGetSearchLimitWarning,
+            NuGetSearchLimits.MaxResults);
+        interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{message.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+    }
+
+    public static void DisplayNuGetSearchFailureWarnings(this IInteractionService interactionService, IEnumerable<string> failedSources)
+    {
+        foreach (var source in failedSources.Select(PackageSourceRedactor.RedactForDisplay).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase))
+        {
+            var message = string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NuGetSearchSourceFailedWarning, source);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{message.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
+        }
+    }
+
     /// <summary>
     /// Formats an emoji prefix with trailing space for aligned console output.
     /// </summary>
@@ -60,4 +91,3 @@ internal static class ConsoleHelpers
         return grid;
     }
 }
-

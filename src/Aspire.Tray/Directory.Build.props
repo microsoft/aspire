@@ -5,6 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>Aspire.Tray</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <IsPackable>false</IsPackable>
     <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
@@ -12,5 +13,6 @@
     <PackageReference Include="System.IO.Hashing" />
     <Compile Include="$(MSBuildThisFileDirectory)Common/*.cs" Link="Common/%(Filename)%(Extension)" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Common/TrayCliProtocol.cs" />
+    <Compile Include="$(SharedDir)LinuxTrayPayload.cs" Link="Common/LinuxTrayPayload.cs" />
   </ItemGroup>
 </Project>

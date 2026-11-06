@@ -28,6 +28,8 @@ public static class MongoDBReplicaSetBuilderExtensions
     private const string NewReplicaSetConfigurationIncompatibleCodeName = "NewReplicaSetConfigurationIncompatible";
     private const string ConfigurationInProgressCodeName = "ConfigurationInProgress"; // NOTE: Represents the error `Cannot run replSetReconfig because the node is currently updating its configuration.` that can be returned by `replSetReconfig` when a preceding `replSetInitiate` (or `replSetReconfig`, for that matter) command is still being processed in the background.
     private static readonly TimeSpan s_rsInitiationRetryWaitInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_primaryElectionPollInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan s_primaryElectionTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Adds a MongoDB replica set resource to the application model.
@@ -299,28 +301,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                                 // NOTE: There is no existing configuration to preserve member ids from, so all of them are freshly allocated.
                                 var membersBsonArray = BuildMembersConfiguration(memberHosts, currentMembers: null);
 
-                                // NOTE: The initialization is performed in two steps, first with a single member and then with the full configuration. `replSetInitiate` runs a quorum check against every host in the configuration it is handed and only returns once an election has succeeded, so initiating with the full member list makes success depend on every other member already being reachable. Initiating with only the initial primary elects it immediately, and the remaining members are then added by a reconfiguration, which does not have to wait on them.
-                                await admin.RunCommandAsync<BsonDocument>(new BsonDocument
-                                {
-                                    ["replSetInitiate"] = new BsonDocument
-                                    {
-                                        ["_id"] = rsResource.Name,
-                                        ["members"] = new BsonArray([membersBsonArray[0]]),
-                                    },
-                                    // NOTE: A member has no primary until this very command has run, so selecting one is
-                                    // the one thing that cannot be asked for here.
-                                }, readPreference: ReadPreference.Nearest, cancellationToken: ct).ConfigureAwait(false);
-
-                                await admin.RunCommandAsync<BsonDocument>(new BsonDocument
-                                {
-                                    ["replSetReconfig"] = new BsonDocument
-                                    {
-                                        ["_id"] = rsResource.Name,
-                                        ["version"] = 2,
-                                        ["members"] = membersBsonArray,
-                                    },
-                                    ["force"] = true,
-                                }, readPreference: ReadPreference.Nearest, cancellationToken: ct).ConfigureAwait(false);
+                                await InitiateReplicaSetAsync(admin, rsResource.Name, membersBsonArray, ct).ConfigureAwait(false);
                                 configured = true;
                                 break;
                             }
@@ -549,6 +530,76 @@ public static class MongoDBReplicaSetBuilderExtensions
             // below actually needs, since that is what makes the member's endpoint resolvable.
             .WaitForStart(member)
             .WithRelationship(member, "replica set member");
+    }
+
+    /// <summary>
+    /// Initiates a brand new replica set on the initial primary and then extends it to every declared member.
+    /// </summary>
+    /// <remarks>
+    /// The initialization is performed in two steps, first with a single member and then with the full configuration.
+    /// <c>replSetInitiate</c> runs a quorum check against every host in the configuration it is handed, so initiating
+    /// with the full member list makes success depend on every other member already being reachable. Initiating with
+    /// only the initial primary does not, and the remaining members are then added by a reconfiguration.
+    /// </remarks>
+    internal static async Task InitiateReplicaSetAsync(IMongoDatabase admin, string replicaSetName, BsonArray members, CancellationToken cancellationToken)
+    {
+        await admin.RunCommandAsync<BsonDocument>(new BsonDocument
+        {
+            ["replSetInitiate"] = new BsonDocument
+            {
+                ["_id"] = replicaSetName,
+                ["members"] = new BsonArray([members[0]]),
+            },
+            // NOTE: A member has no primary until this very command has run, so selecting one is
+            // the one thing that cannot be asked for here.
+        }, readPreference: ReadPreference.Nearest, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // NOTE: `replSetInitiate` returns as soon as the configuration is installed, while the member is still going
+        // through its own election. A reconfiguration sent straight away races that election: it is either rejected with
+        // `ConfigurationInProgress`, or interrupted with `InterruptedDueToReplStateChange` by the state transition that
+        // makes the member primary. Waiting for the member to report itself as a writable primary closes that window.
+        await WaitForWritablePrimaryAsync(admin, cancellationToken).ConfigureAwait(false);
+
+        await admin.RunCommandAsync<BsonDocument>(new BsonDocument
+        {
+            ["replSetReconfig"] = new BsonDocument
+            {
+                ["_id"] = replicaSetName,
+                ["version"] = 2,
+                ["members"] = members,
+            },
+            ["force"] = true,
+        }, readPreference: ReadPreference.Nearest, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task WaitForWritablePrimaryAsync(IMongoDatabase admin, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(s_primaryElectionTimeout);
+
+        try
+        {
+            while (true)
+            {
+                // NOTE: `hello` is answered in every replica set state, and `isWritablePrimary` only turns true once the
+                // member has finished stepping up, which is the transition that would otherwise interrupt the next command.
+                var hello = await admin.RunCommandAsync<BsonDocument>(
+                    new BsonDocument("hello", 1),
+                    readPreference: ReadPreference.Nearest,
+                    cancellationToken: timeout.Token).ConfigureAwait(false);
+
+                if (hello.TryGetValue("isWritablePrimary", out var isWritablePrimary) && isWritablePrimary.ToBoolean())
+                {
+                    return;
+                }
+
+                await Task.Delay(s_primaryElectionPollInterval, timeout.Token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new DistributedApplicationException($"The initial MongoDB replica set member did not become a writable primary within {s_primaryElectionTimeout.TotalSeconds} seconds of being initiated.");
+        }
     }
 
     /// <summary>

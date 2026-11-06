@@ -331,6 +331,51 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void CalculateCounterIncreaseValues_DimensionMissingFromInterval_NotTreatedAsReset()
+    {
+        var context = CreateContext();
+        var frequentDimension = new DimensionScope(capacity: 100, []);
+        var stoppedDimension = new DimensionScope(capacity: 100, []);
+        var processStart = s_startTime.AddSeconds(-60);
+
+        // Cumulative totals. The second dimension stops reporting, so it has no value in the latest intervals.
+        // Summing the totals first would give 1502, 1503, 1003, 1003: a drop that looks like a reset.
+        foreach (var (secondsBeforeEnd, value) in new[] { (35, 1000), (25, 1001), (15, 1002), (5, 1003) })
+        {
+            frequentDimension.AddPointValue(new NumberDataPoint
+            {
+                AsInt = value,
+                StartTimeUnixNano = ToNanos(processStart),
+                TimeUnixNano = ToNanos(s_startTime.AddSeconds(-secondsBeforeEnd))
+            }, context);
+        }
+        foreach (var (secondsBeforeEnd, value) in new[] { (35, 500), (25, 501) })
+        {
+            stoppedDimension.AddPointValue(new NumberDataPoint
+            {
+                AsInt = value,
+                StartTimeUnixNano = ToNanos(processStart),
+                TimeUnixNano = ToNanos(s_startTime.AddSeconds(-secondsBeforeEnd))
+            }, context);
+        }
+
+        var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(30));
+        var increases = calculator.CalculateCounterIncreaseValues([frequentDimension, stoppedDimension], s_startTime, OtlpAggregationTemporality.Cumulative);
+
+        Assert.Equal([null, 1, 1, 0, null], increases);
+    }
+
+    [Fact]
+    public void CalculateCounterIncreaseValues_NoDimensions_AllNullValues()
+    {
+        var calculator = new ChartDataCalculator(pointCount: 3, duration: TimeSpan.FromSeconds(30));
+
+        var increases = calculator.CalculateCounterIncreaseValues([], s_startTime, OtlpAggregationTemporality.Cumulative);
+
+        Assert.Equal([null, null, null, null, null], increases);
+    }
+
+    [Fact]
     public void CalculateChartValues_NoDimensions_AllNullValues()
     {
         var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(50));
@@ -957,6 +1002,7 @@ public class ChartDataCalculatorTests
                 Unit = "items",
                 Type = OtlpInstrumentType.Gauge,
                 AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+                IsMonotonic = false,
                 Parent = OtlpScope.Empty,
                 ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
             },

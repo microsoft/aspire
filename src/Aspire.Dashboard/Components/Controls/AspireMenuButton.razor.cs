@@ -16,11 +16,11 @@ public partial class AspireMenuButton : FluentComponentBase
     {
     }
 
-    private static readonly Icon s_defaultIcon = new Icons.Regular.Size24.ChevronDown();
+    private static readonly Icon s_defaultIcon = new Icons.Regular.Size16.ChevronDown();
+    private static readonly Icon s_defaultOpenIcon = new Icons.Regular.Size16.ChevronUp();
 
     private bool _renderMenu;
     private bool _visible;
-    private Icon? _icon;
     private MenuButtonItem[] _items = [];
     private bool _disabled;
     private bool _hasActionableItems = true;
@@ -45,10 +45,10 @@ public partial class AspireMenuButton : FluentComponentBase
     public Icon? Icon { get; set; }
 
     [Parameter]
-    public Color? IconColor { get; set; } = Color.Primary;
+    public Color? IconColor { get; set; } = Color.Custom;
 
     [Parameter]
-    public string? IconCustomColor { get; set; }
+    public string? IconCustomColor { get; set; } = "currentColor";
 
     [Parameter]
     public string? ButtonClass { get; set; }
@@ -94,8 +94,6 @@ public partial class AspireMenuButton : FluentComponentBase
 
     protected override void OnParametersSet()
     {
-        _icon = Icon ?? s_defaultIcon;
-
         if (!ReferenceEquals(_renderedItemsProvider, ItemsProvider))
         {
             _renderedItemsProvider = ItemsProvider;
@@ -119,6 +117,8 @@ public partial class AspireMenuButton : FluentComponentBase
             UpdateDisabled();
         }
     }
+
+    private Icon CurrentIcon => Icon ?? (_visible ? s_defaultOpenIcon : s_defaultIcon);
 
     private void ToggleMenu()
     {

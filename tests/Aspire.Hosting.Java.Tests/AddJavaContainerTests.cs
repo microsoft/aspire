@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -117,7 +118,10 @@ public class AddJavaContainerTests
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             app.Resource, serviceProvider: built.Services.GetRequiredService<IServiceProvider>());
 
-        Assert.Equal("http://host.docker.internal:4317", envVars["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        var dcpInfo = await built.Services.GetRequiredService<IDcpDependencyCheckService>().GetDcpInfoAsync();
+        var containerHostName = dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
+
+        Assert.Equal($"http://{containerHostName}:4317", envVars["OTEL_EXPORTER_OTLP_ENDPOINT"]);
     }
 
     [Fact]

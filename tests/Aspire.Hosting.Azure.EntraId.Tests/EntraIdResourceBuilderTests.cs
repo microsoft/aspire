@@ -365,12 +365,12 @@ public class EntraIdResourceBuilderTests
     }
 
     [Fact]
-    public void AddEntraIdApplication_WithFicMsi()
+    public void AddEntraIdApplication_WithFederatedManagedIdentityCredential()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
 
         appBuilder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
-            .WithFicMsi(ClientId);
+            .WithFederatedManagedIdentityCredential(ClientId);
 
         using var app = appBuilder.Build();
 
@@ -388,23 +388,23 @@ public class EntraIdResourceBuilderTests
     [InlineData("mi-client-id")]
     [InlineData("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/web")]
     [InlineData("00001111-aaaa-2222-bbbb-3333cccc4444 ")]
-    public void WithFicMsi_RejectsInvalidManagedIdentityClientId(string clientId)
+    public void WithFederatedManagedIdentityCredential_RejectsInvalidManagedIdentityClientId(string clientId)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var entra = builder.AddEntraIdApplication("entra-web");
 
-        var exception = Assert.Throws<ArgumentException>(() => entra.WithFicMsi(clientId));
+        var exception = Assert.Throws<ArgumentException>(() => entra.WithFederatedManagedIdentityCredential(clientId));
         Assert.Equal("managedIdentityClientId", exception.ParamName);
         Assert.Empty(entra.Resource.ClientCredentials);
     }
 
     [Fact]
-    public void WithFicMsi_RejectsMissingManagedIdentityClientId()
+    public void WithFederatedManagedIdentityCredential_RejectsMissingManagedIdentityClientId()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var entra = builder.AddEntraIdApplication("entra-web");
 
-        var exception = Assert.Throws<ArgumentNullException>(() => entra.WithFicMsi(null!));
+        var exception = Assert.Throws<ArgumentNullException>(() => entra.WithFederatedManagedIdentityCredential((string)null!));
         Assert.Equal("managedIdentityClientId", exception.ParamName);
         Assert.Empty(entra.Resource.ClientCredentials);
     }
@@ -415,12 +415,33 @@ public class EntraIdResourceBuilderTests
     [InlineData("00001111-aaaa-2222-bbbb-3333cccc4444 ")]
     public void FederatedIdentityCredential_RejectsInvalidManagedIdentityClientId(string clientId)
     {
-        var exception = Assert.Throws<ArgumentException>(() => new EntraIdFederatedIdentityCredential
-        {
-            ManagedIdentityClientId = clientId
-        });
+        var exception = Assert.Throws<ArgumentException>(() => new EntraIdFederatedIdentityCredential(clientId));
 
-        Assert.Equal(nameof(EntraIdFederatedIdentityCredential.ManagedIdentityClientId), exception.ParamName);
+        Assert.Equal("managedIdentityClientId", exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task WithFederatedManagedIdentityCredential_ClientId_ExistingApplication_InjectsEnvironmentVariables(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var entra = builder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
+            .WithFederatedManagedIdentityCredential("11112222-aaaa-3333-bbbb-4444cccc5555");
+        var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            web.Resource, operation, TestServiceProvider.Instance);
+
+        // A client ID needs no Aspire identity, so it applies in both modes and does not require the consumer to have one.
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["AzureAd__Instance"] = "https://login.microsoftonline.com/",
+            ["AzureAd__TenantId"] = TenantId,
+            ["AzureAd__ClientId"] = ClientId,
+            ["AzureAd__ClientCredentials__0__SourceType"] = "SignedAssertionFromManagedIdentity",
+            ["AzureAd__ClientCredentials__0__ManagedIdentityClientId"] = "11112222-aaaa-3333-bbbb-4444cccc5555"
+        }, env);
     }
 
     [Fact]
@@ -432,7 +453,7 @@ public class EntraIdResourceBuilderTests
 
         appBuilder.AddExistingEntraApplication("entra-web", tenantId: TenantId, clientId: ClientId)
             .WithClientSecret(secret)
-            .WithFicMsi(ClientId);
+            .WithFederatedManagedIdentityCredential(ClientId);
 
         using var app = appBuilder.Build();
 
@@ -674,6 +695,39 @@ public class EntraIdResourceBuilderTests
     }
 
     [Theory]
+    [InlineData(DistributedApplicationOperation.Run, false)]
+    [InlineData(DistributedApplicationOperation.Run, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false)]
+    [InlineData(DistributedApplicationOperation.Publish, true)]
+    public async Task WithReference_ProjectFactoriesPreserveMicrosoftIdentityWebDefaults(DistributedApplicationOperation operation, bool useDotnetProject)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create(operation);
+        var entra = appBuilder.AddExistingEntraApplication("entra-api", tenantId: TenantId, clientId: ClientId);
+
+#pragma warning disable CS0618 // Both factories must retain Entra defaults even through a widened builder view.
+        IResourceBuilder<IResourceWithEnvironment> project = useDotnetProject
+            ? appBuilder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            : appBuilder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+
+        project.WithEnvironment("EXISTING_SETTING", "unchanged");
+        Assert.Same(project, project.WithReference(entra));
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            project.Resource, operation, TestServiceProvider.Instance);
+
+        Assert.Equal("unchanged", env["EXISTING_SETTING"]);
+        // Factory-specific telemetry settings are independent of the authentication configuration.
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["AzureAd__Instance"] = "https://login.microsoftonline.com/",
+            ["AzureAd__TenantId"] = TenantId,
+            ["AzureAd__ClientId"] = ClientId
+        }, env.Where(pair => pair.Key.StartsWith("AzureAd__", StringComparison.Ordinal))
+            .ToDictionary(pair => pair.Key, pair => pair.Value));
+    }
+
+    [Theory]
     [InlineData(DistributedApplicationOperation.Run, "AzureAdApi", "AzureAdApi")]
     [InlineData(DistributedApplicationOperation.Publish, "AzureAdApi", "AzureAdApi")]
     [InlineData(DistributedApplicationOperation.Run, "Authentication:AzureAd", "Authentication__AzureAd")]
@@ -832,9 +886,8 @@ public class EntraIdResourceBuilderTests
         var entra = appBuilder.AddExistingEntraApplication("entra-web", tenantId, clientId)
             .WithSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs)
             .WithClientSecret(secret)
-            .WithCredential(new EntraIdFederatedIdentityCredential
+            .WithCredential(new EntraIdFederatedIdentityCredential(ClientId)
             {
-                ManagedIdentityClientId = ClientId,
                 TokenExchangeUrl = "api://CustomTokenExchange",
                 TokenExchangeAuthority = "https://login.microsoftonline.com/"
             })
@@ -1302,7 +1355,7 @@ public class EntraIdResourceBuilderTests
         var container = appBuilder.AddContainer("api", "myimage");
 
         Assert.Throws<ArgumentNullException>(() =>
-            container.WithReference(source: null!, connectionName: "AzureAd"));
+            container.WithReference(source: (IResourceBuilder<EntraIdApplicationResource>)null!, connectionName: "AzureAd"));
     }
 
     [Fact]

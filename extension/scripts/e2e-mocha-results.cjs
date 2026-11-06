@@ -32,11 +32,17 @@ function isBlockingHarnessFailure(error) {
 }
 
 function hasCompletedMochaTestFailures(results) {
+  // The reporter writes partial results with complete: false while Mocha is still running. A run that
+  // stopped before EVENT_RUN_END did not complete, so its recorded failures can never be advisory.
+  if (results?.complete === false) {
+    return false;
+  }
+
   if (!Array.isArray(results?.tests) || !Array.isArray(results?.failures) || results.failures.length === 0) {
     return false;
   }
 
-  // The reporter writes this shape only after Mocha emits EVENT_RUN_END:
+  // The reporter writes this shape with complete: true after Mocha emits EVENT_RUN_END:
   //   { tests: [{ fullTitle: "suite test" }],
   //     failures: [{ fullTitle: "suite test", err: { name: "NoSuchSessionError" } }] }
   // Startup crashes and hook failures can appear without a completed matching test. Require every

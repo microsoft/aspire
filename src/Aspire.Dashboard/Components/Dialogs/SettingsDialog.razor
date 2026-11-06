@@ -1,76 +1,127 @@
-﻿@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Resources
 @using Humanizer
 @inject IStringLocalizer<Dialogs> Loc
 
 <FluentDialogBody Class="navigation-dialog-body aspire-dialog-fields">
-    <FluentStack Orientation="Orientation.Vertical" Style="display: flex; height: 100%; overflow-y: auto;" VerticalGap="12">
-        <div class="input-container">
-            <FluentRadioGroup TValue="string"
-                              Label="@Loc[nameof(Dialogs.SettingsDialogTheme)]"
-                              @bind-Value="@_currentSetting"
-                              @bind-Value:after="ThemeChangedAsync"
-                              Orientation="Orientation.Vertical">
-                <FluentRadio Value="@ThemeManager.ThemeSettingSystem" Label="@Loc[nameof(Dialogs.SettingsDialogSystemTheme)]" role="radio" aria-checked="@(_currentSetting == ThemeManager.ThemeSettingSystem ? "true" : "false")" />
-                <FluentRadio Value="@ThemeManager.ThemeSettingLight" Label="@Loc[nameof(Dialogs.SettingsDialogLightTheme)]" role="radio" aria-checked="@(_currentSetting == ThemeManager.ThemeSettingLight ? "true" : "false")" />
-                <FluentRadio Value="@ThemeManager.ThemeSettingDark" Label="@Loc[nameof(Dialogs.SettingsDialogDarkTheme)]" role="radio" aria-checked="@(_currentSetting == ThemeManager.ThemeSettingDark ? "true" : "false")" />
-            </FluentRadioGroup>
-        </div>
+    <ChildContent>
+        <div class="settings-groups">
+        <section class="settings-group" aria-labelledby="settings-appearance-title">
+            <h2 id="settings-appearance-title" class="settings-group-title">@Loc[nameof(Dialogs.SettingsDialogAppearanceGroup)]</h2>
 
-        <div class="input-container">
-            <FluentSelect TOption="CultureInfo" TValue="CultureInfo"
-                ChangeOnEnterOnly="true"
-                Position="SelectPosition.Below"
-                Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
-                Items="@_languageOptions"
-                OptionText="@(c => c?.NativeName.Humanize())"
-                @bind-Value="@_selectedUiCulture"
-                @bind-Value:after="@OnLanguageChanged"
-                Class="aspire-input language-select"/>
+            <div class="input-container setting-row">
+                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogTheme)]</span>
+                <IconToggleGroup TValue="string"
+                                 Label="@Loc[nameof(Dialogs.SettingsDialogTheme)]"
+                                 Options="@_themeOptions"
+                                 Value="@_currentSetting"
+                                 ValueChanged="ThemeChangedAsync"
+                                 ShowCurrentLabel="false"
+                                 ShowOptionText="true" />
+            </div>
 
-            <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]</p>
-        </div>
+            <div class="input-container setting-row">
+                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogResourceListDensity)]</span>
+                <IconToggleGroup TValue="ResourceListDensity"
+                                 Label="@Loc[nameof(Dialogs.SettingsDialogResourceListDensity)]"
+                                 Options="@_densityOptions"
+                                 Value="@ViewPreferences.Density"
+                                 ValueChanged="@(density => ViewPreferences.SetDensityAsync(density))"
+                                 ShowCurrentLabel="false"
+                                 ShowOptionText="true" />
+            </div>
 
-        <div class="input-container">
-            <FluentRadioGroup TValue="TimeFormat"
-                              Label="@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]"
-                              @bind-Value="@_timeFormat"
-                              @bind-Value:after="OnTimeFormatChanged"
-                              Orientation="Orientation.Vertical">
-                @foreach (var format in Enum.GetValues<TimeFormat>())
-                {
-                    <FluentRadio Value="@format" Label="@FormatTimeFormatOption(format)" role="radio" aria-checked="@(_timeFormat == format ? "true" : "false")" />
-                }
-            </FluentRadioGroup>
-        </div>
+            <div class="input-container setting-row">
+                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]</span>
+                <IconToggleGroup TValue="GroupOverview"
+                                 Label="@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]"
+                                 Options="@_groupOverviewOptions"
+                                 Value="@ViewPreferences.GroupOverview"
+                                 ValueChanged="@(groupOverview => ViewPreferences.SetGroupOverviewAsync(groupOverview))"
+                                 ShowCurrentLabel="false"
+                                 ShowOptionText="true" />
+            </div>
+        </section>
 
-        <div>
-            <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogDashboardLogsAndTelemetry)]</span>
+        <section class="settings-group" aria-labelledby="settings-language-time-title">
+            <h2 id="settings-language-time-title" class="settings-group-title">@Loc[nameof(Dialogs.SettingsDialogLanguageAndTimeGroup)]</h2>
+
+            <div class="input-container setting-row">
+                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogLanguage)]</span>
+                <FluentSelect TOption="CultureInfo" TValue="CultureInfo"
+                              ChangeOnEnterOnly="true"
+                              Position="SelectPosition.Below"
+                              Items="@_languageOptions"
+                              OptionText="@(c => c?.NativeName.Humanize())"
+                              @bind-Value="@_selectedUiCulture"
+                              @bind-Value:after="@OnLanguageChanged"
+                              Class="aspire-input language-select"
+                              aria-label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
+                              aria-description="@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]"
+                              data-tooltip="@Loc[nameof(Dialogs.SettingsDialogLanguagePageReloads)]" />
+            </div>
+
+            <div class="input-container setting-row">
+                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]</span>
+                <IconToggleGroup TValue="TimeFormat"
+                                 Label="@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]"
+                                 Options="@_timeFormatOptions"
+                                 Value="@_timeFormat"
+                                 ValueChanged="OnTimeFormatChanged"
+                                 ShowCurrentLabel="false"
+                                 ShowOptionText="true" />
+            </div>
+        </section>
+
+        <section class="settings-group" aria-labelledby="settings-experience-title">
+            <h2 id="settings-experience-title" class="settings-group-title">@Loc[nameof(Dialogs.SettingsDialogExperienceGroup)]</h2>
+
+            <div class="input-container setting-row">
+                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogDashboardExperienceSelectorLabel)]</span>
+                <IconToggleGroup TValue="string"
+                                 Label="@Loc[nameof(Dialogs.SettingsDialogDashboardExperience)]"
+                                 Options="@_dashboardExperienceOptions"
+                                 Value="@NewDashboardExperience"
+                                 ValueChanged="OnDashboardExperienceChangedAsync"
+                                 ShowCurrentLabel="false"
+                                 ShowOptionText="true" />
+            </div>
+        </section>
+
+        <section class="settings-group settings-group-last" aria-labelledby="settings-data-title">
+            <h2 id="settings-data-title" class="settings-group-title">@Loc[nameof(Dialogs.SettingsDialogDataAndTelemetryGroup)]</h2>
+
             <div>
-                <FluentButton Class="aspire-button" OnClick="LaunchManageDataAsync"
-                              Title="@Loc[nameof(Dialogs.ManageDataManageButtonText)]"
+                <FluentButton Class="aspire-button"
+                              OnClick="LaunchManageDataAsync"
+                              data-tooltip="@Loc[nameof(Dialogs.ManageDataManageButtonText)]"
                               aria-label="@Loc[nameof(Dialogs.ManageDataManageButtonText)]">
                     <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Slot="start" Color="Color.Primary" />
                     @Loc[nameof(Dialogs.ManageDataManageButtonText)]
                 </FluentButton>
             </div>
-        </div>
 
-        @if (TelemetryService.IsTelemetryEnabled)
-        {
-            <div>
+            @if (TelemetryService.IsTelemetryEnabled)
+            {
                 <p class="setting-subtext">
-                    @Loc[nameof(Dialogs.SettingsDialogTelemetryEnabledInfo)] <a target="_blank" href="https://aka.ms/aspire/dashboard-microsoft-collected-telemetry" title="@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkTooltip)]">@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkText)]</a>
+                    @Loc[nameof(Dialogs.SettingsDialogTelemetryEnabledInfo)] <a target="_blank" href="https://aka.ms/aspire/dashboard-microsoft-collected-telemetry" data-tooltip="@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkTooltip)]">@Loc[nameof(Dialogs.SettingsDialogTelemetryInfoLinkText)]</a>
                 </p>
-            </div>
-        }
+            }
+        </section>
 
-        <div class="version">
-            <div>
-                @string.Format(Loc[nameof(Dialogs.SettingsDialogVersion)], VersionHelpers.DashboardDisplayVersion)
-            </div>
-            <div>
-                @string.Format(Loc[nameof(Dialogs.SettingsDialogDotNetRuntimeVersion)], VersionHelpers.RuntimeDisplayName)
-            </div>
         </div>
-    </FluentStack>
+    </ChildContent>
+
+    <ActionTemplate>
+        <footer class="interaction-dialog-actions settings-dialog-footer">
+            <div class="settings-version">
+                <span>@string.Format(Loc[nameof(Dialogs.SettingsDialogVersion)], VersionHelpers.DashboardDisplayVersion)</span>
+                <span>@string.Format(Loc[nameof(Dialogs.SettingsDialogDotNetRuntimeVersion)], VersionHelpers.RuntimeDisplayName)</span>
+            </div>
+            <FluentButton Appearance="ButtonAppearance.Primary"
+                          Class="aspire-button"
+                          OnClick="CloseAsync">
+                @Loc[nameof(Dialogs.DialogCloseButtonText)]
+            </FluentButton>
+        </footer>
+    </ActionTemplate>
 </FluentDialogBody>

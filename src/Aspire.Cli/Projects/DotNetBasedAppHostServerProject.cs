@@ -64,9 +64,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string? logFilePath = null,
         string? restoreRootConfigDirectory = null)
     {
-        _appPath = Path.GetFullPath(appPath);
-        _appPath = new Uri(_appPath).LocalPath;
-        _appPath = OperatingSystem.IsWindows() ? _appPath.ToLowerInvariant() : _appPath;
+        (_appPath, var pathHash) = GetAppPathIdentity(appPath);
         _socketPath = socketPath;
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
@@ -77,17 +75,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _logFilePath = logFilePath;
         _restoreRootConfigDirectory = restoreRootConfigDirectory is not null ? Path.GetFullPath(restoreRootConfigDirectory) : null;
 
-        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
-
-        if (projectModelPath is not null)
-        {
-            _projectModelPath = projectModelPath;
-        }
-        else
-        {
-            var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-            _projectModelPath = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), AppsFolder, pathDir);
-        }
+        _projectModelPath = projectModelPath ?? GetDefaultProjectModelPath(pathHash);
 
         // Create a stable UserSecretsId based on the app path hash
         _userSecretsId = new Guid(pathHash[..16]).ToString();
@@ -108,6 +96,29 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// Gets the full path to the AppHost server project file.
     /// </summary>
     public string GetProjectFilePath() => Path.Combine(_projectModelPath, ProjectFileName);
+
+    internal static string GetDefaultInstanceIdentifier(string appPath)
+    {
+        var (_, pathHash) = GetAppPathIdentity(appPath);
+
+        return Path.Combine(GetDefaultProjectModelPath(pathHash), ProjectFileName);
+    }
+
+    private static (string AppPath, byte[] Hash) GetAppPathIdentity(string appPath)
+    {
+        appPath = new Uri(Path.GetFullPath(appPath)).LocalPath;
+        appPath = OperatingSystem.IsWindows() ? appPath.ToLowerInvariant() : appPath;
+
+        // Keep the existing identity so discovery finds servers started by earlier CLIs.
+        return (appPath, SHA256.HashData(Encoding.UTF8.GetBytes(appPath)));
+    }
+
+    private static string GetDefaultProjectModelPath(byte[] pathHash)
+    {
+        var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
+
+        return Path.Combine(CliPathHelper.GetAspireHomeDirectory(), AppsFolder, pathDir);
+    }
 
     private string GetProjectHash()
     {

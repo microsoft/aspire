@@ -1,0 +1,5 @@
+﻿{
+  .github/content.txt: Keep GitHub content,
+  .gitignore: bin/,
+  content.txt: Keep template content
+}

@@ -4,7 +4,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Templating;
+using Aspire.Cli.Tests.Agents;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -34,6 +39,164 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         var service = new ConfigurationService(configuration, executionContext, globalSettingsFile, logger);
 
         return (service, settingsFilePath);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_MigratesLegacySettingsAndProfilesWithRequestedEdit()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, destination) = CreateService(workspace);
+        var legacyPath = Path.Combine(workspace.Path, ".aspire", "settings.json");
+        const string original = """
+            {
+                "appHostPath": "../original/AppHost.csproj",
+                "language": "csharp",
+                "sdkVersion": "17.0.0",
+                "features": { "defaultWatchEnabled": false }
+            }
+            """;
+        const string profiles = """
+            {
+                "profiles": {
+                    "default": {
+                        "applicationUrl": "https://localhost:5001",
+                        "environmentVariables": { "EXAMPLE": "value" }
+                    }
+                }
+            }
+            """;
+        var profilesPath = Path.Combine(workspace.Path, "apphost.run.json");
+        await File.WriteAllTextAsync(legacyPath, original);
+        await File.WriteAllTextAsync(profilesPath, profiles);
+
+        await service.SetConfigurationAsync("appHost.path", "updated/AppHost.csproj");
+
+        await Verify(await File.ReadAllTextAsync(destination), "json");
+        Assert.Equal(original, await File.ReadAllTextAsync(legacyPath));
+        Assert.Equal(profiles, await File.ReadAllTextAsync(profilesPath));
+    }
+
+    [Theory]
+    [InlineData("set")]
+    [InlineData("delete")]
+    [InlineData("source-add")]
+    [InlineData("source-remove")]
+    public async Task ConfigurationMutations_PreserveLinuxAccessAcl(string mutation)
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            Assert.Skip("Linux POSIX ACL validation.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace);
+        var path = service.GetSettingsFilePath(isGlobal: true);
+        await File.WriteAllTextAsync(path, """{"custom":"original","templateSources":{"company":{"repository":"https://example.test/templates"}}}""");
+        // The ACL mask makes the group mode r--, but group::--- denies the owning group access.
+        TestPosixAcl.Set(path, "user::rw-,user:65534:r--,group::---,mask::r--,other::---");
+        var acl = TestPosixAcl.Get(path);
+        var mode = File.GetUnixFileMode(path);
+        using var configSources = TestConfigSourceServices.Create(workspace.CreateExecutionContext());
+        var store = new TemplateSourceStore(service, workspace.CreateExecutionContext(), NullLogger<TemplateSourceStore>.Instance, configSources);
+
+        switch (mutation)
+        {
+            case "set":
+                await service.SetConfigurationAsync("custom", "updated", isGlobal: true);
+                break;
+            case "delete":
+                Assert.True(await service.DeleteConfigurationAsync("custom", isGlobal: true));
+                break;
+            case "source-add":
+                await store.AddAsync("added", new JsonObject { ["repository"] = "https://example.test/added" }, CancellationToken.None);
+                break;
+            case "source-remove":
+                Assert.True(await store.RemoveAsync("company", CancellationToken.None));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(mutation));
+        }
+
+        Assert.Equal(acl, TestPosixAcl.Get(path));
+        Assert.Equal(mode, File.GetUnixFileMode(path));
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        Assert.Equal(mutation == "delete" ? null : mutation == "set" ? "updated" : "original", settings["custom"]?.GetValue<string>());
+        Assert.Equal(mutation switch
+        {
+            "source-add" => ["company", "added"],
+            "source-remove" => [],
+            _ => new[] { "company" }
+        }, settings["templateSources"]?.AsObject().Select(source => source.Key).ToArray() ?? []);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ConfigurationMutations_UnavailableLockPreservesFile(bool global, bool delete)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """{ /* unchanged */ "features:defaultWatchEnabled": true, }""";
+        var (service, _) = CreateService(workspace, original);
+        var path = service.GetSettingsFilePath(global);
+        await File.WriteAllTextAsync(path, original);
+        var cache = workspace.CreateExecutionContext().CacheDirectory;
+        cache.Create();
+        await File.WriteAllTextAsync(Path.Combine(cache.FullName, "workspace-config-locks"), "Blocks lock directory creation.");
+
+        await Assert.ThrowsAsync<IOException>(() => delete
+            ? service.DeleteConfigurationAsync("features.defaultWatchEnabled", global)
+            : service.SetConfigurationAsync("features.defaultWatchEnabled", "false", global));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ConfigurationMutations_WaitForFileLockAndPreserveRefreshedSettings(bool global, bool delete)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace, """{"custom":"original"}""");
+        var path = service.GetSettingsFilePath(global);
+        await File.WriteAllTextAsync(path, """{"custom":"original"}""");
+        Task mutation;
+        using (var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
+            workspace.CreateExecutionContext(), new FileInfo(path), NullLogger.Instance, CancellationToken.None))
+        {
+            Assert.NotNull(configLock);
+            mutation = delete
+                ? service.DeleteConfigurationAsync("custom", global)
+                : service.SetConfigurationAsync("custom", "edited", global);
+            await Assert.ThrowsAsync<TimeoutException>(() => mutation.WaitAsync(TimeSpan.FromSeconds(1)));
+
+            // Simulate the refresh's atomic publication while it owns this same file lock.
+            await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, JsonNode.Parse("""
+                {
+                  "custom": "original",
+                  "docs": { "llmsTxtUrl": "https://updated.example/llms.txt" },
+                  "configSource": {
+                    "repository": "https://git.example/configuration",
+                    "path": "aspire.config.json",
+                    "appliedVersion": "version-2"
+                  }
+                }
+                """)!.AsObject(), CancellationToken.None);
+        }
+        await mutation.DefaultTimeout();
+
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Assert.Equal(delete ? ["configSource", "docs"] : new[] { "configSource", "custom", "docs" }, settings.Select(p => p.Key).Order());
+        if (!delete)
+        {
+            Assert.Equal("edited", settings["custom"]!.GetValue<string>());
+        }
+        Assert.Equal("https://updated.example/llms.txt", settings["docs"]!["llmsTxtUrl"]!.GetValue<string>());
+        Assert.Equal("version-2", settings["configSource"]!["appliedVersion"]!.GetValue<string>());
     }
 
     [Fact]
@@ -122,6 +285,18 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SetConfigurationAsync_RewritesNonOsLineBreaksWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{\n  \"appHost\": {\n    \"path\": \"MyApp.csproj\"\n  }\n}\n".ReplaceLineEndings(LineEndingAssert.NonOsNewLine));
+
+        await service.SetConfigurationAsync("channel", "daily", isGlobal: false);
+
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsFilePath);
+    }
+
+    [Fact]
     public async Task SetConfigurationAsync_HandlesEmptyFile()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -132,6 +307,19 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
 
         var result = File.ReadAllText(settingsFilePath);
         Assert.Contains("daily", result);
+    }
+
+    [Fact]
+    public async Task DeleteConfigurationAsync_RewritesNonOsLineBreaksWithOsLineBreaksAndSingleFinalNewline()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{\n  \"channel\": \"daily\",\n  \"appHost\": {\n    \"path\": \"MyApp.csproj\"\n  }\n}\n".ReplaceLineEndings(LineEndingAssert.NonOsNewLine));
+
+        var deleted = await service.DeleteConfigurationAsync("channel", isGlobal: false);
+
+        Assert.True(deleted);
+        LineEndingAssert.FileUsesOsLineBreaksAndSingleFinalNewline(settingsFilePath);
     }
 
     [Fact]
@@ -321,6 +509,250 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         var result = File.ReadAllText(settingsFilePath);
         Assert.Contains("appHost", result);
         Assert.Contains("MyApp/MyApp.csproj", result);
+    }
+
+    [Theory]
+    [InlineData("skillSources.team.plugins[0]", false)]
+    [InlineData("skillSources.team.plugins.0", false)]
+    [InlineData("skillSources:team:plugins:0", false)]
+    [InlineData("skillSources.team.plugins[0]", true)]
+    [InlineData("skillSources.team.plugins.0", true)]
+    [InlineData("skillSources:team:plugins:0", true)]
+    public async Task SetConfigurationAsync_EditsArrayAndPreservesOtherEntries(string key, bool isGlobal)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """
+            {
+              "skillSources": {
+                "team": {
+                  "repository": "example/team",
+                  "plugins": ["aspire", "other"]
+                }
+              },
+              "channel": "daily"
+            }
+            """;
+        var (service, localPath) = CreateService(workspace, original);
+        var settingsPath = isGlobal ? service.GetSettingsFilePath(isGlobal: true) : localPath;
+        if (isGlobal)
+        {
+            await File.WriteAllTextAsync(settingsPath, original);
+        }
+
+        await service.SetConfigurationAsync(key, "deployment", isGlobal);
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json").UseParameters(key, isGlobal);
+        var loaded = AspireConfigFile.Load(Path.GetDirectoryName(settingsPath)!);
+        Assert.NotNull(loaded?.SkillSources);
+        var plugins = loaded.SkillSources["team"].Plugins;
+        Assert.NotNull(plugins);
+        Assert.Equal(["deployment", "other"], plugins);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"plugins":null}""")]
+    public async Task SetConfigurationAsync_CreatesArrayAndAppendsWithoutGaps(string original)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, settingsPath) = CreateService(workspace, original);
+
+        await service.SetConfigurationAsync("plugins[0]", "aspire");
+        await service.SetConfigurationAsync("plugins[1]", "other");
+        await service.SetConfigurationAsync("plugins.2", "deployment");
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json").UseParameters(original);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_CreatesNestedArraysAndObjects()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, settingsPath) = CreateService(workspace, "{}");
+
+        await service.SetConfigurationAsync("matrix[0][0].name", "first");
+        await service.SetConfigurationAsync("matrix[0][1].name", "second");
+        await service.SetConfigurationAsync("matrix.0.0.name", "updated");
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json");
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_NumericPropertiesRemainObjects()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, settingsPath) = CreateService(workspace, "{}");
+
+        await service.SetConfigurationAsync("custom.0", "first");
+        await service.SetConfigurationAsync("custom:1", "second");
+        await service.SetConfigurationAsync("custom.0", "updated");
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json");
+    }
+
+    [Theory]
+    [InlineData("plugins[2]")]
+    [InlineData("plugins.2")]
+    [InlineData("plugins[-1]")]
+    [InlineData("plugins.-1")]
+    [InlineData("plugins[2147483648]")]
+    [InlineData("plugins.2147483648")]
+    [InlineData("plugins.name")]
+    [InlineData("plugins[]")]
+    [InlineData("plugins[first]")]
+    [InlineData("plugins[0")]
+    [InlineData("plugins[0]suffix")]
+    [InlineData("plugins[0]]")]
+    [InlineData("plugins.[0]")]
+    [InlineData("plugins..name")]
+    [InlineData("")]
+    public async Task SetConfigurationAsync_InvalidArrayPathPreservesFile(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """
+            {
+              // Keep comments on rejected edits.
+              "plugins": ["aspire"],
+              "channel": "daily"
+            }
+            """;
+        var (service, settingsPath) = CreateService(workspace, original);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetConfigurationAsync(key, "deployment"));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(settingsPath));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"0":"aspire"}""")]
+    [InlineData("\"aspire\"")]
+    [InlineData("true")]
+    public async Task SetConfigurationAsync_BracketIndexDoesNotReplaceNonArray(string value)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var original = $$"""{"plugins":{{value}},"channel":"daily"}""";
+        var (service, settingsPath) = CreateService(workspace, original);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.SetConfigurationAsync("plugins[0]", "deployment"));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(settingsPath));
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_RejectsGapInNewArrayWithoutCreatingFile()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace);
+        var settingsPath = service.GetSettingsFilePath(isGlobal: true);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetConfigurationAsync("plugins[1]", "deployment", isGlobal: true));
+
+        Assert.False(File.Exists(settingsPath));
+    }
+
+    [Theory]
+    [InlineData("plugins[0]", false)]
+    [InlineData("plugins.0", false)]
+    [InlineData("plugins:0", false)]
+    [InlineData("plugins[0]", true)]
+    public async Task DeleteConfigurationAsync_RemovesArrayElementAndCompactsIndices(string key, bool isGlobal)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """{"plugins":["aspire","other"],"channel":"daily"}""";
+        var (service, localPath) = CreateService(workspace, original);
+        var settingsPath = isGlobal ? service.GetSettingsFilePath(isGlobal: true) : localPath;
+        if (isGlobal)
+        {
+            await File.WriteAllTextAsync(settingsPath, original);
+        }
+
+        Assert.True(await service.DeleteConfigurationAsync(key, isGlobal));
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json").UseParameters(key, isGlobal);
+    }
+
+    [Fact]
+    public async Task DeleteConfigurationAsync_PreservesEmptyArraysAndArrayElements()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, settingsPath) = CreateService(workspace, """
+            {
+              "plugins": ["aspire"],
+              "rows": [{"nested": {"name": "first"}}, {"name": "second"}]
+            }
+            """);
+
+        Assert.True(await service.DeleteConfigurationAsync("plugins[0]"));
+        Assert.True(await service.DeleteConfigurationAsync("rows[0].nested.name"));
+
+        await Verify(await File.ReadAllTextAsync(settingsPath), "json");
+    }
+
+    [Theory]
+    [InlineData("plugins[1]")]
+    [InlineData("plugins.1")]
+    [InlineData("missing[0]")]
+    public async Task DeleteConfigurationAsync_MissingArrayElementPreservesFile(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """{"plugins":["aspire"]}""";
+        var (service, settingsPath) = CreateService(workspace, original);
+
+        Assert.False(await service.DeleteConfigurationAsync(key));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(settingsPath));
+    }
+
+    [Fact]
+    public async Task DeleteConfigurationAsync_InvalidArrayPathPreservesFileAndThrows()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """{"plugins":["aspire"],"custom":{"0":"value"}}""";
+        var (service, settingsPath) = CreateService(workspace, original);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.DeleteConfigurationAsync("plugins[-1]"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteConfigurationAsync("custom[0]"));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(settingsPath));
+    }
+
+    [Theory]
+    [InlineData("matrix[0][1].name")]
+    [InlineData("matrix.0.1.name")]
+    [InlineData("matrix:0:1:name")]
+    [InlineData("matrix[00][01].name")]
+    public async Task GetConfigurationAsync_ReadsArrayPaths(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, settingsPath) = CreateService(workspace, """
+            {"matrix": [[{"name": "first"}, {"name": "second"}]]}
+            """);
+        var configuration = new ConfigurationBuilder().AddJsonFile(settingsPath).Build();
+        var reader = new ConfigurationService(configuration, workspace.CreateExecutionContext(),
+            new FileInfo(service.GetSettingsFilePath(isGlobal: true)), NullLogger<ConfigurationService>.Instance);
+
+        Assert.Equal("second", await reader.GetConfigurationAsync(key));
+        Assert.Equal("second", await reader.GetConfigurationFromDirectoryAsync(key, workspace.WorkspaceRoot));
+    }
+
+    [Fact]
+    public async Task GetLocalConfigurationAsync_FlattensArraysWithBracketIndices()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace, """
+            {
+              "plugins": [null, "aspire", null, "other", null],
+              "matrix": [[{"name": "first"}, null], null],
+              "nullOnly": [null],
+              "nullProperty": null,
+              "custom": {"0": "numeric property"},
+              "emptyArray": [],
+              "emptyObject": {}
+            }
+            """);
+
+        await Verify(await service.GetLocalConfigurationAsync());
     }
 
     [Fact]

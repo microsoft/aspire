@@ -244,6 +244,39 @@ public sealed class AzurePublishingContext(
         static BicepValue<string> GetOutputs(ModuleImport module, string outputName) =>
             new MemberExpression(new MemberExpression(new IdentifierExpression(module.BicepIdentifier), "outputs"), outputName);
 
+        var deploymentTargets = model.Resources
+            .Select(resource => resource.GetDeploymentTargetAnnotation()?.DeploymentTarget)
+            .OfType<AzureBicepResource>()
+            .ToHashSet();
+        var deploymentTargetOutputs = new Dictionary<BicepOutputReference, ProvisioningParameter>();
+
+        BicepValue<string> GetOutputValue(BicepOutputReference output)
+        {
+            if (moduleMap.TryGetValue(output.Resource, out var module))
+            {
+                return GetOutputs(module, output.Name);
+            }
+
+            if (!deploymentTargets.Contains(output.Resource))
+            {
+                throw new InvalidOperationException(
+                    $"Output '{output.Name}' references Azure resource '{output.Resource.Name}', which is not included in the published model.");
+            }
+
+            // Compute targets are published separately from main.bicep because their images are supplied by the
+            // deployment tool. Infrastructure such as Front Door can depend on their outputs. Expose those as
+            // explicit inputs instead of referencing a module that main.bicep does not deploy.
+            if (!deploymentTargetOutputs.TryGetValue(output, out var parameter))
+            {
+                parameter = new ProvisioningParameter(
+                    Infrastructure.NormalizeBicepIdentifier($"{output.Resource.Name}_{output.Name}_input"), typeof(string));
+                deploymentTargetOutputs.Add(output, parameter);
+                MainInfrastructure.Add(parameter);
+            }
+
+            return parameter;
+        }
+
         FormattableString EvalExpr(ReferenceExpression expr)
         {
             var args = new object[expr.ValueProviders.Count];
@@ -283,12 +316,15 @@ public sealed class AzurePublishingContext(
 
         object Eval(object? value) => value switch
         {
-            BicepOutputReference b => GetOutputs(moduleMap[b.Resource], b.Name),
+            BicepOutputReference b => GetOutputValue(b),
             ParameterResource p => ParameterLookup[p],
             ConnectionStringReference r => Eval(r.ConnectionStringExpression),
             IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
             ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+            IBicepOutputReferenceProvider p when p.GetOutputReference() is { } b => Eval(b),
+#pragma warning restore ASPIREAZURE003
             string s => s,
             _ => ""
         };
@@ -503,13 +539,11 @@ public sealed class AzurePublishingContext(
 
         foreach (var (_, output) in outputs)
         {
-            var module = moduleMap[output.Resource];
-
             var identifier = Infrastructure.NormalizeBicepIdentifier($"{output.Resource.Name}_{output.Name}");
 
             var bicepOutput = new ProvisioningOutput(identifier, typeof(string))
             {
-                Value = GetOutputs(module, output.Name)
+                Value = GetOutputValue(output)
             };
 
             OutputLookup[output] = bicepOutput;

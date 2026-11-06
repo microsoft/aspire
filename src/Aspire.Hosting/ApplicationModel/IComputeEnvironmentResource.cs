@@ -36,6 +36,7 @@ public interface IComputeEnvironmentResource : IResource
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="endpointReferenceExpression"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the requested endpoint property is unsupported, or when a non-HTTP/HTTPS endpoint does not specify a port.</exception>
+    /// <exception cref="NotSupportedException">Thrown when the environment does not implement browser-origin resolution.</exception>
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
     {
@@ -44,6 +45,12 @@ public interface IComputeEnvironmentResource : IResource
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
+        if (property is EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin)
+        {
+            throw new NotSupportedException(
+                $"Compute environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it does not implement deployed browser-origin resolution. " +
+                "An endpoint host address alone does not establish a browser-facing origin. Use an environment that supports browser origins or supply an explicit origin parameter.");
+        }
         var scheme = endpoint.UriScheme;
         var port = endpoint.Port ?? GetDefaultPort(scheme, endpoint);
         var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));

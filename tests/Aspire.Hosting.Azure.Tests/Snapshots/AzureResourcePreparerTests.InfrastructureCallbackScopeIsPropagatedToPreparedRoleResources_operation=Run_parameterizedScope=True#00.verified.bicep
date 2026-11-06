@@ -3,7 +3,7 @@ param location string = resourceGroup().location
 
 param storage_name string
 
-resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource storage 'Microsoft.Storage/storageAccounts@2026-06-01' existing = {
   name: storage_name
 }
 

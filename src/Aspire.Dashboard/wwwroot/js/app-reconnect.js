@@ -10,12 +10,36 @@ let currentMode = "none";
 // Set up event handlers
 const reconnectModal = document.getElementById("components-reconnect-modal");
 reconnectModal.addEventListener("components-reconnect-state-changed", handleReconnectStateChanged);
+// "toggle" reports a dialog opening or closing; it doesn't toggle the dialog itself.
+// Capture native dialog events because they don't bubble. Fluent's composed host
+// events also reach this listener across the shadow-DOM boundary.
+// https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/toggle_event
+document.addEventListener("toggle", keepReconnectModalOnTop, true);
 
 const retryButton = document.getElementById("components-reconnect-button");
 retryButton.addEventListener("click", retryCircuit);
 
 const resourceServiceRetryButton = document.getElementById("components-reconnect-resource-service-button");
 resourceServiceRetryButton.addEventListener("click", retryResourceService);
+
+function keepReconnectModalOnTop(event) {
+    if (!reconnectModal.open || event.target === reconnectModal || !(event.target instanceof HTMLElement)) {
+        return;
+    }
+
+    // Fluent dialogs emit a composed toggle event from their host because the native
+    // dialog's toggle event doesn't escape its shadow root.
+    const dialog = event.target instanceof HTMLDialogElement
+        ? event.target
+        : event.target.shadowRoot?.querySelector("dialog");
+    if (dialog?.matches(":modal")) {
+        // Modal dialogs are ordered in the top layer, independently of z-index.
+        // Reopening promotes the reconnect UI without dismissing the other dialog.
+        // https://developer.mozilla.org/en-US/docs/Glossary/Top_layer
+        reconnectModal.close();
+        reconnectModal.showModal();
+    }
+}
 
 function handleReconnectStateChanged(event) {
     if (event.detail.state === "show") {

@@ -53,6 +53,15 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         "gradlew"
     ];
 
+    // Embedded files keep the line breaks of the checkout that built the CLI (CRLF from a Windows checkout
+    // with core.autocrlf, LF otherwise), so these config files are rewritten with the OS line break as they
+    // are copied, to match the ones the CLI serializes.
+    private static readonly HashSet<string> s_osLineBreakTemplateFileNames =
+    [
+        Configuration.AspireConfigFile.FileName,
+        "apphost.run.json"
+    ];
+
     private readonly Option<bool?> _localhostTldOption = new("--localhost-tld")
     {
         Description = TemplatingStrings.UseLocalhostTld_Description
@@ -103,9 +112,9 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         return GetTemplateDefinitions();
     }
 
-    public Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default)
+    public Task<IEnumerable<ITemplate>> GetTemplatesAsync(TemplateSource? source, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(GetTemplateDefinitions());
+        return Task.FromResult(source is null ? GetTemplateDefinitions() : []);
     }
 
     public Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default)
@@ -300,7 +309,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         }
     }
 
-    private async Task CopyTemplateTreeToDiskAsync(string templateRoot, string outputPath, Func<string, string> tokenReplacer, CancellationToken cancellationToken)
+    internal async Task CopyTemplateTreeToDiskAsync(string templateRoot, string outputPath, Func<string, string> tokenReplacer, CancellationToken cancellationToken)
     {
         var assembly = typeof(CliTemplateFactory).Assembly;
         _logger.LogDebug("Copying embedded template tree '{TemplateRoot}' to '{OutputPath}'.", templateRoot, outputPath);
@@ -344,6 +353,11 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 using var reader = new StreamReader(stream);
                 var content = await reader.ReadToEndAsync(cancellationToken);
                 var transformedContent = tokenReplacer(content);
+                if (s_osLineBreakTemplateFileNames.Contains(Path.GetFileName(filePath)))
+                {
+                    transformedContent = ConfigurationHelper.NormalizeJsonFileContent(transformedContent);
+                }
+
                 await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
                 await using var writer = new StreamWriter(fileStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 await writer.WriteAsync(transformedContent.AsMemory(), cancellationToken);

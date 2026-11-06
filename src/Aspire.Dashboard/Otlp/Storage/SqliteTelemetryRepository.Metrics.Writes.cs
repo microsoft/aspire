@@ -24,6 +24,7 @@ public sealed partial class SqliteTelemetryRepository
     private const int DoublePointType = 2;
     private const int HistogramPointType = 3;
     private const int MaxMetricPointBatchSize = 100;
+    internal const long MetricTimeBucketWidthUnixNano = 60_000_000_000;
 
     private readonly MetricIngestionState _metricIngestionState = new();
 
@@ -225,7 +226,7 @@ public sealed partial class SqliteTelemetryRepository
                 }
                 else
                 {
-                    pointBatch.AddUpdate(latest!.PointId, endTimeUnixNano, incrementRepeatCount: true);
+                    pointBatch.AddUpdate(latest!.PointId, latest.EndTimeUnixNano, endTimeUnixNano, incrementRepeatCount: true);
                     latest.EndTimeUnixNano = endTimeUnixNano;
                     QueueMetricExemplars(pointBatch, latest.PointId, point.Exemplars);
                     context.SuccessCount++;
@@ -293,7 +294,7 @@ public sealed partial class SqliteTelemetryRepository
                 }
                 else
                 {
-                    pointBatch.AddUpdate(latest!.PointId, endTimeUnixNano, incrementRepeatCount: false);
+                    pointBatch.AddUpdate(latest!.PointId, latest.EndTimeUnixNano, endTimeUnixNano, incrementRepeatCount: false);
                     latest.EndTimeUnixNano = endTimeUnixNano;
                     QueueMetricExemplars(pointBatch, latest.PointId, point.Exemplars);
                     context.SuccessCount++;
@@ -335,8 +336,15 @@ public sealed partial class SqliteTelemetryRepository
 
     private void ExecuteMetricPointBatch(SqliteConnection connection, IDbTransaction transaction, MetricPointBatch pointBatch)
     {
-        foreach (var updates in pointBatch.Updates.Values.Chunk(MaxMetricPointBatchSize))
+        foreach (var updates in pointBatch.Updates.Values
+            .GroupBy(static update => update.OriginalEndTimeUnixNano / MetricTimeBucketWidthUnixNano != update.EndTimeUnixNano / MetricTimeBucketWidthUnixNano)
+            .SelectMany(static group => group.Chunk(MaxMetricPointBatchSize)))
         {
+            // SQLite rewrites an index whenever an indexed column is assigned, even if its value
+            // is unchanged. Separate crossing updates so ordinary repeats do not mention the bucket.
+            var bucketAssignment = updates[0].OriginalEndTimeUnixNano / MetricTimeBucketWidthUnixNano != updates[0].EndTimeUnixNano / MetricTimeBucketWidthUnixNano
+                ? string.Create(CultureInfo.InvariantCulture, $", end_time_bucket = updates.end_time_unix_nano / {MetricTimeBucketWidthUnixNano}")
+                : string.Empty;
             var sql = new StringBuilder("""
                 WITH updates(point_id, end_time_unix_nano, repeat_delta) AS (
                     VALUES
@@ -356,11 +364,11 @@ public sealed partial class SqliteTelemetryRepository
                 index++;
             }
             sql.AppendLine();
-            sql.Append("""
+            sql.Append(CultureInfo.InvariantCulture, $"""
                 )
                 UPDATE telemetry_metric_points AS points
                 SET end_time_unix_nano = updates.end_time_unix_nano,
-                    repeat_count = points.repeat_count + updates.repeat_delta
+                    repeat_count = points.repeat_count + updates.repeat_delta{bucketAssignment}
                 FROM updates
                 WHERE points.point_id = updates.point_id;
                 """);
@@ -371,7 +379,7 @@ public sealed partial class SqliteTelemetryRepository
         [
             "dimension_id", "point_type", "start_time_unix_nano", "end_time_unix_nano", "repeat_count",
             "integer_value", "double_value", "histogram_sum", "histogram_count", "bucket_counts", "explicit_bounds", "flags",
-            "histogram_aggregation_start_unix_nano", "histogram_aggregation_id"
+            "histogram_aggregation_start_unix_nano", "histogram_aggregation_id", "end_time_bucket"
         ];
         BindRowParameters<PendingMetricPoint> bindParameters = static (point, parameters) =>
         {
@@ -389,6 +397,7 @@ public sealed partial class SqliteTelemetryRepository
             parameters[11].Value = point.Flags;
             parameters[12].Value = point.Histogram is { } histogram ? checked((long)histogram.AggregationStartUnixNano) : DBNull.Value;
             parameters[13].Value = point.Histogram?.AggregationId ?? (object)DBNull.Value;
+            parameters[14].Value = point.EndTimeUnixNano / MetricTimeBucketWidthUnixNano;
         };
 
         List<long> numberPointIds;
@@ -411,6 +420,7 @@ public sealed partial class SqliteTelemetryRepository
                         ON CONFLICT(dimension_id, start_time_unix_nano, histogram_aggregation_id) WHERE point_type = {HistogramPointType}
                         DO UPDATE SET
                             end_time_unix_nano = excluded.end_time_unix_nano,
+                            end_time_bucket = excluded.end_time_bucket,
                             histogram_sum = excluded.histogram_sum,
                             histogram_count = excluded.histogram_count,
                             bucket_counts = excluded.bucket_counts,
@@ -988,11 +998,13 @@ public sealed partial class SqliteTelemetryRepository
         public List<PendingMetricPoint> Inserts { get; } = [];
         public Dictionary<MetricExemplarKey, PendingMetricExemplar> Exemplars { get; } = [];
 
-        public void AddUpdate(long pointId, long endTimeUnixNano, bool incrementRepeatCount)
+        public void AddUpdate(long pointId, long originalEndTimeUnixNano, long endTimeUnixNano, bool incrementRepeatCount)
         {
             if (!Updates.TryGetValue(pointId, out var update))
             {
-                update = new MetricPointUpdate { PointId = pointId };
+                // Later observations in this export mutate the cache. Keep the database's original
+                // endpoint so coalescing several repeats cannot hide a bucket crossing.
+                update = new MetricPointUpdate { PointId = pointId, OriginalEndTimeUnixNano = originalEndTimeUnixNano };
                 Updates.Add(pointId, update);
             }
             update.EndTimeUnixNano = endTimeUnixNano;
@@ -1029,6 +1041,7 @@ public sealed partial class SqliteTelemetryRepository
     private sealed class MetricPointUpdate
     {
         public required long PointId { get; init; }
+        public required long OriginalEndTimeUnixNano { get; init; }
         public long EndTimeUnixNano { get; set; }
         public long RepeatDelta { get; set; }
     }

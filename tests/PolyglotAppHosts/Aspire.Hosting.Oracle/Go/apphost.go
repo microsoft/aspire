@@ -9,12 +9,12 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	oracle := builder.AddOracle("oracledb")
 	if err = oracle.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	customPassword := builder.AddParameter("oracle-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
@@ -23,12 +23,12 @@ func main() {
 		Port:     aspire.Float64Ptr(1522),
 	})
 	if err = oracle2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	db := oracle.AddDatabase("mydb")
 	if err = db.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	oracle.AddDatabase("inventory", &aspire.AddDatabaseOptions{
@@ -58,7 +58,7 @@ func main() {
 	oracle3.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("oracle3-data")})
 	oracle3.AddDatabase("chaineddb")
 	if err = oracle3.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = oracle.PrimaryEndpoint()
@@ -77,9 +77,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

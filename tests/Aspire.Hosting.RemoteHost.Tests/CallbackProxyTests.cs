@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,6 +12,43 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class CallbackProxyTests
 {
+    [Theory]
+    [InlineData("system", AksNodePoolMode.System, AksNodePoolMode.User)]
+    [InlineData("workers", AksNodePoolMode.User, AksNodePoolMode.System)]
+    public async Task InvokedSyncVoidProxy_AksNodePoolWritebackPreservesIdentity(
+        string name, AksNodePoolMode mode, AksNodePoolMode changedMode)
+    {
+        var pool = new AksNodePoolConfig(name, "Standard_D2s_v5", 1, 3, mode);
+        var invoker = new TestCallbackInvoker
+        {
+            ResultToReturn = new JsonObject
+            {
+                ["p0"] = new JsonObject
+                {
+                    ["name"] = "cpu",
+                    ["mode"] = changedMode.ToString(),
+                    ["vmSize"] = "Standard_D4s_v5",
+                    ["minCount"] = 2,
+                    ["maxCount"] = 5,
+                    ["osSku"] = "AzureLinux"
+                }
+            }
+        };
+        await using var handles = new HandleRegistry();
+        var tokens = new CancellationTokenRegistry();
+        var context = AtsCapabilityScanner.ScanAssemblies([typeof(AksNodePoolConfig).Assembly]).ToAtsContext();
+        var marshaller = new AtsMarshaller(handles, context, tokens,
+            new Lazy<AtsCallbackProxyFactory>(() => throw new NotImplementedException()));
+        using var factory = new AtsCallbackProxyFactory(invoker, handles, tokens, marshaller);
+        var configure = Assert.IsType<Action<AksNodePoolConfig>>(
+            factory.CreateProxy("configure-pool", typeof(Action<AksNodePoolConfig>)));
+
+        configure(pool);
+
+        Assert.Equal(new AksNodePoolConfig(name, "Standard_D4s_v5", 2, 5, mode, "AzureLinux"), pool);
+        Assert.Single(invoker.Invocations);
+    }
+
     [Fact]
     public void CreateProxy_ReturnsNullForNonDelegateType()
     {

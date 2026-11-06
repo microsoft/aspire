@@ -1,15 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
         <source>Describe resources in a running AppHost</source>
-        <target state="needs-review-translation">Çalışan bir Aspire apphost'tan kaynak anlık görüntülerini göster.</target>
+        <target state="translated">Çalışan bir AppHost'taki kaynakları açıklayın</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Continuously stream resource state changes</source>
-        <target state="new">Continuously stream resource state changes</target>
+        <target state="translated">Kaynak durumundaki değişiklikleri sürekli olarak aktarın</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderHealth">
@@ -34,32 +34,32 @@
       </trans-unit>
       <trans-unit id="HeaderURLs">
         <source>URLs</source>
-        <target state="new">URLs</target>
+        <target state="translated">URL’ler</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">Çıktıda gizli kaynakları içerecek şekilde ekleyin</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table, Json, or Mermaid)</source>
-        <target state="needs-review-translation">Makine tarafından kullanılmak üzere JSON biçiminde çıktı ver.</target>
+        <target state="translated">Çıktı biçimi (Tablo, Json veya Mermaid)</target>
         <note />
       </trans-unit>
       <trans-unit id="MermaidFollowNotSupported">
         <source>The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</source>
-        <target state="new">The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</target>
+        <target state="translated">Mermaid çıktı biçimi --follow seçeneğini desteklemiyor. Kaynak grafiği anlık görüntüsünü dışarı aktarmak için --follow seçeneğini atlayın.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
         <source>No AppHost project found.</source>
-        <target state="needs-review-translation">AppHost projesi bulunamadı.</target>
+        <target state="translated">AppHost projesi bulunamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to display. If not specified, all resources are shown.</source>
-        <target state="needs-review-translation">Görüntülenecek kaynağın adı. Belirtilmezse tüm kaynaklar gösterilir.</target>
+        <target state="translated">Görüntülenecek kaynağın adı. Belirtilmezse tüm kaynaklar gösterilir.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

@@ -1,7 +1,20 @@
-// Aspire VS Code extension launch configurations
+// Aspire CLI and VS Code extension launch configurations
 {
 	"version": "0.2.0",
 	"configurations": [
+		{
+			"name": "Debug Aspire CLI",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "build: Aspire CLI",
+			"program": "${workspaceFolder}/artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll",
+			"args": [
+				"new"
+			],
+			"cwd": "${workspaceFolder}",
+			"console": "integratedTerminal",
+			"stopAtEntry": false
+		},
 		{
 			"name": "Run Extension",
 			"type": "extensionHost",

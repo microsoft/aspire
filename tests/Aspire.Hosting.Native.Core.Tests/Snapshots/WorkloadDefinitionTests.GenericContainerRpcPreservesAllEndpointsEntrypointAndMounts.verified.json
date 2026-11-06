@@ -1,0 +1,1 @@
+﻿{"instanceId":"test-instance","endpoints":[{"name":"http","protocol":"TCP","uriScheme":"http","host":"127.0.0.1","port":5050},{"name":"management","protocol":"TCP","uriScheme":"https","host":"127.0.0.1","port":5051}]}

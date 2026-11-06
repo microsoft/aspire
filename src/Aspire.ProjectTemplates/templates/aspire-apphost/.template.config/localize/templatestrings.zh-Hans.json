@@ -4,7 +4,7 @@
   "description": "用于创建 Aspire AppHost (业务流程协调程序)项目的项目模板。",
   "symbols/Framework/description": "项目的目标框架。",
   "symbols/Framework/choices/net10.0/description": "目标 net10.0",
-  "symbols/Framework/choices/net11.0/description": "Target net11.0",
+  "symbols/Framework/choices/net11.0/description": "目标 net11.0",
   "symbols/appHostHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTP 终结点。",
   "symbols/appHostOtlpHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 OTLP HTTP 终结点。",
   "symbols/appHostResourceHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的资源服务 HTTP 终结点。",

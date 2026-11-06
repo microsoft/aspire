@@ -9,6 +9,7 @@ public class TemplateGitIgnoreTests
     [InlineData("ts-starter")]
     [InlineData("py-starter")]
     [InlineData("java-starter")]
+    [InlineData("go-starter")]
     public void StarterTemplates_IgnoreWorkspaceAspireDirectory(string templateName)
     {
         var filePath = Path.Combine(GetRepoRoot(), "src", "Aspire.Cli", "Templating", "Templates", templateName, ".gitignore");

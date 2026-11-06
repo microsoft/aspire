@@ -1,0 +1,14 @@
+<Project>
+  <!-- The versions of the packages of the skill's file-based apps (video.cs, recorder/recorder.cs), pinned so every run
+       uses the same packages. Dependabot updates them (see .github/dependabot.yml); cgmanifest.json registers them for
+       component governance: change both together. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Playwright" Version="1.64.0" />
+    <PackageVersion Include="SkiaSharp" Version="4.153.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="4.153.1" />
+    <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.4" />
+  </ItemGroup>
+</Project>

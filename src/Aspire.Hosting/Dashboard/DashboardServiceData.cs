@@ -57,7 +57,8 @@ internal sealed class DashboardServiceData : IDisposable
                 // The same stamping is applied on the auxiliary backchannel path so that
                 // `aspire describe` and the VS Code extension observe identical terminal
                 // metadata; both call sites share TerminalResourceSnapshotProperties.
-                var terminalProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceId, snapshot.Properties);
+                var terminalProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceId,
+                    ResourceTraitSnapshotProperties.AddTraitProperties(resource, snapshot.Properties));
 
                 // ImmutableArray's == operator compares the underlying array reference, so this is
                 // true only when AddTerminalProperties returned the original array unchanged (no

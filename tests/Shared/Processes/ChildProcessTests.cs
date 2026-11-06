@@ -311,7 +311,11 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             Assert.Equal(1, budgetCount);
             Assert.Equal(1, signalCount);
             Assert.Equal(process.ProcessId, signaledPid);
-            Assert.Equal(gracefulBudget.Token, signalToken);
+            // The signaler runs under the shared graceful budget: not cancelled while the budget
+            // is live, and cancelled as soon as the budget expires.
+            Assert.False(signalToken.IsCancellationRequested);
+            gracefulBudget.Cancel();
+            Assert.True(signalToken.IsCancellationRequested);
         }
         finally
         {
@@ -324,6 +328,49 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             var entry = Assert.Single(sink.Writes, entry => entry.Exception?.Message == "test signal failure");
             Assert.Equal(LogLevel.Warning, entry.LogLevel);
         }
+    }
+
+    [Fact]
+    public async Task Shutdown_CancelsBlockedSignalerOnceChildExits()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/18880: a signaler that delivers
+        // the signal and then blocks (DCP stop-process-tree) must be cancelled once the child has
+        // exited instead of holding shutdown for the whole TerminationTimeout drain.
+        using var readiness = new ProcessTestReadiness();
+        using var cancellation = new CancellationTokenSource();
+        var signalerCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("wait", readiness.Name),
+            new ChildProcessOptions
+            {
+                // Far beyond the wait below, so a drain that waits for the signaler cannot pass.
+                TerminationTimeout = TimeSpan.FromMinutes(5),
+                BeginGracefulShutdown = () => CancellationToken.None,
+                RequestGracefulShutdownAsync = async (pid, token) =>
+                {
+                    using (var root = Process.GetProcessById(pid))
+                    {
+                        root.Kill(entireProcessTree: true);
+                    }
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, token);
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        signalerCancelled.TrySetResult();
+                        throw;
+                    }
+                }
+            });
+        await process.StartAsync(TestContext.Current.CancellationToken);
+        var identity = await readiness.ReadRuntimeAsync();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => process.WaitForExitAsync(cancellation.Token))
+            .WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.True(signalerCancelled.Task.IsCompleted);
+        await ProcessTestFixture.AssertExitedAsync(identity);
     }
 
     [Theory]
@@ -363,11 +410,12 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             var shutdown = dispose
                 ? process.DisposeAsync().AsTask()
                 : Assert.ThrowsAnyAsync<OperationCanceledException>(() => process.WaitForExitAsync(cancellation.Token));
-            await signaled.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await signaled.Task.DefaultTimeout();
             Assert.False(shutdown.IsCompleted);
             gracefulBudget.Cancel();
 
-            await shutdown.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            // Owned-tree escalation can consume the supervisor's five-second termination timeout.
+            await shutdown.DefaultTimeout(TestConstants.LongTimeoutDuration);
             await ProcessTestFixture.AssertExitedAsync(identities[0]);
             if (ownedTree)
             {
@@ -377,10 +425,13 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             {
                 using var worker = Process.GetProcessById(identities[1].ProcessId);
                 Assert.False(worker.HasExited);
-                await cleanup.WaitForConnectionAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+                // Register the exit wait before releasing cleanup so it retains the handle
+                // required to read ExitCode even if the worker exits immediately.
+                var workerExitTask = worker.WaitForExitAsync(TestContext.Current.CancellationToken);
+                await cleanup.WaitForConnectionAsync(TestContext.Current.CancellationToken).DefaultTimeout();
                 using var writer = new StreamWriter(cleanup, leaveOpen: true) { AutoFlush = true };
                 await writer.WriteLineAsync("cleanup");
-                await worker.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+                await workerExitTask.DefaultTimeout();
                 Assert.Equal(0, worker.ExitCode);
                 Assert.Equal("completed", await File.ReadAllTextAsync(cleanupPath, TestContext.Current.CancellationToken));
             }

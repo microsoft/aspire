@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <NativeProviderGeneratedDirectory>$(IntermediateOutputPath)provider-contract/</NativeProviderGeneratedDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ExternalApi/NativeIntegrations.ExternalApi.csproj" />
+    <ProjectReference Include="../../../../src/Aspire.Hosting.Native.CodeGeneration/Aspire.Hosting.Native.CodeGeneration.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+  <Target Name="GenerateProviderContract" BeforeTargets="CoreCompile" DependsOnTargets="ResolveProjectReferences">
+    <MSBuild Projects="../ExternalApi/NativeIntegrations.ExternalApi.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ProviderAssembly" />
+    </MSBuild>
+    <MSBuild Projects="../../../../src/Aspire.Hosting.Native.CodeGeneration/Aspire.Hosting.Native.CodeGeneration.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
+      <Output TaskParameter="TargetOutputs" ItemName="_ProviderGenerator" />
+    </MSBuild>
+    <Exec Command="&quot;$(DotNetTool)&quot; exec &quot;@(_ProviderGenerator)&quot; --provider &quot;@(_ProviderAssembly)&quot; example.csharp.external-api &quot;$(NativeProviderGeneratedDirectory)&quot;" />
+    <ItemGroup>
+      <Compile Include="$(NativeProviderGeneratedDirectory)ProviderContract.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

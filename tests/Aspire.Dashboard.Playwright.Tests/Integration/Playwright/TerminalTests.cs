@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -20,6 +22,73 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
 {
     private const string ResourceName = "terminal-resource";
     private const string Endpoint = "/api/terminal?resource=terminal-resource";
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ModernResourceTerminal_FocusDocumentationAndShortcutsPreserveViewer()
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
+            await page.Context.RouteAsync("https://aka.ms/aspire/dashboard-terminal",
+                route => route.FulfillAsync(new() { ContentType = "text/html", Body = "<title>Terminal documentation</title>" }));
+            await page.GotoAsync($"/resources/{ResourceName}?terminal=true").DefaultTimeout();
+            await using var connection = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
+            await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
+            var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
+            await Assertions.Expect(input).ToBeVisibleAsync();
+            var viewer = await input.ElementHandleAsync();
+            Assert.NotNull(viewer);
+            var connectionCount = connection.ConnectionCount;
+            var overview = page.Locator(".resource-overview");
+            var documentation = page.Locator(".overview-terminal-card a.overview-card-action");
+
+            foreach (var focused in new[] { true, false })
+            {
+                await Assertions.Expect(overview).ToHaveClassAsync(focused
+                    ? new Regex("terminal-focused")
+                    : new Regex("^(?!.*terminal-focused)"));
+                await Assertions.Expect(documentation).ToHaveAttributeAsync("href", "https://aka.ms/aspire/dashboard-terminal");
+                await Assertions.Expect(documentation).ToHaveAttributeAsync("aria-label", "More information");
+                foreach (var keyboard in new[] { false, true })
+                {
+                    if (keyboard)
+                    {
+                        await documentation.FocusAsync();
+                    }
+                    var popup = await page.RunAndWaitForPopupAsync(() => keyboard
+                        ? page.Keyboard.PressAsync("Enter")
+                        : documentation.ClickAsync());
+                    await popup.WaitForLoadStateAsync();
+                    Assert.Equal("https://aka.ms/aspire/dashboard-terminal", popup.Url);
+                    await popup.CloseAsync();
+                }
+
+                await input.FocusAsync();
+                await page.Keyboard.TypeAsync("cd");
+                Assert.Equal("cd", await connection.ReadInputTextAsync(2, CancellationToken.None).DefaultTimeout());
+                Assert.Equal($"/resources/{ResourceName}", new Uri(page.Url).AbsolutePath);
+                await page.Keyboard.PressAsync("F6");
+                await Assertions.Expect(page.Locator(".terminal-font-controls fluent-button:not([disabled])").First).ToBeFocusedAsync();
+                Assert.True(await viewer.EvaluateAsync<bool>("element => element.isConnected"));
+                Assert.Equal(connectionCount, connection.ConnectionCount);
+
+                if (focused)
+                {
+                    await page.GetByRole(AriaRole.Button, new() { Name = "Minimize terminal", Exact = true }).ClickAsync();
+                    await Assertions.Expect(page).ToHaveURLAsync(new Regex($"/resources/{ResourceName}$"));
+                }
+            }
+
+            await page.GetByRole(AriaRole.Button, new() { Name = "Expand terminal", Exact = true }).ClickAsync();
+            await Assertions.Expect(overview).ToHaveClassAsync(new Regex("terminal-focused"));
+            Assert.True(await viewer.EvaluateAsync<bool>("element => element.isConnected"));
+            Assert.Equal(connectionCount, connection.ConnectionCount);
+            await page.GetByRole(AriaRole.Button, new() { Name = "Minimize terminal", Exact = true }).FocusAsync();
+            await page.Keyboard.PressAsync("c");
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/consolelogs", StringComparison.Ordinal));
+        });
+    }
 
     [Theory]
     [InlineData(false, false)]
@@ -95,7 +164,8 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 async id => {
                     const module = await import('/Components/Controls/TerminalView.razor.js');
                     const state = module.getToolbarState(id);
-                    return state.fontPx === 13 && state.cols === 137 && state.rows === 41;
+                    // The requested policy stays unchanged; the displayed font can scale to fit a follower.
+                    return window.moduleTerminal.sizing.fontSize === 13 && state.cols === 137 && state.rows === 41;
                 }
                 """, terminalId));
 
@@ -207,8 +277,11 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await dimensions.ClickAsync();
             await dropdown.Locator("fluent-option[text='80×24']").ClickAsync();
             await Assertions.Expect(dimensions).ToHaveTextAsync("80×24");
-            Assert.NotNull(connection.Presentation.PrimaryPeerId);
-            Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(
+                () => Task.FromResult(
+                    connection.Presentation.PrimaryPeerId is not null &&
+                    !string.Equals(primaryId, connection.Presentation.PrimaryPeerId, StringComparison.Ordinal)),
+                "The explicitly sized terminal should become the primary presenter.");
             await page.WaitForFunctionAsync("() => window.terminalObserver.geometry.columns === 80 && window.terminalObserver.geometry.rows === 24").DefaultTimeout();
         });
     }
@@ -225,7 +298,9 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await MountObserverAsync(page, requestPrimary: true);
             var primaryId = connection.Presentation.PrimaryPeerId;
             var button = page.GetByRole(AriaRole.Button, new() { Name = name, Exact = true });
-            for (var fontSize = 13 + delta; fontSize != bound + delta; fontSize += delta)
+            // The label reports the follower's rendered size, for example "13px", not its last requested size.
+            var currentFontSize = int.Parse((await page.Locator(".terminal-font-size").InnerTextAsync())[..^2], CultureInfo.InvariantCulture);
+            for (var fontSize = Math.Clamp(currentFontSize + delta, 8, 32); fontSize != bound + delta; fontSize += delta)
             {
                 await button.ClickAsync();
                 await Assertions.Expect(page.Locator(".terminal-font-size")).ToHaveTextAsync($"{fontSize}px");
@@ -383,7 +458,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await WriteMetadataAsync(page, connection, "Building <app> & \u03bb", "/work/source files");
             connection.Workload.Write("\u001b]9;4;1;42\u0007");
             await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-state", "normal");
-            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("title", "42%");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-tooltip", "42%");
             await Assertions.Expect(page.Locator(".terminal-icon [role=progressbar]")).ToHaveAttributeAsync("aria-valuenow", "42");
             await Assertions.Expect(input).ToBeFocusedAsync();
             await titleButton.ClickAsync();
@@ -395,7 +470,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await WriteMetadataAsync(page, connection, "Build failed", "/work/build output");
             connection.Workload.Write("\u001b]9;4;2;75\u0007");
             await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-state", "error");
-            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("title", "75%");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-tooltip", "75%");
             await Assertions.Expect(page.Locator(".terminal-icon [role=progressbar]")).ToHaveAttributeAsync("aria-valuenow", "75");
             await Assertions.Expect(directoryButton).ToBeFocusedAsync();
             await page.Keyboard.PressAsync("Enter");
@@ -449,10 +524,13 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     private async Task<TestTerminalConnection> OpenTerminalAsync(IPage page)
     {
         await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
-        await page.GotoAsync($"/terminals/resource/{ResourceName}").DefaultTimeout();
+        // Header/metadata tests need the standalone terminal. Modern resource terminals are deliberately chromeless.
+        var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+        await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = "legacy", Url = baseUrl }]);
+        await page.GotoAsync($"/legacy/terminals/resource/{ResourceName}").DefaultTimeout();
         var connection = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
         await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
-        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeEnabledAsync();
+        await ExpectProducerDimensionsAsync(page);
         return connection;
     }
 
@@ -512,10 +590,14 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             async ({ endpoint, viewId, readOnly, chromeless }) => {
                 const module = await import('/Components/Controls/TerminalView.razor.js');
                 window.terminalModule = module;
+                const view = document.createElement('div');
+                view.className = 'terminal-view';
+                view.style.cssText = 'position:fixed;left:0;top:0;width:700px;height:500px;z-index:10000';
+                document.body.appendChild(view);
                 const container = document.createElement('div');
                 container.dataset.testid = 'module-terminal';
-                container.style.cssText = 'position:fixed;left:0;top:0;width:700px;height:500px;z-index:10000';
-                document.body.appendChild(container);
+                container.style.cssText = 'width:100%;height:100%';
+                view.appendChild(container);
                 const template = document.createElement('div');
                 template.innerHTML = '<div><fluent-button aria-label="Copy">Copy</fluent-button></div>';
                 template.hidden = true;

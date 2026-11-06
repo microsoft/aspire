@@ -296,6 +296,27 @@ public class ExecutionConfigurationGathererTests
     }
 
     [Fact]
+    public async Task ResolveAsync_SensitiveEnvironmentVariableWithoutServices_ResolvesValue()
+    {
+        var resource = new ContainerResource("consumer");
+        var secret = new ParameterResource("secret", _ => "secret-value", secret: true);
+        var context = new ExecutionConfigurationGathererContext();
+        context.EnvironmentVariables["SECRET"] = ReferenceExpression.Create($"prefix {secret} suffix");
+
+        var result = await context.ResolveAsync(
+            resource,
+            NullLogger.Instance,
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+
+        Assert.Null(result.Exception);
+        Assert.Collection(result.EnvironmentVariables, variable =>
+        {
+            Assert.Equal("SECRET", variable.Key);
+            Assert.Equal("prefix secret-value suffix", variable.Value);
+        });
+    }
+
+    [Fact]
     public async Task ResolveAsync_FailingArgument_LogsErrorAndCollectsException()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

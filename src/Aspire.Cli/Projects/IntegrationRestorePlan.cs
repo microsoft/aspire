@@ -38,10 +38,10 @@ internal sealed class IntegrationRestorePlanResolver(
             ? null
             : PackageSourceOverrideMappings.GetEffectivePackagePattern(packageSourceOverridePattern);
         var localSourceDiscoveryChannel = requestedChannel;
-        var canAppendIdentitySource =
+        var hasExactPackageSourceOverride =
             explicitPackageSourceOverridePattern is not null &&
             PackageSourceOverrideMappings.IsExactPackagePattern(explicitPackageSourceOverridePattern);
-        if ((string.IsNullOrWhiteSpace(effectivePackageSourceOverride) || canAppendIdentitySource) &&
+        if ((string.IsNullOrWhiteSpace(effectivePackageSourceOverride) || hasExactPackageSourceOverride) &&
             localSourceDiscoveryChannel is null &&
             string.Equals(sdkVersion, executionContext.IdentitySdkVersion, StringComparison.OrdinalIgnoreCase))
         {
@@ -106,15 +106,17 @@ internal sealed class IntegrationRestorePlanResolver(
             effectivePackageSourceOverride,
             effectivePackageSourceOverridePattern,
             requestedPolicyChannel,
-            sourceDiscoveryChannel,
-            executionContext.NuGetServiceIndexOverride);
+            sourceDiscoveryChannel);
         restoreSources = NormalizeSources(restoreSources, new DirectoryInfo(appDirectoryPath));
 
+        // Exact overrides move only the selected package. The accompanying channel's broad
+        // Aspire policy must not remove other configured integration mappings.
         var configuration = nugetService.BuildConfiguration(
             new DirectoryInfo(appDirectoryPath),
             workloadId,
             restoreSources.PackageSourceMappings,
             restrictToSelectedSources: false,
+            overrideIntegrationSources: !string.IsNullOrWhiteSpace(packageSourceOverride) && !hasExactPackageSourceOverride,
             restoreSources.PackageScopedAppendSource,
             restoreSources.HasAuthoritativeAspirePolicy,
             cancellationToken);
@@ -155,8 +157,7 @@ internal sealed class IntegrationRestorePlanResolver(
         string? packageSourceOverride,
         string? packageSourceOverridePattern,
         PackageChannel? requestedPolicyChannel,
-        PackageChannel? sourceDiscoveryChannel,
-        string? nugetServiceIndexOverride)
+        PackageChannel? sourceDiscoveryChannel)
     {
         var additionalSources = new List<string>();
         var hasOverride = !string.IsNullOrWhiteSpace(packageSourceOverride);
@@ -224,7 +225,6 @@ internal sealed class IntegrationRestorePlanResolver(
             packageSourceMappings = PackageSourceOverrideMappings.Create(
                 packageSourceOverride!,
                 sourcePolicyChannel,
-                nugetServiceIndexOverride,
                 packageSourceOverridePattern)
                 .Where(mapping =>
                     mapping.PackageFilter != PackageMapping.AllPackages ||

@@ -75,17 +75,6 @@ internal class PackagingService : IPackagingService
 
     private readonly CliExecutionContext _executionContext;
 
-    /// <summary>
-    /// Resolves the nuget.org service-index URL the CLI should write into the
-    /// <c>PackageMapping</c>s it generates. Returns the override supplied by
-    /// <c>ASPIRE_CLI_NUGET_SERVICE_INDEX</c> or the <c>nugetServiceIndexOverride</c>
-    /// field of <c>.aspire-install.json</c> when set, otherwise the canonical
-    /// <see cref="PackageSources.NuGetOrg"/>. This is a write-side rewrite
-    /// only; URLs read out of existing user <c>NuGet.config</c> files are not
-    /// touched. See <c>docs/specs/cli-identity-sidecar.md</c>.
-    /// </summary>
-    private string NuGetOrgUrl => _executionContext.NuGetServiceIndexOverride ?? PackageSources.NuGetOrg;
-
     private readonly INuGetPackageCache _nuGetPackageCache;
     private readonly IFeatures _features;
     private readonly IConfiguration _configuration;
@@ -147,18 +136,17 @@ internal class PackagingService : IPackagingService
         // (e.g. an override that ultimately resolves to a non-staging identity still warns).
         WarnIfStagingDiagnosticOverridesActive();
 
-        var nugetOrg = NuGetOrgUrl;
         var defaultChannel = GetImplicitChannel();
 
-        var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
-        {
-            new PackageMapping(PackageMapping.AllPackages, nugetOrg)
-        }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
+        PackageMapping[]? stableMappings = _executionContext.NuGetServiceIndexOverride is { } integrationSource
+            ? [new(PackageSourceOverrideMappings.DefaultPackagePattern, integrationSource)]
+            : null;
+        var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable,
+            stableMappings, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
-            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
-            new PackageMapping(PackageMapping.AllPackages, nugetOrg)
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json")
         }, _nuGetPackageCache, _features, _logger, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         var prPackageChannels = new List<PackageChannel>();
@@ -291,8 +279,7 @@ internal class PackagingService : IPackagingService
         var packagesPath = PathNormalizer.NormalizePathForStorage(packagesDirectory.FullName);
         return PackageChannel.CreateExplicitChannel(name, PackageChannelQuality.Both, new[]
         {
-            new PackageMapping("Aspire*", packagesPath),
-            new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
+            new PackageMapping("Aspire*", packagesPath)
         }, _nuGetPackageCache, _features, _logger, pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
     }
 
@@ -457,8 +444,7 @@ internal class PackagingService : IPackagingService
 
         var stagingChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, stagingQuality, new[]
         {
-            new PackageMapping("Aspire*", stagingFeedUrl),
-            new PackageMapping(PackageMapping.AllPackages, NuGetOrgUrl)
+            new PackageMapping("Aspire*", stagingFeedUrl)
         }, _nuGetPackageCache, _features, _logger, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, currentCliVersion: _executionContext.IdentitySdkVersion, validateTemplatePackageMetadataPrefetching: TemplatePackageMetadataPrefetchingValidation);
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually

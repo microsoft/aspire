@@ -7,7 +7,7 @@ Use this integration to model, configure, and orchestrate an Azure Kubernetes Se
 ### Prerequisites
 
 - An Azure subscription - [create one for free](https://azure.microsoft.com/free/)
-- [Helm](https://helm.sh/docs/intro/install/) **v4.2.0 or later** on your `PATH`.
+- [Helm](https://helm.sh/docs/intro/install/) **v4.0.0 or later** on your `PATH`.
 
 Aspire shells out to `helm upgrade --install` to deploy the generated chart and any `AddHelmChart(...)` releases, and validates the Helm version up front so missing or older installs produce a clear actionable error instead of cryptic flag failures.
 
@@ -17,6 +17,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Kubernetes` integrati
 
 ```bash
 aspire add Aspire.Hosting.Azure.Kubernetes
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -28,7 +29,7 @@ In the AppHost, add an AKS environment and deploy services to it:
 ```csharp
 var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
     .WithComputeEnvironment(aks);
 ```
 
@@ -40,6 +41,75 @@ const aks = await builder.addAzureKubernetesEnvironment("aks");
 const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
     .withComputeEnvironment(aks);
 ```
+
+### Existing clusters
+
+Use the shared Azure existing-resource APIs to deploy to a pre-provisioned AKS cluster:
+
+```csharp
+var clusterName = builder.AddParameter("cluster-name");
+var resourceGroup = builder.AddParameter("cluster-resource-group");
+var subscription = builder.AddParameter("cluster-subscription");
+
+var aks = builder.AddAzureKubernetesEnvironment("aks")
+    .AsExistingInResourceGroup(clusterName, resourceGroup, subscription);
+```
+
+Use `AsExisting(clusterName, null)` when the cluster is in the application's Azure resource group. `PublishAsExisting` applies only when publishing/deploying.
+
+An explicit existing-cluster resource group and subscription select the cluster independently of `Resource.Scope`, which controls the module deploying supporting infrastructure. A resource-group-only cluster reference inherits the module's subscription; an unscoped reference inherits its resource group too. Credential retrieval uses the cluster resource ID returned by provisioning.
+
+Aspire references the cluster without changing its node pools, networking, or add-ons, and does not assign workloads to an automatically created `workload` node pool. Cluster-creation settings do not reconfigure an existing cluster. Explicit node-pool affinity must name a pool that already exists. The cluster must have a kubelet managed identity for registry access; workloads using Azure workload identity also require OIDC and workload identity to be enabled beforehand. Any ingress add-ons used by the application must already be installed and configured.
+
+Existing private clusters can have their public DNS name disabled. The cluster FQDN output falls back to the private DNS name, or an empty string if neither name is available. Deploying to a private cluster still requires network connectivity and DNS resolution from the deployment host.
+
+Aspire still provisions the default container registry, grants the cluster's kubelet identity `AcrPull` access, and creates workload identity federated credentials when needed. The deploying identity needs permission to create these supporting resources and role assignments, retrieve AKS credentials, and deploy Kubernetes workloads. `aspire destroy` removes the application's workloads and deletes the application's Azure resource group. Keep the existing cluster in a separate resource group if it must survive `aspire destroy`.
+
+### Node pool configuration
+
+Use callbacks to configure system and user node pools. Both receive an `AksNodePoolConfig` with a VM size of `Standard_D2s_v5` and an autoscaling range of 1-3 nodes. User pools can scale to zero; system pools require at least one node.
+
+**C#**
+
+```csharp
+var aks = builder.AddAzureKubernetesEnvironment("aks")
+    .WithSystemNodePool(pool =>
+    {
+        pool.VmSize = "Standard_D2as_v5";
+        pool.OsSku = "AzureLinux";
+    });
+
+var workers = aks.AddNodePool("workers", pool =>
+{
+    pool.MinCount = 0;
+    pool.MaxCount = 5;
+    pool.OsSku = "AzureLinux";
+});
+```
+
+**TypeScript**
+
+```typescript
+const aks = await builder.addAzureKubernetesEnvironment("aks");
+await aks.withSystemNodePool(async pool => {
+    pool.vmSize = "Standard_D2as_v5";
+    pool.osSku = "AzureLinux";
+});
+
+const workers = await aks.addNodePool("workers", async pool => {
+    pool.minCount = 0;
+    pool.maxCount = 5;
+    pool.osSku = "AzureLinux";
+});
+```
+
+`OsSku` / `osSku` is optional. Leaving it unset omits `osSKU` from the generated Bicep and preserves the AKS default, including for automatically created pools. Values such as `AzureLinux` and `Ubuntu` select the OS SKU, not a specific OS image version; Azure validates availability and compatibility. These APIs configure Linux node pools.
+
+Each `WithSystemNodePool` call replaces the previous system-pool configuration, including its OS SKU. The selected value is part of the app model and is retained when deployment regenerates Bicep. Changing the OS SKU of an existing pool can reimage nodes and disrupt workloads; follow the [AKS OS SKU migration guidance](https://learn.microsoft.com/azure/aks/upgrade-os-version).
+
+The C# callback receives the configuration stored in the app model, not a copy. Extensions can compose further changes through the retained configuration or `workers.Resource.Config` until infrastructure generation. The final values are validated and applied to the generated Bicep at that point; later mutations do not change files already generated.
+
+Existing parameter-based C# calls remain supported. TypeScript calls using scalar options must migrate to callbacks: replace `await aks.withSystemNodePool({ vmSize: "Standard_D2as_v5" })` with the callback above, and replace `await aks.addNodePool("workers", { minCount: 0 })` with `await aks.addNodePool("workers", async pool => { pool.minCount = 0; })`. Polyglot callbacks receive local data whose property changes are written back when the callback returns. Assign properties directly, without remote setters or per-property `await`.
 
 ### Existing container registries
 
@@ -65,7 +135,7 @@ const aks = await builder.addAzureKubernetesEnvironment("aks");
 await aks.withContainerRegistry(registry);
 ```
 
-Aspire grants the AKS kubelet identity `AcrPull` at the registry's scope. The deployment identity must have permission to create role assignments there, as well as push images to the registry.
+Aspire grants the AKS kubelet identity `AcrPull` at the registry's scope, independently of the cluster's resource group or subscription. This applies to both new and existing clusters and registries. For an existing cluster, Aspire reads its kubelet identity and deploys the grant in a separate module without creating a replacement identity. The deployment identity must have permission to create role assignments at the registry's scope, as well as push images to the registry.
 
 `aspire destroy` preserves the existing registry only when it is outside the application's resource group. It deletes the entire application resource group, including any existing resources in that group, even those configured with `PublishAsExisting`. A registry in that group and its images are deleted.
 
@@ -75,7 +145,7 @@ Aspire grants the AKS kubelet identity `AcrPull` at the registry's scope. The de
 
 ### Cluster identities and permissions
 
-Aspire provisions separate user-assigned managed identities for the control plane and kubelets. Both inherit the cluster's resource-group and subscription scope, including scopes set through provisioning customization. Neither is a workload identity:
+For newly provisioned clusters, Aspire provisions separate user-assigned managed identities for the control plane and kubelets. Both inherit the cluster's resource-group and subscription scope, including scopes set through provisioning customization. Neither is a workload identity:
 
 | Identity | Permissions |
 | --- | --- |

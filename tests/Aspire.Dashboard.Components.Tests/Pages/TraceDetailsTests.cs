@@ -17,6 +17,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -33,6 +34,57 @@ public partial class TraceDetailsTests : DashboardTestContext
     public TraceDetailsTests(ITestOutputHelper testOutputHelper)
     {
         _testOutputHelper = testOutputHelper;
+    }
+
+    [Fact]
+    public async Task Render_ManySpanLogs_RendersButtonsWithoutTooltipText()
+    {
+        SetupTraceDetailsServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddTracesAsync(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }
+        ]);
+        var logs = new ScopeLogs { Scope = CreateScope(name: "test-scope") };
+        logs.LogRecords.Add(Enumerable.Range(0, 501).Select(index =>
+            CreateLogRecord(time: s_testTime.AddMilliseconds(index), traceId: "1", spanId: "1-1",
+                eventName: "Test event", message: "Test message")));
+        await repository.AddLogsAsync(new AddContext(),
+        [
+            new ResourceLogs { Resource = CreateResource(), ScopeLogs = { logs } }
+        ]);
+
+        var cut = Render<TraceDetail>(builder => builder
+            .Add(p => p.TraceId, Convert.ToHexString(Encoding.UTF8.GetBytes("1")))
+            .AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            var buttons = cut.FindAll(".span-log-entry-button");
+            Assert.Equal(501, buttons.Count);
+            // Span logs can number in the thousands, so their buttons carry no tooltip text. The log's details open
+            // on click instead.
+            Assert.All(buttons, button =>
+            {
+                Assert.Null(button.GetAttribute("data-tooltip"));
+                Assert.Equal("Log entry details", button.GetAttribute("aria-label"));
+            });
+            // Only the bounded trace header keeps its rich Fluent tooltip.
+            Assert.Single(cut.FindComponents<FluentTooltip>());
+        });
     }
 
     [Fact]
@@ -83,6 +135,84 @@ public partial class TraceDetailsTests : DashboardTestContext
         await DisposeComponentsAsync();
 
         Assert.Equal(0, telemetryRepository.TraceSubscriptionCount);
+    }
+
+    [Fact]
+    public async Task Render_HasLogs_RendersEveryLogMarkerOnEachSpan()
+    {
+        SetupTraceDetailsServices();
+        Render<FluentTooltipProvider>();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var scopeLogs = new ScopeLogs { Scope = CreateScope() };
+        foreach (var spanId in new[] { "1-1", "1-2" })
+        {
+            for (var i = 0; i < 501; i++)
+            {
+                scopeLogs.LogRecords.Add(CreateLogRecord(
+                    time: s_testTime.AddMinutes(6).AddMilliseconds(i),
+                    traceId: "1",
+                    spanId: spanId,
+                    eventName: "Event"));
+            }
+        }
+        await telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs = { scopeLogs }
+            }
+        });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = Render<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var spanContainers = cut.FindAll(".span-button-container");
+            Assert.Equal(2, spanContainers.Count);
+
+            // Every log marker is rendered on each span. They carry no tooltip, so there's no per-span limit to apply:
+            // the log's details open on click.
+            Assert.All(spanContainers, container =>
+            {
+                var buttons = container.QuerySelectorAll(".span-log-entry-button");
+                Assert.Equal(501, buttons.Length);
+                Assert.All(buttons, button =>
+                {
+                    Assert.Null(button.GetAttribute("title"));
+                    Assert.Null(button.GetAttribute("data-tooltip"));
+                });
+            });
+        });
     }
 
     [Fact]

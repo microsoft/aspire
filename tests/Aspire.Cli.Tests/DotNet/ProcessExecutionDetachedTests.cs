@@ -19,13 +19,16 @@ public class ProcessExecutionDetachedTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
 
+        // Console.OpenStandardInput() returns Stream.Null exactly when GetStdHandle(STD_INPUT_HANDLE)
+        // is NULL or INVALID_HANDLE_VALUE (on both .NET Framework and .NET). Probing that way avoids
+        // Add-Type, which runs csc.exe and loads a freshly compiled assembly; that cold compile
+        // occasionally pushed this child past the exit timeout on Windows CI (#20844).
         await using var child = CreateDetachedExecution(
             "powershell.exe",
             ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", """
-                Add-Type 'using System; using System.Runtime.InteropServices; public static class Stdio { [DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int id); }';
-                $inputHandle = [Stdio]::GetStdHandle(-10);
-                if ($inputHandle -eq [IntPtr]::Zero -or $inputHandle.ToInt64() -eq -1) { exit 42 }
-                if ([Console]::In.Read() -ne -1) { exit 43 }
+                $stdin = [Console]::OpenStandardInput();
+                if ([object]::ReferenceEquals($stdin, [System.IO.Stream]::Null)) { exit 42 }
+                if ($stdin.ReadByte() -ne -1) { exit 43 }
                 [Console]::Out.WriteLine('discarded stdout');
                 [Console]::Error.WriteLine('discarded stderr');
                 exit 0

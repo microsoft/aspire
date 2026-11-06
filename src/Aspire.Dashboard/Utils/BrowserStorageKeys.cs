@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -9,12 +9,18 @@ internal static class BrowserStorageKeys
 {
     public const string UnsecuredTelemetryMessageDismissedKey = "Aspire_Telemetry_UnsecuredMessageDismissed";
     public const string UnsecuredEndpointMessageDismissedKey = "Aspire_Security_UnsecuredEndpointMessageDismissed";
+    public const string DashboardFeedbackPromptDismissed = "Aspire_DashboardFeedback_PromptDismissed";
+    public const string DashboardFeedbackPromptDismissedForSession = "Aspire_DashboardFeedback_PromptDismissedForSession";
     public const string TimeFormat = "Aspire_TimeFormat";
+    public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
 
     public const string TracesPageState = "Aspire_PageState_Traces";
     public const string StructuredLogsPageState = "Aspire_PageState_StructuredLogs";
     public const string MetricsPageState = "Aspire_PageState_Metrics";
+    public const string MetricsOrganize = "Aspire_Metrics_Organize";
     public const string ConsoleLogsPageState = "Aspire_PageState_ConsoleLogs";
+    public const string ParametersPageState = "Aspire_PageState_Parameters";
+    public const string GraphPageState = "Aspire_PageState_Graph";
     public const string TerminalsPageState = "Aspire_PageState_Terminals";
     public const string ResourcesPageState = "Resources_PageState";
     public const string ConsoleLogConsoleSettings = "Aspire_ConsoleLog_ConsoleSettings";
@@ -26,7 +32,15 @@ internal static class BrowserStorageKeys
     public const string SelectedDashboardRunId = "Aspire_Settings_SelectedDashboardRunId";
     public const string ResourcesShowHiddenResources = "Aspire_Resources_ShowHiddenResources";
 
-    public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
+    public const string ResourcePaneCollapsed = "Aspire_ResourcePane_Collapsed";
+    public const string ResourcePaneWidth = "Aspire_ResourcePane_Width";
+    public const string ResourcePaneMode = "Aspire_ResourcePane_Mode";
+    public const string ResourcePaneGrouping = "Aspire_ResourcePane_Grouping";
+    public const string ResourcePaneKinds = "Aspire_ResourcePane_Kinds";
+    public const string ResourceListDensity = "Aspire_ResourcePane_Density";
+    public const string GroupOverview = "Aspire_ResourceOverview_GroupView";
+    public const string RecordingsStyle = "Aspire_Header_RecordingsStyle";
+    public const string LastSelectedResources = "Aspire_ResourcePane_LastSelectedResources";
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
     public const string SplitterOrientationKeyPrefix = "Aspire_SplitterOrientation_";

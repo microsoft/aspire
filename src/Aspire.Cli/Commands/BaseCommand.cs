@@ -5,9 +5,11 @@ using System.CommandLine;
 using System.CommandLine.Help;
 using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
@@ -63,7 +65,10 @@ internal abstract class BaseCommand : Command
     protected IInteractionService InteractionService { get; }
 
     protected AspireCliTelemetry Telemetry { get; }
+    protected ConfigSourceService ConfigSources { get; }
 
+    // Commands that start an AppHost or dashboard provide their own stopping message.
+    // Other commands report a neutral cancellation.
     protected virtual string? CancellationMessage => null;
 
     private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
@@ -76,8 +81,10 @@ internal abstract class BaseCommand : Command
         _executionContext = services.ExecutionContext;
         InteractionService = services.InteractionService;
         Telemetry = services.Telemetry;
+        ConfigSources = services.ConfigSources;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
+            _executionContext.ResetSourceTrustWarning();
             SelectForExecution(parseResult);
 
             // Route human-readable output to stderr when a machine-readable format is requested so
@@ -93,6 +100,7 @@ internal abstract class BaseCommand : Command
             }
             finally
             {
+                await ConfigSources.StopChecksAsync().ConfigureAwait(false);
                 await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
             }
         }));
@@ -145,8 +153,8 @@ internal abstract class BaseCommand : Command
             // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
             var terminationTask = services.CancellationManager.ProcessTerminationCompletionSource.Task;
 
-            // After cancellation is triggered, show "Stopping Aspire..." after 200ms if the
-            // handler hasn't completed yet, so the user knows shutdown is in progress.
+            // After cancellation is triggered, show the command's cancellation message after
+            // 200ms if the handler hasn't completed yet, so the user knows shutdown is in progress.
             var stoppingMessageTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var stoppingMessageRegistration = cancellationToken.Register(() =>
                 Task.Delay(200).ContinueWith(_ => stoppingMessageTcs.TrySetResult(), TaskScheduler.Default));
@@ -178,6 +186,15 @@ internal abstract class BaseCommand : Command
                     tasksToAwait.Remove(stoppingMessageTcs.Task);
                 }
             }
+        }
+        catch (InvalidSecretsFileException ex)
+        {
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
+        }
+        catch (ConfigSourceException ex)
+        {
+            ConfigSourceService.DisplayGitTimeoutOutput(InteractionService, ex.GitOutput);
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
         }
         catch (NonInteractiveException)
         {
@@ -250,6 +267,8 @@ internal abstract class BaseCommand : Command
             }
         }
 
+        await ConfigSources.StopChecksAsync().ConfigureAwait(false);
+
         if (UpdateNotificationsEnabled && !_isMachineReadableFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
         {
             try
@@ -264,6 +283,11 @@ internal abstract class BaseCommand : Command
             {
                 // Ignore any errors during update check to avoid impacting the main command
             }
+        }
+
+        if (!_isMachineReadableFormatRequested)
+        {
+            ConfigSources.NotifyIfUpdateAvailable();
         }
 
         return result.ExitCode;

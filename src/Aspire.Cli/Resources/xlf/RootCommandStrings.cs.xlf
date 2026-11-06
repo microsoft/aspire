@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
-        <target state="needs-review-translation">Umožňuje zobrazit animovaný úvodní banner rozhraní příkazového řádku Aspire.</target>
+        <target state="translated">Umožňuje zobrazit animovaný úvodní banner rozhraní příkazového řádku Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -19,42 +19,42 @@
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Před provedením příkazu počkejte na připojení ladicího programu.</target>
+        <target state="translated">Před provedením příkazu počkejte na připojení ladicího programu.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionScriptDescription">
         <source>Write a shell completion script to standard output</source>
-        <target state="new">Write a shell completion script to standard output</target>
+        <target state="translated">Zapsat skript automatického dokončování pro prostředí na standardní výstup</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellDescription">
         <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
-        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <target state="translated">Prostředí, pro které se má vygenerovat skript (bash, fish, pwsh, zsh). Výchozí hodnota se přebírá z proměnné SHELL, ve Windows je to pwsh.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellRequired">
         <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
-        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <target state="translated">Nepovedlo se rozpoznat podporované prostředí. Zadejte bash, fish, pwsh nebo zsh: aspire completions script &lt;shell&gt;.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionsDescription">
         <source>Generate shell completion scripts</source>
-        <target state="new">Generate shell completion scripts</target>
+        <target state="translated">Vygenerovat skripty automatického dokončování pro prostředí</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
-        <target state="needs-review-translation">Povolte protokolování ladění do konzoly.</target>
+        <target state="translated">Povolte protokolování ladění do konzoly.</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
         <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
+        <target state="translated">Nastavte minimální úroveň protokolu pro výstup konzoly (trasování, ladění, informace, upozornění, chyba, kritické).</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
-        <target state="needs-review-translation">Aspire CLI lze použít k vytváření, spouštění a publikování aplikací založených na Aspire.</target>
+        <target state="translated">Aspire CLI lze použít k vytváření, spouštění a publikování aplikací založených na Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -64,37 +64,37 @@
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
 Read more about Aspire CLI telemetry: {0}</source>
-        <target state="new">Telemetry
+        <target state="translated">Telemetrie
 ---------
 
-The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+Rozhraní příkazového řádku Aspire shromažďuje data o využití. Shromažďuje je společnost Microsoft a slouží k vylepšování vašich možností. Výslovný nesouhlas s telemetrií můžete vyjádřit tak, že pomocí vašeho preferovaného prostředí nastavíte proměnnou prostředí ASPIRE_CLI_TELEMETRY_OPTOUT na hodnotu 1 nebo true.
 
-Read more about Aspire CLI telemetry: {0}</target>
+Další informace o telemetrii rozhraní Aspire CLI: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
-        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <target state="translated">Aspire CLI emuluje identitu {0} verze {1}. Chování se může lišit od nainstalovaného sestavení; identita byla přepsána prostřednictvím proměnných prostředí nebo podpůrné součásti instalace.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidCompletionRequest">
         <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
-        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
+        <target state="translated">Očekává se [suggest] nebo [suggest:\&lt;cursor&gt;] následované jedním řetězcem příkazového řádku, přičemž kurzor musí být uvnitř tohoto řetězce.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
-        <target state="needs-review-translation">Umožňuje potlačit banner spuštění a oznámení o telemetrii.</target>
+        <target state="translated">Umožňuje potlačit banner spuštění a oznámení o telemetrii.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
         <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
-        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
+        <target state="translated">Spusťte příkaz v neinteraktivním režimu, který zakáže všechny interaktivní výzvy a indikátory průběhu.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Před provedením příkazu počkejte na připojení ladicího programu.</target>
+        <target state="translated">Před provedením příkazu počkejte na připojení ladicího programu.</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

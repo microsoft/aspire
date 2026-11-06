@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipes;
 using System.Security;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -57,8 +58,13 @@ public sealed class ProcessTestFixture : IAsyncLifetime
             "ProcessSupervisor.cs", "ProcessSupervisorLogger.cs", "ProcessSupervisor.Windows.cs", "ParentProcessLivenessMonitor.cs",
             "ProcessStartTimeHelper.cs", "ProcessSignaler.cs", "KnownConfigNames.cs"
         ];
-        var includes = string.Join(Environment.NewLine, sources.Select(source =>
-            $"""<Compile Include="{SecurityElement.Escape(Path.Combine(repository.FullName, "src", "Shared", source))}" />"""));
+        var sourcePaths = sources.Select(source => Path.Combine(repository.FullName, "src", "Shared", source)).Concat(
+        [
+            Path.Combine(repository.FullName, "tests", "Shared", "AsyncTestHelpers.cs"),
+            Path.Combine(repository.FullName, "tests", "Aspire.TestUtilities", "PlatformDetection.cs")
+        ]);
+        var includes = string.Join(Environment.NewLine, sourcePaths.Select(source =>
+            $"""<Compile Include="{SecurityElement.Escape(source)}" />"""));
         var project = Path.Combine(_directory.FullName, "ProcessTestHost.csproj");
         await File.WriteAllTextAsync(project, $$"""
             <Project Sdk="Microsoft.NET.Sdk">
@@ -148,7 +154,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                 // PID reuse means the original process has already been reaped.
                 return;
             }
-            await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout(TestConstants.LongTimeoutDuration);
             Assert.True(process.HasExited);
         }
         catch (ArgumentException)
@@ -195,14 +201,14 @@ public sealed class ProcessTestFixture : IAsyncLifetime
         var error = process.StandardError.ReadToEndAsync();
         try
         {
-            await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromMinutes(2));
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
         }
         finally
         {
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                await process.WaitForExitAsync().DefaultTimeout();
             }
             await Task.WhenAll(output, error);
         }
@@ -226,6 +232,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
         using System.Runtime.InteropServices;
         using System.Text.Json;
         using Aspire.Shared;
+        using Microsoft.AspNetCore.InternalTesting;
         using Microsoft.Extensions.Logging.Abstractions;
 
         if (ProcessSupervisor.IsSupervisor)
@@ -319,9 +326,9 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                         context.Cancel = true;
                         shutdown.TrySetResult();
                     }) : null;
-                    await started.WaitForConnectionAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                    await started.WaitForConnectionAsync().DefaultTimeout();
                     using var reader = new StreamReader(started);
-                    await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                    await reader.ReadLineAsync().DefaultTimeout();
                     await NotifyReady(args[1], "runtime", Environment.ProcessId);
                     if (args[0] == "tree-exit")
                     {

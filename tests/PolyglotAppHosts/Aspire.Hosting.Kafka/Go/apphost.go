@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	kafka := builder.AddKafka("broker")
@@ -28,20 +28,20 @@ func main() {
 	_ = kafka.InternalEndpoint()
 	_ = kafka.ConnectionStringExpression()
 	if err = kafka.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	kafka2 := builder.AddKafka("broker2", &aspire.AddKafkaOptions{Port: aspire.Float64Ptr(19092)})
 	kafka2.WithDataBindMount("/tmp/kafka-data")
 	if err = kafka2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

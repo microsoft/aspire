@@ -4,37 +4,37 @@
     <body>
       <trans-unit id="Description">
         <source>Destroy a previously deployed AppHost environment</source>
-        <target state="new">Destroy a previously deployed AppHost environment</target>
+        <target state="translated">Destruir um ambiente AppHost implantado anteriormente</target>
         <note />
       </trans-unit>
       <trans-unit id="DestroyCanceled">
         <source>The destroy operation was canceled.</source>
-        <target state="new">The destroy operation was canceled.</target>
+        <target state="translated">A operação de destruição foi cancelada.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresYes">
         <source>The destroy command requires --yes when the --non-interactive option is specified.</source>
-        <target state="new">The destroy command requires --yes when the --non-interactive option is specified.</target>
+        <target state="translated">O comando destroy requer --yes quando a opção --non-interactive é especificada.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
         <source>Destroy completed</source>
-        <target state="new">Destroy completed</target>
+        <target state="translated">Destruição concluída</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailedPrefix">
         <source>Destroy failed</source>
-        <target state="new">Destroy failed</target>
+        <target state="translated">Falha ao destruir</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path containing the deployment artifacts to destroy</source>
-        <target state="new">The output path containing the deployment artifacts to destroy</target>
+        <target state="translated">O caminho de saída que contém os artefatos de implantação a serem destruídos</target>
         <note />
       </trans-unit>
       <trans-unit id="YesOptionDescription">
         <source>Do not prompt for confirmation before destroying resources</source>
-        <target state="new">Do not prompt for confirmation before destroying resources</target>
+        <target state="translated">Não solicite confirmação antes de destruir recursos</target>
         <note />
       </trans-unit>
     </body>

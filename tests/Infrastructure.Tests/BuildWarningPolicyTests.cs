@@ -19,21 +19,24 @@ public sealed class BuildWarningPolicyTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
         var script = Path.Combine(workspace.Path, "evaluate.ps1");
+        var resultPath = Path.Combine(workspace.Path, "evaluation_results.json");
         await File.WriteAllTextAsync(script, """
             & $env:TEST_DOTNET msbuild (Join-Path $env:TEST_REPO 'eng/WarningPolicy.proj') -nologo `
               -getProperty:WarningsNotAsErrors,NoWarn,NuGetAuditMode,NuGetAudit,TreatWarningsAsErrors `
+              "-getResultOutputFile:$env:TEST_RESULT" `
               "/p:TreatNuGetAuditWarningsAsErrors=$env:TEST_STRICT" "/p:OfficialBuild=$env:TEST_OFFICIAL"
             exit $LASTEXITCODE
             """);
 
         using var command = CreateCommand(script, RepoRoot.Path)
+            .WithEnvironmentVariable("TEST_RESULT", resultPath)
             .WithEnvironmentVariable("WarningsNotAsErrors", "CS1591")
             .WithEnvironmentVariable("TEST_STRICT", strict.ToString())
             .WithEnvironmentVariable("TEST_OFFICIAL", official.ToString());
         var result = await command.ExecuteAsync();
         result.EnsureSuccessful();
 
-        using var document = JsonDocument.Parse(result.Output);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultPath));
         var properties = document.RootElement.GetProperty("Properties");
         Assert.Equal(
             strict ? ["CS1591"] : new[] { "CS1591", "NU1901", "NU1902", "NU1903", "NU1904" },

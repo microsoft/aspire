@@ -4,6 +4,7 @@
 using Aspire.TestUtilities;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Utils;
+using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -796,6 +797,100 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(childResource.Resource, relationshipAnnotation.Resource);
         Assert.Equal(KnownRelationshipTypes.WaitFor, relationshipAnnotation.Type);
+    }
+
+    [Fact]
+    public async Task WaitForOnMultipleChildResourcesWaitsForSharedParentOnce()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parentResource = builder.AddResource(new CustomResource("parent"));
+        var child1 = builder.AddResource(new CustomChildResource("child1", parentResource.Resource));
+        var child2 = builder.AddResource(new CustomChildResource("child2", parentResource.Resource));
+        var containerResource = builder.AddContainer("container", "image", "tag")
+                                       .WaitFor(child1)
+                                       .WaitFor(child2)
+                                       .WaitFor(child2);
+
+        using var resourceLoggerService = new ResourceLoggerService();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(resourceLoggerService: resourceLoggerService);
+
+        var logLines = new List<string>();
+        using var subscription = resourceLoggerService.Subscribe(containerResource.Resource.Name, lines =>
+        {
+            lock (logLines)
+            {
+                logLines.AddRange(lines.Select(l => l.Content));
+            }
+        });
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(containerResource.Resource, cts.Token);
+
+        foreach (var dependency in new IResource[] { parentResource.Resource, child1.Resource, child2.Resource })
+        {
+            await notificationService.PublishUpdateAsync(dependency, s => s with
+            {
+                State = KnownResourceStates.Running,
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            }).DefaultTimeout();
+        }
+
+        await waitTask.DefaultTimeout();
+
+        string[] snapshot;
+        lock (logLines)
+        {
+            snapshot = [.. logLines];
+        }
+
+        foreach (var name in new[] { "parent", "child1", "child2" })
+        {
+            Assert.Single(snapshot, l => l.EndsWith($"Waiting for resource '{name}' to enter the 'Running' state.", StringComparison.Ordinal));
+            Assert.Single(snapshot, l => l.EndsWith($"Waiting for resource ready to execute for '{name}'.", StringComparison.Ordinal));
+            Assert.Single(snapshot, l => l.EndsWith($"Finished waiting for resource '{name}'.", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesKeepsWaitsWithDifferentWaitTypesOrBehaviors()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var dependency = builder.AddResource(new CustomResource("dependency"));
+        var containerResource = builder.AddContainer("container", "image", "tag")
+                                       .WaitFor(dependency)
+                                       .WaitFor(dependency, WaitBehavior.WaitOnResourceUnavailable)
+                                       .WaitForStart(dependency);
+
+        using var resourceLoggerService = new ResourceLoggerService();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(resourceLoggerService: resourceLoggerService);
+
+        var logLines = new List<string>();
+        using var subscription = resourceLoggerService.Subscribe(containerResource.Resource.Name, lines =>
+        {
+            lock (logLines)
+            {
+                logLines.AddRange(lines.Select(l => l.Content));
+            }
+        });
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(containerResource.Resource, cts.Token);
+
+        await notificationService.PublishUpdateAsync(dependency.Resource, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+
+        string[] snapshot;
+        lock (logLines)
+        {
+            snapshot = [.. logLines];
+        }
+
+        Assert.Equal(3, snapshot.Count(l => l.EndsWith("Waiting for resource 'dependency' to enter the 'Running' state.", StringComparison.Ordinal)));
     }
 
     [Fact]

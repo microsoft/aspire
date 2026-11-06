@@ -910,6 +910,76 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("Dnx", false)]
+    [InlineData("DnxPinned", false)]
+    [InlineData("Path", false)]
+    [InlineData("Path", true)]
+    public async Task ResolveAspireCliBundlePathsIncludesSetupOutputInFailure(string invocationMode, bool includePathCli)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{invocationMode}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "cli"));
+        await CreateFakeDnxWithSetupExitCodeAsync(cliDirectory.FullName, 42);
+        if (includePathCli)
+        {
+            CreateFakeNativeAspireCli(cliDirectory.FullName);
+        }
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", project.ProjectFile, "-nologo", "-v:q", "-t:ResolveAspireCliBundlePaths", "-warnaserror"],
+            new Dictionary<string, string>
+            {
+                ["ASPIRE_HOME"] = Path.Combine(workspace.Path, "aspire-home"),
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(cliDirectory.FullName)
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        var errorLines = result.Output.Split('\n').Where(line => line.Contains("error ASPIRE009:", StringComparison.Ordinal)).ToArray();
+        Assert.Contains(errorLines, line => line.Contains("failed with exit code 42", StringComparison.Ordinal));
+        Assert.Contains(errorLines, line => line.Contains("Acquiring Aspire CLI; package source: 'test-feed'.", StringComparison.Ordinal));
+        Assert.Contains(errorLines, line => line.Contains("error: Unable to load 'test-feed'; response: 401 (Unauthorized).", StringComparison.Ordinal));
+        Assert.Equal(includePathCli ? 2 : 1, errorLines.Count(line => line.Contains("Output from '", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResolveAspireCliBundlePathsKeepsSuccessfulAndRecoveredSetupOutputQuiet(bool includeFailingPathCli)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, includeBundlePaths: false);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxWithSetupExitCodeAsync(dnxDirectory.FullName, 0);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "cli"));
+        if (includeFailingPathCli)
+        {
+            CreateFakeNativeAspireCli(cliDirectory.FullName);
+            await File.WriteAllTextAsync(Path.Combine(cliDirectory.FullName, "setup-exit-code"), "42");
+        }
+
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", project.ProjectFile, "-nologo", "-v:q", "-t:ResolveAspireCliBundlePaths", "-warnaserror"],
+            new Dictionary<string, string>
+            {
+                ["ASPIRE_HOME"] = aspireHome,
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(cliDirectory.FullName, dnxDirectory.FullName)
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(string.Empty, result.Output.Trim());
+        AssertCliBundleExists(aspireHome, result.Output);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public void ResolveAspireCliBundleResolvesStandaloneTerminalHost(bool executableExists)
@@ -1723,6 +1793,17 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return dnxPath;
     }
 
+    private static async Task CreateFakeDnxWithSetupExitCodeAsync(string fakeCliDirectory, int exitCode)
+    {
+        var dnxPath = await CreateFakeDnxAsync(fakeCliDirectory);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.Copy(CopyFakeCommandHost(fakeCliDirectory), dnxPath, overwrite: true);
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "setup-exit-code"), exitCode.ToString(CultureInfo.InvariantCulture));
+    }
+
     private static async Task CreateFakeDnxThatFailsVersionAsync(string fakeCliDirectory)
     {
         var dnxPath = await CreateFakeDnxAsync(fakeCliDirectory);
@@ -1742,7 +1823,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     private static string CreateFakeNativeAspireCli(string fakeCliDirectory)
     {
         var fakeDotNetPath = CopyFakeCommandHost(fakeCliDirectory);
-        var aspirePath = Path.Combine(fakeCliDirectory, "aspire.exe");
+        var aspirePath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
         File.Copy(fakeDotNetPath, aspirePath, overwrite: true);
         return aspirePath;
     }
@@ -1751,7 +1832,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     {
         var fakeCommandHostPath = GetAssemblyMetadataPath("FakeCommandHostPath");
         var sourceDirectory = Path.GetDirectoryName(fakeCommandHostPath)!;
-        foreach (var sourcePath in Directory.EnumerateFiles(sourceDirectory, "dotnet.*"))
+        foreach (var sourcePath in Directory.EnumerateFiles(sourceDirectory, "dotnet*"))
         {
             File.Copy(sourcePath, Path.Combine(destinationDirectory, Path.GetFileName(sourcePath)), overwrite: true);
         }
