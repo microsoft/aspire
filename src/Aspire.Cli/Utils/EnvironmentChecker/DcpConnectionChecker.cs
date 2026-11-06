@@ -234,9 +234,14 @@ internal sealed class DcpConnectionChecker(
 
             try
             {
+                // Abrupt CLI exit can bypass disposal. Let DCP capture the native parent identity;
+                // its Linux identity time is boot-relative, not a .NET wall-clock start time.
+                // https://github.com/microsoft/dcp/blob/02587e8f87bc76cb01d6baf60314c693b7a88976/pkg/process/process_handle.go#L18-L55
                 var arguments = new List<string>
                 {
                     "start-apiserver",
+                    "--monitor",
+                    Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
                     "--kubeconfig",
                     kubeconfigPath
                 };

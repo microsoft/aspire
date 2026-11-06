@@ -5,9 +5,9 @@ using System.IO.Hashing;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Cli.Certificates;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Certificates;
@@ -133,56 +133,4 @@ public class NativeCertificateToolRunnerTests(ITestOutputHelper outputHelper)
             certificateManager,
             TestEnvironment.CreateLinux(),
             logger ?? new FakeLogger<NativeCertificateToolRunner>());
-
-    private sealed class TestCertificateManager(int version = CertificateManager.CurrentAspNetCoreCertificateVersion)
-        : CertificateManager(NullLogger.Instance, CertificateManager.LocalhostHttpsDistinguishedName, version, version)
-    {
-        public List<byte[]> Certificates { get; } = [];
-        public bool SaveCalled { get; private set; }
-        public bool TrustCalled { get; private set; }
-
-        protected override void PopulateCertificatesFromStore(
-            X509Store store,
-            List<X509Certificate2> certificates,
-            bool requireExportable)
-        {
-            certificates.AddRange(
-                Certificates.Select(certificate => X509CertificateLoader.LoadPkcs12(
-                    certificate,
-                    password: null,
-                    X509KeyStorageFlags.Exportable)));
-        }
-
-        protected override X509Certificate2 SaveCertificateCore(X509Certificate2 certificate, StoreName storeName, StoreLocation storeLocation)
-        {
-            SaveCalled = true;
-            return certificate;
-        }
-
-        protected override TrustLevel TrustCertificateCore(X509Certificate2 certificate)
-        {
-            TrustCalled = true;
-            return TrustLevel.Full;
-        }
-
-        public override TrustLevel GetTrustLevel(X509Certificate2 certificate) => TrustLevel.None;
-
-        internal override bool IsExportable(X509Certificate2 c) => true;
-
-        protected override void RemoveCertificateFromTrustedRoots(X509Certificate2 certificate)
-        {
-        }
-
-        protected override IList<X509Certificate2> GetCertificatesToRemove(StoreName storeName, StoreLocation storeLocation) => [];
-
-        protected override void CreateDirectoryWithPermissions(string directoryPath)
-        {
-        }
-
-        internal override CheckCertificateStateResult CheckCertificateState(X509Certificate2 candidate) => new(true, null);
-
-        internal override void CorrectCertificateState(X509Certificate2 candidate)
-        {
-        }
-    }
 }
