@@ -1,0 +1,31 @@
+// The official pipeline blocks Maven Central and the Gradle Plugin Portal.
+// This feed has upstreams for both; keep the generated starter unchanged.
+// https://eng.ms/docs/coreai/devdiv/one-engineering-system-1es/1es-docs/secure-supply-chain/how-to-securely-configure-package-source-files#gradle
+def mirror = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-maven/maven/v1'
+def token = System.getenv('SYSTEM_ACCESSTOKEN')
+
+def configureRepositories = { repositories ->
+    repositories.all { repository ->
+        if (!(repository instanceof org.gradle.api.artifacts.repositories.MavenArtifactRepository)
+            || repository.url.toString() != mirror) {
+            repositories.remove(repository)
+        }
+    }
+    repositories.maven {
+        url = mirror
+        if (token) {
+            credentials {
+                username = 'Azure DevOps Services'
+                password = token
+            }
+        }
+    }
+}
+
+beforeSettings { settings ->
+    configureRepositories(settings.pluginManagement.repositories)
+}
+
+allprojects { project ->
+    configureRepositories(project.repositories)
+}
