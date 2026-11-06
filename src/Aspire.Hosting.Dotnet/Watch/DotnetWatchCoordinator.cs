@@ -206,11 +206,12 @@ internal static partial class DotnetWatchCoordinator
     internal static void Configure(
         IDistributedApplicationBuilder builder,
         IResourceBuilder<DotnetProjectResource> resource,
-        DotnetProjectMetadata metadata)
+        DotnetProjectMetadata metadata,
+        DotnetProjectBuildCoordinator.CoordinatorState? buildCoordinator)
     {
         var state = s_states.GetValue(builder, static b => new WatchState(b));
         s_projectStates.AddOrUpdate(resource.Resource, state);
-        state.Configure(resource, metadata);
+        state.Configure(resource, metadata, buildCoordinator);
     }
 
     /// <summary>
@@ -223,6 +224,17 @@ internal static partial class DotnetWatchCoordinator
         {
             state.UseDedicatedServer(resource);
         }
+    }
+
+    /// <summary>Test hook: reports a watcher <c>build_complete</c> status to the server that watches <paramref name="resource"/>.</summary>
+    internal static void ReportBuildCompleteForTesting(DotnetProjectResource resource, bool success)
+    {
+        if (!s_projectStates.TryGetValue(resource, out var state) || state.Projects.Find(p => p.Resource == resource) is not { } project)
+        {
+            throw new InvalidOperationException($"'{resource.Name}' isn't watched.");
+        }
+
+        project.Server.OnBuildCompleteForTesting(success);
     }
 
     private static string? GetProjectLaunchConfigurationType(IResource resource) =>
@@ -330,14 +342,16 @@ internal static partial class DotnetWatchCoordinator
 #pragma warning restore ASPIREPERSISTENCE001
 
     /// <summary>
-    /// Applies <see cref="Evaluate"/> to every registered project at <see cref="BeforeStartEvent"/>: excluded projects
-    /// get their normal launch back and a notice in the terminal and their log; unsupported ones fail the run together.
+    /// Applies <see cref="Evaluate"/> to every registered project at <see cref="BeforeStartEvent"/>: watched projects
+    /// leave Aspire's coordinated build (the watcher builds them), excluded projects get their normal launch and
+    /// coordinated build back and a notice in the terminal and their log; unsupported ones fail the run together.
     /// </summary>
     /// <remarks>
-    /// An excluded project keeps waiting for the watch server while other projects are watched, so its own
-    /// <c>dotnet run</c> build doesn't race the watcher's initial build over shared project outputs.
+    /// This runs before the coordinated build plan is created (the BeforeStart pipeline step follows
+    /// <see cref="BeforeStartEvent"/>). The watch servers start only after the coordinated build of the excluded projects
+    /// has finished (see <see cref="WatchServer"/>), so the two builds don't race over shared project outputs.
     /// </remarks>
-    private static void ApplyEligibility(List<WatchedProject> projects, DistributedApplicationModel model, IServiceProvider services)
+    private static List<WatchedProject> ApplyEligibility(List<WatchedProject> projects, DistributedApplicationModel model, IServiceProvider services)
     {
         var errors = new List<string>();
         var excluded = new List<(WatchedProject Project, string Reason)>();
@@ -363,28 +377,27 @@ internal static partial class DotnetWatchCoordinator
         }
 
         projects.RemoveAll(p => excluded.Any(x => ReferenceEquals(x.Project, p)));
+
+        // The watcher builds the watched projects; Aspire's coordinated build keeps only the excluded ones.
+        foreach (var project in projects)
+        {
+            project.BuildCoordinator?.RemoveResource(project.Resource);
+        }
+
         var noticeLogger = services.GetRequiredService<ILoggerFactory>().CreateLogger(NoticeLoggerCategory);
         var loggers = services.GetRequiredService<ResourceLoggerService>();
         foreach (var (project, reason) in excluded)
         {
-            var resource = project.Resource;
-            var server = project.Server.Resource;
-
-            // The server stays in the model only while it still watches a project.
-            var keepServerWait = projects.Any(p => p.Server == project.Server);
             foreach (var annotation in project.Annotations)
             {
-                var waitsForServer = annotation is WaitAnnotation wait && ReferenceEquals(wait.Resource, server)
-                    || annotation is ResourceRelationshipAnnotation relationship && ReferenceEquals(relationship.Resource, server);
-                if (!(keepServerWait && waitsForServer))
-                {
-                    resource.Annotations.Remove(annotation);
-                }
+                project.Resource.Annotations.Remove(annotation);
             }
 
             noticeLogger.LogInformation("{Notice}", reason);
-            loggers.GetLogger(resource).LogInformation("[watch] {Notice}", reason);
+            loggers.GetLogger(project.Resource).LogInformation("[watch] {Notice}", reason);
         }
+
+        return excluded.Select(x => x.Project).ToList();
     }
 
     internal enum WatchDecisionKind
@@ -443,10 +456,17 @@ internal static partial class DotnetWatchCoordinator
     [GeneratedRegex(@"Process id (?<pid>\d+) ran for \d+ ?ms and exited with exit code (?<code>-?\d+)")]
     private static partial Regex ExitedLineRegex();
 
-    private sealed class WatchedProject(DotnetProjectResource resource, DotnetProjectMetadata metadata, WatchServer server)
+    private sealed class WatchedProject(
+        DotnetProjectResource resource,
+        DotnetProjectMetadata metadata,
+        DotnetProjectBuildCoordinator.CoordinatorState? buildCoordinator,
+        WatchServer server)
     {
         public DotnetProjectResource Resource { get; } = resource;
         public DotnetProjectMetadata Metadata { get; } = metadata;
+
+        /// <summary>Aspire's coordinated build, which builds the project instead of the watcher if it isn't watched.</summary>
+        public DotnetProjectBuildCoordinator.CoordinatorState? BuildCoordinator { get; } = buildCoordinator;
         public string ProjectPath => ((IProjectMetadata)Metadata).ProjectPath;
 
         /// <summary>Annotations the coordinator added (removed again if something else takes over the launch).</summary>
@@ -486,7 +506,7 @@ internal static partial class DotnetWatchCoordinator
                 Projects.RemoveAll(p => !e.Model.Resources.Contains(p.Resource));
 
                 // Opt-outs, run-to-completion and unsupported projects can only be decided on the final model.
-                ApplyEligibility(Projects, e.Model, e.Services);
+                ExcludedProjects = ApplyEligibility(Projects, e.Model, e.Services);
 
                 var active = new List<WatchServer>();
                 foreach (var server in _servers)
@@ -540,14 +560,20 @@ internal static partial class DotnetWatchCoordinator
         public string[] ProxyPrefixArgs { get; }
         public List<WatchedProject> Projects { get; } = [];
 
-        public void Configure(IResourceBuilder<DotnetProjectResource> resource, DotnetProjectMetadata metadata)
+        /// <summary>Registered projects that run without hot reload, built by Aspire's coordinated build.</summary>
+        public IReadOnlyList<WatchedProject> ExcludedProjects { get; private set; } = [];
+
+        public void Configure(
+            IResourceBuilder<DotnetProjectResource> resource,
+            DotnetProjectMetadata metadata,
+            DotnetProjectBuildCoordinator.CoordinatorState? buildCoordinator)
         {
             var existing = resource.Resource.Annotations.ToHashSet();
             var projectPath = ((IProjectMetadata)metadata).ProjectPath;
             var scope = FindSdkScope(Path.GetDirectoryName(projectPath)!);
             var server = _servers.FirstOrDefault(s => s.DedicatedTo is null && string.Equals(s.SdkScope, scope, PathComparison))
                 ?? AddServer(scope, dedicatedTo: null, firstProjectName: resource.Resource.Name);
-            var project = new WatchedProject(resource.Resource, metadata, server);
+            var project = new WatchedProject(resource.Resource, metadata, buildCoordinator, server);
 
             // Replace the SDK-selected launch tool (dotnet run) with the proxy. Program arguments contributed through
             // WithArgs (launch-profile and user args) stay in the ordinary segment after `--`.
@@ -580,8 +606,15 @@ internal static partial class DotnetWatchCoordinator
             ownedByLaunchConfigurationType: GetProjectLaunchConfigurationType(resource.Resource),
             showInCommandLine: true);
 
-            // The watcher's own initial build is the build barrier in watch runs (Aspire's coordinated build is skipped).
+            // The watcher's own initial build is the build barrier in watch runs (the project leaves Aspire's coordinated
+            // build once it's known to be watched).
             resource.WaitFor(server.Builder);
+
+            // Consumers of the build output that don't wait for the service, such as EF startup operations that run
+            // `dotnet-ef --no-build` (and that the service itself may wait on), wait for the watcher's successful build.
+            // Last one wins, so this replaces the coordinated build's barrier.
+            resource.WithAnnotation(new DotnetProgramBuildCompletionAnnotation(
+                (_, cancellationToken) => project.Server.WaitForSuccessfulBuildAsync(cancellationToken)));
 
             // Aspire's Rebuild command stays available: it stops the service, runs `dotnet build` and starts it again,
             // and the watcher picks the fresh output back up.
@@ -671,6 +704,9 @@ internal static partial class DotnetWatchCoordinator
         private int _generation;
         private volatile bool _ready;
         private volatile string? _lastBuildError;
+
+        // Completed by the watcher's first successful build of the current server run; re-armed when the server restarts.
+        private TaskCompletionSource _successfulBuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _noticeGate = new();
         private DotnetWatchEventInterpreter? _interpreter;
         private bool _flushScheduled;
@@ -760,10 +796,57 @@ internal static partial class DotnetWatchCoordinator
                         _interpreter = new DotnetWatchEventInterpreter(Projects.Select(p => (p.ProjectPath, p.Resource.Name)), Resource.WorkingDirectory, referencedDirectories);
                     }
 
-                    _prepareTask = PrepareWithNoticeAsync(services, ++_generation, _monitorCts.Token, cancellationToken);
+                    if (_successfulBuild.Task.IsCompleted)
+                    {
+                        _successfulBuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    }
+
+                    _prepareTask = PrepareWithNoticeAsync(services, ++_generation, _successfulBuild, _monitorCts.Token, cancellationToken);
                 }
 
                 return _prepareTask;
+            }
+        }
+
+        /// <summary>
+        /// Completes once the watcher has built its projects successfully, independently of whether any service has
+        /// started. A failed build keeps waiting for a fix, as the services do. After the server restarts, this waits
+        /// for the restarted watcher's build.
+        /// </summary>
+        public Task WaitForSuccessfulBuildAsync(CancellationToken cancellationToken)
+        {
+            Task successfulBuild;
+            lock (_gate)
+            {
+                successfulBuild = _successfulBuild.Task;
+            }
+
+            return successfulBuild.WaitAsync(cancellationToken);
+        }
+
+        internal void OnBuildCompleteForTesting(bool success)
+        {
+            TaskCompletionSource successfulBuild;
+            lock (_gate)
+            {
+                successfulBuild = _successfulBuild;
+            }
+
+            OnBuildComplete(success, error: null, successfulBuild);
+        }
+
+        /// <summary>Records a <c>build_complete</c> status from the watcher run that <paramref name="successfulBuild"/> belongs to.</summary>
+        internal void OnBuildComplete(bool success, string? error, TaskCompletionSource successfulBuild)
+        {
+            if (success)
+            {
+                _lastBuildError = null;
+                _ready = true;
+                successfulBuild.TrySetResult();
+            }
+            else
+            {
+                _lastBuildError = error ?? "the build failed";
             }
         }
 
@@ -777,11 +860,11 @@ internal static partial class DotnetWatchCoordinator
             }
         }
 
-        private async Task<PreparedServer> PrepareWithNoticeAsync(IServiceProvider services, int generation, CancellationToken monitorToken, CancellationToken cancellationToken)
+        private async Task<PreparedServer> PrepareWithNoticeAsync(IServiceProvider services, int generation, TaskCompletionSource successfulBuild, CancellationToken monitorToken, CancellationToken cancellationToken)
         {
             try
             {
-                return await PrepareCoreAsync(services, generation, monitorToken, cancellationToken).ConfigureAwait(false);
+                return await PrepareCoreAsync(services, generation, successfulBuild, monitorToken, cancellationToken).ConfigureAwait(false);
             }
             catch (DistributedApplicationException ex)
             {
@@ -799,9 +882,22 @@ internal static partial class DotnetWatchCoordinator
             }
         }
 
-        private async Task<PreparedServer> PrepareCoreAsync(IServiceProvider services, int generation, CancellationToken monitorToken, CancellationToken cancellationToken)
+        private async Task<PreparedServer> PrepareCoreAsync(IServiceProvider services, int generation, TaskCompletionSource successfulBuild, CancellationToken monitorToken, CancellationToken cancellationToken)
         {
             var logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource);
+
+            // Projects that aren't watched are built by Aspire's coordinated build. Let it finish first so the watcher's
+            // build doesn't race it over shared project outputs.
+            var excluded = _state.ExcludedProjects.Where(p => p.BuildCoordinator is not null).ToList();
+            if (excluded.Count > 0)
+            {
+                logger.LogInformation("Waiting for the coordinated build of the projects that aren't watched: {Projects}", string.Join(", ", excluded.Select(p => p.Resource.Name)));
+                foreach (var project in excluded)
+                {
+                    await project.BuildCoordinator!.WaitForBuildCompletionAsync(project.Resource, services, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
             DotnetWatchServerInfrastructure.EnsurePrivateDirectory(_state.RunDirectory);
 
             var roots = Roots;
@@ -888,7 +984,7 @@ internal static partial class DotnetWatchCoordinator
             }
 
             // The status pipe listener must exist before the watcher connects to it.
-            _ = Task.Run(() => MonitorStatusAsync(services, logger, statusPipeName, monitorToken), CancellationToken.None);
+            _ = Task.Run(() => MonitorStatusAsync(services, logger, statusPipeName, successfulBuild, monitorToken), CancellationToken.None);
 
             // Everything set only for the watcher must not leak into the services, which inherit its environment.
             return new PreparedServer(args, environment, [.. environment.Keys]);
@@ -916,7 +1012,7 @@ internal static partial class DotnetWatchCoordinator
             return resolved;
         }
 
-        private async Task MonitorStatusAsync(IServiceProvider services, ILogger serverLogger, string statusPipeName, CancellationToken monitorToken)
+        private async Task MonitorStatusAsync(IServiceProvider services, ILogger serverLogger, string statusPipeName, TaskCompletionSource successfulBuild, CancellationToken monitorToken)
         {
             var notifications = services.GetRequiredService<ResourceNotificationService>();
             var diagnostics = services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DotnetWatchCoordinator).FullName!);
@@ -954,18 +1050,13 @@ internal static partial class DotnetWatchCoordinator
 
                     if (status.type == DotnetWatchStatusTypes.BuildComplete)
                     {
-                        if (status.success == true)
+                        string? error;
+                        lock (_noticeGate)
                         {
-                            _lastBuildError = null;
-                            _ready = true;
+                            error = _interpreter?.FirstError;
                         }
-                        else
-                        {
-                            lock (_noticeGate)
-                            {
-                                _lastBuildError = _interpreter?.FirstError ?? "the build failed";
-                            }
-                        }
+
+                        OnBuildComplete(status.success == true, error, successfulBuild);
                     }
 
                     IReadOnlyList<WatchNotice> notices;

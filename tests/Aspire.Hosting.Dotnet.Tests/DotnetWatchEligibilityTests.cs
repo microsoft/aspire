@@ -42,14 +42,85 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
-        var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
         Assert.Contains(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(watched.Resource));
-        var plainArgs = await ArgumentEvaluator.GetArgumentListAsync(plain.Resource);
-        Assert.DoesNotContain(DotnetWatchCoordinator.ProxyCommandName, plainArgs);
-        Assert.Equal("run", plainArgs[0]);
+        AssertWatchedOutsideCoordinatedBuild(watched);
 
-        // The opted-out project still waits for the watcher's initial build so the two builds don't race.
-        Assert.Contains(plain.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource == server);
+        // The opted-out project gets Aspire's coordinated build and launch back, not the watcher's.
+        AssertCoordinatedBuildAndLaunch(plain);
+        var build = Assert.Single(Model(app).Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Equal([Metadata(plain).ProjectPath], build.ProjectPaths);
+    }
+
+    [Fact]
+    public async Task OptedOutProjectKeepsItsBuildEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(s_watchConfig);
+
+        var plain = AddProject(builder, workspace, "plain").WithBuildEnvironment("MARKER", "1").WithWatch(false);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        Assert.DoesNotContain(Model(app).Resources, r => r is DotnetWatchServerResource);
+        AssertCoordinatedBuildAndLaunch(plain);
+
+        // The coordinated build is the one that applies the WithBuildEnvironment callbacks.
+        var build = Assert.Single(Model(app).Resources.OfType<DotnetProjectBuildResource>());
+        Assert.Equal([Metadata(plain).ProjectPath], build.ProjectPaths);
+        Assert.NotEmpty(plain.Resource.Annotations.OfType<DotnetProjectBuildEnvironmentCallbackAnnotation>());
+    }
+
+    [Fact]
+    public async Task WatchedProjectsLeaveTheCoordinatedBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(s_watchConfig);
+
+        var api = AddProject(builder, workspace, "api");
+        var worker = AddProject(builder, workspace, "worker");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        AssertWatchedOutsideCoordinatedBuild(api);
+        AssertWatchedOutsideCoordinatedBuild(worker);
+        Assert.DoesNotContain(Model(app).Resources, r => r is DotnetProjectBuildResource);
+    }
+
+    [Fact]
+    public async Task WatchedProjectBuildBarrierWaitsForTheWatchersSuccessfulBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(s_watchConfig);
+
+        var api = AddProject(builder, workspace, "api");
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        // EF startup operations run `dotnet-ef --no-build` after the last build barrier.
+        var barrier = api.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>().Last();
+        var wait = barrier.Callback(app.Services, CancellationToken.None);
+        Assert.False(wait.IsCompleted);
+
+        DotnetWatchCoordinator.ReportBuildCompleteForTesting(api.Resource, success: false);
+        await Task.Delay(50);
+        Assert.False(wait.IsCompleted);
+
+        using (var cts = new CancellationTokenSource())
+        {
+            var canceled = barrier.Callback(app.Services, cts.Token);
+            await cts.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceled);
+        }
+
+        DotnetWatchCoordinator.ReportBuildCompleteForTesting(api.Resource, success: true);
+        await wait.WaitAsync(TimeSpan.FromSeconds(10));
+
+        // Later consumers don't wait for another build.
+        await barrier.Callback(app.Services, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     [Fact]
@@ -64,8 +135,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
         Assert.DoesNotContain(Model(app).Resources, r => r is DotnetWatchServerResource);
-        Assert.DoesNotContain(plain.Resource.Annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetWatchServerResource);
-        Assert.DoesNotContain(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(plain.Resource));
+        AssertCoordinatedBuildAndLaunch(plain);
     }
 
     [Fact]
@@ -83,8 +153,9 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
-        Assert.DoesNotContain(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(migrations.Resource));
+        AssertCoordinatedBuildAndLaunch(migrations);
         Assert.Contains(DotnetWatchCoordinator.ProxyCommandName, await ArgumentEvaluator.GetArgumentListAsync(api.Resource));
+        AssertWatchedOutsideCoordinatedBuild(api);
     }
 
     [Fact]
@@ -214,6 +285,28 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, name, $"{name}.csproj");
         DotnetWatchCoordinatorTests.CreateProjectFile(path);
         return builder.AddDotnetProject(name, Path.GetDirectoryName(path)!);
+    }
+
+    /// <summary>Aspire builds the project (`dotnet run --no-build` after the coordinated build), and no watch annotation is left.</summary>
+    private static void AssertCoordinatedBuildAndLaunch(IResourceBuilder<DotnetProjectResource> project)
+    {
+        var annotations = project.Resource.Annotations;
+        Assert.True(Metadata(project).SuppressBuild);
+        Assert.Single(annotations.OfType<LaunchToolArgsCallbackAnnotation>());
+        Assert.DoesNotContain(annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetWatchServerResource);
+        Assert.Contains(annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetProjectBuildResource);
+        Assert.Single(annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+    }
+
+    /// <summary>The watcher builds the project: it waits for the watch server only, and its build barrier is the watcher's.</summary>
+    private static void AssertWatchedOutsideCoordinatedBuild(IResourceBuilder<DotnetProjectResource> project)
+    {
+        var annotations = project.Resource.Annotations;
+        Assert.False(Metadata(project).SuppressBuild);
+        Assert.Contains(annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetWatchServerResource);
+        Assert.DoesNotContain(annotations.OfType<WaitAnnotation>(), w => w.Resource is DotnetProjectBuildResource);
+        Assert.DoesNotContain(annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Resource is DotnetProjectBuildResource);
+        Assert.Single(annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
     }
 
     private static IProjectMetadata Metadata(IResourceBuilder<DotnetProjectResource> resource) =>
