@@ -165,6 +165,9 @@ tests/PolyglotAppHosts/**/Java/**/*.class
 *.egg-info/
 /playground/python/**/build
 
+# Disposable SSH development fixture: generated identities and runtime artifacts.
+/playground/RemoteDependencies/.fixture/
+
 # IntelliJ
 .idea/
 
