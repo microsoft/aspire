@@ -431,6 +431,15 @@ foreach ($template in $templates)
             {
                 Pop-Location
             }
+
+            # The diagnostics artifact preserves the generated project but does not need installed
+            # dependencies. Remove them after all Aspire processes stop so upload-artifact cannot race
+            # a package installer cleanup and fail while stat-ing a disappearing node_modules directory.
+            foreach ($relativeDependencyPath in @('node_modules', 'frontend/node_modules'))
+            {
+                $dependencyPath = Join-Path $projectRoot $relativeDependencyPath
+                Remove-Item -Recurse -Force $dependencyPath -ErrorAction SilentlyContinue
+            }
         }
 
         Pop-Location
