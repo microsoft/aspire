@@ -1901,8 +1901,6 @@ public static partial class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsPublishMode &&
             builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
         {
-            var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
-
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
                 ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
@@ -1911,35 +1909,11 @@ public static partial class JavaScriptHostingExtensions
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
             containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            // The step is added to the pipeline instead of as a PipelineStepAnnotation on the container because
-            // WithDockerfile replaces the container's step annotation, which would drop this step if the
-            // Dockerfile is configured again after this point.
-            builder.Pipeline.AddStep(new PipelineStep
-            {
-                Name = validationStepName,
-                Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
-                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
-                Resource = containerBuilder.Resource,
-                Action = _ =>
-                {
-                    // A resource excluded from the manifest is never published, so it must not fail the pipeline.
-                    if (!containerBuilder.Resource.IsExcludedFromPublish())
-                    {
-                        ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
-                    }
-
-                    return Task.CompletedTask;
-                }
-            });
-
-            // Deploy environments such as Azure Container Apps run the image build step without the aggregate
-            // Build step, so the image build must wait for the validation itself.
-            containerBuilder.WithPipelineConfiguration(context =>
-            {
-                var validationStep = context.GetSteps(containerBuilder.Resource).FirstOrDefault(step => step.Name == validationStepName);
-
-                context.GetSteps(containerBuilder.Resource, WellKnownPipelineTags.BuildCompute).DependsOn(validationStep);
-            });
+            containerBuilder.AddPublishValidation(
+                $"validate-javascript-dockerfile-run-script-{resource.Name}",
+                $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
+                [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                _ => ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource));
         }
 
         resourceBuilder.WithVSCodeDebugging();
@@ -2209,6 +2183,9 @@ public static partial class JavaScriptHostingExtensions
     /// <para>
     /// The Next.js application must have <c>output: "standalone"</c> configured in <c>next.config.ts</c>
     /// and a <c>public/</c> directory (even if empty) for the published container to build correctly.
+    /// The standalone output check runs before the container image build during publish and deployment,
+    /// including Azure Container Apps and App Service. Resources excluded from publishing are not validated.
+    /// Use <see cref="DisableBuildValidation"/> when the configuration cannot be statically inspected.
     /// </para>
     /// <example>
     /// The following example creates a Next.js app.
@@ -2270,29 +2247,22 @@ public static partial class JavaScriptHostingExtensions
             }
         }
 
-        // Add a publish prereq step that validates the Next.js config has standalone output enabled.
-        // This runs at deploy time (not resource creation time) so it doesn't block `aspire start`.
-        // Can be disabled with .DisableBuildValidation().
-        resourceBuilder.WithAnnotation(new PipelineStepAnnotation(factoryCtx =>
-        [
-            new PipelineStep
-            {
-                Name = $"nextjs-standalone-check-{name}",
-                Description = $"Validates that the Next.js app '{name}' has output: \"standalone\" configured.",
-                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
-                RequiredBySteps = [WellKnownPipelineSteps.Build],
-                Resource = resourceBuilder.Resource,
-                Action = _ =>
+        if (builder.ExecutionContext.IsPublishMode &&
+            builder.TryCreateResourceBuilder<ContainerResource>(name, out var containerBuilder))
+        {
+            var validationStep = containerBuilder.AddPublishValidation(
+                $"nextjs-standalone-check-{name}",
+                $"Validates that the Next.js app '{name}' has output: \"standalone\" configured.",
+                [WellKnownPipelineSteps.Build],
+                _ =>
                 {
                     if (!resourceBuilder.Resource.TryGetLastAnnotation<SuppressPublishValidationAnnotation>(out var suppress))
                     {
                         ValidateNextJsStandaloneOutput(appDirectory);
                     }
-
-                    return Task.CompletedTask;
-                }
-            }
-        ]));
+                });
+            validationStep.DependsOn(WellKnownPipelineSteps.BuildPrereq);
+        }
 
         return resourceBuilder;
     }
