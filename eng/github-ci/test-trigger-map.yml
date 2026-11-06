@@ -632,8 +632,11 @@ affected_project_rules:
       - Aspire.Hosting.Dotnet
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.CodeGeneration.Go
+      - Aspire.Hosting.Go
+      - Aspire.Hosting.Redis
     targets: [job:cli-starter-validation]
-    reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
+    reason: direct executables, SDK, and hosting/code-generation packages used by the C#, TypeScript, and Go starter scenarios
   - projects: [Aspire.Hosting.Dotnet]
     targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests]
     reason: generated C# AppHosts use AddDotnetProject through a runtime-only package reference
