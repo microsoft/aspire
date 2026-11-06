@@ -53,6 +53,27 @@ suite('GoAppHostParser', () => {
         assert.deepStrictEqual(await parser.parseResources(doc), []);
     });
 
+    test('anchors nested resource expressions to their declaration instead of the package', async () => {
+        const doc = document([
+            'package main',
+            'func main() {',
+            '    builder, err := aspire.CreateBuilder()',
+            '    cache := (builder.AddRedis("cache"))',
+            '    resources = append(resources, builder.AddRedis("nested"))',
+            '    resource := builders[lookup()].AddRedis("indexed")',
+            '}',
+        ].join('\n'));
+
+        assert.deepStrictEqual((await parser.parseResources(doc)).map(resource => ({
+            name: resource.name,
+            line: resource.statementStartLine,
+        })), [
+            { name: 'cache', line: 3 },
+            { name: 'nested', line: 4 },
+            { name: 'indexed', line: 5 },
+        ]);
+    });
+
     test('decodes Go strings exactly and rejects invalid escapes', async () => {
         const doc = document(String.raw`
 builder.AddRedis("\x63\u0061\U00000063\150e")

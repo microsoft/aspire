@@ -192,15 +192,18 @@ suite('AspireCodeLensProvider builder lens', () => {
         const harness = createHarness({
             appHosts: [{ ...makeAppHost(appHostPath), resources: [makeResource('cache')] }],
         });
-        const doc = createMockDocument('func main() {\n builder, err := aspire.CreateBuilder()\n cache := builder.AddRedis("cache")\n}', appHostPath);
+        const doc = createMockDocument('package main\nfunc main() {\n builder, err := aspire.CreateBuilder()\n cache := (builder.AddRedis("cache"))\n}', appHostPath);
         const gutter = new AspireGutterDecorationProvider(harness.treeProvider);
         try {
             const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
             assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensOpenDashboard'));
-            assert.ok(lenses.some(lens => lens.range.start.line === 2));
+            const resourceLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.codeLensResourceAction'
+                || lens.command?.command === 'aspire-vscode.codeLensRevealResource');
+            assert.ok(resourceLenses.length > 0);
+            assert.ok(resourceLenses.every(lens => lens.range.start.line === 3));
             const editor = createMockEditor(doc);
             await applyGutterDecorations(gutter, editor.editor);
-            assert.deepStrictEqual(getCurrentDecoratedLines(editor.decorationState), [2]);
+            assert.deepStrictEqual(getCurrentDecoratedLines(editor.decorationState), [3]);
         }
         finally {
             gutter.dispose();
