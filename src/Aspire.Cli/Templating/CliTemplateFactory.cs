@@ -218,7 +218,11 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 KnownTemplateId.GoStarter,
                 "Starter App (Go API + Redis, Go AppHost)",
                 (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
-                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                cmd =>
+                {
+                    AddOptionIfMissing(cmd, _localhostTldOption);
+                    AddOptionIfMissing(cmd, _useRedisCacheOption);
+                },
                 ApplyGoStarterTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.Go),

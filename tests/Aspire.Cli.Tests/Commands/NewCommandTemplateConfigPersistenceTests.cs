@@ -233,6 +233,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             identityChannel: PackageChannelNames.Daily,
             registerIdentityChannel: false,
             explicitChannelArg: null,
+            extraArguments: "",
             outputDirectory => File.ReadAllText(Path.Combine(outputDirectory, AspireConfigFile.FileName)));
 
         LineEndingAssert.UsesOsLineBreaksAndSingleFinalNewline(content);
@@ -369,6 +370,34 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         }
     }
 
+    [Theory]
+    [InlineData("default", true)]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    public async Task GoStarterHonorsRedisChoice(string choice, bool usesRedis)
+    {
+        var (appHost, packages) = await ScaffoldAndReadAsync(
+            KnownTemplateId.GoStarter,
+            identityChannel: PackageChannelNames.Daily,
+            registerIdentityChannel: false,
+            explicitChannelArg: null,
+            extraArguments: choice == "default" ? "" : $" --use-redis-cache {choice}",
+            outputDirectory =>
+            {
+                var config = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(config);
+                Assert.NotNull(config.Packages);
+                return (
+                    File.ReadAllText(Path.Combine(outputDirectory, "apphost.go")),
+                    config.Packages.Keys.Order(StringComparer.Ordinal).ToArray());
+            });
+
+        Assert.Equal(
+            usesRedis ? ["Aspire.Hosting.Go", "Aspire.Hosting.Redis"] : ["Aspire.Hosting.Go"],
+            packages);
+        await Verify(appHost, "go").UseParameters(choice);
+    }
+
     /// <summary>
     /// Drives <c>aspire new &lt;templateId&gt;</c> and reads the <c>channel</c> value persisted to
     /// <c>aspire.config.json</c> in the scaffolded output directory.
@@ -388,6 +417,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             identityChannel,
             registerIdentityChannel,
             explicitChannelArg,
+            extraArguments: "",
             outputDirectory => AspireConfigFile.Load(outputDirectory)?.Channel);
     }
 
@@ -402,6 +432,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         string identityChannel,
         bool registerIdentityChannel,
         string? explicitChannelArg,
+        string extraArguments,
         Func<string, T> readOutput)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -442,7 +473,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         // `--localhost-tld false` short-circuits the bool? confirmation prompt so the
         // test is non-interactive. The value doesn't affect channel persistence.
         var parseResult = newCommand.Parse(
-            $"new {templateId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false{channelArg}");
+            $"new {templateId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false{channelArg}{extraArguments}");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal((int)CliExitCodes.Success, exitCode);
