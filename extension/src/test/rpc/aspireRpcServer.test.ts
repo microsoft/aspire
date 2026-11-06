@@ -138,6 +138,27 @@ suite('AspireRpcServer', () => {
         }
     });
 
+    test('clients that do not trust the per-session certificate are rejected', async () => {
+        const rpcServer = await AspireRpcServer.create(() => {
+            throw new Error('The test does not establish a connection.');
+        });
+
+        try {
+            const port = Number(rpcServer.connectionInfo.address.replace('localhost:', ''));
+            const socket = tls.connect({ port, host: 'localhost' });
+            const error = await new Promise<NodeJS.ErrnoException>((resolve, reject) => {
+                socket.once('secureConnect', () => reject(new Error('Expected the TLS handshake to be rejected.')));
+                socket.once('error', resolve);
+            });
+            socket.destroy();
+
+            assert.strictEqual(error.code, 'DEPTH_ZERO_SELF_SIGNED_CERT');
+        }
+        finally {
+            rpcServer.dispose();
+        }
+    });
+
     test('connections added after disposal are rejected and disposed without publishing them', async () => {
         const rpcServer = await AspireRpcServer.create(() => {
             throw new Error('The test does not establish a connection.');
@@ -170,7 +191,8 @@ async function connectClient(
     const socket = tls.connect({
         port,
         host: 'localhost',
-        rejectUnauthorized: false,
+        // Trust exactly the server's per-session self-signed certificate rather than disabling validation.
+        ca: rpcServer.connectionInfo.cert,
     });
     await new Promise<void>((resolve, reject) => {
         socket.once('secureConnect', resolve);

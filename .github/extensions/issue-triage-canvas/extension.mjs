@@ -7,6 +7,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
+import { describeSafeError } from "./safe-error.mjs";
 
 const repo = "microsoft/aspire";
 const [repoOwner, repoName] = repo.split("/");
@@ -502,8 +503,8 @@ async function readIssueTriagePreferences() {
         }
 
         if (error instanceof SyntaxError) {
-            const warning = `Stored preferences could not be parsed; defaults were used. ${String(error.message || error)}`;
-            await copilotSession?.log(`Issue triage preferences load failed: ${warning}`, { level: "warning", ephemeral: true });
+            const warning = "Stored preferences could not be parsed; defaults were used.";
+            await copilotSession?.log(`Issue triage preferences load failed: ${warning} ${String(error.message || error)}`, { level: "warning", ephemeral: true });
             return { preferences: normalizeIssueTriagePreferences(), exists: true, warnings: [warning] };
         }
 
@@ -869,9 +870,10 @@ async function closeIssues(numbers, reason) {
             closed.push(await closeIssue(number, reason));
         }
         catch (error) {
+            await copilotSession?.log(`Issue triage failed to close #${number}: ${String(error.stderr || error.message || error)}`, { level: "warning", ephemeral: true });
             failures.push({
                 number,
-                error: String(error.stderr || error.message || error),
+                error: describeSafeError(error, "The issue could not be closed. See the Copilot session log for details."),
             });
         }
     }
@@ -2942,7 +2944,8 @@ function renderHtml() {
           state.dismissed.delete(number);
         }
         await savePreferences({ dismissed: [...state.dismissed] });
-        setStatus(\`Closed \${payload.closed.length} issue(s). Failures: \${payload.failures.length}.\`);
+        const failureReasons = [...new Set(payload.failures.map((item) => item.error))];
+        setStatus(\`Closed \${payload.closed.length} issue(s). Failures: \${payload.failures.length}.\` + (failureReasons.length > 0 ? " " + failureReasons.join(" ") : ""));
         populateCategoryFilter();
         populateAreaFilter();
         render();
@@ -3210,7 +3213,9 @@ async function handleRequest(instanceId, req, res) {
     catch (error) {
         await copilotSession?.log(`Issue triage canvas error: ${String(error.stderr || error.message || error)}`, { level: "error", ephemeral: true });
         if (!res.headersSent) {
-            jsonResponse(res, 500, { error: String(error.stderr || error.message || error) });
+            // The detail was logged above; the browser only gets a fixed message so stderr,
+            // paths, and stack traces are never exposed to the page.
+            jsonResponse(res, 500, { error: describeSafeError(error) });
             return;
         }
 
