@@ -4,17 +4,82 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.Git;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 
 namespace Aspire.Cli.Tests.Git;
 
 public class GitRepositoryTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    [PlatformSpecific(TestPlatforms.Windows)]
+    public async Task GetRootAsync_WhileMcpReadsStandardInput_Completes()
+    {
+        await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await workspace.InitializeGitAsync();
+        var options = new RemoteInvokeOptions
+        {
+            StartInfo = { RedirectStandardInput = true, RedirectStandardOutput = true }
+        };
+        options.StartInfo.Environment.Remove("GIT_REDIRECT_STDIN");
+
+        // A real stdio server reproduces the inherited pipe read without changing the test host's stdin.
+        using var remote = RemoteExecutor.Invoke(static async directoryPath =>
+        {
+            var directory = new DirectoryInfo(directoryPath);
+            var context = new CliExecutionContext(directory, directory, directory, directory, directory, "unused.log", "local");
+            using var profilingTelemetry = CreateProfilingTelemetry();
+            var repository = new GitRepository(context, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
+            var serverOptions = new McpServerOptions
+            {
+                ServerInfo = new() { Name = "git-test", Version = "1.0" },
+                Handlers = new()
+                {
+                    CallToolHandler = async (_, cancellationToken) =>
+                    {
+                        var root = await repository.GetRootAsync(cancellationToken);
+                        return new CallToolResult
+                        {
+                            Content = [new TextContentBlock { Text = root?.FullName ?? string.Empty }]
+                        };
+                    }
+                }
+            };
+            var transport = new StdioMcpTransportFactory(NullLoggerFactory.Instance).CreateTransport();
+            await using var server = McpServer.Create(transport, serverOptions);
+            await server.RunAsync();
+        }, workspace.WorkspaceRoot.FullName, options);
+
+        try
+        {
+            var clientTransport = new StreamClientTransport(
+                serverInput: remote.Process.StandardInput.BaseStream,
+                serverOutput: remote.Process.StandardOutput.BaseStream);
+            await using var client = await McpClient.CreateAsync(clientTransport).DefaultTimeout();
+            using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutDuration);
+            var result = await client.CallToolAsync("git_root", cancellationToken: cts.Token);
+
+            Assert.False(result.IsError ?? false);
+            Assert.Collection(result.Content,
+                block => Assert.Equal(workspace.WorkspaceRoot.FullName, Assert.IsType<TextContentBlock>(block).Text));
+        }
+        finally
+        {
+            remote.Process.StandardInput.Close();
+        }
+    }
+
     [Fact]
     public async Task GetIncludedFilesAsync_OutsideRepo_ReturnsNull()
     {
