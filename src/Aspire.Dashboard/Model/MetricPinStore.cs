@@ -28,9 +28,9 @@ public sealed class MetricPinStore
 {
     private readonly LocalStorageSetting<List<OtlpInstrumentKey>> _setting;
 
-    public MetricPinStore(ILocalStorage localStorage, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
+    public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
-        _setting = new(localStorage, timeProvider, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger,
+        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger,
             NormalizePins, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
     }
 

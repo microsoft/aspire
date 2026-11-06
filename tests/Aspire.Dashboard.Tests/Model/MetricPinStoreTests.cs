@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
@@ -24,6 +25,7 @@ public sealed class MetricPinStoreTests
 
     private readonly InMemoryBrowserLocalStorage _browser = new();
     private readonly FakeTimeProvider _timeProvider = new();
+    private readonly LocalStorageLocks _locks = new();
 
     [Fact]
     public async Task SetPinned_PersistsInPinnedOrderAcrossStores()
@@ -133,7 +135,7 @@ public sealed class MetricPinStoreTests
     }
 
     private MetricPinStore CreateStore() =>
-        new(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<MetricPinStore>.Instance);
+        new(_browser.Storage, _locks, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<MetricPinStore>.Instance);
 
     private async Task<MetricPinStore> CreateLoadedStoreAsync()
     {

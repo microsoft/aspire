@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
@@ -21,6 +22,7 @@ public sealed class ResourceTagStoreTests
 
     private readonly InMemoryBrowserLocalStorage _browser = new();
     private readonly FakeTimeProvider _timeProvider = new();
+    private readonly LocalStorageLocks _locks = new();
 
     [Fact]
     public void AppHostTagsAreMergedWithoutPersistingDeclaredTags()
@@ -161,6 +163,26 @@ public sealed class ResourceTagStoreTests
     }
 
     [Fact]
+    public async Task Tags_OverlappingSavesFromTwoTabsKeepBothChanges()
+    {
+        var tabA = await CreateLoadedStoreAsync();
+        var tabB = await CreateLoadedStoreAsync();
+
+        // Tab A's save reads storage, and its response is held, so tab B saves while tab A's save is in progress.
+        var releaseTabA = new TaskCompletionSource();
+        _browser.OnAfterReadAsync = () => releaseTabA.Task;
+        tabA.AddTag("api", "backend");
+        _browser.OnAfterReadAsync = null;
+        tabB.AddTag("worker", "db");
+
+        // Tab B's save waits for tab A's, then reads what tab A saved instead of the value both tabs started from.
+        Assert.False(_browser.Items.ContainsKey(s_storageKey));
+        releaseTabA.SetResult();
+        await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend"],"worker":["db"]}""");
+        Assert.Equal(["backend"], tabB.GetTags("api"));
+    }
+
+    [Fact]
     public async Task Tags_LoadThatReadBeforeASaveDoesNotReplaceIt()
     {
         var store = await CreateLoadedStoreAsync();
@@ -228,11 +250,25 @@ public sealed class ResourceTagStoreTests
         var store = await CreateLoadedStoreAsync();
         store.AddTag("api", "backend");
 
-        var otherApp = new ResourceTagStore(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "Other App" }), NullLogger<ResourceTagStore>.Instance);
+        var otherApp = new ResourceTagStore(_browser.Storage, _locks, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "Other App" }), NullLogger<ResourceTagStore>.Instance);
         await otherApp.EnsureLoadedAsync().DefaultTimeout();
 
         Assert.Empty(otherApp.GetAllTags());
         Assert.Equal([s_storageKey], _browser.Items.Keys);
+    }
+
+    [Fact]
+    public async Task Tags_MalformedStoredValueIsKeptAndReplaced()
+    {
+        // Not valid JSON, for example a value that was cut short, but still holding tags someone could recover.
+        const string malformedValue = """{"api":["backend"]""";
+        _browser.Items[s_storageKey] = malformedValue;
+        var store = await CreateLoadedStoreAsync();
+
+        store.AddTag("api", "core");
+
+        Assert.Equal("""{"api":["core"]}""", _browser.Items[s_storageKey]);
+        Assert.Equal(malformedValue, _browser.Items[$"{s_storageKey}_Unreadable"]);
     }
 
     [Fact]
@@ -271,7 +307,7 @@ public sealed class ResourceTagStoreTests
     }
 
     private ResourceTagStore CreateStore() =>
-        new(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceTagStore>.Instance);
+        new(_browser.Storage, _locks, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceTagStore>.Instance);
 
     private async Task<ResourceTagStore> CreateLoadedStoreAsync()
     {

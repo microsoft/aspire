@@ -5,6 +5,7 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -58,7 +59,7 @@ public class ResourceTagEditorTests : DashboardTestContext
     public ResourceTagEditorTests()
     {
         // Fake time keeps saves that fail from retrying in the background after a test.
-        _tagStore = new(_localStorage, new FakeTimeProvider(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
+        _tagStore = new(_localStorage, new LocalStorageLocks(), new FakeTimeProvider(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         Services.AddLocalization();
         Services.AddSingleton(_tagStore);

@@ -390,6 +390,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
         // Tags, resource order and pinned metrics are kept in the browser's local storage, so each circuit loads its own.
+        builder.Services.AddSingleton<LocalStorageLocks>();
         builder.Services.AddScoped<ResourceTagStore>();
         builder.Services.AddScoped<ResourceOrderStore>();
         builder.Services.AddScoped<MetricPinStore>();

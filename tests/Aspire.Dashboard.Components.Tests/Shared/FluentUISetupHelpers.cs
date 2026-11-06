@@ -270,6 +270,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
+        context.Services.AddSingleton<LocalStorageLocks>();
         context.Services.AddScoped<ResourceTagStore>();
         context.Services.AddScoped<ResourceOrderStore>();
         context.Services.AddScoped<MetricPinStore>();

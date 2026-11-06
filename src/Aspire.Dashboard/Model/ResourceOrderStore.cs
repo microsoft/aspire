@@ -30,9 +30,9 @@ public sealed class ResourceOrderStore
     private readonly Dictionary<string, long> _defaultPositions = new(StringComparers.ResourceName);
     private readonly LocalStorageSetting<ResourceOrderSettings> _setting;
 
-    public ResourceOrderStore(ILocalStorage localStorage, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
+    public ResourceOrderStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
     {
-        _setting = new(localStorage, timeProvider, BrowserStorageKeys.ResourceOrderKey(options.Value.GetApplicationNameOrDefault()), logger,
+        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceOrderKey(options.Value.GetApplicationNameOrDefault()), logger,
             Normalize, OrderEqual, () => Changed?.Invoke());
     }
 
@@ -113,7 +113,9 @@ public sealed class ResourceOrderStore
             return true;
         }
 
-        _setting.Update(order =>
+        // The check above can be outdated by the time the move is applied: a save can adopt an order without these items
+        // in between, and the move is then rejected.
+        return _setting.Update(order =>
         {
             // Another tab can have saved an order without these items, for example after local storage was cleared.
             var keys = GetScope(order, grouping);
@@ -136,7 +138,6 @@ public sealed class ResourceOrderStore
             }
             return true;
         });
-        return true;
     }
 
     private static List<string> GetScope(ResourceOrderSettings order, string? grouping)

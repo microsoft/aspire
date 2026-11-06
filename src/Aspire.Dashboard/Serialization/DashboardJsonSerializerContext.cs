@@ -40,7 +40,6 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(Dictionary<string, List<string>>))]
 [JsonSerializable(typeof(ResourceOrderSettings))]
 [JsonSerializable(typeof(List<OtlpInstrumentKey>))]
-[JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(List<FileReferenceViewModel>))]
 [JsonSerializable(typeof(StatusResponse))]
 [JsonSerializable(typeof(ValidateTokenRequest))]

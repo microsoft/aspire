@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
@@ -21,6 +22,7 @@ public sealed class ResourceOrderStoreTests
 
     private readonly InMemoryBrowserLocalStorage _browser = new();
     private readonly FakeTimeProvider _timeProvider = new();
+    private readonly LocalStorageLocks _locks = new();
 
     [Fact]
     public async Task AppHostDefaultsSeedOrderingAndSavedMovesTakePrecedence()
@@ -166,7 +168,7 @@ public sealed class ResourceOrderStoreTests
 
         Assert.Equal(["api_0"], GetOrderedKeys(store));
         Assert.Equal("""{"resources":["api_0"],"groups":{},"customOrder":false}""", _browser.Items[s_storageKey]);
-        Assert.Equal("[1,2]", _browser.Items[$"{s_storageKey}_Unreadable"]);
+        Assert.Equal("[1, 2]", _browser.Items[$"{s_storageKey}_Unreadable"]);
     }
 
     [Fact]
@@ -222,7 +224,7 @@ public sealed class ResourceOrderStoreTests
         store.GetGroupPositions(grouping).OrderBy(pair => pair.Value).Select(pair => pair.Key).ToArray();
 
     private ResourceOrderStore CreateStore() =>
-        new(_browser.Storage, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceOrderStore>.Instance);
+        new(_browser.Storage, _locks, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceOrderStore>.Instance);
 
     private async Task<ResourceOrderStore> CreateLoadedStoreAsync()
     {

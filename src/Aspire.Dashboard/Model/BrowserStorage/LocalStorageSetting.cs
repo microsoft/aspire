@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
-
 namespace Aspire.Dashboard.Model.BrowserStorage;
 
 /// <summary>
@@ -33,7 +31,8 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 /// </para>
 /// <para>
 /// Changes can happen on any thread, including resource subscription threads, so writes don't wait for the browser.
-/// Writes run one at a time, each saving every change queued when it starts.
+/// Writes run one at a time, each saving every change queued when it starts, and saves of the same setting from
+/// different tabs run one at a time too; see <see cref="LocalStorageLocks"/>.
 /// </para>
 /// </remarks>
 /// <typeparam name="TValue">The stored value. It must be registered with the dashboard's JSON serializer context.</typeparam>
@@ -42,8 +41,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     // Retries cover a reconnecting circuit: delays of 1, 2, 4 and 8 seconds wait about 15 seconds in all.
     private const int MaxWriteAttempts = 5;
     private static readonly TimeSpan s_firstRetryDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan s_saveLockTimeout = TimeSpan.FromSeconds(10);
 
     private readonly ILocalStorage _localStorage;
+    private readonly LocalStorageLocks _locks;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
     private readonly Func<TValue?, TValue> _normalize;
@@ -60,6 +61,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     private long _saveCount;
 
     /// <param name="localStorage">The browser's local storage.</param>
+    /// <param name="locks">Makes saves of the setting from different tabs run one at a time.</param>
     /// <param name="timeProvider">Times the delays between save retries.</param>
     /// <param name="key">The local storage key.</param>
     /// <param name="logger">Logs values that can't be read or saved.</param>
@@ -69,9 +71,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     /// </param>
     /// <param name="equals">Returns whether two normalized values have the same content, to only notify real changes.</param>
     /// <param name="onChanged">Invoked, on any thread, after the in-memory value changes.</param>
-    public LocalStorageSetting(ILocalStorage localStorage, TimeProvider timeProvider, string key, ILogger logger, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
+    public LocalStorageSetting(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, string key, ILogger logger, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
     {
         _localStorage = localStorage;
+        _locks = locks;
         _timeProvider = timeProvider;
         Key = key;
         _logger = logger;
@@ -263,6 +266,27 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     /// <returns><see langword="false"/> when storage couldn't be read, so nothing was written.</returns>
     private async Task<bool> TryWriteAsync(Func<TValue, bool>[] changes)
     {
+        // Another tab saving the same setting between this read and write would have its change replaced, so the whole
+        // save holds the setting's lock. A browser that stops answering would otherwise hold up saves in other tabs
+        // until its JavaScript call times out; giving up is retried like storage that can't be read.
+        var saveLock = _locks.GetLock(Key);
+        if (!await saveLock.WaitAsync(s_saveLockTimeout).ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        try
+        {
+            return await TryWriteLockedAsync(changes).ConfigureAwait(false);
+        }
+        finally
+        {
+            saveLock.Release();
+        }
+    }
+
+    private async Task<bool> TryWriteLockedAsync(Func<TValue, bool>[] changes)
+    {
         var result = await _localStorage.GetUnprotectedAsync<TValue>(Key).ConfigureAwait(false);
         if (result.ReadFailed)
         {
@@ -271,25 +295,26 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         if (result.InvalidValue)
         {
             // Keep the value for the version of the dashboard that saved it, or for someone to recover it by hand.
-            // A value that isn't even JSON can't be copied, and can't be recovered either. Only the first unreadable
+            // Only the first unreadable
             // value is kept: dashboard versions that alternate on the same app would otherwise keep replacing each
             // other's backup, until nothing of the first value is left.
             var backupKey = $"{Key}_Unreadable";
-            var backup = await _localStorage.GetUnprotectedAsync<JsonElement>(backupKey).ConfigureAwait(false);
+            var backup = await _localStorage.GetRawUnprotectedAsync(backupKey).ConfigureAwait(false);
             if (backup.ReadFailed)
             {
                 return false;
             }
-            if (!backup.Success && !backup.InvalidValue)
+            if (!backup.Success)
             {
-                var unreadable = await _localStorage.GetUnprotectedAsync<JsonElement>(Key).ConfigureAwait(false);
+                // Copied as text, so a value that isn't valid JSON, such as one cut short, is kept too.
+                var unreadable = await _localStorage.GetRawUnprotectedAsync(Key).ConfigureAwait(false);
                 if (unreadable.ReadFailed)
                 {
                     return false;
                 }
                 if (unreadable.Success)
                 {
-                    await _localStorage.SetUnprotectedAsync(backupKey, unreadable.Value).ConfigureAwait(false);
+                    await _localStorage.SetRawUnprotectedAsync(backupKey, unreadable.Value).ConfigureAwait(false);
                 }
             }
         }

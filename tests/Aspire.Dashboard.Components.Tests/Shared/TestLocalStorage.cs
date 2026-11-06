@@ -65,6 +65,30 @@ public sealed class TestLocalStorage : ILocalStorage
         return new StorageResult<T>(success: false, value: default);
     }
 
+    public Task<StorageResult<string>> GetRawUnprotectedAsync(string key)
+    {
+        if (IsUnprotectedReadFailed?.Invoke(key) == true)
+        {
+            return Task.FromResult(new StorageResult<string>(success: false, value: null) { ReadFailed = true });
+        }
+
+        lock (_unprotectedValues)
+        {
+            return Task.FromResult(_unprotectedValues.TryGetValue(key, out var savedValue) && savedValue is string text
+                ? new StorageResult<string>(success: true, value: text)
+                : new StorageResult<string>(success: false, value: null));
+        }
+    }
+
+    public Task SetRawUnprotectedAsync(string key, string value)
+    {
+        lock (_unprotectedValues)
+        {
+            _unprotectedValues[key] = value;
+        }
+        return Task.CompletedTask;
+    }
+
     public Task SetAsync<T>(string key, T value)
     {
         return Task.CompletedTask;
