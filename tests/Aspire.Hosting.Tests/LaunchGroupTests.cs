@@ -142,6 +142,60 @@ public class LaunchGroupTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("[\"catalog\", \"basket\"]", null, false)]
+    [InlineData("[\"catalog\", \"basket\"]", null, true)]
+    [InlineData("{\"name\": \"catalog\"}", null, false)]
+    [InlineData("{\"name\": \"catalog\"}", null, true)]
+    [InlineData("[\"catalog\", \"basket\"]", "catalog", false)]
+    [InlineData("[\"catalog\", \"basket\"]", "catalog", true)]
+    [InlineData("{\"name\": \"catalog\"}", "catalog", false)]
+    [InlineData("{\"name\": \"catalog\"}", "catalog", true)]
+    public async Task NonScalarSelectionsFailBeforeStarting(string selection, string? scalarValue, bool useMembershipApi)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var json = new MemoryStream(Encoding.UTF8.GetBytes(
+            $$$"""{"Aspire": {"LaunchGroup": {{{selection}}}}}"""));
+        builder.Configuration.AddJsonStream(json);
+        if (scalarValue is not null)
+        {
+            builder.Configuration["Aspire:LaunchGroup"] = scalarValue;
+        }
+        var resource = builder.AddExecutable("catalog", "unused", ".");
+        if (useMembershipApi)
+        {
+            resource.WithLaunchGroup("catalog");
+        }
+        await using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal("Aspire:LaunchGroup must be a single group name.", exception.Message);
+        Assert.Single(app.Services.GetServices<LaunchGroupService>());
+        Assert.False(resource.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishingIgnoresNonScalarSelection(bool useMembershipApi)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Configuration["Aspire:LaunchGroup:0"] = "catalog";
+        var resource = builder.AddExecutable("catalog", "unused", ".");
+        if (useMembershipApi)
+        {
+            resource.WithLaunchGroup("catalog");
+        }
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(useMembershipApi, app.Services.GetService<LaunchGroupService>() is not null);
+        Assert.False(resource.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
+    [Theory]
     [InlineData("\"local\"")]
     [InlineData("[null]")]
     [InlineData("[[\"local\"]]")]

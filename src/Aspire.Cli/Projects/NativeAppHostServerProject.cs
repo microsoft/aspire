@@ -198,13 +198,7 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
         startInfo.ArgumentList.Add("server");
         startInfo.ArgumentList.Add("--contentRoot");
         startInfo.ArgumentList.Add(AppDirectoryPath);
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
+        AppHostServerEnvironment.Apply(startInfo.Environment, environmentVariables);
         LayoutLease?.AddEnvironment(startInfo);
         // Only the current session selects the operation; do not inherit a parent server's mode.
         var operation = environmentVariables?.GetValueOrDefault(OperationEnvironmentVariable) ?? "run";

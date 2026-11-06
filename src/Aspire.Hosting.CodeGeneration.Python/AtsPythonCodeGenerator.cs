@@ -266,7 +266,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         _ => typeId
     };
 
-    private static string GetParamHandler(AtsParameterInfo param, string paramName)
+    private string GetParamHandler(AtsParameterInfo param, string paramName)
     {
         if (param.IsCallback)
         {
@@ -275,6 +275,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         if (param.Type?.TypeId == AtsConstants.CancellationToken)
         {
             return $"self._client.register_cancellation_token({paramName})";
+        }
+        if (RequiresCollectionNormalization(param.Type))
+        {
+            return $"_normalize_argument({paramName}, {MapParameterToPython(param)})";
         }
         return paramName;
     }
@@ -289,18 +293,18 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             return $"client.register_cancellation_token({paramName})";
         }
-        if (RequiresConstructorCollectionNormalization(param.Type))
+        if (RequiresCollectionNormalization(param.Type))
         {
-            return $"_normalize_constructor_argument({paramName}, {MapParameterToPython(param)})";
+            return $"_normalize_argument({paramName}, {MapParameterToPython(param)})";
         }
         return paramName;
     }
 
-    private static bool RequiresConstructorCollectionNormalization(AtsTypeRef? type) => type?.Category switch
+    private static bool RequiresCollectionNormalization(AtsTypeRef? type) => type?.Category switch
     {
         AtsTypeCategory.Array => true,
         AtsTypeCategory.Dict => type.IsReadOnly,
-        AtsTypeCategory.Union => type.UnionTypes?.Any(RequiresConstructorCollectionNormalization) is true,
+        AtsTypeCategory.Union => type.UnionTypes?.Any(RequiresCollectionNormalization) is true,
         _ => false
     };
 

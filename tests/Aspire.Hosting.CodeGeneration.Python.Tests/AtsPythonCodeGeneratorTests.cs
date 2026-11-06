@@ -407,25 +407,31 @@ public class AtsPythonCodeGeneratorTests
 
             client._socket = Socket()
             client._connected = True
-            groups = {
+            create_groups = {
                 "list": lambda: ["catalog", "basket"],
                 "tuple": lambda: ("catalog", "basket"),
                 "set": lambda: {"catalog", "basket"},
                 "dictionary": lambda: {"catalog": 1, "basket": 2},
                 "generator": lambda: (name for name in ["catalog", "basket"]),
                 "empty_generator": lambda: (name for name in []),
-            }[iterable_kind]()
-            resource = aspire_app.ExecutableResource(handle, client, launch_groups=groups)
-            assert resource.handle.to_json() == handle.to_json()
-            capability_id, args = calls.pop()
-            assert capability_id == "Aspire.Hosting/withLaunchGroups"
-            assert args["builder"] == handle.to_json()
-            expected = [] if iterable_kind == "empty_generator" else ["catalog", "basket"]
-            actual = args["launchGroupNames"]
-            assert isinstance(actual, list)
-            assert (sorted(actual) if iterable_kind == "set" else actual) == (
-                sorted(expected) if iterable_kind == "set" else expected
-            )
+            }[iterable_kind]
+            for use_fluent in (False, True):
+                groups = create_groups()
+                if use_fluent:
+                    resource = aspire_app.ExecutableResource(handle, client)
+                    assert resource.with_launch_groups(groups) is resource
+                else:
+                    resource = aspire_app.ExecutableResource(handle, client, launch_groups=groups)
+                assert resource.handle.to_json() == handle.to_json()
+                capability_id, args = calls.pop()
+                assert capability_id == "Aspire.Hosting/withLaunchGroups"
+                assert args["builder"] == handle.to_json()
+                expected = [] if iterable_kind == "empty_generator" else ["catalog", "basket"]
+                actual = args["launchGroupNames"]
+                assert isinstance(actual, list), actual
+                assert (sorted(actual) if iterable_kind == "set" else actual) == (
+                    sorted(expected) if iterable_kind == "set" else expected
+                )
 
             for groups in ("catalog", ["catalog", 42], 42, (name for name in ["catalog", 42]), {"catalog": 1, 42: 2}):
                 try:
@@ -471,6 +477,48 @@ public class AtsPythonCodeGeneratorTests
             assert args["variables"] == {"MODE": "production", "REGION": "west"}
             assert calls == []
 
+            resource.with_env_vars({"MODE": "production", "REGION": "west"})
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables"
+            assert args["variables"] == {"MODE": "production", "REGION": "west"}
+
+            resource.with_pipeline_step_factory(
+                "deploy", callback, depends_on=(name for name in ["build"]), tags={"release"}
+            )
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "deploy" and args["callback"] in client._callback_registry
+            assert args["dependsOn"] == ["build"] and args["tags"] == ["release"]
+            assert set(args) == {"builder", "stepName", "callback", "dependsOn", "tags"}
+
+            resource.with_pipeline_step_factory("deploy", callback, depends_on=None, tags=None)
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert set(args) == {"builder", "stepName", "callback"}
+
+            resource.with_parent_relationship(resource)
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withBuilderParentRelationship"
+            assert args["parent"] == handle.to_json()
+
+            resource.with_launch_groups("catalog")
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withLaunchGroups"
+            assert args["launchGroupNames"] == "catalog"
+            try:
+                resource.with_launch_groups(42)
+                raise AssertionError("A scalar was converted to a collection")
+            except TypeError:
+                pass
+            assert calls == []
+
+            assert aspire_app._normalize_argument(
+                (name for name in ["catalog", "basket"]), typing.Iterable[str] | None
+            ) == ["catalog", "basket"]
+            assert aspire_app._normalize_argument(
+                {"catalog": (name for name in ["api", "cache"])}, typing.Mapping[str, typing.Iterable[str]] | None
+            ) == {"catalog": ["api", "cache"]}
+            assert aspire_app._normalize_argument(None, typing.Iterable[str] | None) is None
             assert aspire_app._validate_type({"catalog": ["api", "cache"]}, typing.Mapping[str, typing.Iterable[str]])
             assert not aspire_app._validate_type({"catalog": ["api", 42]}, typing.Mapping[str, typing.Iterable[str]])
             """);

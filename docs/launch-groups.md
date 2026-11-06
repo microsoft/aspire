@@ -25,7 +25,7 @@ use the `Aspire:LaunchGroups` configuration array. Configuration definitions ena
 launch group support automatically, without any launch group API calls.
 `WithLaunchGroup` and `WithLaunchGroups` also register the required support.
 Undefined membership and invalid selections fail before resources start. Select
-exactly one name, not a comma- or semicolon-separated list.
+exactly one scalar name, not an array, object, or comma- or semicolon-separated list.
 Selecting a group when no names or resource memberships are defined also fails
 before resources start; it does not fall back to running the full application.
 

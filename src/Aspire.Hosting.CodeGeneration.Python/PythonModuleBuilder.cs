@@ -1755,25 +1755,27 @@ internal sealed class PythonModuleBuilder
             return value
 
 
-        def _normalize_constructor_argument(value: typing.Any, expected_type: typing.Any) -> typing.Any:
-            # Once an overload is selected, its parameter type determines the JSON shape:
+        def _normalize_argument(value: typing.Any, expected_type: typing.Any) -> typing.Any:
+            # The declared parameter type determines the JSON shape:
             # {"catalog": 1} is ["catalog"] for Iterable[str], but stays an object for Mapping[str, int].
             if value is None or isinstance(value, (str, _ReferenceHandle)) or callable(value):
                 return value
             origin = typing.get_origin(expected_type)
             if origin is typing.get_origin(typing.Iterable):
                 item_type = typing.get_args(expected_type)[0]
-                return [_normalize_constructor_argument(item, item_type) for item in value]
+                return [_normalize_argument(item, item_type) for item in value]
             if origin is typing.get_origin(typing.Mapping):
                 key_type, value_type = typing.get_args(expected_type)
                 return {
-                    _normalize_constructor_argument(key, key_type): _normalize_constructor_argument(item, value_type)
+                    _normalize_argument(key, key_type): _normalize_argument(item, value_type)
                     for key, item in value.items()
                 }
             if origin in (typing.Union, types.UnionType):
+                # Union validation must not exhaust a fluent argument's generator before marshalling.
+                value = _normalize_constructor_value(value)
                 for subtype in typing.get_args(expected_type):
                     if _validate_type(value, subtype):
-                        return _normalize_constructor_argument(value, subtype)
+                        return _normalize_argument(value, subtype)
             return value
 
 

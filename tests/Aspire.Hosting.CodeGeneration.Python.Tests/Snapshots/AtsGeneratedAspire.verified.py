@@ -1520,25 +1520,27 @@ def _normalize_constructor_value(value: typing.Any) -> typing.Any:
     return value
 
 
-def _normalize_constructor_argument(value: typing.Any, expected_type: typing.Any) -> typing.Any:
-    # Once an overload is selected, its parameter type determines the JSON shape:
+def _normalize_argument(value: typing.Any, expected_type: typing.Any) -> typing.Any:
+    # The declared parameter type determines the JSON shape:
     # {"catalog": 1} is ["catalog"] for Iterable[str], but stays an object for Mapping[str, int].
     if value is None or isinstance(value, (str, _ReferenceHandle)) or callable(value):
         return value
     origin = typing.get_origin(expected_type)
     if origin is typing.get_origin(typing.Iterable):
         item_type = typing.get_args(expected_type)[0]
-        return [_normalize_constructor_argument(item, item_type) for item in value]
+        return [_normalize_argument(item, item_type) for item in value]
     if origin is typing.get_origin(typing.Mapping):
         key_type, value_type = typing.get_args(expected_type)
         return {
-            _normalize_constructor_argument(key, key_type): _normalize_constructor_argument(item, value_type)
+            _normalize_argument(key, key_type): _normalize_argument(item, value_type)
             for key, item in value.items()
         }
     if origin in (typing.Union, types.UnionType):
+        # Union validation must not exhaust a fluent argument's generator before marshalling.
+        value = _normalize_constructor_value(value)
         for subtype in typing.get_args(expected_type):
             if _validate_type(value, subtype):
-                return _normalize_constructor_argument(value, subtype)
+                return _normalize_argument(value, subtype)
     return value
 
 
@@ -2498,7 +2500,7 @@ class _BaseResource(AbstractResource):
     def with_endpoints(self, endpoints: typing.Iterable[str]) -> typing.Self:
         """Sets the endpoints"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['endpoints'] = endpoints
+        rpc_args['endpoints'] = _normalize_argument(endpoints, typing.Iterable[str])
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints',
             rpc_args,
@@ -2689,7 +2691,7 @@ class _BaseResource(AbstractResource):
             _endpoints = _normalize_constructor_value(_endpoints)
             if _validate_type(_endpoints, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["endpoints"] = _normalize_constructor_argument(typing.cast(typing.Iterable[str], _endpoints), typing.Iterable[str])
+                rpc_args["endpoints"] = _normalize_argument(typing.cast(typing.Iterable[str], _endpoints), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoints'. Expected: Iterable[str]")
@@ -2791,7 +2793,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_env_vars(self, vars: typing.Mapping[str, str]) -> typing.Self:
         """Sets environment variables"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['variables'] = vars
+        rpc_args['variables'] = _normalize_argument(vars, typing.Mapping[str, str])
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables',
             rpc_args,
@@ -2812,7 +2814,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             _env_vars = _normalize_constructor_value(_env_vars)
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["variables"] = _normalize_constructor_argument(typing.cast(typing.Mapping[str, str], _env_vars), typing.Mapping[str, str])
+                rpc_args["variables"] = _normalize_argument(typing.cast(typing.Mapping[str, str], _env_vars), typing.Mapping[str, str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_vars'. Expected: Mapping[str, str]")

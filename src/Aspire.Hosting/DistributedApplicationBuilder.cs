@@ -909,9 +909,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         // Check after application code has configured the builder, while services can still be registered.
+        var launchGroupSelection = Configuration.GetSection("Aspire:LaunchGroup");
         if (ExecutionContext.IsRunMode &&
             (Configuration.GetSection(LaunchGroupService.ConfigurationSectionName).Exists() ||
-             !string.IsNullOrEmpty(Configuration["Aspire:LaunchGroup"])))
+             !string.IsNullOrEmpty(launchGroupSelection.Value) ||
+             launchGroupSelection.GetChildren().Any()))
         {
             LaunchGroupExtensions.EnsureSupport(this);
         }

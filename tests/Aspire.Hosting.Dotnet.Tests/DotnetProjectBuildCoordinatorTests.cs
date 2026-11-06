@@ -39,9 +39,11 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         EmptyFiles.FileExtensions.AddTextExtension("proj");
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     [RequiresTools(["dotnet"])]
-    public async Task LaunchGroupSelectionPreservesAutomaticCoordinatedBuild()
+    public async Task LaunchGroupSelectionPreservesAutomaticCoordinatedBuild(bool separateBuildEnvironment)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sharedProject = CreateSharedProject(workspace.Path);
@@ -52,14 +54,27 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path, outputHelper).WithResourceCleanUp(true);
         builder.Configuration["Aspire:LaunchGroup"] = "catalog";
-        builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
+        var api = builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(apiSentinel).WithLaunchGroup("catalog");
         var worker = builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(workerSentinel).WithLaunchGroup("basket");
+        if (separateBuildEnvironment)
+        {
+            worker.WithBuildEnvironment("BUILD_FLAVOR", "worker");
+        }
         builder.Pipeline.WithFinalAction(WellKnownPipelineSteps.BeforeStart, context =>
         {
-            var build = Assert.Single(context.Model.Resources.OfType<DotnetProjectBuildResource>());
-            Assert.False(build.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            var builds = context.Model.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+            Assert.Equal(separateBuildEnvironment ? ["__dotnet-project-build", "__dotnet-project-build-2"] : ["__dotnet-project-build"],
+                builds.Select(build => build.Name));
+            Assert.All(builds, build =>
+            {
+                Assert.True(build.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
+                Assert.False(build.HasAnnotationOfType<ExplicitStartupAnnotation>());
+            });
+            AssertBuildDependency(api.Resource, builds[^1]);
+            AssertBuildDependency(worker.Resource, builds[^1]);
+            Assert.False(api.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
             Assert.True(worker.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
             Assert.All(context.Model.Resources.Where(resource => resource is not DotnetProjectBuildResource),
                 resource => Assert.False(resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>()));
@@ -82,7 +97,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("shared", File.ReadAllText(apiSentinel));
         Assert.False(File.Exists(workerSentinel));
-        Assert.Single(File.ReadAllLines(GetBuildCountPath(sharedProject)));
+        Assert.Equal(separateBuildEnvironment ? 2 : 1, File.ReadAllLines(GetBuildCountPath(sharedProject)).Length);
         Assert.Single(File.ReadAllLines(GetBuildCountPath(apiProject)));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
     }

@@ -61,7 +61,15 @@ internal sealed class LaunchGroupService(
             declaredGroups.UnionWith(memberships.Select(annotation => annotation.LaunchGroupName));
         }
 
-        var selectedGroup = configuration["Aspire:LaunchGroup"];
+        var selection = configuration.GetSection("Aspire:LaunchGroup");
+        // Arrays and objects such as "LaunchGroup": ["catalog", "basket"] have children
+        // but no scalar value. Reject children even when another provider supplies a scalar.
+        if (selection.GetChildren().Any())
+        {
+            throw new DistributedApplicationException("Aspire:LaunchGroup must be a single group name.");
+        }
+
+        var selectedGroup = selection.Value;
         if (string.IsNullOrEmpty(selectedGroup))
         {
             return;
