@@ -245,9 +245,9 @@ cache hits; generation does not resolve the ref again. The path is the selected
 template's directory containing `.template.config`, relative to the repository,
 not the broader directory searched for templates. A root template records `.`.
 URL credentials, queries, and fragments are not persisted; local repository paths
-are absolute. Existing configuration and unrelated provenance fields are retained
-using a locked, atomic JSON merge. Invalid configuration fails explicitly without
-replacing the existing file.
+are absolute with forward-slash separators. Existing configuration and unrelated
+provenance fields are retained using a locked, atomic JSON merge. Invalid
+configuration fails explicitly without replacing the existing file.
 
 This is project-local origin metadata, not `templateSources` registration or a
 `configSource` binding. It does not cause fetching or inheritance. Failed or

@@ -15,6 +15,7 @@ using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.TemplateEngine.Abstractions;
@@ -359,7 +360,7 @@ internal sealed partial class TemplateEngineFactory(
             // "/templates/web/.template.config/template.json" records "templates/web".
             var configPath = Path.GetFullPath(template.ConfigPlace.TrimStart('/', '\\'), repositoryTemplate.Path);
             var templateRoot = Path.GetDirectoryName(Path.GetDirectoryName(configPath))!;
-            var path = Path.GetRelativePath(repositoryTemplate.Root, templateRoot).Replace('\\', '/');
+            var path = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(repositoryTemplate.Root, templateRoot));
             await WriteProvenanceAsync(result.OutputPath, repositoryTemplate.Repository, repositoryTemplate.Sha, path, cancellationToken);
         }
 
@@ -421,7 +422,9 @@ internal sealed partial class TemplateEngineFactory(
                 Fragment = ""
             }.Uri.AbsoluteUri;
         }
-        return !repository.Contains(':') ? Path.GetFullPath(repository, executionContext.WorkingDirectory.FullName) : repository;
+        return Path.IsPathFullyQualified(repository) || !repository.Contains(':')
+            ? PathNormalizer.NormalizePathForStorage(Path.GetFullPath(repository, executionContext.WorkingDirectory.FullName))
+            : repository;
     }
 
     private async Task<TemplateResult> ApplyAsync(IEngineEnvironmentSettings settings, TemplateCreator creator, ITemplateInfo template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)

@@ -10,6 +10,7 @@ using Aspire.Cli.NuGet;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using NuGet.Versioning;
@@ -117,7 +118,32 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         var provenance = AspireConfigFile.Load(Path.Combine(workspace.Path, "out"))!.Provenance!.Template!;
-        Assert.Equal(expectedRepository ?? Path.Combine(workspace.Path, "repository"), provenance.Repository);
+        Assert.Equal(expectedRepository ?? PathNormalizer.NormalizePathForStorage(Path.Combine(workspace.Path, "repository")), provenance.Repository);
+        Assert.Equal(".", provenance.Path);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepositoryTemplate_ProvenanceNormalizesLocalRepositoryPaths(bool absolute)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var repositoryPath = workspace.CreateDirectory("repository with spaces/nested").FullName;
+        var repository = absolute ? repositoryPath : Path.GetRelativePath(workspace.Path, repositoryPath);
+        var interaction = new TestInteractionService();
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
+            CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
+        var services = CreateServices(workspace, interaction, interactive: false);
+        services.AddSingleton<IGitCommandRunner>(git);
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>().Parse(
+            ["new", "--template-repository", repository, "--name", "Demo", "--output", "out", "--suppress-agent-init"])
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        var provenance = AspireConfigFile.Load(Path.Combine(workspace.Path, "out"))!.Provenance!.Template!;
+        Assert.Equal(PathNormalizer.NormalizePathForStorage(repositoryPath), provenance.Repository);
         Assert.Equal(".", provenance.Path);
     }
 
