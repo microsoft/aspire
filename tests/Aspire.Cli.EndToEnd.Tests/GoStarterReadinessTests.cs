@@ -49,9 +49,9 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
         await auto.RunCommandAsync("cd GoReady", counter);
         // Build before any run/start can repair the template through WithModTidy.
         await auto.RunCommandAsync("(cd api && go build -mod=readonly -o /tmp/go-ready-api . && go mod tidy -diff)", counter, TimeSpan.FromMinutes(3));
-        await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4));
         try
         {
+            await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4));
             await auto.RunCommandAsync("aspire wait api --status up --timeout 120", counter, TimeSpan.FromMinutes(3));
             await auto.RunCommandAsync("aspire describe api --format json > api.json", counter);
             // Describe emits { resources: [{ urls: [{ url: \"http://...\" }] }] }. Use Node,
