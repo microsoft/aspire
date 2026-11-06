@@ -11,6 +11,27 @@
       "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-29T21:40:30Z"
+    },
+    {
+      "run_id": 42168190867,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42168190867",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "observed_at": "2026-11-06T06:06:55Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets",
+          "job_id": 127730495564,
+          "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+          "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+          "stack_trace": "   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 118\n   at Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostControlShutdownUnlinksSockets() in D:\\a\\aspire\\aspire\\tests\\Aspire.Managed.Tests\\TerminalHostSignalTests.cs:line 130\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "1deb9580-3dc7-4e49-bbb4-9c262a00b899"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21409"
