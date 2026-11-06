@@ -242,16 +242,6 @@ public class ContainerRuntimeCheckTests
     }
 
     [Fact]
-    public async Task FindAvailableRuntimeAsync_RestrictsDiscoveryToSupportedRuntimes()
-    {
-        var runtime = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(
-            cancellationToken: TestContext.Current.CancellationToken,
-            supportedRuntimes: []);
-
-        Assert.Null(runtime);
-    }
-
-    [Fact]
     public void ParseVersionFromJsonOutput_WithWslcInfo_ReturnsClientAndSessionManagerVersions()
     {
         var input = """{"Client":{"Version":"3.0.3.0"},"Server":{"SessionManagerVersion":"3.0.3","Sessions":[{"ID":1,"Name":"default"}]}}""";

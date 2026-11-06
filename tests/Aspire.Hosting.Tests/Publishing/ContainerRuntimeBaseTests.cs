@@ -24,13 +24,7 @@ public class ContainerRuntimeBaseTests
     public async Task BuildImageAsync_PreservesRootContext(string runtimeName)
     {
         var runner = new TestProcessRunner();
-        IContainerRuntime runtime = runtimeName switch
-        {
-            KnownContainerRuntimes.Docker => new DockerContainerRuntime(NullLogger<DockerContainerRuntime>.Instance, runner),
-            KnownContainerRuntimes.Podman => new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, runner),
-            KnownContainerRuntimes.Wslc => new WslcContainerRuntime(NullLogger<WslcContainerRuntime>.Instance, runner),
-            _ => throw new ArgumentOutOfRangeException(nameof(runtimeName))
-        };
+        var runtime = CreateRuntime(runtimeName, runner);
         var rootPath = Path.GetPathRoot(Path.GetFullPath("context"))!;
 
         await runtime.BuildImageAsync(rootPath, Path.Combine(rootPath, "Dockerfile"),
@@ -45,13 +39,7 @@ public class ContainerRuntimeBaseTests
     public async Task BuildImageAsync_PreservesArgumentBoundaries(string runtimeName)
     {
         var runner = new TestProcessRunner();
-        IContainerRuntime runtime = runtimeName switch
-        {
-            KnownContainerRuntimes.Docker => new DockerContainerRuntime(NullLogger<DockerContainerRuntime>.Instance, runner),
-            KnownContainerRuntimes.Podman => new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, runner),
-            KnownContainerRuntimes.Wslc => new WslcContainerRuntime(NullLogger<WslcContainerRuntime>.Instance, runner),
-            _ => throw new ArgumentOutOfRangeException(nameof(runtimeName))
-        };
+        var runtime = CreateRuntime(runtimeName, runner);
         var contextPath = Path.GetFullPath("context with spaces");
         var dockerfile = Path.Combine(contextPath, "Dockerfile");
         const string secretPath = """C:\secrets with spaces\team,a\config "quoted".json""";
@@ -123,6 +111,14 @@ public class ContainerRuntimeBaseTests
             ["--secret", $"id=npmrc,type=file,src={path}"],
             ContainerRuntimeBase<PodmanContainerRuntime>.BuildSecrets(secrets, useCsv: false));
     }
+
+    private static IContainerRuntime CreateRuntime(string runtimeName, TestProcessRunner runner) => runtimeName switch
+    {
+        KnownContainerRuntimes.Docker => new DockerContainerRuntime(NullLogger<DockerContainerRuntime>.Instance, runner),
+        KnownContainerRuntimes.Podman => new PodmanContainerRuntime(NullLogger<PodmanContainerRuntime>.Instance, runner),
+        KnownContainerRuntimes.Wslc => new WslcContainerRuntime(NullLogger<WslcContainerRuntime>.Instance, runner),
+        _ => throw new ArgumentOutOfRangeException(nameof(runtimeName))
+    };
 
     [Fact]
     public async Task ExecuteContainerCommandAsync_IncludesCapturedOutputInFailureMessage()
