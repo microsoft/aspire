@@ -39,14 +39,58 @@ public class DotnetWatchEventInterpreterTests
     }
 
     [Fact]
-    public void SharedFileEditIsAttributedToAllProjects()
+    public void UnattributableSharedFileEditDoesNotNameProjects()
     {
         var interpreter = CreateReady();
 
         interpreter.OnLogLine($"File updated: {s_shared}");
         var notice = Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 7ms."));
 
-        Assert.Equal("🔥 Hot reload applied to api, worker in 7 ms (Greeter.cs).", notice.Message);
+        // Without a reference graph the owner is unknown: every service gets the notice, but it doesn't claim they all changed.
+        Assert.Equal("🔥 Hot reload applied in 7 ms (Greeter.cs).", notice.Message);
+        Assert.Equal([s_api, s_worker], notice.ProjectPaths);
+    }
+
+    [Fact]
+    public void SharedLibraryEditIsAttributedToTheServicesThatReferenceIt()
+    {
+        var root = Directory.CreateTempSubdirectory("aspire-watch-refs").FullName;
+        try
+        {
+            var api = Path.Combine(root, "Api", "Api.csproj");
+            var worker = Path.Combine(root, "Worker", "Worker.csproj");
+            var shared = Path.Combine(root, "Shared", "Shared.csproj");
+            var core = Path.Combine(root, "Core", "Core.csproj");
+            WriteProject(api, @"..\Shared\Shared.csproj");
+            WriteProject(worker);
+            WriteProject(shared, "../Core/Core.csproj");
+            WriteProject(core);
+
+            var projects = new[] { (api, "api"), (worker, "worker") };
+            var references = projects.ToDictionary(p => p.Item1, p => DotnetWatchEventInterpreter.ReadReferencedDirectories(p.Item1));
+            var interpreter = new DotnetWatchEventInterpreter(projects, root, references);
+            interpreter.OnStatus("build_complete", [api, worker], true, null);
+
+            // Api -> Shared -> Core; the independent worker isn't affected by either.
+            interpreter.OnLogLine($"File updated: {Path.Combine(root, "Shared", "Greeter.cs")}");
+            var notice = Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 7ms."));
+            Assert.Equal("🔥 Hot reload applied to api in 7 ms (Greeter.cs).", notice.Message);
+            Assert.Equal([api], notice.ProjectPaths);
+
+            interpreter.OnLogLine($"File updated: {Path.Combine(root, "Core", "Clock.cs")}");
+            Assert.Equal([api], Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 5ms.")).ProjectPaths);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+
+        static void WriteProject(string path, params string[] references)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var items = string.Concat(references.Select(r => $"<ProjectReference Include=\"{r}\" />"));
+            File.WriteAllText(path, $"<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup>{items}</ItemGroup></Project>");
+        }
     }
 
     [Fact]
@@ -164,6 +208,39 @@ public class DotnetWatchEventInterpreterTests
         var relaunched = Assert.Single(interpreter.OnStatus("process_started", [s_api], null, null));
         Assert.Equal("▶️ api is running again.", relaunched.Message);
         Assert.Empty(interpreter.OnStatus("process_started", [s_api], null, null));
+    }
+
+    [Fact]
+    public void RelaunchReportedBeforeItsConsoleLineIsNotReportedAsHotReload()
+    {
+        var interpreter = CreateReady();
+        interpreter.OnStatus("process_exited", [s_api], null, 3);
+
+        // The status pipe delivers process_started before DCP delivers the console lines of the same cycle.
+        interpreter.OnLogLine($"File updated: {s_apiProgram}");
+        Assert.Equal(WatchNoticeKind.Relaunched, Assert.Single(interpreter.OnStatus("process_started", [s_api], null, null)).Kind);
+        Assert.True(interpreter.HasPending);
+        Assert.Empty(interpreter.OnLogLine("C# and Razor changes applied in 32ms."));
+
+        // The next real edit is reported again.
+        interpreter.OnLogLine($"File updated: {s_apiProgram}");
+        Assert.Equal(WatchNoticeKind.HotReloadApplied, Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 20ms.")).Kind);
+    }
+
+    [Fact]
+    public void RelaunchWithoutAConsoleLineDoesNotSuppressLaterHotReloads()
+    {
+        var interpreter = CreateReady();
+        interpreter.OnStatus("process_exited", [s_api], null, 3);
+        interpreter.OnStatus("process_started", [s_api], null, null);
+
+        // No "changes applied" line followed the relaunch; the coordinator flushes after a short delay.
+        Assert.True(interpreter.HasPending);
+        Assert.Empty(interpreter.FlushPending());
+        Assert.False(interpreter.HasPending);
+
+        interpreter.OnLogLine($"File updated: {s_apiProgram}");
+        Assert.Equal(WatchNoticeKind.HotReloadApplied, Assert.Single(interpreter.OnLogLine("C# and Razor changes applied in 20ms.")).Kind);
     }
 
     [Fact]

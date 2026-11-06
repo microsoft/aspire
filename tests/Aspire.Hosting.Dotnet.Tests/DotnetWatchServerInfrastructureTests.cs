@@ -86,6 +86,27 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
 
     [Fact]
     [UnsupportedOSPlatform("windows")]
+    public async Task RunDirectorySharedByConcurrentServersIsAcceptedByAll()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = Path.Combine(workspace.Path, $"aspw-{Guid.NewGuid():N}"[..17]);
+
+        // The shared server and dedicated servers prepare the same run directory concurrently.
+        using var start = new Barrier(16);
+        var tasks = Enumerable.Range(0, 16).Select(_ => Task.Run(() =>
+        {
+            start.SignalAndWait();
+            DotnetWatchServerInfrastructure.EnsurePrivateDirectory(path);
+        })).ToArray();
+
+        await Task.WhenAll(tasks);
+        Assert.Equal(DotnetWatchServerInfrastructure.PrivateDirectoryMode, File.GetUnixFileMode(path));
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
     public void RunDirectoryThatAlreadyExistsIsRejected()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes.");

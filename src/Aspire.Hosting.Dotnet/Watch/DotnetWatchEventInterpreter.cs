@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Watch;
@@ -114,6 +115,10 @@ internal sealed class DotnetWatchEventInterpreter
     private readonly IReadOnlyList<(string ProjectPath, string Name)> _projects;
     private readonly List<string> _changedFiles = [];
     private readonly HashSet<string> _crashed = new(StringComparer.Ordinal);
+
+    // Relaunched projects whose console "changes applied" line may still be in flight: the status pipe can deliver
+    // process_started before DCP delivers the console line of the same cycle.
+    private readonly HashSet<string> _relaunched = new(StringComparer.Ordinal);
     private bool _ready;
     private bool _rebuilding;
     private bool _restartPending;
@@ -123,20 +128,75 @@ internal sealed class DotnetWatchEventInterpreter
     private PendingFailure? _pending;
 
     private readonly string? _workingDirectory;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _referencedDirectories;
 
     /// <param name="projects">The watched projects and their resource names.</param>
     /// <param name="workingDirectory">
     /// The watch server's working directory: the watcher logs changed files under it relative to it
     /// (<c>File updated: ./Api/Program.cs</c>).
     /// </param>
-    public DotnetWatchEventInterpreter(IEnumerable<(string ProjectPath, string Name)> projects, string? workingDirectory = null)
+    /// <param name="referencedDirectories">
+    /// Per watched project, the directories of the projects it references (transitively), so an edit in a shared
+    /// library is attributed only to the services that use it. See <see cref="ReadReferencedDirectories"/>.
+    /// </param>
+    public DotnetWatchEventInterpreter(
+        IEnumerable<(string ProjectPath, string Name)> projects,
+        string? workingDirectory = null,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? referencedDirectories = null)
     {
         _projects = projects.ToArray();
         _workingDirectory = workingDirectory;
+        _referencedDirectories = referencedDirectories ?? new Dictionary<string, IReadOnlyList<string>>();
     }
 
-    /// <summary>Whether a notice is waiting for an error line; call <see cref="FlushPending"/> after a short delay.</summary>
-    public bool HasPending => _pending is not null;
+    /// <summary>
+    /// Best-effort: the directories of the projects <paramref name="projectPath"/> references through literal
+    /// <c>ProjectReference</c> items, transitively. References computed by MSBuild (properties, imports) aren't seen;
+    /// edits there fall back to unattributed notices.
+    /// </summary>
+    internal static IReadOnlyList<string> ReadReferencedDirectories(string projectPath)
+    {
+        var directories = new List<string>();
+        var visited = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal) { Path.GetFullPath(projectPath) };
+        var queue = new Queue<string>(visited);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            IEnumerable<string> includes;
+            try
+            {
+                includes = XDocument.Load(current).Descendants()
+                    .Where(e => e.Name.LocalName == "ProjectReference")
+                    .Select(e => (string?)e.Attribute("Include"))
+                    .OfType<string>()
+                    .SelectMany(i => i.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    .Where(i => !i.Contains("$(", StringComparison.Ordinal) && !i.Contains('*'))
+                    .ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
+            {
+                continue;
+            }
+
+            foreach (var include in includes)
+            {
+                var referenced = Path.GetFullPath(include.Replace('\\', Path.DirectorySeparatorChar), Path.GetDirectoryName(current)!);
+                if (visited.Add(referenced) && File.Exists(referenced))
+                {
+                    directories.Add(Path.GetDirectoryName(referenced)! + Path.DirectorySeparatorChar);
+                    queue.Enqueue(referenced);
+                }
+            }
+        }
+
+        return directories;
+    }
+
+    /// <summary>
+    /// Whether a notice is waiting for an error line, or a relaunch is waiting for its console line; call
+    /// <see cref="FlushPending"/> after a short delay.
+    /// </summary>
+    public bool HasPending => _pending is not null || _relaunched.Count > 0;
 
     public IReadOnlyList<WatchNotice> OnStatus(string type, IReadOnlyList<string>? projects, bool? success, int? exitCode)
     {
@@ -204,6 +264,7 @@ internal sealed class DotnetWatchEventInterpreter
                 var relaunched = projects.Where(_crashed.Remove).ToArray();
                 if (relaunched.Length > 0)
                 {
+                    _relaunched.UnionWith(relaunched);
                     notices.Add(Notice(WatchNoticeKind.Relaunched, LogLevel.Information, $"▶️ {Names(relaunched)} is running again.", relaunched));
                 }
                 break;
@@ -287,8 +348,10 @@ internal sealed class DotnetWatchEventInterpreter
                 return notices;
             }
 
-            // A crashed project is relaunched rather than patched; the Relaunched notice covers it.
-            var projects = Attribute(files).Where(p => !_crashed.Contains(p)).ToArray();
+            // A crashed project is relaunched rather than patched; the Relaunched notice covers it, whichever of the
+            // status event and this line arrived first.
+            var projects = Attribute(files, out var attributed).Where(p => !_crashed.Contains(p) && !_relaunched.Contains(p)).ToArray();
+            _relaunched.Clear();
             if (projects.Length == 0)
             {
                 return notices;
@@ -299,16 +362,22 @@ internal sealed class DotnetWatchEventInterpreter
             _inError = false;
             _pending = null;
             notices.Add(Notice(WatchNoticeKind.HotReloadApplied, LogLevel.Information,
-                $"{prefix}🔥 Hot reload applied to {Names(projects)} in {applied.Groups["ms"].Value} ms{fileList}.", projects));
+                attributed
+                    ? $"{prefix}🔥 Hot reload applied to {Names(projects)} in {applied.Groups["ms"].Value} ms{fileList}."
+                    : $"{prefix}🔥 Hot reload applied in {applied.Groups["ms"].Value} ms{fileList}.", projects));
             TryAddProjectFileNotice(files, notices);
         }
 
         return notices;
     }
 
-    /// <summary>Emits a pending failure without an error line (for example when the output was not captured).</summary>
+    /// <summary>
+    /// Emits a pending failure without an error line (for example when the output was not captured), and stops
+    /// suppressing hot reload notices for relaunched projects.
+    /// </summary>
     public IReadOnlyList<WatchNotice> FlushPending()
     {
+        _relaunched.Clear();
         var notices = new List<WatchNotice>();
         if (_pending is not null)
         {
@@ -352,11 +421,16 @@ internal sealed class DotnetWatchEventInterpreter
     }
 
     /// <summary>
-    /// Maps changed files to the watched projects whose directory contains them; files outside every project (a
-    /// shared library, for example) affect all watched projects.
+    /// Maps changed files to the watched projects whose directory contains them, or else to the watched projects that
+    /// reference the project containing them. Files no watched project can be tied to affect all watched projects.
     /// </summary>
-    private IReadOnlyList<string> Attribute(IReadOnlyCollection<string> files)
+    private IReadOnlyList<string> Attribute(IReadOnlyCollection<string> files) => Attribute(files, out _);
+
+    /// <param name="files">The changed files.</param>
+    /// <param name="attributed">False when some file couldn't be tied to specific projects, so all were returned.</param>
+    private IReadOnlyList<string> Attribute(IReadOnlyCollection<string> files, out bool attributed)
     {
+        var all = _projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal).ToArray();
         var owners = new HashSet<string>(StringComparer.Ordinal);
         foreach (var file in files)
         {
@@ -372,15 +446,30 @@ internal sealed class DotnetWatchEventInterpreter
                         matched = true;
                     }
                 }
+
+                if (!matched)
+                {
+                    foreach (var (projectPath, _) in _projects)
+                    {
+                        if (_referencedDirectories.TryGetValue(projectPath, out var referenced) &&
+                            referenced.Any(dir => file.StartsWith(dir, StringComparison.Ordinal)))
+                        {
+                            owners.Add(projectPath);
+                            matched = true;
+                        }
+                    }
+                }
             }
 
             if (!matched)
             {
-                return _projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal).ToArray();
+                attributed = false;
+                return all;
             }
         }
 
-        return owners.Count > 0 ? owners.ToArray() : _projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal).ToArray();
+        attributed = owners.Count > 0;
+        return attributed ? owners.ToArray() : all;
     }
 
     /// <summary>

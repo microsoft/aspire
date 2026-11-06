@@ -128,40 +128,37 @@ internal static class DotnetWatchServerInfrastructure
             return;
         }
 
-        bool createdEarlier;
+        // Servers sharing a run directory are prepared concurrently, so the ownership check, creation and
+        // registration happen under one lock; otherwise a second caller could see the first caller's directory
+        // before it's registered and reject it as planted.
         lock (s_createdDirectories)
         {
-            createdEarlier = s_createdDirectories.Contains(path);
-        }
+            if (!s_createdDirectories.Contains(path) && Path.Exists(path))
+            {
+                throw new DistributedApplicationException(string.Format(CultureInfo.InvariantCulture,
+                    "The watch run directory '{0}' already exists. Remove it and try again.", path));
+            }
 
-        if (!createdEarlier && Path.Exists(path))
-        {
-            throw new DistributedApplicationException(string.Format(CultureInfo.InvariantCulture,
-                "The watch run directory '{0}' already exists. Remove it and try again.", path));
-        }
+            if (new DirectoryInfo(path).LinkTarget is not null)
+            {
+                throw new DistributedApplicationException(string.Format(CultureInfo.InvariantCulture,
+                    "The watch run directory '{0}' is a symbolic link.", path));
+            }
 
-        if (new DirectoryInfo(path).LinkTarget is not null)
-        {
-            throw new DistributedApplicationException(string.Format(CultureInfo.InvariantCulture,
-                "The watch run directory '{0}' is a symbolic link.", path));
-        }
+            try
+            {
+                Directory.CreateDirectory(path, PrivateDirectoryMode);
 
-        try
-        {
-            Directory.CreateDirectory(path, PrivateDirectoryMode);
+                // CreateDirectory leaves an existing directory's mode alone, and the umask only ever removes bits. This
+                // also fails if someone else won a race to create the directory, because only the owner can chmod it.
+                File.SetUnixFileMode(path, PrivateDirectoryMode);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new DistributedApplicationException(string.Format(CultureInfo.InvariantCulture,
+                    "Couldn't create the private watch run directory '{0}': {1}", path, ex.Message), ex);
+            }
 
-            // CreateDirectory leaves an existing directory's mode alone, and the umask only ever removes bits. This
-            // also fails if someone else won a race to create the directory, because only the owner can chmod it.
-            File.SetUnixFileMode(path, PrivateDirectoryMode);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw new DistributedApplicationException(string.Format(CultureInfo.InvariantCulture,
-                "Couldn't create the private watch run directory '{0}': {1}", path, ex.Message), ex);
-        }
-
-        lock (s_createdDirectories)
-        {
             s_createdDirectories.Add(path);
         }
     }

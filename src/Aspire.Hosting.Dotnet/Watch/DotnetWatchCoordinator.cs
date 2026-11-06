@@ -750,9 +750,11 @@ internal static partial class DotnetWatchCoordinator
                     _monitorCts = new CancellationTokenSource();
                     _ready = false;
                     _lastBuildError = null;
+                    var referencedDirectories = Projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal)
+                        .ToDictionary(p => p, DotnetWatchEventInterpreter.ReadReferencedDirectories, StringComparer.Ordinal);
                     lock (_noticeGate)
                     {
-                        _interpreter = new DotnetWatchEventInterpreter(Projects.Select(p => (p.ProjectPath, p.Resource.Name)), Resource.WorkingDirectory);
+                        _interpreter = new DotnetWatchEventInterpreter(Projects.Select(p => (p.ProjectPath, p.Resource.Name)), Resource.WorkingDirectory, referencedDirectories);
                     }
 
                     _prepareTask = PrepareWithNoticeAsync(services, ++_generation, _monitorCts.Token, cancellationToken);
