@@ -1506,8 +1506,46 @@ class AspireDict(typing.MutableMapping[TKey, TValue]):
         )
 
 
+def _normalize_constructor_value(value: typing.Any) -> typing.Any:
+    # Validation must not exhaust generators that are later sent over JSON-RPC.
+    # Preserve tuple and mapping shapes used to select constructor overloads.
+    if isinstance(value, (str, _ReferenceHandle)) or callable(value):
+        return value
+    if isinstance(value, typing.Mapping):
+        return {key: _normalize_constructor_value(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return tuple(_normalize_constructor_value(item) for item in value)
+    if isinstance(value, typing.Iterable):
+        return [_normalize_constructor_value(item) for item in value]
+    return value
+
+
+def _normalize_argument(value: typing.Any, expected_type: typing.Any) -> typing.Any:
+    # The declared parameter type determines the JSON shape:
+    # {"catalog": 1} is ["catalog"] for Iterable[str], but stays an object for Mapping[str, int].
+    if value is None or isinstance(value, (str, _ReferenceHandle)) or callable(value):
+        return value
+    origin = typing.get_origin(expected_type)
+    if origin is typing.get_origin(typing.Iterable):
+        item_type = typing.get_args(expected_type)[0]
+        return [_normalize_argument(item, item_type) for item in value]
+    if origin is typing.get_origin(typing.Mapping):
+        key_type, value_type = typing.get_args(expected_type)
+        return {
+            _normalize_argument(key, key_type): _normalize_argument(item, value_type)
+            for key, item in value.items()
+        }
+    if origin in (typing.Union, types.UnionType):
+        # Union validation must not exhaust a fluent argument's generator before marshalling.
+        value = _normalize_constructor_value(value)
+        for subtype in typing.get_args(expected_type):
+            if _validate_type(value, subtype):
+                return _normalize_argument(value, subtype)
+    return value
+
+
 def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
-    if typing.get_origin(expected_type) is typing.Iterable:
+    if typing.get_origin(expected_type) is typing.get_origin(typing.Iterable):
         if isinstance(arg, str):
             return False
         item_type = typing.get_args(expected_type)[0]
@@ -1516,7 +1554,7 @@ def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
         for item in arg:
             if not _validate_type(item, item_type):
                 return False
-    elif typing.get_origin(expected_type) is typing.Mapping:
+    elif typing.get_origin(expected_type) is typing.get_origin(typing.Mapping):
         key_type, value_type = typing.get_args(expected_type)
         if not isinstance(arg, typing.Mapping):
             return False
@@ -2462,7 +2500,7 @@ class _BaseResource(AbstractResource):
     def with_endpoints(self, endpoints: typing.Iterable[str]) -> typing.Self:
         """Sets the endpoints"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['endpoints'] = endpoints
+        rpc_args['endpoints'] = _normalize_argument(endpoints, typing.Iterable[str])
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints',
             rpc_args,
@@ -2547,6 +2585,7 @@ class _BaseResource(AbstractResource):
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[_BaseResourceKwargs]) -> None:
         if (_optional_string := kwargs.pop("optional_string", None)) is not None and _optional_string is not False:
+            _optional_string = _normalize_constructor_value(_optional_string)
             if _validate_dict_types(_optional_string, OptionalStringParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["value"] = typing.cast(OptionalStringParameters, _optional_string).get("value")
@@ -2558,6 +2597,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'optional_string'. Expected: OptionalStringParameters or Literal[True]")
         if (_config := kwargs.pop("config", None)) is not None:
+            _config = _normalize_constructor_value(_config)
             if _validate_type(_config, TestConfigDto):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["config"] = typing.cast(TestConfigDto, _config)
@@ -2565,6 +2605,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'config'. Expected: TestConfigDto")
         if (_created_at := kwargs.pop("created_at", None)) is not None:
+            _created_at = _normalize_constructor_value(_created_at)
             if _validate_type(_created_at, datetime.datetime):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["createdAt"] = typing.cast(datetime.datetime, _created_at)
@@ -2572,6 +2613,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'created_at'. Expected: datetime.datetime")
         if (_modified_at := kwargs.pop("modified_at", None)) is not None:
+            _modified_at = _normalize_constructor_value(_modified_at)
             if _validate_type(_modified_at, datetime.datetime):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["modifiedAt"] = typing.cast(datetime.datetime, _modified_at)
@@ -2579,6 +2621,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'modified_at'. Expected: datetime.datetime")
         if (_correlation_id := kwargs.pop("correlation_id", None)) is not None:
+            _correlation_id = _normalize_constructor_value(_correlation_id)
             if _validate_type(_correlation_id, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["correlationId"] = typing.cast(str, _correlation_id)
@@ -2586,6 +2629,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'correlation_id'. Expected: str")
         if (_optional_callback := kwargs.pop("optional_callback", None)) is not None and _optional_callback is not False:
+            _optional_callback = _normalize_constructor_value(_optional_callback)
             if _validate_type(_optional_callback, typing.Callable[[TestCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext], None], _optional_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext",))
@@ -2596,6 +2640,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'optional_callback'. Expected: Callable[[TestCallbackContext], None] or Literal[True]")
         if (_status := kwargs.pop("status", None)) is not None:
+            _status = _normalize_constructor_value(_status)
             if _validate_type(_status, TestResourceStatus):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["status"] = typing.cast(TestResourceStatus, _status)
@@ -2603,6 +2648,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'status'. Expected: TestResourceStatus")
         if (_nested_config := kwargs.pop("nested_config", None)) is not None:
+            _nested_config = _normalize_constructor_value(_nested_config)
             if _validate_type(_nested_config, TestNestedDto):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["config"] = typing.cast(TestNestedDto, _nested_config)
@@ -2610,6 +2656,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'nested_config'. Expected: TestNestedDto")
         if (_validator := kwargs.pop("validator", None)) is not None:
+            _validator = _normalize_constructor_value(_validator)
             if _validate_type(_validator, typing.Callable[[TestResourceContext], bool]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["validator"] = client.register_callback(typing.cast(typing.Callable[[TestResourceContext], bool], _validator), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext",))
@@ -2617,6 +2664,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'validator'. Expected: Callable[[TestResourceContext], bool]")
         if (_test_wait_for := kwargs.pop("test_wait_for", None)) is not None:
+            _test_wait_for = _normalize_constructor_value(_test_wait_for)
             if _validate_type(_test_wait_for, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _test_wait_for)
@@ -2624,6 +2672,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'test_wait_for'. Expected: AbstractResource")
         if (_dependency := kwargs.pop("dependency", None)) is not None:
+            _dependency = _normalize_constructor_value(_dependency)
             if _validate_type(_dependency, AbstractResourceWithConnectionString):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResourceWithConnectionString, _dependency)
@@ -2631,6 +2680,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'dependency'. Expected: AbstractResourceWithConnectionString")
         if (_union_dependency := kwargs.pop("union_dependency", None)) is not None:
+            _union_dependency = _normalize_constructor_value(_union_dependency)
             if _validate_type(_union_dependency, str | AbstractResourceWithConnectionString):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(str | AbstractResourceWithConnectionString, _union_dependency)
@@ -2638,13 +2688,15 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'union_dependency'. Expected: str | AbstractResourceWithConnectionString")
         if (_endpoints := kwargs.pop("endpoints", None)) is not None:
+            _endpoints = _normalize_constructor_value(_endpoints)
             if _validate_type(_endpoints, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["endpoints"] = typing.cast(typing.Iterable[str], _endpoints)
+                rpc_args["endpoints"] = _normalize_argument(typing.cast(typing.Iterable[str], _endpoints), typing.Iterable[str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoints'. Expected: Iterable[str]")
         if (_cancellable_operation := kwargs.pop("cancellable_operation", None)) is not None:
+            _cancellable_operation = _normalize_constructor_value(_cancellable_operation)
             if _validate_type(_cancellable_operation, typing.Callable[[CancellationToken], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["operation"] = client.register_callback(typing.cast(typing.Callable[[CancellationToken], None], _cancellable_operation))
@@ -2652,6 +2704,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'cancellable_operation'. Expected: Callable[[CancellationToken], None]")
         if (_merge_label := kwargs.pop("merge_label", None)) is not None:
+            _merge_label = _normalize_constructor_value(_merge_label)
             if _validate_type(_merge_label, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["label"] = typing.cast(str, _merge_label)
@@ -2664,6 +2717,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'merge_label'. Expected: str or (str, str)")
         if (_merge_endpoint := kwargs.pop("merge_endpoint", None)) is not None:
+            _merge_endpoint = _normalize_constructor_value(_merge_endpoint)
             if _validate_tuple_types(_merge_endpoint, (str, int)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(tuple[str, int], _merge_endpoint)[0]
@@ -2679,6 +2733,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'merge_endpoint'. Expected: (str, int) or MergeEndpointParameters")
         if (_merge_logging := kwargs.pop("merge_logging", None)) is not None:
+            _merge_logging = _normalize_constructor_value(_merge_logging)
             if _validate_type(_merge_logging, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["logLevel"] = typing.cast(str, _merge_logging)
@@ -2694,6 +2749,7 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'merge_logging'. Expected: str or MergeLoggingParameters")
         if (_merge_route := kwargs.pop("merge_route", None)) is not None:
+            _merge_route = _normalize_constructor_value(_merge_route)
             if _validate_dict_types(_merge_route, MergeRouteParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(MergeRouteParameters, _merge_route)["path"]
@@ -2737,7 +2793,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_env_vars(self, vars: typing.Mapping[str, str]) -> typing.Self:
         """Sets environment variables"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['variables'] = vars
+        rpc_args['variables'] = _normalize_argument(vars, typing.Mapping[str, str])
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables',
             rpc_args,
@@ -2747,6 +2803,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ContainerResourceKwargs]) -> None:
         if (_test_with_env_callback := kwargs.pop("test_with_env_callback", None)) is not None:
+            _test_with_env_callback = _normalize_constructor_value(_test_with_env_callback)
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
@@ -2754,9 +2811,10 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             else:
                 raise TypeError("Invalid type for option 'test_with_env_callback'. Expected: Callable[[TestEnvironmentContext], None]")
         if (_env_vars := kwargs.pop("env_vars", None)) is not None:
+            _env_vars = _normalize_constructor_value(_env_vars)
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["variables"] = typing.cast(typing.Mapping[str, str], _env_vars)
+                rpc_args["variables"] = _normalize_argument(typing.cast(typing.Mapping[str, str], _env_vars), typing.Mapping[str, str])
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_vars'. Expected: Mapping[str, str]")
@@ -2788,6 +2846,7 @@ class TestDatabaseResource(ContainerResource):
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestDatabaseResourceKwargs]) -> None:
         if (_data_volume := kwargs.pop("data_volume", None)) is not None and _data_volume is not False:
+            _data_volume = _normalize_constructor_value(_data_volume)
             if _validate_type(_data_volume, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(str, _data_volume)
@@ -2999,6 +3058,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestRedisResourceKwargs]) -> None:
         if (_promise_collision_resources := kwargs.pop("promise_collision_resources", None)) is not None:
+            _promise_collision_resources = _normalize_constructor_value(_promise_collision_resources)
             if _validate_tuple_types(_promise_collision_resources, (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["resource"] = typing.cast(tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise], _promise_collision_resources)[0]
@@ -3007,6 +3067,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'promise_collision_resources'. Expected: (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)")
         if (_mutable_promise_collision_resources := kwargs.pop("mutable_promise_collision_resources", None)) is not None:
+            _mutable_promise_collision_resources = _normalize_constructor_value(_mutable_promise_collision_resources)
             if _validate_tuple_types(_mutable_promise_collision_resources, (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["resource"] = typing.cast(tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise], _mutable_promise_collision_resources)[0]
@@ -3015,6 +3076,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'mutable_promise_collision_resources'. Expected: (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)")
         if (_persistence := kwargs.pop("persistence", None)) is not None and _persistence is not False:
+            _persistence = _normalize_constructor_value(_persistence)
             if _validate_type(_persistence, TestPersistenceMode):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["mode"] = typing.cast(TestPersistenceMode, _persistence)
@@ -3025,6 +3087,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'persistence'. Expected: TestPersistenceMode or Literal[True]")
         if (_connection_string := kwargs.pop("connection_string", None)) is not None:
+            _connection_string = _normalize_constructor_value(_connection_string)
             if _validate_type(_connection_string, ReferenceExpression):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["connectionString"] = typing.cast(ReferenceExpression, _connection_string)
@@ -3032,6 +3095,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'connection_string'. Expected: ReferenceExpression")
         if (_connection_string_direct := kwargs.pop("connection_string_direct", None)) is not None:
+            _connection_string_direct = _normalize_constructor_value(_connection_string_direct)
             if _validate_type(_connection_string_direct, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["connectionString"] = typing.cast(str, _connection_string_direct)
@@ -3039,6 +3103,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'connection_string_direct'. Expected: str")
         if (_redis_specific := kwargs.pop("redis_specific", None)) is not None:
+            _redis_specific = _normalize_constructor_value(_redis_specific)
             if _validate_type(_redis_specific, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["option"] = typing.cast(str, _redis_specific)
@@ -3046,6 +3111,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'redis_specific'. Expected: str")
         if (_multi_param_handle_callback := kwargs.pop("multi_param_handle_callback", None)) is not None:
+            _multi_param_handle_callback = _normalize_constructor_value(_multi_param_handle_callback)
             if _validate_type(_multi_param_handle_callback, typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext, TestEnvironmentContext], None], _multi_param_handle_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext"))
@@ -3053,6 +3119,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'multi_param_handle_callback'. Expected: Callable[[TestCallbackContext, TestEnvironmentContext], None]")
         if (_data_volume := kwargs.pop("data_volume", None)) is not None and _data_volume is not False:
+            _data_volume = _normalize_constructor_value(_data_volume)
             if _validate_dict_types(_data_volume, DataVolumeParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(DataVolumeParameters, _data_volume).get("name")
@@ -3064,6 +3131,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'data_volume'. Expected: DataVolumeParameters or Literal[True]")
         if (_concrete_vault_resource := kwargs.pop("concrete_vault_resource", None)) is not None:
+            _concrete_vault_resource = _normalize_constructor_value(_concrete_vault_resource)
             if _validate_type(_concrete_vault_resource, TestVaultResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["resource"] = typing.cast(TestVaultResource, _concrete_vault_resource)
@@ -3071,6 +3139,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
             else:
                 raise TypeError("Invalid type for option 'concrete_vault_resource'. Expected: TestVaultResource")
         if (_python_builder_callback := kwargs.pop("python_builder_callback", None)) is not None:
+            _python_builder_callback = _normalize_constructor_value(_python_builder_callback)
             if _validate_type(_python_builder_callback, typing.Callable[[TestRedisResource], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[TestRedisResource], None], _python_builder_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",))
@@ -3104,6 +3173,7 @@ class TestVaultResource(ContainerResource, AbstractTestVaultResource):
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestVaultResourceKwargs]) -> None:
         if (_vault_direct := kwargs.pop("vault_direct", None)) is not None:
+            _vault_direct = _normalize_constructor_value(_vault_direct)
             if _validate_type(_vault_direct, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["option"] = typing.cast(str, _vault_direct)

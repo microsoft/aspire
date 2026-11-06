@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREWATCH001
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Registers launch-group support from AppHost configuration.
 
 using System.Diagnostics;
 using System.Reflection;
@@ -905,6 +906,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         foreach (var resource in Resources)
         {
             ValidateResourceName(resource);
+        }
+
+        // Check after application code has configured the builder, while services can still be registered.
+        var launchGroupSelection = Configuration.GetSection("Aspire:LaunchGroup");
+        if (ExecutionContext.IsRunMode &&
+            (Configuration.GetSection(LaunchGroupService.ConfigurationSectionName).Exists() ||
+             !string.IsNullOrEmpty(launchGroupSelection.Value) ||
+             launchGroupSelection.GetChildren().Any()))
+        {
+            LaunchGroupExtensions.EnsureSupport(this);
         }
 
         var host = _innerBuilder.Build();

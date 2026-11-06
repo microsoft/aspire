@@ -355,6 +355,175 @@ public class AtsPythonCodeGeneratorTests
             aspirePy);
     }
 
+    [Theory]
+    [InlineData("list")]
+    [InlineData("tuple")]
+    [InlineData("set")]
+    [InlineData("dictionary")]
+    [InlineData("generator")]
+    [InlineData("empty_generator")]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnUnix(string iterableKind)
+        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python3", iterableKind);
+
+    [Theory]
+    [InlineData("list")]
+    [InlineData("tuple")]
+    [InlineData("set")]
+    [InlineData("dictionary")]
+    [InlineData("generator")]
+    [InlineData("empty_generator")]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task GeneratedLaunchGroupsKeyword_AcceptsIterablesOnWindows(string iterableKind)
+        => GeneratedLaunchGroupsKeyword_AcceptsIterables("python", iterableKind);
+
+    private Task GeneratedLaunchGroupsKeyword_AcceptsIterables(string pythonExecutable, string iterableKind)
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+        return ExecuteGeneratedPythonAsync(pythonExecutable, files["aspire_app.py"],
+            $"iterable_kind = '{iterableKind}'{Environment.NewLine}" +
+            """
+            import json
+            import typing
+            import aspire_app
+
+            client = aspire_app.AspireClient("unused")
+            handle = aspire_app.Handle({"$handle": "resource", "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource"})
+            calls = []
+
+            class Socket:
+                def sendall(self, message):
+                    # Keep the real marshalling, JSON encoder, and request/response path.
+                    header, payload = message.split(b"\r\n\r\n", 1)
+                    assert header == f"Content-Length: {len(payload)}".encode()
+                    request = json.loads(payload)
+                    assert request["method"] == "invokeCapability"
+                    capability_id, args = request["params"]
+                    calls.append((capability_id, args))
+                    client._pending_results[request["id"]] = (args["builder"], None)
+                    client._pending_requests[request["id"]].set()
+
+            client._socket = Socket()
+            client._connected = True
+            create_groups = {
+                "list": lambda: ["catalog", "basket"],
+                "tuple": lambda: ("catalog", "basket"),
+                "set": lambda: {"catalog", "basket"},
+                "dictionary": lambda: {"catalog": 1, "basket": 2},
+                "generator": lambda: (name for name in ["catalog", "basket"]),
+                "empty_generator": lambda: (name for name in []),
+            }[iterable_kind]
+            for use_fluent in (False, True):
+                groups = create_groups()
+                if use_fluent:
+                    resource = aspire_app.ExecutableResource(handle, client)
+                    assert resource.with_launch_groups(groups) is resource
+                else:
+                    resource = aspire_app.ExecutableResource(handle, client, launch_groups=groups)
+                assert resource.handle.to_json() == handle.to_json()
+                capability_id, args = calls.pop()
+                assert capability_id == "Aspire.Hosting/withLaunchGroups"
+                assert args["builder"] == handle.to_json()
+                expected = [] if iterable_kind == "empty_generator" else ["catalog", "basket"]
+                actual = args["launchGroupNames"]
+                assert isinstance(actual, list), actual
+                assert (sorted(actual) if iterable_kind == "set" else actual) == (
+                    sorted(expected) if iterable_kind == "set" else expected
+                )
+
+            for groups in ("catalog", ["catalog", 42], 42, (name for name in ["catalog", 42]), {"catalog": 1, 42: 2}):
+                try:
+                    aspire_app.ExecutableResource(handle, client, launch_groups=groups)
+                    raise AssertionError("Invalid launch_groups was accepted")
+                except TypeError as error:
+                    assert "launch_groups" in str(error)
+                assert calls == []
+
+            callback = lambda context: None
+            aspire_app.ExecutableResource(handle, client, pipeline_step_factory=("build", callback))
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "build" and "callback" in args
+
+            aspire_app.ExecutableResource(handle, client, pipeline_step_factory={
+                "step_name": "deploy",
+                "callback": callback,
+                "depends_on": (name for name in ["build"]),
+                "tags": {"release"},
+            })
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "deploy" and "callback" in args
+            assert args["dependsOn"] == ["build"]
+            assert args["tags"] == ["release"]
+
+            aspire_app.ExecutableResource(handle, client, pipeline_step_factory={
+                "step_name": "publish",
+                "callback": callback,
+                "depends_on": {"build": 1, "deploy": 2},
+                "tags": {"release": True},
+            })
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "publish" and "callback" in args
+            assert args["dependsOn"] == ["build", "deploy"]
+            assert args["tags"] == ["release"]
+
+            aspire_app.ExecutableResource(handle, client, env_vars={"MODE": "production", "REGION": "west"})
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables"
+            assert args["variables"] == {"MODE": "production", "REGION": "west"}
+            assert calls == []
+
+            resource.with_env_vars({"MODE": "production", "REGION": "west"})
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting.CodeGeneration.Python.Tests/withEnvironmentVariables"
+            assert args["variables"] == {"MODE": "production", "REGION": "west"}
+
+            resource.with_pipeline_step_factory(
+                "deploy", callback, depends_on=(name for name in ["build"]), tags={"release"}
+            )
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert args["stepName"] == "deploy" and args["callback"] in client._callback_registry
+            assert args["dependsOn"] == ["build"] and args["tags"] == ["release"]
+            assert set(args) == {"builder", "stepName", "callback", "dependsOn", "tags"}
+
+            resource.with_pipeline_step_factory("deploy", callback, depends_on=None, tags=None)
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withPipelineStepFactory"
+            assert set(args) == {"builder", "stepName", "callback"}
+
+            resource.with_parent_relationship(resource)
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withBuilderParentRelationship"
+            assert args["parent"] == handle.to_json()
+
+            resource.with_launch_groups("catalog")
+            capability_id, args = calls.pop()
+            assert capability_id == "Aspire.Hosting/withLaunchGroups"
+            assert args["launchGroupNames"] == "catalog"
+            try:
+                resource.with_launch_groups(42)
+                raise AssertionError("A scalar was converted to a collection")
+            except TypeError:
+                pass
+            assert calls == []
+
+            assert aspire_app._normalize_argument(
+                (name for name in ["catalog", "basket"]), typing.Iterable[str] | None
+            ) == ["catalog", "basket"]
+            assert aspire_app._normalize_argument(
+                {"catalog": (name for name in ["api", "cache"])}, typing.Mapping[str, typing.Iterable[str]] | None
+            ) == {"catalog": ["api", "cache"]}
+            assert aspire_app._normalize_argument(None, typing.Iterable[str] | None) is None
+            assert aspire_app._validate_type({"catalog": ["api", "cache"]}, typing.Mapping[str, typing.Iterable[str]])
+            assert not aspire_app._validate_type({"catalog": ["api", 42]}, typing.Mapping[str, typing.Iterable[str]])
+            """);
+    }
+
     [Fact]
     [RequiresTools(["python3"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]

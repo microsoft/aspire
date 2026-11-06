@@ -2965,6 +2965,46 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// Returns: The resource builder.
 	WithImageTag(tag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
 	// WithLifetime sets the lifetime behavior of the container resource.
 	//
 	// Prefer WithPersistentLifetime or WithSessionLifetime for new code. Marking a
@@ -4792,6 +4832,30 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageTag(t
 	return s
 }
 
+// WithLaunchGroup adds a resource to a launch group.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLaunchGroup(launchGroupName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLaunchGroups(launchGroupNames []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithLifetime sets the lifetime behavior of the container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetime(lifetime ContainerLifetime) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -6405,6 +6469,46 @@ type CSharpAppResource interface {
 	// release.
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) CSharpAppResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) CSharpAppResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) CSharpAppResource
+
 	// WithLifetimeOf configures a resource to match the lifetime of another
 	// resource.
 	//
@@ -7933,6 +8037,30 @@ func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImag
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withImagePushOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *cSharpAppResource) WithLaunchGroup(launchGroupName string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *cSharpAppResource) WithLaunchGroups(launchGroupNames []string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10472,6 +10600,46 @@ type ContainerRegistryResource interface {
 	// Returns: The resource builder.
 	WithIconName(iconName string, options ...*WithIconNameOptions) ContainerRegistryResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) ContainerRegistryResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) ContainerRegistryResource
+
 	// WithLifetimeOf configures a resource to match the lifetime of another
 	// resource.
 	//
@@ -11245,6 +11413,30 @@ func (s *containerRegistryResource) WithIconName(iconName string, options ...*Wi
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withIconName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *containerRegistryResource) WithLaunchGroup(launchGroupName string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *containerRegistryResource) WithLaunchGroups(launchGroupNames []string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12714,6 +12906,46 @@ type ContainerResource interface {
 	//
 	// Returns: The resource builder.
 	WithImageTag(tag string) ContainerResource
+
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) ContainerResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) ContainerResource
 
 	// WithLifetime sets the lifetime behavior of the container resource.
 	//
@@ -14536,6 +14768,30 @@ func (s *containerResource) WithImageTag(tag string) ContainerResource {
 	}
 	reqArgs["tag"] = serializeValue(tag)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withImageTag", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *containerResource) WithLaunchGroup(launchGroupName string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *containerResource) WithLaunchGroups(launchGroupNames []string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18087,6 +18343,46 @@ type DotnetToolResource interface {
 	// release.
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) DotnetToolResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) DotnetToolResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) DotnetToolResource
+
 	// WithLifetimeOf configures a resource to match the lifetime of another
 	// resource.
 	//
@@ -19672,6 +19968,30 @@ func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerIma
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withImagePushOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *dotnetToolResource) WithLaunchGroup(launchGroupName string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *dotnetToolResource) WithLaunchGroups(launchGroupNames []string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22464,6 +22784,46 @@ type ExecutableResource interface {
 	// release.
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ExecutableResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) ExecutableResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) ExecutableResource
+
 	// WithLifetimeOf configures a resource to match the lifetime of another
 	// resource.
 	//
@@ -23979,6 +24339,30 @@ func (s *executableResource) WithImagePushOptions(callback func(arg ContainerIma
 	return s
 }
 
+// WithLaunchGroup adds a resource to a launch group.
+func (s *executableResource) WithLaunchGroup(launchGroupName string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *executableResource) WithLaunchGroups(launchGroupNames []string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *executableResource) WithLifetimeOf(sourceBuilder Resource) ExecutableResource {
@@ -25359,6 +25743,46 @@ type ExternalServiceResource interface {
 	// Returns: The resource builder.
 	WithIconName(iconName string, options ...*WithIconNameOptions) ExternalServiceResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) ExternalServiceResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) ExternalServiceResource
+
 	// WithLifetimeOf configures a resource to match the lifetime of another
 	// resource.
 	//
@@ -26151,6 +26575,30 @@ func (s *externalServiceResource) WithIconName(iconName string, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withIconName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *externalServiceResource) WithLaunchGroup(launchGroupName string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *externalServiceResource) WithLaunchGroups(launchGroupNames []string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -29190,6 +29638,46 @@ type ParameterResource interface {
 	// Returns: The resource builder.
 	WithIconName(iconName string, options ...*WithIconNameOptions) ParameterResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) ParameterResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) ParameterResource
+
 	// WithLifetimeOf configures a resource to match the lifetime of another
 	// resource.
 	//
@@ -30054,6 +30542,30 @@ func (s *parameterResource) WithIconName(iconName string, options ...*WithIconNa
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withIconName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *parameterResource) WithLaunchGroup(launchGroupName string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *parameterResource) WithLaunchGroups(launchGroupNames []string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -32225,6 +32737,46 @@ type ProjectResource interface {
 	// release.
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ProjectResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) ProjectResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) ProjectResource
+
 	// WithLifetimeOf configures a resource to match the lifetime of another
 	// resource.
 	//
@@ -33753,6 +34305,30 @@ func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImageP
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withImagePushOptions", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *projectResource) WithLaunchGroup(launchGroupName string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *projectResource) WithLaunchGroups(launchGroupNames []string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -37419,6 +37995,46 @@ type TestDatabaseResource interface {
 	// Returns: The resource builder.
 	WithImageTag(tag string) TestDatabaseResource
 
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) TestDatabaseResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) TestDatabaseResource
+
 	// WithLifetime sets the lifetime behavior of the container resource.
 	//
 	// Prefer WithPersistentLifetime or WithSessionLifetime for new code. Marking a
@@ -39240,6 +39856,30 @@ func (s *testDatabaseResource) WithImageTag(tag string) TestDatabaseResource {
 	}
 	reqArgs["tag"] = serializeValue(tag)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withImageTag", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *testDatabaseResource) WithLaunchGroup(launchGroupName string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *testDatabaseResource) WithLaunchGroups(launchGroupNames []string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -41181,6 +41821,46 @@ type TestRedisResource interface {
 	//
 	// Returns: The resource builder.
 	WithImageTag(tag string) TestRedisResource
+
+	// WithLaunchGroup adds a resource to a launch group.
+	//
+	// Membership is additive. Select one group with the Aspire:LaunchGroup
+	// configuration setting. Selecting a group marks resources without that
+	// membership for explicit start, including ungrouped resources, unless they
+	// have an ExcludeFromLaunchGroupSelectionAnnotation. Dependencies and children
+	// must be assigned membership explicitly; selection does not change lifecycle
+	// commands. Valid group names are inferred from membership unless explicitly
+	// defined in Aspire:LaunchGroups. Use the Aspire__LaunchGroup environment
+	// variable or dotnet run -- Aspire:LaunchGroup=catalog to select a group. No
+	// selection preserves normal startup, and publishing is unaffected.
+	//
+	// Parameters:
+	//   - launchGroupName: The case-insensitive launch group name.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroup(launchGroupName string) TestRedisResource
+
+	// WithLaunchGroups adds a resource to multiple launch groups.
+	//
+	// Repeated calls add membership rather than replacing it. No selection
+	// preserves normal startup. Unselected resources can be started later from the
+	// dashboard or resource commands.
+	//
+	// Parameters:
+	//   - launchGroupNames: The case-insensitive launch group names.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithLaunchGroups(launchGroupNames []string) TestRedisResource
 
 	// WithLifetime sets the lifetime behavior of the container resource.
 	//
@@ -43285,6 +43965,30 @@ func (s *testRedisResource) WithImageTag(tag string) TestRedisResource {
 	}
 	reqArgs["tag"] = serializeValue(tag)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withImageTag", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroup adds a resource to a launch group.
+func (s *testRedisResource) WithLaunchGroup(launchGroupName string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchGroupName"] = serializeValue(launchGroupName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroup", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithLaunchGroups adds a resource to multiple launch groups.
+func (s *testRedisResource) WithLaunchGroups(launchGroupNames []string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if launchGroupNames != nil { reqArgs["launchGroupNames"] = serializeValue(launchGroupNames) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLaunchGroups", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

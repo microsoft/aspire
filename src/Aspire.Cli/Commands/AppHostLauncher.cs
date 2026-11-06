@@ -80,6 +80,11 @@ internal sealed class AppHostLauncher(
         Description = SharedCommandStrings.LaunchProfileOptionDescription
     };
 
+    internal static readonly Option<string?> s_launchGroupOption = new("--launch-group")
+    {
+        Description = SharedCommandStrings.LaunchGroupOptionDescription
+    };
+
     /// <summary>
     /// Adds the detached launch options to a command so they appear in --help.
     /// Called by both RunCommand and StartCommand to keep options in sync.
@@ -90,6 +95,16 @@ internal sealed class AppHostLauncher(
         command.Options.Add(s_formatOption);
         command.Options.Add(s_isolatedOption);
         command.Options.Add(s_launchProfileOption);
+        command.Options.Add(s_launchGroupOption);
+        command.Validators.Add(result =>
+        {
+            if (result.GetResult(s_launchGroupOption) is { Tokens.Count: > 0 } optionResult &&
+                optionResult.GetValueOrDefault<string?>() is { } group &&
+                (string.IsNullOrWhiteSpace(group) || group != group.Trim() || group.Contains(',') || group.Contains(';')))
+            {
+                result.AddError(SharedCommandStrings.InvalidLaunchGroupName);
+            }
+        });
     }
 
     /// <summary>

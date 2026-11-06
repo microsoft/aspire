@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRETERMINAL001 // Terminal APIs are experimental.
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Opt in to experimental launch-group APIs.
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -11,10 +12,13 @@ var builder = DistributedApplication.CreateBuilder(args);
 // together: Frontend/Storefront for the frontend, Backend/API for the catalog service, and Backend/Checkout for the
 // basket service.
 var storefrontPromotion = builder.AddParameter("storefront-promotion", "Free shipping over $50")
+                                .WithLaunchGroup("frontend")
                                 .WithTags("Frontend", "Storefront");
 var lowStockThreshold = builder.AddParameter("low-stock-threshold", "5")
+                         .WithLaunchGroups("catalog", "frontend")
                          .WithTags("Backend", "API");
 var checkoutSigningKey = builder.AddParameter("checkout-signing-key", () => Guid.NewGuid().ToString(), secret: true)
+                          .WithLaunchGroups("basket", "frontend")
                           .WithTags("Backend", "Checkout");
 builder.AddParameter("support-contact-email")
        .WithDescription("The customer support email address displayed by the storefront.")
@@ -87,30 +91,37 @@ builder.AddParameter("storefront-certificate")
        });
 
 var catalogDb = builder.AddPostgres("postgres")
+                       .WithLaunchGroups("catalog", "frontend")
                        .WithDataVolume()
                        .WithPgAdmin(resource =>
                        {
+                           resource.WithLaunchGroup("catalog");
                            resource.WithUrlForEndpoint("http", u => u.DisplayText = "PG Admin");
                        })
-                       .AddDatabase("catalogdb");
+                       .AddDatabase("catalogdb")
+                       .WithLaunchGroups("catalog", "frontend");
 
 var basketCache = builder.AddRedis("basketcache")
+                         .WithLaunchGroups("basket", "frontend")
                          .WithDataVolume();
 
 #if !SKIP_DASHBOARD_REFERENCE
 basketCache.WithRedisCommander(c =>
             {
+                c.WithLaunchGroup("basket");
                 c.WithHostPort(33801);
                 c.WithUrlForEndpoint("http", u => u.DisplayText = "Redis Commander");
             })
            .WithRedisInsight(c =>
             {
+                c.WithLaunchGroup("basket");
                 c.WithHostPort(33802);
                 c.WithUrlForEndpoint("http", u => u.DisplayText = "Redis Insight");
             });
 #endif
 
 var catalogDbApp = builder.AddDotnetProject("catalogdbapp", "../CatalogDb/CatalogDb.csproj")
+                          .WithLaunchGroups("catalog", "frontend")
                           .WithReference(catalogDb)
                           .WaitFor(catalogDb)
                           .WithHttpHealthCheck("/health");
@@ -134,6 +145,7 @@ if (builder.Environment.IsDevelopment() && builder.ExecutionContext.IsRunMode)
 }
 
 var catalogService = builder.AddDotnetProject("catalogservice", "../CatalogService/CatalogService.csproj")
+                            .WithLaunchGroups("catalog", "frontend")
                             .WithTags("Backend", "API")
                             .WithTrait("Owner", "Finance")
                             .WithTrait("Owner", "Platform")
@@ -160,12 +172,14 @@ var catalogService = builder.AddDotnetProject("catalogservice", "../CatalogServi
                             .WithReplicas(2);
 
 var messaging = builder.AddRabbitMQ("messaging")
+                       .WithLaunchGroups("basket", "orders", "frontend")
                        .WithDataVolume()
                        .WithPersistentLifetime()
                        .WithManagementPlugin()
                        .PublishAsContainer();
 
 var basketService = builder.AddDotnetProject("basketservice", "../BasketService/BasketService.csproj")
+                           .WithLaunchGroups("basket", "frontend")
                            .WithTags("Backend", "Checkout")
                            .WithEnvironment("Checkout__SigningKey", checkoutSigningKey)
                            .WithDashboardPosition(20)
@@ -175,6 +189,7 @@ var basketService = builder.AddDotnetProject("basketservice", "../BasketService/
                            .WaitFor(messaging);
 
 var frontend = builder.AddDotnetProject("frontend", "../MyFrontend/MyFrontend.csproj")
+    .WithLaunchGroup("frontend")
     .WithTags("Frontend", "Storefront")
     .WithEnvironment("Storefront__Promotion", storefrontPromotion)
     .WithDashboardPosition(0)
@@ -213,10 +228,11 @@ else
 }
 
 builder.AddDotnetProject("orderprocessor", "../OrderProcessor/OrderProcessor.csproj", options => options.LaunchProfileName = "OrderProcessor")
+    .WithLaunchGroup("orders")
     .WithReference(messaging)
     .WaitFor(messaging);
 
-var yarp = builder.AddYarp("apigateway");
+var yarp = builder.AddYarp("apigateway").WithLaunchGroup("frontend");
 #if YARP_USE_CONFIG_FILE
 yarp.WithConfigFile("yarp.json")
     .WithReference(basketService)

@@ -937,13 +937,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         }
 
         // Apply environment variables from apphost.run.json
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
+        AppHostServerEnvironment.Apply(startInfo.Environment, environmentVariables);
 
         _layoutLease?.AddEnvironment(startInfo);
 
