@@ -7,6 +7,6 @@
     "node": ">=22"
   },
   "dependencies": {
-    "msedge-tts": "2.1.0"
+    "msedge-tts": "2.1.1"
   }
 }
