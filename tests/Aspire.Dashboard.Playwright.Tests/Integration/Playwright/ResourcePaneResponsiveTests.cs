@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
+using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -1945,6 +1946,137 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             Assert.True(await pane.Locator(".resource-pane-list").EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth + 1"));
             Assert.True(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"));
         });
+    }
+
+    [Theory]
+    [InlineData(420)]
+    [InlineData(560)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CompactSidebar_ErrorBadgeKeepsItsPlaceWhileActionsShow(int paneWidth)
+    {
+        // The fixture's persistent "cache" container widens every row's compact type column. That is when the badge
+        // used to move: at rest it sat before the wide columns, and while the actions showed it went to the end of the
+        // narrower name track, out from under a pointer that was on it.
+        var services = fixture.DashboardApp.Services;
+        var writer = services.GetRequiredService<ITelemetryRepositoryWriter>();
+        await writer.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new[] { "api", "cache" }.Select(name =>
+            {
+                var resource = CreateResource(name);
+                resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+                return new ResourceLogs
+                {
+                    Resource = resource,
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(message: $"{name} failed", severity: SeverityNumber.Error) } } }
+                };
+            })
+        });
+
+        try
+        {
+            await RunTestAsync(async page =>
+            {
+                await page.SetViewportSizeAsync(1440, 900);
+                await page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Light });
+                await page.GotoAsync("/resources/cache?pane=tags");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Compact", Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
+                var pane = page.Locator(".resource-pane");
+                var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                var handle = await separator.BoundingBoxAsync();
+                var initialPane = await pane.BoundingBoxAsync();
+                Assert.NotNull(handle);
+                Assert.NotNull(initialPane);
+                await page.Mouse.MoveAsync(handle.X + handle.Width / 2, handle.Y + handle.Height / 2);
+                await page.Mouse.DownAsync();
+                await page.Mouse.MoveAsync(handle.X + handle.Width / 2 + paneWidth - initialPane.Width, handle.Y + handle.Height / 2);
+                await page.Mouse.UpAsync();
+                await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", paneWidth.ToString(CultureInfo.InvariantCulture));
+
+                // Per row: the badge's box; whether it is the topmost element at its center; the hidden spacer's box,
+                // which stops the name before the badge; the end of the name's text; whether the badge overlaps a
+                // shown column or action; and whether any action is shown.
+                const string measure = """
+                    row => {
+                        const box = el => el.getBoundingClientRect();
+                        const shown = el => box(el).width > 0 && box(el).height > 0 && getComputedStyle(el).visibility !== 'hidden';
+                        const badge = row.querySelector(':scope > .resource-row-error-link');
+                        const b = box(badge);
+                        const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+                        const spacer = box(row.querySelector('.error-badge-spacer'));
+                        const others = [...row.querySelectorAll('.resource-row-meta > *, .resource-row-actions .resource-row-action, .resource-row-actions .resource-row-toggle')]
+                            .filter(shown);
+                        const overlaps = others.some(el => { const o = box(el); return o.left < b.right - 0.5 && o.right > b.left + 0.5; });
+                        return [b.left, b.top, b.right, b.bottom, top?.closest('.resource-row-error-link') === badge ? 1 : 0,
+                            spacer.left, spacer.right, box(row.querySelector('.resource-row-text')).right, overlaps ? 1 : 0,
+                            [...row.querySelectorAll('.resource-row-actions .resource-row-action')].some(shown) ? 1 : 0];
+                    }
+                    """;
+
+                // With the persistent type in the list, the wide columns decide the badge's place. Filtered down to
+                // "api", the columns are 64px and the actions decide it instead.
+                await AssertRowAsync("api", "persistent types", typeWidth: 128);
+                await AssertRowAsync("cache", "persistent types", typeWidth: 128);
+                await pane.GetByRole(AriaRole.Searchbox).FillAsync("api");
+                await Assertions.Expect(pane.Locator("[data-resource-name='cache']")).ToHaveCountAsync(0);
+                await AssertRowAsync("api", "no persistent types", typeWidth: 64);
+
+                async Task AssertRowAsync(string name, string stage, double typeWidth)
+                {
+                    var row = pane.Locator($"[data-resource-name='{name}']").First;
+                    var badge = row.Locator(":scope > .resource-row-error-link");
+                    var context = $"{name} ({stage})";
+                    await row.ScrollIntoViewIfNeededAsync();
+                    await page.Mouse.MoveAsync(1, 1);
+                    await Assertions.Expect(badge).ToHaveTextAsync("1");
+                    var type = await row.Locator(".resource-row-meta .resource-row-type").BoundingBoxAsync();
+                    Assert.NotNull(type);
+                    Assert.Equal(typeWidth, type.Width, 0.5);
+                    var rest = await row.EvaluateAsync<double[]>(measure);
+                    AssertBadge(rest, rest, context, "rest", actionsShown: false);
+
+                    // Pointing at the row or at the badge itself, focusing the row, and opening its menu all show the
+                    // actions in place of the columns. None of them may move or cover the badge.
+                    await row.Locator(".resource-row-name").HoverAsync();
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "row hover", actionsShown: true);
+
+                    await page.Mouse.MoveAsync(1, 1);
+                    await page.Mouse.MoveAsync((float)((rest[0] + rest[2]) / 2), (float)((rest[1] + rest[3]) / 2));
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "badge hover", actionsShown: true);
+
+                    await page.Mouse.MoveAsync(1, 1);
+                    await row.Locator(".resource-row-link").FocusAsync();
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "focus", actionsShown: true);
+
+                    await row.HoverAsync();
+                    await row.Locator(".resource-row-actions .aspire-menu-button").Last.ClickAsync();
+                    await page.Mouse.MoveAsync(1, 1);
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "menu open", actionsShown: true);
+                    await page.Keyboard.PressAsync("Escape");
+                }
+
+                static void AssertBadge(double[] rest, double[] current, string row, string state, bool actionsShown)
+                {
+                    var context = $"{row}, {state}";
+                    Assert.True(Math.Abs(current[0] - rest[0]) < 0.5 && Math.Abs(current[1] - rest[1]) < 0.5,
+                        $"{context}: the badge moved from ({rest[0]}, {rest[1]}) to ({current[0]}, {current[1]}).");
+                    Assert.True(current[4] == 1, $"{context}: something covers the badge.");
+                    Assert.True(Math.Abs(current[5] - current[0]) < 0.5 && Math.Abs(current[6] - current[2]) < 0.5,
+                        $"{context}: the spacer ({current[5]}-{current[6]}) is not under the badge ({current[0]}-{current[2]}).");
+                    Assert.True(current[7] <= current[0] + 0.5, $"{context}: the name ends at {current[7]}, under the badge at {current[0]}.");
+                    Assert.True(current[8] == 0, $"{context}: the badge overlaps a column or an action.");
+                    Assert.Equal(actionsShown ? 1d : 0d, current[9]);
+                }
+            });
+        }
+        finally
+        {
+            // The fixture is shared by the class, so later tests must not see these badges.
+            await writer.ClearStructuredLogsAsync();
+            services.GetRequiredService<ITelemetryRepository>().MarkViewedErrorLogs(null);
+        }
     }
 
     [Theory]

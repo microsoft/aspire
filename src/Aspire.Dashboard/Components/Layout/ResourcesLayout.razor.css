@@ -2801,9 +2801,32 @@
         display: none;
     }
 
-    /* With the columns gone, the error badge's spacer ends the row link again, so the badge goes back to the end. */
+    /* The error badge keeps one place whether the columns or the actions show, so it never moves, least of all out
+       from under a pointer that is on it. Its margin is measured from the end of the name track, which is 92px
+       wider at rest than while the actions show (the 112px rail narrows to 20px). At rest the badge must clear the
+       type and state columns: the type column + 34px (see above). While the actions show it must clear the link's
+       8px end padding, which is 8px + 92px = 100px from the end of the wider, at-rest track. The badge takes
+       whichever is further from the end in both states, so with wide persistent type columns a gap is left before
+       the actions. The spacer, which stops the name before the badge, moves with it: at rest it sits before the
+       columns, and while the actions show only the link's 8px end padding follows it. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact {
+        --resource-row-error-offset: max(calc(var(--resource-row-meta-type-width) + 34px), 100px);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-error-link {
+        margin-inline-end: var(--resource-row-error-offset);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .error-badge-spacer {
+        margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-meta-type-width) - 34px);
+    }
+
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
-        margin-inline-end: 8px;
+        margin-inline-end: calc(var(--resource-row-error-offset) - 92px);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .error-badge-spacer {
+        margin-inline-end: calc(var(--resource-row-error-offset) - 100px);
     }
 }
 
