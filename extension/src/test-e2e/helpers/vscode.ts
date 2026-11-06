@@ -1,3 +1,5 @@
+import type { AspireExtensionE2EControlCommand } from '../../types/extensionApi';
+import { applyE2eControl } from './assertions';
 import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 import { error as webDriverError } from 'selenium-webdriver';
 
@@ -666,7 +668,9 @@ export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> 
                 return true;
             }
 
-            await dismissNotification(notifications[0]);
+            // Clicking a toast's clear action needs the toast hovered, and toasts re-layout as others
+            // arrive or expire. VS Code's own command clears every notification without the DOM.
+            await applyE2eControl({ command: { name: 'clearAllNotifications' } satisfies AspireExtensionE2EControlCommand });
             return false;
         }
         catch (error) {
@@ -678,15 +682,6 @@ export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> 
             throw error;
         }
     }, timeoutMs, 'Timed out dismissing VS Code notifications.');
-}
-
-// VS Code only displays a toast's clear action while the toast is hovered or focused, so
-// Notification.dismiss() hovers before clicking. Toasts re-layout whenever another notification
-// arrives or expires, which can move the toast out from under the pointer and hide the action
-// between its visibility check and the click. Dispatching the click does not depend on hover.
-export async function dismissNotification(notification: Notification): Promise<void> {
-    const clearAction = await notification.findElement(By.css('.codicon-notifications-clear'));
-    await VSBrowser.instance.driver.executeScript('arguments[0].click();', clearAction);
 }
 
 export async function waitForNotificationCountGreaterThan(count: number, timeoutMs = 30000): Promise<void> {

@@ -1,15 +1,15 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { error as webDriverError } from 'selenium-webdriver';
 
 interface NotificationLike {
     getMessage(): Promise<string>;
     dismiss(): Promise<void>;
-    findElement?(locator: unknown): Promise<unknown>;
 }
 
 interface NotificationExtesterStubModule {
-    NotificationActionElement: new (selector: string, onClick: () => void) => unknown;
     getNotificationWaitState(): {
         notificationPollCount: number;
         pollResults: Array<NotificationLike | false>;
@@ -35,6 +35,7 @@ const extesterStubModulePath = path.join(extensionRoot, 'out', 'test', 'fixtures
 const compiledE2eHelpersPath = path.join(extensionRoot, 'out', 'test-e2e', 'helpers');
 const compiledExtesterModulePath = path.join(compiledE2eHelpersPath, 'extester.js');
 const compiledVscodeHelpersModulePath = path.join(compiledE2eHelpersPath, 'vscode.js');
+const e2eBridgeEnvironmentVariables = ['ASPIRE_EXTENSION_E2E_CONTROL_FILE', 'ASPIRE_EXTENSION_E2E_STATE_FILE', 'ASPIRE_EXTENSION_E2E_RUN_ID'];
 
 suite('waitForNotificationMessage', () => {
     const originalExtesterModule = process.env.ASPIRE_EXTENSION_E2E_EXTESTER_MODULE;
@@ -140,24 +141,33 @@ suite('waitForNotificationMessage', () => {
         );
     });
 
-    test('dismisses notifications without depending on the pointer hovering the toast', async () => {
+    test('dismisses notifications through VS Code clear-all instead of hovering each toast', async () => {
         const { stub, vscode } = loadNotificationWaitModules();
-        const clickedSelectors: string[] = [];
         const notification: NotificationLike = {
             getMessage: async () => "Required option '--message' was not provided.",
-            // VS Code hides the clear action once the toast moves out from under the pointer.
+            // VS Code hides a toast's clear action once the toast moves out from under the pointer.
             dismiss: async () => {
                 throw new webDriverError.ElementNotInteractableError('element not interactable');
             },
-            findElement: async locator => new stub.NotificationActionElement(String(locator), () => clickedSelectors.push(String(locator))),
         };
+        const bridge = startFakeE2eBridge(commandName => {
+            if (commandName === 'clearAllNotifications') {
+                stub.setNotificationPolls([]);
+            }
+        });
 
-        stub.setNotificationPolls([[notification], []]);
+        stub.setNotificationPolls([[notification], [notification], [notification]]);
 
-        await vscode.dismissAllNotifications(5000);
+        try {
+            await vscode.dismissAllNotifications(5000);
+        }
+        finally {
+            bridge.dispose();
+        }
 
-        assert.deepStrictEqual(clickedSelectors, ['.codicon-notifications-clear']);
-        assert.strictEqual(stub.getNotificationWaitState().notificationPollCount, 2);
+        assert.deepStrictEqual(bridge.commandNames, ['clearAllNotifications']);
+        // Clearing replaced the remaining polls, so a single poll after it found no notifications.
+        assert.strictEqual(stub.getNotificationWaitState().notificationPollCount, 1);
     });
 
     test('waits for the tab to exist and for the provider to produce lenses', async () => {
@@ -205,6 +215,59 @@ function loadNotificationWaitModules(): {
 
     const vscode = require(compiledVscodeHelpersModulePath) as VscodeHelpersModule;
     return { stub, vscode };
+}
+
+/**
+ * Answers E2E control commands the way the extension host bridge does: it reads each new control
+ * revision, reports it applied in the state file and records the command name.
+ */
+function startFakeE2eBridge(onCommand: (commandName: string) => void): { commandNames: string[]; dispose(): void } {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-e2e-bridge-'));
+    const controlFile = path.join(directory, 'control.json');
+    const stateFile = path.join(directory, 'state.json');
+    const originalEnvironment = new Map(e2eBridgeEnvironmentVariables.map(name => [name, process.env[name]]));
+    const commandNames: string[] = [];
+    let lastRevision = -1;
+
+    process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE = controlFile;
+    process.env.ASPIRE_EXTENSION_E2E_STATE_FILE = stateFile;
+    delete process.env.ASPIRE_EXTENSION_E2E_RUN_ID;
+    fs.writeFileSync(stateFile, JSON.stringify({}));
+
+    const interval = setInterval(() => {
+        if (!fs.existsSync(controlFile)) {
+            return;
+        }
+
+        const payload = JSON.parse(fs.readFileSync(controlFile, 'utf8')) as { revision: number; command?: { name: string } };
+        if (payload.revision <= lastRevision) {
+            return;
+        }
+
+        lastRevision = payload.revision;
+        if (payload.command) {
+            commandNames.push(payload.command.name);
+            onCommand(payload.command.name);
+        }
+
+        fs.writeFileSync(stateFile, JSON.stringify({ control: { revision: payload.revision, status: 'applied', startedObserved: true } }));
+    }, 10);
+
+    return {
+        commandNames,
+        dispose: () => {
+            clearInterval(interval);
+            for (const [name, value] of originalEnvironment) {
+                if (value === undefined) {
+                    delete process.env[name];
+                }
+                else {
+                    process.env[name] = value;
+                }
+            }
+            fs.rmSync(directory, { recursive: true, force: true });
+        },
+    };
 }
 
 function resetLoadedNotificationModules(): void {

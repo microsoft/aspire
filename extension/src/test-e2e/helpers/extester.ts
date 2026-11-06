@@ -90,7 +90,7 @@ export interface QuickPickItem {
 
 export interface Notification {
     getMessage(): Promise<string>;
-    findElement(locator: Locator): Promise<WebElement>;
+    dismiss(): Promise<void>;
     takeAction(title: string): Promise<void>;
 }
 
