@@ -579,10 +579,14 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
         const name = link?.querySelector('.resource-row-name');
-        // Ordinary names remain quiet. Only the finite-width extreme-name fallback
-        // needs a tooltip; the native link always retains its complete accessible name.
-        if (name && name.scrollWidth > name.clientWidth) {
-            link.setAttribute('data-tooltip', link.getAttribute('aria-label'));
+        // Keep availability explanations even when the name fits. Clipped names also
+        // need their full identity; ordinary available rows remain quiet.
+        const tooltip = [
+            name && name.scrollWidth > name.clientWidth ? link.getAttribute('aria-label') : null,
+            link?.getAttribute('data-resource-unavailable-reason')
+        ].filter(Boolean).join('\n');
+        if (tooltip) {
+            link.setAttribute('data-tooltip', tooltip);
             link.setAttribute('data-tooltip-positioning', 'above');
         }
         else if (link) {

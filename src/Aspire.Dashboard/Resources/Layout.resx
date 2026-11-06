@@ -393,6 +393,42 @@
   <data name="ResourceTabUnavailable" xml:space="preserve">
     <value>Not available for this resource</value>
   </data>
+  <data name="ResourcePaneNoStructuredLogs" xml:space="preserve">
+    <value>No structured logs are currently available for this resource. Select to open its logs view.</value>
+  </data>
+  <data name="ResourcePaneNoTraces" xml:space="preserve">
+    <value>No traces are currently available for this resource. Select to open its traces view.</value>
+  </data>
+  <data name="ResourcePaneNoMetrics" xml:space="preserve">
+    <value>No metrics are currently available for this resource. Select to open its metrics view.</value>
+  </data>
+  <data name="ResourcePaneParameterNoConsoleLogs" xml:space="preserve">
+    <value>Parameters do not produce console logs. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoStructuredLogs" xml:space="preserve">
+    <value>Parameters do not produce structured logs. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoTraces" xml:space="preserve">
+    <value>Parameters do not produce traces. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoMetrics" xml:space="preserve">
+    <value>Parameters do not produce metrics. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoTerminal" xml:space="preserve">
+    <value>Parameters do not support terminal sessions. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneNoStructuredLogsLabel" xml:space="preserve">
+    <value>No logs</value>
+  </data>
+  <data name="ResourcePaneNoTracesLabel" xml:space="preserve">
+    <value>No traces</value>
+  </data>
+  <data name="ResourcePaneNoMetricsLabel" xml:space="preserve">
+    <value>No metrics</value>
+  </data>
+  <data name="ResourcePaneNotApplicableLabel" xml:space="preserve">
+    <value>Not applicable</value>
+  </data>
   <data name="ResourceTabOverview" xml:space="preserve">
     <value>Overview</value>
   </data>

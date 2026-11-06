@@ -572,6 +572,48 @@
     gap: 0;
 }
 
+.resource-row.resource-row-unavailable {
+    background: light-dark(var(--colorNeutralBackground3), color-mix(in srgb, var(--aspire-page-background) 90%, var(--aspire-shell-background)));
+}
+
+.resource-row.resource-row-unavailable:hover {
+    background: light-dark(color-mix(in srgb, var(--colorNeutralBackground3) 75%, var(--colorNeutralStroke1)), color-mix(in srgb, var(--aspire-control-background) 60%, var(--aspire-page-background)));
+}
+
+.resource-row.resource-row-unavailable:active {
+    background: light-dark(var(--colorNeutralBackground3Pressed), color-mix(in srgb, var(--aspire-page-background) 85%, var(--aspire-shell-background)));
+}
+
+.resource-row-unavailable > .resource-row-link,
+.resource-row-unavailable .resource-row-sub,
+.resource-row-unavailable .resource-row-type,
+.resource-row-unavailable .resource-row-kind-label {
+    color: var(--colorNeutralForeground3);
+}
+
+.resource-row-unavailable .resource-row-icon {
+    background: light-dark(var(--colorNeutralBackground3), var(--aspire-page-background));
+}
+
+.resource-row-availability {
+    display: inline-block;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    max-width: 65%;
+    height: 17px;
+    padding-inline: 5px;
+    overflow: hidden;
+    border: 1px solid var(--colorNeutralStrokeAccessible);
+    border-radius: 4px;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground2);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 @media (forced-colors: active) {
     .resource-row {
         --resource-row-kind-accent: CanvasText;
@@ -606,6 +648,12 @@
 
     .resource-row.selected ::deep .resource-relationship-trigger {
         color: HighlightText;
+    }
+
+    .resource-row.selected .resource-row-availability {
+        background: Highlight;
+        color: HighlightText;
+        border-color: HighlightText;
     }
 }
 
@@ -715,7 +763,7 @@
     justify-content: center;
 }
 
-.resource-row.selected .resource-row-icon {
+.resource-row.selected:not(.resource-row-unavailable) .resource-row-icon {
     background: var(--resource-brand-soft);
 }
 
@@ -819,9 +867,28 @@
     background: var(--colorSubtleBackgroundPressed);
 }
 
-.resource-select-all-toggle.on,
+.resource-select-all-toggle.on {
+    background: var(--colorBrandBackground);
+    color: var(--colorNeutralForegroundOnBrand);
+}
+
 .resource-select-all-toggle.on:hover {
-    color: var(--colorBrandForeground1);
+    background: var(--colorBrandBackgroundHover);
+    color: var(--colorNeutralForegroundOnBrand);
+}
+
+.resource-select-all-toggle.on:active {
+    background: var(--colorBrandBackgroundPressed);
+}
+
+@media (forced-colors: active) {
+    .resource-select-all-toggle.on,
+    .resource-select-all-toggle.on:hover,
+    .resource-select-all-toggle.on:active {
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText;
+    }
 }
 .resource-row-all::after {
     content: "";

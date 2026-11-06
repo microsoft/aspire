@@ -596,6 +596,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneCollapsed ? (true, collapsed) : (false, null);
         await AddTelemetryAsync("api");
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/structuredlogs");
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
@@ -1374,6 +1375,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Null(cut.Find(".resource-select-all-toggle").GetAttribute("aria-pressed"));
         Assert.Equal("All selected", cut.Find(".resource-select-all-toggle").GetAttribute("aria-description"));
         Assert.Equal("All selected", cut.Find(".resource-select-all-toggle").GetAttribute("data-tooltip"));
+        Assert.True(cut.Find(".resource-select-all-toggle").ClassList.Contains("on"));
+        Assert.Empty(cut.FindAll(".resource-row.selected"));
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 
@@ -1400,6 +1403,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("Select all", selectAll.GetAttribute("aria-label"));
         Assert.Null(selectAll.GetAttribute("aria-description"));
         Assert.Equal("Select all", selectAll.GetAttribute("data-tooltip"));
+        Assert.False(selectAll.ClassList.Contains("on"));
 
         await cut.InvokeAsync(() => selectAll.Click());
 
@@ -1416,9 +1420,48 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => selectAll.Click());
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
 
-        // Every row looks selected, since everything is. Only an explicit selection marks rows as the current ones.
-        Assert.Equal(["api", "cache"], cut.FindAll(".resource-row.selected[data-resource-name]").Select(r => r.GetAttribute("data-resource-name")));
+        Assert.True(selectAll.ClassList.Contains("on"));
+        Assert.Empty(cut.FindAll(".resource-row.selected"));
         Assert.Empty(cut.FindAll(".resource-row-link[aria-current]"));
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
+    public async Task SelectAll_HighlightsOnlyTheControlAcrossResourceKinds()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("key", resourceType: KnownResourceTypes.Parameter)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        await AddTelemetryAsync("browser");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources/api");
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => cut.Find(".resource-kind-toggle[aria-label='Telemetry sources']").Click());
+        cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll(".resource-row").Count));
+
+        await cut.InvokeAsync(() => cut.Find(".resource-select-all-toggle").Click());
+        cut.Render();
+
+        Assert.True(cut.Find(".resource-select-all-toggle").ClassList.Contains("on"));
+        Assert.Empty(cut.FindAll(".resource-row.selected"));
+        Assert.Empty(cut.FindAll(".resource-row-link[aria-current]"));
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Null(cut.Instance.GetScopeResourceNames());
+        Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+
+        await cut.InvokeAsync(() => cut.Find(".resource-row-kind-telemetry .resource-row-link").Click());
+        cut.Render();
+
+        Assert.False(cut.Find(".resource-select-all-toggle").ClassList.Contains("on"));
+        Assert.Equal(["browser"], cut.Instance.SelectedResourceNames);
+        Assert.Equal("page", cut.Find(".resource-row-kind-telemetry.selected .resource-row-link").GetAttribute("aria-current"));
+        Assert.Single(cut.FindAll(".resource-row.selected"));
     }
 
     [Theory]
@@ -2044,7 +2087,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal("/traces/resource/browser", cut.Instance.GetTabUrl(ResourceTab.Traces));
             Assert.Equal("/metrics/resource/browser?duration=15&pane=telemetry",
                 cut.Instance.AddSelectionToUrl("/metrics/resource/browser?duration=15"));
-            Assert.Null(cut.Instance.GetSelectionTelemetryKeys(null));
+            Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
         });
 
         navigation.NavigateTo(DashboardUrls.TelemetrySourcesUrl());

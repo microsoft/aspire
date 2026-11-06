@@ -27,6 +27,20 @@ Children stay under their parent. Order is stored alongside tags in the AppHost'
 and survives dashboard and AppHost restarts; new resources are appended to their sibling list.
 Persistent containers show a pin after their state and resource type.
 
+Resource rows are muted when they do not apply to the current tab or have not sent that type of
+telemetry. A visible **No logs**, **No traces**, **No metrics**, or **Not applicable** badge identifies the
+reason without relying on color. Hover or focus the row for a fuller explanation of what is unsupported
+or which telemetry is currently missing, and what selecting the resource will open. Muted rows remain selectable with the mouse
+or keyboard; opening a telemetry view without data shows its existing empty state. Availability
+updates as telemetry arrives, is cleared, or leaves the retention window, without changing the selection. If a selected resource
+sends its first telemetry after its view is opened, that view stays scoped to the selected resource.
+Trace availability includes client spans targeting a resource, even if that resource reports only
+logs or metrics rather than spans of its own.
+
+When all resources are selected, **Select all** has a filled accent background instead of
+highlighting every row. Selecting individual resources restores their row highlights and clears
+the button highlight; the all-resources scope and filters are unchanged.
+
 ## Closing detail pages
 
 Use the **Close view** (X) button at the top right of a detail page to return to its parent,
