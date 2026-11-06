@@ -29,6 +29,7 @@ $settings = @{
     ASPIRE_INIT_SOURCE_URL = 'https://msft.ghe.com/coreai/aspire-1p-init-test.git'
     ASPIRE_INIT_SOURCE_PATH = 'aspire.config.json'
     ASPIRE_INIT_SOURCE_REF = 'jamesnk/source-demo'
+    ASPIRE_INIT_SOURCE_README_URL = 'https://msft.ghe.com/coreai/aspire-1p-init-test/blob/jamesnk/source-demo/README.md'
     ASPIRE_CLI_CHANNEL = 'stable'
     ASPIRE_CLI_VERSION = $version
     ASPIRE_CLI_COMMIT = $null

@@ -1,0 +1,7 @@
+﻿ℹ️ A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.
+
+   Configuration source:  https://git.example/configuration
+          Source origin:  ASPIRE_INIT_SOURCE_URL
+
+🚨 Only use sources you trust. Content from these sources can run code on your machine.
+⬇  Fetching configuration source using Git. Git may prompt you to authenticate.

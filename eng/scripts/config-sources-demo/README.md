@@ -38,6 +38,13 @@ app in that directory rather than a nested directory. Choose the template,
 language, and app name when prompted. Accept the configuration source when
 prompted to apply the demo settings.
 
+The CLI explains configuration sources before showing the proposed source details.
+The launcher sets `ASPIRE_INIT_SOURCE_README_URL` to the configured branch's
+[README](https://msft.ghe.com/coreai/aspire-1p-init-test/blob/jamesnk/source-demo/README.md),
+so the details include a clickable link with more information. The previous
+environment-variable value is restored when the launcher finishes. Terminals
+without hyperlink support show the URL as plain text.
+
 `-CommandArguments` forwards an array of arguments to `aspire new`. In the template picker, choose
 **Search for more templates** and leave the search empty to list custom templates.
 

@@ -178,14 +178,15 @@ public partial class NewCommandLocalTemplateTests
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
         var interaction = new TestInteractionService();
+        interaction.ConfirmCallback = (prompt, _) =>
+        {
+            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            return false;
+        };
         interaction.SetupStringPromptResponse("Hello");
         var selectionCount = 0;
-        interaction.PromptForSelectionCallback = (prompt, choices, formatter, _) =>
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
         {
-            if (prompt == ConfigSourceStrings.UseSourcePrompt)
-            {
-                return ConfigSourceStrings.Decline;
-            }
             var options = choices.Cast<object>().ToArray();
             selectionCount++;
             Assert.Equal(

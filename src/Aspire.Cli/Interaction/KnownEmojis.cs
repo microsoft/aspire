@@ -33,6 +33,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji BarChart = new("bar_chart", "blue");
     public static readonly KnownEmoji CheckMarkButton = new("check_mark_button", "green");
     public static readonly KnownEmoji CrossMark = new("cross_mark", "red");
+    public static readonly KnownEmoji DownArrow = new("down_arrow", "blue");
     public static readonly KnownEmoji FileFolder = new("file_folder", "yellow");
     public static readonly KnownEmoji FloppyDisk = new("floppy_disk", "blue");
     public static readonly KnownEmoji Gear = new("gear");
