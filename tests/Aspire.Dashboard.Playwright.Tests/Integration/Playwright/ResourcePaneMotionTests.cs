@@ -46,13 +46,16 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                     observer.disconnect();
                                     const frames=[];
                                     const sample=() => {
-                                        const pane=layout.querySelector('.resource-pane'), row=pane.querySelector('.resource-row[data-resource-name]');
-                                        const b=pane.getBoundingClientRect(),r=row.getBoundingClientRect(),
+                                        const pane=layout.querySelector(':scope > .resource-pane'), row=pane?.querySelector('.resource-row[data-resource-name]');
+                                        const b=pane?.getBoundingClientRect(),r=row?.getBoundingClientRect(),
                                             content=layout.querySelector('.resource-content'),c=content.getBoundingClientRect(),
                                             workspace=layout.getBoundingClientRect();
-                                        frames.push([b.width,r.width,r.height,document.documentElement.scrollWidth,
+                                        // Resolved tracks look like "420px 1020px". The first track still
+                                        // animates after its pane is unmounted.
+                                        const trackWidth=parseFloat(getComputedStyle(layout).gridTemplateColumns);
+                                        frames.push([trackWidth,r?.width??0,r?.height??0,document.documentElement.scrollWidth,
                                             document.documentElement.clientWidth,c.width,c.left,c.right,workspace.left,
-                                            workspace.right,b.right,getComputedStyle(content).transform==='none'?0:1]);
+                                            workspace.right,b?.right??workspace.left+trackWidth,getComputedStyle(content).transform==='none'?0:1]);
                                         if(layout.getAnimations().some(a => a.playState==='running')) requestAnimationFrame(sample);
                                         else resolve(frames);
                                     };
@@ -75,8 +78,16 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                     }
                     Assert.All(frames, frame =>
                     {
-                        Assert.Equal(originalRow.Width, frame[1]);
-                        Assert.Equal(originalRow.Height, frame[2]);
+                        if (frame[1] > 0)
+                        {
+                            Assert.Equal(originalRow.Width, frame[1]);
+                            Assert.Equal(originalRow.Height, frame[2]);
+                        }
+                        else
+                        {
+                            Assert.True(collapse);
+                            Assert.Equal(0, frame[2]);
+                        }
                         Assert.True(frame[3] <= frame[4]);
                         Assert.InRange(Math.Abs(frame[7] - frame[9]), 0, .5);
                         Assert.InRange(Math.Abs(frame[6] - frame[10]), 0, .5);
@@ -87,8 +98,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                     await Assertions.Expect(toggle).ToHaveAttributeAsync("aria-expanded", collapse ? "false" : "true");
                     if (collapse)
                     {
-                        await Assertions.Expect(pane).Not.ToBeVisibleAsync();
-                        await Assertions.Expect(pane).ToHaveAttributeAsync("inert", "");
+                        await Assertions.Expect(pane).ToHaveCountAsync(0);
                         await Assertions.Expect(separator).ToHaveCountAsync(0);
                         var content = await page.Locator(".resource-content").BoundingBoxAsync();
                         var layout = await page.Locator(".resources-layout").BoundingBoxAsync();
