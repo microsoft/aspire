@@ -21,10 +21,10 @@ public sealed class TraitAnnotation : IResourceAnnotation
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
 
-        if (name == KnownResourceTraits.DashboardTag &&
+        if (name == KnownResourceTraits.Tag &&
             (value.Length > 50 || value != string.Join(' ', value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))))
         {
-            throw new ArgumentException("Dashboard tags must be at most 50 characters and use single spaces between words, without leading or trailing whitespace.", nameof(value));
+            throw new ArgumentException("Tags must be at most 50 characters and use single spaces between words, without leading or trailing whitespace.", nameof(value));
         }
         if (name == KnownResourceTraits.DashboardPosition && !int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
         {

@@ -739,7 +739,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
             [
@@ -767,7 +767,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
         Dictionary<string, ResourcePropertyViewModel> Tags(params string[] tags) => new()
         {
             [name] = new(name, Value.ForList([.. tags.Select(Value.ForString)]), false, null, 0, null, false)
@@ -1364,7 +1364,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     public void Relationships_KeepParentWaitAndReferenceMeaningInRepeatedTagMemberships()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+        var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
         var resource = ModelTestHelpers.CreateResource("catalogdb", properties: new()
         {
             [KnownProperties.Resource.ParentName] = new(KnownProperties.Resource.ParentName, Value.ForString("postgres"), false, null, 0, null, false),
