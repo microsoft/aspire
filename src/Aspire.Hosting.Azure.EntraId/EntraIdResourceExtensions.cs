@@ -1467,7 +1467,7 @@ public static class EntraIdResourceExtensions
     /// <summary>
     /// Adds redirect URIs for a resource's endpoint to a registration created by Aspire.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The registration is existing. Configure its redirect URIs manually.</exception>
+    /// <exception cref="InvalidOperationException">The registration is existing, or infrastructure generation detects that TLS is disabled for the deployed endpoint.</exception>
     /// <param name="builder">The resource builder.</param>
     /// <param name="endpoint">The endpoint that serves the callbacks.</param>
     /// <param name="callbackPaths">The callback paths on that endpoint, such as <c>/signin-oidc</c>.</param>
@@ -1477,8 +1477,8 @@ public static class EntraIdResourceExtensions
     /// <remarks>
     /// <para>
     /// In run mode the origin comes from the endpoint's finalized browser URLs, including vanity hostnames and URL
-    /// customization. When publishing or deploying, the host name comes from the resource's compute environment and
-    /// the scheme is <c>https</c>.
+    /// customization. When publishing or deploying, the origin comes from the resource's compute environment,
+    /// and the deployed endpoint must have TLS enabled.
     /// After endpoint allocation, resolution waits up to 30 seconds for finalized browser URLs. If they are not ready,
     /// the allocated origin is used with a warning. Supply explicit redirect URIs if that address differs from the browser URL.
     /// </para>
@@ -1550,9 +1550,18 @@ public static class EntraIdResourceExtensions
                     "or register the redirect URI with an explicit URL.");
             }
 
-#pragma warning disable ASPIRECOMPUTE002 // Preserve the compute environment's deferred browser-origin expression.
-            return computeEnvironment.GetEndpointPropertyExpression(endpoint.PrimaryBrowserOrigin);
+#pragma warning disable ASPIRECOMPUTE002 // Resolve deployment properties without allocating the endpoint.
+            var origin = computeEnvironment.GetEndpointPropertyExpression(endpoint.PrimaryBrowserOrigin);
+            var tlsEnabled = computeEnvironment.GetEndpointPropertyExpression(endpoint.Property(EndpointProperty.TlsEnabled));
 #pragma warning restore ASPIRECOMPUTE002
+            if (string.Equals(tlsEnabled.ValueExpression, bool.FalseString, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Endpoint '{endpoint.EndpointName}' on resource '{endpoint.Resource.Name}' cannot be used for an Entra redirect URI because TLS is disabled in compute environment '{computeEnvironment.Name}'. " +
+                    "Use an HTTPS endpoint, enable HTTPS upgrade, or supply an explicit HTTPS redirect URI.");
+            }
+
+            return origin;
         }
     }
 

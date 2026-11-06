@@ -1229,6 +1229,42 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
         await Verify(entra.Resource.GetBicepTemplateString(), "bicep");
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public void WithRedirectUris_Endpoint_PublishMode_RequiresDeployedTls(bool appService, bool upgrade, bool https)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        IResourceBuilder<IComputeEnvironmentResource> environment = appService
+            ? builder.AddAzureAppServiceEnvironment("env").WithHttpsUpgrade(upgrade)
+            : builder.AddAzureContainerAppEnvironment("env").WithHttpsUpgrade(upgrade);
+        var web = builder.AddContainer("web", "image")
+            .WithEndpoint(name: "web", scheme: https ? "https" : "http", targetPort: 8080, isExternal: true);
+        var entra = builder.AddEntraIdApplication("entra-web")
+            .WithRedirectUris(web.GetEndpoint("web"), "/signin-oidc");
+        web.WithComputeEnvironment(environment);
+
+        if (!upgrade && !https)
+        {
+            var error = Assert.Throws<InvalidOperationException>(entra.Resource.GetBicepTemplateString);
+            Assert.Equal(
+                "Endpoint 'web' on resource 'web' cannot be used for an Entra redirect URI because TLS is disabled in compute environment 'env'. " +
+                "Use an HTTPS endpoint, enable HTTPS upgrade, or supply an explicit HTTPS redirect URI.", error.Message);
+        }
+        else
+        {
+            _ = entra.Resource.GetBicepTemplateString();
+            var origin = Assert.IsType<ReferenceExpression>(entra.Resource.Parameters["redirectUri0"]);
+            Assert.Equal("https://{0}", origin.Format);
+        }
+    }
+
     [Fact]
     public async Task WithRedirectUris_Endpoint_RunMode_UsesPrimaryUrlWhenItIsADevLocalhostName()
     {
@@ -1526,6 +1562,11 @@ public class EntraIdProvisioningTests(ITestOutputHelper outputHelper)
 
         public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
         {
+            if (endpointReferenceExpression.Property is EndpointProperty.TlsEnabled)
+            {
+                return ReferenceExpression.Create($"{bool.TrueString}");
+            }
+
             Assert.Equal(EndpointProperty.PrimaryBrowserOrigin, endpointReferenceExpression.Property);
             return ReferenceExpression.Create($"https://{GetHostAddressExpression(endpointReferenceExpression.Endpoint)}");
         }
