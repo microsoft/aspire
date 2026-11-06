@@ -475,9 +475,6 @@
   <data name="ResourcePaneReorderUnavailable" xml:space="preserve">
     <value>Clear search, filters and grouping, and move resources within the same parent.</value>
   </data>
-  <data name="ResourcePaneReorderFailed" xml:space="preserve">
-    <value>Unable to save the resource order. Try again.</value>
-  </data>
   <data name="ResourcePaneMovedBefore" xml:space="preserve">
     <value>{0} moved before {1}.</value>
     <comment>{0} is the moved resource name; {1} is the target resource name.</comment>
@@ -488,9 +485,6 @@
   </data>
   <data name="ResourcePaneGroupReorderUnavailable" xml:space="preserve">
     <value>Clear search and filters, and try reordering groups again.</value>
-  </data>
-  <data name="ResourcePaneGroupReorderFailed" xml:space="preserve">
-    <value>Unable to save the group order. Try again.</value>
   </data>
   <data name="NavMenuToggleExpand" xml:space="preserve">
     <value>Expand navigation labels</value>
