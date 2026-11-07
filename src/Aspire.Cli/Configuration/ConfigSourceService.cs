@@ -611,7 +611,7 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
-            interaction.DisplayMessage(KnownEmojis.DownArrow,
+            interaction.DisplayMessage(KnownEmojis.InboxTray,
                 allowInteractiveInput && hostEnvironment.SupportsInteractiveInput
                     ? ConfigSourceStrings.FetchingSourceWithAuthentication
                     : ConfigSourceStrings.FetchingSource,

@@ -1716,7 +1716,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             if (message == fetchMessage)
             {
-                Assert.Equal(KnownEmojis.DownArrow, emoji);
+                Assert.Equal(KnownEmojis.InboxTray, emoji);
                 Assert.Equal(ConsoleOutput.Error, consoleOverride);
                 Assert.Empty(git.ResolutionModes);
                 Assert.Empty(git.FetchModes);
