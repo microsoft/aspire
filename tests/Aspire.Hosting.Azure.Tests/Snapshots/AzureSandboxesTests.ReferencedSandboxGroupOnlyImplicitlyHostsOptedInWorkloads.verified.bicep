@@ -64,4 +64,4 @@ output resourceGroup string = resourceGroup().name
 
 output connectionString string = 'Endpoint=https://management.${sandboxes.location}.azuredevcompute.io;SubscriptionId=${subscription().subscriptionId};ResourceGroup=${resourceGroup().name};SandboxGroupName=${sandboxes.name}'
 
-output imagePullIdentityResourceId string = sandboxes_mi.id
+output imagePullIdentityId string = sandboxes_mi.id
