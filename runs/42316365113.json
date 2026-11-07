@@ -1,0 +1,63 @@
+{
+  "run_id": 42316365113,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42316365113",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-07T01:20:52Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21545,
+    "title": "Warn on unsupported AspireCliInvocationMode values",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "davidfowl/fix-19714-invalid-invocation-mode",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21545",
+    "merged_at": "2026-11-07T00:08:19Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "09f1abab775574a20bc5ac31e03675a255c13a86",
+    "failed_sha": "7b48978d53dd834dd6a7ed6ee4d3097dae34f613",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "399e3e6f8984c75dc2778e1329f46958f78f9ad7",
+        "message": "Fix Radius container image exports for TypeScript (#21830) ## Description Restores Radius's `withContainerImage(image)` method on `DotnetProjectResource` in generated TypeScript AppHosts. Overlapping legacy and generic exports previously caused a collision on `CSharpAppResource` that removed the generic capability for every target, including modern .NET projects. Export the generic overload once using the existing `Aspire.Hosting.Radius/withContainerImage` capability ID, and exclude the legacy o",
+        "html_url": "https://github.com/microsoft/aspire/commit/399e3e6f8984c75dc2778e1329f46958f78f9ad7",
+        "pull_request": {
+          "number": 21830,
+          "title": "Fix Radius container image exports for TypeScript",
+          "url": "https://github.com/microsoft/aspire/pull/21830",
+          "merged_at": "2026-11-06T23:20:54Z"
+        }
+      },
+      {
+        "sha": "7b48978d53dd834dd6a7ed6ee4d3097dae34f613",
+        "message": "Warn on unsupported AspireCliInvocationMode values (#21545) ## Description `AspireCliInvocationMode` only recognized `Dnx` and `DnxPinned`; every other value (for example `DnxPinnedd` or `DefinitelyInvalid`) silently fell through to `Path` resolution, so typos never surfaced. **Root cause:** `_ResolveAspireCliInvocation` passed the raw value to `ResolveAspireCliInvocation`, which treats anything other than `Dnx`/`DnxPinned` as `Path`. The only validation target (`_ValidateAspireCliDnxInvocationM",
+        "html_url": "https://github.com/microsoft/aspire/commit/7b48978d53dd834dd6a7ed6ee4d3097dae34f613",
+        "pull_request": {
+          "number": 21545,
+          "title": "Warn on unsupported AspireCliInvocationMode values",
+          "url": "https://github.com/microsoft/aspire/pull/21545",
+          "merged_at": "2026-11-07T00:08:19Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 128235456167,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42316365113/job/128235456167",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no test failures observed.",
+      "failed_steps": []
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests"
+  ]
+}
