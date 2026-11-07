@@ -197,7 +197,7 @@ the graph root does not produce the repository project graph.
 
 Evaluating `eng/Build.props`'s `ProjectToBuild` items would also make selection
 depend on build flags and the current RID. Flags such as `SkipNativeBuild`,
-`BuildBundleDepsOnly`, and `SkipTestProjects` differ across CI jobs.
+`SkipManagedBuild`, and `SkipTestProjects` differ across CI jobs.
 
 That project set is also a net loss for test selection:
 
