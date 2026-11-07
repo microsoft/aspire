@@ -1,0 +1,69 @@
+{
+  "run_id": 42331406399,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42331406399",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-07T03:25:27Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21530,
+    "title": "Use TimeProvider for SealedSecret sync-wait budget to fix SealedSecretApplyStepTests flake",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/fix-19662-sealedsecret-fake-time",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21530",
+    "merged_at": "2026-11-07T02:53:15Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "9b8d7c09d72146ead03236e898673c359f6f8afe",
+    "failed_sha": "c37dfbed834193aaefb9fd88b5472176dd224c0a",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "c37dfbed834193aaefb9fd88b5472176dd224c0a",
+        "message": "Use TimeProvider for SealedSecret sync-wait budget to fix SealedSecretApplyStepTests flake (#21530) ## Description Fixes #19662 `SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut` is flaky on CI. ### Root cause `WaitForSealedSecretSyncedAsync` and `InvokeProbeWithRemainingBudgetAsync` measured their budget against the wall clock (`DateTimeOffset.UtcNow` and `CancelAfter`). #19555 raised the test budget from 10ms to 250ms, but the test stil",
+        "html_url": "https://github.com/microsoft/aspire/commit/c37dfbed834193aaefb9fd88b5472176dd224c0a",
+        "pull_request": {
+          "number": 21530,
+          "title": "Use TimeProvider for SealedSecret sync-wait budget to fix SealedSecretApplyStepTests flake",
+          "url": "https://github.com/microsoft/aspire/pull/21530",
+          "merged_at": "2026-11-07T02:53:15Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 128279058176,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42331406399/job/128279058176",
+      "classification": "flaky-test",
+      "reason": "Single timing-based timeout in a process-tree-kill test; the rest of the Aspire.Cli.Tests suite passed.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.DotNetSdkInstallerTests.CheckAsync_WhenCanceled_KillsDotNetProcessTree",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/DotNetSdkInstallerTests.cs:68 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 180\n   at Aspire.Cli.Tests.DotNetSdkInstallerTests.CheckAsync_WhenCanceled_KillsDotNetProcessTree() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/DotNetSdkInstallerTests.cs:line 67\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "30s TimeoutException waiting for dotnet process tree kill; unrelated to the merged SealedSecret change and timing/load dependent.",
+      "job_id": 128279058176,
+      "execution_id": "0935dcf6-dd8a-4d53-bb95-7a5f5e84f611",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "dotnetsdkinstaller-canceled-kills-process-tree-timeout"
+  ]
+}

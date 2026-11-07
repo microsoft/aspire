@@ -1,0 +1,29 @@
+{
+  "id": "dotnetsdkinstaller-canceled-kills-process-tree-timeout",
+  "type": "flaky-test",
+  "title": "DotNetSdkInstallerTests.CheckAsync_WhenCanceled_KillsDotNetProcessTree times out after 30s",
+  "error_pattern": "System.TimeoutException : The operation at tests/Aspire.Cli.Tests/DotNetSdkInstallerTests.cs:68 timed out after reaching the limit of 30000ms.",
+  "occurrences": [
+    {
+      "run_id": 42331406399,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/42331406399",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "observed_at": "2026-11-07T03:25:27Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Cli.Tests.DotNetSdkInstallerTests.CheckAsync_WhenCanceled_KillsDotNetProcessTree",
+          "job_id": 128279058176,
+          "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+          "error": "System.TimeoutException : The operation at /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/DotNetSdkInstallerTests.cs:68 timed out after reaching the limit of 30000ms.",
+          "stack_trace": "   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 180\n   at Aspire.Cli.Tests.DotNetSdkInstallerTests.CheckAsync_WhenCanceled_KillsDotNetProcessTree() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/DotNetSdkInstallerTests.cs:line 67\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "0935dcf6-dd8a-4d53-bb95-7a5f5e84f611"
+        }
+      ]
+    }
+  ]
+}
