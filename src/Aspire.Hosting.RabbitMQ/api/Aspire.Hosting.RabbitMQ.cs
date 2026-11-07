@@ -19,10 +19,10 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withManagementPlugin dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithManagementPlugin(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, int? port) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withManagementPlugin dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithManagementPlugin(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder) { throw null; }
     }
 }
@@ -45,6 +45,8 @@ namespace Aspire.Hosting.ApplicationModel
         public EndpointReferenceExpression Port { get { throw null; } }
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
 

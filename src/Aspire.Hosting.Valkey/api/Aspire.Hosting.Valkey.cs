@@ -24,6 +24,9 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> builder, System.TimeSpan? interval = null, long keysChangedThreshold = 1) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> WithRepl(this ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> builder) { throw null; }
     }
 }
 
@@ -45,6 +48,8 @@ namespace Aspire.Hosting.ApplicationModel
         public EndpointReferenceExpression Port { get { throw null; } }
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
 
