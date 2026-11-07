@@ -300,6 +300,8 @@ namespace Projects%3B
       <_AspireCliSetupExecutable Condition="'$(AspireCliBundlePath)' == '' and '$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and Exists('$(_AspireResolvedDnxHostPath)')">$(_AspireResolvedDnxHostPath)</_AspireCliSetupExecutable>
       <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' != ''">"$(_AspireCliSetupPath)" setup</_AspireCliSetupDiagnosticCommand>
       <_AspireCliSetupDiagnosticCommand Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == ''">"$(_AspireResolvedDnxHostPath)" $(_AspireResolvedDnxHostArgumentsPrefix)--yes $(_AspireCliDnxPackageReference) -- setup --install-path "$(_AspireCliSetupHome)"</_AspireCliSetupDiagnosticCommand>
+      <!-- Pinned setup only validates its layout when ASPIRE_LAYOUT_PATH points at it, so tell users to set it when rerunning the command. -->
+      <_AspireCliSetupDiagnosticEnvironment Condition="'$(_AspireCliSetupExecutable)' != '' and '$(_AspireCliSetupPath)' == '' and '$(_AspireCliBundlePinnedVersion)' != ''"> with the ASPIRE_LAYOUT_PATH environment variable set to '$(_AspireCliSetupHome)'</_AspireCliSetupDiagnosticEnvironment>
     </PropertyGroup>
 
     <!-- Argument values are metadata so paths containing MSBuild item separators remain one argument. -->
@@ -338,7 +340,7 @@ namespace Projects%3B
     <!-- Script installs normally extract during installation. This fallback also covers older
          installers and DNX-only machines, and runs during real builds so IDE and command-line
          builds stamp concrete DCP and dashboard assembly metadata. -->
-    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupDiagnosticCommand)' to prepare it." Importance="Low"
+    <Message Text="Aspire CLI bundle was not found. Running '$(_AspireCliSetupDiagnosticCommand)'$(_AspireCliSetupDiagnosticEnvironment) to prepare it." Importance="Low"
             Condition="'$(_AspireCliSetupExecutable)' != '' and ('$(DcpDir)' == '' or ('$(AspireDashboardDir)' == '' and '$(AspireDashboardPath)' == ''))" />
     <RunAspireCliCommand FileName="$(_AspireCliSetupExecutable)"
                          Arguments="@(_AspireCliSetupArgument)"
@@ -449,11 +451,11 @@ namespace Projects%3B
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' != ''">
         $(_AspireCliBundleNotFoundError)
-        Automatic Aspire CLI bundle setup failed: $(_AspireCliSetupFailureMessage) Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
+        Automatic Aspire CLI bundle setup failed: $(_AspireCliSetupFailureMessage) Run '$(_AspireCliSetupDiagnosticCommand)'$(_AspireCliSetupDiagnosticEnvironment) to diagnose the failure.
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupFailureMessage)' == '' and '$(_AspireCliSetupExitCode)' != '' and '$(_AspireCliSetupExitCode)' != '0'">
         $(_AspireCliBundleNotFoundError)
-        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)' to diagnose the failure.
+        Automatic Aspire CLI bundle setup failed with exit code $(_AspireCliSetupExitCode). Run '$(_AspireCliSetupDiagnosticCommand)'$(_AspireCliSetupDiagnosticEnvironment) to diagnose the failure.
       </_AspireCliBundleNotFoundError>
       <_AspireCliBundleNotFoundError Condition="'$(_AspireCliSetupOutput)' != ''">
         $(_AspireCliBundleNotFoundError)

@@ -1161,6 +1161,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Contains(errorLines, line => line.Contains("Acquiring Aspire CLI; package source: 'test-feed'.", StringComparison.Ordinal));
         Assert.Contains(errorLines, line => line.Contains("error: Unable to load 'test-feed'; response: 401 (Unauthorized).", StringComparison.Ordinal));
         Assert.Equal(includePathCli ? 2 : 1, errorLines.Count(line => line.Contains("Output from '", StringComparison.Ordinal)));
+
+        // Pinned setup validates its layout only when ASPIRE_LAYOUT_PATH points at it, so the rerun guidance must say so.
+        var layoutPathGuidance = $"with the ASPIRE_LAYOUT_PATH environment variable set to '{Path.Combine(workspace.Path, "aspire-home", "dnx", "aspire.cli")}";
+        Assert.Equal(invocationMode == "DnxPinned", errorLines.Any(line => line.Contains(layoutPathGuidance, StringComparison.Ordinal)));
     }
 
     [Theory]
