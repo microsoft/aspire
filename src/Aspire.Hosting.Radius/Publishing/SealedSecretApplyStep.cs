@@ -124,11 +124,13 @@ internal sealed class SealedSecretApplyStep
         // fresh one. The apply and verify kubectl calls are wrapped with the same remaining-budget
         // helper the poll loop already uses, which cancels the linked token (killing the child
         // process) when the budget is exhausted.
-        var deadline = DateTimeOffset.UtcNow + store.MaterializationTimeout;
+        var timeProvider = TimeProvider.System;
+        var deadline = timeProvider.GetUtcNow() + store.MaterializationTimeout;
 
         var appliedGeneration = await InvokeProbeWithRemainingBudgetAsync(
             ct => ApplyManifestAsync(validated.Content, applyNamespace, kubeContext, store.Name, metadata.Namespace, metadata.Name, manifestPath, logger, ct),
-            RemainingBudget(deadline),
+            RemainingBudget(deadline, timeProvider),
+            timeProvider,
             cancellationToken,
             () => CreateOperationTimeoutException(store.Name, metadata.Namespace, metadata.Name, "apply", store.MaterializationTimeout))
             .ConfigureAwait(false);
@@ -137,6 +139,7 @@ internal sealed class SealedSecretApplyStep
             store.Name, metadata.Namespace, metadata.Name, appliedGeneration, deadline, store.MaterializationTimeout, s_pollInterval,
             ct => GetSealedSecretStatusAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
             ct => SecretExistsAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
+            timeProvider,
             cancellationToken).ConfigureAwait(false);
 
         // The SealedSecret controller can report Synced=True and create a Secret that is missing keys
@@ -147,7 +150,8 @@ internal sealed class SealedSecretApplyStep
         {
             var dataKeys = await InvokeProbeWithRemainingBudgetAsync(
                 ct => GetSecretDataKeysAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
-                RemainingBudget(deadline),
+                RemainingBudget(deadline, timeProvider),
+                timeProvider,
                 cancellationToken,
                 () => CreateOperationTimeoutException(store.Name, metadata.Namespace, metadata.Name, "verify", store.MaterializationTimeout))
                 .ConfigureAwait(false);
@@ -268,13 +272,15 @@ internal sealed class SealedSecretApplyStep
         TimeSpan interval,
         Func<CancellationToken, Task<SealedSecretStatusSnapshot>> getStatus,
         Func<CancellationToken, Task<bool>> secretExists,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         while (true)
         {
             var status = await InvokeProbeWithRemainingBudgetAsync(
                 getStatus,
-                RemainingBudget(deadline),
+                RemainingBudget(deadline, timeProvider),
+                timeProvider,
                 cancellationToken,
                 () => CreateSealedSecretSyncTimeoutException(storeName, ns, name, appliedGeneration, timeout))
                 .ConfigureAwait(false);
@@ -283,7 +289,8 @@ internal sealed class SealedSecretApplyStep
             {
                 if (await InvokeProbeWithRemainingBudgetAsync(
                     secretExists,
-                    RemainingBudget(deadline),
+                    RemainingBudget(deadline, timeProvider),
+                    timeProvider,
                     cancellationToken,
                     () => CreateSealedSecretSyncTimeoutException(storeName, ns, name, appliedGeneration, timeout))
                     .ConfigureAwait(false))
@@ -298,7 +305,7 @@ internal sealed class SealedSecretApplyStep
                     $"failed to sync generation {appliedGeneration}: {decision.Message}. Diagnostic: ASPIRERADIUS058.");
             }
 
-            var remaining = RemainingBudget(deadline);
+            var remaining = RemainingBudget(deadline, timeProvider);
             if (remaining <= TimeSpan.Zero)
             {
                 throw CreateSealedSecretSyncTimeoutException(storeName, ns, name, appliedGeneration, timeout);
@@ -306,7 +313,7 @@ internal sealed class SealedSecretApplyStep
 
             try
             {
-                await Task.Delay(remaining < interval ? remaining : interval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(remaining < interval ? remaining : interval, timeProvider, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
@@ -318,6 +325,7 @@ internal sealed class SealedSecretApplyStep
     internal static async Task<T> InvokeProbeWithRemainingBudgetAsync<T>(
         Func<CancellationToken, Task<T>> probe,
         TimeSpan remaining,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken,
         Func<InvalidOperationException> createTimeoutException)
     {
@@ -326,20 +334,20 @@ internal sealed class SealedSecretApplyStep
             throw createTimeoutException();
         }
 
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        linkedCts.CancelAfter(remaining);
+        using var timeoutCts = new CancellationTokenSource(remaining, timeProvider);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
         try
         {
             return await probe(linkedCts.Token).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && linkedCts.IsCancellationRequested)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
             throw createTimeoutException();
         }
     }
 
-    private static TimeSpan RemainingBudget(DateTimeOffset deadline) => deadline - DateTimeOffset.UtcNow;
+    private static TimeSpan RemainingBudget(DateTimeOffset deadline, TimeProvider timeProvider) => deadline - timeProvider.GetUtcNow();
 
     private static InvalidOperationException CreateSealedSecretSyncTimeoutException(
         string storeName,
