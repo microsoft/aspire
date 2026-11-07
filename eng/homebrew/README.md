@@ -50,6 +50,7 @@ the initial/upstream cask change must include the generation stanza, not just a 
 | `validate-cask-artifact.sh` | Runs shared cask syntax, style, audit, and install validation used by GitHub Actions and Azure DevOps |
 | `dogfood.sh` | Installs a generated cask locally, optionally using downloaded native archive artifacts |
 | `publish-cask.py` | Validates, reconciles and proposes stable cask updates; dry run by default |
+| `capture-dotnet.py` | Forwards SDK execution and preserves bounded failure diagnostics outside the validator's temporary HOME |
 
 ### Pipeline templates
 
@@ -82,6 +83,13 @@ drift and substantive validation failures are not publishable. Full execution
 on one architecture does not establish install/notarization on the other.
 The tap validator runs from its own checkout so released-CLI smoke tests use
 the agent's SDK, not the Aspire source checkout's development `global.json`.
+SDK commands still run through the same installed `dotnet` executable with
+unchanged arguments and exit status. Failed SDK commands retain their last
+1 MiB of combined stdout/stderr in `dotnet-failures/` under the diagnostic
+output directory, surviving the pinned validator's temporary-HOME cleanup.
+Known credential environment values and credential-bearing feed URLs are
+redacted in these retained files. Diagnostic-write failures are reported without
+replacing the original SDK failure; successful commands create no failure log.
 
 `--publish` explicitly opts into writes after validation and requires
 `HOMEBREW_TAP_WRITE_TOKEN`; the independent `HOMEBREW_READ_TOKEN` is only for

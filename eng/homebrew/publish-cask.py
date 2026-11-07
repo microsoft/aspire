@@ -16,6 +16,8 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -324,9 +326,9 @@ def publish_cask(candidate, version, client, validate, publish, writer):
     return {**result, "outcome": "submitted", "pr_url": pull["html_url"]}
 
 
-def run(command, log=None, cwd=None):
+def run(command, log=None, cwd=None, env=None):
     try:
-        process = subprocess.run(command, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
+        process = subprocess.run(command, cwd=cwd, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
     except subprocess.TimeoutExpired as error:
         # subprocess retains partial output as bytes even with text=True.
         # Keep the failing validator's diagnostics before its temporary state is removed.
@@ -342,6 +344,19 @@ def run(command, log=None, cwd=None):
     if process.returncode:
         raise PublicationError(f"{Path(command[0]).name} failed (exit {process.returncode}); see validation logs")
     return process.stdout.strip()
+
+
+def dotnet_diagnostic_environment(work, output):
+    executable = shutil.which("dotnet")
+    if executable is None:
+        raise PublicationError("An installed .NET SDK is required for the released CLI smoke test")
+    wrapper = work / "bin" / "dotnet"
+    wrapper.parent.mkdir()
+    command = [sys.executable, str(Path(__file__).with_name("capture-dotnet.py").resolve()),
+               str(Path(executable).resolve()), str((output / "dotnet-failures").resolve())]
+    wrapper.write_text("#!/bin/sh\nexec " + shlex.join(command) + ' "$@"\n')
+    wrapper.chmod(0o700)
+    return {**os.environ, "PATH": str(wrapper.parent) + os.pathsep + os.environ.get("PATH", os.defpath)}
 
 
 def verify_source_artifact(data, metadata, build_id, source_commit, version):
@@ -432,8 +447,10 @@ def validate_release(candidate, version, client, tap_checkout, output, source_co
              str(metadata_file), str(template_file)], output / "consistency.log")
         # The released CLI smoke test must not inherit Aspire's global.json:
         # it pins a development SDK that disposable release validators may lack.
+        # The pinned validator removes temporary HOME, including CLI logs.
+        # Capture SDK failures outside it without changing checks or exit codes.
         run(["bash", str(tap / "scripts/validate-cask.sh"), "--cask-file", str(candidate)],
-            output / "validation.log", cwd=tap)
+            output / "validation.log", cwd=tap, env=dotnet_diagnostic_environment(work, output))
 
 
 def main(argv=None):
