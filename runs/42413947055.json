@@ -1,0 +1,90 @@
+{
+  "run_id": 42413947055,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42413947055",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-07T22:03:24Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21831,
+    "title": "Show repository and ref in template picker group headings",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-template-source-group-provenance",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21831",
+    "merged_at": "2026-11-07T21:02:44Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "9b8d7c09d72146ead03236e898673c359f6f8afe",
+    "failed_sha": "db62c3556439a1139d969b394869585c657d7df8",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "c37dfbed834193aaefb9fd88b5472176dd224c0a",
+        "message": "Use TimeProvider for SealedSecret sync-wait budget to fix SealedSecretApplyStepTests flake (#21530) ## Description Fixes #19662 `SealedSecretApplyStepTests.WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut` is flaky on CI. ### Root cause `WaitForSealedSecretSyncedAsync` and `InvokeProbeWithRemainingBudgetAsync` measured their budget against the wall clock (`DateTimeOffset.UtcNow` and `CancelAfter`). #19555 raised the test budget from 10ms to 250ms, but the test stil",
+        "html_url": "https://github.com/microsoft/aspire/commit/c37dfbed834193aaefb9fd88b5472176dd224c0a",
+        "pull_request": {
+          "number": 21530,
+          "title": "Use TimeProvider for SealedSecret sync-wait budget to fix SealedSecretApplyStepTests flake",
+          "url": "https://github.com/microsoft/aspire/pull/21530",
+          "merged_at": "2026-11-07T02:53:15Z"
+        }
+      },
+      {
+        "sha": "db27327c3c2a90dd4a58494a75a891715f427260",
+        "message": "Restore single-line compact rows in the dashboard resource list (#21880) ## Description The resource list's **Compact** density lost its one-line rows in #21727. That PR removed the compact branch of the row markup and switched `.density-compact .resource-row-text` to `flex-direction: column`, so compact rows became the same two-line rows as Comfortable (\"● Running · 1 minute ago\"), only shorter. They then also picked up the \"No logs\" / \"Not applicable\" badges added in #21819. #21727 also droppe",
+        "html_url": "https://github.com/microsoft/aspire/commit/db27327c3c2a90dd4a58494a75a891715f427260",
+        "pull_request": {
+          "number": 21880,
+          "title": "Restore single-line compact rows in the dashboard resource list",
+          "url": "https://github.com/microsoft/aspire/pull/21880",
+          "merged_at": "2026-11-07T21:02:28Z"
+        }
+      },
+      {
+        "sha": "db62c3556439a1139d969b394869585c657d7df8",
+        "message": "Show repository and ref in template picker group headings (#21831) ## Description Configured template sources currently appear in the `aspire new` picker under a friendly name or alias alone, making it difficult to tell which repository and ref will supply a template. Show that provenance directly in each source heading while retaining the friendly name. Git headings now use `Name (repository @ ref)`. An omitted ref is explicitly displayed as `default branch`, rather than guessing a branch name ",
+        "html_url": "https://github.com/microsoft/aspire/commit/db62c3556439a1139d969b394869585c657d7df8",
+        "pull_request": {
+          "number": 21831,
+          "title": "Show repository and ref in template picker group headings",
+          "url": "https://github.com/microsoft/aspire/pull/21831",
+          "merged_at": "2026-11-07T21:02:44Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 128538664400,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42413947055/job/128538664400",
+      "classification": "flaky-test",
+      "reason": "Intermittent endpoint-missing assertion in Windows tree-actions E2E, recurring across prior runs.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:326:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same assertion has failed intermittently on multiple prior main runs with passing runs in between.",
+      "job_id": 128538664400,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing"
+  ]
+}
