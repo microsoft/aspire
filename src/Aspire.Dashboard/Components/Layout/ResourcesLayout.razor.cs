@@ -36,6 +36,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 {
     private const string FilterButtonId = "resourcePaneFilterButton";
     private const string GroupingButtonId = "resourcePaneGroupingButton";
+    private const string ResourcePickerButtonId = "resourcePanePickerButton";
     internal const int MinimumPaneWidthPx = 420;
     internal const int MaximumPaneWidthPx = 560;
     internal const int DefaultPaneWidthPx = MinimumPaneWidthPx;
@@ -74,6 +75,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? _focusPaneSelectionReveal;
     private AspireMenu? _resourceContextMenu;
     private IReadOnlyList<MenuButtonItem> _resourceContextMenuItems = [];
+    private bool _isResourcePickerOpen;
+    private string? _resourcePickerSelectionLocation;
+    private bool _wasResourcePickerOpen;
+    private bool _focusResourcePicker;
+    private FluentTextInput? _resourcePaneSearch;
     private bool _showTelemetryOnlyResources;
     // Which kinds of items the pane lists, and so what "all resources" covers. Telemetry sources use
     // _showTelemetryOnlyResources, which replaced the filter menu's telemetry-only option.
@@ -297,6 +303,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ViewPreferences.Changed += OnViewPreferencesChanged;
         OrderStore.Changed += OnOrderChanged;
 
+        // Start reading stored tags and order now, so the reads overlap the other storage reads and the connection.
+        var settingsLoaded = Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync());
+
         var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         if (showHiddenResources.Success)
         {
@@ -364,6 +373,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
+        // Wait for stored tags and order before showing resources, so the list doesn't first appear in another order.
+        await settingsLoaded;
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
         foreach (var resource in snapshot)
         {
@@ -430,6 +441,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     protected override async Task OnParametersSetAsync()
     {
+        if (!ViewportInformation.IsDesktop)
+        {
+            _isResourcePickerOpen = false;
+        }
         if (!ViewportInformation.IsDesktop && (_isPaneFullCanvas || _isPaneSelectionReveal))
         {
             _isPaneFullCanvas = false;
@@ -482,6 +497,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             SetResourceListVisible(true);
         }
         _isDrawerOpen = !ViewportInformation.IsDesktop && showResourceList;
+        // Modifier selection changes the URL without dismissing the picker. Other navigation still closes it.
+        _isResourcePickerOpen = _isResourcePickerOpen && string.Equals(location, _resourcePickerSelectionLocation, StringComparison.Ordinal);
+        _resourcePickerSelectionLocation = null;
         if (previousTab != CurrentTab || !previousSelection.SequenceEqual(_selectedResourceNames, StringComparers.ResourceName))
         {
             // Reused pages must replace subscriptions and terminal state before an
@@ -500,9 +518,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        var focusResourcePicker = _focusResourcePicker && _isResourcePickerOpen;
+        _focusResourcePicker = false;
+        var pickerChanged = _isResourcePickerOpen != _wasResourcePickerOpen;
         var showResizer = ViewportInformation.IsDesktop && !_isPaneCollapsed && !_isPaneFullCanvas;
         var registrationChanged = showResizer != _isResizerRegistered || !_isOrderingRegistered;
-        if (_usesCommandSelectionModifier is not null && !registrationChanged && _isTabOverflowRegistered &&
+        if (_usesCommandSelectionModifier is not null && !pickerChanged && !focusResourcePicker &&
+            !registrationChanged && _isTabOverflowRegistered &&
             _startPaneSelectionReveal is null && _focusPaneSelectionReveal is null)
         {
             return;
@@ -517,6 +539,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 _usesCommandSelectionModifier = await _jsModule.InvokeAsync<bool>("usesCommandSelectionModifier");
             }
             _selfRef ??= DotNetObjectReference.Create(this);
+            if (pickerChanged)
+            {
+                await _jsModule.InvokeVoidAsync("setResourcePickerOpen", _layoutElement, _selfRef, _isResourcePickerOpen);
+                _wasResourcePickerOpen = _isResourcePickerOpen;
+            }
+            if (focusResourcePicker && _resourcePaneSearch is { } search)
+            {
+                await search.Element.FocusAsync();
+            }
             if (!_isTabOverflowRegistered)
             {
                 _isTabOverflowRegistered = true;
@@ -1495,7 +1526,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after))
         {
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderFailed)]);
+            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because a resource has no position.", resourceName, targetName);
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
             return false;
         }
 
@@ -1523,7 +1555,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         if (!OrderStore.TryMoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after))
         {
-            await ToastService.ShowErrorToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderFailed)]);
+            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because a group has no position.", groupKey, targetKey);
+            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
             return false;
         }
 
@@ -1555,6 +1588,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task TogglePaneCollapsedAsync()
     {
+        _isResourcePickerOpen = false;
         CancelPaneSelectionReveal();
         _animatedPaneNavigation = null;
         _animatePaneTransition = true;
@@ -1567,6 +1601,24 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private void OpenDrawer() => _isDrawerOpen = true;
 
     private void CloseDrawer() => _isDrawerOpen = false;
+
+    private void ToggleResourcePicker()
+    {
+        _isResourcePickerOpen = !_isResourcePickerOpen;
+        _focusResourcePicker = _isResourcePickerOpen;
+    }
+
+    [JSInvokable]
+    public Task OnResourcePickerClosedAsync() => InvokeAsync(() =>
+    {
+        if (_isDisposed || !_isResourcePickerOpen)
+        {
+            return;
+        }
+
+        _isResourcePickerOpen = false;
+        StateHasChanged();
+    });
 
     private void UpdatePaneMenuItems()
     {
@@ -2290,6 +2342,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private async Task OnRowClickAsync(MouseEventArgs e, string resourceName)
     {
+        _isResourcePickerOpen &= e.ShiftKey || e.CtrlKey || e.MetaKey;
         // The selection can also change by navigating, for example with a link to a resource. Ranges then start at
         // the last selected resource.
         var anchor = _selectionAnchor is not null && IsSelected(_selectionAnchor) ? _selectionAnchor : _selectedResourceNames is [.., var last] ? last : null;
@@ -2341,11 +2394,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await SetStoredSelectionAsync(selection);
         }
 
-        var url = GetSelectionUrl(selection);
-        _animatedPaneNavigation = _isPaneFullCanvas && selection.Count == 1
-            ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri
-            : null;
-        NavigationManager.NavigateTo(url);
+        NavigateToSelection(selection);
     }
 
     // A single selected resource is shown by its row alone, so a one-resource group doesn't duplicate the highlight.
@@ -2356,6 +2405,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task OnResourceGroupClick(MouseEventArgs e, List<string> groupResourceNames)
     {
+        _isResourcePickerOpen &= e.ShiftKey || e.CtrlKey || e.MetaKey;
         if (groupResourceNames.Count == 0)
         {
             return;
@@ -2389,11 +2439,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _selectionAnchor = selection is [.., var last] ? last : null;
-        NavigationManager.NavigateTo(GetSelectionUrl(selection));
+        NavigateToSelection(selection);
     }
 
     private async Task OnAllResourcesClickAsync()
     {
+        _isResourcePickerOpen = false;
         var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
         var path = NavigationManager.ToBaseRelativePath(uri.GetLeftPart(UriPartial.Path));
         var query = HttpUtility.ParseQueryString(uri.Query);
@@ -2444,7 +2495,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         _selectionAnchor = null;
         await SetStoredSelectionAsync([]);
-        NavigationManager.NavigateTo(GetSelectionUrl([]));
+        NavigateToSelection([]);
+    }
+
+    private void NavigateToSelection(IReadOnlyList<string> resourceNames)
+    {
+        var url = GetSelectionUrl(resourceNames);
+        _animatedPaneNavigation = _isPaneFullCanvas && resourceNames.Count == 1
+            ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri
+            : null;
+        _resourcePickerSelectionLocation = _isResourcePickerOpen ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri : null;
+        NavigationManager.NavigateTo(url);
     }
 
     /// <summary>
@@ -2684,6 +2745,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 await module.InvokeVoidAsync("unregisterResourceOrdering", _layoutElement);
                 await module.InvokeVoidAsync("unregisterResourceContextMenu", _layoutElement);
                 await module.InvokeVoidAsync("unregisterPaneActivityVisibility", _layoutElement);
+                await module.InvokeVoidAsync("unregisterResourcePicker", _layoutElement);
                 await module.InvokeVoidAsync("cancelPaneSelectionReveal", _layoutElement);
                 await module.InvokeVoidAsync("unregisterTabOverflow", _tabOverflowRegistrationId);
             }

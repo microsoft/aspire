@@ -54,14 +54,17 @@
        ZipMacFiles would wrap a ZIP named .app again, hiding its executable from
        the signing service. Preserve the bundle directory in the ZIP.
        https://github.com/dotnet/arcade/blob/main/src/Microsoft.DotNet.SignTool/src/SignTool.cs -->
-  <Target Name="PrepareTraySigning">
+  <Target Name="CreateTrayAppSigningArchive">
     <Error Condition="!Exists('$(TrayAppPath)/Contents/MacOS/aspire-tray')" Text="Publish the tray app before preparing signing input." />
     <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(TraySigningArchive)'))" />
     <Delete Files="$(TraySigningArchive)" />
     <Exec Command="ditto -c -k --sequesterRsrc --keepParent &quot;$(TrayAppPath)&quot; &quot;$(TraySigningArchive)&quot;" />
   </Target>
 
-  <Target Name="RestoreSignedTray">
+  <!-- Replace the prepared app with the returned signed archive, restore executable
+       permissions, staple Apple's notarization ticket, and validate the final app.
+       Do not republish afterward: that would overwrite the signed contents. -->
+  <Target Name="ExtractAndValidateSignedTrayApp">
     <Error Condition="!Exists('$(TraySigningArchive)')" Text="Signed tray app archive is missing: $(TraySigningArchive)" />
     <RemoveDir Directories="$(TrayAppPath)" />
     <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(TrayAppPath)'))" />

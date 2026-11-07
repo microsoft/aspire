@@ -96,7 +96,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var result = await RunDotNetAsync(
             ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-t:_ShowBanner",
              $"-p:Configuration={configuration}", $"-p:ContinuousIntegrationBuild={ci}",
-             $"-p:ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
+             $"-p:_ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
 
         Assert.Equal(succeeds, result.ExitCode == 0);
         if (!succeeds)
@@ -275,23 +275,23 @@ public sealed class Hex1bNativePublishingTests : IDisposable
              "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
              typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
              "--output", layout, "--artifacts", artifacts, "--rid", rid, "--configuration", "Release"];
-        // Layout assembly now requires the native tray payload for desktop RIDs, even
+        // Layout assembly requires the native tray payload for desktop RIDs, even
         // when the scenario focuses on the managed bundle's PTY sidecars.
         if (rid.StartsWith("win-", StringComparison.Ordinal))
         {
             var tray = Path.Combine(_workspace.Path, "windows-tray");
             WindowsTrayTestPayload.Create(tray, rid);
-            arguments.AddRange(["--tray-windows", tray]);
+            arguments.AddRange(["--tray-dir", tray]);
         }
         else if (rid.StartsWith("osx-", StringComparison.Ordinal))
         {
-            arguments.AddRange(["--tray-app", MacTrayTestPayload.Create(_workspace.Path)]);
+            arguments.AddRange(["--tray-dir", MacTrayTestPayload.Create(_workspace.Path)]);
         }
         else if (rid is "linux-x64" or "linux-arm64")
         {
             var tray = Path.Combine(_workspace.Path, "linux-tray");
             LinuxTrayTestPayload.Create(tray, rid);
-            arguments.AddRange(["--tray-linux", tray]);
+            arguments.AddRange(["--tray-dir", tray]);
         }
 
         var result = await RunDotNetAsync(

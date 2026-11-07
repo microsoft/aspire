@@ -206,12 +206,12 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
                 $"Install Go {MinimumGoVersion} or later, or put the {requiredToolchain} toolchain on PATH, then rerun 'aspire doctor'.");
         }
 
-        // With the default GOTOOLCHAIN=auto, `go run` downloads the toolchain that go.mod requires.
+        // With GOTOOLCHAIN=auto, Go checks PATH before downloading the required toolchain.
         return CreateVersionResult(
             appHostFile,
             version,
             EnvironmentCheckStatus.Warning,
-            $"Go {version} is installed. Go downloads the Go {MinimumGoVersion} toolchain the first time the AppHost runs, which needs network access.",
+            $"Go {version} is installed. Go uses a newer toolchain from PATH or downloads the Go {MinimumGoVersion} toolchain the first time the AppHost runs. Downloading requires network access.",
             $"Install Go {MinimumGoVersion} or later to avoid the download, then rerun 'aspire doctor'.");
     }
 

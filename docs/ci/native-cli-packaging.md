@@ -19,6 +19,22 @@ The GitHub Actions test workflow builds native CLI archives per OS/RID and uploa
 
 These PR artifacts are useful for validation and dogfooding, but they are not the final official signed release artifacts.
 
+## Shared bundle validation
+
+Validate packaging and signing against the outputs of the producing build,
+not replacement projects or private MSBuild targets in `Infrastructure.Tests`.
+The native jobs verify packaged Dashboard and TerminalHost behavior and compare
+the CLI archive with its tool and npm packages. Official builds additionally
+exercise real signing and notarization; unsigned GitHub artifacts cannot
+establish those contracts.
+
+The deployment workflow consumes a different build mode: it invokes
+`eng/Bundle.proj` with `BuildDistributionPackages` omitted, producing a
+standalone CLI rather than distribution packages. Validate that path with a
+Linux build and inspect the resulting CLI and extracted bundle. A successful
+distribution-mode build alone does not establish this contract, and validating
+the build does not require deploying to Azure.
+
 ## Internal signed builds
 
 The internal Azure DevOps `build_sign_native` stage is responsible for producing signed native CLI artifacts. Windows and macOS native jobs run with code signing enabled so each OS/arch-specific native executable can be signed or notarized on the appropriate platform.
@@ -57,11 +73,26 @@ Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, ex
 
 ## Native AOT Dashboard package signing
 
-All seven Dashboard SDK NuGet packages follow the CLI package-signing path: `assemble` stages them together in `Shipping` before its Windows signing pass. There is no second Dashboard staging pass after signing. When NuGet signing is enabled, this ensures Linux packages receive NuGet signatures even though Linux native jobs skip ELF signing.
+The official Assemble job stages the three Linux Dashboard SDK NuGet packages
+before its Windows signing pass because Linux native jobs skip signing.
+Windows/macOS Dashboard packages are staged afterward so their signed producer
+outputs are preserved.
 
-NuGet signing follows `PostBuildSign` in `eng/pipelines/common-variables.yml`: release-branch and manually queued official builds set it to `false`, enabling Arcade's default package-signing inputs. Automatic main builds set it to `true`, excluding NuGet packages from in-build signing; native executable and npm signing are selected separately.
+NuGet signing follows `PostBuildSign` in
+[`common-variables.yml`](../../eng/pipelines/common-variables.yml):
+release-branch and manually queued official builds set it to `false`, enabling
+Arcade's default package-signing inputs. Automatic main builds set it to `true`,
+excluding NuGet packages from in-build signing; native executable and npm
+signing are selected separately.
 
-Assembly verifies every staged NuGet release package's signature before publishing build artifacts only when real signing is enabled and `PostBuildSign` is not `true`. This matches package-signing selection rather than assuming that a real-signed build signs every artifact. The unsigned `*.symbols.nupkg` files also staged in `Shipping` are excluded because they are symbol-server inputs, not NuGet release packages.
+Assembly checks that all seven Dashboard packages reached `Shipping`. When real
+signing is enabled and `PostBuildSign` is not `true`, it also verifies every final
+NuGet release package's signature before publishing, including Dashboard, CLI,
+and managed packages. This matches package-signing selection
+rather than assuming that a real-signed build signs every artifact. The unsigned
+`*.symbols.nupkg` files are excluded because they are symbol-server inputs, not
+NuGet release packages. See the Assemble job in
+[`azure-pipelines.yml`](../../eng/pipelines/azure-pipelines.yml).
 
 ## Nix flake packaging
 

@@ -670,6 +670,31 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         Assert.Contains("Cannot set nested manifest field 'spec.replicas' because 'spec' already has a scalar value.", exception.Message);
     }
 
+    [Theory]
+    [MemberData(nameof(InvalidManifestFieldValues))]
+    public void KubernetesManifestResourceWithFieldRejectsInvalidValues(object value)
+    {
+        var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");
+        manifest.WithField("spec.replicas", 3);
+
+        Assert.Throws<ArgumentException>(() => manifest.WithField("spec", value));
+
+        var spec = Assert.IsType<Dictionary<string, object?>>(Assert.Single(manifest.Fields).Value);
+        Assert.Equal(3, Assert.Single(spec).Value);
+    }
+
+    public static TheoryData<object> InvalidManifestFieldValues => new()
+    {
+        new object(),
+        double.NaN,
+        double.PositiveInfinity,
+        new Dictionary<int, object> { [1] = "invalid-key" },
+        new Dictionary<string, object> { ["$handle"] = "resource", ["$type"] = "Resource" },
+        new Dictionary<string, object> { ["nested"] = new object[] { new Dictionary<string, object> { ["$handle"] = "resource", ["$type"] = "Resource" } } },
+        new Dictionary<string, object> { ["nested"] = new object[] { new object() } },
+        new object[] { new Dictionary<string, object> { ["nested"] = double.NegativeInfinity } }
+    };
+
     [Fact]
     public async Task PublishAsync_HandlesSpecialResourceName()
     {

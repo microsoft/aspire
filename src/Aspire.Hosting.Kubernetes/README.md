@@ -47,6 +47,26 @@ Concrete route hostnames also match wildcard HTTPS listener scopes. Ingress wild
 Hostless routes, wildcard hosts, and deferred hostname expressions still require an explicit origin input; internal service DNS and controller-assigned addresses are not assumed to be browser origins.
 Different endpoint identities retain separate inputs even when their readable names collide.
 
+### Custom manifests in polyglot AppHosts
+
+Use `addManifest` inside a Kubernetes service customization to add custom resources to the generated Helm chart. `withField` accepts JSON-compatible primitives, objects, and arrays, including arrays of objects:
+
+```typescript
+await api.publishAsKubernetesService(async (service) => {
+    const policy = await service.addManifest("cilium.io/v2", "CiliumNetworkPolicy", "api-netpol");
+    await policy.withField("spec.endpointSelector.matchLabels", {
+        "app.kubernetes.io/component": "api"
+    });
+    await policy.withField("spec.ingress", [{
+        fromEndpoints: [{
+            matchLabels: { "app.kubernetes.io/component": "frontend" }
+        }]
+    }]);
+});
+```
+
+Paths are dot-separated, so pass keys containing dots or slashes inside an object at the parent path, as shown above. Each call replaces the value at that path; it does not merge an existing subtree. Non-JSON objects such as resource handles are not supported as field values, including inside objects and arrays. Use the dedicated namespace, label, and annotation methods for manifest metadata. In C# AppHosts, use `AdditionalResources` with a `BaseKubernetesResource` subclass for typed custom resources.
+
 ### Container registries
 
 Assign a registry to a project or Dockerfile-backed resource to include its registry-qualified image name in the published Helm chart:
