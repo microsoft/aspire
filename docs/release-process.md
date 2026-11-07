@@ -52,6 +52,11 @@ publishing secret groups, GitHub dispatches or MicroBuild publish authorization.
 `HomebrewTestOnly=true` with `DryRun=false` fails inside that contained graph;
 it cannot fall through to a live release.
 
+Azure requires the ordinary repository and source-build resource declarations
+to remain static. Naming those read-only resources does not run their templates
+or download artifacts; test-only mode adds its plain 1ES template resource through
+the selected extends template.
+
 The Linux job exercises the production publisher against synchronized fixtures
 and a loopback HTTP server. Its real CLI emits the Azure DevOps skip warning
 directly into task stdout. The disposable macOS job validates the pinned tap's

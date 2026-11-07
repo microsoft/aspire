@@ -156,23 +156,19 @@ variables:
       value: dotnet-aspire
 
 resources:
+  # Azure does not support conditional repository/pipeline declarations. These
+  # resources only name read-only inputs; test-only mode does not extend the
+  # MicroBuild template or download the source build's artifacts.
   repositories:
-    - ${{ if parameters.HomebrewTestOnly }}:
-        - repository: 1ESPipelineTemplates
-          type: git
-          name: 1ESPipelineTemplates/1ESPipelineTemplates
-          ref: refs/tags/release
-    - ${{ else }}:
-        - repository: MicroBuildTemplate
-          type: git
-          name: 1ESPipelineTemplates/MicroBuildTemplate
-          ref: refs/tags/release
+    - repository: MicroBuildTemplate
+      type: git
+      name: 1ESPipelineTemplates/MicroBuildTemplate
+      ref: refs/tags/release
   pipelines:
-    - ${{ if not(parameters.HomebrewTestOnly) }}:
-        - pipeline: aspire-build
-          source: microsoft-aspire  # Name of the main build pipeline
-          project: internal      # AzDO project name
-          trigger: none          # Manual trigger only - no automatic releases
+    - pipeline: aspire-build
+      source: microsoft-aspire  # Name of the main build pipeline
+      project: internal      # AzDO project name
+      trigger: none          # Manual trigger only - no automatic releases
 
 extends:
   # Test-only mode selects a different template before any release graph or
