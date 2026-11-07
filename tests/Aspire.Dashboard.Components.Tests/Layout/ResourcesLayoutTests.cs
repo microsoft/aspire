@@ -456,14 +456,16 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.ToggleResourceList(cut);
 
         var row = cut.Find("[data-resource-name='api']");
-        // The URLs column is the resources grid's: the URL opens in a new tab, and the tcp address isn't a link. The
-        // internal and inactive URLs aren't listed.
+        // The URLs column is the resources grid's: the URL opens in a new tab, and the tcp address isn't a link but takes
+        // focus for its tooltip. Addresses are masked. The internal and inactive URLs aren't listed.
         var urls = row.QuerySelector(".resource-row-endpoints .url-container")!;
         var link = Assert.Single(urls.QuerySelectorAll("a"));
         Assert.Equal(address, link.GetAttribute("href"));
         Assert.Equal("_blank", link.GetAttribute("target"));
         Assert.Equal("Friendly API", link.TextContent);
-        Assert.Contains(urls.QuerySelectorAll("span"), span => span.TextContent == tcpAddress);
+        Assert.Equal(DashboardUIHelpers.MaskUrlForDisplay(address), link.GetAttribute("data-tooltip"));
+        var tcp = Assert.Single(urls.QuerySelectorAll("span[tabindex='0']"));
+        Assert.Equal(DashboardUIHelpers.MaskUrlForDisplay(tcpAddress), tcp.TextContent);
         var openEndpoint = row.QuerySelector("a.resource-row-primary-endpoint")!;
         Assert.Equal(address, openEndpoint.GetAttribute("href"));
         Assert.Equal("_blank", openEndpoint.GetAttribute("target"));

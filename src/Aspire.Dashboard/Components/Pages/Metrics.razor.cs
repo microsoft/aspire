@@ -376,15 +376,13 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             : null;
     }
 
-    // Pinning applies to the resources of the current selection, every resource when all of them are selected. Pins
-    // are kept by resource name (see MetricPinStore), so the replicas of a selected resource share them. Without the
-    // resource list, the selection is the resource picked on the page.
-    private IReadOnlyList<string> GetPinResourceNames()
-    {
-        IEnumerable<ResourceKey> keys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames)
-            ?? (PageViewModel.SelectedResource.Id is { ReplicaSetName: not null } id ? [id.GetResourceKey()] : []);
-        return [.. keys.Select(key => key.Name).Distinct(StringComparers.ResourceName)];
-    }
+    // Pinning applies to the resources of the current selection, every resource when all of them are selected,
+    // including those that haven't sent telemetry yet. Pins are kept by resource name (see MetricPinStore), so the
+    // replicas of a selected resource share them. Without the resource list, the selection is the resource picked on
+    // the page.
+    private IReadOnlyList<string> GetPinResourceNames() =>
+        ResourcesLayout?.GetSelectionPinResourceNames(SelectedResourceNames)
+            ?? (PageViewModel.SelectedResource.Id is { ReplicaSetName: { } replicaSetName } ? [replicaSetName] : []);
 
     private string GetInstrumentResourceLabel(OtlpInstrumentSummary instrument) =>
         OtlpHelpers.GetResourceName(instrument.ResourceView.Resource, _resources);

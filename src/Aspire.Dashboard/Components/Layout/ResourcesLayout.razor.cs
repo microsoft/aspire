@@ -2120,6 +2120,49 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return keys;
     }
 
+    /// <summary>
+    /// Gets the names the given resources report their telemetry under, or the current selection's when none are given:
+    /// what metric pins are kept by (see <see cref="MetricPinStore"/>). Unlike <see cref="GetSelectionTelemetryKeys"/>,
+    /// it includes resources that haven't sent telemetry yet, so a pin made now applies to them once they do. A
+    /// resource's replicas report its name, its display name in the app model.
+    /// </summary>
+    internal IReadOnlyList<string> GetSelectionPinResourceNames(IReadOnlyCollection<string>? resourceNames)
+    {
+        if (resourceNames is null || resourceNames.Count == 0)
+        {
+            resourceNames = _selectedResourceNames;
+        }
+
+        IEnumerable<string> names;
+        if (resourceNames.Count > 0)
+        {
+            names = resourceNames.Select(name =>
+                ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource)
+                    ? GetPinResourceName(resource)
+                    : _telemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName))?.Resource.ResourceKey.Name)
+                .OfType<string>();
+        }
+        else if (IsTelemetryPane)
+        {
+            names = _telemetryOnlyResources.Select(r => r.Resource.ResourceKey.Name);
+        }
+        else
+        {
+            // All resources: the app's resources, and the telemetry sources while the pane lists them. Parameters don't
+            // send telemetry.
+            names = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetPinResourceName);
+            if (_showTelemetryOnlyResources)
+            {
+                names = names.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey.Name));
+            }
+        }
+
+        return [.. names.Distinct(StringComparers.ResourceName)];
+
+        // The name the resource's telemetry has, or will have: its display name, which replicas share.
+        string GetPinResourceName(ResourceViewModel resource) => GetTelemetryResource(resource)?.ResourceKey.Name ?? resource.DisplayName;
+    }
+
     internal IReadOnlyList<ResourceKey> GetPaneTelemetryKeys()
     {
         if (IsTelemetryPane)

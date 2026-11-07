@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading.Channels;
 using System.Web;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Controls;
@@ -18,6 +19,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
+using Aspire.Tests.Shared.DashboardModel;
 using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
@@ -425,6 +427,62 @@ public partial class MetricsTests : DashboardTestContext
 
         IEnumerable<string?> GetPinStates() =>
             cut.FindComponents<MetricPinButton>().Select(button => button.Find("fluent-button").GetAttribute("aria-pressed"));
+    }
+
+    [Fact]
+    public async Task PinButton_PinsForSelectedResourcesThatHaveNotSentTelemetryYet()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        // App resources are named after their telemetry: service.name "api" and instance "TestId" is "api-TestId".
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api-TestId", displayName: "api"),
+                ModelTestHelpers.CreateResource("worker-TestId", displayName: "worker")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddRequestsAsync("api");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.AddResourceSelection(DashboardUrls.MetricsUrl(), ["api", "worker"]));
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+            builder.Add(layout => layout.Body, bodyBuilder =>
+            {
+                bodyBuilder.OpenComponent<Metrics>(0);
+                bodyBuilder.CloseComponent();
+            });
+        });
+        var store = Services.GetRequiredService<MetricPinStore>();
+
+        // Only api has the instrument so far, but pinning it pins it for worker too, which is selected.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<MetricPinButton>()));
+        cut.FindComponent<MetricPinButton>().Find("fluent-button").Click();
+        cut.WaitForAssertion(() => Assert.Equal(
+            [new MetricPin("api", "test-meter", "requests"), new MetricPin("worker", "test-meter", "requests")], store.GetPins()));
+
+        // So when worker reports it, it's already pinned there.
+        await AddRequestsAsync("worker");
+        var worker = Assert.Single(telemetryRepository.GetResourcesByName("worker"));
+        Assert.True(store.IsPinned(Assert.Single(telemetryRepository.GetInstrumentSummaries(worker.ResourceKey))));
+
+        Task AddRequestsAsync(string serviceName) => telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: serviceName),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { CreateSumMetric(metricName: "requests", startTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }
+        });
     }
 
     [Fact]
