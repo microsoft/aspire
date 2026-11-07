@@ -36,6 +36,68 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     : PlaywrightTestsBase<ResourcePaneResponsiveTests.MetadataResourcesFixture>(fixture)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CollapsedPicker_ControlsRemainReachableAtPopupWidth(bool savedWidth)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneCollapsed}', 'true')");
+            if (savedWidth)
+            {
+                await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneWidth}', '560')");
+            }
+            await page.GotoAsync("/resources/cache?pane=tags");
+            var picker = page.Locator("#resourcePanePickerButton");
+            await picker.ClickAsync();
+            var popup = page.Locator(".resource-picker-popover:popover-open");
+            var selectAll = popup.Locator(".resource-select-all-toggle");
+            await Assertions.Expect(selectAll).ToBeInViewportAsync(new() { Ratio = 1 });
+            await Assertions.Expect(popup.Locator(".resource-row[data-resource-name='cache'] .resource-row-actions").First)
+                .ToBeInViewportAsync(new() { Ratio = 1 });
+            await selectAll.ClickAsync();
+            await Assertions.Expect(picker).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/resources(?:\?.*)?$"));
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Activity_ResumesAfterAnimatedExpansion(bool remountPane)
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.SeedActivityAsync();
+            await page.SetViewportSizeAsync(2000, 1000);
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.NoPreference });
+            await page.GotoAsync("/resources/cache?pane=tags");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='cache']").First).ToBeVisibleAsync();
+            if (remountPane)
+            {
+                var toggle = page.Locator(".resource-header-row .resource-pane-toggle-button");
+                await toggle.ClickAsync();
+                await Assertions.Expect(page.Locator(".resources-layout > .resource-pane")).ToHaveCountAsync(0);
+                var picker = page.Locator("#resourcePanePickerButton");
+                await picker.ClickAsync();
+                await Assertions.Expect(page.Locator(".resource-picker-popover .resource-pane")).ToBeVisibleAsync();
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(picker).ToHaveAttributeAsync("aria-expanded", "false");
+                await toggle.ClickAsync();
+                await Assertions.Expect(page.Locator(".resources-layout > .resource-pane")).ToBeVisibleAsync();
+            }
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='api'] .resource-row-insight-requests").First)
+                .ToHaveTextAsync("20 incoming");
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".resource-row-insight")).ToHaveCountAsync(0);
+        });
+    }
+
+    [Theory]
     [InlineData(390, false)]
     [InlineData(390, true)]
     [InlineData(768, false)]
@@ -2186,7 +2248,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         private static ResourceViewModel Create(string name, string type, KnownResourceState state, HealthStatus? health,
             DateTime? startTime, ImmutableArray<UrlViewModel> urls, string[] tags)
         {
-            var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+            var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
             var properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty.Add(tagKey,
                 new(tagKey, Value.ForList([.. tags.Select(Value.ForString)]), false, null, 0, null, false));
             if (type != KnownResourceTypes.Parameter)
