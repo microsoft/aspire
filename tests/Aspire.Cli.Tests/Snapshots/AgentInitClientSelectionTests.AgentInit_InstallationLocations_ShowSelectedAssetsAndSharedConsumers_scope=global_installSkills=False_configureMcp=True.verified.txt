@@ -4,7 +4,7 @@
     Claude Code,
     OpenCode
   ],
-  Locations:
-Installation locations:
-  MCP: ~/.copilot/mcp-config.json
+  Results: [
+    Configure Aspire MCP for GitHub Copilot at ~/.copilot/mcp-config.json
+  ]
 }
