@@ -20,7 +20,8 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Managed"
+  TEST_SOURCE_SHA: "63c361dd3b0b32d55ab7c2276a660a8fd02dd127"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +29,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "windows-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "80"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -47,6 +48,7 @@ jobs:
     name: Generate matrix
     if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       is_cli_e2e: ${{ steps.detect_cli_e2e.outputs.is_cli_e2e }}
@@ -148,6 +150,7 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      RECEIPT_INDEX: ${{ matrix.index }}
 
     steps:
       - name: Setup vars (Linux/macOS)
@@ -166,6 +169,24 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_SOURCE_SHA }}
+
+      - name: Retain before-build source receipt
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $bundle = "$env:GITHUB_WORKSPACE/all-results"
+          New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+          # Operator code belongs to the workflow ref, not the tested checkout.
+          git --no-pager fetch --no-tags --depth=1 origin $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw "Cannot fetch operator source." }
+          $archive = Join-Path $env:RUNNER_TEMP "pr-21433-operator.zip"
+          git --no-pager archive --format=zip "--output=$archive" $env:GITHUB_SHA .github/validation/pr-21433-source-receipt.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Cannot read operator source." }
+          Expand-Archive -LiteralPath $archive -DestinationPath "$env:RUNNER_TEMP/pr-21433-operator"
+          $script = "$env:RUNNER_TEMP/pr-21433-operator/.github/validation/pr-21433-source-receipt.ps1"
+          & $script -Stage before-build -OutputPath "$bundle/before-build.json" -Index $env:RECEIPT_INDEX
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -250,9 +271,21 @@ jobs:
         run: >
           ${{ env.BUILD_SCRIPT }}
           -restore -ci -build
+          -configuration Debug
           -projects ${{ env.TEST_PROJECT_PATH }}
           /p:InstallBrowsersForPlaywright=false
-          /p:RunQuarantinedTests=true
+          /p:RunQuarantinedTests=false
+
+      - name: Retain after-build source and SDK receipts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          & "$env:RUNNER_TEMP/pr-21433-operator/.github/validation/pr-21433-source-receipt.ps1" -Stage after-build `
+            -OutputPath "$env:GITHUB_WORKSPACE/all-results/after-build.json" -Index $env:RECEIPT_INDEX
+          & $env:DOTNET_SCRIPT --info *> "$env:GITHUB_WORKSPACE/all-results/dotnet-info.txt"
+          if ($LASTEXITCODE -ne 0) { throw "Cannot retain dotnet information." }
+          & $env:DOTNET_SCRIPT build-server shutdown
+          if ($LASTEXITCODE -ne 0) { throw "Cannot stop build servers before tests." }
 
       - name: Run test iterations (Linux/macOS)
         if: runner.os != 'Windows'
@@ -331,26 +364,33 @@ jobs:
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Skip default quarantine/outerloop exclusion filters so the target test can run
           SkipDefaultTestFilters: true
+          UseSharedCompilation: false
         run: |
           $pass = 0
           $fail = 0
           $iterations = [int]"${{ env.ITERATIONS_PER_RUNNER }}"
+          $heartbeatProcess = Start-Process -FilePath $env:DOTNET_SCRIPT `
+            -ArgumentList "$env:GITHUB_WORKSPACE\tools\scripts\Heartbeat.cs 60" `
+            -NoNewWindow -PassThru
 
+          try {
           for ($i = 1; $i -le $iterations; $i++) {
             Write-Host "::group::Iteration $i/$iterations"
 
             # Cleanup between iterations
             Remove-Item -Recurse -Force "${{ github.workspace }}/testresults" -ErrorAction SilentlyContinue
-            Get-Process | Where-Object { $_.ProcessName -match '^dcp' } | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
 
             # Run test (capture output for zero-test detection)
             $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
             & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
+              /p:ContinuousIntegrationBuild=true `
+              /p:TrxFileNamePrefix="Managed" `
               --no-restore `
               --no-build `
+              --no-launch-profile `
               -- `
-              --timeout 10m `
+              --report-trx `
               --results-directory "${{ github.workspace }}/testresults" `
               ${{ env.TEST_FILTER }} *> $iterOutput
             $result = $LASTEXITCODE
@@ -364,7 +404,13 @@ jobs:
                 $result = 8
               }
             }
-            Remove-Item $iterOutput -ErrorAction SilentlyContinue
+            Set-Content -Path "${{ github.workspace }}/all-results/test-exit-code.txt" -Value $result
+            Copy-Item $iterOutput "${{ github.workspace }}/all-results/test-output.log" -ErrorAction Stop
+            $dest = "${{ github.workspace }}/all-results/iteration-$i"
+            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+            if (Test-Path "${{ github.workspace }}/testresults") {
+              Copy-Item -Recurse "${{ github.workspace }}/testresults/*" $dest -ErrorAction Stop
+            }
 
             if ($result -eq 0) {
               Write-Host "✅ Iteration ${i}: PASS"
@@ -372,12 +418,15 @@ jobs:
             } else {
               Write-Host "❌ Iteration ${i}: FAIL (exit $result)"
               $fail++
-              $dest = "${{ github.workspace }}/all-results/failure-$i"
-              New-Item -ItemType Directory -Path $dest -Force | Out-Null
-              Copy-Item -Recurse "${{ github.workspace }}/testresults/*" $dest -ErrorAction SilentlyContinue
             }
 
             Write-Host "::endgroup::"
+          }
+          }
+          finally {
+            if ($heartbeatProcess -and -not $heartbeatProcess.HasExited) {
+              Stop-Process -Id $heartbeatProcess.Id -Force -ErrorAction Stop
+            }
           }
 
           Write-Host ""
@@ -389,17 +438,19 @@ jobs:
 
           if ($fail -gt 0) { exit 1 }
 
-      - name: Upload failure logs
-        if: failure()
+      - name: Upload original validation evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
+          name: evidence-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
-          if-no-files-found: ignore
+          if-no-files-found: error
+          retention-days: 30
 
   results:
     if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     name: Reproduce Results
     needs: [reproduce]
     permissions: {}
