@@ -40,6 +40,9 @@ namespace Aspire.Hosting
         [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithPhpMyAdmin<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<MySql.PhpMyAdminContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.MySqlServerResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> WithRepl(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder) { throw null; }
     }
 }
 
@@ -58,6 +61,8 @@ namespace Aspire.Hosting.ApplicationModel
         public ReferenceExpression JdbcConnectionString { get { throw null; } }
 
         public MySqlServerResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ReferenceExpression UriExpression { get { throw null; } }
 
@@ -83,6 +88,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
@@ -94,5 +101,9 @@ namespace Aspire.Hosting.MySql
     public sealed partial class PhpMyAdminContainerResource : ApplicationModel.ContainerResource
     {
         public PhpMyAdminContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

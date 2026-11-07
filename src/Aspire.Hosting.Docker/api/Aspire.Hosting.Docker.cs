@@ -40,13 +40,13 @@ namespace Aspire.Hosting
 
     public static partial class DockerComposeServiceExtensions
     {
-        [AspireExportIgnore(Reason = "IManifestExpressionProvider parameters are not ATS-compatible. Use the parameter-builder overload in polyglot app hosts.")]
+        [AspireExportIgnore(Reason = "IManifestExpressionProvider parameters are not ATS-compatible. Use the parameter-builder overload in polyglot AppHosts.")]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.IManifestExpressionProvider manifestExpressionProvider, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
         [AspireExport]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
-        [AspireExportIgnore(Reason = "Prefer the builder or IManifestExpressionProvider overloads in polyglot app hosts to avoid duplicate asEnvironmentPlaceholder projections on ParameterResource.")]
+        [AspireExportIgnore(Reason = "Prefer the builder or IManifestExpressionProvider overloads in polyglot AppHosts to avoid duplicate asEnvironmentPlaceholder projections on ParameterResource.")]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.ParameterResource parameter, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
         [AspireExport]
@@ -82,16 +82,20 @@ namespace Aspire.Hosting.Docker
         public ApplicationModel.EndpointReference OtlpGrpcEndpoint { get { throw null; } }
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true, ExposeMethods = true)]
-    public partial class DockerComposeEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
+    public partial class DockerComposeEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, ApplicationModel.IComputeEnvironmentWithVolumeMounts
     {
         public DockerComposeEnvironmentResource(string name) : base(default!) { }
 
         public bool DashboardEnabled { get { throw null; } set { } }
 
         public string? DefaultNetworkName { get { throw null; } set { } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
@@ -110,6 +114,8 @@ namespace Aspire.Hosting.Docker
         public DockerComposeServiceResource(string name, ApplicationModel.IResource resource, DockerComposeEnvironmentResource composeEnvironmentResource) : base(default!) { }
 
         public DockerComposeEnvironmentResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }
 
@@ -639,7 +645,7 @@ namespace Aspire.Hosting.Docker.Resources.ServiceNodes.Swarm
         public string? FailureAction { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "max_failure_ratio")]
-        public string? MaxFailureRatio { get { throw null; } set { } }
+        public double? MaxFailureRatio { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "monitor")]
         public string? Monitor { get { throw null; } set { } }

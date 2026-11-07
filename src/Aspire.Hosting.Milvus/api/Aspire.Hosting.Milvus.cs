@@ -48,6 +48,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public Milvus.MilvusServerResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 }
@@ -57,6 +59,10 @@ namespace Aspire.Hosting.Milvus
     public partial class AttuResource : ApplicationModel.ContainerResource
     {
         public AttuResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true)]
@@ -75,6 +81,8 @@ namespace Aspire.Hosting.Milvus
         public ApplicationModel.EndpointReferenceExpression Port { get { throw null; } }
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression Token { get { throw null; } }
 

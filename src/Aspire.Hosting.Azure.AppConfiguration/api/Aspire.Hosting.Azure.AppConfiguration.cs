@@ -38,6 +38,8 @@ namespace Aspire.Hosting.Azure
         public AzureAppConfigurationEmulatorResource(AzureAppConfigurationResource innerResource) : base(default!, default) { }
 
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public partial class AzureAppConfigurationResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEndpoints, IAzurePrivateEndpointTarget
@@ -53,6 +55,8 @@ namespace Aspire.Hosting.Azure
         public bool IsEmulator { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
 
