@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release stabilization version property change; not user-facing",
+  "mergedAt": "2026-11-06T22:14:33Z",
+  "number": 21876,
+  "runDate": "2026-11-07T00:10:00Z",
+  "status": "excluded",
+  "title": "Stabilize builds ahead of 17.0 release"
+}
