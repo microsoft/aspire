@@ -23,6 +23,7 @@ resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'web'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -37,7 +38,6 @@ resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
         }
       ]
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

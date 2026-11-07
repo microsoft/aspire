@@ -15,6 +15,7 @@ resource druid 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'druid'
   location: location
   properties: {
+    environmentId: my_ace_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -23,7 +24,6 @@ resource druid 'Microsoft.App/containerApps@2025-07-01' = {
         transport: 'http'
       }
     }
-    environmentId: my_ace_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

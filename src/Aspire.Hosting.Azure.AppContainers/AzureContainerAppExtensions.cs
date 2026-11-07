@@ -397,7 +397,8 @@ public static class AzureContainerAppExtensions
 
             infra.Add(laWorkspace);
 
-            var containerAppEnvironment = new ContainerAppManagedEnvironment(appEnvResource.GetBicepIdentifier())
+            // Keep the existing deployment API when updating the shared SDK for sandbox support.
+            var containerAppEnvironment = new ContainerAppManagedEnvironment(appEnvResource.GetBicepIdentifier(), "2025-07-01")
             {
                 AppLogsConfiguration = new()
                 {
@@ -507,15 +508,18 @@ public static class AzureContainerAppExtensions
                     var keysExpr = storageVolume.GetKeys()[0].Compile();
                     var keyValue = new MemberExpression(keysExpr, "value");
 
-                    var containerAppStorage = new ContainerAppManagedEnvironmentStorage(managedStorageName)
+                    var containerAppStorage = new ContainerAppManagedEnvironmentStorage(managedStorageName, "2025-07-01")
                     {
                         Parent = containerAppEnvironment,
-                        ManagedEnvironmentStorageAzureFile = new()
+                        Properties = new()
                         {
-                            ShareName = share.Name,
-                            AccountName = storageVolume.Name,
-                            AccountKey = keyValue,
-                            AccessMode = ContainerAppAccessMode.ReadWrite
+                            AzureFile = new()
+                            {
+                                ShareName = share.Name,
+                                AccountName = storageVolume.Name,
+                                AccountKey = keyValue,
+                                AccessMode = ContainerAppAccessMode.ReadWrite
+                            }
                         }
                     };
 
@@ -1244,11 +1248,13 @@ public static class AzureContainerAppExtensions
         // limits:
         // https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.ContainerApp.EnvNaming/
         //
-        // Azure.Provisioning.AppContainers does not override GetResourceNameRequirements for
-        // ContainerAppManagedEnvironment, so it inherits ProvisionableResource's conservative default of
-        // (1, 24, LowercaseLetters). That default silently drops the digits Aspire relies on to keep sibling
-        // environment names distinct, so "cae1"/"cae2" both sanitize to "cae" and collide in a shared resource
-        // group (https://github.com/microsoft/aspire/issues/18722).
+        // Preserve the historical (1, 24, LowercaseLetters) fallback unless callers opt into
+        // unique naming. New SDK naming requirements must not rename deployed environments.
+        // https://github.com/microsoft/aspire/issues/18722
+        private static readonly ResourceNameRequirements s_legacyRequirements = new(
+            minLength: 1,
+            maxLength: 24,
+            validCharacters: ResourceNameCharacters.LowercaseLetters);
         private static readonly ResourceNameRequirements s_requirements = new(
             minLength: 2,
             maxLength: 60,
@@ -1268,13 +1274,13 @@ public static class AzureContainerAppExtensions
             }
 
             // Delegate to the standard dynamic naming algorithm. The opt-in substitutes the requirements that
-            // Azure.Provisioning failed to declare; otherwise the supplied requirements preserve the legacy output
+            // Azure.Provisioning previously failed to declare; otherwise the legacy requirements preserve the output
             // byte-for-byte. Recording the returned expression here means caller-configured resolvers still take
             // precedence and only names produced by this fallback participate in collision validation.
             var resolvedName = base.ResolveName(
                 options,
                 resource,
-                useUniqueResourceNaming ? s_requirements : requirements);
+                useUniqueResourceNaming ? s_requirements : s_legacyRequirements);
 
             if (resolvedName is not null)
             {

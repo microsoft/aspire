@@ -104,7 +104,7 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
 
     private ContainerApp CreateContainerApp()
     {
-        var containerApp = new ContainerApp(Infrastructure.NormalizeBicepIdentifier(Resource.Name))
+        var containerApp = new ContainerApp(Infrastructure.NormalizeBicepIdentifier(Resource.Name), "2025-07-01")
         {
             Name = NormalizedContainerAppName
         };

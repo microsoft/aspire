@@ -9,10 +9,10 @@ resource worker 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'worker'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
