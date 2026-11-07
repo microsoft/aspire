@@ -41,6 +41,11 @@
   </PropertyGroup>
   <ItemGroup>
     <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
+    <AssemblyMetadata Include="DcpTestDirectory" Value="$(DcpDir)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageDownload Include="Microsoft.DeveloperControlPlane.$(BuildOs)-$(BuildArch)" Version="[$(MicrosoftDeveloperControlPlanedarwinamd64Version)]" />
   </ItemGroup>
 
   <ItemGroup>
