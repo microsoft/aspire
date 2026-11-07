@@ -2345,12 +2345,28 @@
     align-items: center;
     justify-content: center;
     border-radius: 6px;
-    color: var(--colorBrandForeground1);
+    color: var(--colorNeutralForeground2);
     text-decoration: none;
 }
 
 .resource-row-actions > a.resource-row-action:hover {
     background: var(--colorSubtleBackgroundHover);
+    color: var(--colorNeutralForeground1);
+}
+
+/* Row actions are neutral so brand color is reserved for selection, primary actions and links.
+   The resource's own URL stays brand-colored: opening it is the row's main job. */
+.resource-row-actions > a.resource-row-primary-endpoint {
+    color: var(--colorBrandForeground1);
+}
+
+.resource-row-actions ::deep fluent-button.resource-row-action {
+    --aspire-button-foreground: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-row-actions ::deep fluent-button.resource-row-action:hover {
+    color: var(--colorNeutralForeground1);
 }
 
 /* Override the direct-anchor display rule as well as Fluent button styles when disclosing actions. */

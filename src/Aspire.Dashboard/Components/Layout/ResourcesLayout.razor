@@ -562,7 +562,7 @@
                    @onclick:preventDefault="true"
                    @onclick:stopPropagation="true"
                    @onkeydown:stopPropagation="true">
-                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="16px" Color="Color.Primary" />
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                 </a>
             }
             else if (!showLabels && DashboardClient.IsEnabled && !resource.IsParameter)
@@ -575,7 +575,7 @@
                               data-tooltip-positioning="above"
                               aria-label="@($"{outputAction.Text} {resourceName}")"
                               OnClick="@(outputAction.OnClick!)">
-                    <FluentIcon Value="@outputAction.Icon" Width="16px" Color="Color.Primary" />
+                    <FluentIcon Value="@outputAction.Icon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                 </FluentButton>
             }
             @if (!showLabels)
@@ -588,7 +588,7 @@
                               data-tooltip-positioning="above"
                               aria-label="@($"{jsonAction.Text} {resourceName}")"
                               OnClick="@(jsonAction.OnClick!)">
-                    <FluentIcon Value="@jsonAction.Icon" Width="16px" Color="Color.Primary" />
+                    <FluentIcon Value="@jsonAction.Icon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                 </FluentButton>
             }
             @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetResourceRowCommands(resource) : GetSidebarCommands(resource))
@@ -609,7 +609,7 @@
                     <FluentButton Appearance="ButtonAppearance.Transparent"
                                   Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-highlighted resource-row-command-slot-{highlightedIndex++} {(!command.IsHighlighted && _isPaneFullCanvas ? "resource-row-wide-command" : null)}")"
                                   IconOnly="true"
-                                  IconStart="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor(Color.Primary)"
+                                  IconStart="@(IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor("currentColor"))"
                                   data-tooltip="@commandTitle"
                                   data-tooltip-positioning="above"
                                   aria-label="@($"{command.GetDisplayName()} {resourceName}")"

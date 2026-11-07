@@ -167,6 +167,11 @@
         <target state="translated">Экспорт .env</target>
         <note />
       </trans-unit>
+      <trans-unit id="OverviewGraphAccessibleLabel">
+        <source>Resource graph. The resource list shows the same resources in an accessible format</source>
+        <target state="new">Resource graph. The resource list shows the same resources in an accessible format</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">
         <source>Delete value</source>
         <target state="new">Delete value</target>

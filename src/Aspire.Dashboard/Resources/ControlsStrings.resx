@@ -132,6 +132,9 @@
   <data name="ChartContainerGraphAccessibleLabel" xml:space="preserve">
     <value>Graph. For an accessible view please navigate to the Table tab</value>
   </data>
+  <data name="OverviewGraphAccessibleLabel" xml:space="preserve">
+    <value>Resource graph. The resource list shows the same resources in an accessible format</value>
+  </data>
   <data name="EnvironmentVariablesFilterToggleShowSpecOnly" xml:space="preserve">
     <value>Show core properties</value>
   </data>

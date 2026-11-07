@@ -64,7 +64,7 @@
                  class="resource-graph-container"
                  tabindex="0"
                  role="region"
-                 aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]">
+                 aria-label="@ControlsStringsLoc[nameof(ControlsStrings.OverviewGraphAccessibleLabel)]">
                 <svg class="resource-graph"></svg>
                 <div class="resource-graph-controls">
                     <FluentButton Appearance="ButtonAppearance.Transparent"
@@ -260,7 +260,7 @@
         <section class="home-activity" aria-labelledby="home-activity-title">
             <div class="home-activity-header">
                 <div class="home-activity-title">
-                    <span class="home-live-dot" aria-hidden="true"></span>
+                    <span class="home-live-dot @(max == 0 ? "idle" : null)" aria-hidden="true"></span>
                     <h2 id="home-activity-title">@Loc[nameof(Dashboard.Resources.Resources.HomeLiveActivity)]</h2>
                     <span class="home-activity-window">@Loc[nameof(Dashboard.Resources.Resources.HomeActivityWindow)]</span>
                 </div>

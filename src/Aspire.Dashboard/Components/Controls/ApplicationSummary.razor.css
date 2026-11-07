@@ -469,6 +469,16 @@
     }
 }
 
+/* With no requests in the window there is nothing live to signal, so the dot rests in a neutral color
+   instead of pulsing green next to "Waiting for requests". */
+.home-live-dot.idle {
+    background: var(--colorNeutralStroke1);
+}
+
+.home-live-dot.idle::after {
+    display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .home-live-dot::after {
         animation: none;
