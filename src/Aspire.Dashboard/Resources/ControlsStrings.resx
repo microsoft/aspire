@@ -221,6 +221,10 @@
   <data name="SummaryDetailsViewCloseView" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="SummaryDetailsViewCloseViewWithShortcut" xml:space="preserve">
+    <value>Close (Esc)</value>
+    <comment>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</comment>
+  </data>
   <data name="SelectAResource" xml:space="preserve">
     <value>Select a resource</value>
   </data>
