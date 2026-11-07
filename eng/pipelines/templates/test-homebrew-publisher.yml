@@ -1,0 +1,84 @@
+# Contained release-pipeline tests. No release artifacts, publishing credentials,
+# MicroBuild publish authorization or live tap writes are imported here.
+parameters:
+  - name: dryRun
+    type: boolean
+  - name: version
+    type: string
+    default: auto
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    pool:
+      name: NetCore1ESPool-Internal
+      image: 1es-ubuntu-2204
+      os: linux
+    stages:
+      - stage: HomebrewTests
+        jobs:
+          - job: PublisherBehavior
+            timeoutInMinutes: 15
+            templateContext:
+              outputs:
+                - output: pipelineArtifact
+                  targetPath: $(Build.ArtifactStagingDirectory)/homebrew
+                  artifactName: homebrew-publisher
+                  condition: always()
+            steps:
+              - checkout: self
+                persistCredentials: false
+              - bash: |
+                  set -euo pipefail
+                  mkdir -p "$OUTPUT"
+                  if [[ "$DRY_RUN" != "True" ]]; then
+                    echo "##vso[task.logissue type=error;]HomebrewTestOnly requires DryRun=true."
+                    exit 1
+                  fi
+                  python3 -u -m unittest discover \
+                    -s tests/Infrastructure.Tests/Pipelines \
+                    -p test_homebrew_publisher.py -v 2>&1 | tee "$OUTPUT/tests.log"
+                  python3 tests/Infrastructure.Tests/Pipelines/test_homebrew_publisher.py \
+                    --emit-skip-warning --output-dir "$OUTPUT"
+                displayName: Test actual publisher and emit its idempotent-skip warning
+                env:
+                  DRY_RUN: ${{ parameters.dryRun }}
+                  OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew
+
+          - job: CanonicalMacOS
+            dependsOn: PublisherBehavior
+            timeoutInMinutes: 90
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            templateContext:
+              outputs:
+                - output: pipelineArtifact
+                  targetPath: $(Build.ArtifactStagingDirectory)/homebrew
+                  artifactName: homebrew-canonical-macos
+                  condition: always()
+            steps:
+              - checkout: self
+                persistCredentials: false
+              - bash: |
+                  set -euo pipefail
+                  mkdir -p "$OUTPUT"
+                  if [[ "$DRY_RUN" != "True" ]]; then
+                    echo "##vso[task.logissue type=error;]HomebrewTestOnly requires DryRun=true."
+                    exit 1
+                  fi
+                  # This hosted agent is disposable. Never run the full install
+                  # validator on a maintainer's shared Homebrew installation.
+                  git --no-pager clone --quiet https://github.com/microsoft/homebrew-aspire.git "$TAP"
+                  git --no-pager -C "$TAP" checkout --quiet f17f51b14acbf17f6a29db1cae91a8f92fe63369
+                  python3 -u eng/homebrew/publish-cask.py \
+                    --candidate "$TAP/Casks/a/aspire.rb" \
+                    --version "$VERSION" --tap-checkout "$TAP" \
+                    --validate-only --output-dir "$OUTPUT" 2>&1 | tee "$OUTPUT/console.log"
+                displayName: Fully validate published fixture without release or tap publication
+                env:
+                  DRY_RUN: ${{ parameters.dryRun }}
+                  VERSION: ${{ parameters.version }}
+                  TAP: $(Agent.TempDirectory)/homebrew-validator
+                  OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew

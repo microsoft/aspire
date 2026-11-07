@@ -43,6 +43,29 @@ The Aspire release process uses these main automation components:
 
 ## Draft-then-publish release flow
 
+### Contained Homebrew publisher tests
+
+Run definition 1600 on a personal branch with **both**
+`HomebrewTestOnly=true` and `DryRun=true`. Test-only mode selects an exclusive
+template graph: no NuGet/npm/WinGet/release jobs, source-build downloads,
+publishing secret groups, GitHub dispatches or MicroBuild publish authorization.
+`HomebrewTestOnly=true` with `DryRun=false` fails inside that contained graph;
+it cannot fall through to a live release.
+
+The Linux job exercises the production publisher against synchronized fixtures
+and a loopback HTTP server. Its real CLI emits the Azure DevOps skip warning
+directly into task stdout. The disposable macOS job validates the pinned tap's
+already-published stable cask, including install/uninstall, without opening a
+tap PR or changing a release. With `ReleaseVersion=auto`, it uses the pinned
+fixture version, not an inferred new release. Each job retains its diagnostics
+on failure as well as success.
+
+**Production Homebrew publication is not enabled by these tests.** Enabling it
+requires pipeline-owned continuation after the manager publishes the draft,
+per-cask serialization and least-privilege tap credentials. Neither an
+independent release-event publisher nor validation of unavailable draft URLs
+substitutes for that wiring. See [publisher behavior](../eng/homebrew/README.md#release-pipeline-owned-tap-publisher).
+
 GitHub's [immutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases) lock release assets and the underlying tag at publish time. Once a release is published, the assets attached to it (and the tag itself) cannot be changed. The body and title remain editable, but everything else is frozen.
 
 Aspire's release flow has historically depended on mutating the released artifact: the agentic release-notes-generate workflow rewrites the body, and the AzDO pipeline's `PublishReleaseAssetsJob` uploads `aspire-cli-*` archives onto the release *after* it was created. With immutable releases enabled, all of those mutations must happen **before** the release is published.

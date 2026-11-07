@@ -2,12 +2,16 @@
 
 ## Overview
 
-Aspire CLI is distributed via [Homebrew Cask](https://docs.brew.sh/Cask-Cookbook) for macOS (arm64 and x64). Cask PRs are submitted to the upstream [Homebrew/homebrew-cask](https://github.com/Homebrew/homebrew-cask) repository.
+Aspire CLI is distributed via [Homebrew Cask](https://docs.brew.sh/Cask-Cookbook)
+for macOS (arm64 and x64), using the
+[Microsoft tap](https://github.com/microsoft/homebrew-aspire).
+The upstream submission/autobump notes below describe the historical upstream
+path, not release-pipeline-owned publication to the Microsoft tap.
 
 ### Install commands
 
 ```bash
-brew install --cask aspire              # stable
+brew install --cask microsoft/aspire/aspire # stable
 ```
 
 ## Shell completion
@@ -45,12 +49,64 @@ the initial/upstream cask change must include the generation stanza, not just a 
 | `prepare-cask-artifact.sh` | Prepares CI artifacts by generating, validating, and adding dogfood helpers |
 | `validate-cask-artifact.sh` | Runs shared cask syntax, style, audit, and install validation used by GitHub Actions and Azure DevOps |
 | `dogfood.sh` | Installs a generated cask locally, optionally using downloaded native archive artifacts |
+| `publish-cask.py` | Validates, reconciles and proposes stable cask updates; dry run by default |
 
 ### Pipeline templates
 
 | File | Description |
 |---|---|
 | `eng/pipelines/templates/prepare-homebrew-cask.yml` | Generates, styles, validates, audits, and tests the cask |
+| `eng/pipelines/templates/test-homebrew-publisher.yml` | Contained behavioral tests and published-fixture validation |
+
+## Release-pipeline-owned tap publisher
+
+`publish-cask.py` defaults to **dry run**. It reads candidate metadata and tap
+state, skips an existing matching version/PR/in-flight branch with an Azure
+DevOps warning, or fully validates a new candidate before printing its proposed
+diff. It never requests a write credential in dry run. `result.json` reports
+`planned`, `skipped`, `submitted`, `validated` (fixture-only), or `failed`.
+
+```bash
+python3 eng/homebrew/publish-cask.py \
+  --candidate /path/to/aspire.rb --version 13.6.5 \
+  --tap-checkout /path/to/pinned-tap --output-dir /path/to/diagnostics
+```
+
+Validation requires disposable macOS equipment and a clean validator checkout
+at `f17f51b14acbf17f6a29db1cae91a8f92fe63369`. It downloads both public stable
+archives, compares the immutable candidate snapshot to the source release-tag
+template with the tap's non-executing Ripper checker, then runs the isolated
+tap validator. Draft and prerelease releases, placeholder hashes, template
+drift and substantive validation failures are not publishable. Full execution
+on one architecture does not establish install/notarization on the other.
+
+`--publish` explicitly opts into writes after validation and requires
+`HOMEBREW_TAP_WRITE_TOKEN`; the independent `HOMEBREW_READ_TOKEN` is only for
+read requests. Provision a tap-scoped GitHub App token or fine-grained token
+with contents and pull-request write permissions, not a broad source-repo
+release credential. No credentials are provisioned by this change.
+
+Same-version runs claim a deterministic branch atomically. Existing claims
+are never overwritten; abandoned branches and closed-unmerged PRs require
+operator recovery. Conflicting hashes and version rollback fail explicitly.
+Target advancement during validation requires a rerun. **This claim is not a
+per-cask lock:** production must serialize all versions before enabling writes,
+and external tap writers can still require revalidation.
+
+Reads retry transient transport/throttle/service errors at most three times,
+with 30-second request timeouts and a 120-second phase-wide deadline.
+Permanent authentication/input/validation failures do not retry. Writes are
+never blindly retried: a lost branch response becomes an in-flight skip;
+contents/PR uncertainty requires exact remote evidence or fails with recovery
+instructions. This prevents duplicate submissions after a lost response.
+
+Use `HomebrewTestOnly=true, DryRun=true` in release definition 1600 for
+contained testing. `--test-server` is restricted to numeric loopback HTTP and
+ignores ambient credentials; it is not an alternative GitHub target.
+`--validate-only --version auto` exercises the pinned, already-published
+fixture without publishing. The production release graph remains unchanged
+and does **not** call `--publish`: public-asset continuation and per-cask
+serialization must be wired before production enablement.
 
 ## Supported Platforms
 
