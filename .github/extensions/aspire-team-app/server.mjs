@@ -695,6 +695,16 @@ async function handle(req, res, log, instanceId) {
       broadcastPreferences(prefs);
       return send(res, 200, { prefs });
     }
+    if (req.method === "POST" && path === "/api/layout") {
+      const { layout } = await readBody(req);
+      if (layout !== "grid" && layout !== "rows") {
+        return send(res, 400, { error: "layout must be grid or rows" });
+      }
+      const prefs = await updatePrefs((latest) => { latest.layout = layout; });
+      if (cache) cache = { ...cache, prefs };
+      broadcastPreferences(prefs);
+      return send(res, 200, { prefs });
+    }
     if (req.method === "POST" && path === "/api/mode") {
       const { mode } = await readBody(req);
       const next = ["review", "issues", "ship", "health"].includes(mode)
