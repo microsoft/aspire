@@ -5,8 +5,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 // Bug #15378 repro with a real Azure Functions project. This validates that
 // AddAzureFunctionsProject resources still get IDE execution in Visual Studio
 // (DEBUG_SESSION_PORT set, no DEBUG_SESSION_INFO) so breakpoints bind.
+#pragma warning disable CS0618 // This regression specifically exercises legacy Functions IDE execution.
 var funcApp = builder.AddAzureFunctionsProject<Projects.AzureFunctionsService>("azure-functions-service")
     .WithExternalHttpEndpoints();
+#pragma warning restore CS0618
 
 // Bug #15606/#15647 repro: A standard project resource should get
 // IDE execution when DEBUG_SESSION_PORT is set and the extension

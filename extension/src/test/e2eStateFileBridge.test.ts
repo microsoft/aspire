@@ -1,6 +1,8 @@
 import * as assert from 'assert';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
+import * as http from 'http';
+import https = require('https');
 import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
@@ -17,7 +19,8 @@ import type { ResourceDebugger } from '../debugger/resourceDebugContracts';
 import { csharpExtensionMissingForBlazorDebugging } from '../loc/strings';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { executeE2eControlCommand, isBrowserDebugSessionType } from '../testing/e2eStateFileBridge';
+import { cloneAppHostState } from '../extensionState';
+import { executeE2eControlCommand, isBrowserDebugSessionType, withResourceTraffic } from '../testing/e2eStateFileBridge';
 import { pipelineInteractionCapability } from '../types/configInfo';
 import { AspireExtensionE2EControlCommand } from '../types/extensionApi';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
@@ -185,6 +188,77 @@ suite('E2E state file bridge', () => {
             assert.strictEqual(customRequest.withArgs('continue').callCount, 1);
         });
     }
+
+    test('drives HTTPS breakpoint traffic using per-request fixture certificate trust', async () => {
+        const request = new EventEmitter() as http.ClientRequest;
+        const response = new EventEmitter() as http.IncomingMessage;
+        response.statusCode = 200;
+        response.resume = () => {
+            queueMicrotask(() => response.emit('end'));
+            return response;
+        };
+        const get = sandbox.stub(https, 'get').callsFake((_url, _options, callback) => {
+            assert.ok(callback);
+            callback(response);
+            return request;
+        });
+        const fetch = sandbox.stub(globalThis, 'fetch');
+        const originalGlobalTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
+        const hit = await withResourceTraffic('https://localhost:5001/base/proof', 'functions', async () => 'breakpoint');
+
+        assert.strictEqual(hit, 'breakpoint');
+        sinon.assert.calledOnce(get);
+        assert.strictEqual(get.firstCall.args[0], 'https://localhost:5001/base/proof');
+        const options = get.firstCall.args[1] as https.RequestOptions;
+        assert.strictEqual(options.rejectUnauthorized, false);
+        assert.ok(options.signal instanceof AbortSignal);
+        sinon.assert.notCalled(fetch);
+        assert.strictEqual(process.env.NODE_TLS_REJECT_UNAUTHORIZED, originalGlobalTls);
+    });
+
+    test('keeps ordinary HTTP breakpoint traffic on fetch', async () => {
+        const fetch = sandbox.stub(globalThis, 'fetch').resolves(new Response('proof'));
+        const get = sandbox.stub(https, 'get');
+
+        const hit = await withResourceTraffic('http://localhost:5000/proof', 'functions', async () => 'breakpoint');
+
+        assert.strictEqual(hit, 'breakpoint');
+        sinon.assert.calledOnce(fetch);
+        assert.strictEqual(fetch.firstCall.args[0], 'http://localhost:5000/proof');
+        sinon.assert.notCalled(get);
+    });
+
+    test('captures the Functions launch contract without copying build-only metadata into E2E state', () => {
+        const snapshot = cloneAppHostState({
+            appHostPath: '/workspace/AppHost/AppHost.csproj',
+            appHostPid: 123,
+            cliPid: 124,
+            dashboardUrl: null,
+            resources: [{
+                name: 'functions',
+                displayName: 'functions',
+                resourceType: 'Executable',
+                state: 'Running',
+                stateStyle: null,
+                healthStatus: null,
+                healthReports: null,
+                exitCode: null,
+                dashboardUrl: null,
+                urls: [],
+                commands: null,
+                properties: {
+                    'project.path': '/workspace/Functions/Functions.csproj',
+                    'resource.launchConfigurationType': 'azure-functions-with-external-build.v1',
+                    build_environment: '{"SECRET":"private-build-value"}',
+                },
+            }],
+        }, false);
+
+        assert.strictEqual(snapshot.resources?.[0].launchConfigurationType, 'azure-functions-with-external-build.v1');
+        assert.strictEqual(snapshot.resources?.[0].projectPath, '/workspace/Functions/Functions.csproj');
+        assert.strictEqual(JSON.stringify(snapshot).includes('private-build-value'), false);
+    });
 
     for (const route of [
         { invocation: 'vscode.lm.invokeTool', direct: false, canceled: false },

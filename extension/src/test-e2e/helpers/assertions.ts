@@ -141,7 +141,7 @@ export async function waitForHttpText(url: string, expectedText: string, timeout
 
     while (Date.now() - started < timeoutMs) {
         try {
-            const body = await getUrlText(url);
+            const { body } = await getHttpResponse(url);
             if (body.includes(expectedText)) {
                 return expectedText;
             }
@@ -569,10 +569,15 @@ function isResourceMatch(resource: ResourceState, resourceName: string): boolean
     return resource.name === resourceName || resource.displayName === resourceName;
 }
 
-function getUrlText(url: string, redirectLimit = 5, cookies: string[] = []): Promise<string> {
+export function getHttpResponse(
+    url: string,
+    requestHeaders: Readonly<Record<string, string>> = {},
+    redirectLimit = 5,
+    cookies: string[] = []): Promise<{ body: string; headers: http.IncomingHttpHeaders }> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
         const headers: Record<string, string> = {
+            ...requestHeaders,
             'accept-encoding': 'identity',
         };
         if (cookies.length > 0) {
@@ -590,7 +595,7 @@ function getUrlText(url: string, redirectLimit = 5, cookies: string[] = []): Pro
 
                 response.resume();
                 response.on('end', () => {
-                    getUrlText(new URL(response.headers.location!, parsed).toString(), redirectLimit - 1, nextCookies).then(resolve, reject);
+                    getHttpResponse(new URL(response.headers.location!, parsed).toString(), requestHeaders, redirectLimit - 1, nextCookies).then(resolve, reject);
                 });
                 return;
             }
@@ -604,7 +609,7 @@ function getUrlText(url: string, redirectLimit = 5, cookies: string[] = []): Pro
                     return;
                 }
 
-                resolve(body);
+                resolve({ body, headers: response.headers });
             });
         };
         const request = parsed.protocol === 'https:'

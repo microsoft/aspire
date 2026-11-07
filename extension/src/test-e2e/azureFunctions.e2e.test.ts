@@ -1,7 +1,12 @@
 import * as assert from 'assert';
-import { findResource, getCommandInvocationCount, getTaskProcessEventCount, waitForCommandOutcome, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForRunningResourceWithUrl, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath } from './helpers/paths';
+import * as fs from 'fs';
+import * as net from 'net';
+import * as path from 'path';
+import { once } from 'events';
+import { findResource, getCommandInvocationCount, getHttpResponse, getResources, getTaskProcessEventCount, waitForCommandOutcome, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning, waitForKnownProcessExit, writeFileWithRetry } from './helpers/fixtures';
+import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
+import { BottomBarPanel } from './helpers/extester';
 import { openAspireView } from './helpers/vscode';
 
 suite('Aspire Azure Functions E2E', function () {
@@ -13,6 +18,8 @@ suite('Aspire Azure Functions E2E', function () {
         }
 
         await runE2eTeardown([
+            () => executeE2eControlCommand({ name: 'clearBreakpoints' }),
+            () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
@@ -35,6 +42,7 @@ suite('Aspire Azure Functions E2E', function () {
         await openAspireView();
 
         const appHostPath = getPrimaryAppHostProjectPath();
+        const buildsBeforeRun = readFunctionsBuilds().length;
         const taskSequenceBeforeRun = getTaskProcessEventCount();
         const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
@@ -42,12 +50,17 @@ suite('Aspire Azure Functions E2E', function () {
 
         // Running and endpoint activation are separate updates; the backchannel omits inactive URLs.
         // Wait for both in the same snapshot before probing HTTPS (https://github.com/microsoft/aspire/issues/19639).
-        const runningState = await waitForRunningResourceWithUrl('e2e-functions', 'https:', 300000);
+        const runningState = await waitForFunctionsWithHttps(taskSequenceBeforeRun, 300000);
         const functionsResource = findResource(runningState.state, 'e2e-functions');
         assert.ok(functionsResource, 'Expected the HTTPS Azure Functions resource in extension state.');
         const httpsUrl = functionsResource.urls?.find(url => new URL(url.url).protocol === 'https:')?.url;
         assert.ok(httpsUrl, 'Expected the Azure Functions resource to expose an HTTPS URL.');
         await waitForHttpText(new URL('/api/https-proof', httpsUrl).toString(), 'Aspire HTTPS Functions E2E', 180000);
+        if (usesExternalBuildContract()) {
+            assert.strictEqual(functionsResource.launchConfigurationType, 'azure-functions-with-external-build.v1');
+            await assertBuildContext(httpsUrl, buildsBeforeRun);
+            await assertSdkCorsOrigin(httpsUrl);
+        }
 
         const taskStarted = await waitForTaskProcessEvent(
             event => event.state === 'started' && isAzureFunctionsHostTask(event),
@@ -67,8 +80,273 @@ suite('Aspire Azure Functions E2E', function () {
             120000,
             taskStarted.sequence);
         assert.strictEqual(taskEnded.taskName, taskStarted.taskName);
+        await waitForKnownProcessExit(taskStarted.processId!, 'Azure Functions Core Tools task', 120000);
+
+        if (usesExternalBuildContract()) {
+            const buildsBeforeRestart = readFunctionsBuilds().length;
+            const restartSequence = getTaskProcessEventCount();
+            const startInvocationBefore = getCommandInvocationCount('aspire-vscode.startResource');
+            await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: functionsResource.name }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.startResource', 'success', 60000, startInvocationBefore);
+            const restarted = await waitForFunctionsWithHttps(restartSequence, 180000);
+            const restartedResource = findResource(restarted.state, 'e2e-functions')!;
+            const restartedUrl = restartedResource.urls?.find(url => new URL(url.url).protocol === 'https:')?.url;
+            assert.ok(restartedUrl);
+            await waitForHttpText(new URL('/api/https-proof', restartedUrl).toString(), 'Aspire HTTPS Functions E2E');
+            await assertSdkCorsOrigin(restartedUrl);
+            assert.strictEqual(readFunctionsBuilds().length, buildsBeforeRestart, 'Starting prebuilt Functions again must not invoke an extension build.');
+            const restartedTask = await waitForTaskProcessEvent(
+                event => event.state === 'started' && isAzureFunctionsHostTask(event),
+                'a fresh Functions task after starting the stopped resource', 60000, restartSequence);
+            assert.notStrictEqual(restartedTask.executionId, taskStarted.executionId);
+            const restartStopInvocationBefore = getCommandInvocationCount('aspire-vscode.stopResource');
+            await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: functionsResource.name }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, restartStopInvocationBefore);
+            await waitForTaskProcessEvent(
+                event => event.state === 'ended' && event.executionId === restartedTask.executionId,
+                'the restarted Functions task to end', 120000, restartedTask.sequence);
+            await waitForKnownProcessExit(restartedTask.processId!, 'restarted Azure Functions Core Tools task', 120000);
+        }
+    });
+
+    test('runs two HTTPS Functions tasks behind the fixed launch-profile port', async function () {
+        if (!shouldRunAzureFunctionsE2E() || !usesExternalBuildContract()) {
+            this.skip();
+            return;
+        }
+
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        await stopPrimaryAppHostIfRunning();
+        const appHostPath = getPrimaryAppHostProjectPath();
+        const appHostSource = path.join(path.dirname(appHostPath), 'AppHost.cs');
+        const launchSettingsPath = path.join(getWorkspaceRoot(), 'AspireE2E.Functions', 'Properties', 'launchSettings.json');
+        const originalAppHost = fs.readFileSync(appHostSource, 'utf8');
+        const originalLaunchSettings = fs.readFileSync(launchSettingsPath, 'utf8');
+        const reservation = net.createServer();
+        const releasePort = () => new Promise<void>((resolve, reject) => {
+            reservation.close(error => error ? reject(error) : resolve());
+        });
+
+        try {
+            reservation.listen(0, '127.0.0.1');
+            await once(reservation, 'listening');
+            const address = reservation.address();
+            assert.ok(address && typeof address === 'object');
+            const publicPort = address.port;
+            assert.strictEqual(originalAppHost.split('.WithReplicas(1)').length, 2);
+            writeFileWithRetry(appHostSource, originalAppHost.replace('.WithReplicas(1)', '.WithReplicas(2)'));
+            const launchSettings = JSON.parse(originalLaunchSettings) as {
+                profiles: Record<string, { commandLineArgs: string }>;
+            };
+            const profile = launchSettings.profiles['AspireE2E.Functions'];
+            assert.ok(profile);
+            profile.commandLineArgs += ` --port ${publicPort}`;
+            writeFileWithRetry(launchSettingsPath, JSON.stringify(launchSettings, undefined, 2));
+            const buildsBeforeRun = readFunctionsBuilds().length;
+            const taskSequence = getTaskProcessEventCount();
+            const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+            // This scenario verifies a requested fixed public port, so release the
+            // test-owned reservation immediately before Aspire binds its proxy.
+            await releasePort();
+            await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);
+            const running = await waitForExtensionState(file => {
+                const resources = getResources(file.state).filter(resource =>
+                    path.basename(resource.projectPath ?? '') === 'AspireE2E.Functions.csproj');
+                return resources.filter(resource => resource.state === 'Running'
+                    && resource.urls?.some(url => new URL(url.url).protocol === 'https:')).length === 2;
+            }, 'both HTTPS Functions replicas to be running', 300000, file => {
+                const failed = getResources(file.state).find(resource =>
+                    path.basename(resource.projectPath ?? '') === 'AspireE2E.Functions.csproj'
+                    && resource.state === 'FailedToStart');
+                if (failed) {
+                    return `Functions replica '${failed.name}' failed to start.`;
+                }
+                return file.taskProcessEvents.some(event => event.sequence > taskSequence
+                    && event.state === 'ended' && isAzureFunctionsHostTask(event))
+                    ? 'A replicated Functions task exited before HTTPS readiness.'
+                    : undefined;
+            });
+            const resource = getResources(running.state).find(candidate =>
+                path.basename(candidate.projectPath ?? '') === 'AspireE2E.Functions.csproj'
+                && candidate.state === 'Running')!;
+            const httpsUrl = resource.urls?.find(url => new URL(url.url).protocol === 'https:')?.url;
+            assert.ok(httpsUrl);
+            assert.strictEqual(new URL(httpsUrl).port, String(publicPort));
+            await waitForHttpText(new URL('/api/https-proof', httpsUrl).toString(), 'Aspire HTTPS Functions E2E');
+            await assertBuildContext(httpsUrl, buildsBeforeRun);
+            await assertSdkCorsOrigin(httpsUrl);
+            const first = await waitForTaskProcessEvent(event =>
+                event.state === 'started' && isAzureFunctionsHostTask(event), 'first replicated Functions task', 60000, taskSequence);
+            const second = await waitForTaskProcessEvent(event =>
+                event.state === 'started' && isAzureFunctionsHostTask(event) && event.executionId !== first.executionId,
+            'second replicated Functions task', 60000, taskSequence);
+            assert.ok(first.processId && second.processId);
+            assert.notStrictEqual(first.processId, second.processId);
+            await stopPrimaryAppHostIfRunning();
+            await Promise.all([first, second].map(async task => {
+                await waitForTaskProcessEvent(event => event.state === 'ended' && event.executionId === task.executionId,
+                    'replicated Functions task to end', 120000, task.sequence);
+                await waitForKnownProcessExit(task.processId!, 'replicated Functions task', 120000);
+            }));
+        } finally {
+            await runE2eTeardown([
+                () => stopPrimaryAppHostIfRunning(),
+                async () => {
+                    if (reservation.listening) {
+                        await releasePort();
+                    }
+                },
+                async () => { writeFileWithRetry(appHostSource, originalAppHost); },
+                async () => { writeFileWithRetry(launchSettingsPath, originalLaunchSettings); },
+            ], 'Replicated Functions E2E teardown failed.');
+        }
+    });
+
+    test('attaches coreclr to the isolated worker, hits an HTTPS handler breakpoint and cleans up', async function () {
+        if (!shouldRunAzureFunctionsE2E()) {
+            this.skip();
+        }
+
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        const capabilities = (await executeE2eControlCommand({ name: 'getSupportedCapabilities' })).result as string[];
+        assert.ok(capabilities.includes('azure-functions'));
+        assert.ok(capabilities.includes('azure-functions-with-external-build.v1'));
+        const appHostPath = getPrimaryAppHostProjectPath();
+        const appHostSourcePath = path.join(path.dirname(appHostPath), 'AppHost.cs');
+        const resourceSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Functions', 'HttpsFunction.cs');
+        const appHostBreakpointLine = findLine(appHostSourcePath, usesExternalBuildContract() ? 'builder.AddDotnetAzureFunction(' : 'builder.AddAzureFunctionsProject(');
+        const resourceBreakpointLine = findLine(resourceSourcePath, 'return new OkObjectResult("Aspire HTTPS Functions E2E");');
+        const buildsBeforeRun = readFunctionsBuilds().length;
+        const taskSequence = getTaskProcessEventCount();
+        const status = await executeE2eControlCommand({
+            name: 'proveAppHostAndResourceDebugging',
+            appHostPath,
+            resourceName: 'e2e-functions',
+            appHostSourcePath,
+            appHostBreakpointLine,
+            resourceSourcePath,
+            resourceBreakpointLine,
+            resourceRequestPath: '/api/https-proof',
+            continueExceptionStops: true,
+            timeoutMs: 300000,
+        }, { timeoutMs: 540000 });
+        const proof = status.result as FunctionsDebugProof;
+        assert.strictEqual(proof.proof, 'aspire-apphost-and-resource-debug-breakpoints-hit');
+        const hit = proof.resourceBreakpoint;
+        assert.strictEqual(hit.stoppedEvent.reason, 'breakpoint');
+        assert.strictEqual(hit.stoppedEvent.sessionType, 'coreclr');
+        assert.strictEqual(fs.realpathSync.native(hit.matchingStackFrame.source!.path!), fs.realpathSync.native(resourceSourcePath));
+        assert.strictEqual(hit.matchingStackFrame.line, resourceBreakpointLine + 1);
+        const workerSession = proof.debugSessions.find(session => session.id === hit.stoppedEvent.sessionId);
+        assert.ok(workerSession);
+        assert.strictEqual(workerSession.configuration.request, 'attach');
+        assert.strictEqual(workerSession.configuration.resourceType, usesExternalBuildContract() ? 'azure-functions-with-external-build.v1' : 'azure-functions');
+        const workerProcessId = Number(workerSession.configuration.processId);
+        assert.ok(Number.isInteger(workerProcessId) && workerProcessId > 0);
+        if (usesExternalBuildContract()) {
+            assertSingleFunctionsBuild(buildsBeforeRun);
+        }
+
+        const taskStarted = await waitForTaskProcessEvent(
+            event => event.state === 'started' && isAzureFunctionsHostTask(event),
+            'the debug Functions Core Tools task to start', 30000, taskSequence);
+        assert.notStrictEqual(workerProcessId, taskStarted.processId, 'coreclr must attach to the worker, not the task shell or Core Tools host.');
+        await waitForTaskProcessEvent(
+            event => event.state === 'ended' && event.executionId === taskStarted.executionId,
+            'the debug Functions task to end when debugging stops', 120000, taskStarted.sequence);
+        await waitForKnownProcessExit(workerProcessId, 'debugged Functions worker', 120000);
+        await waitForKnownProcessExit(taskStarted.processId!, 'debugged Functions Core Tools task', 120000);
+        await waitForNoDebugSessions();
+        await waitForNoRunningAppHost();
     });
 });
+
+interface FunctionsDebugProof {
+    proof: string;
+    resourceBreakpoint: {
+        stoppedEvent: { sessionId: string; sessionType: string; reason: string };
+        matchingStackFrame: { source?: { path?: string }; line: number };
+    };
+    debugSessions: Array<{
+        id: string;
+        configuration: { request?: string; resourceType?: string; processId?: string };
+    }>;
+}
+
+async function waitForFunctionsWithHttps(afterTaskSequence: number, timeoutMs: number) {
+    const snapshot = await waitForExtensionState(file => {
+        const resource = findResource(file.state, 'e2e-functions');
+        return resource?.state === 'FailedToStart'
+            || file.taskProcessEvents.some(event => event.sequence > afterTaskSequence && event.state === 'ended' && isAzureFunctionsHostTask(event))
+            || (resource?.state === 'Running' && resource.urls?.some(url => new URL(url.url).protocol === 'https:') === true);
+    }, 'Functions task startup or HTTPS readiness', timeoutMs);
+    const ended = snapshot.taskProcessEvents.find(event =>
+        event.sequence > afterTaskSequence && event.state === 'ended' && isAzureFunctionsHostTask(event));
+    if (ended || findResource(snapshot.state, 'e2e-functions')?.state === 'FailedToStart') {
+        // A terminal startup failure cannot recover during this wait. Preserve its console
+        // before teardown closes the task instead of hiding the cause behind an endpoint timeout.
+        const terminal = await new BottomBarPanel().openTerminalView();
+        const text = (await terminal.getText()).split(/\r?\n/)
+            .map(line => line.includes('Aspire E2E p@ss') ? '<fixture task command redacted>' : line).join('\n');
+        throw new Error(`Functions task failed before HTTPS readiness (exit ${ended?.exitCode ?? '<unknown>'}).\n${text}`);
+    }
+
+    return snapshot;
+}
+
+function usesExternalBuildContract(): boolean {
+    return process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS !== 'true';
+}
+
+function readFunctionsBuilds(): string[] {
+    const file = path.join(getWorkspaceRoot(), 'AspireE2E.Functions', 'build-invocations.txt');
+    return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split(/\r?\n/).filter(Boolean) : [];
+}
+
+function assertSingleFunctionsBuild(previousCount: number): string {
+    const appHostConfigurationFile = path.join(path.dirname(getPrimaryAppHostProjectPath()), 'apphost-build-configuration.txt');
+    assert.strictEqual(
+        fs.readFileSync(appHostConfigurationFile, 'utf8'),
+        'Release',
+        'The running AppHost must report AssemblyConfiguration=Release, including when CLI global properties override the project default.');
+    const builds = readFunctionsBuilds().slice(previousCount);
+    assert.strictEqual(builds.length, 1, 'Expected exactly one coordinated Functions build, with no second extension build.');
+    // The MSBuild probe writes "Release|custom|<absolute TargetPath>". '|' cannot
+    // occur in a Windows path and the fixture never uses it in Unix path names.
+    const [configuration, flavor, targetPath, ...extra] = builds[0].split('|');
+    assert.deepStrictEqual([configuration, flavor, ...extra], ['Release', 'custom']);
+    assert.match(targetPath.replaceAll('\\', '/'), /\/bin\/custom\/Release\/net10\.0\/AspireE2E\.Functions\.dll$/);
+    assert.strictEqual(fs.existsSync(path.join(getWorkspaceRoot(), 'AspireE2E.Functions', 'bin', 'wrong')), false);
+    return targetPath;
+}
+
+async function assertBuildContext(httpsUrl: string, previousCount: number): Promise<void> {
+    // MSBuild can retain a lowercase Windows drive while the runtime reports its canonical casing.
+    const targetPath = fs.realpathSync.native(assertSingleFunctionsBuild(previousCount));
+    await waitForHttpText(
+        new URL('/api/build-proof', httpsUrl).toString(),
+        `Release|custom|<none>|runtime-value|${targetPath}|${path.dirname(targetPath)}`);
+}
+
+async function assertSdkCorsOrigin(httpsUrl: string): Promise<void> {
+    // This origin is set only by the project's SDK RunArguments, not the launch
+    // profile or DCP args. The host's response proves Core Tools actually consumed it.
+    const origin = 'https://aspire-functions-e2e.invalid';
+    const response = await getHttpResponse(new URL('/api/https-proof', httpsUrl).toString(), { Origin: origin });
+    assert.ok(response.body.includes('Aspire HTTPS Functions E2E'));
+    assert.strictEqual(response.headers['access-control-allow-origin'], origin);
+}
+
+function findLine(filePath: string, marker: string): number {
+    const line = fs.readFileSync(filePath, 'utf8').split(/\r?\n/).findIndex(value => value.includes(marker));
+    assert.ok(line >= 0, `Expected breakpoint marker ${marker} in ${filePath}.`);
+    return line;
+}
 
 function shouldRunAzureFunctionsE2E(): boolean {
     return process.env.ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS === 'true';

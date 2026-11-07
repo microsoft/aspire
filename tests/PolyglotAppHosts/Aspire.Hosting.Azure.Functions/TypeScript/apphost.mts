@@ -5,28 +5,27 @@ import { AzureFunctionsLanguage, createBuilder } from './.aspire/modules/aspire.
 
 const builder = await createBuilder();
 
-// ── 1. addAzureFunctionsProject (path-based overload) ───────────────────────
-const funcApp = await builder.addAzureFunctionsProject(
-    "myfunc",
+const storage = await builder.addAzureStorage("funcstorage");
+
+// ── 1. addDotnetAzureFunction and its typed fluent APIs ─────────────────────
+const functions = await builder.addDotnetAzureFunction(
+    "dotnetfunc",
     "../MyFunctions/MyFunctions.csproj",
 );
+await functions.withHostStorage(storage);
+await functions.withBuildEnvironment("BUILD_KEY", "build-value");
+await functions.withReplicas(2);
+await functions.disableForwardedHeaders();
+await functions.withEndpointsInEnvironment(["http"]);
 
-// ── 2. withHostStorage — specify custom Azure Storage for Functions host ────
-const storage = await builder.addAzureStorage("funcstorage");
-await funcApp.withHostStorage(storage);
+// ── 2. Legacy addAzureFunctionsProject compatibility surface ────────────────
+const legacyFuncApp = await builder.addAzureFunctionsProject(
+    "legacyfunc",
+    "../OtherFunc/OtherFunc.csproj",
+);
+await legacyFuncApp.withHostStorage(storage);
 
-// ── 3. Fluent chaining — verify return types enable chaining ────────────────
-await builder
-    .addAzureFunctionsProject("chained-func", "../OtherFunc/OtherFunc.csproj")
-    .withHostStorage(storage)
-    .withEnvironment("MY_KEY", "my-value")
-    .withHttpEndpoint({ port: 7071 });
-
-// ── 4. withReference from base builder — standard resource references ───────
-const anotherStorage = await builder.addAzureStorage("appstorage");
-await funcApp.withReference(anotherStorage);
-
-// ── 5. addAzureFunctionsApp — directory-based TypeScript Functions app ───────
+// ── 3. addAzureFunctionsApp — directory-based TypeScript Functions app ──────
 const nodeFuncApp = await builder.addAzureFunctionsApp(
     "nodefunc",
     "../NodeFunctions",
@@ -34,6 +33,6 @@ const nodeFuncApp = await builder.addAzureFunctionsApp(
 );
 await nodeFuncApp
     .withHostStorage(storage)
-    .withReference(anotherStorage);
+    .withReference(storage);
 
 await builder.build().run();

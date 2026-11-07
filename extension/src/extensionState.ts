@@ -78,6 +78,7 @@ function cloneResourceState(resource: ResourceJson, includeSensitiveDashboardUrl
     resourceType: resource.resourceType,
     state: resource.state,
     projectPath: resource.properties?.['project.path'] ?? null,
+    launchConfigurationType: resource.properties?.['resource.launchConfigurationType'] ?? null,
     dashboardUrl: resource.dashboardUrl && includeSensitiveDashboardUrls ? stripResourceSuffix(resource.dashboardUrl) : (sanitizeDashboardUrl(resource.dashboardUrl) ?? null),
     urls: resource.urls?.map(cloneResourceUrlState) ?? null,
     commands: resource.commands ? cloneResourceCommands(resource.commands) : null,

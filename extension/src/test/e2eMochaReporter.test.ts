@@ -107,6 +107,41 @@ suite('E2E Mocha reporter', () => {
         assert.strictEqual(hasCompletedMochaTestFailures({ complete: true, tests: [failedTest], failures: [failedTest] }), true);
     });
 
+    test('rejects empty, missing, all-skipped, and inconsistent successful test reports', () => {
+        const { assertExecutedMochaTests } = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-results.cjs'));
+        const { shouldAllowAdvisoryTestFailure } = require(getProcessFailureModulePath());
+        const completedTest = { title: 'starts a Functions worker' };
+        assert.doesNotThrow(() => assertExecutedMochaTests({
+            complete: true,
+            tests: [completedTest],
+            passes: [completedTest],
+            failures: [],
+        }));
+
+        for (const results of [
+            undefined,
+            {},
+            { tests: [], passes: [], pending: [], failures: [] },
+            { complete: false, tests: [completedTest], passes: [completedTest], failures: [] },
+            { tests: [completedTest], passes: [completedTest], failures: [] },
+            { tests: [completedTest], passes: [], pending: [completedTest], failures: [] },
+            { complete: true, tests: [completedTest], passes: [], pending: [completedTest], failures: [] },
+            { complete: true, tests: [completedTest], passes: [completedTest], failures: [completedTest] },
+            { complete: true, tests: [completedTest], passes: [completedTest] },
+        ]) {
+            let failure: unknown;
+            assert.throws(() => {
+                try {
+                    assertExecutedMochaTests(results);
+                } catch (error) {
+                    failure = error;
+                    throw error;
+                }
+            });
+            assert.strictEqual(shouldAllowAdvisoryTestFailure(failure, results, false), false);
+        }
+    });
+
     test('only classifies completed test failures as advisory', () => {
         const { hasCompletedMochaTestFailures } = require(path.join(__dirname, '..', '..', 'scripts', 'e2e-mocha-results.cjs'));
         const failedTest = {
@@ -115,15 +150,22 @@ suite('E2E Mocha reporter', () => {
         };
 
         assert.strictEqual(hasCompletedMochaTestFailures({
+            complete: true,
             tests: [failedTest],
             failures: [failedTest],
         }), true);
         assert.strictEqual(hasCompletedMochaTestFailures(undefined), false);
         assert.strictEqual(hasCompletedMochaTestFailures({
+            tests: [failedTest],
+            failures: [failedTest],
+        }), false);
+        assert.strictEqual(hasCompletedMochaTestFailures({
+            complete: true,
             tests: [],
             failures: [{ title: '"before all" hook', fullTitle: 'Aspire E2E "before all" hook' }],
         }), false);
         assert.strictEqual(hasCompletedMochaTestFailures({
+            complete: true,
             tests: [failedTest],
             failures: [
                 failedTest,
@@ -419,6 +461,7 @@ function getProcessRunnerModulePath() {
 function createCompletedMochaResults(errorName?: string, errorMessage?: string) {
     const failedTest = { fullTitle: 'Aspire E2E starts an AppHost' };
     return {
+        complete: true,
         tests: [failedTest],
         failures: [{
             ...failedTest,

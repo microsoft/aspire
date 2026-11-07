@@ -7,8 +7,9 @@ Use this integration to model, configure, and orchestrate Azure Functions apps i
 ### Prerequisites
 
 * An Aspire project based on the starter template.
-* An Azure Functions app. .NET isolated worker apps can be referenced as projects. TypeScript and JavaScript apps can be referenced by directory.
-* Azure Functions Core Tools for local JavaScript Functions apps. TypeScript Functions apps normally reference `azure-functions-core-tools` from `devDependencies` and run it through an npm script.
+* An Azure Functions app. C# isolated-worker apps can be referenced as SDK-style projects. TypeScript and JavaScript apps can be referenced by directory.
+* Azure Functions Core Tools for local .NET and JavaScript Functions apps. TypeScript Functions apps normally reference `azure-functions-core-tools` from `devDependencies` and run it through an npm script.
+* .NET 10 binding packages require Core Tools 4.13.0 or later, whose host targets .NET 10. See the [Core Tools 4.13.0 release](https://github.com/Azure/azure-functions-core-tools/releases/tag/4.13.0).
 
 ### Add the integration
 
@@ -18,10 +19,11 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Functions` integratio
 aspire add Aspire.Hosting.Azure.Functions
 ```
 
-The .NET Functions resource deliberately retains `AddAzureFunctionsProject` and its specialized
-Functions host/debug behavior. Do not replace it with ordinary `AddDotnetProject`; that migration
-is tracked separately in [#21345](https://github.com/microsoft/aspire/issues/21345). Keep its required
-generated project metadata and build references. See the [project migration guide](../../docs/migrate-from-addproject.md#retained-legacy-scenarios).
+Use `AddDotnetAzureFunction(name, projectPath)` / `addDotnetAzureFunction` for .NET Functions projects. It returns an
+`AzureFunctionsResource` based on `DotnetProjectResource`, preserving the Functions host,
+binding configuration, and publishing behavior. The old `AddAzureFunctionsProject` overloads
+and `AzureFunctionsProjectResource` remain available but are obsolete. See the
+[project migration guide](../../docs/migrate-from-addproject.md#azure-functions-projects).
 
 ## Usage example
 
@@ -39,12 +41,38 @@ var storage = builder.AddAzureStorage("storage").RunAsEmulator();
 var queue = storage.AddQueues("queue");
 var blob = storage.AddBlobs("blob");
 
-builder.AddAzureFunctionsProject<Projects.Company_FunctionApp>("functions")
+builder.AddDotnetAzureFunction("functions", "../AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj")
     .WithReference(queue)
     .WithReference(blob);
 
 builder.Build().Run();
 ```
+
+**TypeScript - .NET isolated worker project**
+
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
+
+const builder = await createBuilder();
+const queue = await builder.addAzureStorage("storage").runAsEmulator().addQueues("queue");
+
+await builder.addDotnetAzureFunction("functions", "../Functions/Functions.csproj")
+    .withReference(queue);
+
+await builder.build().run();
+```
+
+For .NET Functions projects, `WithReplicas(2)` / `withReplicas(2)` keeps a launch profile's
+`--port` as the public proxy port and assigns a separate listener port to each Functions
+host. HTTPS, certificate settings, and other profile arguments are preserved. A single
+replica retains the direct, fixed-port behavior. This does not change legacy Functions
+resources or published container ports.
+
+In publish mode, `WithEndpointsInEnvironment` / `withEndpointsInEnvironment` controls automatic
+`ASPNETCORE_URLS` configuration. C# predicates compose; the generated API takes endpoint names,
+with an empty list excluding all endpoints. Filters do not remove endpoints, change ingress or
+Core Tools run arguments, or override explicit environment values. When opting out, configure a
+listening address appropriate for the deployed Functions host.
 
 **C# - TypeScript or JavaScript app directory**
 
@@ -85,7 +113,7 @@ await builder.build().run();
 
 ## TypeScript and JavaScript Functions apps
 
-The directory-based APIs (`AddAzureFunctionsApp`, `AzureFunctionsAppResource`, `AzureFunctionsLanguage`, and the app-specific extension overloads) are experimental pending API review and may change or be removed. C# callers must opt in by suppressing diagnostic `ASPIREAZUREFUNCTIONS001`, for example with `#pragma warning disable ASPIREAZUREFUNCTIONS001`. The existing .NET project APIs are unaffected.
+The directory-based APIs (`AddAzureFunctionsApp`, `AzureFunctionsAppResource`, `AzureFunctionsLanguage`, and the app-specific extension overloads) are experimental pending API review and may change or be removed. C# callers must opt in by suppressing diagnostic `ASPIREAZUREFUNCTIONS001`, for example with `#pragma warning disable ASPIREAZUREFUNCTIONS001`. The .NET Functions APIs do not require this experimental opt-in.
 
 Directory-based Functions apps run on the Azure Functions Node worker with `FUNCTIONS_WORKER_RUNTIME` set to `node`.
 
@@ -125,11 +153,29 @@ When a TypeScript or JavaScript Functions app does not include a `Dockerfile`, A
 
 If the Functions app directory already contains a `Dockerfile`, Aspire uses that Dockerfile instead. Use this to select a different Azure Functions Node image, customize the Node version, or add project-specific build steps.
 
-When deployed to Azure Container Apps, Functions resources are published with the container app `kind` set to `functionapp` and the Functions container port set to `80`.
+When deployed to Azure Container Apps, Functions resources are published with the container app
+`kind` set to `functionapp`. .NET Functions use SDK container publishing and target port `8080`;
+TypeScript and JavaScript Functions use port `80`. Functions apps cannot be published as
+Container App Jobs.
 
 ## Debugging
 
-.NET isolated worker Functions projects use the Azure Functions extension integration for debugging.
+.NET isolated-worker Functions projects start Core Tools, which hosts and launches the isolated
+worker. The SDK selects the process invocation and host working directory; Aspire does not
+launch the worker directly.
+
+An IDE advertising `azure-functions-with-external-build.v1` launches the output produced by
+Aspire's coordinated build without rebuilding it. Build-only environment variables configured
+with `WithBuildEnvironment` are used for that build and IDE output evaluation, not injected into
+the host or worker runtime environment.
+
+With an older IDE that supports the legacy Functions launcher, or a capability-less Visual
+Studio session with the Functions project loaded in the solution, the IDE builds the project.
+Aspire logs one startup warning per affected resource because the IDE may use different build
+configuration or build environment settings. This fallback waits for the entire existing
+coordinated initial-build batch, including failures, but does not add the Functions project to
+that batch. Upgrade the IDE integration or run outside the IDE to use Aspire-owned builds.
+Ordinary project external-build support alone is not Functions external-build support.
 
 TypeScript and JavaScript Functions apps use VS Code JavaScript debugging. Aspire does not add a service-discovery endpoint for the Node inspector. During a VS Code debug session, the Aspire extension starts the Functions host with a loopback-only Node inspector port by setting `languageWorkers__node__arguments`, then attaches the JavaScript debugger to that port.
 
@@ -154,7 +200,7 @@ var scheduler = builder.AddDurableTaskScheduler("scheduler")
 
 var taskHub = scheduler.AddTaskHub("taskhub");
 
-builder.AddAzureFunctionsProject<Projects.Company_FunctionApp>("funcapp")
+builder.AddDotnetAzureFunction("funcapp", "../AzureFunctionsWithDts.Functions/AzureFunctionsWithDts.Functions.csproj")
     .WithHostStorage(storage)
     .WithReference(taskHub);
 

@@ -1502,6 +1502,14 @@ function projectDownloadCache(result, storageDirectory) {
     fs.mkdirSync(projectedMacOsDirectory);
     projectDirectoryChildren(cachedMacOsDirectory, projectedMacOsDirectory);
     fs.symlinkSync('Code', path.join(projectedMacOsDirectory, 'Electron'), 'file');
+  } else if (result.manifest.platform === 'win32' && hasLongWindowsWorkbenchPath(cachedVsCodeDirectory)) {
+    // VS Code resolves its workbench file URL against the physical cache directory,
+    // even when launched through a short junction. Chromium reports ERR_FILE_NOT_FOUND
+    // for the observed 268-character workbench.html path. Materialize a run-local copy
+    // so a genuinely short storage root can avoid Windows MAX_PATH without mutating cache.
+    // https://learn.microsoft.com/windows/win32/fileio/maximum-file-path-limitation
+    removePathWithoutFollowingLinks(projectedVsCodeDirectory);
+    fs.cpSync(cachedVsCodeDirectory, projectedVsCodeDirectory, { recursive: true });
   } else {
     projectCacheEntry(cachedVsCodeDirectory, projectedVsCodeDirectory);
   }
@@ -1509,6 +1517,20 @@ function projectDownloadCache(result, storageDirectory) {
   projectCacheEntry(
     path.join(result.cacheDirectory, result.manifest.chromeDriverEntry),
     path.join(storageDirectory, result.manifest.chromeDriverEntry));
+}
+
+function hasLongWindowsWorkbenchPath(vscodeDirectory) {
+  const physicalDirectory = fs.realpathSync.native(vscodeDirectory);
+  const roots = [
+    physicalDirectory,
+    ...fs.readdirSync(physicalDirectory, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .map(entry => path.join(physicalDirectory, entry.name)),
+  ];
+  return roots.some(root => {
+    const workbench = path.join(root, 'resources', 'app', 'out', 'vs', 'code', 'electron-browser', 'workbench', 'workbench.html');
+    return workbench.length >= 260 && fs.existsSync(workbench);
+  });
 }
 
 function projectDirectoryChildren(sourceDirectory, destinationDirectory, excludedName) {

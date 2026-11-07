@@ -5,23 +5,29 @@ import * as path from 'path';
 import * as net from 'node:net';
 import * as vscode from 'vscode';
 import { azureFunctionsExtensionId, csharpExtensionId } from '../../capabilities';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, isAzureFunctionsNodeLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, AzureFunctionsExternalBuildLaunchConfiguration, ExecutableLaunchConfiguration, isAzureFunctionsLaunchConfiguration, isAzureFunctionsNodeLaunchConfiguration } from '../../dcp/types';
 import {
     azureFunctionsCmdDelayedExpansion,
     azureFunctionsCmdPercentArgument,
+    azureFunctionsExternalBuildEvaluationFailed,
     azureFunctionsHostStartupTimedOut,
+    azureFunctionsInvalidExternalBuildConfiguration,
     azureFunctionsInvalidProcessId,
     azureFunctionsNodeInspectorPortAllocationFailed,
+    azureFunctionsPowerShellShimArgument,
+    azureFunctionsSdkEndpointConflict,
     azureFunctionsTaskExitedBeforeStartup,
+    azureFunctionsUnsupportedSdkInvocation,
     azureFunctionsUnsupportedTaskShell,
     azureFunctionsWorkerStartupTimedOut,
-    invalidLaunchConfiguration
+    invalidLaunchConfiguration,
+    prebuiltProjectOutputMissing
 } from '../../loc/strings';
 import { assertNoTerminalControlCharacters, quoteShellArg } from '../../utils/AspireTerminalProvider';
 import { quoteCmdArgument } from '../../utils/cmdShim';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import { AlreadyStartedResourceDebugSession, ResourceDebuggerExtension } from '../debuggerExtensions';
-import { DotNetService } from './dotnet';
+import { DotNetService, parseSdkSerializedArguments } from './dotnet';
 import { cleanupRun, registerRunCleanup } from '../runCleanupRegistry';
 
 const AF_EXTENSION_ID = azureFunctionsExtensionId;
@@ -42,6 +48,23 @@ const TEMP_DIRECTORY_CLEANUP_MAX_ATTEMPTS =
     TEMP_DIRECTORY_CLEANUP_TIMEOUT_MS / TEMP_DIRECTORY_CLEANUP_RETRY_DELAY_MS;
 
 type FuncHostTaskShell = 'cmd' | 'fish' | 'powershell' | 'posix';
+
+type FuncHostInvocation = {
+    command: string;
+};
+
+type FuncHostEndpointOptions = {
+    port?: number;
+    portSpecified: boolean;
+    useHttps: boolean;
+    useHttpsSpecified: boolean;
+    cert?: string;
+    certSpecified: boolean;
+    password?: string;
+    passwordSpecified: boolean;
+    invalid: boolean;
+    tokenIndexes: Set<number>;
+};
 
 type TerminalProfileConfiguration = {
     path?: string | string[];
@@ -311,30 +334,202 @@ function getPickProcessTimeoutSeconds(): number {
         : DEFAULT_PICK_PROCESS_TIMEOUT_SECONDS;
 }
 
-function getFuncHostPort(args: string[]): number {
+function parseFuncHostEndpointOptions(args: string[]): FuncHostEndpointOptions {
+    // Core Tools' Fclp parser accepts endpoint options in forms such as:
+    //   --port 7071
+    //   -p=7071
+    //   --useHttps false
+    // It keeps the first occurrence when aliases or options are repeated.
+    const result: FuncHostEndpointOptions = {
+        portSpecified: false,
+        useHttps: false,
+        useHttpsSpecified: false,
+        certSpecified: false,
+        passwordSpecified: false,
+        invalid: false,
+        tokenIndexes: new Set<number>()
+    };
+
     for (let index = 0; index < args.length; index++) {
         const argument = args[index];
-        if ((argument === '--port' || argument === '-p') && index + 1 < args.length) {
-            const port = Number(args[index + 1]);
-            if (Number.isInteger(port) && port > 0 && port <= 65_535) {
-                return port;
+        const port = parseOptionValue(args, index, argument, ['--port', '-p']);
+        if (port) {
+            result.tokenIndexes.add(index);
+            if (port.consumedNext) {
+                result.tokenIndexes.add(index + 1);
+                index++;
             }
+            if (!result.portSpecified) {
+                result.portSpecified = true;
+                const value = Number(port.value);
+                if (port.value === undefined || !Number.isInteger(value) || value <= 0 || value > 65_535) {
+                    result.invalid = true;
+                } else {
+                    result.port = value;
+                }
+            }
+            continue;
         }
 
-        const match = /^(?:--port|-p)=(\d+)$/.exec(argument);
-        if (match) {
-            const port = Number(match[1]);
-            if (port > 0 && port <= 65_535) {
-                return port;
+        const useHttps = parseBooleanOption(args, index, argument, '--useHttps');
+        if (useHttps) {
+            result.tokenIndexes.add(index);
+            if (useHttps.consumedNext) {
+                result.tokenIndexes.add(index + 1);
+                index++;
+            }
+            if (!result.useHttpsSpecified) {
+                result.useHttpsSpecified = true;
+                if (useHttps.value === undefined) {
+                    result.invalid = true;
+                } else {
+                    result.useHttps = useHttps.value;
+                }
+            }
+            continue;
+        }
+
+        const cert = parseOptionValue(args, index, argument, ['--cert']);
+        if (cert) {
+            result.tokenIndexes.add(index);
+            if (cert.consumedNext) {
+                result.tokenIndexes.add(index + 1);
+                index++;
+            }
+            if (!result.certSpecified) {
+                result.certSpecified = true;
+                if (cert.value === undefined) {
+                    result.invalid = true;
+                } else {
+                    result.cert = cert.value;
+                }
+            }
+            continue;
+        }
+
+        const password = parseOptionValue(args, index, argument, ['--password']);
+        if (password) {
+            result.tokenIndexes.add(index);
+            if (password.consumedNext) {
+                result.tokenIndexes.add(index + 1);
+                index++;
+            }
+            if (!result.passwordSpecified) {
+                result.passwordSpecified = true;
+                if (password.value === undefined) {
+                    result.invalid = true;
+                } else {
+                    result.password = password.value;
+                }
             }
         }
     }
 
-    return FUNC_HOST_DEFAULT_PORT;
+    return result;
 }
 
-function createFuncTask(rawArgs: string[], quotedArgs: string[], buildOutputPath: string, env: Record<string, string>): vscode.Task {
-    const commandLine = ['func', 'host', 'start', ...quotedArgs].join(' ');
+function parseOptionValue(
+    args: string[],
+    index: number,
+    argument: string,
+    names: string[]
+): { value: string | undefined; consumedNext: boolean } | undefined {
+    for (const name of names) {
+        if (argument === name) {
+            const next = args[index + 1];
+            return {
+                value: next === undefined || isCommandLineOption(next) ? undefined : next,
+                consumedNext: next !== undefined && !isCommandLineOption(next)
+            };
+        }
+
+        if (argument.startsWith(`${name}=`) || argument.startsWith(`${name}:`)) {
+            return { value: argument.slice(name.length + 1), consumedNext: false };
+        }
+    }
+
+    return undefined;
+}
+
+function parseBooleanOption(
+    args: string[],
+    index: number,
+    argument: string,
+    name: string
+): { value: boolean | undefined; consumedNext: boolean } | undefined {
+    if (argument === `${name}+`) {
+        return { value: true, consumedNext: false };
+    }
+    if (argument === `${name}-`) {
+        return { value: false, consumedNext: false };
+    }
+
+    const parsed = parseOptionValue(args, index, argument, [name]);
+    if (!parsed) {
+        return undefined;
+    }
+
+    if (parsed.value === undefined) {
+        return { value: true, consumedNext: false };
+    }
+
+    return { value: parseBooleanValue(parsed.value), consumedNext: parsed.consumedNext };
+}
+
+function parseBooleanValue(value: string): boolean | undefined {
+    switch (value.toLowerCase()) {
+        case 'true':
+        case 'on':
+        case '1':
+            return true;
+        case 'false':
+        case 'off':
+        case '0':
+            return false;
+        default:
+            return undefined;
+    }
+}
+
+function isCommandLineOption(value: string): boolean {
+    return value.startsWith('-');
+}
+
+function normalizeSdkFunctionsHostArguments(sdkArgs: string[], modelArgs: string[], launchProfilePort: number | undefined): string[] {
+    const sdk = parseFuncHostEndpointOptions(sdkArgs);
+    if (sdk.invalid) {
+        throw new Error(azureFunctionsSdkEndpointConflict);
+    }
+
+    const model = parseFuncHostEndpointOptions(modelArgs);
+    if (launchProfilePort !== undefined && (model.invalid || model.port === undefined)) {
+        throw new Error(azureFunctionsSdkEndpointConflict);
+    }
+
+    if (sdk.tokenIndexes.size === 0) {
+        return sdkArgs;
+    }
+
+    // Replicated hosts listen on allocated target ports, not the profile's public
+    // port. Validate SDK settings against the declaration before removing them.
+    const expectedPort = launchProfilePort ?? model.port;
+    const conflicts =
+        (sdk.portSpecified && (model.port === undefined || sdk.port !== expectedPort)) ||
+        (sdk.useHttpsSpecified && sdk.useHttps !== model.useHttps) ||
+        (sdk.certSpecified && (!model.certSpecified || sdk.cert !== model.cert)) ||
+        (sdk.passwordSpecified && (!model.passwordSpecified || sdk.password !== model.password));
+    if (conflicts) {
+        throw new Error(azureFunctionsSdkEndpointConflict);
+    }
+
+    return sdkArgs.filter((_argument, index) => !sdk.tokenIndexes.has(index));
+}
+
+function getFuncHostPort(args: string[]): number {
+    return parseFuncHostEndpointOptions(args).port ?? FUNC_HOST_DEFAULT_PORT;
+}
+
+function createFuncTask(rawArgs: string[], commandLine: string, buildOutputPath: string, env: Record<string, string>): vscode.Task {
     return new vscode.Task(
         { type: 'func', command: 'host start', args: rawArgs },
         vscode.TaskScope.Workspace,
@@ -557,23 +752,119 @@ async function waitForWorkerProcessId(discovery: WorkerProcessIdDiscovery, deadl
     throw new Error(azureFunctionsWorkerStartupTimedOut(timeoutSeconds));
 }
 
-function quoteFuncHostArguments(args: string[] | undefined): string[] {
-    const funcHostArgs = args ?? [];
-    for (const argument of funcHostArgs) {
+function getFuncHostCommandLine(invocation: FuncHostInvocation, args: string[]): string {
+    const commandArgs = ['host', 'start', ...args];
+    for (const argument of [invocation.command, ...commandArgs]) {
         assertNoTerminalControlCharacters(argument);
     }
 
     // These characters have the same literal meaning in the supported task shells.
     // Avoid resolving the configured shell when no argument needs shell-specific quoting.
-    if (funcHostArgs.every(argument => /^[A-Za-z0-9_./:-]+$/.test(argument))) {
-        return funcHostArgs;
+    if ([invocation.command, ...commandArgs].every(argument => /^[A-Za-z0-9_./:-]+$/.test(argument))) {
+        return [invocation.command, ...commandArgs].join(' ');
     }
 
     const shell = getFuncHostTaskShell();
-    return funcHostArgs.map(argument => quoteFuncHostArgument(argument, shell));
+    if (shell === 'powershell') {
+        return getPowerShellFuncHostCommandLine(invocation.command, commandArgs);
+    }
+
+    return [invocation.command, ...commandArgs]
+        .map(argument => quoteFuncHostArgument(argument, shell))
+        .join(' ');
 }
 
-function quoteFuncHostArgument(argument: string, shell: FuncHostTaskShell): string {
+function quotePowerShellLiteral(value: string): string {
+    // PowerShell treats typographic apostrophes as string delimiters too.
+    return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`;
+}
+
+function getPowerShellFuncHostCommandLine(command: string, args: string[]): string {
+    // Tasks cross two independent boundaries: Windows' native -Command parsing and
+    // PowerShell's call to func. Legacy native passing drops empty strings and consumes
+    // quotes, whereas Standard passing requires the original strings. Resolve aliases
+    // before choosing so a func.cmd shim gets cmd/CRT quoting even in PowerShell 7.
+    // https://learn.microsoft.com/powershell/module/microsoft.powershell.core/about/about_parsing#passing-arguments-that-contain-quote-characters
+    // Inline quoted tokens suppress Unix wildcard/tilde expansion; splatting loses
+    // that protection even when the array was constructed from quoted literals.
+    const literalArgs = args.map(quotePowerShellLiteral).join(' ');
+    const legacyArgs = args.map(argument => quotePowerShellLiteral(quoteCmdArgument(argument))).join(' ');
+    // npm's func.ps1 forwards $args to Node, reintroducing Unix expansion. Bypass
+    // only its complete known token stream when Node is native; custom scripts
+    // and functions must continue receiving their original arguments.
+    // https://github.com/npm/cmd-shim/blob/main/lib/index.js
+    const npmShimSource = String.raw`$basedir=Split-Path $MyInvocation.MyCommand.Definition -Parent
+$exe=""
+if ($PSVersionTable.PSVersion -lt "6.0" -or $IsWindows) {
+  $exe=".exe"
+}
+$ret=0
+if (Test-Path "$basedir/node$exe") {
+  if ($MyInvocation.ExpectingInput) {
+    $input | & "$basedir/node$exe" "$basedir/node_modules/azure-functions-core-tools/lib/main.js" $args
+  } else {
+    & "$basedir/node$exe" "$basedir/node_modules/azure-functions-core-tools/lib/main.js" $args
+  }
+  $ret=$LASTEXITCODE
+} else {
+  if ($MyInvocation.ExpectingInput) {
+    $input | & "node$exe" "$basedir/node_modules/azure-functions-core-tools/lib/main.js" $args
+  } else {
+    & "node$exe" "$basedir/node_modules/azure-functions-core-tools/lib/main.js" $args
+  }
+  $ret=$LASTEXITCODE
+}
+exit $ret`.split('\n').map(quotePowerShellLiteral).join(' + [char]10 + ');
+    const script = [
+        '& {',
+        `$command = Get-Command ${quotePowerShellLiteral(command)} -ErrorAction Stop;`,
+        "while ($command.CommandType -eq 'Alias') { $command = $command.ResolvedCommand };",
+        String.raw`$shim = $command.CommandType -eq 'Application' -and $command.Path -match '\.(cmd|bat)$';`,
+        ...(args.some(argument => /[%!]/.test(argument))
+            ? [`if ($shim) { [Console]::Error.WriteLine(${quotePowerShellLiteral(azureFunctionsPowerShellShimArgument)}); exit 1 };`]
+            : []),
+        // This preference does not exist in Windows PowerShell 5.1 or early PowerShell 7.
+        '$passing = Get-Variable PSNativeCommandArgumentPassing -ValueOnly -ErrorAction SilentlyContinue;',
+        "$npmShim = $command.CommandType -eq 'ExternalScript' -and [IO.Path]::GetFileName($command.Path) -eq 'func.ps1';",
+        'if ($npmShim) {',
+        'function Get-AspireShimTokens($text) { $tokens = $null; $null = [System.Management.Automation.Language.Parser]::ParseInput($text, [ref]$tokens, [ref]$null);',
+        "($tokens | Where-Object { $_.Kind -notin 'Comment', 'NewLine', 'EndOfInput' } | ForEach-Object { $_.Text }) -join [char]0 };",
+        `$npmShim = (Get-AspireShimTokens $command.ScriptBlock.ToString()) -ceq (Get-AspireShimTokens (${npmShimSource}));`,
+        '};',
+        "$native = $command.CommandType -eq 'Application';",
+        'if ($npmShim) {',
+        "$nodeName = if ($PSVersionTable.PSVersion -lt '6.0' -or $IsWindows) { 'node.exe' } else { 'node' };",
+        '$nodePath = Join-Path ([IO.Path]::GetDirectoryName($command.Path)) $nodeName;',
+        '$node = if (Test-Path -LiteralPath $nodePath) { Get-Command $nodePath -ErrorAction Stop } else { Get-Command $nodeName -ErrorAction Stop };',
+        "while ($node.CommandType -eq 'Alias') { $node = $node.ResolvedCommand };",
+        "$native = $node.CommandType -eq 'Application';",
+        '};',
+        // A batch shim needs an already-serialized cmd command line, including in Standard
+        // mode. Scope the preference to this invocation; never change the terminal profile.
+        "if ($shim) { $PSNativeCommandArgumentPassing = 'Legacy' };",
+        'if ($npmShim -and $native) {',
+        "$entryPoint = Join-Path ([IO.Path]::GetDirectoryName($command.Path)) 'node_modules/azure-functions-core-tools/lib/main.js';",
+        `if (!$passing -or $passing -eq 'Legacy') { & $node "$entryPoint" ${legacyArgs} } else { & $node "$entryPoint" ${literalArgs} }`,
+        "} elseif ($native -and ($shim -or !$passing -or $passing -eq 'Legacy')) {",
+        `& $command ${legacyArgs}`,
+        '} else {',
+        `& $command ${literalArgs}`,
+        '};',
+        // Even a following type test resets $?, hiding a custom script/function failure.
+        '$succeeded = $?;',
+        "if ($command.CommandType -eq 'Application' -or $npmShim) { exit $LASTEXITCODE };",
+        'if (!$succeeded) { exit 1 }',
+        '}',
+    ].join(' ');
+
+    // VS Code hands -Command to Windows with verbatim arguments. Preserve the script's
+    // double quotes through that outer boundary before PowerShell parses its literals.
+    return process.platform === 'win32'
+        ? script.replace(/(\\*)"/g, (_match: string, backslashes: string) => `${backslashes}${backslashes}\\"`)
+        : script;
+}
+
+function quoteFuncHostArgument(argument: string, shell: Exclude<FuncHostTaskShell, 'powershell'>): string {
     // Keep ordinary flags and paths unchanged so the Azure Functions extension can
     // still inspect exact flag values before it flattens the array for ShellExecution.
     const isShellSafe = shell === 'posix' || shell === 'fish'
@@ -606,7 +897,38 @@ function quoteFuncHostArgument(argument: string, shell: FuncHostTaskShell): stri
         return `'${argument.replace(/[\\']/g, value => `\\${value}`)}'`;
     }
 
-    return quoteShellArg(argument, shell === 'powershell' ? 'win32' : 'linux');
+    return quoteShellArg(argument, 'linux');
+}
+
+function getSdkFunctionsHostInvocation(runCommand: string, runArguments: string): FuncHostInvocation & { args: string[] } {
+    const commandName = (command: string): string => path.win32.basename(path.posix.basename(command)).toLowerCase();
+    const isFuncCommand = (command: string): boolean => /^(?:func|func\.(?:exe|cmd|bat|ps1))$/.test(commandName(command));
+    let tokens = parseSdkSerializedArguments(runArguments);
+    let command = runCommand;
+    if (/^cmd(?:\.exe)?$/.test(commandName(runCommand))) {
+        // Microsoft.Azure.Functions.Worker.Sdk ComputeRunArguments emits:
+        //   Windows: RunCommand=cmd, RunArguments=/C func start <SDK RunArguments>
+        //   Unix:    RunCommand=func, RunArguments=start <SDK RunArguments>
+        // Only unwrap this transport wrapper, preserving the exact selected Core Tools
+        // command rather than replacing it with whichever `func` appears first on PATH.
+        if (tokens[0]?.toLowerCase() !== '/c' || !tokens[1] || !isFuncCommand(tokens[1])) {
+            throw new Error(azureFunctionsUnsupportedSdkInvocation);
+        }
+        command = tokens[1];
+        tokens = tokens.slice(2);
+    } else if (!isFuncCommand(runCommand)) {
+        throw new Error(azureFunctionsUnsupportedSdkInvocation);
+    }
+
+    const startIndex = tokens[0]?.toLowerCase() === 'host' ? 1 : 0;
+    if (tokens[startIndex]?.toLowerCase() !== 'start') {
+        throw new Error(azureFunctionsUnsupportedSdkInvocation);
+    }
+
+    return {
+        command,
+        args: tokens.slice(startIndex + 1)
+    };
 }
 
 function getFuncHostTaskShell(): FuncHostTaskShell {
@@ -870,34 +1192,71 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
     getSupportedFileTypes: () => ['.cs', '.csproj'],
     getProjectFile: (launchConfig) => {
         if (isAzureFunctionsLaunchConfiguration(launchConfig)) {
+            if (launchConfig.type === 'azure-functions-with-external-build.v1') {
+                validateFunctionsExternalBuildMetadata(launchConfig);
+            }
             return launchConfig.project_path;
         }
-        throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        throw new Error(invalidLaunchConfiguration('Azure Functions'));
     },
     createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<AlreadyStartedResourceDebugSession | void> => {
         if (!isAzureFunctionsLaunchConfiguration(launchConfig)) {
-            extensionLogOutputChannel.info(`The resource type was not azure-functions for ${JSON.stringify(launchConfig)}`);
-            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+            throw new Error(invalidLaunchConfiguration('Azure Functions'));
+        }
+        if (launchConfig.type === 'azure-functions-with-external-build.v1') {
+            validateFunctionsExternalBuildMetadata(launchConfig);
         }
 
         const rawArgs = [...(args ?? [])];
+        let funcHostInvocation: FuncHostInvocation = { command: 'func' };
         // Validate caller-provided arguments before building the project. The final
         // argument list is quoted again after generated Core Tools flags are appended.
-        quoteFuncHostArguments(rawArgs);
+        getFuncHostCommandLine(funcHostInvocation, rawArgs);
 
         const runId = debugConfiguration.runId;
         const projectPath = launchConfig.project_path;
         const dotNetService = new DotNetService(launchOptions.debugSession);
-        // project_path from the hosting integration is currently a .csproj file path
-        // (resolved by AzureFunctionsProjectMetadata.ResolveProjectPath). If Aspire
-        // later supports non-.NET Functions resources, that launch config should carry
-        // an explicit language/build contract instead of reusing this .NET project path.
-        // Always build because path-based Functions resources do not have to be ProjectReferences
-        // of the AppHost, so an existing target can be stale even after the AppHost was rebuilt.
-        extensionLogOutputChannel.info(`Building Azure Functions project before starting func host: ${projectPath}`);
-        await dotNetService.buildDotNetProject(projectPath);
-        const targetPath = await dotNetService.getDotNetTargetPath(projectPath);
-        const buildOutputPath = path.dirname(targetPath);
+        let buildOutputPath: string;
+        if (launchConfig.type === 'azure-functions-with-external-build.v1') {
+            // This contract is emitted only after Aspire's coordinated build completes.
+            // Even forceBuild must not replace that build or evaluate with runtime-only env.
+            // ComputeRunArguments supplies both the host directory and SDK-only host options.
+            // Aspire leaves those SDK arguments to this launcher for external-build IDE runs.
+            let properties: Awaited<ReturnType<DotNetService['getDotNetProjectRunProperties']>>;
+            try {
+                properties = await dotNetService.getDotNetProjectRunProperties(
+                    projectPath,
+                    launchConfig.build_configuration,
+                    launchConfig.build_environment,
+                    launchConfig.build_working_directory);
+            } catch {
+                // MSBuild diagnostics can echo build properties, including secrets. Do not
+                // serialize the launch payload or propagate its raw evaluation error.
+                throw new Error(azureFunctionsExternalBuildEvaluationFailed(projectPath));
+            }
+            if (!isAbsoluteFunctionsPath(properties.targetPath) || !isAbsoluteFunctionsPath(properties.runWorkingDirectory)) {
+                throw new Error(azureFunctionsInvalidExternalBuildConfiguration);
+            }
+            const sdkInvocation = getSdkFunctionsHostInvocation(properties.runCommand, properties.runArguments);
+            funcHostInvocation = { command: sdkInvocation.command };
+            getFuncHostCommandLine(funcHostInvocation, sdkInvocation.args);
+            rawArgs.unshift(...normalizeSdkFunctionsHostArguments(sdkInvocation.args, rawArgs, launchConfig.launch_profile_port));
+            getFuncHostCommandLine(funcHostInvocation, rawArgs);
+            if (!fs.existsSync(properties.targetPath)) {
+                throw new Error(prebuiltProjectOutputMissing(projectPath, properties.targetPath));
+            }
+            buildOutputPath = properties.runWorkingDirectory;
+            if (!fs.existsSync(buildOutputPath)) {
+                throw new Error(prebuiltProjectOutputMissing(projectPath, buildOutputPath));
+            }
+        } else {
+            // Legacy hosting packages do not coordinate Functions builds. Always build,
+            // since path resources need not be AppHost ProjectReferences and may be stale.
+            extensionLogOutputChannel.info(`Building Azure Functions project before starting func host: ${projectPath}`);
+            await dotNetService.buildDotNetProject(projectPath);
+            const targetPath = await dotNetService.getDotNetTargetPath(projectPath);
+            buildOutputPath = path.dirname(targetPath);
+        }
         extensionLogOutputChannel.info(`Starting Azure Functions project with a registered func task: ${projectPath} (buildPath: ${buildOutputPath})`);
 
         // ShellExecution inherits the VS Code process environment. Only add the
@@ -934,15 +1293,15 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
             rawArgs.push('--json-output-file', ownedJsonOutputFileArgument);
         }
 
-        let quotedArgs: string[];
+        let commandLine: string;
         try {
-            quotedArgs = quoteFuncHostArguments(rawArgs);
+            commandLine = getFuncHostCommandLine(funcHostInvocation, rawArgs);
         } catch (error) {
             cleanupRun(runId);
             throw error;
         }
 
-        state.task = createFuncTask(rawArgs, quotedArgs, buildOutputPath, dcpEnv);
+        state.task = createFuncTask(rawArgs, commandLine, buildOutputPath, dcpEnv);
         let completeSession: ((exitCode: number) => void) | undefined;
         let completed = false;
         const complete = (exitCode: number): void => {
@@ -1108,3 +1467,35 @@ export const azureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
         }
     }
 };
+
+export const externalBuildAzureFunctionsDebuggerExtension: ResourceDebuggerExtension = {
+    ...azureFunctionsDebuggerExtension,
+    resourceType: 'azure-functions-with-external-build.v1',
+    getSupportedFileTypes: () => ['.csproj', '.fsproj', '.vbproj']
+};
+
+function isAbsoluteFunctionsPath(value: unknown): value is string {
+    return typeof value === 'string' && value.trim().length > 0 && !value.includes('\0') && path.isAbsolute(value);
+}
+
+function validateFunctionsExternalBuildMetadata(configuration: AzureFunctionsExternalBuildLaunchConfiguration): void {
+    const environment = configuration.build_environment;
+    if (configuration.suppress_build !== true ||
+        !isAbsoluteFunctionsPath(configuration.project_path) ||
+        !isAbsoluteFunctionsPath(configuration.build_working_directory) ||
+        (configuration.launch_profile_port !== undefined &&
+            (!Number.isInteger(configuration.launch_profile_port) ||
+                configuration.launch_profile_port <= 0 || configuration.launch_profile_port > 65535)) ||
+        (configuration.mode !== undefined && configuration.mode !== 'Debug' && configuration.mode !== 'NoDebug') ||
+        (configuration.build_configuration !== undefined &&
+            (typeof configuration.build_configuration !== 'string' ||
+                configuration.build_configuration.trim().length === 0 ||
+                /[\0\r\n]/.test(configuration.build_configuration))) ||
+        (environment !== undefined &&
+            (!environment || typeof environment !== 'object' || Array.isArray(environment) ||
+                Object.entries(environment).some(([name, value]) =>
+                    name.trim().length === 0 || /[=\0]/.test(name) ||
+                    typeof value !== 'string' || value.includes('\0'))))) {
+        throw new Error(azureFunctionsInvalidExternalBuildConfiguration);
+    }
+}

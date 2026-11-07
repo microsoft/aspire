@@ -752,9 +752,9 @@ function collectProfileDotnetHostEnvVarNames(profile: LaunchProfile | null | und
     return names;
 }
 
-function parseSdkSerializedArguments(argumentsText: string): string[] {
-    // `dotnet run-api` exposes ProcessStartInfo.Arguments after the SDK serializes an argument array,
-    // for example:
+export function parseSdkSerializedArguments(argumentsText: string): string[] {
+    // SDK RunArguments (also exposed by `dotnet run-api`) use ProcessStartInfo.Arguments
+    // serialization, for example:
     //   exec "/workspace/output with spaces/apphost.dll"
     // Use the same CRT-compatible parser as src/Shared/CommandLineArgsParser.cs. That helper is copied
     // from System.Diagnostics.Process: Windows processes use these rules natively, while the .NET runtime
