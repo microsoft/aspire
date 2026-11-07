@@ -322,6 +322,11 @@
         <target state="new">Started</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceHeaderStopped">
+        <source>Stopped</source>
+        <target state="new">Stopped</target>
+        <note>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</note>
+      </trans-unit>
       <trans-unit id="ResourcePaneActivityContext">
         <source>{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</source>
         <target state="new">{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</target>
@@ -442,21 +447,6 @@
         <target state="new">State</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneKindHide">
-        <source>Select to hide {0}</source>
-        <target state="new">Select to hide {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneKindShow">
-        <source>Select to show {0}</source>
-        <target state="new">Select to show {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneKindsLandmark">
-        <source>Types to show</source>
-        <target state="new">Types to show</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneLandmark">
         <source>Resources</source>
         <target state="new">Resources</target>
@@ -476,16 +466,6 @@
         <source>{0} moved before {1}.</source>
         <target state="new">{0} moved before {1}.</target>
         <note>{0} is the moved resource name; {1} is the target resource name.</note>
-      </trans-unit>
-      <trans-unit id="ResourcePaneNoKindsHint">
-        <source>Turn on a type above to list it.</source>
-        <target state="new">Turn on a type above to list it.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneNoKindsShown">
-        <source>Nothing shown</source>
-        <target state="new">Nothing shown</target>
-        <note />
       </trans-unit>
       <trans-unit id="ResourcePaneNoMetrics">
         <source>No metrics are currently available for this resource. Select to open its metrics view.</source>
@@ -590,11 +570,6 @@
       <trans-unit id="ResourcePaneResourceActions">
         <source>Actions for {0}</source>
         <target state="new">Actions for {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneSelectAll">
-        <source>Select all</source>
-        <target state="new">Select all</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneSelectionAddHint">

@@ -111,6 +111,8 @@ internal static class KnownResourcePropertySortOrder
 
 internal static class KnownResourceTraits
 {
-    public const string DashboardTag = "Aspire_Dashboard_Tag";
+    // Tags are not dashboard-only: they also appear in `aspire describe` output and other tooling, so the
+    // name has no "Dashboard" scope. The "Aspire_" prefix keeps it apart from user traits added with WithTrait.
+    public const string Tag = "Aspire_Tag";
     public const string DashboardPosition = "Aspire_Dashboard_Position";
 }

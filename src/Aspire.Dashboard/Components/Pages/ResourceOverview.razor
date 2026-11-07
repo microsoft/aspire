@@ -48,7 +48,7 @@
     else if (ResourcesLayout.IsMultiSelection || ResourceName is null)
     {
         @* All resources, or several selected resources: show their scoped Summary or Graph. *@
-        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : ResourcesLayout.GetScopeResourceNames())" />
+        <ApplicationSummary ResourceNames="@(ResourcesLayout.IsMultiSelection ? ResourcesLayout.SelectedResourceNames : null)" />
     }
     else if (Resource is { IsParameter: true } parameter && parameter.HasMissingParameterValueState())
     {

@@ -105,8 +105,6 @@ ignore:
   - eng/scripts/test-native-terminalhost.ps1          # unconditional native CLI archive smoke
   # SDK registration diagnostics run with the unconditional native Windows archive smoke.
   - eng/scripts/tray-registration-control/**
-  # The stabilization job invokes this script independently of the tests selector.
-  - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
   # helpers and the AzDO native-symbol validator. Listed so they do not show as unattributed audit noise.
   # (verify-cli-archive.ps1 and validate-npm-release-aliases.ps1 are NOT here -- they have test consumers
@@ -371,8 +369,9 @@ path_rules:
     reason: native Dashboard archive production and packaged runtime validation
   - paths:
       - eng/scripts/verify-native-dashboard-warnings.ps1
-    targets: [test:Infrastructure.Tests, job:native-dashboard-validation]
-    reason: validates the Native AOT Dashboard publish warning policy
+      - eng/aspire-managed-entitlements.plist
+    targets: [CLI_ARCHIVE_CONSUMERS, test:Infrastructure.Tests]
+    reason: native bundle warning validation and macOS JIT signing inputs
   - paths:
       - eng/scripts/test-native-tray.ps1
     targets: [test:Infrastructure.Tests]
@@ -528,6 +527,10 @@ path_rules:
       - src/Aspire.Tray/Windows/publish.ps1
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: native CLI bundle assembly and publishing inputs
+  - paths:
+      - eng/Bundle.proj
+    targets: [test:Aspire.Templates.Tests, job:native-dashboard-validation, job:polyglot]
+    reason: shared bundle phases produce RID runtime packages and the standalone Dashboard archive
 
   - paths:
       - tools/AnalyzeCiFailure/**
@@ -560,6 +563,7 @@ path_rules:
       # Script behavior and packaging fixtures.
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/stabilization-smoke-init-restore.sh
       - eng/scripts/validate-npm-package-signatures.ps1
       - eng/scripts/validate-npm-release-aliases.ps1
       - eng/scripts/aspire-skills-bundle.common.ps1
@@ -632,8 +636,11 @@ affected_project_rules:
       - Aspire.Hosting.Dotnet
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.JavaScript
+      - Aspire.Hosting.CodeGeneration.Go
+      - Aspire.Hosting.Go
+      - Aspire.Hosting.Redis
     targets: [job:cli-starter-validation]
-    reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
+    reason: direct executables, SDK, and hosting/code-generation packages used by the C#, TypeScript, and Go starter scenarios
   - projects: [Aspire.Hosting.Dotnet]
     targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests]
     reason: generated C# AppHosts use AddDotnetProject through a runtime-only package reference

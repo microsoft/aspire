@@ -64,6 +64,8 @@ internal static class ResourceSetupHelpers
         module.SetupVoid("unregisterResourceContextMenu", _ => true).SetVoidResult();
         module.SetupVoid("registerPaneActivityVisibility", _ => true).SetVoidResult();
         module.SetupVoid("unregisterPaneActivityVisibility", _ => true).SetVoidResult();
+        module.SetupVoid("setResourcePickerOpen", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterResourcePicker", _ => true).SetVoidResult();
         module.SetupVoid("restoreResourceContextMenuFocus", _ => true).SetVoidResult();
         module.SetupVoid("startPaneSelectionReveal", _ => true).SetVoidResult();
         module.SetupVoid("focusPaneSelectionReveal", _ => true).SetVoidResult();

@@ -659,7 +659,7 @@ public class ResourceDetailsTests : DashboardTestContext
         var properties = new[]
         {
             Trait("Owner", "Finance", "Platform"),
-            Trait(KnownResourceTraits.DashboardTag, "Backend", "API"),
+            Trait(KnownResourceTraits.Tag, "Backend", "API"),
             Trait(KnownResourceTraits.DashboardPosition, "10"),
             new ResourcePropertyViewModel("provider.diagnostic", Value.ForString("hidden"), false, null, int.MaxValue, null, false)
         }.ToDictionary(p => p.Name);

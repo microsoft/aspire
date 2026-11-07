@@ -13,6 +13,7 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -107,6 +108,7 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "repository": "http://example.test/templates" }""")]
     [InlineData("""{ "repository": "git@example.test:templates" }""")]
     [InlineData("""{ "repository": "https://token@example.test/templates" }""")]
+    [InlineData("""{ "repository": "ssh://git:password@example.test/templates" }""")]
     [InlineData("""{ "repository": "https://example.test/templates?q=search" }""")]
     [InlineData("""{ "repository": "https://example.test/templates#main" }""")]
     [InlineData("""{ "repository": "https://example.test/templates", "ref": 42 }""")]
@@ -335,8 +337,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, selectionCount);
         var groupedChoices = Assert.Single(interaction.GroupedSelectionPromptCalls);
         Assert.Equal(
-            [new SelectionChoiceGroup("source:first-source", "Company [templates]"),
-                new SelectionChoiceGroup("source:second-source", "Company [templates]")],
+            [new SelectionChoiceGroup("source:first-source", $"Company [templates] ({Path.Combine(workspace.Path, "first")})") { Style = new Style(Color.Green) },
+                new SelectionChoiceGroup("source:second-source", $"Company [templates] ({Path.Combine(workspace.Path, "second")})") { Style = new Style(Color.Green) }],
             groupedChoices.TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(["Same template", "Same template"], groupedChoices.TakeLast(2).Select(choice => choice.DisplayLabel));
         Assert.All(groupedChoices.SkipLast(2), choice =>
@@ -371,6 +373,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(1, selectionCount);
         Assert.Equal("Sample (Observable services)", Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].DisplayLabel);
+        Assert.Equal(new SelectionChoiceGroup("source:company", $"company ({Path.Combine(workspace.Path, "template")})") { Style = new Style(Color.Green) },
+            Assert.Single(interaction.GroupedSelectionPromptCalls)[^1].Group);
         Assert.Empty(interaction.DisplayedMessages);
         Assert.Equal(["Greeting text"], interaction.StringPromptCalls.Select(call => call.PromptText));
         Assert.Equal([true], interaction.StringPromptLogResponses);
