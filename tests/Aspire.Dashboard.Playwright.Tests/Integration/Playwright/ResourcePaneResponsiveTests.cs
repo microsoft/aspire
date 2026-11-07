@@ -2434,7 +2434,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         private static ResourceViewModel Create(string name, string type, KnownResourceState state, HealthStatus? health,
             DateTime? startTime, ImmutableArray<UrlViewModel> urls, string[] tags)
         {
-            var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+            var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
             var properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty.Add(tagKey,
                 new(tagKey, Value.ForList([.. tags.Select(Value.ForString)]), false, null, 0, null, false));
             if (type != KnownResourceTypes.Parameter)
