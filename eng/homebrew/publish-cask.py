@@ -344,7 +344,46 @@ def run(command, log=None):
     return process.stdout.strip()
 
 
-def validate_release(candidate, version, client, tap_checkout, output):
+def verify_source_artifact(data, metadata, build_id, source_commit, version):
+    build = metadata["build"]
+    artifact = metadata["artifact"]
+    candidate_version, _ = identity(data)
+    if version != "auto" and candidate_version != version:
+        raise PublicationError("Downloaded cask does not match requested release version")
+    if build_id <= 0 or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", source_commit):
+        raise PublicationError("Exact source build ID and commit are required")
+    if build["id"] != build_id or build["sourceVersion"] != source_commit:
+        raise PublicationError("Downloaded artifact metadata does not match the selected source run/commit")
+    if (build["definition"]["id"] != 1602 or build["project"]["name"] != "internal"
+            or build["repository"]["url"] != "https://dev.azure.com/dnceng/internal/_git/microsoft-aspire"):
+        raise PublicationError("Homebrew artifact must come from the official microsoft-aspire source build")
+    if build["status"] != "completed" or build["result"] not in ("succeeded", "partiallySucceeded"):
+        raise PublicationError("Selected Homebrew source build has not completed successfully")
+    # Source tags use "release-version - 13.6.4"; multiple release tags are
+    # ambiguous even when one happens to match the downloaded cask.
+    if not isinstance(build["tags"], list) or any(not isinstance(tag, str) for tag in build["tags"]):
+        raise PublicationError("Source build tags must be a list of strings")
+    tags = [tag for tag in build["tags"] if tag.startswith("release-version - ")]
+    if tags != [f"release-version - {candidate_version}"]:
+        raise PublicationError("Source build release tag does not uniquely match the downloaded cask")
+    resource = artifact["resource"]
+    # 1ES.PublishBuildArtifacts returns Container metadata such as
+    # "#/75481081/homebrew-cask-stable", not a PipelineArtifact manifest.
+    if (artifact["name"] != "homebrew-cask-stable"
+            or type(artifact["id"]) is not int or artifact["id"] <= 0
+            or resource["type"].lower() != "container"
+            or not re.fullmatch(r"#/[1-9][0-9]*/homebrew-cask-stable", resource["data"])):
+        raise PublicationError("Expected the selected build's homebrew-cask-stable container artifact")
+    return {
+        "build_id": build_id, "definition_id": build["definition"]["id"],
+        "source_commit": source_commit, "source_branch": build["sourceBranch"],
+        "build_result": build["result"], "artifact_id": artifact["id"],
+        "artifact_name": artifact["name"], "container": resource["data"],
+        "version": candidate_version,
+    }
+
+
+def validate_release(candidate, version, client, tap_checkout, output, source_commit=None):
     if platform.system() != "Darwin":
         raise PublicationError("Full cask validation requires disposable macOS equipment")
     if not tap_checkout:
@@ -363,6 +402,8 @@ def validate_release(candidate, version, client, tap_checkout, output):
         reference = client.request("GET", f"/repos/{SOURCE}/git/tags/{reference['sha']}")["object"]
     if reference["type"] != "commit":
         raise PublicationError("Release tag does not resolve to a commit")
+    if source_commit is not None and reference["sha"] != source_commit:
+        raise PublicationError("Public release tag does not match the selected source build commit")
     template = client.request("GET", f"/repos/{SOURCE}/contents/eng/homebrew/aspire.rb.template?ref={reference['sha']}")
     with tempfile.TemporaryDirectory(prefix="aspire-homebrew-validation-") as work:
         work = Path(work)
@@ -401,10 +442,34 @@ def main(argv=None):
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--publish", action="store_true", help="Explicit live tap-write opt-in; never used in test pipeline")
     mode.add_argument("--validate-only", action="store_true", help="Fully validate a published fixture, without target reconciliation or writes")
+    mode.add_argument("--artifact-check-only", action="store_true", help="Verify downloaded source-build artifact identity without network or writes")
+    parser.add_argument("--source-build-metadata", type=Path, help="Build and container-artifact metadata fetched from the selected Azure run")
+    parser.add_argument("--source-build-id", type=int)
+    parser.add_argument("--source-build-commit")
     parser.add_argument("--test-server", help="Loopback-only HTTP fixture; ignores all credentials and never validates a real release")
     args = parser.parse_args(argv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    source = None
     try:
+        source_data = None
+        if any(value is not None for value in (args.source_build_metadata, args.source_build_id, args.source_build_commit)):
+            if not all(value is not None for value in (args.source_build_metadata, args.source_build_id, args.source_build_commit)):
+                raise PublicationError("Source metadata, exact build ID and source commit must be supplied together")
+            source_data = args.candidate.read_bytes()
+            try:
+                source = verify_source_artifact(
+                    source_data, json.loads(args.source_build_metadata.read_text()),
+                    args.source_build_id, args.source_build_commit, args.version,
+                )
+            except (KeyError, TypeError, AttributeError) as error:
+                raise PublicationError("Malformed source-build provenance; fetch metadata from the selected run again") from error
+            args.version = source["version"]
+            # Retain the exact downloaded bytes in diagnostics and use this
+            # snapshot, not a path another step might subsequently rewrite.
+            args.candidate = args.output_dir / "source-candidate.rb"
+            args.candidate.write_bytes(source_data)
+        if args.artifact_check_only and source is None:
+            raise PublicationError("--artifact-check-only requires selected source-build provenance")
         if args.test_server:
             parsed = urllib.parse.urlsplit(args.test_server)
             if parsed.scheme != "http" or not ipaddress.ip_address(parsed.hostname).is_loopback or parsed.path:
@@ -415,13 +480,18 @@ def main(argv=None):
             writer = lambda: client
         else:
             client = GitHubClient(os.environ.get("HOMEBREW_READ_TOKEN", ""))
-            validation = lambda candidate, version: validate_release(candidate, version, client, args.tap_checkout, args.output_dir)
+            def validation(candidate, version):
+                if source_data is not None and candidate.read_bytes() != source_data:
+                    raise PublicationError("Candidate changed after source-artifact verification")
+                validate_release(candidate, version, client, args.tap_checkout, args.output_dir, args.source_build_commit)
             def writer():
                 token = os.environ.get("HOMEBREW_TAP_WRITE_TOKEN", "")
                 if not token:
                     raise PublicationError("HOMEBREW_TAP_WRITE_TOKEN is required after validation for --publish")
                 return GitHubClient(token)
-        if args.validate_only:
+        if args.artifact_check_only:
+            result = {"outcome": "artifact_verified", "version": args.version, "publish": False}
+        elif args.validate_only:
             with tempfile.TemporaryDirectory(prefix="aspire-homebrew-fixture-") as work:
                 snapshot = Path(work) / "aspire.rb"
                 data = args.candidate.read_bytes()
@@ -436,12 +506,17 @@ def main(argv=None):
                 result = {"outcome": "validated", "version": version, "publish": False}
         else:
             result = publish_cask(args.candidate, args.version, client, validation, args.publish, writer)
+        if source is not None:
+            result["source"] = source
         (args.output_dir / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(json.dumps(result))
         return 0
     except (PublicationError, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
         message = str(error)
-        (args.output_dir / "result.json").write_text(json.dumps({"outcome": "failed", "error": message}, indent=2) + "\n")
+        result = {"outcome": "failed", "error": message}
+        if source is not None:
+            result["source"] = source
+        (args.output_dir / "result.json").write_text(json.dumps(result, indent=2) + "\n")
         print(f"Homebrew publication failed: {message}", file=sys.stderr)
         return 1
 

@@ -93,7 +93,7 @@ class FakeGitHub:
             elif method == "POST" and relative == "/pulls":
                 result = {
                     "state": "open", "merged_at": None, "html_url": "https://github.com/microsoft/homebrew-aspire/pull/99",
-                    "head": {"ref": BRANCH, "repo": {"full_name": "microsoft/homebrew-aspire"}},
+                    "head": {"ref": body["head"], "repo": {"full_name": "microsoft/homebrew-aspire"}},
                     "base": {"ref": "main"},
                 }
                 self.pulls.append(result)
@@ -201,6 +201,125 @@ class PublisherTests(unittest.TestCase):
         self.assertEqual([cask(VERSION)], self.validation_calls)
         self.assertEqual([], self.fake.writes)
         self.assertEqual([], self.token_calls)
+
+    def source_metadata(self):
+        return {
+            "build": {
+                "id": 3115399, "definition": {"id": 1602},
+                "project": {"name": "internal"},
+                "repository": {"url": "https://dev.azure.com/dnceng/internal/_git/microsoft-aspire"},
+                "sourceVersion": "c" * 40, "sourceBranch": "refs/heads/release/13.6",
+                "status": "completed", "result": "succeeded",
+                "tags": [f"release-version - {VERSION}"],
+            },
+            "artifact": {
+                "id": 77459436, "name": "homebrew-cask-stable",
+                "resource": {"type": "Container", "data": "#/75481081/homebrew-cask-stable"},
+            },
+        }
+
+    def test_source_artifact_provenance_and_publication_preserve_downloaded_bytes(self):
+        downloaded = self.candidate.read_bytes()
+        provenance = self.module.verify_source_artifact(
+            downloaded, self.source_metadata(), 3115399, "c" * 40, VERSION
+        )
+        self.assertEqual(3115399, provenance["build_id"])
+        self.assertEqual(77459436, provenance["artifact_id"])
+        self.assertEqual(VERSION, provenance["version"])
+        self.run_publisher(True)
+        self.assertEqual(downloaded, self.fake.branch)
+        self.assertEqual(downloaded, self.candidate.read_bytes())
+
+    def test_source_artifact_rejects_wrong_run_commit_version_and_artifact(self):
+        cases = (
+            ("build", "id", 3115398),
+            ("build", "sourceVersion", "d" * 40),
+            ("build", "definition", {"id": 1600}),
+            ("build", "project", {"name": "public"}),
+            ("build", "repository", {"url": "https://dev.azure.com/dnceng/internal/_git/another"}),
+            ("build", "result", "failed"),
+            ("build", "status", "inProgress"),
+            ("build", "tags", ["release-version - 13.6.4"]),
+            ("build", "tags", [f"release-version - {VERSION}", "release-version - 13.6.4"]),
+            ("artifact", "name", "homebrew-cask-prerelease"),
+            ("artifact", "resource", {"type": "PipelineArtifact", "data": "anything"}),
+            ("artifact", "resource", {"type": "Container", "data": "#/75481081/other"}),
+        )
+        for section, key, value in cases:
+            with self.subTest(section=section, key=key, value=value):
+                metadata = self.source_metadata()
+                metadata[section][key] = value
+                with self.assertRaises(self.module.PublicationError):
+                    self.module.verify_source_artifact(
+                        self.candidate.read_bytes(), metadata, 3115399, "c" * 40, VERSION
+                    )
+        self.assertEqual([], self.fake.writes)
+
+    def test_source_artifact_cli_checks_identity_without_network_or_writes(self):
+        metadata = Path(self.temp.name) / "source.json"
+        metadata.write_text(json.dumps(self.source_metadata()))
+        output = Path(self.temp.name) / "output"
+        process = subprocess.run([
+            sys.executable, str(SCRIPT), "--candidate", str(self.candidate),
+            "--version", "auto", "--output-dir", str(output), "--artifact-check-only",
+            "--source-build-metadata", str(metadata), "--source-build-id", "3115399",
+            "--source-build-commit", "c" * 40,
+        ], capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, process.returncode, process.stderr)
+        result = json.loads((output / "result.json").read_text())
+        self.assertEqual("artifact_verified", result["outcome"])
+        self.assertEqual(3115399, result["source"]["build_id"])
+        self.assertEqual(VERSION, result["version"])
+        self.assertFalse(result["publish"])
+        self.assertEqual(cask(VERSION), self.candidate.read_bytes())
+        self.assertEqual(cask(VERSION), (output / "source-candidate.rb").read_bytes())
+
+    def test_source_artifact_cli_rejects_malformed_provenance_with_diagnostics(self):
+        malformed = [
+            {}, {"build": None, "artifact": {}},
+        ]
+        for tags in (None, f"release-version - {VERSION}", {f"release-version - {VERSION}": True}, [42]):
+            metadata = self.source_metadata()
+            metadata["build"]["tags"] = tags
+            malformed.append(metadata)
+        metadata = self.source_metadata()
+        metadata["artifact"]["id"] = True
+        malformed.append(metadata)
+        for index, value in enumerate(malformed):
+            with self.subTest(metadata=value):
+                metadata = Path(self.temp.name) / "source.json"
+                metadata.write_text(json.dumps(value))
+                output = Path(self.temp.name) / f"output-{index}"
+                process = subprocess.run([
+                    sys.executable, str(SCRIPT), "--candidate", str(self.candidate),
+                    "--version", "auto", "--output-dir", str(output), "--artifact-check-only",
+                    "--source-build-metadata", str(metadata), "--source-build-id", "3115399",
+                    "--source-build-commit", "c" * 40,
+                ], capture_output=True, text=True, timeout=10)
+                self.assertEqual(1, process.returncode)
+                result = json.loads((output / "result.json").read_text())
+                self.assertEqual("failed", result["outcome"])
+                self.assertTrue(result["error"])
+                self.assertIn("Homebrew publication failed:", process.stderr)
+                self.assertFalse((output / "source-candidate.rb").exists())
+
+    def test_source_artifact_public_release_commit_must_match_source_run(self):
+        class ReleaseClient:
+            def begin_phase(self):
+                pass
+
+            def request(self, method, path):
+                if "/releases/" in path:
+                    return {"tag_name": f"v{VERSION}", "draft": False, "prerelease": False}
+                return {"object": {"type": "commit", "sha": "d" * 40}}
+
+        with patch.object(self.module.platform, "system", return_value="Darwin"), \
+                patch.object(self.module, "run", return_value=self.module.VALIDATOR_REVISION):
+            with self.assertRaisesRegex(self.module.PublicationError, "selected source build commit"):
+                self.module.validate_release(
+                    self.candidate, VERSION, ReleaseClient(), Path(self.temp.name),
+                    Path(self.temp.name), "c" * 40,
+                )
 
     def test_publication_writes_once_and_rerun_skips(self):
         first, _ = self.run_publisher(True)

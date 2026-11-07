@@ -158,7 +158,7 @@ variables:
 resources:
   # Azure does not support conditional repository/pipeline declarations. These
   # resources only name read-only inputs; test-only mode does not extend the
-  # MicroBuild template or download the source build's artifacts.
+  # MicroBuild template and downloads only the selected source cask artifact.
   repositories:
     - repository: MicroBuildTemplate
       type: git

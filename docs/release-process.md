@@ -47,14 +47,14 @@ The Aspire release process uses these main automation components:
 
 Run definition 1600 on a personal branch with **both**
 `HomebrewTestOnly=true` and `DryRun=true`. Test-only mode selects an exclusive
-template graph: no NuGet/npm/WinGet/release jobs, source-build downloads,
+template graph: no NuGet/npm/WinGet/release jobs, unrelated source-build downloads,
 publishing secret groups, GitHub dispatches or MicroBuild publish authorization.
 `HomebrewTestOnly=true` with `DryRun=false` fails inside that contained graph;
 it cannot fall through to a live release.
 
 Azure requires the ordinary repository and source-build resource declarations
 to remain static. Naming those read-only resources does not run their templates
-or download artifacts; test-only mode adds its plain 1ES template resource through
+by themselves; test-only mode adds its plain 1ES template resource through
 the selected extends template.
 
 Plain 1ES also adds its standard SDL source-analysis stage, using the repository's
@@ -62,11 +62,19 @@ Windows analysis pool. This does not add release publishing jobs.
 
 The Linux job exercises the production publisher against synchronized fixtures
 and a loopback HTTP server. Its real CLI emits the Azure DevOps skip warning
-directly into task stdout. The disposable macOS job validates the pinned tap's
-already-published stable cask, including install/uninstall, without opening a
-tap PR or changing a release. With `ReleaseVersion=auto`, it uses the pinned
-fixture version, not an inferred new release. Each job retains its diagnostics
-on failure as well as success.
+directly into task stdout. Select the exact `aspire-build` resource run for the
+stable release under test. The source-artifact job downloads its
+`homebrew-cask-stable` container artifact with `DownloadBuildArtifacts@0`,
+checks run/commit/artifact provenance and retains the unchanged cask. It never
+falls back to a latest build or regenerates the candidate.
+
+The disposable macOS job receives those bytes and validates them using the
+pinned tap validator, including public release-tag/source-commit agreement,
+both archive hashes and install/uninstall, without opening a tap PR or changing
+a release. With `ReleaseVersion=auto`, the downloaded cask and unique source
+build release tag determine the version. Every job retains diagnostics on
+failure as well as success; source-artifact provenance and input bytes are
+retained separately from full-validation results.
 
 **Production Homebrew publication is not enabled by these tests.** Enabling it
 requires pipeline-owned continuation after the manager publishes the draft,

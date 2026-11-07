@@ -56,7 +56,7 @@ the initial/upstream cask change must include the generation stanza, not just a 
 | File | Description |
 |---|---|
 | `eng/pipelines/templates/prepare-homebrew-cask.yml` | Generates, styles, validates, audits, and tests the cask |
-| `eng/pipelines/templates/test-homebrew-publisher.yml` | Contained behavioral tests and published-fixture validation |
+| `eng/pipelines/templates/test-homebrew-publisher.yml` | Contained behavioral tests, exact source-artifact download and macOS validation |
 
 ## Release-pipeline-owned tap publisher
 
@@ -64,7 +64,8 @@ the initial/upstream cask change must include the generation stanza, not just a 
 state, skips an existing matching version/PR/in-flight branch with an Azure
 DevOps warning, or fully validates a new candidate before printing its proposed
 diff. It never requests a write credential in dry run. `result.json` reports
-`planned`, `skipped`, `submitted`, `validated` (fixture-only), or `failed`.
+`planned`, `skipped`, `submitted`, `validated` (validation-only),
+`artifact_verified` (source identity only), or `failed`.
 
 ```bash
 python3 eng/homebrew/publish-cask.py \
@@ -101,10 +102,26 @@ contents/PR uncertainty requires exact remote evidence or fails with recovery
 instructions. This prevents duplicate submissions after a lost response.
 
 Use `HomebrewTestOnly=true, DryRun=true` in release definition 1600 for
-contained testing. `--test-server` is restricted to numeric loopback HTTP and
+contained testing and select the exact `aspire-build` resource run containing
+the stable release under test. The graph uses `DownloadBuildArtifacts@0` to
+download `homebrew-cask-stable` from that run: it is a container artifact, so
+the source pipeline-artifact shortcut is not appropriate. There is no latest
+fallback or cask regeneration.
+
+The source run/commit, official definition, artifact/container identity and
+unique release-version tag are checked before passing the unchanged cask to
+macOS. The full validator additionally requires the public release tag to match
+that source commit and both archive hashes to match the downloaded cask.
+`source-build.json`, `source-candidate.rb`, `result.json` and logs retain
+provenance and byte-preservation evidence without download tickets or credentials.
+`--artifact-check-only` checks identity without claiming full cask validation.
+The same `--source-build-metadata`, `--source-build-id` and
+`--source-build-commit` inputs are accepted by the publisher.
+
+`--test-server` is restricted to numeric loopback HTTP and
 ignores ambient credentials; it is not an alternative GitHub target.
-`--validate-only --version auto` exercises the pinned, already-published
-fixture without publishing. The production release graph remains unchanged
+`--validate-only --version auto` derives the version from the candidate and
+validates without publishing. The production release graph remains unchanged
 and does **not** call `--publish`: public-asset continuation and per-cask
 serialization must be wired before production enablement.
 
