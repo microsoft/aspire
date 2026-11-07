@@ -78,16 +78,30 @@ runs:
 
     - name: Generate metadata and source partitions
       shell: bash
-      run: >
-        ./build.sh -test
-        /p:TestRunnerName=TestEnumerationRunsheetBuilder
-        /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json
-        /p:GenerateCIPartitions=true
-        /p:TestEnumerationMetadataOnly=true
-        /p:SkipGenerateCanonicalTestMatrix=true
-        ${{ inputs.beforeBuildPropsPath != '' && format('/p:BeforeBuildPropsPath={0}', inputs.beforeBuildPropsPath) || '' }}
-        /bl
-        ${{ inputs.buildArgs }}
+      env:
+        BUILD_ARGS: ${{ inputs.buildArgs }}
+        BEFORE_BUILD_PROPS_PATH: ${{ inputs.beforeBuildPropsPath }}
+      run: |
+        set -euo pipefail
+
+        args_file=$(mktemp)
+        trap 'rm -f "$args_file"' EXIT
+        python3 .github/workflows/parse-command-line.py --format nul BUILD_ARGS > "$args_file"
+        build_args=()
+        while IFS= read -r -d '' arg; do build_args+=("$arg"); done < "$args_file"
+        props_args=()
+        if [[ -n "$BEFORE_BUILD_PROPS_PATH" ]]; then
+          props_args+=("/p:BeforeBuildPropsPath=$BEFORE_BUILD_PROPS_PATH")
+        fi
+        ./build.sh -test \
+          /p:TestRunnerName=TestEnumerationRunsheetBuilder \
+          /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json \
+          /p:GenerateCIPartitions=true \
+          /p:TestEnumerationMetadataOnly=true \
+          /p:SkipGenerateCanonicalTestMatrix=true \
+          "${props_args[@]}" \
+          /bl \
+          "${build_args[@]}"
 
     - name: Find class-mode split test projects
       id: class_mode
@@ -111,14 +125,21 @@ runs:
     - name: Generate class partitions and canonical test matrix
       if: ${{ steps.class_mode.outputs.count != '0' }}
       shell: bash
-      run: >
-        ./build.sh -test
-        /p:TestRunnerName=TestEnumerationRunsheetBuilder
-        /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json
-        /p:GenerateCIPartitions=true
-        /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/ClassModeTestProjects.props
-        /bl
-        ${{ inputs.buildArgs }}
+      env:
+        BUILD_ARGS: ${{ inputs.buildArgs }}
+      run: |
+        args_file=$(mktemp)
+        trap 'rm -f "$args_file"' EXIT
+        python3 .github/workflows/parse-command-line.py --format nul BUILD_ARGS > "$args_file"
+        build_args=()
+        while IFS= read -r -d '' arg; do build_args+=("$arg"); done < "$args_file"
+        ./build.sh -test \
+          /p:TestRunnerName=TestEnumerationRunsheetBuilder \
+          /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json \
+          /p:GenerateCIPartitions=true \
+          "/p:BeforeBuildPropsPath=$GITHUB_WORKSPACE/artifacts/ClassModeTestProjects.props" \
+          /bl \
+          "${build_args[@]}"
 
     - name: Generate canonical test matrix
       if: ${{ steps.class_mode.outputs.count == '0' }}
@@ -137,10 +158,13 @@ runs:
 
         if (Test-Path $canonicalMatrixPath) {
           & $expandScript -CanonicalMatrixFile $canonicalMatrixPath -OutputToGitHubEnv
+          # Keep the large matrix out of both shell source and per-variable OS env limits.
+          & $expandScript -CanonicalMatrixFile $canonicalMatrixPath -OutputMatrixFile "$env:GITHUB_WORKSPACE/artifacts/github-test-matrix.json"
         } else {
           $emptyMatrix = '{"include":[]}'
           "all_tests=$emptyMatrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           Write-Host "No canonical test matrix found, using empty matrix"
+          $emptyMatrix | Set-Content -Path "$env:GITHUB_WORKSPACE/artifacts/github-test-matrix.json" -Encoding utf8
         }
 
     - name: Upload logs

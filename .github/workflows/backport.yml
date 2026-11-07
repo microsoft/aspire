@@ -118,9 +118,11 @@ jobs:
 
     - name: Post backport started comment to pull request
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      env:
+        TARGET_BRANCH: ${{ steps.target-branch-extractor.outputs.result }}
       with:
         script: |
-          const target_branch = '${{ steps.target-branch-extractor.outputs.result }}';
+          const target_branch = process.env.TARGET_BRANCH;
           const workflow_run_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
           const backport_start_body = `Started backporting to \`${target_branch}\` ([link to workflow run](${workflow_run_url}))`;
           await github.rest.issues.createComment({
@@ -154,6 +156,7 @@ jobs:
       uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
         GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        TARGET_BRANCH: ${{ steps.target-branch-extractor.outputs.result }}
         BACKPORT_PR_TITLE_TEMPLATE: '[%target_branch%] %source_pr_title%'
         BACKPORT_PR_DESCRIPTION_TEMPLATE: |
           Backport of #%source_pr_number% to %target_branch%
@@ -170,7 +173,7 @@ jobs:
       with:
         github-token: ${{ steps.app-token.outputs.token }}
         script: |
-          const target_branch = '${{ steps.target-branch-extractor.outputs.result }}';
+          const target_branch = process.env.TARGET_BRANCH;
           const repo_owner = context.payload.repository.owner.login;
           const repo_name = context.payload.repository.name;
           const pr_number = context.payload.issue.number;

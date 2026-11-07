@@ -133,6 +133,11 @@ ignore:
 # only. targets may be test: / job: / a GROUP name / ALL.
 path_rules:
   - paths:
+      - .github/workflows/parse-command-line.py
+    targets: [ALL]
+    reason: shared argument parsing
+
+  - paths:
       - Aspire.slnx
     targets: [ALL]
     reason: solution membership can add an existing project without touching that project's files, so run everything

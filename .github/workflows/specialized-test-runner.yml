@@ -47,7 +47,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Identify relevant test projects
-        run: ./eng/scripts/generate-specialized-test-projects-list.sh ${{ inputs.attributeName }} ${{ github.workspace }}/artifacts/BeforeBuildProps.props
+        env:
+          ATTRIBUTE_NAME: ${{ inputs.attributeName }}
+        run: ./eng/scripts/generate-specialized-test-projects-list.sh "$ATTRIBUTE_NAME" "$GITHUB_WORKSPACE/artifacts/BeforeBuildProps.props"
 
       # We need to build test projects, so that we can interrogate each test project
       # and find out whether it contains any tests of the specified type.
@@ -66,17 +68,24 @@ jobs:
         id: generate_tests_matrix_raw
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-        run: >
-          ./build.sh
-          --test
-          /p:TestRunnerName=${{ inputs.testRunnerName }}
-          ${{ inputs.extraRunSheetBuilderArgs }}
-          -c Debug
-          /p:Restore=false
-          /p:Build=false
-          /p:InstallBrowsersForPlaywright=false
-          /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
-          /bl:${{ github.workspace }}/artifacts/log/Debug/runsheet.binlog
+          TEST_RUNNER_NAME: ${{ inputs.testRunnerName }}
+          EXTRA_RUNSHEET_ARGS: ${{ inputs.extraRunSheetBuilderArgs }}
+        run: |
+          args_file=$(mktemp)
+          trap 'rm -f "$args_file"' EXIT
+          python3 .github/workflows/parse-command-line.py --format nul EXTRA_RUNSHEET_ARGS > "$args_file"
+          runsheet_args=()
+          while IFS= read -r -d '' arg; do runsheet_args+=("$arg"); done < "$args_file"
+          ./build.sh \
+            --test \
+            "/p:TestRunnerName=$TEST_RUNNER_NAME" \
+            "${runsheet_args[@]}" \
+            -c Debug \
+            /p:Restore=false \
+            /p:Build=false \
+            /p:InstallBrowsersForPlaywright=false \
+            "/p:BeforeBuildPropsPath=$GITHUB_WORKSPACE/artifacts/BeforeBuildProps.props" \
+            "/bl:$GITHUB_WORKSPACE/artifacts/log/Debug/runsheet.binlog"
 
       - name: Inject enablePlaywrightInstall into runsheet properties
         id: inject_properties
@@ -200,8 +209,10 @@ jobs:
       # Check if there were no tests to run
       - name: Check if tests were run
         id: check_tests
+        env:
+          RUNSHEET: ${{ needs.generate_tests_matrix.outputs.runsheet }}
         run: |
-          if [ "${{ needs.generate_tests_matrix.outputs.runsheet }}" = "[]" ]; then
+          if [ "$RUNSHEET" = "[]" ]; then
             echo "No tests found for this test type"
             echo "tests_run=false" >> $GITHUB_OUTPUT
           else

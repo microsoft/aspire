@@ -106,10 +106,10 @@ jobs:
       # --- Authorize ---------------------------------------------------------
       - name: Authorize
         env:
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          ACTOR="${{ github.actor }}"
-          ACTOR_ID="${{ github.actor_id }}"
           echo "Checking if $ACTOR (id=$ACTOR_ID) is authorized to run releases..."
 
           # The AzDO release pipeline dispatches this workflow as the
@@ -243,18 +243,21 @@ jobs:
       - name: Check if Tag Exists
         id: check-tag
         if: inputs.skip_tagging != true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
-          TAG_NAME="v${{ inputs.release_version }}"
+          TAG_NAME="v${RELEASE_VERSION}"
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             EXISTING_SHA=$(git rev-parse "$TAG_NAME")
-            if [ "$EXISTING_SHA" == "${{ inputs.commit_sha }}" ]; then
+            if [ "$EXISTING_SHA" == "${COMMIT_SHA}" ]; then
               echo "✓ Tag $TAG_NAME already exists and points to the correct commit"
               echo "tag_exists=true" >> $GITHUB_OUTPUT
               echo "tag_matches=true" >> $GITHUB_OUTPUT
             else
               echo "⚠️ Tag $TAG_NAME exists but points to different commit!"
               echo "   Existing: $EXISTING_SHA"
-              echo "   Expected: ${{ inputs.commit_sha }}"
+              echo "   Expected: ${COMMIT_SHA}"
               echo "tag_exists=true" >> $GITHUB_OUTPUT
               echo "tag_matches=false" >> $GITHUB_OUTPUT
             fi
@@ -272,18 +275,21 @@ jobs:
 
       - name: Create and Push Tag
         if: inputs.skip_tagging != true && steps.check-tag.outputs.tag_exists != 'true'
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
-          TAG_NAME="v${{ inputs.release_version }}"
+          TAG_NAME="v${RELEASE_VERSION}"
           DRY_RUN="${{ inputs.dry_run }}"
 
           if [ "$DRY_RUN" == "true" ]; then
             echo "🔍 [DRY RUN] Would create and push tag:"
             echo "   Tag name: $TAG_NAME"
-            echo "   Target commit: ${{ inputs.commit_sha }}"
-            echo "   Command: git tag \"$TAG_NAME\" \"${{ inputs.commit_sha }}\""
+            echo "   Target commit: ${COMMIT_SHA}"
+            echo "   Command: git tag \"$TAG_NAME\" \"${COMMIT_SHA}\""
             echo "   Command: git push origin \"$TAG_NAME\""
           else
-            git tag "$TAG_NAME" "${{ inputs.commit_sha }}"
+            git tag "$TAG_NAME" "${COMMIT_SHA}"
             git push origin "$TAG_NAME"
             echo "✓ Created and pushed tag: $TAG_NAME"
           fi
@@ -293,12 +299,11 @@ jobs:
         id: check-release
         if: inputs.skip_github_release != true
         env:
-          # Draft visibility requires push access; the read-only automatic token
-          # would miss an existing draft and break release retries.
-          # https://docs.github.com/en/rest/releases/releases#list-releases
+          # Draft visibility requires push access; release operations use this token.
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          TAG_NAME="v${{ inputs.release_version }}"
+          TAG_NAME="v${RELEASE_VERSION}"
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
             echo "✓ Release $TAG_NAME already exists"
             echo "release_exists=true" >> $GITHUB_OUTPUT
@@ -310,6 +315,8 @@ jobs:
       - name: Generate Release Notes
         if: inputs.skip_github_release != true && steps.check-release.outputs.release_exists != 'true'
         id: release-notes
+        env:
+          COMMIT_SHA: ${{ inputs.commit_sha }}
         run: |
           # Write a short placeholder. The real release notes are generated
           # asynchronously by the release-notes-generate agentic workflow,
@@ -324,7 +331,7 @@ jobs:
           *This release is currently a draft. Release notes are being generated automatically and CLI assets are being uploaded — both will appear here within a few minutes. Once everything looks correct, the release manager will publish the draft. If notes or assets are missing after ~30 minutes, ping the Aspire team.*
 
           ---
-          *Full commit: [${{ inputs.commit_sha }}](https://github.com/${{ github.repository }}/commit/${{ inputs.commit_sha }})*
+          *Full commit: [${COMMIT_SHA}](https://github.com/${{ github.repository }}/commit/${COMMIT_SHA})*
           EOF
 
           echo "Placeholder release notes generated"
@@ -337,9 +344,11 @@ jobs:
           # (release-notes-generate is triggered by an explicit
           # workflow_dispatch in the next step, not by a release event —
           # draft releases don't fire release events.)
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          COMMIT_SHA: ${{ inputs.commit_sha }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          TAG_NAME="v${{ inputs.release_version }}"
+          TAG_NAME="v${RELEASE_VERSION}"
           DRY_RUN="${{ inputs.dry_run }}"
           PRERELEASE_FLAG=""
           if [ "${{ inputs.is_prerelease }}" == "true" ]; then
@@ -357,8 +366,8 @@ jobs:
           if [ "$DRY_RUN" == "true" ]; then
             echo "🔍 [DRY RUN] Would create DRAFT GitHub Release:"
             echo "   Tag: $TAG_NAME"
-            echo "   Title: Aspire ${{ inputs.release_version }}"
-            echo "   Target: ${{ inputs.commit_sha }}"
+            echo "   Title: Aspire ${RELEASE_VERSION}"
+            echo "   Target: ${COMMIT_SHA}"
             echo "   Prerelease: ${{ inputs.is_prerelease }}"
             echo "   Draft: true"
             echo ""
@@ -369,9 +378,9 @@ jobs:
           else
             gh release create "$TAG_NAME" \
               --draft \
-              --title "Aspire ${{ inputs.release_version }}" \
+              --title "Aspire ${RELEASE_VERSION}" \
               --notes-file release_notes.md \
-              --target "${{ inputs.commit_sha }}" \
+              --target "${COMMIT_SHA}" \
               $PRERELEASE_FLAG
 
             echo "✓ Created DRAFT GitHub Release: $TAG_NAME"
@@ -400,9 +409,10 @@ jobs:
           # GitHub App integration expect. Dispatching with GITHUB_TOKEN would
           # run it as github-actions[bot], which the workflow's activation gate
           # is not configured for.
+          RELEASE_VERSION: ${{ inputs.release_version }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          TAG_NAME="v${{ inputs.release_version }}"
+          TAG_NAME="v${RELEASE_VERSION}"
           echo "Dispatching release-notes-generate for $TAG_NAME"
           # The runnable workflow is the gh-aw-compiled lock file; dispatch it
           # on the default branch (where workflow_dispatch requires it to live).
@@ -537,9 +547,10 @@ jobs:
       - name: Check for Existing Baseline Branch and PR
         id: check-baseline-pr
         env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
+          BRANCH_NAME="update-baseline-${RELEASE_VERSION}"
           EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --json number --jq '.[0].number // empty')
 
           if [ -n "$EXISTING_PR" ]; then
@@ -561,15 +572,19 @@ jobs:
 
       - name: Checkout Existing Baseline Branch
         if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists == 'true' && inputs.dry_run != true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
+          BRANCH_NAME="update-baseline-${RELEASE_VERSION}"
           git fetch origin "$BRANCH_NAME:$BRANCH_NAME"
           git checkout "$BRANCH_NAME"
 
       - name: Update PackageValidationBaselineVersion
         if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists != 'true'
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          VERSION="${{ inputs.release_version }}"
+          VERSION="${RELEASE_VERSION}"
           FILE="src/Directory.Build.props"
 
           echo "Updating PackageValidationBaselineVersion to $VERSION in $FILE"
@@ -589,8 +604,10 @@ jobs:
 
       - name: Dry Run - Show Baseline PR Details
         if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run == true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          VERSION="${{ inputs.release_version }}"
+          VERSION="${RELEASE_VERSION}"
           BRANCH_NAME="update-baseline-$VERSION"
 
           echo "🔍 [DRY RUN] Would create baseline version PR:"
@@ -613,9 +630,11 @@ jobs:
 
       - name: Create Branch and Commit for Baseline PR
         if: steps.check-baseline-pr.outputs.pr_exists != 'true' && steps.check-baseline-pr.outputs.branch_exists != 'true' && inputs.dry_run != true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
-          VERSION="${{ inputs.release_version }}"
+          BRANCH_NAME="update-baseline-${RELEASE_VERSION}"
+          VERSION="${RELEASE_VERSION}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -629,8 +648,10 @@ jobs:
 
       - name: Baseline PR Deferred
         if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.defer_baseline_pr == true && inputs.dry_run != true
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          echo "Baseline branch update-baseline-${{ inputs.release_version }} is ready."
+          echo "Baseline branch update-baseline-${RELEASE_VERSION} is ready."
           echo "PR creation is deferred until update-nix-cli-flake.yml commits eng/nix/versions.json to the same branch."
 
       - name: Create Baseline PR

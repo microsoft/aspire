@@ -75,6 +75,7 @@ jobs:
         id: create-pr
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BEHIND_COUNT: ${{ steps.check.outputs.behind_count }}
         run: |
           # Check if a PR already exists for this branch
           EXISTING_PR=$(gh pr list --head backmerge/release-13.5-to-main --base main --json number --jq '.[0].number // empty')
@@ -87,7 +88,7 @@ jobs:
           
           This PR merges changes from \`release/13.5\` back into \`main\`.
           
-          **Commits to merge:** ${{ steps.check.outputs.behind_count }}
+          **Commits to merge:** $BEHIND_COUNT
           
           This PR was created automatically to keep \`main\` up-to-date with release branch changes.
           Once approved, please merge using a **merge commit** (not squash or rebase).
@@ -118,6 +119,8 @@ jobs:
       - name: Create issue for merge conflicts
         if: steps.check.outputs.changes == 'true' && steps.merge.outputs.merge_success == 'false'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          BEHIND_COUNT: ${{ steps.check.outputs.behind_count }}
         with:
           script: |
             const workflowRunUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
@@ -163,7 +166,7 @@ jobs:
               '### Details',
               '',
               `**Workflow run:** ${workflowRunUrl}`,
-              '**Commits to merge:** ${{ steps.check.outputs.behind_count }}',
+              `**Commits to merge:** ${process.env.BEHIND_COUNT}`,
               '',
               '---',
               `*This issue was created automatically by the [backmerge-release](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/workflows/backmerge-release.yml) workflow.*`
