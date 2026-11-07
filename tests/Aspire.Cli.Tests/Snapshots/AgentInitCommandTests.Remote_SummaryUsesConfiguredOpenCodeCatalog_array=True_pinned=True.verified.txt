@@ -1,0 +1,3 @@
+﻿Configured sources:
+  Sources: https://github.com/microsoft/aspire-skills, https://raw.githubusercontent.com/microsoft/aspire-skills/release/opencode/v2/
+  Locations: .github/copilot/settings.json (GitHub Copilot), .claude/settings.json (Claude Code), opencode.jsonc (OpenCode)
