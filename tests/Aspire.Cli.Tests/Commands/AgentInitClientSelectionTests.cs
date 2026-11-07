@@ -8,6 +8,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Agents;
 using Aspire.Cli.Tests.TestServices;
@@ -15,6 +16,7 @@ using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Semver;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -324,7 +326,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.cs"), string.Empty);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var labels = new List<string>();
-        var locations = new List<string>();
+        var subtleMessages = new List<string>();
         var interaction = new TestInteractionService
         {
             PromptForSelectionsCallback = (prompt, choices, formatter, _) =>
@@ -333,13 +335,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                 labels.AddRange(choices.Cast<object>().Select(formatter));
                 return choices.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId)).Cast<object>().ToArray();
             },
-            DisplaySubtleMessageCallback = message =>
-            {
-                if (message.StartsWith(AgentCommandStrings.InitCommand_InstallationLocations, StringComparison.Ordinal))
-                {
-                    locations.Add(message);
-                }
-            }
+            DisplaySubtleMessageCallback = subtleMessages.Add
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -350,7 +346,103 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var result = provider.GetRequiredService<RootCommand>().Parse(
             $"agent init --scope {scope} --skills {(installSkills ? "dotnet-inspect" : "none")} --mcp={configureMcp}");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        await Verify(new { Agents = labels, Locations = Assert.Single(locations) }).UseParameters(scope, installSkills, configureMcp);
+        Assert.Empty(subtleMessages);
+        await Verify(new
+        {
+            Agents = labels,
+            Results = interaction.DisplayedMessages.Select(message => message.Message
+                .Replace(homeDirectory.FullName, "~", StringComparison.Ordinal)
+                .Replace(workspace.WorkspaceRoot.FullName, "<workspace>", StringComparison.Ordinal)
+                .Replace('\\', '/'))
+        }).UseParameters(scope, installSkills, configureMcp);
+    }
+
+    [Theory]
+    [InlineData("project", "installed")]
+    [InlineData("global", "installed")]
+    [InlineData("project", "skipped")]
+    [InlineData("project", "failed")]
+    public async Task AgentInit_SkillSummary_GroupsInstalledSkillsByLocationAndAgent(string scope, string playwrightOutcome)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.cs"), string.Empty);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var interaction = new TestInteractionService();
+        var version = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+            options.InteractionServiceFactory = _ => interaction;
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                IsAvailable = playwrightOutcome != "skipped",
+                ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(
+                    playwrightOutcome == "installed" ? new NpmPackageInfo { Version = version } : null)
+            };
+            options.PlaywrightCliRunnerFactory = _ => new FakePlaywrightCliRunner { InstalledVersion = version };
+        });
+        using var provider = services.BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents copilot,claude,opencode --scope {scope} --skills dotnet-inspect,playwright-cli --mcp=false");
+
+        Assert.Equal(playwrightOutcome == "failed" ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
+            await result.InvokeAsync().DefaultTimeout());
+        var summary = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message.StartsWith(AgentCommandStrings.InitCommand_InstalledSkillsSummary, StringComparison.Ordinal));
+        foreach (var client in provider.GetServices<IAgentClient>())
+        {
+            var directory = client.GetSkillBaseDirectory(Enum.Parse<AgentConfigurationScope>(scope, ignoreCase: true), workspace.WorkspaceRoot);
+            Assert.True(File.Exists(Path.Combine(directory, "dotnet-inspect", "SKILL.md")));
+            Assert.Equal(playwrightOutcome == "installed", File.Exists(Path.Combine(directory, "playwright-cli", "SKILL.md")));
+        }
+
+        if (playwrightOutcome == "installed")
+        {
+            var previousCount = interaction.DisplayedMessages.Count;
+            Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+            Assert.Equal(summary, Assert.Single(interaction.DisplayedMessages.Skip(previousCount),
+                message => message.Message.StartsWith(AgentCommandStrings.InitCommand_InstalledSkillsSummary, StringComparison.Ordinal)));
+        }
+
+        await Verify(summary.Message)
+            .UseParameters(scope, playwrightOutcome == "installed" ? "installed" : "not-installed")
+            .DisableRequireUniquePrefix();
+    }
+
+    [Fact]
+    public async Task AgentInit_SkillSummary_IncludesOnlySuccessfulPlaywrightDestinations()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "apphost.cs"), string.Empty);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var blockedSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "playwright-cli");
+        await AgentConfigurationTestContext.WriteAsync(blockedSkillPath, "blocked destination");
+        var interaction = new TestInteractionService();
+        var version = SemVersion.Parse("0.1.3", SemVersionStyles.Strict);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+            options.InteractionServiceFactory = _ => interaction;
+            options.NpmRunnerFactory = _ => new FakeNpmRunner
+            {
+                ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new NpmPackageInfo { Version = version })
+            };
+            options.PlaywrightCliRunnerFactory = _ => new FakePlaywrightCliRunner { InstalledVersion = version };
+        });
+        using var provider = services.BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot,claude,opencode --scope project --skills playwright-cli --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Empty(interaction.DisplayedErrors);
+        var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+        Assert.Equal(AgentCommandStrings.PlaywrightCliInstaller_InstalledWithMirrorWarnings, warning.Message);
+        Assert.Equal("# Playwright CLI Skill", await File.ReadAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "playwright-cli", "SKILL.md")));
+        Assert.Equal("blocked destination", await File.ReadAllTextAsync(blockedSkillPath));
+        var summary = Assert.Single(interaction.DisplayedMessages,
+            message => message.Message.StartsWith(AgentCommandStrings.InitCommand_InstalledSkillsSummary, StringComparison.Ordinal));
+        await Verify(summary.Message);
     }
 
     [Fact]
