@@ -18,6 +18,7 @@ import {
   computeCommunityItems,
   isChecksFailing,
   isReviewDebt,
+  isUrgentPullRequest,
   reviewAgeStartedAt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
@@ -830,7 +831,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(hostRepoKey(e.host, e.repo))).map((e) => e.message))];
     for (const pr of allPrs) {
       if (pr.firstReadinessError) {
-        errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from Needs attention. ${pr.firstReadinessError}`);
+        errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from PR queue. ${pr.firstReadinessError}`);
       }
     }
 
@@ -839,7 +840,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
     else lanes = bucketReview(allPrs, { showDrafts });
 
-    // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
+    // Full pr-dashboard attention engine (review mode only). The focused "PR queue"
     // queue is the capped headline; attention buckets, the community list, the personal
     // "For you" picks and core-team developer counts sit beneath it. Items are reshaped into
     // the card shape the renderer consumes ({ pr, reason, signals }).
@@ -860,7 +861,10 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       const card = (pr, reason, extra) =>
         Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || ""), reviewDebt: isReviewDebt(pr) }, extra || {});
       const focusCards = focusAll.map((f, index) => {
-        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone, queuePosition: index + 1 });
+        return card(f.pullRequest, f.reason, {
+          bucketLabel: f.bucketLabel, bucketTone: f.bucketTone,
+          queuePosition: index + 1, urgent: isUrgentPullRequest(f.pullRequest),
+        });
       });
       attention = {
         forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
