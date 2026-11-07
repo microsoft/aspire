@@ -57,6 +57,9 @@ to remain static. Naming those read-only resources does not run their templates
 or download artifacts; test-only mode adds its plain 1ES template resource through
 the selected extends template.
 
+Plain 1ES also adds its standard SDL source-analysis stage, using the repository's
+Windows analysis pool. This does not add release publishing jobs.
+
 The Linux job exercises the production publisher against synchronized fixtures
 and a loopback HTTP server. Its real CLI emits the Azure DevOps skip warning
 directly into task stdout. The disposable macOS job validates the pinned tap's

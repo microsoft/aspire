@@ -21,6 +21,11 @@ extends:
       name: NetCore1ESPool-Internal
       image: 1es-ubuntu-2204
       os: linux
+    sdl:
+      sourceAnalysisPool:
+        name: NetCore1ESPool-Internal
+        image: windows.vs2026preview.scout.amd64
+        os: windows
     stages:
       - stage: HomebrewTests
         jobs:
