@@ -758,6 +758,35 @@ public class ResourceNotificationService : IDisposable
     private readonly object _onResourceUpdatedLock = new();
 
     /// <summary>
+    /// Gets the published snapshots for the resource's current instances.
+    /// </summary>
+    /// <param name="resource">The resource whose instance snapshots are requested.</param>
+    /// <returns>The current published instance snapshots, or an empty list before any snapshots are published.</returns>
+    /// <remarks>
+    /// This is a read-only observation, not an atomic snapshot across instances. When DCP instance
+    /// metadata is available, obsolete or resource-wide entries are excluded. Resources without DCP
+    /// instances return the snapshots published for that exact resource object.
+    /// </remarks>
+    [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public IReadOnlyList<ResourceEvent> GetCurrentStates(IResource resource)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var instanceNames = resource.TryGetInstances(out var instances)
+            ? instances.Select(instance => instance.Name).ToHashSet(StringComparer.Ordinal) : null;
+        var snapshots = new List<ResourceEvent>();
+        foreach (var (id, state) in _resourceNotificationStates)
+        {
+            if (ReferenceEquals(state.Resource, resource) &&
+                (instanceNames is null || instanceNames.Contains(id)) && state.LastSnapshot is { } snapshot)
+            {
+                snapshots.Add(new ResourceEvent(resource, id, snapshot));
+            }
+        }
+        return snapshots;
+    }
+
+    /// <summary>
     /// Attempts to retrieve the current state of a resource by resourceId.
     /// </summary>
     /// <remarks>
@@ -896,6 +925,12 @@ public class ResourceNotificationService : IDisposable
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
             var newState = stateFactory(previousState);
+#pragma warning disable ASPIREWATCH001 // Snapshot projections are experimental.
+            if (resource.TryGetLastAnnotation<ResourceSnapshotProjectionAnnotation>(out var projection))
+            {
+                newState = projection.Projection(resourceId, newState);
+            }
+#pragma warning restore ASPIREWATCH001
 
             if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
             {

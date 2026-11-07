@@ -10,6 +10,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.DotnetWatch;
+using Aspire.Shared.DotnetWatch;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
@@ -2134,11 +2135,209 @@ public class GuestAppHostProjectTests : IDisposable
         if (watch)
         {
             Assert.Equal("true", serverEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+            Assert.Equal(DotnetWatchOwnership.CliOwner, serverEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         }
         else
         {
-            Assert.False(serverEnvironment.ContainsKey(DotnetWatchRunEnvironment.WatchEnabledVariable));
+            Assert.Equal("false", serverEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+            Assert.Equal("", serverEnvironment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
         }
+        Assert.Equal("", serverEnvironment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
+        Assert.Equal("", serverEnvironment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunAsync_ResolvedWatchControlsTheGuestNativeCommandAndOnlyTheFinalServerOwnsManagedWatch(bool watch, bool defaultWatch)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var guestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appHost = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.mts"));
+        await File.WriteAllTextAsync(appHost.FullName, "// test apphost");
+        var command = OperatingSystem.IsWindows() ? Path.Combine(Environment.SystemDirectory, "cmd.exe") : "/bin/sh";
+        var runtime = new RuntimeSpec
+        {
+            Language = "test/runtime",
+            DisplayName = "Test runtime",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.mts"],
+            Execute = new CommandSpec { Command = command, Args = ["guest-run"] },
+            WatchExecute = new CommandSpec { Command = command, Args = ["guest-watch"] }
+        };
+        var session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtime });
+        var sessions = new FakeAppHostServerSessionFactory { Session = session };
+        var processes = new TestProcessExecutionFactory
+        {
+            AsyncAttemptCallback = (_, _, _) =>
+            {
+                guestStarted.TrySetResult();
+                return Task.FromResult((0, (string?)null));
+            }
+        };
+        var interaction = new TestInteractionService();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["features:defaultWatchEnabled"] = defaultWatch.ToString()
+        }).Build();
+        var project = CreateGuestAppHostProject(
+            interactionService: interaction,
+            languageId: "test/runtime",
+            configuration: configuration,
+            serverSessionFactory: sessions,
+            processExecutionFactory: processes,
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+            });
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Watch = watch,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["ApplicationVariable"] = "preserved",
+                [DotnetWatchRunEnvironment.WatchEnabledVariable] = "true",
+                [DotnetWatchOwnership.OwnerEnvironmentVariable] = "cli",
+                [DotnetWatchOwnership.AppHostControlEnvironmentVariable] = "old-control",
+                [DotnetWatchOwnership.AppHostSessionEnvironmentVariable] = "old-session"
+            }
+        };
+
+        var run = project.RunAsync(context, cancellation.Token);
+        try
+        {
+            await guestStarted.Task.DefaultTimeout();
+            await cancellation.CancelAsync();
+            await run.DefaultTimeout();
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await run.DefaultTimeout();
+        }
+
+        Assert.Equal(command, processes.LastFileName);
+        Assert.NotNull(processes.LastArguments);
+        Assert.Equal([watch ? "guest-watch" : "guest-run"], processes.LastArguments);
+        Assert.NotNull(processes.LastEnvironmentVariables);
+        Assert.Equal("false", processes.LastEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables,
+            name => Assert.Equal("", processes.LastEnvironmentVariables[name]));
+        Assert.Equal("preserved", processes.LastEnvironmentVariables["ApplicationVariable"]);
+        Assert.NotNull(sessions.CapturedEnvironmentVariables);
+        Assert.Equal(watch ? "true" : "false", sessions.CapturedEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.Equal(watch ? "cli" : "", sessions.CapturedEnvironmentVariables[DotnetWatchOwnership.OwnerEnvironmentVariable]);
+        Assert.Equal("old-session", context.EnvironmentVariables[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RunAsync_NativeServerRunsNormallyAndWarnsOnlyForResolvedWatch(bool watch, bool defaultWatch)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var guestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var root = _workspace.WorkspaceRoot;
+        var appHost = new FileInfo(Path.Combine(root.FullName, "apphost.mts"));
+        var executable = Path.Combine(root.FullName, "server");
+        await File.WriteAllTextAsync(appHost.FullName, "// test apphost");
+        await File.WriteAllTextAsync(executable, "");
+        new AspireConfigFile { Features = new() { [KnownFeatures.AppHostServerV2] = true } }.Save(root.FullName);
+        var interaction = new TestInteractionService();
+        var command = OperatingSystem.IsWindows() ? Path.Combine(Environment.SystemDirectory, "cmd.exe") : "/bin/sh";
+        var runtime = new RuntimeSpec
+        {
+            Language = "typescript/nodejs",
+            DisplayName = "Test runtime",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.mts"],
+            Execute = new CommandSpec { Command = command, Args = ["guest-run"] },
+            WatchExecute = new CommandSpec { Command = command, Args = ["guest-watch"] }
+        };
+        var session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtime });
+        var sessions = new FakeAppHostServerSessionFactory { Session = session };
+        var processes = new TestProcessExecutionFactory
+        {
+            AsyncAttemptCallback = (_, _, _) =>
+            {
+                guestStarted.TrySetResult();
+                return Task.FromResult((0, (string?)null));
+            }
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["features:defaultWatchEnabled"] = defaultWatch.ToString()
+        }).Build();
+        var project = CreateGuestAppHostProject(
+            interactionService: interaction,
+            languageId: "typescript/nodejs",
+            configuration: configuration,
+            serverSessionFactory: sessions,
+            processExecutionFactory: processes,
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(
+                    new NativeAppHostServerProject(path, executable, new TestProcessExecutionFactory(), NullLogger.Instance))
+            });
+
+        var run = project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = root,
+            Watch = watch
+        }, cancellation.Token);
+        try
+        {
+            await Task.WhenAny(guestStarted.Task, run).DefaultTimeout();
+            Assert.True(guestStarted.Task.IsCompletedSuccessfully, string.Join(Environment.NewLine, interaction.DisplayedErrors));
+            await cancellation.CancelAsync();
+            await run.DefaultTimeout();
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await run.DefaultTimeout();
+        }
+
+        Assert.Equal(command, processes.LastFileName);
+        Assert.NotNull(processes.LastArguments);
+        Assert.Equal(["guest-run"], processes.LastArguments);
+        Assert.NotNull(sessions.CapturedEnvironmentVariables);
+        Assert.Equal("false", sessions.CapturedEnvironmentVariables[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables,
+            name => Assert.Equal("", sessions.CapturedEnvironmentVariables[name]));
+        Assert.Equal(watch ? 1 : 0,
+            interaction.DisplayedMessages.Count(message => message.Message == RunCommandStrings.WatchNativeServerUnsupported));
+    }
+
+    [Fact]
+    public async Task BuildAndGenerateSdkAsync_DiscoveryExplicitlyDisablesWatchAndPrivateGenerationState()
+    {
+        var root = _workspace.WorkspaceRoot;
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, "apphost.mts"), "// test apphost");
+        var sessions = new FakeAppHostServerSessionFactory();
+        var project = CreateGuestAppHostProject(
+            serverSessionFactory: sessions,
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+            });
+
+        await ((IGuestAppHostSdkGenerator)project).BuildAndGenerateSdkAsync(root, packageSourceOverride: null, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.NotEmpty(sessions.CreatedSessionEnvironments);
+        Assert.All(sessions.CreatedSessionEnvironments, environment =>
+        {
+            Assert.NotNull(environment);
+            Assert.Equal("false", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+            Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("", environment[name]));
+        });
     }
 
     [Fact]
@@ -2270,7 +2469,11 @@ public class GuestAppHostProjectTests : IDisposable
             Arguments = arguments,
             EnvironmentVariables = new Dictionary<string, string>
             {
-                [NativeAppHostServerProject.OperationEnvironmentVariable] = "run"
+                [NativeAppHostServerProject.OperationEnvironmentVariable] = "run",
+                [DotnetWatchRunEnvironment.WatchEnabledVariable] = "true",
+                [DotnetWatchOwnership.OwnerEnvironmentVariable] = "cli",
+                [DotnetWatchOwnership.AppHostControlEnvironmentVariable] = "old-control",
+                [DotnetWatchOwnership.AppHostSessionEnvironmentVariable] = "old-session"
             }
         };
 
@@ -2283,6 +2486,8 @@ public class GuestAppHostProjectTests : IDisposable
             Assert.Equal(expectedOperation, environment![NativeAppHostServerProject.OperationEnvironmentVariable]);
             Assert.False(environment.ContainsKey(KnownConfigNames.IntegrationHostBootstrap));
             Assert.NotEmpty(environment[KnownConfigNames.UnixSocketPath]);
+            Assert.Equal("false", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+            Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("", environment[name]));
         });
         Assert.Equal("run", context.EnvironmentVariables[NativeAppHostServerProject.OperationEnvironmentVariable]);
     }
@@ -2610,7 +2815,8 @@ public class GuestAppHostProjectTests : IDisposable
         IEnvironment? environment = null,
         DirectoryInfo? homeDirectory = null,
         IConfiguration? configuration = null,
-        string? identityVersion = null)
+        string? identityVersion = null,
+        IProcessExecutionFactory? processExecutionFactory = null)
     {
         var effectiveConfiguration = configuration ?? _configuration;
         var effectiveEnvironment = environment ?? new TestEnvironment();
@@ -2649,7 +2855,7 @@ public class GuestAppHostProjectTests : IDisposable
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
-            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(
+            processExecutionFactory: processExecutionFactory ?? TestProcessExecutionFactory.CreateForCliGuardian(
                 effectiveEnvironment, _loggerFactory.CreateLogger<ProcessExecutionFactory>()),
             packagingService: new TestPackagingService(),
             configuration: effectiveConfiguration,

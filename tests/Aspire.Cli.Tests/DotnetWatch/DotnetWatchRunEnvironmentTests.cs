@@ -4,23 +4,38 @@
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotnetWatch;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.DotnetWatch;
 
-// What `aspire run --watch` does in the CLI: set the watch switch and show the AppHost's watch notices.
 public class DotnetWatchRunEnvironmentTests
 {
     [Fact]
-    public void RunEnvironmentOnlyEnablesWatch()
+    public void RunEnvironmentEstablishesCliOwnershipWithoutLeakingAnOldHostGeneration()
     {
         var environment = new Dictionary<string, string>();
 
         DotnetWatchRunEnvironment.Apply(environment);
 
-        // Aspire.Hosting.Dotnet finds the watch host in its own package; the CLI passes nothing else.
         Assert.Equal("true", Assert.Single(environment, e => e.Key == DotnetWatchRunEnvironment.WatchEnabledVariable).Value);
-        Assert.Single(environment);
+        Assert.Equal(DotnetWatchOwnership.CliOwner, environment[DotnetWatchOwnership.OwnerEnvironmentVariable]);
+        Assert.Equal("", environment[DotnetWatchOwnership.AppHostControlEnvironmentVariable]);
+        Assert.Equal("", environment[DotnetWatchOwnership.AppHostSessionEnvironmentVariable]);
+    }
+
+    [Fact]
+    public void DisableOverridesInheritedWatchAndPrivateGenerationState()
+    {
+        var environment = DotnetWatchOwnership.PrivateEnvironmentVariables.ToDictionary(name => name, _ => "inherited");
+        environment[DotnetWatchRunEnvironment.WatchEnabledVariable] = "true";
+        environment["ApplicationVariable"] = "preserved";
+
+        DotnetWatchRunEnvironment.Disable(environment);
+
+        Assert.Equal("false", environment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
+        Assert.All(DotnetWatchOwnership.PrivateEnvironmentVariables, name => Assert.Equal("", environment[name]));
+        Assert.Equal("preserved", environment["ApplicationVariable"]);
     }
 
     [Theory]

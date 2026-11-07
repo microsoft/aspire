@@ -9,6 +9,7 @@ using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.DotnetWatch;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -389,6 +390,10 @@ internal static partial class DotnetProjectBuildCoordinator
 
     private static bool ShouldCoordinateBuild(IDistributedApplicationBuilder builder)
     {
+        if (DotnetWatchOwnership.IsCliOwned(builder.Configuration[DotnetWatchOwnership.OwnerEnvironmentVariable]))
+        {
+            return true;
+        }
         if (string.IsNullOrEmpty(builder.Configuration[DebugSessionPortConfigurationKey]))
         {
             return true;
@@ -1101,14 +1106,28 @@ internal static partial class DotnetProjectBuildCoordinator
             return () => target.Annotations.Remove(annotation);
         }
 
-        private static IResource? FindRebuilder(
+        internal static IResource? FindRebuilder(
             DistributedApplicationModel model,
-            DotnetProjectResource resource) =>
+            IResource resource) =>
             model.Resources
                 .SingleOrDefault(candidate =>
                     candidate.Name == $"{resource.Name}-rebuilder" &&
                     candidate is IResourceWithParent<IResource> parent &&
                     ReferenceEquals(parent.Parent, resource));
+
+        internal async Task EnsureBuildEnvironmentEvaluatedAsync(
+            DotnetProjectResource resource, IResource buildResource, IServiceProvider services, CancellationToken cancellationToken)
+        {
+            if (_sharedBuildEnvironments.SingleOrDefault(environment => ReferenceEquals(environment.Resource, resource)) is { } environment)
+            {
+                await environment.EnsureEvaluatedAsync(new EnvironmentCallbackContext(
+                    services.GetRequiredService<DistributedApplicationExecutionContext>(), buildResource,
+                    new Dictionary<string, object>(), cancellationToken)
+                {
+                    Logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(buildResource)
+                }).ConfigureAwait(false);
+            }
+        }
 
         private static string? FindNearestGlobalJson(string workingDirectory)
         {

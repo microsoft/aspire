@@ -611,8 +611,11 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         string? appHostConfiguration,
         string? appHostGlobalArtifactsPath)
     {
-        // `dotnet watch` does not work with file-based apps yet, so use `dotnet run` in that case.
-        if (configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
+        // CLI-owned host injects DOTNET_WATCH and debug-service settings. The package's service
+        // watcher owns effective registrations; ordinary/excluded projects must not acquire a
+        // competing legacy watcher. File-based legacy projects also retain their ordinary path.
+        if (configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp ||
+            Aspire.Shared.DotnetWatch.DotnetWatchOwnership.IsCliOwned(configuration[Aspire.Shared.DotnetWatch.DotnetWatchOwnership.OwnerEnvironmentVariable]))
         {
             projectArguments.Add("run");
             projectArguments.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");

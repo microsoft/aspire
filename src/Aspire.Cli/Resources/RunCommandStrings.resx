@@ -133,7 +133,7 @@
     <value>Output format for detached AppHost results</value>
   </data>
   <data name="WatchArgumentDescription" xml:space="preserve">
-    <value>Start project resources in watch mode</value>
+    <value>Enable experimental combined AppHost and compatible C# service watching</value>
   </data>
   <data name="StartDebugSessionArgumentDescription" xml:space="preserve">
     <value>Whether to start a debug session, if running in an Aspire Terminal</value>
@@ -268,21 +268,68 @@
     <value>The --no-build option cannot be used for a VS Code run session: VS Code builds and watches the services it launches.</value>
   </data>
   <data name="WatchOptionDescription" xml:space="preserve">
-    <value>(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service. Defaults to the defaultWatchEnabled feature; use --watch false to turn it off.</value>
+    <value>(Preview) Watch compatible C# AppHosts and reconstruct their model after changes, enable language-native watching for compatible polyglot AppHosts, and hot reload compatible C# services added with AddDotnetProject. Defaults to the defaultWatchEnabled feature; use --watch false to turn all CLI-controlled watch paths off. Real IDE-owned runs retain IDE watch policy.</value>
   </data>
   <data name="Watch" xml:space="preserve">
     <value>Watch</value>
   </data>
   <data name="WatchEnabledSummary" xml:space="preserve">
-    <value>Hot reload is on for C# services (preview). Save a file to apply changes.</value>
+    <value>Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</value>
   </data>
   <data name="NoBuildNotSupportedWithWatchOption" xml:space="preserve">
-    <value>--no-build can't be used with --watch: hot reload builds C# services whenever they change. Remove --no-build, or remove --watch.</value>
+    <value>--no-build can't be used with --watch: watching builds compatible AppHosts and C# services whenever they change. Remove --no-build, or pass --watch false.</value>
   </data>
   <data name="NoBuildNotSupportedWithDefaultWatch" xml:space="preserve">
-    <value>--no-build can't be used while watch is on by default (the defaultWatchEnabled feature): hot reload builds C# services whenever they change. Remove --no-build, or pass --watch false to run without watch.</value>
+    <value>--no-build can't be used while combined watch is on by default (the defaultWatchEnabled feature). Remove --no-build, or pass --watch false to run without CLI-controlled watch.</value>
   </data>
   <data name="WatchHandledByIde" xml:space="preserve">
     <value>The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</value>
+  </data>
+  <data name="WatchNotSupportedWithDebugger" xml:space="preserve">
+    <value>--watch cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</value>
+  </data>
+  <data name="WatchBootstrapUnavailable" xml:space="preserve">
+    <value>The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</value>
+    <comment>Aspire.Hosting.Dotnet and ResolveAspireDotnetWatch must not be localized.</comment>
+  </data>
+  <data name="WatchBootstrapInvalid" xml:space="preserve">
+    <value>The package-owned watch resolve target returned invalid payload or selected SDK metadata.</value>
+  </data>
+  <data name="WatchToolOverrideInvalid" xml:space="preserve">
+    <value>ASPIRE_DOTNET_WATCH_TOOL_PATH is invalid or differs from the package target's resolved tool. Relative overrides are resolved against the AppHost directory; an invalid override does not select a default tool.</value>
+    <comment>ASPIRE_DOTNET_WATCH_TOOL_PATH must not be localized.</comment>
+  </data>
+  <data name="WatchAppHostFallback" xml:space="preserve">
+    <value>C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible C# service groups can still be watched.</value>
+  </data>
+  <data name="WatchAppHostRequirementsInvalid" xml:space="preserve">
+    <value>The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</value>
+  </data>
+  <data name="WatchAppHostRuntimeMissing" xml:space="preserve">
+    <value>The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</value>
+  </data>
+  <data name="WatchAppHostProjectRequired" xml:space="preserve">
+    <value>This preview supports C# AppHost watching for .csproj entry points only; file-based and other .NET AppHosts run normally.</value>
+  </data>
+  <data name="WatchAppHostDefaultBuildRequired" xml:space="preserve">
+    <value>This preview requires a single-targeted Debug AppHost build because the watcher host has no build-configuration or target-framework options.</value>
+  </data>
+  <data name="WatchAppHostProfileUnsupported" xml:space="preserve">
+    <value>The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</value>
+  </data>
+  <data name="WatchAppHostGenerationRequired" xml:space="preserve">
+    <value>A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</value>
+  </data>
+  <data name="WatchAppHostRestarting" xml:space="preserve">
+    <value>The C# AppHost model changed. Replacing the complete watch generation...</value>
+  </data>
+  <data name="WatchAppHostChannelFailed" xml:space="preserve">
+    <value>The private AppHost watch channel failed: {0} The watch run will stop rather than overlap AppHost generations.</value>
+  </data>
+  <data name="WatchAppHostIdentityRequired" xml:space="preserve">
+    <value>The watched AppHost must announce its initial process instance before startup can be established. The run will stop if that announcement is missing or the backchannel disconnects first.</value>
+  </data>
+  <data name="WatchNativeServerUnsupported" xml:space="preserve">
+    <value>AppHost watching is unavailable for the selected native AppHost server. Running without watching; stop and rerun Aspire to apply AppHost edits. Managed C# service watching is also unavailable.</value>
   </data>
 </root>

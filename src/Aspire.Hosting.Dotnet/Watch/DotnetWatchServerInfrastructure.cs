@@ -1,9 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
 using System.Globalization;
-using System.Reflection;
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -21,18 +20,7 @@ internal static class DotnetWatchServerInfrastructure
     /// <summary>Owner-only permissions (0700) for the run directory.</summary>
     internal const UnixFileMode PrivateDirectoryMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 
-    // HACK(spike): Aspire.Hosting has no public way to opt a resource out of its lifecycle commands; these are the
-    // internal types the dashboard resource and the project rebuilders use. TODO: a public system-resource API.
-    private const string ExcludeLifecycleCommandsAnnotationTypeName = "Aspire.Hosting.ApplicationModel.ExcludeLifecycleCommandsAnnotation";
-    private const string ApplicationOrchestratorTypeName = "Aspire.Hosting.Orchestrator.ApplicationOrchestrator";
-
-    /// <summary>
-    /// A hidden command that stops the server as the first half of a coordinator-driven restart (a fresh watcher drops
-    /// its compilation baselines and delta history), without the "watcher stopped" notice.
-    /// </summary>
-    internal const string StopForRestartCommand = "stop-for-restart";
-
-    private static readonly ConcurrentDictionary<IResource, byte> s_restarting = new();
+    private static readonly ConditionalWeakTable<IResource, Lifecycle> s_lifecycles = new();
 
     /// <summary>
     /// Hides the server and replaces Start/Stop/Restart with a single <c>start</c> command that is only offered
@@ -42,13 +30,14 @@ internal static class DotnetWatchServerInfrastructure
     internal static IResourceBuilder<T> AsWatchSystemResource<T>(this IResourceBuilder<T> server) where T : IResource
     {
         server.WithHidden().ExcludeFromManifest();
+        var lifecycle = s_lifecycles.GetValue(server.Resource, _ => new());
 
         // Hidden resources don't draw attention when they fail, so say so where the user is looking: the terminal
         // notices and the log of every service that waits on the server.
         server.ApplicationBuilder.Eventing.Subscribe<ResourceStoppedEvent>(server.Resource, (e, _) =>
         {
             if (e.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping.IsCancellationRequested ||
-                s_restarting.TryRemove(server.Resource, out byte _))
+                Interlocked.Exchange(ref lifecycle.InternalStop, 0) != 0)
             {
                 return Task.CompletedTask;
             }
@@ -65,52 +54,66 @@ internal static class DotnetWatchServerInfrastructure
             return Task.CompletedTask;
         });
 
-        var hostingAssembly = typeof(ResourceCommandAnnotation).Assembly;
-        if (hostingAssembly.GetType(ExcludeLifecycleCommandsAnnotationTypeName) is not { } excludeType
-            || hostingAssembly.GetType(ApplicationOrchestratorTypeName) is not { } orchestratorType
-            || orchestratorType.GetMethod("StartResourceAsync", BindingFlags.Public | BindingFlags.Instance, [typeof(string), typeof(CancellationToken)]) is not { } startMethod
-            || orchestratorType.GetMethod("StopResourceAsync", BindingFlags.Public | BindingFlags.Instance, [typeof(string), typeof(CancellationToken)]) is not { } stopMethod
-            || Activator.CreateInstance(excludeType, nonPublic: true) is not IResourceAnnotation excludeAnnotation)
+        foreach (var name in new[] { KnownResourceCommands.StartCommand, KnownResourceCommands.StopCommand, KnownResourceCommands.RestartCommand })
         {
-            // Keep the built-in lifecycle commands rather than leaving the server without a way to start again.
-            return server;
+#pragma warning disable ASPIREWATCH001 // Lifecycle-command overrides are experimental.
+            server.WithAnnotation(new ResourceLifecycleCommandOverrideAnnotation(name, original =>
+            {
+                if (original.Name == KnownResourceCommands.StartCommand)
+                {
+                    lifecycle.Start = original;
+                }
+                else if (original.Name == KnownResourceCommands.StopCommand)
+                {
+                    lifecycle.Stop = original;
+                }
+
+                return DotnetWatchMember.CloneCommand(original, _ => ResourceCommandState.Hidden,
+                    _ => Task.FromResult(CommandResults.Failure(
+                        "The watch run owns this watcher. Restart the complete watch run instead of controlling the server directly.")));
+            }));
+#pragma warning restore ASPIREWATCH001
         }
 
-        server.WithAnnotation(excludeAnnotation);
-        server.WithCommand(
-            KnownResourceCommands.StartCommand,
-            "Start",
-            async context =>
-            {
-                var orchestrator = context.Services.GetRequiredService(orchestratorType);
-                await ((Task)startMethod.Invoke(orchestrator, [context.ResourceName, context.CancellationToken])!).ConfigureAwait(false);
-                return CommandResults.Success();
-            },
-            new CommandOptions
-            {
-                Description = "Start the hot reload watcher. Watched services wait for it before they start.",
-                IconName = "Play",
-                IconVariant = IconVariant.Filled,
-                IsHighlighted = true,
-                UpdateState = context => IsStopped(context.ResourceSnapshot.State?.Text) ? ResourceCommandState.Enabled : ResourceCommandState.Hidden,
-            });
-        server.WithCommand(
-            StopForRestartCommand,
-            "Stop for restart",
-            async context =>
-            {
-                s_restarting[server.Resource] = 0;
-                var orchestrator = context.Services.GetRequiredService(orchestratorType);
-                await ((Task)stopMethod.Invoke(orchestrator, [context.ResourceName, context.CancellationToken])!).ConfigureAwait(false);
-                return CommandResults.Success();
-            },
-            new CommandOptions
-            {
-                Description = "Stops the hot reload watcher so the AppHost can start a fresh one.",
-                UpdateState = _ => ResourceCommandState.Hidden,
-            });
-
         return server;
+    }
+
+    internal static Task<ExecuteCommandResult> StartOwnedAsync(IResource server, IServiceProvider services, CancellationToken cancellationToken) =>
+        ExecuteOwnedAsync(server, services, cancellationToken, start: true);
+
+    internal static Task<ExecuteCommandResult> StopOwnedAsync(IResource server, IServiceProvider services, CancellationToken cancellationToken) =>
+        ExecuteOwnedAsync(server, services, cancellationToken, start: false);
+
+    private static Task<ExecuteCommandResult> ExecuteOwnedAsync(IResource server, IServiceProvider services, CancellationToken cancellationToken, bool start)
+    {
+        if (!s_lifecycles.TryGetValue(server, out var lifecycle) || (start ? lifecycle.Start : lifecycle.Stop) is not { } command)
+        {
+            return Task.FromResult(CommandResults.Failure($"The original watcher lifecycle callback for '{server.Name}' is unavailable."));
+        }
+
+#pragma warning disable ASPIREWATCH001 // Owned lifecycle commands need the current DCP instance identity.
+        var instances = services.GetRequiredService<ResourceNotificationService>().GetCurrentStates(server);
+#pragma warning restore ASPIREWATCH001
+        if (instances.Count != 1)
+        {
+            return Task.FromResult(CommandResults.Failure(
+                $"Expected one current watcher instance for '{server.Name}', but found {instances.Count}. Restart the watch run."));
+        }
+
+        if (!start)
+        {
+            Interlocked.Exchange(ref lifecycle.InternalStop, 1);
+        }
+
+        return command.ExecuteCommand(new ExecuteCommandContext
+        {
+            // Built-in callbacks address DCP instances, not logical model names.
+            ResourceName = instances[0].ResourceId,
+            Services = services,
+            CancellationToken = cancellationToken,
+            Logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(server),
+            Arguments = new([])
+        });
     }
 
     /// <summary>
@@ -128,7 +131,7 @@ internal static class DotnetWatchServerInfrastructure
 
     internal static string FormatStoppedNotice(string serverName, int? exitCode) =>
         string.Format(CultureInfo.InvariantCulture,
-            "❌ The hot reload watcher stopped{0}. Edits aren't applied, and watched services can't (re)start until it runs again. Start it again with 'aspire resource {1} start' or from the dashboard (show hidden resources).",
+            "❌ The hot reload watcher '{1}' stopped{0}. Edits aren't applied. Restart the complete watch run; this group cannot downgrade to ordinary execution after build handoff.",
             exitCode is { } code ? string.Format(CultureInfo.InvariantCulture, " (exit code {0})", code) : "",
             serverName);
 
@@ -139,6 +142,20 @@ internal static class DotnetWatchServerInfrastructure
         state is null || KnownResourceStates.TerminalStates.Contains(state) || state == KnownResourceStates.NotStarted || state == "Unknown";
 
     private static readonly HashSet<string> s_createdDirectories = new(StringComparer.Ordinal);
+
+    internal static string CreatePrivateDirectory()
+    {
+        var directory = Directory.CreateTempSubdirectory("aspw-");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(directory.FullName, PrivateDirectoryMode);
+        }
+        lock (s_createdDirectories)
+        {
+            s_createdDirectories.Add(directory.FullName);
+        }
+        return directory.FullName;
+    }
 
     /// <summary>
     /// Creates <paramref name="path"/> accessible only by the current user (0700 on Unix). A directory this process
@@ -187,5 +204,12 @@ internal static class DotnetWatchServerInfrastructure
 
             s_createdDirectories.Add(path);
         }
+    }
+
+    private sealed class Lifecycle
+    {
+        public ResourceCommandAnnotation? Start;
+        public ResourceCommandAnnotation? Stop;
+        public int InternalStop;
     }
 }

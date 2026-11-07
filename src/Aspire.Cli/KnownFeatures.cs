@@ -62,7 +62,7 @@ internal static class KnownFeatures
 
         [DefaultWatchEnabled] = new(
             DefaultWatchEnabled,
-            "Enable or disable hot reload of C# services by default for 'aspire run' (the same as passing --watch); an explicit --watch or --watch false wins",
+            "Enable combined watching of compatible C# AppHosts and services and compatible language-native polyglot AppHosts by default for 'aspire run' (the same as --watch); an explicit --watch or --watch false wins, and real IDE-owned runs retain IDE watch policy",
             DefaultValue: false),
 
         [ShowAllTemplates] = new(

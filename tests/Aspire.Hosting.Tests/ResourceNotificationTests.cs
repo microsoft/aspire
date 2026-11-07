@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREWATCH001 // Snapshot projections are experimental.
+
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -20,6 +22,99 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "3")]
 public class ResourceNotificationTests
 {
+    [Fact]
+    public async Task CurrentStatesAreSeparatedByResourceAndInstance()
+    {
+        var resource = new ExecutableResource("resource", "command", ".");
+        var other = new ExecutableResource("other", "command", ".");
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        Assert.Empty(notifications.GetCurrentStates(resource));
+        await notifications.PublishUpdateAsync(resource, "instance-a", snapshot => snapshot with { State = KnownResourceStates.Running });
+        await notifications.PublishUpdateAsync(resource, "instance-b", snapshot => snapshot with { State = KnownResourceStates.Waiting });
+        await notifications.PublishUpdateAsync(other, "instance-c", snapshot => snapshot with { State = KnownResourceStates.Finished });
+
+        var states = notifications.GetCurrentStates(resource).OrderBy(state => state.ResourceId, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(["instance-a", "instance-b"], states.Select(state => state.ResourceId));
+        Assert.Equal([KnownResourceStates.Running, KnownResourceStates.Waiting], states.Select(state => state.Snapshot.State?.Text));
+        Assert.All(states, state => Assert.Same(resource, state.Resource));
+        Assert.Equal("instance-c", Assert.Single(notifications.GetCurrentStates(other)).ResourceId);
+    }
+
+    [Fact]
+    public async Task SnapshotProjection_LastWinsAndPrecedesCommandState()
+    {
+        var resource = new ExecutableResource("transport", "command", ".");
+        resource.Annotations.Add(new ResourceSnapshotProjectionAnnotation(
+            (_, _) => throw new InvalidOperationException("Only the last projection should execute.")));
+        string? observedId = null;
+        resource.Annotations.Add(new ResourceSnapshotProjectionAnnotation((resourceId, snapshot) =>
+        {
+            observedId = resourceId;
+            return snapshot with { State = KnownResourceStates.Starting, ExitCode = null };
+        }));
+        resource.AddLifeCycleCommands();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+
+        await notifications.PublishUpdateAsync(resource, "transport-instance", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        });
+
+        Assert.Equal("transport-instance", observedId);
+        Assert.True(notifications.TryGetCurrentState("transport-instance", out var update));
+        Assert.Equal(KnownResourceStates.Starting, update.Snapshot.State?.Text);
+        Assert.Null(update.Snapshot.ExitCode);
+        Assert.Equal(ResourceCommandState.Disabled, update.Snapshot.Commands
+            .Single(command => command.Name == KnownResourceCommands.StartCommand).State);
+    }
+
+    [Fact]
+    public async Task SnapshotProjection_IsAppliedToLaterLogicalUpdates()
+    {
+        var resource = new ExecutableResource("transport", "command", ".");
+        resource.Annotations.Add(new ResourceSnapshotProjectionAnnotation((_, snapshot) => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ExitCode = null
+        }));
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource, snapshot => snapshot with { State = KnownResourceStates.Finished, ExitCode = 0 });
+
+        await notifications.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            HealthReports = [new("endpoint", HealthStatus.Healthy, "Endpoint is healthy.", null)],
+            Properties = [new("logical", "updated")]
+        });
+
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var update));
+        Assert.Equal(KnownResourceStates.Running, update.Snapshot.State?.Text);
+        Assert.Null(update.Snapshot.ExitCode);
+        Assert.Equal(HealthStatus.Healthy, update.Snapshot.HealthStatus);
+        var property = Assert.Single(update.Snapshot.Properties);
+        Assert.Equal("logical", property.Name);
+        Assert.Equal("updated", property.Value);
+    }
+
+    [Fact]
+    public async Task SnapshotProjection_FailureDoesNotPublishOrReplaceState()
+    {
+        var resource = new ExecutableResource("transport", "command", ".");
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource, snapshot => snapshot with { State = KnownResourceStates.Starting });
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var before));
+        resource.Annotations.Add(new ResourceSnapshotProjectionAnnotation(
+            (_, _) => throw new InvalidOperationException("Invalid projection.")));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            notifications.PublishUpdateAsync(resource, snapshot => snapshot with { State = KnownResourceStates.Running }));
+
+        Assert.Equal("Invalid projection.", error.Message);
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var after));
+        Assert.Same(before.Snapshot, after.Snapshot);
+    }
+
     [Fact]
     public void InitialStateCanBeSpecified()
     {

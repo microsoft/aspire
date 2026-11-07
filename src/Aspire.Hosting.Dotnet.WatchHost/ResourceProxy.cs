@@ -5,12 +5,13 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Shared.DotnetWatch;
 using static Aspire.Shared.DotnetWatch.DotnetWatchHostProtocol;
 
 namespace Aspire.Hosting.Dotnet.WatchHost;
 
 /// <summary>
-/// Plan D10 / Session 6a: per-replica proxy between DCP and the pinned <c>Microsoft.DotNet.HotReload.Watch.Aspire</c>
+/// Per-replica proxy between DCP and the pinned <c>Microsoft.DotNet.HotReload.Watch.Aspire</c>
 /// server's resource pipe.
 /// </summary>
 /// <remarks>
@@ -28,9 +29,10 @@ namespace Aspire.Hosting.Dotnet.WatchHost;
 /// values, or unsets them.
 /// </para>
 /// <para>
-/// The service environment is NOT passed on the command line. DCP launches this process with the service
+/// Application settings and secrets are not passed on the command line. DCP launches this process with the service
 /// environment, and <c>ASPIRE_DOTNET_WATCH_FORWARD_ENV</c> names (not values) the variables the app model produced.
-/// Only those are forwarded in the pipe request.
+/// Those are forwarded in the pipe request. Public <c>SSL_CERT_DIR</c>/<c>SSL_CERT_FILE</c> trust paths also use
+/// <c>dotnet run -e</c> so native certificate validation sees them before the application starts.
 /// </para>
 /// <para>
 /// Wire contract pinned to watcher 10.0.403 (dotnet/dotnet 5a2162be): version byte 1, 7-bit-length-prefixed UTF-8
@@ -217,6 +219,10 @@ internal static class ResourceProxy
             .Concat((processVariableNames ?? []).Where(n => s_alwaysForwardedPrefixes.Any(p => n.StartsWith(p, StringComparison.OrdinalIgnoreCase))));
         foreach (var name in candidates)
         {
+            if (IsPrivateEnvironment(name))
+            {
+                continue;
+            }
             if (lookup(name) is { } value)
             {
                 result[name] = value;
@@ -235,12 +241,21 @@ internal static class ResourceProxy
         var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         foreach (var name in (names ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries))
         {
+            if (IsPrivateEnvironment(name))
+            {
+                continue;
+            }
             if (!environment.Keys.Contains(name, comparer))
             {
                 environment[name] = lookup(name) ?? string.Empty;
             }
         }
+
     }
+
+    private static bool IsPrivateEnvironment(string name) =>
+        DotnetWatchOwnership.PrivateEnvironmentVariables.Contains(name, StringComparer.OrdinalIgnoreCase) ||
+        name is CleanupMarkerVariable or ForwardedEnvironmentNamesVariable or RestoreEnvironmentNamesVariable;
 
     /// <summary><c>dotnet run</c> options that precede the application arguments.</summary>
     /// <remarks>
@@ -294,6 +309,19 @@ internal static class ResourceProxy
         foreach (var option in runOptions)
         {
             argsArray.Add((JsonNode?)JsonValue.Create(option));
+        }
+
+        // On Unix the in-app watch agent updates only .NET's environment cache,
+        // not libc getenv, which OpenSSL uses for these public trust paths.
+        // Set only these paths before process startup; passwords stay on the pipe.
+        // https://github.com/dotnet/runtime/blob/v10.0.14/src/libraries/System.Private.CoreLib/src/System/Environment.Variables.Unix.cs
+        foreach (var name in s_alwaysForwardedNames)
+        {
+            if (environment.TryGetValue(name, out var path) && !string.IsNullOrEmpty(path))
+            {
+                argsArray.Add((JsonNode?)JsonValue.Create("-e"));
+                argsArray.Add((JsonNode?)JsonValue.Create($"{name}={path}"));
+            }
         }
 
         if (appArgs.Count > 0)

@@ -309,6 +309,23 @@ internal sealed class TestProcessExecution : IProcessExecution
 /// </summary>
 internal static class DotNetCliRunnerTestHelper
 {
+    internal static DotNetCliRunner CreateWithFactory(
+        IServiceProvider serviceProvider,
+        CliExecutionContext executionContext,
+        IProcessExecutionFactory executionFactory)
+        => new(
+            serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>(),
+            serviceProvider,
+            TestTelemetryHelper.CreateInitializedTelemetry(),
+            serviceProvider.GetRequiredService<ProfilingTelemetry>(),
+            serviceProvider.GetRequiredService<IConfiguration>(),
+            new NullDiskCache(),
+            serviceProvider.GetRequiredService<IFeatures>(),
+            serviceProvider.GetRequiredService<IInteractionService>(),
+            executionContext,
+            executionFactory,
+            new HostEnvironment());
+
     /// <summary>
     /// Creates a <see cref="DotNetCliRunner"/> with an assertion callback that is invoked on each execution.
     /// </summary>

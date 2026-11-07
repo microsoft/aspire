@@ -47,7 +47,7 @@ internal static class DotnetWatchStatusTypes
 }
 
 /// <summary>
-/// SPIKE: turns the watcher's status events (<c>--status-pipe</c>) into concise notices for the CLI and resource logs.
+/// Turns the watcher's status events (<c>--status-pipe</c>) into concise notices for the CLI and resource logs.
 /// The watcher's console output is shown as logs of the <c>dotnet-watch</c> resource and never interpreted.
 /// </summary>
 /// <remarks>

@@ -16,14 +16,14 @@ internal class EnvironmentVariablesExecutionConfigurationGatherer : IExecutionCo
         if (resource.TryGetEnvironmentVariables(out var envVarAnnotations))
         {
             var envVars = new Dictionary<string, object>(context.EnvironmentVariables);
-            var callbackContext = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken)
-            {
-                Logger = resourceLogger,
-            };
-
             foreach (var ann in envVarAnnotations)
             {
-                // Each annotation operates on a shared context.
+                // Cached callbacks return an earlier snapshot. Later callbacks must
+                // receive that dictionary, not the initial, potentially empty context.
+                var callbackContext = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken)
+                {
+                    Logger = resourceLogger,
+                };
                 envVars = await ann.AsCallbackAnnotation().EvaluateOnceAsync(callbackContext).ConfigureAwait(false);
             }
 

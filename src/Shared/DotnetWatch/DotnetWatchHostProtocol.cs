@@ -42,4 +42,7 @@ internal static class DotnetWatchHostProtocol
 
     /// <summary>Overrides how long the server host lets the watcher exit on its own after a stop signal.</summary>
     public const string ShutdownGraceVariable = "ASPIRE_DOTNET_WATCH_SERVER_SHUTDOWN_GRACE_MS";
+
+    /// <summary>Private per-generation marker written only after contained watcher-tree cleanup is verified.</summary>
+    public const string CleanupMarkerVariable = "ASPIRE_DOTNET_WATCH_CLEANUP_MARKER";
 }

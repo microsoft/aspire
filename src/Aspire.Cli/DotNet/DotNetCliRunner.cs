@@ -79,6 +79,20 @@ internal sealed class ProcessInvocationOptions
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
 
+    public bool DisableExtensionLaunch { get; set; }
+
+    public string? DotNetExecutablePath { get; set; }
+
+    /// <summary>
+    /// Reads the structured results of the explicitly requested MSBuild targets.
+    /// </summary>
+    public bool QueryTargetResults { get; set; }
+
+    /// <summary>
+    /// Gates a watched AppHost's backchannel connection on its validated initial process announcement.
+    /// </summary>
+    public Task? BackchannelConnectionReady { get; set; }
+
     /// <summary>
     /// When true, suppresses logging of process output to the logger.
     /// Useful for background operations like NuGet package cache refreshes.
@@ -185,6 +199,10 @@ internal sealed class ProcessInvocationOptions
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
+        DisableExtensionLaunch = DisableExtensionLaunch,
+        DotNetExecutablePath = DotNetExecutablePath,
+        QueryTargetResults = QueryTargetResults,
+        BackchannelConnectionReady = BackchannelConnectionReady,
         SuppressLogging = SuppressLogging,
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
@@ -263,7 +281,21 @@ internal sealed class DotNetCliRunner(
         if (command is null || IsDotNetMuxerCommand(command))
         {
             // Resolve the dotnet executable path, preferring the private SDK installation if available.
-            processFileName = ResolveDotNetPath(finalEnv);
+            if (options.DotNetExecutablePath is { } exactDotnetPath)
+            {
+                // Use the muxer that selected this AppHost's SDK, not the CLI's private SDK.
+                // Otherwise host can load a different MSBuild/runtime pair than preflight validated.
+                processFileName = exactDotnetPath;
+                var dotnetDirectory = Path.GetDirectoryName(PathNormalizer.ResolveSymlinks(exactDotnetPath))!;
+                finalEnv["DOTNET_ROOT"] = dotnetDirectory;
+                finalEnv["DOTNET_MULTILEVEL_LOOKUP"] = "0";
+                var currentPath = finalEnv.TryGetValue("PATH", out var path) ? path : environment.GetEnvironmentVariable("PATH");
+                finalEnv["PATH"] = $"{dotnetDirectory}{Path.PathSeparator}{currentPath}";
+            }
+            else
+            {
+                processFileName = ResolveDotNetPath(finalEnv);
+            }
             effectiveArgs = AddBinlogArgumentIfConfigured(args, dotnetCommand, projectFile, workingDirectory, processActivity);
         }
         else
@@ -288,13 +320,9 @@ internal sealed class DotNetCliRunner(
         var outputCounters = new ProcessOutputCounters();
         var instrumentedOptions = CreateInstrumentedProcessOptions(options, processActivity, outputCounters);
 
-        // Do not use 'await using' here: StartBackchannelAsync runs fire-and-forget and
-        // accesses execution.HasExited / ExitCode after this method returns. Disposing
-        // the underlying Process while the backchannel task is still polling would
-        // cause ObjectDisposedException. We intentionally never dispose this execution:
-        // IAsyncDisposable.DisposeAsync is not called by the finalizer, but the Process's
-        // native handles are still reclaimed by the SafeHandle finalizers, so this is not
-        // a resource leak.
+        // Ordinary invocations start their connector asynchronously, so disposing execution
+        // before that poll settles can race HasExited/ExitCode. CLI-owned watch instead owns
+        // and drains the connector below before disposing its process for the next generation.
         var execution = executionFactory.CreateExecution(processFileName, effectiveArgs, finalEnv, workingDirectory, instrumentedOptions);
 
         // Get socket path from env if present
@@ -304,7 +332,8 @@ internal sealed class DotNetCliRunner(
         // Handle extension-based launch for app hosts with backchannel
         if (backchannelCompletionSource is not null)
         {
-            if (ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
+            if (!options.DisableExtensionLaunch &&
+                ExtensionHelper.IsExtensionHost(interactionService, out var extensionInteractionService, out var extensionBackchannel)
                 && projectFile is not null
                 && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.Project, cancellationToken))
             {
@@ -338,18 +367,101 @@ internal sealed class DotNetCliRunner(
         if (!started)
         {
             processActivity.SetError("Process failed to start.");
+            if (options.DisableExtensionLaunch)
+            {
+                await execution.DisposeAsync().ConfigureAwait(false);
+            }
             return CliExitCodes.FailedToDotnetRunAppHost;
         }
 
+        using var ownedBackchannelStop = options.DisableExtensionLaunch
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : null;
+        Task? ownedBackchannelTask = null;
         if (backchannelCompletionSource is not null && socketPath is not null)
         {
-            _ = StartBackchannelAsync(execution, socketPath, backchannelCompletionSource, backchannelParentContext, cancellationToken);
+            if (ownedBackchannelStop is not null)
+            {
+                ownedBackchannelTask = StartOwnedBackchannelAsync(socketPath, backchannelCompletionSource, ownedBackchannelStop.Token);
+            }
+            else
+            {
+                _ = StartBackchannelAsync(execution, socketPath, backchannelCompletionSource, backchannelParentContext, cancellationToken);
+            }
         }
 
-        var exitCode = await execution.WaitForExitAsync(cancellationToken);
-        processActivity.SetDotNetCompleted(exitCode, outputCounters.StdoutLineCount, outputCounters.StderrLineCount);
+        try
+        {
+            var exitCode = await execution.WaitForExitAsync(cancellationToken);
+            processActivity.SetDotNetCompleted(exitCode, outputCounters.StdoutLineCount, outputCounters.StderrLineCount);
 
-        return exitCode;
+            return exitCode;
+        }
+        finally
+        {
+            if (ownedBackchannelStop is not null)
+            {
+                // A replaced AppHost generation must not leave an old connector polling its
+                // disposed process or completing a stale backchannel after the next launch.
+                await ownedBackchannelStop.CancelAsync().ConfigureAwait(false);
+                if (ownedBackchannelTask is not null)
+                {
+                    try
+                    {
+                        await ownedBackchannelTask.ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ownedBackchannelStop.IsCancellationRequested)
+                    {
+                    }
+                    catch (Exception exception)
+                    {
+                        logger.LogDebug(exception, "AppHost watch backchannel connection ended.");
+                    }
+                }
+                await execution.DisposeAsync().ConfigureAwait(false);
+                if (!OperatingSystem.IsWindows() && backchannelCompletionSource is not null && socketPath is not null)
+                {
+                    // This invocation generated the address, and its owned process tree has
+                    // settled. A force-stopped AppHost cannot unlink its Kestrel socket itself.
+                    // Remove it before the next generation; never prune caller/IDE addresses.
+                    try
+                    {
+                        File.Delete(socketPath);
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    {
+                        logger.LogError(exception, "Could not remove the stopped watch generation's backchannel {SocketPath}.", socketPath);
+                        throw;
+                    }
+                }
+            }
+        }
+
+        async Task StartOwnedBackchannelAsync(
+            string ownedSocketPath,
+            TaskCompletionSource<IAppHostCliBackchannel> completion,
+            CancellationToken connectionToken)
+        {
+            try
+            {
+                if (options.BackchannelConnectionReady is { } readiness)
+                {
+                    // Do not connect to an unannounced child and later mistake its rude-edit
+                    // replacement's first notification for that already-connected process.
+                    await readiness.WaitAsync(connectionToken).ConfigureAwait(false);
+                }
+                await StartBackchannelAsync(execution, ownedSocketPath, completion, backchannelParentContext, connectionToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (connectionToken.IsCancellationRequested)
+            {
+                completion.TrySetCanceled(connectionToken);
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+                throw;
+            }
+        }
     }
 
     private static bool IsDotNetMuxerCommand(string command)
@@ -423,52 +535,29 @@ internal sealed class DotNetCliRunner(
         ProfilingTelemetry.ActivityScope activity,
         ProcessOutputCounters outputCounters)
     {
-        return new ProcessInvocationOptions
+        // Preserve every launch, environment, shutdown, and argument-redaction setting while
+        // instrumenting output. New watch options must survive this layer as well as Clone().
+        var instrumentedOptions = options.Clone();
+        instrumentedOptions.StandardOutputCallback = line =>
         {
-            NoLaunchProfile = options.NoLaunchProfile,
-            StartDebugSession = options.StartDebugSession,
-            Debug = options.Debug,
-            SuppressLogging = options.SuppressLogging,
-            KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,
-            // Forward the Run-path shutdown ladder opt-ins. Forgetting any of these silently
-            // demotes the run to the force-kill fallback: IsolateConsole=false skips console
-            // isolation, KillOnParentExit=false removes the Windows crash-time job safety net, and the
-            // null signaler/service pair causes ProcessExecution's OCE catch
-            // (DotNet/ProcessExecution.cs) to route through its force-kill mode (best-effort SIGTERM
-            // then kill) instead of its graceful ladder. Build/restore/etc. callers leave these unset
-            // and intentionally keep the force-kill path.
-            IsolateConsole = options.IsolateConsole,
-            KillOnParentExit = options.KillOnParentExit,
-            Lifetime = options.Lifetime,
-            CompletionPath = options.CompletionPath,
-            CreateSupervisorStartInfo = options.CreateSupervisorStartInfo,
-            Detached = options.Detached,
-            EnvironmentVariableFilter = options.EnvironmentVariableFilter,
-            EnvironmentVariables = options.EnvironmentVariables,
-            // Without this the redaction boundary is lost between the runner and the process
-            // factory, and a direct AppHost launch would log its forwarded arguments verbatim.
-            AppHostArgumentStartIndex = options.AppHostArgumentStartIndex,
-            GracefulShutdownSignaler = options.GracefulShutdownSignaler,
-            ShutdownService = options.ShutdownService,
-            StandardOutputCallback = line =>
+            var lineCount = Interlocked.Increment(ref outputCounters.StdoutLineCount);
+            if (lineCount == 1)
             {
-                var lineCount = Interlocked.Increment(ref outputCounters.StdoutLineCount);
-                if (lineCount == 1)
-                {
-                    activity.AddDotNetFirstStdoutEvent();
-                }
-                options.StandardOutputCallback?.Invoke(line);
-            },
-            StandardErrorCallback = line =>
-            {
-                var lineCount = Interlocked.Increment(ref outputCounters.StderrLineCount);
-                if (lineCount == 1)
-                {
-                    activity.AddDotNetFirstStderrEvent();
-                }
-                options.StandardErrorCallback?.Invoke(line);
+                activity.AddDotNetFirstStdoutEvent();
             }
+            options.StandardOutputCallback?.Invoke(line);
         };
+        instrumentedOptions.StandardErrorCallback = line =>
+        {
+            var lineCount = Interlocked.Increment(ref outputCounters.StderrLineCount);
+            if (lineCount == 1)
+            {
+                activity.AddDotNetFirstStderrEvent();
+            }
+            options.StandardErrorCallback?.Invoke(line);
+        };
+
+        return instrumentedOptions;
     }
 
     private sealed class ProcessOutputCounters
@@ -799,6 +888,10 @@ internal sealed class DotNetCliRunner(
             // matches what `dotnet run` would have produced.
             // https://learn.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference#switches
             cliArgsList.Add($"-t:{string.Join(";", targets)}");
+            if (options.QueryTargetResults)
+            {
+                cliArgsList.Add($"-getTargetResult:{string.Join(",", targets)}");
+            }
         }
 
         cliArgsList.Add(projectFile.FullName);

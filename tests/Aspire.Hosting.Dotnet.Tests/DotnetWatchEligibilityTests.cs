@@ -6,6 +6,7 @@
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
+using Aspire.Hosting.Dotnet.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.DotnetWatch;
@@ -106,7 +107,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
         var wait = barrier.Callback(app.Services, CancellationToken.None);
         Assert.False(wait.IsCompleted);
 
-        DotnetWatchCoordinator.ReportBuildCompleteForTesting(api.Resource, success: false);
+        await DotnetWatchCoordinator.ReportBuildCompleteForTestingAsync(api.Resource, success: false, app.Services, CancellationToken.None);
         await Task.Delay(50);
         Assert.False(wait.IsCompleted);
 
@@ -117,7 +118,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceled);
         }
 
-        DotnetWatchCoordinator.ReportBuildCompleteForTesting(api.Resource, success: true);
+        await DotnetWatchCoordinator.ReportBuildCompleteForTestingAsync(api.Resource, success: true, app.Services, CancellationToken.None);
         await wait.WaitAsync(TimeSpan.FromSeconds(10));
 
         // Later consumers don't wait for another build.
@@ -286,6 +287,7 @@ public class DotnetWatchEligibilityTests(ITestOutputHelper outputHelper)
 
     private static IResourceBuilder<DotnetProjectResource> AddProject(IDistributedApplicationBuilder builder, TemporaryWorkspace workspace, string name)
     {
+        DotnetWatchPreflightTestServices.Configure(builder);
         var path = Path.Combine(workspace.Path, name, $"{name}.csproj");
         DotnetWatchCoordinatorTests.CreateProjectFile(path);
         return builder.AddDotnetProject(name, Path.GetDirectoryName(path)!);

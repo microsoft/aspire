@@ -18,7 +18,7 @@ namespace Aspire.Hosting.Dotnet.Watch;
 /// watcher reconnects for every launcher it creates, so connections are accepted for as long as the server lives and
 /// commands go to the latest one.
 /// </remarks>
-internal sealed class DotnetWatchControlPipeServer(string pipeName) : IAsyncDisposable
+internal sealed class DotnetWatchControlPipeServer(string pipeName, Action<Exception> onFailure) : IAsyncDisposable
 {
     internal const string RebuildCommand = "rebuild";
 
@@ -29,6 +29,7 @@ internal sealed class DotnetWatchControlPipeServer(string pipeName) : IAsyncDisp
     private readonly object _gate = new();
     private TaskCompletionSource<NamedPipeServerStream> _connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task? _acceptLoop;
+    private Task? _disposeTask;
     private int _connectionCount;
 
     public string PipeName { get; } = pipeName;
@@ -46,6 +47,8 @@ internal sealed class DotnetWatchControlPipeServer(string pipeName) : IAsyncDisp
     /// <summary>Sends a <c>rebuild</c> command; <see langword="false"/> when the watcher isn't connected.</summary>
     public async Task<bool> SendRebuildAsync(IReadOnlyCollection<string> projects, CancellationToken cancellationToken)
     {
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cts.Token);
+        cancellationToken = stopping.Token;
         using var buffer = new MemoryStream();
         using (var writer = new Utf8JsonWriter(buffer))
         {
@@ -158,8 +161,23 @@ internal sealed class DotnetWatchControlPipeServer(string pipeName) : IAsyncDisp
                 }
             }
         }
-        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or IOException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ObjectDisposedException)
+        {
+            lock (_gate)
+            {
+                if (_connected.Task.IsCompleted)
+                {
+                    _connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                }
+                _connected.TrySetException(exception);
+            }
+            onFailure(exception);
         }
         finally
         {
@@ -171,12 +189,24 @@ internal sealed class DotnetWatchControlPipeServer(string pipeName) : IAsyncDisp
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
+    {
+        lock (_gate)
+        {
+            return new(_disposeTask ??= DisposeCoreAsync());
+        }
+    }
+
+    private async Task DisposeCoreAsync()
     {
         _cts.Cancel();
+        lock (_gate)
+        {
+            _connected.TrySetCanceled(_cts.Token);
+        }
         if (_acceptLoop is not null)
         {
-            await _acceptLoop.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            await _acceptLoop.ConfigureAwait(false);
         }
 
         _cts.Dispose();

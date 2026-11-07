@@ -152,7 +152,8 @@ internal sealed class WatchServerHarness : IAsyncDisposable
         var statusServer = new NamedPipeServerStream(StatusPipe, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
         _statusTask = Task.Run(() => ReadStatusAsync(statusServer, _cts.Token));
 
-        _controlServer = new DotnetWatchControlPipeServer(ControlPipe);
+        _controlServer = new DotnetWatchControlPipeServer(ControlPipe,
+            exception => Record(WatchObservationKind.Output, $"Control transport failed: {exception}"));
         _controlServer.Start();
 
         var server = CreateStartInfo(Muxer, Directory, ["exec", toolDll, "server", "--sdk", sdk.SdkDirectory, "--server", ResourcePipe, "--status-pipe", StatusPipe, "--control-pipe", ControlPipe, "--resource", ProjectPath]);

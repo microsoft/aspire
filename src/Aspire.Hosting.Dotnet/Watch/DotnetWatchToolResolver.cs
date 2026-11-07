@@ -4,6 +4,7 @@
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dotnet.Watch;
@@ -228,124 +229,36 @@ internal static class DotnetWatchToolResolver
     /// </summary>
     internal static RuntimeRequirements ReadRuntimeRequirements(string toolDll, string? rollForwardOverride)
     {
-        var path = Path.ChangeExtension(toolDll, ".runtimeconfig.json");
-        if (!File.Exists(path))
+        try
+        {
+            var requirements = DotnetWatchPayload.ReadRuntimeRequirements(toolDll, rollForwardOverride);
+            return new([.. requirements.Frameworks.Select(framework => new RuntimeFramework(framework.Name, framework.Version))],
+                requirements.RollForward);
+        }
+        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or
+            ArgumentException or InvalidOperationException or KeyNotFoundException)
         {
             throw new DistributedApplicationException(
-                $"The hot reload tool '{toolDll}' has no '{Path.GetFileName(path)}', so it can't be started with 'dotnet exec'. " +
-                "Restore and rebuild the AppHost so the Aspire.Hosting.Dotnet package is in place, or run without --watch.");
-        }
-
-        using var document = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
-        if (!document.RootElement.TryGetProperty("runtimeOptions", out var options) || options.ValueKind != JsonValueKind.Object)
-        {
-            return new([], "Minor");
-        }
-
-        var frameworks = new List<RuntimeFramework>();
-        if (options.TryGetProperty("framework", out var framework))
-        {
-            AddFramework(framework);
-        }
-
-        if (options.TryGetProperty("frameworks", out var list) && list.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in list.EnumerateArray())
-            {
-                AddFramework(item);
-            }
-        }
-
-        var rollForward = options.TryGetProperty("rollForward", out var value) && value.ValueKind == JsonValueKind.String
-            ? value.GetString()!
-            : options.TryGetProperty("rollForwardOnNoCandidateFx", out var legacy) && legacy.ValueKind == JsonValueKind.Number && legacy.GetInt32() == 2
-                ? "Major"
-                : options.TryGetProperty("rollForwardOnNoCandidateFx", out legacy) && legacy.ValueKind == JsonValueKind.Number && legacy.GetInt32() == 0
-                    ? "LatestPatch"
-                    : "Minor";
-        if (!string.IsNullOrEmpty(rollForwardOverride) && GetRollForwardRank(rollForwardOverride) > GetRollForwardRank(rollForward))
-        {
-            rollForward = rollForwardOverride;
-        }
-
-        return new(frameworks, rollForward);
-
-        void AddFramework(JsonElement element)
-        {
-            if (element.ValueKind == JsonValueKind.Object &&
-                element.TryGetProperty("name", out var name) && name.GetString() is { Length: > 0 } frameworkName &&
-                element.TryGetProperty("version", out var version) && version.GetString() is { Length: > 0 } frameworkVersion)
-            {
-                frameworks.Add(new(frameworkName, frameworkVersion));
-            }
+                $"{exception.Message} Restore and rebuild the AppHost or run without --watch.", exception);
         }
     }
 
     /// <summary>Parses <c>dotnet --list-runtimes</c> lines such as <c>Microsoft.NETCore.App 10.0.14 [/usr/share/dotnet/shared/Microsoft.NETCore.App]</c>.</summary>
     internal static IReadOnlyList<RuntimeFramework> ParseInstalledFrameworks(string listRuntimesOutput)
     {
-        var installed = new List<RuntimeFramework>();
-        foreach (var line in listRuntimesOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var parts = line.Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2)
-            {
-                installed.Add(new(parts[0], parts[1]));
-            }
-        }
-
-        return installed;
+        return [.. DotnetWatchPayload.ParseInstalledFrameworks(listRuntimesOutput)
+            .Select(framework => new RuntimeFramework(framework.Name, framework.Version))];
     }
 
     /// <summary>The required frameworks that no installed framework satisfies under the roll-forward policy.</summary>
     internal static IReadOnlyList<RuntimeFramework> FindMissingFrameworks(RuntimeRequirements requirements, IReadOnlyList<RuntimeFramework> installed)
     {
-        var rank = GetRollForwardRank(requirements.RollForward);
-        return requirements.Frameworks
-            .Where(required => !TryParseVersion(required.Version, out var requiredVersion, out var requiredIsPrerelease) || !installed.Any(candidate =>
-                string.Equals(candidate.Name, required.Name, StringComparison.OrdinalIgnoreCase) &&
-                TryParseVersion(candidate.Version, out var version, out var prerelease) &&
-                Satisfies(requiredVersion, requiredIsPrerelease, version, prerelease, rank)))
-            .ToList();
-
-        static bool Satisfies(Version required, bool requiredIsPrerelease, Version candidate, bool candidateIsPrerelease, int rank)
-        {
-            if (candidate < required)
-            {
-                return false;
-            }
-
-            if (candidate == required)
-            {
-                // A prerelease doesn't meet the release of the same version.
-                return requiredIsPrerelease || !candidateIsPrerelease;
-            }
-
-            return rank switch
-            {
-                0 => false,
-                1 => candidate.Major == required.Major && candidate.Minor == required.Minor,
-                2 => candidate.Major == required.Major,
-                _ => true,
-            };
-        }
-    }
-
-    // Disable < LatestPatch < Minor/LatestMinor < Major/LatestMajor, by what they accept. Unknown values are treated as
-    // the most permissive so the check doesn't reject what the host might accept.
-    private static int GetRollForwardRank(string rollForward) => rollForward.ToUpperInvariant() switch
-    {
-        "DISABLE" => 0,
-        "LATESTPATCH" => 1,
-        "MINOR" or "LATESTMINOR" => 2,
-        _ => 3,
-    };
-
-    private static bool TryParseVersion(string value, out Version version, out bool prerelease)
-    {
-        var dash = value.IndexOfAny(['-', '+']);
-        prerelease = dash >= 0 && value[dash] == '-';
-        return Version.TryParse(dash >= 0 ? value[..dash] : value, out version!);
+        var shared = new DotnetWatchPayload.RuntimeRequirements(
+            [.. requirements.Frameworks.Select(framework => new DotnetWatchPayload.Framework(framework.Name, framework.Version))],
+            requirements.RollForward);
+        return [.. DotnetWatchPayload.FindMissingFrameworks(shared,
+            [.. installed.Select(framework => new DotnetWatchPayload.Framework(framework.Name, framework.Version))])
+            .Select(framework => new RuntimeFramework(framework.Name, framework.Version))];
     }
 
     /// <summary>

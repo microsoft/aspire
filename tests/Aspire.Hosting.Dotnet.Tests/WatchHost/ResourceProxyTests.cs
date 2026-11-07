@@ -6,6 +6,7 @@ extern alias WatchHost;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using WatchHost::Aspire.Hosting.Dotnet.WatchHost;
 using WatchHost::Aspire.Shared.DotnetWatch;
 
@@ -100,6 +101,38 @@ public class ResourceProxyTests
         var launchProfile = root.GetProperty("LaunchProfileName");
         Assert.False(launchProfile.GetProperty("HasValue").GetBoolean());
         Assert.Equal(JsonValueKind.Null, launchProfile.GetProperty("Value").ValueKind);
+    }
+
+    [Fact]
+    public async Task PublicTrustPathsAreSetBeforeStartupWhileSecretsStayOnThePipe()
+    {
+        (string EntryPoint, Dictionary<string, string> Environment)[] resources =
+        [
+            ("/src/Api/Api.csproj", new()
+            {
+                ["SSL_CERT_DIR"] = "/public certs/roots",
+                ["SSL_CERT_FILE"] = "/public certs/authority.pem",
+                ["Kestrel__Certificates__Default__Password"] = "test-password",
+                ["APPLICATION_SETTING"] = "pipe-only"
+            }),
+            ("/src/Scripts/ticker.cs", new()
+            {
+                ["SSL_CERT_FILE"] = "/other public certs/authority.pem",
+                ["Kestrel__Certificates__Default__Password"] = "other-test-password"
+            }),
+            ("/src/Ordinary/Ordinary.csproj", new())
+        ];
+        var requests = new JsonArray();
+        foreach (var (entryPoint, environment) in resources)
+        {
+            requests.Add(JsonNode.Parse(ResourceProxy.CreateRequestJson(
+                entryPoint,
+                ResourceProxy.GetRunOptions(entryPoint, null),
+                ["--framework", "literal-framework", "--watch", "two words"],
+                environment)));
+        }
+
+        await Verify(requests.ToJsonString(), "json");
     }
 
     [Fact]

@@ -30,6 +30,92 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         "osx-arm64"
     ];
 
+    [Theory]
+    [InlineData(false, "default")]
+    [InlineData(true, "default")]
+    [InlineData(false, "directory")]
+    [InlineData(true, "file")]
+    [InlineData(false, "missing")]
+    [InlineData(true, "missing")]
+    public async Task ResolveBundledWatchUsesExplicitTargetAndSelectedSdk(bool packedLayout, string toolOverride)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceTargets = Path.Combine(GetRepoRoot(), "src", "Aspire.Hosting.Dotnet", "build", "Aspire.Hosting.Dotnet.targets");
+        var package = Path.Combine(workspace.Path, "package");
+        var targets = sourceTargets;
+        if (packedLayout)
+        {
+            targets = Path.Combine(package, "buildTransitive", "Aspire.Hosting.Dotnet.targets");
+            Directory.CreateDirectory(Path.GetDirectoryName(targets)!);
+            File.Copy(sourceTargets, targets);
+        }
+        var tools = Path.Combine(package, "tools", "dotnet-watch");
+        var host = Path.Combine(package, "tools", "dotnet-watch-host");
+        Directory.CreateDirectory(tools);
+        Directory.CreateDirectory(host);
+        const string toolFile = "Microsoft.DotNet.HotReload.Watch.Aspire.dll";
+        const string hostFile = "Aspire.Hosting.Dotnet.WatchHost.dll";
+        await File.WriteAllTextAsync(Path.Combine(tools, toolFile), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(host, hostFile), string.Empty);
+        var overrideDirectory = Path.Combine(workspace.Path, "overrides");
+        Directory.CreateDirectory(overrideDirectory);
+        await File.WriteAllTextAsync(Path.Combine(overrideDirectory, toolFile), string.Empty);
+        var overridePath = toolOverride switch
+        {
+            "directory" => "overrides",
+            "file" => Path.Combine("overrides", toolFile),
+            "missing" => Path.Combine("overrides", "missing.dll"),
+            _ => string.Empty
+        };
+        var properties = packedLayout ? string.Empty :
+            $"""
+            <AspireDotnetWatchToolsDir>{SecurityElement.Escape(tools)}</AspireDotnetWatchToolsDir>
+            <AspireDotnetWatchHostDir>{SecurityElement.Escape(host)}</AspireDotnetWatchHostDir>
+            """;
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Watch.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                {{properties}}
+              </PropertyGroup>
+              <Import Project="{{SecurityElement.Escape(targets)}}" />
+            </Project>
+            """);
+        var environment = new Dictionary<string, string> { ["ASPIRE_DOTNET_WATCH_TOOL_PATH"] = overridePath };
+
+        var ordinary = await RunDotNetWithArgumentsAsync(workspace.Path,
+            ["msbuild", "Watch.csproj", "-nologo", "-getItem:_AspireDotnetWatch"], environment);
+        Assert.True(ordinary.ExitCode == 0, ordinary.Output);
+        using (var document = JsonDocument.Parse(ordinary.StandardOutput))
+        {
+            Assert.Empty(document.RootElement.GetProperty("Items").GetProperty("_AspireDotnetWatch").EnumerateArray());
+        }
+        var resolved = await RunDotNetWithArgumentsAsync(workspace.Path,
+            ["msbuild", "Watch.csproj", "-nologo", "-target:ResolveAspireDotnetWatch",
+                "-getItem:_AspireDotnetWatch", "-getProperty:NETCoreSdkVersion,MSBuildToolsPath,MSBuildProjectDirectory"], environment);
+
+        if (toolOverride == "missing")
+        {
+            Assert.NotEqual(0, resolved.ExitCode);
+            Assert.Contains("missing.dll", resolved.Output);
+            Assert.Contains("does not exist", resolved.Output);
+            return;
+        }
+        Assert.True(resolved.ExitCode == 0, resolved.Output);
+        using var result = JsonDocument.Parse(resolved.StandardOutput);
+        var item = Assert.Single(result.RootElement.GetProperty("Items").GetProperty("_AspireDotnetWatch").EnumerateArray());
+        var sdk = result.RootElement.GetProperty("Properties");
+        var expectedTool = toolOverride == "default" ? Path.Combine(tools, toolFile) :
+            Path.Combine(sdk.GetProperty("MSBuildProjectDirectory").GetString()!, "overrides", toolFile);
+        Assert.Equal(expectedTool, item.GetProperty("Identity").GetString());
+        Assert.Equal(expectedTool, item.GetProperty("ToolPath").GetString());
+        Assert.Equal(Path.Combine(host, hostFile), item.GetProperty("WatchHostPath").GetString());
+        Assert.Equal(sdk.GetProperty("NETCoreSdkVersion").GetString(), item.GetProperty("SdkVersion").GetString());
+        Assert.Equal(sdk.GetProperty("MSBuildToolsPath").GetString(), item.GetProperty("MSBuildPath").GetString());
+        Assert.True(File.Exists(item.GetProperty("DotnetPath").GetString()));
+    }
+
     [Fact]
     public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsDefaulted()
     {

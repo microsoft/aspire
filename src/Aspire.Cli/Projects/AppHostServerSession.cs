@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.DotNet;
+using Aspire.Cli.DotnetWatch;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -181,6 +182,13 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             var serverEnvironmentVariables = _callerEnvironmentVariables is null
                 ? new Dictionary<string, string>()
                 : new Dictionary<string, string>(_callerEnvironmentVariables);
+            if (!serverEnvironmentVariables.TryGetValue(DotnetWatchRunEnvironment.WatchEnabledVariable, out var watch) ||
+                !bool.TryParse(watch, out var watchEnabled) || !watchEnabled)
+            {
+                // Sessions without an explicit final-server watch projection include discovery
+                // and code generation. Never let an inherited parent generation activate them.
+                DotnetWatchRunEnvironment.Disable(serverEnvironmentVariables);
+            }
             serverEnvironmentVariables[KnownConfigNames.RemoteAppHostToken] = _authenticationToken;
 
             _activity = _profilingTelemetry is null

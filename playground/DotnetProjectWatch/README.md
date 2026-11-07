@@ -1,7 +1,39 @@
-# SPIKE: `aspire run --watch` for `AddDotnetProject` services
+# Selective AppHost and .NET service watch
 
-Preview-quality spike of [docs/plans/project-v2-csharpprogram-watch.md](../../docs/plans/project-v2-csharpprogram-watch.md).
-Not production code. Shortcuts are marked `TODO(spike)` / `HACK(spike)` in the source.
+Run this playground with `aspire run --watch` to exercise combined AppHost and compatible C# service
+watching. `features.defaultWatchEnabled` selects the same mode; explicit `--watch false` disables
+CLI-controlled watching. See the [integration README](../../src/Aspire.Hosting.Dotnet/README.md#watch-apphost-and-service-changes)
+for the current prerequisites, evaluated isolation rules, and coverage limits.
+
+The package ships watcher 10.0.403 and WatchHost; it does not acquire a tool at run time. Compatible
+project-based C# AppHosts reconstruct the complete model after changes, while managed-server TypeScript
+AppHosts use their language-native watching. Native protocol-v2 servers run without AppHost or managed
+C# service watching and warn when watching is requested; stop and rerun Aspire to apply AppHost edits.
+The watcher owns watched services' initial and automatic builds. Their Rebuild
+command is disabled; unrelated ordinary resources retain their existing Rebuild command.
+
+Manual Stop remains available, but Start after Stop requires a complete watch-run restart. Internal
+service-watcher refresh preserves stop intent; complete AppHost replacement follows the fresh model,
+including `ExplicitStart`. Replicas and duplicate entry points remain watched with project-group
+observations and no instance-specific Restart. WatchHost/proxy PIDs and exits are transport data,
+not application identity or completion.
+
+Build-file observations include evaluated active imports and relevant ordinary roots. A newly
+overlapping output domain or changed SDK/output context fences the affected group and requires run
+restart. Observation is not atomic upstream pause or live repartition, and does not guarantee discovery
+of future currently-inactive imports.
+
+The pinned SDK can accept a method return-type delete/reinsert edit but then replay a deleted-method
+delta while restarting its child. This is not automatically repaired or classified from repeated
+project-only start events. Keep the edit, stop the complete run, and rerun `aspire run --watch`;
+fresh owners build the saved source. Single-file ENC rude-edit recovery remains separate from
+this documented full-run workaround.
+
+## Historical service-watch spike record
+
+The following measurements and transcripts describe the original service-only spike, not the current
+combined-watch contract or fresh cross-platform validation. In particular, its ordinary post-Stop
+Start, crash Restart, watched Rebuild, and "AppHost never watched" statements are superseded above.
 
 ## How it works
 

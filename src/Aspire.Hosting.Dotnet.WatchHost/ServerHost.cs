@@ -40,9 +40,6 @@ internal static class ServerHost
     internal const int ExitUsage = 64;
     internal const int ExitLaunchFailed = 69;
 
-    // How long output pumps may lag behind the watcher's exit before the host stops waiting for them.
-    private static readonly TimeSpan s_outputDrainTimeout = TimeSpan.FromSeconds(5);
-
     public static async Task<int> RunAsync(string[] args)
     {
         if (args is not ["--", var fileName, .. var arguments])
@@ -59,51 +56,79 @@ internal static class ServerHost
             watcher.ArgumentList.Add(argument);
         }
 
-        // On Unix the guardian's own exit status is the signal that tore down its process group, so it hands the
-        // watcher's exit code over in a private file instead.
-        var exitCodePath = Path.GetTempFileName();
-        var startInfo = ProcessSupervisor.CreateStartInfo(watcher, exitCodePath);
-
-        // Like under DCP, the watcher must not see a console it could read keys from: its stdin is an empty pipe.
-        startInfo.RedirectStandardInput = true;
-
-        Process process;
+        var directory = Directory.CreateTempSubdirectory("aspire-watch-host-");
+        var exitCodePath = Path.Combine(directory.FullName, "exit-code");
+        var cleanupMarker = Environment.GetEnvironmentVariable(DotnetWatchHostProtocol.CleanupMarkerVariable);
+        watcher.Environment.Remove(DotnetWatchHostProtocol.CleanupMarkerVariable);
+        foreach (var name in DotnetWatchOwnership.PrivateEnvironmentVariables)
+        {
+            watcher.Environment.Remove(name);
+        }
+        foreach (var name in new[] { "DEBUG_SESSION_PORT", "DEBUG_SESSION_TOKEN", "DEBUG_SESSION_INFO", "DEBUG_SESSION_SERVER_URI" })
+        {
+            if (watcher.Environment.TryGetValue(name, out var value) && string.IsNullOrEmpty(value))
+            {
+                watcher.Environment.Remove(name);
+            }
+        }
+        var diagnostics = new DiagnosticWriter(Console.Error);
+        using var grace = new CancellationTokenSource();
+        var options = new ChildProcessOptions
+        {
+            Lifetime = ChildProcessLifetime.OwnedTree,
+            CompletionPath = exitCodePath,
+            BeginGracefulShutdown = () =>
+            {
+                grace.CancelAfter(GetShutdownGrace());
+                return grace.Token;
+            },
+            // The watcher ignores redirected-console signals. Let disconnected proxies
+            // terminate their applications during the grace period, then contain and reap
+            // the entire scope through ChildProcess rather than trusting the host's PID exit.
+            RequestGracefulShutdownAsync = (_, _) => Task.CompletedTask,
+            StandardOutputCallback = line => Console.Out.WriteLine(line),
+            StandardErrorCallback = line =>
+            {
+                if (!ProcessSupervisorLogger.TryForward(line, diagnostics))
+                {
+                    Console.Error.WriteLine(line);
+                }
+            }
+        };
+        var process = new ChildProcess(watcher, diagnostics, options, OperatingSystem.IsWindows());
+        await using var processLifetime = process.ConfigureAwait(false);
         try
         {
-            process = Process.Start(startInfo)!;
+            await process.StartAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                var code = await process.WaitForExitAsync(shutdown.Token).ConfigureAwait(false);
+                WriteCleanupMarker(cleanupMarker);
+                return code;
+            }
+            catch (OperationCanceledException) when (shutdown.Token.IsCancellationRequested)
+            {
+                // WaitForExitAsync has already verified contained termination on cancellation.
+                WriteCleanupMarker(cleanupMarker);
+                return 0;
+            }
         }
-        catch (Win32Exception ex)
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or IOException or TimeoutException)
         {
-            File.Delete(exitCodePath);
             Console.Error.WriteLine($"{LogPrefix}: {ex.Message}");
             return ExitLaunchFailed;
         }
-
-        using (process)
+        finally
         {
-            process.StandardInput.Close();
-            var output = Task.WhenAll(
-                PumpAsync(process.StandardOutput, Console.Out, forwardSupervisorDiagnostics: false),
-                PumpAsync(process.StandardError, Console.Error, forwardSupervisorDiagnostics: true));
+            directory.Delete(recursive: true);
+        }
+    }
 
-            try
-            {
-                await process.WaitForExitAsync(shutdown.Token).ConfigureAwait(false);
-                await DrainAsync(output).ConfigureAwait(false);
-                // No handed-off code means the guardian never ran the watcher to completion (for example, it couldn't
-                // start it); the guardian already reported why on stderr.
-                return ReadExitCode(exitCodePath) ?? ExitLaunchFailed;
-            }
-            catch (OperationCanceledException)
-            {
-                await StopAsync(process, GetShutdownGrace()).ConfigureAwait(false);
-                await DrainAsync(output).ConfigureAwait(false);
-                return 0;
-            }
-            finally
-            {
-                File.Delete(exitCodePath);
-            }
+    private static void WriteCleanupMarker(string? path)
+    {
+        if (!string.IsNullOrEmpty(path))
+        {
+            File.WriteAllText(path, "contained-cleanup-complete");
         }
     }
 
@@ -137,34 +162,6 @@ internal static class ServerHost
         catch (IOException)
         {
             return null;
-        }
-    }
-
-    private static async Task PumpAsync(StreamReader reader, TextWriter writer, bool forwardSupervisorDiagnostics)
-    {
-        var diagnostics = new DiagnosticWriter(writer);
-        while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
-        {
-            // The guardian's own records share stderr with the watcher; only its warnings and errors are worth showing.
-            if (forwardSupervisorDiagnostics && ProcessSupervisorLogger.TryForward(line, diagnostics))
-            {
-                continue;
-            }
-
-            await writer.WriteLineAsync(line).ConfigureAwait(false);
-            await writer.FlushAsync().ConfigureAwait(false);
-        }
-    }
-
-    private static async Task DrainAsync(Task output)
-    {
-        try
-        {
-            await output.WaitAsync(s_outputDrainTimeout).ConfigureAwait(false);
-        }
-        catch (TimeoutException)
-        {
-            // A surviving descendant holds the pipe; the watcher's own output is complete.
         }
     }
 

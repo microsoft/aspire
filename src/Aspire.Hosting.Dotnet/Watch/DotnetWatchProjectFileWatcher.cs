@@ -1,14 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Xml.Linq;
-
 namespace Aspire.Hosting.Dotnet.Watch;
 
 /// <summary>
-/// SPIKE: watches the MSBuild files of a watch server's projects (<c>*.*proj</c>, <c>*.props</c>, <c>*.targets</c> in
-/// the project directories and the directories of the projects they reference, and <c>Directory.Build.props</c>,
-/// <c>Directory.Build.targets</c> and <c>Directory.Packages.props</c> above them) and reports changes once saves settle.
+/// Watches evaluated project/import inputs and SDK/build-scope files, reporting changes once saves settle.
 /// </summary>
 /// <remarks>
 /// The watcher (10.0.x) re-evaluates and restores a changed project but doesn't rebuild it, so a new package is never
@@ -18,25 +14,32 @@ namespace Aspire.Hosting.Dotnet.Watch;
 /// </remarks>
 internal sealed class DotnetWatchProjectFileWatcher : IDisposable
 {
-    private static readonly string[] s_ancestorFiles = ["Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"];
+    private static readonly string[] s_ancestorFiles =
+        ["Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json", "NuGet.config"];
 
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly Dictionary<string, bool> _directories;
     private readonly Action<IReadOnlyList<string>> _onChanged;
+    private readonly Action<Exception> _onError;
+    private readonly HashSet<string> _inputs;
     private readonly TimeSpan _debounce;
     private readonly object _gate = new();
     private readonly List<string> _pending = [];
     private Timer? _timer;
     private bool _disposed;
 
-    /// <param name="projectPaths">The watched projects (project files or file-based app entry points).</param>
+    /// <param name="projectPaths">Evaluated physical project and import paths, including file-app entry points.</param>
     /// <param name="onChanged">Called with the changed files, once no change happened for <paramref name="debounce"/>.</param>
     /// <param name="debounce">How long saves must settle.</param>
-    public DotnetWatchProjectFileWatcher(IEnumerable<string> projectPaths, Action<IReadOnlyList<string>> onChanged, TimeSpan debounce)
+    /// <param name="onError">Reports lost observation or infrastructure failure to the owning group.</param>
+    public DotnetWatchProjectFileWatcher(
+        IEnumerable<string> projectPaths, Action<IReadOnlyList<string>> onChanged, TimeSpan debounce, Action<Exception> onError)
     {
         _onChanged = onChanged;
+        _onError = onError;
         _debounce = debounce;
-        _directories = GetWatchedDirectories(projectPaths);
+        _inputs = projectPaths.Select(Path.GetFullPath).ToHashSet(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
+        _directories = GetWatchedDirectories(_inputs);
     }
 
     /// <summary>The directories to watch, and whether only the <c>Directory.*</c> files count in each.</summary>
@@ -48,10 +51,6 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
         {
             var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
             directories[projectDirectory] = false;
-            foreach (var referenced in ReadReferencedDirectories(projectPath))
-            {
-                directories[Path.TrimEndingDirectorySeparator(referenced)] = false;
-            }
         }
 
         foreach (var directory in directories.Keys.ToArray())
@@ -80,58 +79,12 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
                 || extension.Equals(".targets", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// Best-effort: the directories of the projects <paramref name="projectPath"/> references through literal
-    /// <c>ProjectReference</c> items, transitively. References computed by MSBuild (properties, imports) aren't seen.
-    /// </summary>
-    internal static IReadOnlyList<string> ReadReferencedDirectories(string projectPath)
-    {
-        var directories = new List<string>();
-        var visited = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal) { Path.GetFullPath(projectPath) };
-        var queue = new Queue<string>(visited);
-        while (queue.Count > 0)
-        {
-            var current = queue.Dequeue();
-            IEnumerable<string> includes;
-            try
-            {
-                includes = XDocument.Load(current).Descendants()
-                    .Where(e => e.Name.LocalName == "ProjectReference")
-                    .Select(e => (string?)e.Attribute("Include"))
-                    .OfType<string>()
-                    .SelectMany(i => i.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                    .Where(i => !i.Contains("$(", StringComparison.Ordinal) && !i.Contains('*'))
-                    .ToArray();
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException)
-            {
-                continue;
-            }
-
-            foreach (var include in includes)
-            {
-                var referenced = Path.GetFullPath(include.Replace('\\', Path.DirectorySeparatorChar), Path.GetDirectoryName(current)!);
-                if (visited.Add(referenced) && File.Exists(referenced))
-                {
-                    directories.Add(Path.GetDirectoryName(referenced)! + Path.DirectorySeparatorChar);
-                    queue.Enqueue(referenced);
-                }
-            }
-        }
-
-        return directories;
-    }
-
     public void Start()
     {
-        foreach (var (directory, ancestorOnly) in _directories)
+        lock (_gate)
         {
-            if (!Directory.Exists(directory))
-            {
-                continue;
-            }
-
-            try
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            foreach (var (directory, ancestorOnly) in _directories)
             {
                 var watcher = new FileSystemWatcher(directory)
                 {
@@ -142,20 +95,30 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
                 watcher.Changed += handler;
                 watcher.Created += handler;
                 watcher.Deleted += handler;
-                watcher.Renamed += (_, e) => OnChange(e.FullPath, ancestorOnly);
+                watcher.Renamed += (_, e) =>
+                {
+                    OnChange(e.OldFullPath, ancestorOnly);
+                    OnChange(e.FullPath, ancestorOnly);
+                };
+                watcher.Error += (_, e) =>
+                {
+                    lock (_gate)
+                    {
+                        if (!_disposed)
+                        {
+                            _onError(e.GetException());
+                        }
+                    }
+                };
                 watcher.EnableRaisingEvents = true;
                 _watchers.Add(watcher);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-            {
-                // Best effort, e.g. an unreadable ancestor directory.
             }
         }
     }
 
     private void OnChange(string path, bool ancestorOnly)
     {
-        if (!IsBuildFile(path, ancestorOnly))
+        if (!IsBuildFile(path, ancestorOnly) && !_inputs.Contains(Path.GetFullPath(path)))
         {
             return;
         }
@@ -175,7 +138,6 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
 
     private void Flush()
     {
-        string[] changed;
         lock (_gate)
         {
             if (_disposed || _pending.Count == 0)
@@ -183,24 +145,35 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
                 return;
             }
 
-            changed = [.. _pending.Distinct(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase)];
+            var changed = _pending.Distinct(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase).ToArray();
             _pending.Clear();
+            _onChanged(changed);
         }
-
-        _onChanged(changed);
     }
 
-    public void Dispose()
+    /// <summary>Stops observation and returns queued edits for transfer to a replacement inventory.</summary>
+    internal string[] DisposeAndGetPendingChanges()
     {
+        string[] pending;
         lock (_gate)
         {
+            if (_disposed)
+            {
+                return [];
+            }
             _disposed = true;
             _timer?.Dispose();
+            pending = [.. _pending.Distinct(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase)];
+            _pending.Clear();
         }
 
         foreach (var watcher in _watchers)
         {
             watcher.Dispose();
         }
+
+        return pending;
     }
+
+    public void Dispose() => DisposeAndGetPendingChanges();
 }

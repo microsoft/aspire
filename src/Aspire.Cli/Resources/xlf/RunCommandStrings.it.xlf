@@ -148,8 +148,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithDefaultWatch">
-        <source>--no-build can't be used while watch is on by default (the defaultWatchEnabled feature): hot reload builds C# services whenever they change. Remove --no-build, or pass --watch false to run without watch.</source>
-        <target state="new">--no-build can't be used while watch is on by default (the defaultWatchEnabled feature): hot reload builds C# services whenever they change. Remove --no-build, or pass --watch false to run without watch.</target>
+        <source>--no-build can't be used while combined watch is on by default (the defaultWatchEnabled feature). Remove --no-build, or pass --watch false to run without CLI-controlled watch.</source>
+        <target state="new">--no-build can't be used while combined watch is on by default (the defaultWatchEnabled feature). Remove --no-build, or pass --watch false to run without CLI-controlled watch.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
@@ -158,8 +158,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchOption">
-        <source>--no-build can't be used with --watch: hot reload builds C# services whenever they change. Remove --no-build, or remove --watch.</source>
-        <target state="new">--no-build can't be used with --watch: hot reload builds C# services whenever they change. Remove --no-build, or remove --watch.</target>
+        <source>--no-build can't be used with --watch: watching builds compatible AppHosts and C# services whenever they change. Remove --no-build, or pass --watch false.</source>
+        <target state="new">--no-build can't be used with --watch: watching builds compatible AppHosts and C# services whenever they change. Remove --no-build, or pass --watch false.</target>
         <note />
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
@@ -252,14 +252,74 @@
         <target state="new">Watch</target>
         <note />
       </trans-unit>
-      <trans-unit id="WatchArgumentDescription">
-        <source>Start project resources in watch mode</source>
-        <target state="translated">Avvia le risorse del progetto in modalità di monitoraggio</target>
+      <trans-unit id="WatchAppHostChannelFailed">
+        <source>The private AppHost watch channel failed: {0} The watch run will stop rather than overlap AppHost generations.</source>
+        <target state="new">The private AppHost watch channel failed: {0} The watch run will stop rather than overlap AppHost generations.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WatchAppHostDefaultBuildRequired">
+        <source>This preview requires a single-targeted Debug AppHost build because the watcher host has no build-configuration or target-framework options.</source>
+        <target state="new">This preview requires a single-targeted Debug AppHost build because the watcher host has no build-configuration or target-framework options.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostFallback">
+        <source>C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible C# service groups can still be watched.</source>
+        <target state="new">C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible C# service groups can still be watched.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostGenerationRequired">
+        <source>A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</source>
+        <target state="new">A CLI-owned AppHost generation is required. Start the application with aspire run --watch.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostIdentityRequired">
+        <source>The watched AppHost must announce its initial process instance before startup can be established. The run will stop if that announcement is missing or the backchannel disconnects first.</source>
+        <target state="new">The watched AppHost must announce its initial process instance before startup can be established. The run will stop if that announcement is missing or the backchannel disconnects first.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostProfileUnsupported">
+        <source>The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</source>
+        <target state="new">The selected AppHost launch profile is missing, malformed, or does not use the Project launch command. Its ordinary SDK launch behavior will be preserved.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostProjectRequired">
+        <source>This preview supports C# AppHost watching for .csproj entry points only; file-based and other .NET AppHosts run normally.</source>
+        <target state="new">This preview supports C# AppHost watching for .csproj entry points only; file-based and other .NET AppHosts run normally.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRequirementsInvalid">
+        <source>The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</source>
+        <target state="new">The resolved watcher payload or the AppHost's selected SDK {0} cannot be used: {1} Use a complete, compatible watcher payload and SDK without forcing major-version roll-forward.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRestarting">
+        <source>The C# AppHost model changed. Replacing the complete watch generation...</source>
+        <target state="new">The C# AppHost model changed. Replacing the complete watch generation...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchAppHostRuntimeMissing">
+        <source>The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</source>
+        <target state="new">The watcher requires {0} in the selected dotnet installation '{1}'. Install the required runtimes without forcing major-version roll-forward.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchArgumentDescription">
+        <source>Enable experimental combined AppHost and compatible C# service watching</source>
+        <target state="needs-review-translation">Avvia le risorse del progetto in modalità di monitoraggio</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchBootstrapInvalid">
+        <source>The package-owned watch resolve target returned invalid payload or selected SDK metadata.</source>
+        <target state="new">The package-owned watch resolve target returned invalid payload or selected SDK metadata.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchBootstrapUnavailable">
+        <source>The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</source>
+        <target state="new">The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</target>
+        <note>Aspire.Hosting.Dotnet and ResolveAspireDotnetWatch must not be localized.</note>
+      </trans-unit>
       <trans-unit id="WatchEnabledSummary">
-        <source>Hot reload is on for C# services (preview). Save a file to apply changes.</source>
-        <target state="new">Hot reload is on for C# services (preview). Save a file to apply changes.</target>
+        <source>Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</source>
+        <target state="new">Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchHandledByIde">
@@ -267,10 +327,25 @@
         <target state="new">The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</target>
         <note />
       </trans-unit>
-      <trans-unit id="WatchOptionDescription">
-        <source>(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service. Defaults to the defaultWatchEnabled feature; use --watch false to turn it off.</source>
-        <target state="new">(Preview) Hot reload C# services added with AddDotnetProject. Edits are applied when you save; changes that can't be hot reloaded restart only the affected service. Defaults to the defaultWatchEnabled feature; use --watch false to turn it off.</target>
+      <trans-unit id="WatchNativeServerUnsupported">
+        <source>AppHost watching is unavailable for the selected native AppHost server. Running without watching; stop and rerun Aspire to apply AppHost edits. Managed C# service watching is also unavailable.</source>
+        <target state="new">AppHost watching is unavailable for the selected native AppHost server. Running without watching; stop and rerun Aspire to apply AppHost edits. Managed C# service watching is also unavailable.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="WatchNotSupportedWithDebugger">
+        <source>--watch cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</source>
+        <target state="new">--watch cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchOptionDescription">
+        <source>(Preview) Watch compatible C# AppHosts and reconstruct their model after changes, enable language-native watching for compatible polyglot AppHosts, and hot reload compatible C# services added with AddDotnetProject. Defaults to the defaultWatchEnabled feature; use --watch false to turn all CLI-controlled watch paths off. Real IDE-owned runs retain IDE watch policy.</source>
+        <target state="new">(Preview) Watch compatible C# AppHosts and reconstruct their model after changes, enable language-native watching for compatible polyglot AppHosts, and hot reload compatible C# services added with AddDotnetProject. Defaults to the defaultWatchEnabled feature; use --watch false to turn all CLI-controlled watch paths off. Real IDE-owned runs retain IDE watch policy.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WatchToolOverrideInvalid">
+        <source>ASPIRE_DOTNET_WATCH_TOOL_PATH is invalid or differs from the package target's resolved tool. Relative overrides are resolved against the AppHost directory; an invalid override does not select a default tool.</source>
+        <target state="new">ASPIRE_DOTNET_WATCH_TOOL_PATH is invalid or differs from the package target's resolved tool. Relative overrides are resolved against the AppHost directory; an invalid override does not select a default tool.</target>
+        <note>ASPIRE_DOTNET_WATCH_TOOL_PATH must not be localized.</note>
       </trans-unit>
     </body>
   </file>

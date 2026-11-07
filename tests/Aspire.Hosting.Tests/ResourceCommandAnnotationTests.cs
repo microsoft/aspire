@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+#pragma warning disable ASPIREWATCH001 // Lifecycle-command overrides are experimental.
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
@@ -15,6 +16,102 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceCommandAnnotationTests
 {
+    [Fact]
+    public async Task LifecycleOverride_LastMatchingOverrideWins()
+    {
+        var resource = new ProjectResource("project");
+        ResourceCommandAnnotation? original = null;
+        var firstCalled = false;
+        resource.Annotations.Add(new ResourceLifecycleCommandOverrideAnnotation(KnownResourceCommands.RebuildCommand, command =>
+        {
+            firstCalled = true;
+            return command;
+        }));
+        var replacement = new ResourceCommandAnnotation(
+            name: KnownResourceCommands.RebuildCommand,
+            displayName: "Watcher-owned build",
+            updateState: _ => ResourceCommandState.Disabled,
+            executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = false, Message = "Source edits own builds." }),
+            displayDescription: null,
+            arguments: null,
+            confirmationMessage: null,
+            iconName: null,
+            iconVariant: null,
+            isHighlighted: false);
+        resource.Annotations.Add(new ResourceLifecycleCommandOverrideAnnotation(KnownResourceCommands.RebuildCommand, command =>
+        {
+            original = command;
+            return replacement;
+        }));
+
+        resource.AddLifeCycleCommands();
+
+        Assert.False(firstCalled);
+        Assert.NotNull(original);
+        Assert.Equal(CommandStrings.RebuildName, original.DisplayName);
+        var commands = resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
+        Assert.Equal(
+            [KnownResourceCommands.StartCommand, KnownResourceCommands.StopCommand, KnownResourceCommands.RestartCommand, KnownResourceCommands.RebuildCommand],
+            commands.Select(command => command.Name));
+        Assert.Same(replacement, commands[^1]);
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var result = await replacement.ExecuteCommand(new ExecuteCommandContext
+        {
+            ResourceName = resource.Name,
+            Services = services,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new([])
+        });
+        Assert.False(result.Success);
+        Assert.Equal("Source edits own builds.", result.Message);
+    }
+
+    [Fact]
+    public void LifecycleOverride_DoesNotAddUnsupportedCommands()
+    {
+        var resource = new ContainerResource("container");
+        resource.Annotations.Add(new ResourceLifecycleCommandOverrideAnnotation(KnownResourceCommands.RebuildCommand,
+            _ => throw new InvalidOperationException("A container has no built-in Rebuild command.")));
+
+        resource.AddLifeCycleCommands();
+
+        Assert.Equal(
+            [KnownResourceCommands.StartCommand, KnownResourceCommands.StopCommand, KnownResourceCommands.RestartCommand],
+            resource.Annotations.OfType<ResourceCommandAnnotation>().Select(command => command.Name));
+    }
+
+    [Fact]
+    public void LifecycleOverride_CanPreserveTheOriginalCommand()
+    {
+        var resource = new ProjectResource("project");
+        ResourceCommandAnnotation? original = null;
+        resource.Annotations.Add(new ResourceLifecycleCommandOverrideAnnotation(KnownResourceCommands.RestartCommand, command =>
+        {
+            original = command;
+            return command;
+        }));
+
+        resource.AddLifeCycleCommands();
+
+        Assert.Same(original, resource.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(command => command.Name == KnownResourceCommands.RestartCommand));
+        Assert.Equal(CommandStrings.RestartProjectDescription, original!.DisplayDescription);
+    }
+
+    [Fact]
+    public void LifecycleOverride_HonorsLifecycleExclusion()
+    {
+        var resource = new ProjectResource("project");
+        resource.Annotations.Add(new ExcludeLifecycleCommandsAnnotation());
+        resource.Annotations.Add(new ResourceLifecycleCommandOverrideAnnotation(KnownResourceCommands.StartCommand,
+            _ => throw new InvalidOperationException("Excluded commands must not be materialized.")));
+
+        resource.AddLifeCycleCommands();
+
+        Assert.Empty(resource.Annotations.OfType<ResourceCommandAnnotation>());
+    }
+
     [Theory]
     [InlineData("start", "Starting", ResourceCommandState.Disabled)]
     [InlineData("start", "Stopping", ResourceCommandState.Hidden)]

@@ -6,6 +6,7 @@
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
+using Aspire.Hosting.Dotnet.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.DotnetWatch;
@@ -378,6 +379,7 @@ public class DotnetWatchCoordinatorTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(WatchArgs());
+        DotnetWatchPreflightTestServices.Configure(builder);
 
         builder.AddDotnetProject("service", Path.GetDirectoryName(CreateProject(workspace.Path))!).WithBuildEnvironment("MARKER", "1");
 

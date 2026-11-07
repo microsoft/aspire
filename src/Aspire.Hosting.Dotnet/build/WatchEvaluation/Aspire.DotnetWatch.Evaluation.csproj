@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="DotnetWatchProjectEvaluator.cs" />
+    <Compile Include="DotnetWatchProjectEvaluationProtocol.cs" />
+    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="PathNormalizer.cs" />
+    <None Include="Aspire.DotnetWatch.Evaluation.proj" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

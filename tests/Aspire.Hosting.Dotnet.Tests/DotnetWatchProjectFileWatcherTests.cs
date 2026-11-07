@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.Dotnet.Watch;
 
 namespace Aspire.Hosting.Dotnet.Tests;
@@ -17,6 +18,8 @@ public class DotnetWatchProjectFileWatcherTests
     [InlineData("Directory.Packages.props", true, true)]
     [InlineData("Directory.Build.props", true, true)]
     [InlineData("directory.build.targets", true, true)]
+    [InlineData("global.json", true, true)]
+    [InlineData("NuGet.config", true, true)]
     [InlineData("Api.csproj", true, false)]
     [InlineData("Common.props", true, false)]
     public void BuildFilesAreRecognized(string name, bool ancestorOnly, bool expected)
@@ -25,7 +28,7 @@ public class DotnetWatchProjectFileWatcherTests
     }
 
     [Fact]
-    public void WatchesProjectAndReferencedDirectoriesAndTheirAncestors()
+    public void WatchesEvaluatedProjectsAndImportsAndTheirAncestors()
     {
         var root = Directory.CreateTempSubdirectory("aspire-watch-refs").FullName;
         try
@@ -36,18 +39,13 @@ public class DotnetWatchProjectFileWatcherTests
             Directory.CreateDirectory(Path.GetDirectoryName(api)!);
             Directory.CreateDirectory(Path.GetDirectoryName(lib)!);
             Directory.CreateDirectory(Path.GetDirectoryName(core)!);
-            File.WriteAllText(api, """<Project><ItemGroup><ProjectReference Include="..\Lib\Lib.csproj" /><ProjectReference Include="$(Computed)\X.csproj" /></ItemGroup></Project>""");
-            File.WriteAllText(lib, """<Project><ItemGroup><ProjectReference Include="../Core/Core.csproj" /></ItemGroup></Project>""");
-            File.WriteAllText(core, "<Project />");
-
-            Assert.Equal(
-                [Path.GetDirectoryName(lib) + Path.DirectorySeparatorChar, Path.GetDirectoryName(core) + Path.DirectorySeparatorChar],
-                DotnetWatchProjectFileWatcher.ReadReferencedDirectories(api));
-
-            var directories = DotnetWatchProjectFileWatcher.GetWatchedDirectories([api]);
+            var imported = Path.Combine(root, "external", "Build.custom");
+            Directory.CreateDirectory(Path.GetDirectoryName(imported)!);
+            var directories = DotnetWatchProjectFileWatcher.GetWatchedDirectories([api, lib, core, imported]);
             Assert.False(directories[Path.GetDirectoryName(api)!]);
             Assert.False(directories[Path.GetDirectoryName(lib)!]);
             Assert.False(directories[Path.GetDirectoryName(core)!]);
+            Assert.False(directories[Path.GetDirectoryName(imported)!]);
             Assert.True(directories[Path.Combine(root, "src")]);
             Assert.True(directories[root]);
         }
@@ -99,7 +97,7 @@ public class DotnetWatchProjectFileWatcherTests
                         observed.TrySetResult();
                     }
                 }
-            }, TimeSpan.FromMilliseconds(300));
+            }, TimeSpan.FromMilliseconds(300), exception => observed.TrySetException(exception));
             watcher.Start();
 
             File.WriteAllText(Path.Combine(root, "Api", "Program.cs"), "// not a build file");
@@ -128,4 +126,45 @@ public class DotnetWatchProjectFileWatcherTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    [Fact]
+    public void ReplacementRetainsQueuedEditsFromTheOldDebounceWindow()
+    {
+        var root = Directory.CreateTempSubdirectory("aspire-watch-handoff").FullName;
+        try
+        {
+            var project = Path.Combine(root, "Api.csproj");
+            var imported = Path.Combine(root, "Build.custom");
+            var batches = new List<IReadOnlyList<string>>();
+            using var previous = new DotnetWatchProjectFileWatcher([project, imported],
+                batches.Add, TimeSpan.FromMinutes(10), exception => throw exception);
+            OnChange(previous, project, ancestorOnly: false);
+            OnChange(previous, imported, ancestorOnly: false);
+            OnChange(previous, project, ancestorOnly: false);
+
+            var pending = previous.DisposeAndGetPendingChanges();
+
+            Assert.Equal([project, imported], pending);
+            Assert.Empty(batches);
+            Assert.Empty(previous.DisposeAndGetPendingChanges());
+            using var replacement = new DotnetWatchProjectFileWatcher([project, imported],
+                batches.Add, TimeSpan.FromMinutes(10), exception => throw exception);
+            foreach (var path in pending)
+            {
+                OnChange(replacement, path, ancestorOnly: false);
+            }
+            Flush(replacement);
+            Assert.Equal([project, imported], Assert.Single(batches));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "OnChange")]
+    private static extern void OnChange(DotnetWatchProjectFileWatcher watcher, string path, bool ancestorOnly);
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "Flush")]
+    private static extern void Flush(DotnetWatchProjectFileWatcher watcher);
 }

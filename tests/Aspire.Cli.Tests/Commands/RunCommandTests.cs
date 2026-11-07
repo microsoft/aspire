@@ -3661,6 +3661,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("run --watch true", false, true)]
     [InlineData("run --watch false", true, false)]
     [InlineData("run --watch=false", true, false)]
+    [InlineData("run -- --watch", false, false)]
+    [InlineData("run -- --watch=false", true, true)]
     public async Task RunCommand_ExplicitWatchOptionWinsOverDefaultWatchEnabled(string commandLine, bool? defaultWatchEnabled, bool expectWatch)
     {
         var context = await RunWithTestAppHostProjectAsync(commandLine, "csharp", defaultWatchEnabled);
@@ -3686,18 +3688,31 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WatchInIdeOwnedRun_ShowsNoticeAndDoesNotStartServiceWatch()
+    public async Task RunCommand_ExplicitWatchInIdeOwnedRun_FailsBeforeLaunching()
     {
-        var messages = new List<string>();
-        var context = await RunWithTestAppHostProjectAsync(
-            "run --watch",
-            "csharp",
-            defaultWatchEnabled: null,
-            configureInteraction: interaction => interaction.DisplayMessageCallback = (_, message, _) => messages.Add(message),
-            configuration: config => config["DEBUG_SESSION_PORT"] = "12345");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var launched = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += configuration => configuration["DEBUG_SESSION_PORT"] = "12345";
+            options.InteractionServiceFactory = _ => interaction;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                RunAsyncCallback = (_, _) =>
+                {
+                    launched = true;
+                    return Task.FromResult(0);
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
 
-        Assert.False(context.Watch);
-        Assert.Contains(RunCommandStrings.WatchHandledByIde, messages);
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("run --watch").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.False(launched);
+        Assert.Contains(RunCommandStrings.WatchNotSupportedWithDebugger, interaction.DisplayedErrors);
     }
 
     [Fact]
@@ -3777,7 +3792,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("run", true)]
     [InlineData("run --watch", false)]
-    public async Task RunCommand_WatchRun_LaunchesCSharpAppHostNormallyAndProjectsServiceWatch(string commandLine, bool defaultWatchEnabled)
+    public async Task RunCommand_WhenAppHostResolveTargetIsUnavailable_KeepsOrdinaryAppHostAndServiceWatch(string commandLine, bool defaultWatchEnabled)
     {
         var dotnetWatchUsed = true;
         var appHostNoBuild = false;
@@ -3817,9 +3832,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         cts.CancelAfter(TimeSpan.FromSeconds(2));
         await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
 
-        // The legacy whole-AppHost `dotnet watch` is retired: the AppHost runs from the CLI's build and its C# services
-        // are hot reloaded by Aspire.Hosting.Dotnet through its watch host.
-        Assert.False(dotnetWatchUsed, "The C# AppHost must not run under dotnet watch.");
+        Assert.False(dotnetWatchUsed, "Unavailable AppHost coverage must not start a competing legacy dotnet watcher.");
         Assert.True(appHostNoBuild, "The AppHost was already built by the CLI.");
         Assert.NotNull(appHostEnvironment);
         Assert.Equal("true", appHostEnvironment[DotnetWatchRunEnvironment.WatchEnabledVariable]);
@@ -5219,9 +5232,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("run --watch", false, true)]
     [InlineData("run --watch false", true, false)]
-    [InlineData("run", true, false)]
+    [InlineData("run", false, false)]
     public async Task RunCommand_WhenDelegatingToExtension_LeavesWatchToTheIde(string commandLine, bool defaultWatchEnabled, bool expectNotice)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -5253,9 +5265,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("run --no-build")]
-    [InlineData("run --no-build --watch")]
-    public async Task RunCommand_WhenDelegatingToExtension_RejectsNoBuild(string commandLine)
+    [InlineData("run --no-build", nameof(RunCommandStrings.NoBuildNotSupportedWithWatchMode))]
+    [InlineData("run --no-build --watch", nameof(RunCommandStrings.NoBuildNotSupportedWithWatchOption))]
+    public async Task RunCommand_InAspireTerminal_RejectsNoBuildForTheEffectiveWatchOwner(string commandLine, string errorName)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var startDebugSessionCalled = false;
@@ -5279,7 +5291,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.False(startDebugSessionCalled);
         Assert.NotNull(interaction);
-        Assert.Contains(interaction.DisplayedErrors, e => e.Contains(RunCommandStrings.NoBuildNotSupportedWithWatchMode, StringComparison.Ordinal));
+        Assert.Contains(interaction.DisplayedErrors, error => error.Contains(
+            RunCommandStrings.ResourceManager.GetString(errorName, CultureInfo.CurrentCulture)!, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -5709,7 +5722,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
         Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
         Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
-        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.Equal(["--no-build", "--watch=false", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
         Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
         var childParseResult = command.Parse(forwardedArguments);
 

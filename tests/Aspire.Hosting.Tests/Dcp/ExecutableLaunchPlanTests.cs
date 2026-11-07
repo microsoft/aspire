@@ -6,6 +6,7 @@
 using System.Text.Json;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -197,6 +198,39 @@ public class ExecutableLaunchPlanTests
         Assert.Equal(ExecutableLaunchMechanism.Process, decision.Mechanism);
         Assert.Equal(ExecutableLaunchMode.NoDebug, decision.LaunchMode);
         Assert.Equal(ExecutableLaunchMode.Debug, decision.ProjectLaunchMode);
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("cli", false)]
+    public async Task CliOwnedExcludedProjectsDoNotAcquireALegacyDotnetWatcher(string? owner, bool legacyWatch)
+    {
+        var projectPath = Path.Combine(Environment.CurrentDirectory, "service.csproj");
+        var resource = new ProjectResource("project");
+        resource.Annotations.Add(new TestProjectMetadata(projectPath));
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DOTNET_WATCH"] = "true",
+                [DotnetWatchOwnership.OwnerEnvironmentVariable] = owner
+            })
+            .Build();
+        var context = new ExecutableLaunchContext(resource, configuration, new DistributedApplicationOptions(),
+            CreateExecutionConfiguration([]),
+            new ExecutableLaunchDecision(ExecutableLaunchMechanism.Process, ExecutableLaunchMode.NoDebug),
+            NullLogger.Instance, TestContext.Current.CancellationToken);
+
+        var plan = await ProjectExecutableLaunchRecipe.Instance.CreateLaunchPlanAsync(context);
+
+        List<string> expected = legacyWatch
+            ? ["watch", "--non-interactive", "--no-hot-reload", "--project", projectPath]
+            : ["run", "--project", projectPath];
+        if (context.DistributedApplicationOptions.Configuration is { Length: > 0 } appConfiguration)
+        {
+            expected.AddRange(["--configuration", appConfiguration]);
+        }
+        expected.Add("--no-launch-profile");
+        Assert.Equal(expected, plan.Arguments);
     }
 
     [Fact]

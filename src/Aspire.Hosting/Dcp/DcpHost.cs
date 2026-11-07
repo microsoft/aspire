@@ -15,6 +15,7 @@ using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Resources;
 using Aspire.Shared;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -358,11 +359,14 @@ internal sealed class DcpHost
         // Currently this contains the Unix socket for logging and the kubeconfig
         dcpProcessSpec.EnvironmentVariables.Add("DCP_SESSION_FOLDER", locations.DcpSessionDir);
 
+        // Ordinary and opted-out applications inherit DCP's environment too, not
+        // only the watched launches that already filter the private AppHost channel.
         foreach (DictionaryEntry de in Environment.GetEnvironmentVariables())
         {
             var key = de.Key?.ToString();
             var val = de.Value?.ToString();
-            if (key is not null && val is not null && !DcpEnvironmentVariables.IsExcluded(key))
+            if (key is not null && val is not null && !DcpEnvironmentVariables.IsExcluded(key) &&
+                !DotnetWatchOwnership.IsPrivateEnvironmentVariable(key))
             {
                 dcpProcessSpec.EnvironmentVariables[key] = val;
             }

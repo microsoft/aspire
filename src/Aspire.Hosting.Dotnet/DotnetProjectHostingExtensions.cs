@@ -162,7 +162,7 @@ public static partial class DotnetProjectHostingExtensions
 
         builder.WithAnnotation(new DotnetProjectBuildEnvironmentCallbackAnnotation(callback));
 
-        // SPIKE: in `aspire run --watch` the watcher builds the project, so it needs a watcher of its own.
+        // Build-only environment values belong to this project's watcher, not unrelated roots.
         Dotnet.Watch.DotnetWatchCoordinator.OnBuildEnvironmentAdded(builder);
         return builder.WithDotnetProgramBuildEnvironment(callback);
     }
@@ -510,7 +510,7 @@ public static partial class DotnetProjectHostingExtensions
             return Task.CompletedTask;
         });
 
-        // SPIKE: `aspire run --watch` routes the launch through the package-owned watch server.
+        // Watch eligibility is settled on the final model before transferring build ownership.
         if (watch)
         {
             Dotnet.Watch.DotnetWatchCoordinator.Configure(builder, resource, projectMetadata, buildCoordinator);

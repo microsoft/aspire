@@ -27,6 +27,8 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchHostProtocol.cs" Link="Shared\DotnetWatchHostProtocol.cs" />
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchOwnership.cs" Link="Shared\DotnetWatchOwnership.cs" />
+    <Compile Include="$(SharedDir)DotnetWatch\DotnetWatchAppHostProtocol.cs" Link="Shared\DotnetWatchAppHostProtocol.cs" />
     <!-- The guardian that kills the watcher's process tree when the server host dies (Windows job object, Unix
          process group + owner liveness), without .NET 11 process APIs. -->
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
