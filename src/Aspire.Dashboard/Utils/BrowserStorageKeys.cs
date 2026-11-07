@@ -41,6 +41,7 @@ internal static class BrowserStorageKeys
     public const string GroupOverview = "Aspire_ResourceOverview_GroupView";
     public const string RecordingsStyle = "Aspire_Header_RecordingsStyle";
     public const string LastSelectedResources = "Aspire_ResourcePane_LastSelectedResources";
+    public const string ResourceContentOpen = "Aspire_ResourcePane_ContentOpen";
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
     public const string ResourceTagsKeyPrefix = "Aspire_Resources_Tags_";

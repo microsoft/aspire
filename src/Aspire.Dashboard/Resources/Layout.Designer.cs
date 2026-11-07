@@ -664,6 +664,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Stopped.
+        /// </summary>
+        public static string ResourceHeaderStopped {
+            get {
+                return ResourceManager.GetString("ResourceHeaderStopped", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Hide resource list.
         /// </summary>
         public static string ResourcePaneClose {
@@ -979,15 +988,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Select all.
-        /// </summary>
-        public static string ResourcePaneSelectAll {
-            get {
-                return ResourceManager.GetString("ResourcePaneSelectAll", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to All selected.
         /// </summary>
         public static string ResourcePaneAllSelected {
@@ -1015,24 +1015,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Select to show {0}.
-        /// </summary>
-        public static string ResourcePaneKindShow {
-            get {
-                return ResourceManager.GetString("ResourcePaneKindShow", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Select to hide {0}.
-        /// </summary>
-        public static string ResourcePaneKindHide {
-            get {
-                return ResourceManager.GetString("ResourcePaneKindHide", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to OK.
         /// </summary>
         public static string ResourcePaneFilterDone {
@@ -1047,33 +1029,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneFilterReset {
             get {
                 return ResourceManager.GetString("ResourcePaneFilterReset", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Turn on a type above to list it..
-        /// </summary>
-        public static string ResourcePaneNoKindsHint {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoKindsHint", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Nothing shown.
-        /// </summary>
-        public static string ResourcePaneNoKindsShown {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoKindsShown", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Types to show.
-        /// </summary>
-        public static string ResourcePaneKindsLandmark {
-            get {
-                return ResourceManager.GetString("ResourcePaneKindsLandmark", resourceCulture);
             }
         }
 
