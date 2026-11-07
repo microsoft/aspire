@@ -12,18 +12,17 @@ resource sandboxes_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-
   location: location
 }
 
-resource sandboxes 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
-  name: take('sandboxes-${uniqueString(resourceGroup().id)}', 63)
+resource sandboxes 'Microsoft.App/sandboxGroups@2026-07-01' = {
+  name: take('sandboxes-${uniqueString(resourceGroup().id)}', 24)
+  tags: {
+    'aspire-resource-name': 'sandboxes'
+  }
   location: location
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${sandboxes_mi.id}': { }
     }
-  }
-  properties: { }
-  tags: {
-    'aspire-resource-name': 'sandboxes'
   }
 }
 

@@ -3,7 +3,7 @@ param location string = resourceGroup().location
 
 param identity_outputs_id string
 
-resource sandbox 'Microsoft.App/sandboxGroups@2026-02-01-preview' existing = {
+resource sandbox 'Microsoft.App/sandboxGroups@2026-07-01' existing = {
   name: 'existing-sandbox'
 }
 

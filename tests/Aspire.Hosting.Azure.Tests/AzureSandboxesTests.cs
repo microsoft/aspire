@@ -221,6 +221,19 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void SandboxGroupUsesGeneratedDefaults()
+    {
+        var resource = new Aspire.Hosting.Azure.Sandboxes.Provisioning.SandboxGroup("sandboxes");
+        var existing = Aspire.Hosting.Azure.Sandboxes.Provisioning.SandboxGroup.FromExisting("existing");
+        var generated = new global::Azure.Provisioning.AppContainers.SandboxGroup("generated");
+
+        Assert.Equal(generated.ResourceVersion, resource.ResourceVersion);
+        Assert.Equal(generated.ResourceVersion, existing.ResourceVersion);
+        Assert.Equivalent(generated.GetResourceNameRequirements(), resource.GetResourceNameRequirements());
+        Assert.True(existing.IsExistingResource);
+    }
+
+    [Fact]
     public async Task SandboxGroupNamesPreserveDigits()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
@@ -234,8 +247,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var (_, sandbox1Bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandbox1.Resource);
         var (_, sandbox2Bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandbox2.Resource);
 
-        Assert.Contains("name: take('sandbox1-${uniqueString(resourceGroup().id)}', 63)", sandbox1Bicep, StringComparison.Ordinal);
-        Assert.Contains("name: take('sandbox2-${uniqueString(resourceGroup().id)}', 63)", sandbox2Bicep, StringComparison.Ordinal);
+        Assert.Contains("name: take('sandbox1-${uniqueString(resourceGroup().id)}', 24)", sandbox1Bicep, StringComparison.Ordinal);
+        Assert.Contains("name: take('sandbox2-${uniqueString(resourceGroup().id)}', 24)", sandbox2Bicep, StringComparison.Ordinal);
     }
 
     [Fact]

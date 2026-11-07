@@ -17,6 +17,7 @@ resource executable 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'executable'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [
@@ -26,7 +27,6 @@ resource executable 'Microsoft.App/containerApps@2025-07-01' = {
         }
       ]
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

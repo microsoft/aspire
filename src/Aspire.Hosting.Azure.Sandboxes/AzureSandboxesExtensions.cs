@@ -78,7 +78,7 @@ public static class AzureSandboxesExtensions
                 {
                     var resource = new SandboxGroup(infrastructure.AspireResource.GetBicepIdentifier())
                     {
-                        Properties = [],
+                        Properties = new(),
                         Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
                     };
                     ApplyManagedServiceIdentity(resource.Identity, sandboxResource, imagePullIdentityId, infrastructure);

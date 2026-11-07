@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Provisioning" />
+    <PackageReference Include="Azure.Provisioning.AppContainers" />
     <PackageReference Include="Azure.Provisioning.ContainerRegistry" />
     <PackageReference Include="Microsoft.Azure.ContainerApps.Sandbox" />
   </ItemGroup>

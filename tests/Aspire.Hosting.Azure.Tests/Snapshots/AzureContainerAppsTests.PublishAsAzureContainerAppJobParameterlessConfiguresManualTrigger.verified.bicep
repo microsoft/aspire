@@ -9,11 +9,11 @@ resource manual_job 'Microsoft.App/jobs@2025-07-01' = {
   name: 'manual-job'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       triggerType: 'Manual'
       replicaTimeout: 1800
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

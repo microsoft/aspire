@@ -19,6 +19,7 @@ resource myapp 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'myapp'
   location: location
   properties: {
+    environmentId: cae_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       registries: [
@@ -33,7 +34,6 @@ resource myapp 'Microsoft.App/containerApps@2025-10-02-preview' = {
         }
       }
     }
-    environmentId: cae_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

@@ -17,6 +17,7 @@ resource api 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'api'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -37,7 +38,6 @@ resource api 'Microsoft.App/containerApps@2025-07-01' = {
         ]
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
