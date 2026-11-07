@@ -302,8 +302,10 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             await link.Locator(".resource-row-name").HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync(reason);
+            // Moving the pointer away dismisses the hover tooltip. (Escape would close the content on desktop, as its
+            // close button does, once no tooltip is shown.)
             await page.Mouse.MoveAsync(1, 1);
-            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToBeHiddenAsync();
             await page.Keyboard.PressAsync("Tab");
             await link.FocusAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();

@@ -80,12 +80,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _wasResourcePickerOpen;
     private bool _focusResourcePicker;
     private FluentTextInput? _resourcePaneSearch;
-    private bool _showTelemetryOnlyResources;
-    // Which kinds of items the pane lists, and so what "all resources" covers. Telemetry sources use
-    // _showTelemetryOnlyResources, which replaced the filter menu's telemetry-only option.
-    private bool _showResources = true;
-    private bool _showParameters = true;
+    // Whether the pane lists the resources that only send telemetry, and so whether "all resources" covers them. It's
+    // the "Telemetry sources" option at the end of the filter's resource types. Like the filter's other options, it
+    // starts on, so an unfiltered list shows everything.
+    private bool _showTelemetryOnlyResources = true;
+    // The name telemetry sources are stored under in BrowserStorageKeys.ResourcePaneKinds.
+    private const string TelemetrySourcesKind = "TelemetrySources";
     private bool _pendingLandingRedirect;
+    // Whether the landing redirect is for the first location this layout shows, which is the dashboard opening.
+    private bool _isInitialLanding;
+    // Whether the resource content was open, as last stored for this browser tab (see PersistContentOpenAsync).
+    private bool? _storedContentOpen;
+    private bool _isDecidingLanding;
     private bool _hasLocation;
     private string? _lastLocation;
     // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
@@ -285,13 +291,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, _grouping.ToString());
         }
         await ViewPreferences.EnsureLoadedAsync();
+        // A comma-separated list of the kinds of items the pane lists, such as "Resources,Parameters,TelemetrySources".
+        // The pane used to have a toggle for each kind. Resources and parameters are now always listed (the filter's
+        // types narrow them down), so only the telemetry sources entry still counts.
         var kindsResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneKinds);
         if (kindsResult.Success && kindsResult.Value is { } storedKinds)
         {
             var kinds = storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            _showResources = kinds.Contains(nameof(ResourcePaneKind.Resources), StringComparer.Ordinal);
-            _showParameters = kinds.Contains(nameof(ResourcePaneKind.Parameters), StringComparer.Ordinal);
-            _showTelemetryOnlyResources = kinds.Contains(nameof(ResourcePaneKind.TelemetrySources), StringComparer.Ordinal);
+            _showTelemetryOnlyResources = kinds.Contains(TelemetrySourcesKind, StringComparer.Ordinal);
         }
         await ApplyPaneModeFromLocationAsync(_lastLocation);
         if (cancellationToken.IsCancellationRequested)
@@ -518,6 +525,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        await PersistContentOpenAsync();
         var focusResourcePicker = _focusResourcePicker && _isResourcePickerOpen;
         _focusResourcePicker = false;
         var pickerChanged = _isResourcePickerOpen != _wasResourcePickerOpen;
@@ -737,6 +745,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var baseRelativePath = NavigationManager.ToBaseRelativePath(location);
         var parsedLocation = ParseLocation(baseRelativePath);
+        var isFirstLocation = !_hasLocation;
         var wasAllResources = _hasLocation && _selectedResourceNames.Count == 0;
         _hasLocation = true;
 
@@ -756,6 +765,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             && parsedLocation.Tab == ResourceTab.Overview
             && parsedLocation.SelectedResourceNames.Count == 0
             && !wasAllResources;
+        // The dashboard opens on /resources: the root URL redirects there (see Home). When that's the first location
+        // and there's no selection to restore, the resource list fills the page instead of an overview (see
+        // TryRedirectLandingAsync). Other URLs, such as /resources?pane=tags, open what they ask for.
+        _isInitialLanding = isFirstLocation && _pendingLandingRedirect &&
+            string.Equals("/" + baseRelativePath, DashboardUrls.ResourceListUrl(), StringComparisons.UrlPath);
         UpdateSelection();
     }
 
@@ -1140,7 +1154,23 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _pendingLandingRedirect = false;
+        // The layout can render while the stored state is read, and the content it shows until the landing decides
+        // mustn't be remembered as open (see PersistContentOpenAsync).
+        _isDecidingLanding = true;
+        try
+        {
+            await RedirectLandingAsync();
+        }
+        finally
+        {
+            _isDecidingLanding = false;
+        }
+    }
 
+    private async Task RedirectLandingAsync()
+    {
+        var isInitialLanding = _isInitialLanding;
+        _isInitialLanding = false;
         List<string> resourceNames;
         try
         {
@@ -1150,6 +1180,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             resourceNames = lastSelected is { Success: true, Value: { } names }
                 ? names.Where(IsKnownResourceName).ToList()
                 : [];
+
+            // The full-page list is where the dashboard opens, not where a reload of the overview goes: the overview of
+            // all resources has the same URL. When this browser tab last showed the resource content, or a link such as
+            // /graph asked for it (see GraphRedirect), the content stays open.
+            if (isInitialLanding &&
+                await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourceContentOpen) is { Success: true, Value: true })
+            {
+                _storedContentOpen = true;
+                isInitialLanding = false;
+            }
         }
         catch (JSDisconnectedException)
         {
@@ -1160,10 +1200,52 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             NavigationManager.NavigateTo(GetTabUrl(ResourceTab.Overview, resourceNames), new NavigationOptions { ReplaceHistoryEntry = true });
         }
+        else if (isInitialLanding && ViewportInformation.IsDesktop)
+        {
+            // The dashboard opens on the list of all resources, filling the page, with no view open: selecting
+            // resources opens their overview, and a tab opens its view for all resources. Narrow layouts have no
+            // full-page list, so they keep the overview.
+            SetResourceListVisible(true);
+            // Nothing was shown before the list, so there's no transition to animate.
+            _animatePaneTransition = false;
+        }
     }
 
     private bool IsKnownResourceName(string name) =>
         ResourceViewModel.TryGetResourceByName(name, _resourceByName, out _);
+
+    /// <summary>
+    /// Remembers for this browser tab whether the resource content is open or the full-page list replaces it, so a
+    /// reload shows the same thing (see <see cref="TryRedirectLandingAsync"/>).
+    /// </summary>
+    /// <remarks>
+    /// The full-page list is toggled from many places, including every navigation, so the state is stored after it's
+    /// rendered rather than where it changes. It isn't stored while the landing decides what to show, or the content
+    /// shown until then would be remembered as open, and the landing would read that back.
+    /// </remarks>
+    private async Task PersistContentOpenAsync()
+    {
+        if (!ViewportInformation.IsDesktop || !_isLoaded || _pendingLandingRedirect || _isDecidingLanding)
+        {
+            return;
+        }
+
+        var contentOpen = !_isPaneFullCanvas;
+        if (_storedContentOpen == contentOpen)
+        {
+            return;
+        }
+
+        _storedContentOpen = contentOpen;
+        try
+        {
+            await SessionStorage.SetAsync(BrowserStorageKeys.ResourceContentOpen, contentOpen);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit disconnected. There is nothing to persist to.
+        }
+    }
 
     private async Task PersistSelectedResourcesAsync()
     {
@@ -1232,11 +1314,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
-        if (!_showResources)
-        {
-            return [];
-        }
-
         var positions = OrderStore.GetPositions();
         var filteredResources = _resourceByName.Values
             .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
@@ -1251,7 +1328,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private List<ResourceViewModel> GetParameterPaneRows() =>
-        !_showParameters ? [] : _resourceByName.Values
+        _resourceByName.Values
             .Where(r => r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
             .OrderBy(r => r.HasMissingParameterValueState() ? 0 : 1)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -1262,12 +1339,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private List<ResourceGroup> GetResourceGroups()
     {
-        // Tag groups include parameters (see GetTagGroups), so they can have content when only parameters are shown.
-        if (_grouping == ResourcePaneGrouping.Tags ? !_showResources && !_showParameters : !_showResources)
-        {
-            return [];
-        }
-
         var groups = _grouping == ResourcePaneGrouping.Tags ? GetTagGroups() : _resourceByName.Values
             .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
             .GroupBy(r => _grouping == ResourcePaneGrouping.ResourceType ? r.ResourceType
@@ -1368,7 +1439,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var textFilter = _filter.TextFilter;
         var resources = _resourceByName.Values
-            .Where(r => (r.IsParameter ? _showParameters : _showResources) && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+            .Where(r => _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
             .OrderBy(r => r.IsParameter)
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -1450,7 +1521,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private IReadOnlyList<ResourcePaneFilter.FilterGroup> GetFilterGroups() =>
     [
-        new("types", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceTypesHeader)], _filter.ResourceTypesToVisibility, r => [r.ResourceType]),
+        // Telemetry sources aren't resources, so they have no type, but they're listed with the resources. Their
+        // option comes after the types, which include Parameter.
+        new("types", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceTypesHeader)], _filter.ResourceTypesToVisibility, r => [r.ResourceType],
+            TrailingOptions:
+            [
+                new ResourcePaneFilter.FilterOption(
+                    "telemetry-sources",
+                    Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
+                    () => _telemetryOnlyResources.Count,
+                    () => _showTelemetryOnlyResources,
+                    SetTelemetrySourcesShownAsync)
+            ]),
         new("states", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceStatesHeader)], _filter.ResourceStatesToVisibility, r => [r.State ?? string.Empty]),
         new("health", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)], _filter.ResourceHealthStatusesToVisibility, r => [r.HealthStatus?.Humanize() ?? string.Empty]),
         new("tags",
@@ -1677,16 +1759,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
     private bool IsSpacious => ViewPreferences.Density == ResourceListDensity.Spacious;
 
-    // Share relative ages between the sidebar and full-canvas health/start summary.
-    private string? GetStartedAge(ResourceViewModel resource) =>
-        resource.StartTimeStamp is { } startTimeStamp
-            ? Aspire.Dashboard.Components.Controls.DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), Loc)
-            : null;
+    // The time a row shows, in the sidebar and in the full canvas's health column: when the resource stopped, once it
+    // has, rather than when it started, since "Started 3 h ago" says little about a resource that exited a minute ago.
+    // Older app hosts don't report a stop time, so a stopped resource without one still shows when it started.
+    private (string Label, DateTime Time)? GetRowTime(ResourceViewModel resource) =>
+        resource.IsStopped() && resource.StopTimeStamp is { } stopTimeStamp
+            ? (Loc[nameof(Resources.Layout.ResourceHeaderStopped)], stopTimeStamp)
+            : resource.StartTimeStamp is { } startTimeStamp
+                ? (Loc[nameof(Resources.Layout.ResourceHeaderStarted)], startTimeStamp)
+                : null;
 
-    private string? GetStartedTooltip(ResourceViewModel resource) =>
-        resource.StartTimeStamp is { } startTimeStamp
-            ? $"{GetStartedAge(resource)} ({FormatHelpers.FormatDateTime(TimeProvider, startTimeStamp)})"
-            : null;
+    private string GetAge(DateTime time) =>
+        Aspire.Dashboard.Components.Controls.DashboardRunSelect.FormatRunAge(new DateTimeOffset(time), TimeProvider.GetUtcNow(), Loc);
+
+    // For example "Stopped 1 minute ago (11/6/2026 2:30:12 PM)".
+    private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
+        $"{rowTime.Label} {GetAge(rowTime.Time)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
 
     // Relative ages remain current even when the resource itself has no updates.
     private async Task RefreshAgesPeriodicallyAsync(CancellationToken cancellationToken)
@@ -1923,6 +2011,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private string? GetResourceUnavailableReason(ResourceViewModel resource)
     {
+        // While the resource list fills the page, its content is closed and no tab is shown selected (see
+        // RenderTabNavigation). CurrentTab is only kept for the next selection, so no row is unavailable for it.
+        if (_isPaneFullCanvas)
+        {
+            return null;
+        }
+
         if (resource.IsParameter)
         {
             return CurrentTab switch
@@ -1943,6 +2038,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _ => GetTelemetryUnavailableReason(GetTelemetryResource(resource))
         };
     }
+
+    // A telemetry-only row has no overview, console or terminal, and is unavailable for those tabs. Like the other rows,
+    // it's never unavailable while the content is closed (see GetResourceUnavailableReason).
+    private string? GetTelemetryRowUnavailableReason(OtlpResource resource) =>
+        _isPaneFullCanvas ? null
+        : CurrentTab is ResourceTab.Overview or ResourceTab.Console or ResourceTab.Terminal or ResourceTab.Parameters
+            ? Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value
+            : GetTelemetryUnavailableReason(resource);
 
     private string? GetTelemetryUnavailableReason(OtlpResource? resource)
     {
@@ -2024,10 +2127,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return _telemetryOnlyResources.Select(r => r.Resource.ResourceKey).Distinct().ToList();
         }
 
-        // "All resources" covers the kinds the pane lists. Parameters don't send telemetry.
-        IEnumerable<ResourceKey> keys = _showResources
-            ? _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey)
-            : [];
+        // "All resources" covers the app's resources, and the telemetry sources while the pane lists them. Parameters
+        // don't send telemetry.
+        var keys = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey);
         if (_showTelemetryOnlyResources)
         {
             keys = keys.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey));
@@ -2036,113 +2138,27 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return keys.Distinct().ToList();
     }
 
-    internal bool IsKindShown(ResourcePaneKind kind) => kind switch
-    {
-        ResourcePaneKind.Resources => _showResources,
-        ResourcePaneKind.Parameters => _showParameters,
-        _ => _showTelemetryOnlyResources
-    };
-
     /// <summary>
-    /// Gets the names of the app model resources that "all resources" covers, or null when it covers every one of
-    /// them, which is the case with both resources and parameters shown.
+    /// Gets the title for the page when nothing is selected.
     /// </summary>
-    internal IReadOnlyList<string>? GetScopeResourceNames()
+    private string GetScopeTitle() =>
+        Loc[DashboardClient.IsEnabled ? nameof(Resources.Layout.ResourceHeaderAllResources) : nameof(Resources.Layout.TelemetryHeaderAllSources)];
+
+    // Sets the filter's "Telemetry sources" option (see GetFilterGroups).
+    private async Task SetTelemetrySourcesShownAsync(bool shown)
     {
-        if (_showResources && _showParameters)
+        if (_showTelemetryOnlyResources == shown)
         {
-            return null;
+            return;
         }
 
-        return [.. _resourceByName.Values
-            .Where(r => r.IsParameter ? _showParameters : _showResources)
-            .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources))
-            .Select(GetResourceName)];
-    }
+        _showTelemetryOnlyResources = shown;
+        // Remembered in the browser, as the toggle this option replaced was. The value lists the kinds shown, and
+        // telemetry sources is the only one that can still be hidden (see where it's read).
+        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneKinds, shown ? TelemetrySourcesKind : string.Empty);
 
-    /// <summary>
-    /// Gets the title for the page when nothing is selected, naming the kinds of items it covers.
-    /// </summary>
-    private string GetScopeTitle()
-    {
-        if (!DashboardClient.IsEnabled)
-        {
-            return Loc[nameof(Resources.Layout.TelemetryHeaderAllSources)];
-        }
-
-        if (_showResources && _showParameters)
-        {
-            return Loc[nameof(Resources.Layout.ResourceHeaderAllResources)];
-        }
-
-        List<string> kinds = [];
-        if (_showResources)
-        {
-            kinds.Add(ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]);
-        }
-        if (_showParameters)
-        {
-            kinds.Add(Loc[nameof(Resources.Layout.NavMenuParametersTab)]);
-        }
-        if (_showTelemetryOnlyResources)
-        {
-            kinds.Add(Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)]);
-        }
-
-        return kinds.Count > 0 ? string.Join(", ", kinds) : Loc[nameof(Resources.Layout.ResourcePaneNoKindsShown)];
-    }
-
-    private ResourcePaneKind GetKind(string name) =>
-        ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource)
-            ? (resource.IsParameter ? ResourcePaneKind.Parameters : ResourcePaneKind.Resources)
-            : ResourcePaneKind.TelemetrySources;
-
-    private async Task ToggleKindAsync(ResourcePaneKind kind)
-    {
-        switch (kind)
-        {
-            case ResourcePaneKind.Resources:
-                _showResources = !_showResources;
-                break;
-            case ResourcePaneKind.Parameters:
-                _showParameters = !_showParameters;
-                break;
-            default:
-                _showTelemetryOnlyResources = !_showTelemetryOnlyResources;
-                break;
-        }
-
-        var shown = new List<string>();
-        if (_showResources)
-        {
-            shown.Add(nameof(ResourcePaneKind.Resources));
-        }
-        if (_showParameters)
-        {
-            shown.Add(nameof(ResourcePaneKind.Parameters));
-        }
-        if (_showTelemetryOnlyResources)
-        {
-            shown.Add(nameof(ResourcePaneKind.TelemetrySources));
-        }
-        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneKinds, string.Join(',', shown));
-
-        // A kind that's switched off is no longer part of the selection.
-        var remaining = _selectedResourceNames.Where(name => IsKindShown(GetKind(name))).ToList();
-        if (remaining.Count != _selectedResourceNames.Count)
-        {
-            if (remaining.Count == 0)
-            {
-                await OnAllResourcesClickAsync();
-            }
-            else
-            {
-                NavigationManager.NavigateTo(GetSelectionUrl(remaining));
-            }
-        }
-
+        // "All resources" covers telemetry sources only while they're listed, so pages showing all resources refresh.
         ResourcesChanged?.Invoke();
-        StateHasChanged();
     }
 
     private string GetPaneCountText(int resourceCount, int parameterCount, int telemetrySourceCount)
@@ -2571,6 +2587,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static string GetTabId(ResourceTab tab) => $"tab-{tab}";
 
+    // The id of the hidden tab that's active while no tab is shown selected (see RenderTabNavigation). It doesn't
+    // start with "tab-", so OnTabChanged ignores it.
+    private const string NoActiveTabId = "resource-tab-none";
+
     private async Task OnTabChanged(FluentTab? newTab, bool isDesktop, string? renderedLocation)
     {
         // FluentTabs also raises this when a tab is disposed, for example when leaving the resources view, and
@@ -2586,6 +2606,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             || newTab?.Id is not { } id
             || !id.StartsWith("tab-", StringComparison.Ordinal)
             || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
+            // Includes choosing the current tab while the content is closed: FluentTabs raises the same change when it
+            // syncs with ActiveTabId, so it can't tell the user's choice apart. OpenTabFromFullCanvasAsync handles it.
             || tab == CurrentTab
             // A navigation started from the tab strip is still in flight. The layout re-renders when this handler
             // returns, before the router reaches the new location, and that render must not put the previous tab
@@ -2626,6 +2648,27 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await NavigateToTabAsync(href);
     }
 
+    /// <summary>
+    /// Called by the layout's script when the user clicks a tab, or presses Enter or Space on it, while the resource list
+    /// fills the page. No tab is shown selected then, so choosing the current tab must open its content. FluentTabs
+    /// can't report that choice: it raises the same change when it syncs with ActiveTabId, for example right after
+    /// closing the content with a tab still focused, which would reopen it. Other tabs open through OnTabChanged.
+    /// </summary>
+    [JSInvokable]
+    public async Task OpenTabFromFullCanvasAsync(string tabId)
+    {
+        if (_isDisposed || !_isPaneFullCanvas
+            || !tabId.StartsWith("tab-", StringComparison.Ordinal)
+            || !Enum.TryParse<ResourceTab>(tabId["tab-".Length..], out var tab)
+            || tab != CurrentTab
+            || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href)
+        {
+            return;
+        }
+
+        await NavigateToTabAsync(href);
+    }
+
     private async Task NavigateToTabAsync(string href)
     {
         var persistExpandedPane = _isPaneFullCanvas && _isPaneCollapsed;
@@ -2635,6 +2678,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // slow to render or the current tab's menu item doesn't change the URL.
             _isPaneCollapsed = false;
             SetResourceListVisible(false);
+        }
+
+        // Opening the current tab from the full-canvas list doesn't change the URL, so no new location will clear the
+        // tab the strip shows while navigating (see OnParametersSetAsync). Clear it here instead.
+        if (string.Equals(NavigationManager.ToAbsoluteUri(href).AbsoluteUri, NavigationManager.Uri, StringComparison.Ordinal))
+        {
+            _navigatingToTab = null;
         }
 
         NavigationManager.NavigateTo(href);
@@ -2699,7 +2749,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 Text = tab.Text,
                 StartIcon = tab.Icon,
                 Role = MenuItemRole.Radio,
-                Checked = tab.Tab == CurrentTab,
+                // Like the tab strip, the menu shows no current view while the content is closed.
+                Checked = tab.Tab == CurrentTab && !_isPaneFullCanvas,
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
                 OnClick = () => NavigateToTabAsync(tab.Href)
             });
@@ -2784,13 +2835,6 @@ internal enum ResourceTab
     StructuredLogs,
     Traces,
     Metrics
-}
-
-internal enum ResourcePaneKind
-{
-    Resources,
-    Parameters,
-    TelemetrySources
 }
 
 internal enum ResourcePaneGrouping

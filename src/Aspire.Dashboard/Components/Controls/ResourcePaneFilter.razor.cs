@@ -27,7 +27,19 @@ public partial class ResourcePaneFilter
         string Header,
         ConcurrentDictionary<string, bool> Values,
         Func<ResourceViewModel, IEnumerable<string>> GetKeys,
-        Func<string, string>? GetText = null);
+        Func<string, string>? GetText = null,
+        IReadOnlyList<FilterOption>? TrailingOptions = null);
+
+    /// <summary>
+    /// An option listed after a group's values that isn't one of them, such as telemetry sources after the resource
+    /// types. It counts in the group's "All" option, summary and reset like the values do.
+    /// </summary>
+    public sealed record FilterOption(
+        string Key,
+        string Label,
+        Func<int> GetCount,
+        Func<bool> IsVisible,
+        Func<bool, Task> SetVisibleAsync);
 
     [Parameter, EditorRequired]
     public required string ButtonId { get; set; }
@@ -50,7 +62,9 @@ public partial class ResourcePaneFilter
     [Parameter, EditorRequired]
     public required EventCallback OnChanged { get; set; }
 
-    private bool IsFiltered => Groups().Any(group => group.Values.Values.Any(isVisible => !isVisible));
+    private bool IsFiltered => Groups().Any(group => group.Values.Values.Any(isVisible => !isVisible) || HidesTrailingOption(group));
+
+    private static bool HidesTrailingOption(FilterGroup group) => group.TrailingOptions?.Any(option => !option.IsVisible()) == true;
 
     private void TogglePopover() => _isOpen = !_isOpen;
 
@@ -73,7 +87,7 @@ public partial class ResourcePaneFilter
     private bool IsExpanded(FilterGroup group, List<KeyValuePair<string, bool>> options) =>
         _expandedOverrides.TryGetValue(group.Id, out var expanded)
             ? expanded
-            : s_defaultExpandedGroups.Contains(group.Id) || options.Any(pair => !pair.Value);
+            : s_defaultExpandedGroups.Contains(group.Id) || options.Any(pair => !pair.Value) || HidesTrailingOption(group);
 
     private void ToggleGroup(string groupId, bool isExpanded) => _expandedOverrides[groupId] = !isExpanded;
 
@@ -106,13 +120,15 @@ public partial class ResourcePaneFilter
         await OnChanged.InvokeAsync();
     }
 
+    private async Task SetOptionAsync(FilterOption option, bool isVisible)
+    {
+        await option.SetVisibleAsync(isVisible);
+        await OnChanged.InvokeAsync();
+    }
+
     private async Task SetAllAsync(FilterGroup group, bool isVisible)
     {
-        foreach (var key in group.Values.Keys)
-        {
-            group.Values[key] = isVisible;
-        }
-
+        await SetGroupAsync(group, isVisible);
         await OnChanged.InvokeAsync();
     }
 
@@ -120,12 +136,22 @@ public partial class ResourcePaneFilter
     {
         foreach (var group in Groups())
         {
-            foreach (var key in group.Values.Keys)
-            {
-                group.Values[key] = true;
-            }
+            await SetGroupAsync(group, isVisible: true);
         }
 
         await OnChanged.InvokeAsync();
+    }
+
+    private static async Task SetGroupAsync(FilterGroup group, bool isVisible)
+    {
+        foreach (var key in group.Values.Keys)
+        {
+            group.Values[key] = isVisible;
+        }
+
+        foreach (var option in group.TrailingOptions ?? [])
+        {
+            await option.SetVisibleAsync(isVisible);
+        }
     }
 }

@@ -44,11 +44,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
 
             var pane = page.Locator(".resource-pane");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "resource-a", Exact = true })).ToBeVisibleAsync();
-            var telemetryToggle = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.NavMenuTelemetrySourcesTab, Exact = true });
-            if (await telemetryToggle.GetAttributeAsync("aria-pressed") != "true")
-            {
-                await telemetryToggle.ClickAsync();
-            }
+            // Telemetry sources are listed by default.
             var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
             await Assertions.Expect(telemetrySection.First).ToBeVisibleAsync();
             if (await telemetrySection.First.GetAttributeAsync("aria-expanded") == "false")
@@ -86,14 +82,14 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
 
             var pane = page.Locator(".resource-pane");
             var title = page.Locator("h1.resource-title");
-            var selectAll = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
+            var selectAll = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourceHeaderAllResources, Exact = true });
             await Assertions.Expect(title).ToHaveTextAsync(resourceName);
-            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             Assert.Null(await selectAll.GetAttributeAsync("aria-pressed"));
 
             await selectAll.ClickAsync();
             await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
-            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(pane.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
@@ -113,14 +109,15 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = Resources.Layout.ResourceTabOverview }).ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
-            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("data-tooltip", Resources.Layout.ResourcePaneAllSelected);
 
-            // The cleared selection is remembered when entering the resources view again.
+            // The cleared selection is remembered when the page loads again: all resources. The browser tab showed their
+            // overview, so it opens on it rather than on the full-page list a new tab starts with.
             await page.GotoAsync("/resources");
             await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
-            await Assertions.Expect(title).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(pane.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
             await Assertions.Expect(pane.Locator(".resource-row.selected")).ToHaveCountAsync(0);
 
@@ -200,8 +197,8 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
                 await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
             }
 
-            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneSelectAll, Exact = true });
-            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourcePaneSelectAll);
+            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourceHeaderAllResources, Exact = true });
+            await Assertions.Expect(selectAll).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(selectAll).ToBeInViewportAsync(new() { Ratio = 1 });
             var paneBounds = await page.Locator(".resource-pane").BoundingBoxAsync();
             var actionBounds = await selectAll.BoundingBoxAsync();
@@ -286,11 +283,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             var pane = page.Locator(".resource-pane");
             var title = page.Locator("h1.resource-title");
             await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = "multi-a", Exact = true }).First).ToBeVisibleAsync();
-            var telemetryToggle = pane.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.NavMenuTelemetrySourcesTab, Exact = true });
-            if (await telemetryToggle.GetAttributeAsync("aria-pressed") != "true")
-            {
-                await telemetryToggle.ClickAsync();
-            }
+            // Telemetry sources are listed by default.
             var telemetrySection = pane.Locator("button.resource-pane-section-header", new() { HasTextRegex = new Regex("^Telemetry sources") });
             if (await telemetrySection.CountAsync() > 0 &&
                 await telemetrySection.GetAttributeAsync("aria-expanded") == "false")
