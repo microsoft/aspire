@@ -319,7 +319,17 @@ def publish_cask(candidate, version, client, validate, publish, writer):
 
 
 def run(command, log=None):
-    process = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
+    try:
+        process = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
+    except subprocess.TimeoutExpired as error:
+        # subprocess retains partial output as bytes even with text=True.
+        # Keep the failing validator's diagnostics before its temporary state is removed.
+        output = error.stdout or b""
+        output = output.decode(errors="replace") if isinstance(output, bytes) else output
+        if log:
+            log.write_text(output)
+        print(output, end="")
+        raise PublicationError(f"{Path(command[0]).name} timed out after 1800s; see validation logs") from error
     if log:
         log.write_text(process.stdout)
     print(process.stdout, end="")

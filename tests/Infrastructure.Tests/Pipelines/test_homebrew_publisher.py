@@ -411,6 +411,16 @@ class PublisherTests(unittest.TestCase):
             self.assertLess(time.monotonic() - started, 2)
         self.assertEqual(1, len(self.fake.calls))
 
+    def test_validation_timeout_retains_partial_diagnostics_and_fails(self):
+        log = Path(self.temp.name) / "validation.log"
+        timeout = subprocess.TimeoutExpired(["bash", "validator"], 1800, output=b"last validator diagnostic\n")
+        with patch.object(self.module.subprocess, "run", side_effect=timeout), \
+                contextlib.redirect_stdout(io.StringIO()) as console:
+            with self.assertRaisesRegex(self.module.PublicationError, "timed out after 1800s"):
+                self.module.run(["bash", "validator"], log)
+        self.assertEqual("last validator diagnostic\n", log.read_text())
+        self.assertEqual(log.read_text(), console.getvalue())
+
     def test_validation_adapter_rejects_non_macos_and_wrong_revision_before_download(self):
         output = Path(self.temp.name)
         with patch.object(self.module.platform, "system", return_value="Linux"):
