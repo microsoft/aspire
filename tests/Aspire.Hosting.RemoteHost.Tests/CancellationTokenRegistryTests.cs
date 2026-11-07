@@ -71,6 +71,18 @@ public class CancellationTokenRegistryTests
     }
 
     [Fact]
+    public void Cancel_BeforeGetOrCreate_PreservesCancellation()
+    {
+        using var registry = new CancellationTokenRegistry();
+
+        var result = registry.Cancel("ct_delayed_registration");
+        var token = registry.GetOrCreate("ct_delayed_registration");
+
+        Assert.False(result);
+        Assert.True(token.IsCancellationRequested);
+    }
+
+    [Fact]
     public void TryGetToken_ReturnsTrueAndTokenForRegisteredId()
     {
         using var registry = new CancellationTokenRegistry();
