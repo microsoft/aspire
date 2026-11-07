@@ -80,6 +80,8 @@ template with the tap's non-executing Ripper checker, then runs the isolated
 tap validator. Draft and prerelease releases, placeholder hashes, template
 drift and substantive validation failures are not publishable. Full execution
 on one architecture does not establish install/notarization on the other.
+The tap validator runs from its own checkout so released-CLI smoke tests use
+the agent's SDK, not the Aspire source checkout's development `global.json`.
 
 `--publish` explicitly opts into writes after validation and requires
 `HOMEBREW_TAP_WRITE_TOKEN`; the independent `HOMEBREW_READ_TOKEN` is only for

@@ -324,9 +324,9 @@ def publish_cask(candidate, version, client, validate, publish, writer):
     return {**result, "outcome": "submitted", "pr_url": pull["html_url"]}
 
 
-def run(command, log=None):
+def run(command, log=None, cwd=None):
     try:
-        process = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
+        process = subprocess.run(command, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
     except subprocess.TimeoutExpired as error:
         # subprocess retains partial output as bytes even with text=True.
         # Keep the failing validator's diagnostics before its temporary state is removed.
@@ -430,7 +430,10 @@ def validate_release(candidate, version, client, tap_checkout, output, source_co
         # candidate reaches Homebrew, which evaluates the cask DSL.
         run(["ruby", str(tap / "scripts/check-cask-consistency.rb"), str(candidate),
              str(metadata_file), str(template_file)], output / "consistency.log")
-        run(["bash", str(tap / "scripts/validate-cask.sh"), "--cask-file", str(candidate)], output / "validation.log")
+        # The released CLI smoke test must not inherit Aspire's global.json:
+        # it pins a development SDK that disposable release validators may lack.
+        run(["bash", str(tap / "scripts/validate-cask.sh"), "--cask-file", str(candidate)],
+            output / "validation.log", cwd=tap)
 
 
 def main(argv=None):

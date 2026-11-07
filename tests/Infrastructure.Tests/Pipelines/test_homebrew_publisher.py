@@ -558,6 +558,53 @@ class PublisherTests(unittest.TestCase):
                 self.module.validate_release(self.candidate, VERSION, self.fake, output, output)
         self.assertEqual([], self.fake.calls)
 
+    def test_validation_runs_from_tap_not_checkout_sdk_context(self):
+        output = Path(self.temp.name)
+        tap = output / "tap"
+        tap.mkdir()
+        version = VERSION
+
+        class ReleaseClient:
+            def begin_phase(self):
+                pass
+
+            def request(self, method, path):
+                if "/releases/" in path:
+                    return {
+                        "tag_name": f"v{version}", "draft": False, "prerelease": False,
+                        "assets": [
+                            {
+                                "name": f"aspire-cli-osx-{arch}-{version}.tar.gz",
+                                "browser_download_url": (
+                                    f"https://github.com/microsoft/aspire/releases/download/v{version}/"
+                                    f"aspire-cli-osx-{arch}-{version}.tar.gz"
+                                ),
+                            } for arch in ("arm64", "x64")
+                        ],
+                    }
+                if "/git/ref/" in path:
+                    return {"object": {"type": "commit", "sha": "c" * 40}}
+                return {"content": base64.b64encode(b"template").decode()}
+
+        actual_run = self.module.run
+
+        def fixture_run(command, log=None, cwd=None):
+            if command[0] == "curl":
+                Path(command[-1]).write_bytes(b"archive")
+            if command[0] == "bash":
+                return actual_run(
+                    [sys.executable, "-c", "from pathlib import Path; print(Path.cwd())"],
+                    log, cwd=cwd,
+                )
+            return self.module.VALIDATOR_REVISION if "rev-parse" in command else ""
+
+        with patch.object(self.module.platform, "system", return_value="Darwin"), \
+                patch.object(self.module, "run", side_effect=fixture_run), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.module.validate_release(self.candidate, VERSION, ReleaseClient(), tap, output)
+        self.assertEqual(str(tap.resolve()), (output / "validation.log").read_text().strip())
+        self.assertEqual(cask(VERSION), self.candidate.read_bytes())
+
 
 if __name__ == "__main__":
     if "--emit-skip-warning" in sys.argv:
