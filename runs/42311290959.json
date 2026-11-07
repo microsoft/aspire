@@ -1,0 +1,68 @@
+{
+  "run_id": 42311290959,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42311290959",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-07T00:27:32Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21830,
+    "title": "Fix Radius container image exports for TypeScript",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/radius-typescript-exports",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21830",
+    "merged_at": "2026-11-06T23:20:54Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "09f1abab775574a20bc5ac31e03675a255c13a86",
+    "failed_sha": "399e3e6f8984c75dc2778e1329f46958f78f9ad7",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "399e3e6f8984c75dc2778e1329f46958f78f9ad7",
+        "message": "Fix Radius container image exports for TypeScript (#21830) ## Description Restores Radius's `withContainerImage(image)` method on `DotnetProjectResource` in generated TypeScript AppHosts. Overlapping legacy and generic exports previously caused a collision on `CSharpAppResource` that removed the generic capability for every target, including modern .NET projects. Export the generic overload once using the existing `Aspire.Hosting.Radius/withContainerImage` capability ID, and exclude the legacy o",
+        "html_url": "https://github.com/microsoft/aspire/commit/399e3e6f8984c75dc2778e1329f46958f78f9ad7",
+        "pull_request": {
+          "number": 21830,
+          "title": "Fix Radius container image exports for TypeScript",
+          "url": "https://github.com/microsoft/aspire/pull/21830",
+          "merged_at": "2026-11-06T23:20:54Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 128230943448,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42311290959/job/128230943448",
+      "classification": "flaky-test",
+      "reason": "Tree-actions E2E assertion on missing e2e-worker endpoint URL recurs intermittently across unrelated runs.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:326:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same assertion failure recurs across independent main runs with unchanged mechanism.",
+      "job_id": 128230943448,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing"
+  ]
+}
