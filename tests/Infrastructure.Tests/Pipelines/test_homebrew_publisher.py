@@ -119,6 +119,8 @@ def server_for(fake):
             if self.command != "GET":
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             try:
+                if not self.headers.get("User-Agent"):
+                    raise fake.module.ApiError(403, "User-Agent required")
                 value = fake.request(self.command, self.path, body)
                 status = 200
             except fake.module.ApiError as error:
@@ -338,6 +340,11 @@ class PublisherTests(unittest.TestCase):
         self.assertIn("type=warning", result.stdout)
         self.assertEqual("skipped", json.loads((Path(self.temp.name) / "result.json").read_text())["outcome"])
         self.assertEqual([], self.fake.writes)
+
+    def test_http_requests_satisfy_github_user_agent_requirement(self):
+        with server_for(self.fake) as url:
+            client = self.module.GitHubClient(api_url=url)
+            self.assertEqual({"default_branch": "main"}, client.request("GET", PREFIX))
 
     def test_http_retries_only_transient_reads_and_honors_retry_after(self):
         for status in (503, 429, 401, 403, 404):

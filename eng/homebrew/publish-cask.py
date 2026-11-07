@@ -82,7 +82,13 @@ class GitHubClient:
             timer = threading.Timer(remaining, expire)
             timer.daemon = True
             timer.start()
-            headers = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+            # GitHub rejects requests without a valid application User-Agent.
+            # https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api#user-agent
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "User-Agent": "Aspire-Homebrew-Publisher",
+            }
             if self.token:
                 headers["Authorization"] = f"Bearer {self.token}"
             data = None if body is None else json.dumps(body).encode()
