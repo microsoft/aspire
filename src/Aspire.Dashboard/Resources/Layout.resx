@@ -309,9 +309,6 @@
   <data name="ResourcePaneResourceActions" xml:space="preserve">
     <value>Actions for {0}</value>
   </data>
-  <data name="ResourcePaneSelectAll" xml:space="preserve">
-    <value>Select all</value>
-  </data>
   <data name="ResourcePaneAllSelected" xml:space="preserve">
     <value>All selected</value>
   </data>
@@ -342,6 +339,10 @@
   <data name="ResourceHeaderStarted" xml:space="preserve">
     <value>Started</value>
   </data>
+  <data name="ResourceHeaderStopped" xml:space="preserve">
+    <value>Stopped</value>
+    <comment>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</comment>
+  </data>
   <data name="ResourceHeaderNotFound" xml:space="preserve">
     <value>Resource not found</value>
   </data>
@@ -371,21 +372,6 @@
   </data>
   <data name="ResourcePaneFilterReset" xml:space="preserve">
     <value>Reset</value>
-  </data>
-  <data name="ResourcePaneKindShow" xml:space="preserve">
-    <value>Select to show {0}</value>
-  </data>
-  <data name="ResourcePaneKindHide" xml:space="preserve">
-    <value>Select to hide {0}</value>
-  </data>
-  <data name="ResourcePaneNoKindsHint" xml:space="preserve">
-    <value>Turn on a type above to list it.</value>
-  </data>
-  <data name="ResourcePaneNoKindsShown" xml:space="preserve">
-    <value>Nothing shown</value>
-  </data>
-  <data name="ResourcePaneKindsLandmark" xml:space="preserve">
-    <value>Types to show</value>
   </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>

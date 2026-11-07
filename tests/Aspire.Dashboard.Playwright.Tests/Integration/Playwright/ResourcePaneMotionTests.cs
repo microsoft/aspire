@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Utils;
 using Aspire.TestUtilities;
@@ -398,12 +399,15 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             await ToggleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
 
-            // Kind changes must not change the saved width while the resizer is unmounted.
-            var parametersToggle = pane.Locator(".resource-kind-toggle").Nth(1);
-            await parametersToggle.ClickAsync();
+            // Filtering must not change the saved width while the resizer is unmounted.
+            await page.Locator("#resourcePaneFilterButton").ClickAsync();
+            var parameterType = page.GetByRole(AriaRole.Group, new() { Name = Resources.ControlsStrings.ChartContainerFiltersHeader, Exact = true })
+                .GetByRole(AriaRole.Checkbox, new() { Name = KnownResourceTypes.Parameter, Exact = true });
+            await parameterType.ClickAsync();
             await Assertions.Expect(parameter).ToHaveCountAsync(0);
-            await parametersToggle.ClickAsync();
+            await parameterType.ClickAsync();
             await Assertions.Expect(parameter).ToHaveCountAsync(1);
+            await page.Keyboard.PressAsync("Escape");
             await ToggleAsync();
             await AssertReturnedAsync();
 

@@ -41,9 +41,11 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.Context.AddCookiesAsync([new Cookie { Name = "currentTheme", Value = theme, Url = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress() }]);
             await page.GotoAsync("/resources");
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await Assertions.Expect(page.Locator(".home-hero")).ToBeVisibleAsync();
             await page.EvaluateAsync("key => localStorage.setItem(key, JSON.stringify('Cards'))", BrowserStorageKeys.GroupOverview);
             await page.ReloadAsync();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await Assertions.Expect(page.Locator(".home-hero")).ToBeVisibleAsync();
             await page.WaitForFunctionAsync("key => JSON.parse(localStorage.getItem(key)) === 'Summary'", BrowserStorageKeys.GroupOverview);
             await Assertions.Expect(page.Locator(".home-hero-headline")).ToHaveTextAsync("All 3 resources are running");
@@ -81,6 +83,7 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
             await Assertions.Expect(page.Locator(".home-hero-headline")).ToHaveTextAsync("All 2 resources are running");
 
             await page.GotoAsync("/resources");
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await Assertions.Expect(page.Locator(".home-hero-headline")).ToHaveTextAsync("All 3 resources are running");
             if (width <= 768)
             {
