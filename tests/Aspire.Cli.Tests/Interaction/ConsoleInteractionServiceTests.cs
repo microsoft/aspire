@@ -200,6 +200,32 @@ public class ConsoleInteractionServiceTests
     }
 
     [Theory]
+    [InlineData(false, 120)]
+    [InlineData(true, 120)]
+    [InlineData(false, 40)]
+    [InlineData(true, 40)]
+    public async Task PromptForSelectionAsync_TemplateSourceHeadingsAreLiteralAndFitWidth(bool gitSource, int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new('\r', ConsoleKey.Enter, false, false, false)]);
+        console.Profile.Width = width;
+        console.Profile.Capabilities.ColorSystem = ColorSystem.Standard;
+        var interaction = CreateInteractionService(console);
+        var template = CreateSearchableTemplate("first", null);
+        var source = gitSource
+            ? new TemplateSource(".", "https://example.test/organization/[templates]/long-location", "release/[blue]")
+            : new TemplateSource("/work/[templates]/long-directory-location", null, null);
+        var configured = new ConfiguredTemplate("source", template, "Team [templates]", source);
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", new[] { template }, item => item.Name,
+            _ => NewCommand.CreateTemplateSourceGroup(configured),
+            item => NewCommand.FormatTemplateDisplayLabel(item).EscapeMarkup());
+
+        Assert.Same(template, selected);
+        await Verify(output.ToString()).UseParameters(gitSource, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
     [InlineData(6)]
     [InlineData(10)]
     public async Task PromptForSelectionAsync_GroupedLabelsFitNarrowTerminals(int width)
