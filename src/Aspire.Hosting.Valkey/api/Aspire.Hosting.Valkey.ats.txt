@@ -15,3 +15,4 @@ Aspire.Hosting.Valkey/addValkey(name: string, port?: number, password?: Aspire.H
 Aspire.Hosting.Valkey/withDataBindMount(source: string, isReadOnly?: boolean) -> Aspire.Hosting.Valkey/Aspire.Hosting.ApplicationModel.ValkeyResource
 Aspire.Hosting.Valkey/withDataVolume(name?: string, isReadOnly?: boolean) -> Aspire.Hosting.Valkey/Aspire.Hosting.ApplicationModel.ValkeyResource
 Aspire.Hosting.Valkey/withPersistence(interval?: timespan, keysChangedThreshold?: number) -> Aspire.Hosting.Valkey/Aspire.Hosting.ApplicationModel.ValkeyResource
+Aspire.Hosting.Valkey/withRepl() -> Aspire.Hosting.Valkey/Aspire.Hosting.ApplicationModel.ValkeyResource
