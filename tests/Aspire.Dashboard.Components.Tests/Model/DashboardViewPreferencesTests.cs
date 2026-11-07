@@ -68,7 +68,8 @@ public class DashboardViewPreferencesTests : DashboardTestContext
 
         Assert.Equal(expected, preferences.GroupOverview);
         Assert.Equal([GroupOverview.Summary, GroupOverview.Graph], Enum.GetValues<GroupOverview>());
-        Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
+        // Nothing stored for the density, so the list starts compact.
+        Assert.Equal(ResourceListDensity.Compact, preferences.Density);
         Assert.Equal(RecordingsStyle.Panel, preferences.RecordingsStyle);
     }
 

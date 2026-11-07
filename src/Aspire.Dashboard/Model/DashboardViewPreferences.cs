@@ -71,10 +71,13 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     private Task? _loadTask;
     private GroupOverview _groupOverview = GroupOverview.Summary;
 
+    // The resource list starts compact, so the dashboard opens on as many resources as fit.
+    private const ResourceListDensity DefaultDensity = ResourceListDensity.Compact;
+
     /// <summary>
     /// Gets the resource list's density.
     /// </summary>
-    public ResourceListDensity Density { get; private set; }
+    public ResourceListDensity Density { get; private set; } = DefaultDensity;
 
     /// <summary>
     /// Gets what the overview of several resources shows.
@@ -150,9 +153,9 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     {
         try
         {
-            var density = await ReadAsync<ResourceListDensity>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
+            var density = await ReadAsync(BrowserStorageKeys.ResourceListDensity, DefaultDensity).ConfigureAwait(false);
             var groupOverview = await ReadGroupOverviewAsync().ConfigureAwait(false);
-            var recordingsStyle = await ReadAsync<RecordingsStyle>(BrowserStorageKeys.RecordingsStyle).ConfigureAwait(false);
+            var recordingsStyle = await ReadAsync(BrowserStorageKeys.RecordingsStyle, default(RecordingsStyle)).ConfigureAwait(false);
             if (density != Density || groupOverview != GroupOverview || recordingsStyle != RecordingsStyle)
             {
                 Density = density;
@@ -183,9 +186,9 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     }
 
     // Values are stored by name, so reordering the enums doesn't change a stored choice.
-    private async Task<T> ReadAsync<T>(string key) where T : struct, Enum
+    private async Task<T> ReadAsync<T>(string key, T fallback) where T : struct, Enum
     {
         var result = await localStorage.GetUnprotectedAsync<string>(key).ConfigureAwait(false);
-        return result.Success && Enum.TryParse<T>(result.Value, out var value) && Enum.IsDefined(value) ? value : default;
+        return result.Success && Enum.TryParse<T>(result.Value, out var value) && Enum.IsDefined(value) ? value : fallback;
     }
 }
