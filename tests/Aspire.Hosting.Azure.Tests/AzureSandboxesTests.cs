@@ -7,7 +7,6 @@
 
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -18,12 +17,14 @@ using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
+using Azure;
 using Azure.Core;
+using Azure.Core.Pipeline;
 using Azure.Provisioning.Resources;
+using Microsoft.Azure.ContainerApps.Sandbox;
+using Microsoft.Azure.ContainerApps.Sandbox.Models;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -220,6 +221,19 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void SandboxGroupUsesGeneratedDefaults()
+    {
+        var resource = new Aspire.Hosting.Azure.Sandboxes.Provisioning.SandboxGroup("sandboxes");
+        var existing = Aspire.Hosting.Azure.Sandboxes.Provisioning.SandboxGroup.FromExisting("existing");
+        var generated = new global::Azure.Provisioning.AppContainers.SandboxGroup("generated");
+
+        Assert.Equal(generated.ResourceVersion, resource.ResourceVersion);
+        Assert.Equal(generated.ResourceVersion, existing.ResourceVersion);
+        Assert.Equivalent(generated.GetResourceNameRequirements(), resource.GetResourceNameRequirements());
+        Assert.True(existing.IsExistingResource);
+    }
+
+    [Fact]
     public async Task SandboxGroupNamesPreserveDigits()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
@@ -233,8 +247,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var (_, sandbox1Bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandbox1.Resource);
         var (_, sandbox2Bicep) = await AzureManifestUtils.GetManifestWithBicep(model, sandbox2.Resource);
 
-        Assert.Contains("name: take('sandbox1-${uniqueString(resourceGroup().id)}', 63)", sandbox1Bicep, StringComparison.Ordinal);
-        Assert.Contains("name: take('sandbox2-${uniqueString(resourceGroup().id)}', 63)", sandbox2Bicep, StringComparison.Ordinal);
+        Assert.Contains("name: take('sandbox1-${uniqueString(resourceGroup().id)}', 24)", sandbox1Bicep, StringComparison.Ordinal);
+        Assert.Contains("name: take('sandbox2-${uniqueString(resourceGroup().id)}', 24)", sandbox2Bicep, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -377,7 +391,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.DoesNotContain("roleAssignments", bicep, StringComparison.Ordinal);
         Assert.DoesNotContain("Container Apps SandboxGroup Data Owner", bicep, StringComparison.Ordinal);
         Assert.Contains("pull_identity_outputs_id", bicep, StringComparison.Ordinal);
-        Assert.Contains("pull_identity_outputs_clientid", bicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("pull_identity_outputs_clientid", bicep, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -463,9 +477,9 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var (rolesManifest, rolesBicep) = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
 
         Assert.Contains("param sandboxes_mi_outputs_id string", sandboxBicep, StringComparison.Ordinal);
-        Assert.Contains("param sandboxes_mi_outputs_clientid string", sandboxBicep, StringComparison.Ordinal);
+        Assert.DoesNotContain("sandboxes_mi_outputs_clientid", sandboxBicep, StringComparison.Ordinal);
         Assert.Contains("'${sandboxes_mi_outputs_id}': { }", sandboxBicep, StringComparison.Ordinal);
-        Assert.Contains("output imagePullIdentityClientId string = sandboxes_mi_outputs_clientid", sandboxBicep, StringComparison.Ordinal);
+        Assert.Contains("output imagePullIdentityId string = sandboxes_mi_outputs_id", sandboxBicep, StringComparison.Ordinal);
         Assert.Contains("Microsoft.ManagedIdentity/userAssignedIdentities", identityBicep, StringComparison.Ordinal);
         Assert.Contains("Microsoft.Authorization/roleAssignments", rolesBicep, StringComparison.Ordinal);
         Assert.Equal("existing-rg", rolesManifest["scope"]?["resourceGroup"]?.GetValue<string>());
@@ -517,203 +531,391 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task AzureDevComputeClientCreatesV2DiskImageWithManagedIdentity()
-    {
-        var credential = new RecordingTokenCredential();
-        var handler = new RecordingHandler(async request =>
-        {
-            Assert.Equal(HttpMethod.Put, request.Method);
-            Assert.Equal("management.westus3.azuredevcompute.io", request.RequestUri?.Host);
-            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/v2", request.RequestUri?.AbsolutePath);
-            Assert.Equal("?api-version=2026-02-01-preview", request.RequestUri?.Query);
-            Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
-            Assert.Equal("test-token", request.Headers.Authorization?.Parameter);
-
-            var body = await request.Content!.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            Assert.Equal("site-1234", root.GetProperty("name").GetString());
-            Assert.Equal("site-container", root.GetProperty("labels").GetProperty("aspire-resource").GetString());
-            var source = root.GetProperty("source");
-            Assert.Equal("registry", source.GetProperty("kind").GetString());
-            Assert.Equal("example.azurecr.io/site:tag", source.GetProperty("imageUrl").GetString());
-            Assert.Equal("11111111-1111-1111-1111-111111111111", source.GetProperty("managedIdentityClientId").GetString());
-            Assert.False(root.TryGetProperty("registryCredentials", out _));
-            Assert.False(root.TryGetProperty("image", out _));
-
-            return JsonResponse(
-                """
-                {
-                  "id": "disk-1",
-                  "labels": {},
-                  "image": { "base": "example.azurecr.io/site:tag" },
-                  "status": { "state": "Ready", "createdAt": "2026-06-03T00:00:00Z", "updatedAt": "2026-06-03T00:00:00Z" }
-                }
-                """);
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), credential, NullLogger.Instance);
-
-        var diskImage = await client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "site-1234",
-                Labels = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["aspire-resource"] = "site-container"
-                },
-                Source = new AzureDevComputeDiskImageSource
-                {
-                    ImageUrl = "example.azurecr.io/site:tag",
-                    ManagedIdentityClientId = "11111111-1111-1111-1111-111111111111"
-                }
-            },
-            CancellationToken.None);
-
-        Assert.Equal("disk-1", diskImage.Id);
-        Assert.Equal([AzureDevComputeClient.AuthorizationScope], credential.Scopes);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientOmitsManagedIdentityForPublicImage()
-    {
-        var handler = new RecordingHandler(async request =>
-        {
-            var body = await request.Content!.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(body);
-            var source = document.RootElement.GetProperty("source");
-            Assert.Equal("docker.io/library/nginx@sha256:abc123", source.GetProperty("imageUrl").GetString());
-            Assert.False(source.TryGetProperty("managedIdentityClientId", out _));
-
-            return JsonResponse(
-                """
-                {
-                  "id": "disk-1",
-                  "labels": {},
-                  "image": { "base": "docker.io/library/nginx@sha256:abc123" },
-                  "status": { "state": "Ready", "createdAt": "2026-06-03T00:00:00Z", "updatedAt": "2026-06-03T00:00:00Z" }
-                }
-                """);
-        });
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            NullLogger.Instance);
-
-        await client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Source = new AzureDevComputeDiskImageSource
-                {
-                    ImageUrl = "docker.io/library/nginx@sha256:abc123"
-                }
-            },
-            CancellationToken.None);
-    }
-
-    [Fact]
     public async Task SandboxImagePullIdentityIsOnlyUsedForConfiguredAcr()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         sandboxGroup.Resource.ContainerRegistry!.Outputs["loginServer"] = "example.azurecr.io";
-        sandboxGroup.Resource.Outputs[AzureSandboxGroupResource.ImagePullIdentityClientIdOutputName] =
-            "11111111-1111-1111-1111-111111111111";
+        sandboxGroup.Resource.Outputs[AzureSandboxGroupResource.ImagePullIdentityIdOutputName] = PullIdentityResourceId;
 
-        var acrIdentity = await AzureSandboxContainerDeployment.ResolveImagePullManagedIdentityClientIdAsync(
+        var acrIdentity = await AzureSandboxContainerDeployment.ResolveImagePullIdentityResourceIdAsync(
             sandboxGroup.Resource,
             "example.azurecr.io/site@sha256:abc123",
             CancellationToken.None);
-        var publicIdentity = await AzureSandboxContainerDeployment.ResolveImagePullManagedIdentityClientIdAsync(
+        var publicIdentity = await AzureSandboxContainerDeployment.ResolveImagePullIdentityResourceIdAsync(
             sandboxGroup.Resource,
             "docker.io/library/nginx@sha256:def456",
             CancellationToken.None);
 
-        Assert.Equal("11111111-1111-1111-1111-111111111111", acrIdentity);
+        Assert.Equal(PullIdentityResourceId, acrIdentity);
         Assert.Null(publicIdentity);
     }
 
     [Fact]
-    public async Task AzureDevComputeClientListsSandboxResourcesWithLabelSelector()
+    public async Task SandboxGroupClientUsesRegionalEndpointAndManagementScope()
     {
-        var requestCount = 0;
-        var handler = new RecordingHandler(request =>
-        {
-            requestCount++;
-            Assert.Equal(HttpMethod.Get, request.Method);
-            Assert.Equal("management.westus3.azuredevcompute.io", request.RequestUri?.Host);
-            Assert.Contains("Page=1", request.RequestUri?.Query, StringComparison.Ordinal);
-            Assert.Contains("PageSize=100", request.RequestUri?.Query, StringComparison.Ordinal);
-            Assert.Contains("labels=aspire-resource%3Dsite-container", request.RequestUri?.Query, StringComparison.Ordinal);
-            Assert.Contains("api-version=2026-02-01-preview", request.RequestUri?.Query, StringComparison.Ordinal);
-
-            if (request.RequestUri?.AbsolutePath.EndsWith("/sandboxes", StringComparison.Ordinal) == true)
+        var credential = new RecordingTokenCredential();
+        var client = CreateSandboxClient(
+            request =>
             {
-                return Task.FromResult(JsonResponse(
-                    """
-                    [
-                      {
-                        "id": "sandbox-1",
-                        "labels": { "aspire-resource": "site-container" },
-                        "ports": []
-                      }
-                    ]
-                    """));
-            }
+                Assert.Equal(HttpMethod.Get, request.Method);
+                Assert.Equal("management.westus3.azuredevcompute.io", request.RequestUri?.Host);
+                Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages/disk-1", request.RequestUri?.AbsolutePath);
+                Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
+                Assert.Equal("test-token", request.Headers.Authorization?.Parameter);
+                return Task.FromResult(JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Ready" } }"""));
+            },
+            credential);
 
-            Assert.EndsWith("/diskimages", request.RequestUri?.AbsolutePath);
-            return Task.FromResult(JsonResponse(
-                """
-                [
-                  {
-                    "id": "disk-1",
-                    "labels": { "aspire-resource": "site-container" },
-                    "status": { "state": "Ready" }
-                  }
-                ]
-                """));
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-        var scope = new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3");
+        var diskImage = (await client.GetDiskImageResource("disk-1").GetAsync()).Value;
 
-        var sandboxes = await client.ListSandboxesAsync(scope, "aspire-resource=site-container", CancellationToken.None);
-        var diskImages = await client.ListDiskImagesAsync(scope, "aspire-resource=site-container", CancellationToken.None);
-
-        Assert.Equal("sandbox-1", Assert.Single(sandboxes).Id);
-        Assert.Equal("disk-1", Assert.Single(diskImages).Id);
-        Assert.Equal(2, requestCount);
+        Assert.Equal("disk-1", diskImage.Id);
+        Assert.Equal(["https://management.azuredevcompute.io/.default"], credential.Scopes);
     }
 
     [Fact]
-    public async Task AzureDevComputeClientPaginatesSandboxResources()
+    public async Task SandboxDiskImageUsesUserAssignedIdentityForConfiguredAcr()
     {
-        var requestedPages = new List<int>();
-        var handler = new RecordingHandler(request =>
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        sandboxGroup.Resource.ContainerRegistry!.Outputs["loginServer"] = "example.azurecr.io";
+        sandboxGroup.Resource.Outputs[AzureSandboxGroupResource.ImagePullIdentityIdOutputName] = PullIdentityResourceId;
+        var sandboxContainer = new AzureSandboxContainerResource(
+            "frontend-sandbox-container",
+            builder.AddContainer("frontend", "example/image").Resource,
+            sandboxGroup.Resource);
+        using var app = builder.Build();
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = CreateStepContext(app, reportingStep);
+
+        var requests = new List<JsonDocument>();
+        var client = CreateSandboxClient(async request =>
         {
-            var page = request.RequestUri!.Query.Contains("Page=1", StringComparison.Ordinal) ? 1 : 2;
-            requestedPages.Add(page);
-
-            var count = page == 1 ? 100 : 1;
-            var response = Enumerable.Range(0, count)
-                .Select(index => new
-                {
-                    id = $"sandbox-{page}-{index}",
-                    labels = new Dictionary<string, string>(),
-                    ports = Array.Empty<object>()
-                });
-            return Task.FromResult(JsonResponse(JsonSerializer.Serialize(response)));
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/diskimages", request.RequestUri?.AbsolutePath);
+            requests.Add(JsonDocument.Parse(await request.Content!.ReadAsStringAsync()));
+            return JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Creating" } }""", HttpStatusCode.Created);
         });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
 
-        var sandboxes = await client.ListSandboxesAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            labels: null,
-            CancellationToken.None);
+        var acrDiskImage = await AzureSandboxContainerDeployment.CreateDiskImageAsync(
+            stepContext,
+            client,
+            sandboxContainer,
+            "example.azurecr.io/site@sha256:abc123",
+            "site-1234",
+            "owner-1",
+            "deploy-1");
+        await AzureSandboxContainerDeployment.CreateDiskImageAsync(
+            stepContext,
+            client,
+            sandboxContainer,
+            "docker.io/library/nginx@sha256:def456",
+            "nginx-1234",
+            "owner-1",
+            "deploy-1");
 
-        Assert.Equal(101, sandboxes.Count);
-        Assert.Equal([1, 2], requestedPages);
+        Assert.Equal("disk-1", acrDiskImage.Id);
+        Assert.Equal(2, requests.Count);
+
+        var acrRequest = requests[0].RootElement;
+        Assert.Equal("site-1234", acrRequest.GetProperty("name").GetString());
+        Assert.Equal("owner-1", acrRequest.GetProperty("labels").GetProperty("aspire-owner").GetString());
+        Assert.Equal("frontend-sandbox-container", acrRequest.GetProperty("labels").GetProperty("aspire-resource").GetString());
+        Assert.Equal("frontend", acrRequest.GetProperty("labels").GetProperty("aspire-source").GetString());
+        Assert.Equal("deploy-1", acrRequest.GetProperty("labels").GetProperty("aspire-deploy").GetString());
+        var acrSource = acrRequest.GetProperty("source");
+        Assert.Equal("registry", acrSource.GetProperty("kind").GetString());
+        Assert.Equal("example.azurecr.io/site@sha256:abc123", acrSource.GetProperty("imageUrl").GetString());
+        var identity = acrSource.GetProperty("authentication").GetProperty("identity");
+        Assert.Equal("UserAssigned", identity.GetProperty("type").GetString());
+        Assert.Equal(PullIdentityResourceId, identity.GetProperty("identityResourceId").GetString());
+
+        // The service rejects registry authentication for public registries.
+        var publicSource = requests[1].RootElement.GetProperty("source");
+        Assert.Equal("docker.io/library/nginx@sha256:def456", publicSource.GetProperty("imageUrl").GetString());
+        Assert.False(publicSource.TryGetProperty("authentication", out _));
+    }
+
+    [Fact]
+    public async Task SandboxCreateRequestIncludesContainerMetadataEgressAndIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
+            .PublishAsAzureSandbox(new AzureSandboxOptions { Tier = AzureSandboxTier.Large });
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
+        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(
+            computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = CreateStepContext(app, reportingStep);
+
+        JsonDocument? requestBody = null;
+        var client = CreateSandboxClient(async request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes", request.RequestUri?.AbsolutePath);
+            requestBody = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            return JsonResponse("""{ "id": "sandbox-1", "labels": {}, "ports": [] }""", HttpStatusCode.Created);
+        });
+
+        var sandbox = await AzureSandboxContainerDeployment.CreateSandboxAsync(
+            stepContext,
+            client,
+            sandboxContainer,
+            "disk-1",
+            new Dictionary<string, string> { ["ASPNETCORE_URLS"] = "http://+:5000" },
+            new AzureSandboxContainerDeployment.ContainerImageMetadata(
+                ["dotnet", "/app/app.dll"],
+                ["--urls"],
+                new Dictionary<string, string>(),
+                new HashSet<string>()),
+            [new IdentitySetting(PullIdentityResourceId) { Lifecycle = IdentitySettingLifecycle.All }],
+            AzureSandboxContainerDeployment.CreateEgressPolicy(["api.example.test"]),
+            "owner-1",
+            "deploy-1");
+
+        Assert.Equal("sandbox-1", sandbox.Id);
+        Assert.NotNull(requestBody);
+        var root = requestBody.RootElement;
+        Assert.Equal("disk-1", root.GetProperty("sourcesRef").GetProperty("diskImage").GetProperty("id").GetString());
+        Assert.False(root.GetProperty("sourcesRef").GetProperty("diskImage").GetProperty("isPublic").GetBoolean());
+        Assert.Equal("2000m", root.GetProperty("resources").GetProperty("cpu").GetString());
+        Assert.Equal("4096Mi", root.GetProperty("resources").GetProperty("memory").GetString());
+        Assert.Equal("40960Mi", root.GetProperty("resources").GetProperty("disk").GetString());
+        Assert.Equal(["dotnet", "/app/app.dll"], root.GetProperty("entrypoint").EnumerateArray().Select(static item => item.GetString()).ToArray());
+        Assert.Equal(["--urls"], root.GetProperty("cmd").EnumerateArray().Select(static item => item.GetString()).ToArray());
+        Assert.Equal("http://+:5000", root.GetProperty("environment").GetProperty("ASPNETCORE_URLS").GetString());
+        Assert.Equal("owner-1", root.GetProperty("labels").GetProperty("aspire-owner").GetString());
+        var identitySetting = Assert.Single(root.GetProperty("identitySettings").EnumerateArray());
+        Assert.Equal(PullIdentityResourceId, identitySetting.GetProperty("identity").GetString());
+        Assert.Equal("All", identitySetting.GetProperty("lifecycle").GetString());
+        var egress = root.GetProperty("egressPolicy");
+        Assert.Equal("Deny", egress.GetProperty("defaultAction").GetString());
+        Assert.Equal("Full", egress.GetProperty("trafficInspection").GetString());
+        var hostRule = Assert.Single(egress.GetProperty("hostRules").EnumerateArray());
+        Assert.Equal("api.example.test", hostRule.GetProperty("pattern").GetString());
+        Assert.Equal("Allow", hostRule.GetProperty("action").GetString());
+    }
+
+    [Fact]
+    public async Task SandboxCreateRejectsResponsesWithoutResourceIds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        sandboxGroup.Resource.ContainerRegistry!.Outputs["loginServer"] = "example.azurecr.io";
+        var sandboxContainer = new AzureSandboxContainerResource(
+            "frontend-sandbox-container",
+            builder.AddContainer("frontend", "example/image").Resource,
+            sandboxGroup.Resource);
+        using var app = builder.Build();
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = CreateStepContext(app, reportingStep);
+        var client = CreateSandboxClient(_ => Task.FromResult(JsonResponse("""{ "labels": {} }""", HttpStatusCode.Created)));
+
+        var exception = await Assert.ThrowsAsync<SandboxCreateResponseException>(() =>
+            AzureSandboxContainerDeployment.CreateDiskImageAsync(
+                stepContext,
+                client,
+                sandboxContainer,
+                "docker.io/library/nginx@sha256:def456",
+                "nginx-1234",
+                "owner-1",
+                "deploy-1"));
+
+        Assert.True(SandboxGroupClientFactory.MayHaveCreatedResource(exception));
+    }
+
+    [Fact]
+    public async Task SandboxClientRetriesForbiddenResponses()
+    {
+        var attempts = 0;
+        var client = CreateSandboxClient(_ =>
+        {
+            attempts++;
+            return Task.FromResult(attempts == 1
+                ? new HttpResponseMessage(HttpStatusCode.Forbidden)
+                : JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Ready" } }"""));
+        });
+
+        var diskImage = (await client.GetDiskImageResource("disk-1").GetAsync()).Value;
+
+        Assert.Equal("disk-1", diskImage.Id);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public async Task SandboxClientBoundsForbiddenRetries()
+    {
+        var attempts = 0;
+        var client = CreateSandboxClient(_ =>
+        {
+            attempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+        });
+
+        var exception = await Assert.ThrowsAsync<RequestFailedException>(() => client.GetDiskImageResource("disk-1").GetAsync());
+
+        Assert.Equal((int)HttpStatusCode.Forbidden, exception.Status);
+        Assert.Equal(21, attempts);
+    }
+
+    [Fact]
+    public async Task SandboxClientRetriesThrottledAndServerResponsesForReads()
+    {
+        var statuses = new Queue<HttpStatusCode>(
+        [
+            HttpStatusCode.TooManyRequests,
+            HttpStatusCode.ServiceUnavailable,
+            HttpStatusCode.OK
+        ]);
+        var client = CreateSandboxClient(_ =>
+        {
+            var status = statuses.Dequeue();
+            return Task.FromResult(status == HttpStatusCode.OK
+                ? JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Ready" } }""")
+                : new HttpResponseMessage(status));
+        });
+
+        var diskImage = (await client.GetDiskImageResource("disk-1").GetAsync()).Value;
+
+        Assert.Equal("disk-1", diskImage.Id);
+        Assert.Empty(statuses);
+    }
+
+    [Fact]
+    public async Task SandboxClientRetriesTransientNetworkErrorsForReads()
+    {
+        var attempts = 0;
+        var client = CreateSandboxClient(_ =>
+        {
+            attempts++;
+            return attempts == 1
+                ? Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset"))
+                : Task.FromResult(JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Ready" } }"""));
+        });
+
+        var diskImage = (await client.GetDiskImageResource("disk-1").GetAsync()).Value;
+
+        Assert.Equal("disk-1", diskImage.Id);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
+    public async Task SandboxClientDoesNotRetryAmbiguousCreateNetworkErrors()
+    {
+        var attempts = 0;
+        var client = CreateSandboxClient(_ =>
+        {
+            attempts++;
+            return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset"));
+        });
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => client.CreateDiskImageAsync(CreateDiskImageContent()));
+
+        Assert.Equal(1, attempts);
+        Assert.True(SandboxGroupClientFactory.MayHaveCreatedResource(exception));
+    }
+
+    [Fact]
+    public async Task SandboxClientDoesNotRetryAmbiguousCreateServerErrors()
+    {
+        var attempts = 0;
+        var client = CreateSandboxClient(_ =>
+        {
+            attempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadGateway));
+        });
+
+        var exception = await Assert.ThrowsAsync<RequestFailedException>(() => client.CreateDiskImageAsync(CreateDiskImageContent()));
+
+        Assert.Equal(1, attempts);
+        Assert.True(SandboxGroupClientFactory.MayHaveCreatedResource(exception));
+    }
+
+    [Fact]
+    public async Task SandboxClientMarksRejectedCreateResponsesAsDefinite()
+    {
+        var attempts = 0;
+        var client = CreateSandboxClient(_ =>
+        {
+            attempts++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest));
+        });
+
+        var exception = await Assert.ThrowsAsync<RequestFailedException>(() => client.CreateDiskImageAsync(CreateDiskImageContent()));
+
+        Assert.Equal(1, attempts);
+        Assert.False(SandboxGroupClientFactory.MayHaveCreatedResource(exception));
+    }
+
+    [Fact]
+    public async Task SandboxClientMarksMalformedCreateResponsesAsAmbiguous()
+    {
+        var client = CreateSandboxClient(_ => Task.FromResult(JsonResponse("{ not-json", HttpStatusCode.Created)));
+
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() => client.CreateDiskImageAsync(CreateDiskImageContent()));
+
+        Assert.True(SandboxGroupClientFactory.MayHaveCreatedResource(exception));
+    }
+
+    [Fact]
+    public void SandboxCreateFailuresThatAreNotHttpFailuresAreDefinite()
+    {
+        Assert.False(SandboxGroupClientFactory.MayHaveCreatedResource(new InvalidOperationException("missing output")));
+        Assert.True(SandboxGroupClientFactory.MayHaveCreatedResource(new OperationCanceledException()));
+    }
+
+    [Fact]
+    public async Task SandboxClientDoesNotExposeErrorBodies()
+    {
+        const string secret = "resolved-secret-environment-value";
+        var client = CreateSandboxClient(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = JsonContent.Create(new
+            {
+                title = $"Invalid value: {secret}",
+                detail = $"The request contained {secret}."
+            })
+        }));
+
+        var exception = await Assert.ThrowsAsync<RequestFailedException>(() => client.GetDiskImageResource("disk-1").GetAsync());
+
+        Assert.DoesNotContain(secret, exception.Message);
+        Assert.Equal((int)HttpStatusCode.BadRequest, exception.Status);
+    }
+
+    [Fact]
+    public async Task SandboxClientTreatsMissingDeletedResourcesAsSuccess()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        using var app = builder.Build();
+        await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
+        var stepContext = CreateStepContext(app, reportingStep);
+        var client = CreateSandboxClient(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
+        var state = new DeploymentStateSection("sandbox", new JsonObject
+        {
+            ["SandboxId"] = "sandbox-1",
+            ["DiskImageId"] = "disk-1",
+            ["Ports"] = new JsonArray(new JsonObject { ["Port"] = 8080 })
+        }, version: 0);
+
+        await AzureSandboxContainerDeployment.DeleteExistingDeploymentAsync(stepContext, client, state, throwOnError: true);
+    }
+
+    [Fact]
+    public void SandboxPortAuthDefaultsToEntraIdAndOnlyAllowsAnonymousExplicitly()
+    {
+        var secure = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: false);
+        var anonymous = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: true);
+
+        Assert.Null(secure.Anonymous);
+        Assert.True(secure.EntraId?.Enabled);
+        Assert.True(anonymous.Anonymous);
+        Assert.Null(anonymous.EntraId);
     }
 
     [Fact]
@@ -792,8 +994,12 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             excludedResourceIds));
 
         Assert.Equal(
-            "aspire-owner=owner-1,aspire-resource=frontend-sandbox-container",
-            AzureSandboxContainerDeployment.CreateLabelSelector("owner-1", "frontend-sandbox-container"));
+            new Dictionary<string, string>
+            {
+                ["aspire-owner"] = "owner-1",
+                ["aspire-resource"] = "frontend-sandbox-container"
+            },
+            AzureSandboxContainerDeployment.CreateLabelFilter("owner-1", "frontend-sandbox-container"));
     }
 
     [Fact]
@@ -846,12 +1052,12 @@ public class AzureSandboxesTests(ITestOutputHelper output)
 
         AzureSandboxContainerDeployment.ValidateDeploymentScope(
             state,
-            new AzureDevComputeResourceScope("SUB-1", "RG-1", "SANDBOXES-1", "WESTUS3"));
+            new SandboxDataPlaneScope("SUB-1", "RG-1", "SANDBOXES-1", "WESTUS3"));
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             AzureSandboxContainerDeployment.ValidateDeploymentScope(
                 state,
-                new AzureDevComputeResourceScope("sub-1", "rg-1", "sandboxes-2", "westus3")));
+                new SandboxDataPlaneScope("sub-1", "rg-1", "sandboxes-2", "westus3")));
 
         Assert.Contains("aspire destroy", exception.Message);
     }
@@ -864,7 +1070,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         firstPolyglotBuilder.Configuration["AppHost:DeploymentStatePathSha256"] = "POLYGLOT-APPHOST-PATH-ONE";
         secondPolyglotBuilder.Configuration["AppHost:DeploymentStatePathSha256"] = "POLYGLOT-APPHOST-PATH-TWO";
 
-        var scope = new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3");
+        var scope = new SandboxDataPlaneScope("sub", "rg", "sandboxes", "westus3");
         var firstAppHostIdentity = AzureSandboxContainerDeployment.GetStableAppHostIdentity(firstPolyglotBuilder.Configuration);
         var secondAppHostIdentity = AzureSandboxContainerDeployment.GetStableAppHostIdentity(secondPolyglotBuilder.Configuration);
         var owner = AzureSandboxContainerDeployment.CreateStableOwnerId(firstAppHostIdentity, "Production", scope, "frontend-sandbox-container");
@@ -874,7 +1080,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var otherScopeOwner = AzureSandboxContainerDeployment.CreateStableOwnerId(
             firstAppHostIdentity,
             "Production",
-            new AzureDevComputeResourceScope("sub", "other-rg", "sandboxes", "westus3"),
+            new SandboxDataPlaneScope("sub", "other-rg", "sandboxes", "westus3"),
             "frontend-sandbox-container");
 
         Assert.NotEqual(firstAppHostIdentity, secondAppHostIdentity);
@@ -919,7 +1125,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void SandboxLegacyOwnerMigrationUsesOnlyPersistedDeploymentIds()
     {
-        var scope = new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3");
+        var scope = new SandboxDataPlaneScope("sub", "rg", "sandboxes", "westus3");
         var legacyOwner = AzureSandboxContainerDeployment.CreateLegacyStableOwnerId(
             "apphost",
             scope,
@@ -988,10 +1194,9 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         const string imageReference = "example/image@sha256:first";
         var identitySettings = new[]
         {
-            new AzureDevComputeIdentitySetting
+            new IdentitySetting("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/app")
             {
-                Identity = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/app",
-                Lifecycle = "All"
+                Lifecycle = IdentitySettingLifecycle.All
             }
         };
         var egressPolicy = AzureSandboxContainerDeployment.CreateEgressPolicy(
@@ -1053,10 +1258,9 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             imageReference,
             endpoints,
             [
-                new AzureDevComputeIdentitySetting
+                new IdentitySetting("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/replacement")
                 {
-                    Identity = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/replacement",
-                    Lifecycle = "All"
+                    Lifecycle = IdentitySettingLifecycle.All
                 }
             ],
             egressPolicy);
@@ -1087,19 +1291,19 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
         };
-        var client = new FailingPortRemovalClient();
+        var service = new FailingPortRemovalService();
+        var client = CreateSandboxClient(service.HandleAsync);
 
-        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
             AzureSandboxContainerDeployment.DeleteSandboxAsync(
                 stepContext,
                 client,
-                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
                 "sandbox-1",
                 [8080],
                 throwOnError: true));
 
-        Assert.Equal("port removal failed", exception.Message);
-        Assert.True(client.DeleteSandboxCalled);
+        Assert.Contains("port removal failed", exception.Message);
+        Assert.True(service.DeleteSandboxCalled);
     }
 
     [Fact]
@@ -1119,7 +1323,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
         };
-        var client = new FailingPortRemovalClient();
+        var service = new FailingPortRemovalService();
+        var client = CreateSandboxClient(service.HandleAsync);
         var state = new DeploymentStateSection("sandbox", new JsonObject
         {
             ["SandboxId"] = "sandbox-1",
@@ -1127,17 +1332,16 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             ["Ports"] = new JsonArray(new JsonObject { ["Port"] = 8080 })
         }, version: 0);
 
-        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
             AzureSandboxContainerDeployment.DeleteExistingDeploymentAsync(
                 stepContext,
                 client,
-                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
                 state,
                 throwOnError: true));
 
-        Assert.Equal("port removal failed", exception.Message);
-        Assert.True(client.DeleteSandboxCalled);
-        Assert.True(client.DeleteDiskImageCalled);
+        Assert.Contains("port removal failed", exception.Message);
+        Assert.True(service.DeleteSandboxCalled);
+        Assert.True(service.DeleteDiskImageCalled);
     }
 
     [Fact]
@@ -1157,7 +1361,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
         };
-        var client = new FailingPortRemovalClient(new TaskCanceledException("request timed out"));
+        var service = new FailingPortRemovalService(new TaskCanceledException("request timed out"));
+        var client = CreateSandboxClient(service.HandleAsync);
         var state = new DeploymentStateSection("sandbox", new JsonObject
         {
             ["SandboxId"] = "sandbox-1",
@@ -1165,17 +1370,16 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             ["Ports"] = new JsonArray(new JsonObject { ["Port"] = 8080 })
         }, version: 0);
 
-        var exception = await Assert.ThrowsAsync<TaskCanceledException>(() =>
+        var exception = await Assert.ThrowsAnyAsync<Exception>(() =>
             AzureSandboxContainerDeployment.DeleteExistingDeploymentAsync(
                 stepContext,
                 client,
-                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
                 state,
                 throwOnError: true));
 
-        Assert.Equal("request timed out", exception.Message);
-        Assert.True(client.DeleteSandboxCalled);
-        Assert.True(client.DeleteDiskImageCalled);
+        Assert.Contains("request timed out", exception.Message);
+        Assert.True(service.DeleteSandboxCalled);
+        Assert.True(service.DeleteDiskImageCalled);
     }
 
     [Fact]
@@ -1227,31 +1431,26 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             ReportingStep = reportingStep
         };
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<RequestFailedException>(() =>
             AzureSandboxContainerDeployment.DestroyAsync(stepContext, sandboxResource));
 
-        Assert.Contains("ADC request", exception.Message);
-        Assert.Contains("HTTP 400", exception.Message);
+        Assert.Equal((int)HttpStatusCode.BadRequest, exception.Status);
         Assert.NotNull(requestUri);
         Assert.Contains("/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/existing-rg/", requestUri?.AbsolutePath);
         Assert.Contains("/sandboxGroups/existing-group/", requestUri?.AbsolutePath);
     }
 
     [Fact]
-    public void SandboxDiskImageFailureRedactsServiceStatusDetails()
+    public async Task SandboxDiskImageFailureRedactsServiceStatusDetails()
     {
         const string secret = "short-lived-acr-refresh-token";
-        var exception = AzureSandboxContainerDeployment.CreateDiskImageFailureException(
-            new AzureDevComputeDiskImage
-            {
-                Id = "disk-1",
-                Status = new AzureDevComputeDiskImageStatus
-                {
-                    State = "Failed",
-                    ErrorMessage = $"Authentication failed using {secret}"
-                }
-            });
+        var client = CreateSandboxClient(_ => Task.FromResult(JsonResponse(
+            $$"""{ "id": "disk-1", "labels": {}, "status": { "state": "Error", "errorMessage": "Authentication failed using {{secret}}" } }""")));
+        var diskImage = (await client.GetDiskImageResource("disk-1").GetAsync()).Value;
 
+        var exception = AzureSandboxContainerDeployment.CreateDiskImageFailureException(diskImage);
+
+        Assert.Contains("terminal state: 'Error'", exception.Message);
         Assert.DoesNotContain(secret, exception.Message);
         Assert.Contains("Service-provided error details were redacted", exception.Message);
     }
@@ -1273,12 +1472,12 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             PipelineContext = pipelineContext,
             ReportingStep = reportingStep
         };
-        var client = new FailingPruneClient();
+        var service = new FailingPruneService();
+        var client = CreateSandboxClient(service.HandleAsync);
 
         await AzureSandboxContainerDeployment.DeleteRemoteDeploymentsByResourceLabelAsync(
             stepContext,
             client,
-            new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
             "owner",
             "frontend-sandbox-container",
             new HashSet<string>(),
@@ -1286,456 +1485,35 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             new HashSet<string>(),
             throwOnError: false);
 
-        Assert.True(client.DeleteSandboxCalled);
+        Assert.Equal("aspire-owner=owner,aspire-resource=frontend-sandbox-container", service.LabelFilter);
+        Assert.True(service.DeleteSandboxCalled);
     }
 
     [Fact]
     public async Task SandboxDiskImageCreateResponseLossReconcilesLabeledDiskImage()
     {
-        var client = await RunCreateResponseLossAsync(includeSandbox: false);
+        var service = await RunCreateResponseLossAsync(includeSandbox: false);
 
-        Assert.False(client.DeleteSandboxCalled);
-        Assert.True(client.DeleteDiskImageCalled);
+        Assert.False(service.DeleteSandboxCalled);
+        Assert.True(service.DeleteDiskImageCalled);
     }
 
     [Fact]
     public async Task SandboxCreateResponseLossReconcilesLabeledResources()
     {
-        var client = await RunCreateResponseLossAsync(includeSandbox: true);
+        var service = await RunCreateResponseLossAsync(includeSandbox: true);
 
-        Assert.True(client.DeleteSandboxCalled);
-        Assert.True(client.DeleteDiskImageCalled);
+        Assert.True(service.DeleteSandboxCalled);
+        Assert.True(service.DeleteDiskImageCalled);
     }
 
     [Fact]
     public async Task SandboxCreateResponseLossWaitsForDelayedResourceVisibility()
     {
-        var client = await RunCreateResponseLossAsync(includeSandbox: true, emptyPollsBeforeVisible: 4);
+        var service = await RunCreateResponseLossAsync(includeSandbox: true, emptyPollsBeforeVisible: 4);
 
-        Assert.True(client.DeleteSandboxCalled);
-        Assert.True(client.DeleteDiskImageCalled);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientRetriesForbiddenResponses()
-    {
-        var attempts = 0;
-        var credential = new RecordingTokenCredential();
-        var handler = new RecordingHandler(_ =>
-        {
-            attempts++;
-            if (attempts == 1)
-            {
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
-            }
-
-            return Task.FromResult(JsonResponse(
-                """
-                {
-                  "id": "disk-1",
-                  "labels": {},
-                  "status": { "state": "Ready" }
-                }
-                """));
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), credential, NullLogger.Instance, TimeSpan.Zero);
-
-        var diskImage = await client.GetDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "disk-1",
-            CancellationToken.None);
-
-        Assert.Equal("disk-1", diskImage.Id);
-        Assert.Equal(2, attempts);
-        Assert.Equal(2, credential.RequestCount);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientBoundsForbiddenRetriesAndExplainsRequiredRole()
-    {
-        var attempts = 0;
-        var handler = new RecordingHandler(_ =>
-        {
-            attempts++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
-        });
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            NullLogger.Instance,
-            TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "disk-1",
-            CancellationToken.None));
-
-        Assert.Equal(21, attempts);
-        Assert.Contains("Container Apps SandboxGroup Data Owner", exception.Message);
-    }
-
-    [Fact]
-    public void AzureDevComputeClientCapsRetryAfterDelays()
-    {
-        var now = DateTimeOffset.Parse("2026-08-05T20:00:00Z");
-        using var secondsResponse = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
-        secondsResponse.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromHours(1));
-        using var dateResponse = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
-        dateResponse.Headers.RetryAfter = new RetryConditionHeaderValue(now.AddDays(1));
-
-        Assert.Equal(
-            TimeSpan.FromSeconds(30),
-            AzureDevComputeClient.GetRetryDelay(secondsResponse, TimeSpan.FromSeconds(5), now));
-        Assert.Equal(
-            TimeSpan.FromSeconds(30),
-            AzureDevComputeClient.GetRetryDelay(dateResponse, TimeSpan.FromSeconds(5), now));
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientRetriesThrottledAndServerResponses()
-    {
-        var statuses = new Queue<HttpStatusCode>(
-        [
-            HttpStatusCode.TooManyRequests,
-            HttpStatusCode.ServiceUnavailable,
-            HttpStatusCode.OK
-        ]);
-        var handler = new RecordingHandler(_ =>
-        {
-            var status = statuses.Dequeue();
-            if (status == HttpStatusCode.OK)
-            {
-                return Task.FromResult(JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Ready" } }"""));
-            }
-
-            var response = new HttpResponseMessage(status);
-            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.Zero);
-            return Task.FromResult(response);
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
-
-        var diskImage = await client.GetDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "disk-1",
-            CancellationToken.None);
-
-        Assert.Equal("disk-1", diskImage.Id);
-        Assert.Empty(statuses);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientRetriesTransientNetworkErrors()
-    {
-        var attempts = 0;
-        var handler = new RecordingHandler(_ =>
-        {
-            attempts++;
-            return attempts == 1
-                ? Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset"))
-                : Task.FromResult(JsonResponse("""{ "id": "disk-1", "labels": {}, "status": { "state": "Ready" } }"""));
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
-
-        var diskImage = await client.GetDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "disk-1",
-            CancellationToken.None);
-
-        Assert.Equal("disk-1", diskImage.Id);
-        Assert.Equal(2, attempts);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientDoesNotRetryAmbiguousCreateNetworkErrors()
-    {
-        var attempts = 0;
-        var handler = new RecordingHandler(_ =>
-        {
-            attempts++;
-            return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset"));
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.Equal(1, attempts);
-        Assert.True(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<HttpRequestException>(exception.OriginalException);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientDoesNotRetryAmbiguousCreateServerErrors()
-    {
-        var attempts = 0;
-        var handler = new RecordingHandler(_ =>
-        {
-            attempts++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance, TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.Equal(1, attempts);
-        Assert.True(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<InvalidOperationException>(exception.OriginalException);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientMarksMalformedCreateResponsesAsAmbiguous()
-    {
-        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse("{")));
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            NullLogger.Instance,
-            TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.True(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<JsonException>(exception.OriginalException);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientMarksEmptyCreateResponsesAsAmbiguous()
-    {
-        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse("null")));
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            NullLogger.Instance,
-            TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.True(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<InvalidOperationException>(exception.OriginalException);
-    }
-
-    [Theory]
-    [InlineData("""{ "id": "", "labels": {}, "status": { "state": "Ready" } }""")]
-    [InlineData("""{ "id": "disk-1", "labels": {}, "status": null }""")]
-    [InlineData("""{ "id": "disk-1", "labels": {}, "status": { "state": "" } }""")]
-    public async Task AzureDevComputeClientMarksIncompleteCreateResponsesAsAmbiguous(string responseBody)
-    {
-        var handler = new RecordingHandler(_ => Task.FromResult(JsonResponse(responseBody)));
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            NullLogger.Instance,
-            TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.True(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<InvalidOperationException>(exception.OriginalException);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientMarksTruncatedCreateResponseStreamsAsAmbiguous()
-    {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Created)
-        {
-            Content = new StreamContent(new FailingReadStream())
-        }));
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            NullLogger.Instance,
-            TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.True(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<HttpRequestException>(exception.OriginalException);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientMarksRejectedCreateResponsesAsDefinite()
-    {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)));
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            NullLogger.Instance,
-            TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.False(exception.ResponseMayHaveBeenLost);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientKeepsCancellationAfterRejectedCreateDefinite()
-    {
-        var requestCount = 0;
-        var handler = new RecordingHandler(_ =>
-        {
-            Interlocked.Increment(ref requestCount);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
-        });
-        // Cancel when the client logs the 403 retry warning, after the rejection has been received and
-        // before the retry delay starts. A wall-clock timeout could fire while the request is still in flight.
-        using var cancellationTokenSource = new CancellationTokenSource();
-        var sink = new TestSink();
-        sink.MessageLogged += context =>
-        {
-            if (context.LogLevel == LogLevel.Warning)
-            {
-                cancellationTokenSource.Cancel();
-            }
-        };
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new RecordingTokenCredential(),
-            new TestLogger(nameof(AzureDevComputeClient), sink, enabled: true),
-            TimeSpan.FromMinutes(1));
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            cancellationTokenSource.Token));
-
-        Assert.Equal(1, requestCount);
-        Assert.False(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<TaskCanceledException>(exception.OriginalException);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientMarksCancellationBeforeCreateDispatchAsDefinite()
-    {
-        var handler = new RecordingHandler(_ => throw new InvalidOperationException("The HTTP request should not be sent."));
-        var client = new AzureDevComputeClient(
-            new HttpClient(handler),
-            new CanceledTokenCredential(),
-            NullLogger.Instance,
-            TimeSpan.Zero);
-
-        var exception = await Assert.ThrowsAsync<AzureDevComputeCreateException>(() => client.CreateDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeCreateDiskImageRequest
-            {
-                Name = "disk-image",
-                Source = CreateDiskImageSource()
-            },
-            CancellationToken.None));
-
-        Assert.False(exception.ResponseMayHaveBeenLost);
-        Assert.IsType<OperationCanceledException>(exception.OriginalException);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientTreatsMissingDeletedResourcesAsSuccess()
-    {
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-        var scope = new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3");
-
-        await client.DeleteSandboxAsync(scope, "sandbox-1", CancellationToken.None);
-        await client.DeleteDiskImageAsync(scope, "disk-1", CancellationToken.None);
-        var ports = await client.RemovePortAsync(
-            scope,
-            "sandbox-1",
-            new AzureDevComputeRemovePortRequest { Port = 8080 },
-            CancellationToken.None);
-
-        Assert.Empty(ports);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientDoesNotExposeErrorBodies()
-    {
-        const string secret = "registry-refresh-token-secret";
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
-        {
-            Content = new StringContent(secret, Encoding.UTF8, "text/plain")
-        }));
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "disk-1",
-            CancellationToken.None));
-
-        Assert.DoesNotContain(secret, exception.Message);
-        Assert.Contains("details were redacted", exception.Message);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientRedactsProblemDetailsThatEchoSecrets()
-    {
-        const string secret = "resolved-secret-environment-value";
-        var handler = new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
-        {
-            Content = JsonContent.Create(new
-            {
-                title = $"Invalid value: {secret}",
-                detail = $"The request contained {secret}."
-            })
-        }));
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetDiskImageAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "disk-1",
-            CancellationToken.None));
-
-        Assert.DoesNotContain(secret, exception.Message);
-        Assert.Contains("details were redacted", exception.Message);
+        Assert.True(service.DeleteSandboxCalled);
+        Assert.True(service.DeleteDiskImageCalled);
     }
 
     [Fact]
@@ -1758,278 +1536,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal(
             "example.azurecr.io/site@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             reference);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientCreatesSandboxWithContainerMetadata()
-    {
-        var handler = new RecordingHandler(async request =>
-        {
-            Assert.Equal(HttpMethod.Put, request.Method);
-            Assert.Equal("management.westus3.azuredevcompute.io", request.RequestUri?.Host);
-            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes", request.RequestUri?.AbsolutePath);
-            Assert.Equal("?api-version=2026-02-01-preview", request.RequestUri?.Query);
-
-            var body = await request.Content!.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            Assert.Equal("disk-1", root.GetProperty("sourcesRef").GetProperty("diskImage").GetProperty("id").GetString());
-            Assert.False(root.GetProperty("sourcesRef").GetProperty("diskImage").GetProperty("isPublic").GetBoolean());
-            Assert.Equal("2000m", root.GetProperty("resources").GetProperty("cpu").GetString());
-            Assert.Equal("4096Mi", root.GetProperty("resources").GetProperty("memory").GetString());
-            Assert.Equal("32768Mi", root.GetProperty("resources").GetProperty("disk").GetString());
-            Assert.Equal("dotnet", root.GetProperty("entrypoint")[0].GetString());
-            Assert.Equal("/app/app.dll", root.GetProperty("entrypoint")[1].GetString());
-            Assert.Equal("--urls", root.GetProperty("cmd")[0].GetString());
-            Assert.Equal("/app", root.GetProperty("workingDirectory").GetString());
-            Assert.Equal("http://+:5000", root.GetProperty("environment").GetProperty("ASPNETCORE_URLS").GetString());
-            return JsonResponse(
-                """
-                {
-                  "id": "sandbox-1",
-                  "vmmType": "cloudhypervisor",
-                  "sourcesRef": { "diskImage": { "id": "disk-1", "isPublic": false } },
-                  "resources": { "cpu": "1000m", "memory": "2048Mi", "disk": "20480Mi" },
-                  "ports": []
-                }
-                """,
-                HttpStatusCode.Created);
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-
-        var sandbox = await client.CreateSandboxAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            new AzureDevComputeSandboxRequest
-            {
-                Labels = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["aspire-resource"] = "site-container"
-                },
-                Entrypoint = ["dotnet", "/app/app.dll"],
-                Cmd = ["--urls"],
-                WorkingDirectory = "/app",
-                Environment = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["ASPNETCORE_URLS"] = "http://+:5000"
-                },
-                SourcesRef = new AzureDevComputeSandboxSource
-                {
-                    DiskImage = new AzureDevComputeSandboxDiskImageSource
-                    {
-                        Id = "disk-1",
-                        IsPublic = false
-                    }
-                },
-                Resources = new AzureDevComputeSandboxResources
-                {
-                    Cpu = "2000m",
-                    Memory = "4096Mi",
-                    Disk = "32768Mi"
-                }
-            },
-            CancellationToken.None);
-
-        Assert.Equal("sandbox-1", sandbox.Id);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientSetsLifecycleWithAutoDelete()
-    {
-        var handler = new RecordingHandler(async request =>
-        {
-            Assert.Equal(HttpMethod.Post, request.Method);
-            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes/sandbox-1/lifecycle", request.RequestUri?.AbsolutePath);
-
-            var body = await request.Content!.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            Assert.False(root.GetProperty("autoSuspendPolicy").GetProperty("enabled").GetBoolean());
-            Assert.Equal(300, root.GetProperty("autoSuspendPolicy").GetProperty("interval").GetInt32());
-            Assert.Equal("Disk", root.GetProperty("autoSuspendPolicy").GetProperty("mode").GetString());
-            Assert.True(root.GetProperty("autoDeletePolicy").GetProperty("enabled").GetBoolean());
-            Assert.Equal(3600, root.GetProperty("autoDeletePolicy").GetProperty("deleteIntervalInSeconds").GetInt64());
-            Assert.Equal("AfterSuspend", root.GetProperty("autoDeletePolicy").GetProperty("trigger").GetString());
-
-            return JsonResponse(
-                """
-                {
-                  "id": "sandbox-1",
-                  "ports": []
-                }
-                """);
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-
-        var sandbox = await client.SetLifecycleAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "sandbox-1",
-            new AzureDevComputeSandboxLifecyclePolicy
-            {
-                AutoSuspendPolicy = new AzureDevComputeSandboxAutoSuspendPolicy
-                {
-                    Enabled = false,
-                    Interval = 300,
-                    Mode = "Disk"
-                },
-                AutoDeletePolicy = new AzureDevComputeSandboxAutoDeletePolicy
-                {
-                    Enabled = true,
-                    DeleteIntervalInSeconds = 3600,
-                    Trigger = "AfterSuspend"
-                }
-            },
-            CancellationToken.None);
-
-        Assert.Equal("sandbox-1", sandbox.Id);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientAddsAnonymousPort()
-    {
-        var handler = new RecordingHandler(async request =>
-        {
-            Assert.Equal(HttpMethod.Post, request.Method);
-            Assert.Equal("management.westus3.azuredevcompute.io", request.RequestUri?.Host);
-            Assert.Equal("/subscriptions/sub/resourceGroups/rg/sandboxGroups/sg/sandboxes/sandbox-1/ports/add", request.RequestUri?.AbsolutePath);
-            Assert.Equal("?api-version=2026-02-01-preview", request.RequestUri?.Query);
-
-            var body = await request.Content!.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            Assert.Equal(80, root.GetProperty("port").GetInt32());
-            Assert.True(root.GetProperty("auth").GetProperty("anonymous").GetBoolean());
-            Assert.Equal("Http", root.GetProperty("protocol").GetString());
-
-            return JsonResponse(
-                """
-                {
-                  "ports": [
-                    { "port": 80, "url": "https://sandbox.example.test" }
-                  ]
-                }
-                """);
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-
-        var ports = await client.AddPortAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "sandbox-1",
-            new AzureDevComputeAddPortRequest
-            {
-                Port = 80,
-                Auth = new AzureDevComputePortAuthConfig { Anonymous = true },
-                Protocol = "Http"
-            },
-            CancellationToken.None);
-
-        var port = Assert.Single(ports);
-        Assert.Equal(80, port.Port);
-        Assert.Equal("https://sandbox.example.test/", port.Url.ToString());
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientAddsEntraAuthorizedPortWithoutSecrets()
-    {
-        var handler = new RecordingHandler(async request =>
-        {
-            var body = await request.Content!.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(body);
-            var root = document.RootElement;
-            Assert.Equal(5, root.EnumerateObject().Count());
-            Assert.Equal("webhook", root.GetProperty("name").GetString());
-            Assert.Equal(8080, root.GetProperty("port").GetInt32());
-            Assert.Equal("OnDemand", root.GetProperty("activationMode").GetString());
-            Assert.Equal("Http", root.GetProperty("protocol").GetString());
-
-            var auth = root.GetProperty("auth");
-            Assert.Equal(2, auth.EnumerateObject().Count());
-            Assert.False(auth.GetProperty("anonymous").GetBoolean());
-            var entraId = auth.GetProperty("entraId");
-            Assert.True(entraId.GetProperty("enabled").GetBoolean());
-            Assert.Equal(
-                ["11111111-1111-1111-1111-111111111111"],
-                entraId.GetProperty("objectIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
-            Assert.Equal(
-                ["22222222-2222-2222-2222-222222222222"],
-                entraId.GetProperty("tenantIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
-
-            return JsonResponse(
-                """
-                {
-                  "ports": [
-                    { "name": "webhook", "port": 8080, "url": "https://sandbox.example.test" }
-                  ]
-                }
-                """);
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-
-        var ports = await client.AddPortAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "sandbox-1",
-            new AzureDevComputeAddPortRequest
-            {
-                Name = "webhook",
-                Port = 8080,
-                ActivationMode = "OnDemand",
-                Auth = new AzureDevComputePortAuthConfig
-                {
-                    Anonymous = false,
-                    EntraId = new AzureDevComputePortEntraIdAuthConfig
-                    {
-                        Enabled = true,
-                        ObjectIds = ["11111111-1111-1111-1111-111111111111"],
-                        TenantIds = ["22222222-2222-2222-2222-222222222222"]
-                    }
-                },
-                Protocol = "Http"
-            },
-            CancellationToken.None);
-
-        Assert.Equal(8080, Assert.Single(ports).Port);
-    }
-
-    [Fact]
-    public async Task AzureDevComputeClientAddsDefaultEntraAuthenticatedPort()
-    {
-        var handler = new RecordingHandler(async request =>
-        {
-            Assert.Equal(HttpMethod.Post, request.Method);
-
-            var body = await request.Content!.ReadAsStringAsync();
-            using var document = JsonDocument.Parse(body);
-            var auth = document.RootElement.GetProperty("auth");
-            Assert.False(auth.TryGetProperty("anonymous", out _));
-            var entraId = auth.GetProperty("entraId");
-            Assert.True(entraId.GetProperty("enabled").GetBoolean());
-            Assert.Empty(entraId.GetProperty("objectIds").EnumerateArray());
-            Assert.Empty(entraId.GetProperty("tenantIds").EnumerateArray());
-
-            return JsonResponse(
-                """
-                {
-                  "ports": [
-                    { "port": 8080, "url": "https://sandbox.example.test" }
-                  ]
-                }
-                """);
-        });
-        var client = new AzureDevComputeClient(new HttpClient(handler), new RecordingTokenCredential(), NullLogger.Instance);
-
-        var ports = await client.AddPortAsync(
-            new AzureDevComputeResourceScope("sub", "rg", "sg", "westus3"),
-            "sandbox-1",
-            new AzureDevComputeAddPortRequest
-            {
-                Port = 8080,
-                Auth = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: false),
-                Protocol = "Http"
-            },
-            CancellationToken.None);
-
-        var port = Assert.Single(ports);
-        Assert.Equal(8080, port.Port);
-        Assert.Equal("https://sandbox.example.test/", port.Url.ToString());
     }
 
     [Fact]
@@ -2077,13 +1583,13 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.NotNull(lifecycle);
         Assert.NotNull(lifecycle.AutoSuspendPolicy);
         Assert.False(lifecycle.AutoSuspendPolicy.Enabled);
-        Assert.Equal(300, lifecycle.AutoSuspendPolicy.Interval);
-        Assert.Equal("Disk", lifecycle.AutoSuspendPolicy.Mode);
+        Assert.Equal(300, lifecycle.AutoSuspendPolicy.IntervalSeconds);
+        Assert.Equal("Disk", lifecycle.AutoSuspendPolicy.Mode?.ToString());
         Assert.NotNull(lifecycle.AutoDeletePolicy);
         Assert.True(lifecycle.AutoDeletePolicy.Enabled);
         Assert.Null(lifecycle.AutoDeletePolicy.DeleteIntervalInDays);
         Assert.Equal(3600, lifecycle.AutoDeletePolicy.DeleteIntervalInSeconds);
-        Assert.Equal("AfterSuspend", lifecycle.AutoDeletePolicy.Trigger);
+        Assert.Equal("AfterSuspend", lifecycle.AutoDeletePolicy.Trigger?.ToString());
 
         var egress = AzureSandboxContainerDeployment.CreateEgressPolicy(
         [
@@ -2095,18 +1601,18 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             "0.0.0.0",
             "::"
         ]);
-        Assert.Equal("Deny", egress.DefaultAction);
-        Assert.Equal("Full", egress.TrafficInspection);
+        Assert.Equal("Deny", egress.DefaultAction?.ToString());
+        Assert.Equal("Full", egress.TrafficInspection?.ToString());
         Assert.Collection(
             egress.HostRules,
             hostRule =>
             {
-                Assert.Equal("Allow", hostRule.Action);
+                Assert.Equal("Allow", hostRule.Action?.ToString());
                 Assert.Equal("account.blob.core.windows.net", hostRule.Pattern);
             },
             hostRule =>
             {
-                Assert.Equal("Allow", hostRule.Action);
+                Assert.Equal("Allow", hostRule.Action?.ToString());
                 Assert.Equal("api.example.test", hostRule.Pattern);
             });
 
@@ -2147,16 +1653,16 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             enabledResource.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
 
         Assert.Null(AzureSandboxContainerDeployment.CreateLifecyclePolicy(defaultSandbox));
-        var disabledPolicy = Assert.IsType<AzureDevComputeSandboxLifecyclePolicy>(
+        var disabledPolicy = Assert.IsType<SandboxLifecyclePolicy>(
             AzureSandboxContainerDeployment.CreateLifecyclePolicy(disabledSandbox));
         Assert.NotNull(disabledPolicy.AutoSuspendPolicy);
         Assert.False(disabledPolicy.AutoSuspendPolicy.Enabled);
-        var enabledPolicy = Assert.IsType<AzureDevComputeSandboxLifecyclePolicy>(
+        var enabledPolicy = Assert.IsType<SandboxLifecyclePolicy>(
             AzureSandboxContainerDeployment.CreateLifecyclePolicy(enabledSandbox));
         Assert.NotNull(enabledPolicy.AutoSuspendPolicy);
         Assert.True(enabledPolicy.AutoSuspendPolicy.Enabled);
-        Assert.Equal(300, enabledPolicy.AutoSuspendPolicy.Interval);
-        Assert.Equal("Memory", enabledPolicy.AutoSuspendPolicy.Mode);
+        Assert.Equal(300, enabledPolicy.AutoSuspendPolicy.IntervalSeconds);
+        Assert.Equal("Memory", enabledPolicy.AutoSuspendPolicy.Mode?.ToString());
     }
 
     [Fact]
@@ -2631,7 +2137,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         }
     }
 
-    private async Task<AzureDevComputeSandboxResources> CreateSandboxResourcesForTierAsync(AzureSandboxTier tier)
+    private async Task<SandboxResources> CreateSandboxResourcesForTierAsync(AzureSandboxTier tier)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
@@ -3391,16 +2897,44 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         return results;
     }
 
-    private static AzureDevComputeDiskImageSource CreateDiskImageSource()
+    private const string PullIdentityResourceId = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/pull";
+
+    private static SandboxGroupClient CreateSandboxClient(
+        Func<HttpRequestMessage, Task<HttpResponseMessage>> handler,
+        TokenCredential? credential = null)
     {
-        return new AzureDevComputeDiskImageSource
+        return SandboxGroupClientFactory.Create(
+            new SandboxDataPlaneScope("sub", "rg", "sg", "westus3"),
+            credential ?? new RecordingTokenCredential(),
+            NullLogger.Instance,
+            options =>
+            {
+                options.Transport = new HttpClientTransport(new HttpClient(new RecordingHandler(handler)));
+                options.RetryPolicy = new SandboxRetryPolicy(NullLogger.Instance, forbiddenRetryDelay: TimeSpan.Zero, retryDelay: TimeSpan.Zero);
+            });
+    }
+
+    private static CreateDiskImageContent CreateDiskImageContent() =>
+        new(new RegistryDiskImageSource("example.azurecr.io/site@sha256:abc123"));
+
+    private static PipelineStepContext CreateStepContext(
+        DistributedApplication app,
+        IReportingStep reportingStep,
+        CancellationToken cancellationToken = default)
+    {
+        return new PipelineStepContext
         {
-            ImageUrl = "example.azurecr.io/site@sha256:abc123",
-            ManagedIdentityClientId = "11111111-1111-1111-1111-111111111111"
+            PipelineContext = new PipelineContext(
+                app.Services.GetRequiredService<DistributedApplicationModel>(),
+                app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+                app.Services,
+                NullLogger.Instance,
+                cancellationToken),
+            ReportingStep = reportingStep
         };
     }
 
-    private async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(
+    private async Task<ResponseLossCleanupService> RunCreateResponseLossAsync(
         bool includeSandbox,
         int emptyPollsBeforeVisible = 0)
     {
@@ -3408,26 +2942,16 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         using var app = builder.Build();
         using var pipelineCts = new CancellationTokenSource();
         pipelineCts.Cancel();
-        var pipelineContext = new PipelineContext(
-            app.Services.GetRequiredService<DistributedApplicationModel>(),
-            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
-            app.Services,
-            NullLogger.Instance,
-            pipelineCts.Token);
         await using var reportingStep = await new NullPublishingActivityReporter().CreateStepAsync("test");
-        var stepContext = new PipelineStepContext
-        {
-            PipelineContext = pipelineContext,
-            ReportingStep = reportingStep
-        };
-        var client = new ResponseLossCleanupClient(includeSandbox, emptyPollsBeforeVisible);
+        var stepContext = CreateStepContext(app, reportingStep, pipelineCts.Token);
+        var service = new ResponseLossCleanupService(includeSandbox, emptyPollsBeforeVisible);
+        var client = CreateSandboxClient(service.HandleAsync);
 
         var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
             AzureSandboxContainerDeployment.CreateWithResponseLossCleanupAsync(
-                client.CreateResourceThenLoseResponseAsync,
+                service.CreateResourceThenLoseResponseAsync,
                 stepContext,
                 client,
-                new AzureDevComputeResourceScope("sub", "rg", "sandboxes", "westus3"),
                 "owner",
                 "frontend-sandbox-container",
                 "deploy",
@@ -3437,9 +2961,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal("create response lost", exception.Message);
         Assert.Equal(
             "aspire-owner=owner,aspire-resource=frontend-sandbox-container,aspire-deploy=deploy",
-            client.LabelSelector);
-        Assert.False(client.CleanupStartedWithCancellationRequested);
-        return client;
+            service.LabelFilter);
+        return service;
     }
 
     private sealed class TestProject : IProjectMetadata
@@ -3474,199 +2997,139 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         }
     }
 
-    private sealed class FailingPruneClient : IAzureDevComputeClient
+    private static string? GetLabelFilter(HttpRequestMessage request) =>
+        System.Web.HttpUtility.ParseQueryString(request.RequestUri!.Query)["labels"];
+
+    private sealed class FailingPruneService
     {
+        public string? LabelFilter { get; private set; }
+
         public bool DeleteSandboxCalled { get; private set; }
 
-        public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(
-            AzureDevComputeResourceScope scope,
-            string? labels,
-            CancellationToken cancellationToken)
+        public Task<HttpResponseMessage> HandleAsync(HttpRequestMessage request)
         {
-            return Task.FromResult(new List<AzureDevComputeSandbox>
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.EndsWith("/sandboxes", StringComparison.Ordinal))
             {
-                new()
-                {
-                    Id = "old-sandbox",
-                    Labels = new Dictionary<string, string>
+                LabelFilter = GetLabelFilter(request);
+                return Task.FromResult(JsonResponse(
+                    """
                     {
-                        ["aspire-owner"] = "owner",
-                        ["aspire-resource"] = "frontend-sandbox-container"
+                      "value": [
+                        {
+                          "id": "old-sandbox",
+                          "labels": { "aspire-owner": "owner", "aspire-resource": "frontend-sandbox-container" },
+                          "ports": []
+                        }
+                      ]
                     }
-                }
-            });
-        }
+                    """));
+            }
 
-        public Task DeleteSandboxAsync(
-            AzureDevComputeResourceScope scope,
-            string sandboxId,
-            CancellationToken cancellationToken)
-        {
-            DeleteSandboxCalled = true;
-            throw new HttpRequestException("connection reset");
-        }
+            if (request.Method == HttpMethod.Get && path.EndsWith("/diskimages", StringComparison.Ordinal))
+            {
+                return Task.FromResult(JsonResponse("""{ "value": [] }"""));
+            }
 
-        public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(
-            AzureDevComputeResourceScope scope,
-            string? labels,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromResult(new List<AzureDevComputeDiskImage>());
-        }
+            if (request.Method == HttpMethod.Delete && path.Contains("/sandboxes/", StringComparison.Ordinal))
+            {
+                DeleteSandboxCalled = true;
+                return Task.FromException<HttpResponseMessage>(new HttpRequestException("connection reset"));
+            }
 
-        public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task DeleteDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+            throw new NotSupportedException($"{request.Method} {path}");
+        }
     }
 
-    private sealed class ResponseLossCleanupClient(
-        bool includeSandbox,
-        int emptyPollsBeforeVisible) : IAzureDevComputeClient
+    private sealed class ResponseLossCleanupService(bool includeSandbox, int emptyPollsBeforeVisible)
     {
         private bool _resourceCreated;
         private bool _sandboxDeleted;
         private bool _diskImageDeleted;
         private int _listAttempts;
 
-        private static readonly Dictionary<string, string> s_labels = new()
-        {
-            ["aspire-owner"] = "owner",
-            ["aspire-resource"] = "frontend-sandbox-container",
-            ["aspire-deploy"] = "deploy"
-        };
+        public string? LabelFilter { get; private set; }
 
-        public string? LabelSelector { get; private set; }
         public bool DeleteSandboxCalled { get; private set; }
+
         public bool DeleteDiskImageCalled { get; private set; }
-        public bool CleanupStartedWithCancellationRequested { get; private set; }
 
         public Task<string> CreateResourceThenLoseResponseAsync()
         {
             _resourceCreated = true;
-            throw new AzureDevComputeCreateException(
-                new HttpRequestException("create response lost"),
-                responseMayHaveBeenLost: true);
+            throw new HttpRequestException("create response lost");
         }
 
-        public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(
-            AzureDevComputeResourceScope scope,
-            string? labels,
-            CancellationToken cancellationToken)
+        public Task<HttpResponseMessage> HandleAsync(HttpRequestMessage request)
         {
-            LabelSelector = labels;
-            if (_listAttempts == 0)
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.EndsWith("/sandboxes", StringComparison.Ordinal))
             {
-                CleanupStartedWithCancellationRequested = cancellationToken.IsCancellationRequested;
+                LabelFilter = GetLabelFilter(request);
+                _listAttempts++;
+                return Task.FromResult(JsonResponse(
+                    _resourceCreated && _listAttempts > emptyPollsBeforeVisible && includeSandbox && !_sandboxDeleted
+                        ? """{ "value": [ { "id": "sandbox", "labels": { "aspire-owner": "owner", "aspire-resource": "frontend-sandbox-container", "aspire-deploy": "deploy" }, "ports": [] } ] }"""
+                        : """{ "value": [] }"""));
             }
 
-            _listAttempts++;
-            return Task.FromResult(
-                _resourceCreated &&
-                _listAttempts > emptyPollsBeforeVisible &&
-                includeSandbox &&
-                !_sandboxDeleted
-                ? new List<AzureDevComputeSandbox>
-                {
-                    new()
-                    {
-                        Id = "sandbox",
-                        Labels = s_labels
-                    }
-                }
-                : []);
-        }
+            if (request.Method == HttpMethod.Get && path.EndsWith("/diskimages", StringComparison.Ordinal))
+            {
+                Assert.Equal(LabelFilter, GetLabelFilter(request));
+                return Task.FromResult(JsonResponse(
+                    _resourceCreated && _listAttempts > emptyPollsBeforeVisible && !_diskImageDeleted
+                        ? """{ "value": [ { "id": "disk-image", "labels": { "aspire-owner": "owner", "aspire-resource": "frontend-sandbox-container", "aspire-deploy": "deploy" }, "status": { "state": "Ready" } } ] }"""
+                        : """{ "value": [] }"""));
+            }
 
-        public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(
-            AzureDevComputeResourceScope scope,
-            string? labels,
-            CancellationToken cancellationToken)
-        {
-            Assert.Equal(LabelSelector, labels);
-            return Task.FromResult(
-                _resourceCreated &&
-                _listAttempts > emptyPollsBeforeVisible &&
-                !_diskImageDeleted
-                ? new List<AzureDevComputeDiskImage>
-                {
-                    new()
-                    {
-                        Id = "disk-image",
-                        Labels = s_labels,
-                        Status = new AzureDevComputeDiskImageStatus { State = "Ready" }
-                    }
-                }
-                : []);
-        }
+            if (request.Method == HttpMethod.Delete && path.Contains("/sandboxes/", StringComparison.Ordinal))
+            {
+                DeleteSandboxCalled = true;
+                _sandboxDeleted = true;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+            }
 
-        public Task DeleteSandboxAsync(
-            AzureDevComputeResourceScope scope,
-            string sandboxId,
-            CancellationToken cancellationToken)
-        {
-            DeleteSandboxCalled = true;
-            _sandboxDeleted = true;
-            return Task.CompletedTask;
-        }
+            if (request.Method == HttpMethod.Delete && path.Contains("/diskimages/", StringComparison.Ordinal))
+            {
+                DeleteDiskImageCalled = true;
+                _diskImageDeleted = true;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+            }
 
-        public Task DeleteDiskImageAsync(
-            AzureDevComputeResourceScope scope,
-            string diskImageId,
-            CancellationToken cancellationToken)
-        {
-            DeleteDiskImageCalled = true;
-            _diskImageDeleted = true;
-            return Task.CompletedTask;
+            throw new NotSupportedException($"{request.Method} {path}");
         }
-
-        public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeRemovePortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
-    private sealed class FailingPortRemovalClient(Exception? portRemovalException = null) : IAzureDevComputeClient
+    private sealed class FailingPortRemovalService(Exception? portRemovalException = null)
     {
         private readonly Exception _portRemovalException = portRemovalException ?? new HttpRequestException("port removal failed");
 
         public bool DeleteSandboxCalled { get; private set; }
+
         public bool DeleteDiskImageCalled { get; private set; }
 
-        public Task<List<AzureDevComputeSandboxPort>> RemovePortAsync(
-            AzureDevComputeResourceScope scope,
-            string sandboxId,
-            AzureDevComputeRemovePortRequest request,
-            CancellationToken cancellationToken)
+        public Task<HttpResponseMessage> HandleAsync(HttpRequestMessage request)
         {
-            return Task.FromException<List<AzureDevComputeSandboxPort>>(_portRemovalException);
-        }
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Post && path.EndsWith("/ports/remove", StringComparison.Ordinal))
+            {
+                return Task.FromException<HttpResponseMessage>(_portRemovalException);
+            }
 
-        public Task DeleteSandboxAsync(
-            AzureDevComputeResourceScope scope,
-            string sandboxId,
-            CancellationToken cancellationToken)
-        {
-            DeleteSandboxCalled = true;
-            return Task.CompletedTask;
-        }
+            if (request.Method == HttpMethod.Delete && path.Contains("/sandboxes/", StringComparison.Ordinal))
+            {
+                DeleteSandboxCalled = true;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+            }
 
-        public Task<List<AzureDevComputeSandbox>> ListSandboxesAsync(AzureDevComputeResourceScope scope, string? labels, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<List<AzureDevComputeDiskImage>> ListDiskImagesAsync(AzureDevComputeResourceScope scope, string? labels, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeDiskImage> CreateDiskImageAsync(AzureDevComputeResourceScope scope, AzureDevComputeCreateDiskImageRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeDiskImage> GetDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task DeleteDiskImageAsync(AzureDevComputeResourceScope scope, string diskImageId, CancellationToken cancellationToken)
-        {
-            DeleteDiskImageCalled = true;
-            return Task.CompletedTask;
+            if (request.Method == HttpMethod.Delete && path.Contains("/diskimages/", StringComparison.Ordinal))
+            {
+                DeleteDiskImageCalled = true;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+            }
+
+            throw new NotSupportedException($"{request.Method} {path}");
         }
-        public Task<AzureDevComputeSandbox> CreateSandboxAsync(AzureDevComputeResourceScope scope, AzureDevComputeSandboxRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<AzureDevComputeSandbox> SetLifecycleAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeSandboxLifecyclePolicy lifecycle, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task<List<AzureDevComputeSandboxPort>> AddPortAsync(AzureDevComputeResourceScope scope, string sandboxId, AzureDevComputeAddPortRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class TestDeploymentStateManager(string stateFilePath) : IDeploymentStateManager
@@ -3712,43 +3175,6 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             Scopes = [.. requestContext.Scopes];
             RequestCount++;
             return ValueTask.FromResult(new AccessToken("test-token", DateTimeOffset.UtcNow.AddHours(1)));
-        }
-    }
-
-    private sealed class CanceledTokenCredential : TokenCredential
-    {
-        public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
-        {
-            throw new OperationCanceledException();
-        }
-
-        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
-        {
-            throw new OperationCanceledException();
-        }
-    }
-
-    private sealed class FailingReadStream : MemoryStream
-    {
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            throw new IOException("response stream truncated");
-        }
-
-        public override Task<int> ReadAsync(
-            byte[] buffer,
-            int offset,
-            int count,
-            CancellationToken cancellationToken)
-        {
-            return Task.FromException<int>(new IOException("response stream truncated"));
-        }
-
-        public override ValueTask<int> ReadAsync(
-            Memory<byte> buffer,
-            CancellationToken cancellationToken = default)
-        {
-            return ValueTask.FromException<int>(new IOException("response stream truncated"));
         }
     }
 

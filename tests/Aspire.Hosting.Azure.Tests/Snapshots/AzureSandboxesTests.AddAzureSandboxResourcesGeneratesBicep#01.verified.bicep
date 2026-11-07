@@ -12,18 +12,17 @@ resource workergroup_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-1
   location: location
 }
 
-resource workergroup 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
-  name: take('workergroup-${uniqueString(resourceGroup().id)}', 63)
+resource workergroup 'Microsoft.App/sandboxGroups@2026-07-01' = {
+  name: take('workergroup-${uniqueString(resourceGroup().id)}', 24)
+  tags: {
+    'aspire-resource-name': 'workergroup'
+  }
   location: location
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${workergroup_mi.id}': { }
     }
-  }
-  properties: { }
-  tags: {
-    'aspire-resource-name': 'workergroup'
   }
 }
 
@@ -57,4 +56,4 @@ output name string = workergroup.name
 
 output location string = workergroup.location
 
-output imagePullIdentityClientId string = workergroup_mi.properties.clientId
+output imagePullIdentityId string = workergroup_mi.id

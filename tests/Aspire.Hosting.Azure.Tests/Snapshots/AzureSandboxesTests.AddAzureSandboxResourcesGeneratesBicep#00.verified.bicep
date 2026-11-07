@@ -14,8 +14,11 @@ resource hostgroup_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-
   location: location
 }
 
-resource hostgroup 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
-  name: take('hostgroup-${uniqueString(resourceGroup().id)}', 63)
+resource hostgroup 'Microsoft.App/sandboxGroups@2026-07-01' = {
+  name: take('hostgroup-${uniqueString(resourceGroup().id)}', 24)
+  tags: {
+    'aspire-resource-name': 'hostgroup'
+  }
   location: location
   identity: {
     type: 'UserAssigned'
@@ -23,10 +26,6 @@ resource hostgroup 'Microsoft.App/sandboxGroups@2026-02-01-preview' = {
       '${hostgroup_mi.id}': { }
       '${hostmi_outputs_id}': { }
     }
-  }
-  properties: { }
-  tags: {
-    'aspire-resource-name': 'hostgroup'
   }
 }
 
@@ -60,4 +59,4 @@ output name string = hostgroup.name
 
 output location string = hostgroup.location
 
-output imagePullIdentityClientId string = hostgroup_mi.properties.clientId
+output imagePullIdentityId string = hostgroup_mi.id

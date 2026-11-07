@@ -3,9 +3,7 @@ param location string = resourceGroup().location
 
 param identity_outputs_id string
 
-param identity_outputs_clientid string
-
-resource sandbox 'Microsoft.App/sandboxGroups@2026-02-01-preview' existing = {
+resource sandbox 'Microsoft.App/sandboxGroups@2026-07-01' existing = {
   name: 'existing-sandbox'
 }
 
@@ -15,4 +13,4 @@ output name string = sandbox.name
 
 output location string = sandbox.location
 
-output imagePullIdentityClientId string = identity_outputs_clientid
+output imagePullIdentityId string = identity_outputs_id

@@ -85,7 +85,7 @@ internal sealed class ContainerAppJobContext(IResource resource, ContainerAppEnv
 
     private ContainerAppJob CreateContainerAppJob()
     {
-        var containerApp = new ContainerAppJob(Infrastructure.NormalizeBicepIdentifier(Resource.Name))
+        var containerApp = new ContainerAppJob(Infrastructure.NormalizeBicepIdentifier(Resource.Name), "2025-07-01")
         {
             Name = NormalizedContainerAppName
         };

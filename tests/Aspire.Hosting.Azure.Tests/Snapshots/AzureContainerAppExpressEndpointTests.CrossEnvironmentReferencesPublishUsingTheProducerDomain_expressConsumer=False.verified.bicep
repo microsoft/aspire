@@ -11,6 +11,7 @@ resource web 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'web'
   location: location
   properties: {
+    environmentId: consumer_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -19,7 +20,6 @@ resource web 'Microsoft.App/containerApps@2025-07-01' = {
         transport: 'http'
       }
     }
-    environmentId: consumer_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
