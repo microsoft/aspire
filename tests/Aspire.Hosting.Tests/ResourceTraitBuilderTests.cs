@@ -20,8 +20,8 @@ public class ResourceTraitBuilderTests
 
         Assert.Equal(
             [
-                (KnownResourceTraits.DashboardTag, "Backend"),
-                (KnownResourceTraits.DashboardTag, "API"),
+                (KnownResourceTraits.Tag, "Backend"),
+                (KnownResourceTraits.Tag, "API"),
                 ("Owner", "Finance"),
                 ("Owner", "Platform"),
                 (KnownResourceTraits.DashboardPosition, "-10")
@@ -32,8 +32,8 @@ public class ResourceTraitBuilderTests
     [Theory]
     [InlineData("", "value")]
     [InlineData("Owner", " ")]
-    [InlineData("Aspire_Dashboard_Tag", "  Backend")]
-    [InlineData("Aspire_Dashboard_Tag", "Back  end")]
+    [InlineData("Aspire_Tag", "  Backend")]
+    [InlineData("Aspire_Tag", "Back  end")]
     [InlineData("Aspire_Dashboard_Position", "invalid")]
     [InlineData("Aspire_Dashboard_Position", "2147483648")]
     public void InvalidTraitsAreRejected(string name, string value)
@@ -53,7 +53,7 @@ public class ResourceTraitBuilderTests
         var properties = ResourceTraitSnapshotProperties.AddTraitProperties(resource.Resource, [source]);
 
         Assert.Same(source, properties[0]);
-        Assert.Equal(["existing", "resource.trait.Aspire_Dashboard_Tag", "resource.trait.Owner"], properties.Select(p => p.Name));
+        Assert.Equal(["existing", "resource.trait.Aspire_Tag", "resource.trait.Owner"], properties.Select(p => p.Name));
         Assert.Equal(["Backend", "API"], Assert.IsType<string[]>(properties[1].Value));
         Assert.Equal(["Finance, Inc.", "Platform"], Assert.IsType<string[]>(properties[2].Value));
         Assert.Equal("Owner", properties[2].DisplayName);
@@ -67,7 +67,7 @@ public class ResourceTraitBuilderTests
         Assert.Throws<ArgumentException>(() => resource.WithTrait(KnownResourceTraits.DashboardPosition, "invalid"));
         resource.WithTrait(KnownResourceTraits.DashboardPosition, "20");
 
-        Assert.Equal([(KnownResourceTraits.DashboardTag, "Backend"), (KnownResourceTraits.DashboardPosition, "20")],
+        Assert.Equal([(KnownResourceTraits.Tag, "Backend"), (KnownResourceTraits.DashboardPosition, "20")],
             resource.Resource.Annotations.OfType<TraitAnnotation>().Select(t => (t.Name, t.Value)));
     }
 

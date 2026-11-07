@@ -26,8 +26,8 @@ See [PowerShell native argument passing](https://learn.microsoft.com/en-us/power
 The child `pwsh` also preserves the build's external-process output boundary.
 Arcade launches native tools with inherited console handles, so calling its
 scripts in-process does not send their native output through PowerShell stream
-redirection. Capturing the child process keeps native warnings and host output
-in the dependency build log used by warning verification.
+redirection. Capturing the child process preserves native output and host output
+in test-build logs.
 
 These changes remove workflow expression interpolation and batch-wrapper
 reparsing, not all downstream interpretation. Parsing is not general sanitization:
