@@ -299,7 +299,6 @@ internal sealed class RootCommand : BaseRootCommand
 
         var gitCommand = new Command("git") { Hidden = true };
         gitCommand.Subcommands.Add(new Command("askpass") { Hidden = true });
-        gitCommand.Subcommands.Add(new Command("askpass-server") { Hidden = true });
         Subcommands.Add(gitCommand);
 
 #if DEBUG

@@ -3,56 +3,50 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.Versioning;
-using Aspire.Cli.Utils;
-using Microsoft.Extensions.Logging.Abstractions;
+using System.Net.Sockets;
+using System.Security.Authentication;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
+using Spectre.Console;
 
 namespace Aspire.Cli.Git;
 
-[SupportedOSPlatform("macos")]
 internal sealed class GitAskPassSession : IAsyncDisposable
 {
     private static readonly SemaphoreSlim s_promptLock = new(1);
     private readonly GitAskPassDirectory _directory;
+    private readonly Socket _listener;
     private readonly CancellationTokenSource _shutdown;
-    private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly Task _process;
-    private string? _key;
-    private string? _pin;
+    private readonly Uri _destination;
+    private readonly Func<string, CancellationToken, Task<string>> _prompt;
+    private readonly Task _pump;
     private bool _failed;
 
     public CancellationToken CancellationToken => _shutdown.Token;
     public bool Failed => Volatile.Read(ref _failed);
 
-    private GitAskPassSession(Uri destination, Func<string, CancellationToken, Task<string>> prompt,
-        ProcessStartInfo serverStartInfo, CancellationToken cancellationToken)
+    public GitAskPassSession(Uri destination, Func<string, CancellationToken, Task<string>> prompt, CancellationToken cancellationToken)
     {
+        _destination = destination;
+        _prompt = prompt;
         _shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _directory = GitAskPassDirectory.Create();
-        serverStartInfo.WorkingDirectory = Path.GetDirectoryName(_directory.SocketPath)!;
-        serverStartInfo.RedirectStandardInput = true;
-        serverStartInfo.RedirectStandardOutput = true;
-        serverStartInfo.RedirectStandardError = true;
-        foreach (var variable in new[] { GitAskPassProtocol.SocketVariable, GitAskPassProtocol.KeyVariable, GitAskPassProtocol.PinVariable })
-        {
-            serverStartInfo.Environment.Remove(variable);
-        }
-        _process = RunProcessAsync(serverStartInfo, destination, prompt);
-    }
-
-    public static async Task<GitAskPassSession> CreateAsync(Uri destination, Func<string, CancellationToken, Task<string>> prompt,
-        ProcessStartInfo serverStartInfo, CancellationToken cancellationToken)
-    {
-        var session = new GitAskPassSession(destination, prompt, serverStartInfo, cancellationToken);
+        GitAskPassDirectory? directory = null;
+        Socket? listener = null;
         try
         {
-            await session._ready.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-            session._directory.VerifyBoundSocket();
-            return session;
+            directory = GitAskPassDirectory.Create();
+            listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            directory.Bind(listener);
+            listener.Listen(4);
+            _directory = directory;
+            _listener = listener;
+            _pump = RunAsync();
         }
         catch
         {
-            await session.DisposeAsync();
+            listener?.Dispose();
+            directory?.Dispose();
+            _shutdown.Dispose();
             throw;
         }
     }
@@ -62,8 +56,6 @@ internal sealed class GitAskPassSession : IAsyncDisposable
         startInfo.Environment["GIT_ASKPASS"] = _directory.CreateHelper(helperCommand);
         startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
         startInfo.Environment[GitAskPassProtocol.SocketVariable] = _directory.SocketPath;
-        startInfo.Environment[GitAskPassProtocol.KeyVariable] = _key;
-        startInfo.Environment[GitAskPassProtocol.PinVariable] = _pin;
         startInfo.RedirectStandardInput = true;
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
@@ -71,71 +63,98 @@ internal sealed class GitAskPassSession : IAsyncDisposable
         startInfo.StandardErrorEncoding = System.Text.Encoding.UTF8;
     }
 
-    private async Task RunProcessAsync(ProcessStartInfo startInfo, Uri destination, Func<string, CancellationToken, Task<string>> prompt)
+    internal static string GetPrompt(string rawPrompt, Uri destination)
     {
-        // The execution factory's line callbacks cannot support a duplex binary
-        // credential channel. Use the existing raw capture runner, with logging disabled.
-        await ProcessCaptureRunner.RunAsync<bool>(startInfo, Timeout.InfiniteTimeSpan,
-            async (process, token) =>
-            {
-                using var promptCancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
-                var exited = CancelPromptOnExitAsync(process, promptCancellation, token);
-                var input = process.StandardInput.BaseStream;
-                var output = process.StandardOutput.BaseStream;
-                var stderr = process.StandardError.ReadToEndAsync(token);
-                await GitAskPassProtocol.WriteAsync(input, _directory.Inode.ToString(CultureInfo.InvariantCulture), 32, token);
-                await GitAskPassProtocol.WriteAsync(input, Path.GetFileName(_directory.SocketPath), 64, token);
-                await GitAskPassProtocol.WriteAsync(input,
-                    destination.GetComponents(UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.UriEscaped),
-                    GitAskPassProtocol.MaxPromptBytes, token);
-                _key = await GitAskPassProtocol.ReadAsync(output, 64, token);
-                _pin = await GitAskPassProtocol.ReadAsync(output, 64, token);
-                GitAskPassInvocation.ParseKey(_key);
-                GitAskPassInvocation.ParseKey(_pin);
-                _ready.TrySetResult();
-                try
-                {
-                    while (true)
-                    {
-                        var label = await GitAskPassProtocol.ReadAsync(output, GitAskPassProtocol.MaxPromptBytes, token);
-                        await s_promptLock.WaitAsync(promptCancellation.Token);
-                        try
-                        {
-                            var response = await prompt(label, promptCancellation.Token);
-                            GitAskPassProtocol.ValidateResponse(response);
-                            await GitAskPassProtocol.WriteAsync(input, response, GitAskPassProtocol.MaxResponseBytes, token);
-                        }
-                        finally
-                        {
-                            s_promptLock.Release();
-                        }
-                    }
-                }
-                finally
-                {
-                    // EOF dismisses the isolated server if the parent pump has failed.
-                    process.StandardInput.Close();
-                    await stderr;
-                    await exited;
-                }
-            }, () => false, NullLogger.Instance, _shutdown.Token);
-        if (!_shutdown.IsCancellationRequested)
+        // Git emits "Username for 'https://host': " or
+        // "Password for 'https://user@host/repo': ". With useHttpPath=false
+        // the path is omitted. Never display/log the raw URL or its userinfo.
+        var username = rawPrompt.StartsWith("Username for '", StringComparison.Ordinal);
+        var prefix = username ? "Username for '" : "Password for '";
+        if (!rawPrompt.StartsWith(prefix, StringComparison.Ordinal) || !rawPrompt.EndsWith("': ", StringComparison.Ordinal) ||
+            rawPrompt.Any(c => char.IsControl(c) || char.GetUnicodeCategory(c) == UnicodeCategory.Format) ||
+            !Uri.TryCreate(rawPrompt[prefix.Length..^3], UriKind.Absolute, out var uri) ||
+            uri.Scheme != destination.Scheme || uri.IdnHost != destination.IdnHost || uri.Port != destination.Port ||
+            uri.Query.Length != 0 || uri.Fragment.Length != 0 || uri.UserInfo.Contains(':') ||
+            (uri.AbsolutePath != "/" && uri.AbsolutePath.TrimEnd('/') != destination.AbsolutePath.TrimEnd('/')))
         {
-            Volatile.Write(ref _failed, true);
-            _ready.TrySetException(new IOException("Git credential callback server failed."));
-            await _shutdown.CancelAsync();
+            throw new AuthenticationException("Git credential callback destination mismatch.");
         }
+        var origin = destination.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped);
+        return string.Format(CultureInfo.CurrentCulture,
+            username ? InteractionServiceStrings.GitUsernamePrompt : InteractionServiceStrings.GitPasswordPrompt,
+            origin.EscapeMarkup());
     }
 
-    private static async Task CancelPromptOnExitAsync(Process process, CancellationTokenSource prompt, CancellationToken cancellationToken)
+    private async Task RunAsync()
     {
         try
         {
-            await process.WaitForExitAsync(cancellationToken);
-            await prompt.CancelAsync();
+            for (var attempts = 0; attempts < 8; attempts++)
+            {
+                using var socket = await _listener.AcceptAsync(_shutdown.Token);
+                using var request = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
+                request.CancelAfter(TimeSpan.FromSeconds(10));
+                await using var stream = new NetworkStream(socket, ownsSocket: false);
+                var raw = await GitAskPassProtocol.ReadAsync(stream, GitAskPassProtocol.MaxPromptBytes, request.Token);
+                var label = GetPrompt(raw, _destination);
+                request.CancelAfter(GitAskPassProtocol.RequestTimeout);
+                using var monitorCancellation = CancellationTokenSource.CreateLinkedTokenSource(request.Token);
+                var monitor = MonitorDisconnectAsync(stream, request, monitorCancellation.Token);
+                try
+                {
+                    await s_promptLock.WaitAsync(request.Token);
+                    string response;
+                    try
+                    {
+                        response = await _prompt(label, request.Token);
+                        GitAskPassProtocol.ValidateResponse(response);
+                    }
+                    finally
+                    {
+                        s_promptLock.Release();
+                    }
+                    // Stop the read monitor before sending a successful response:
+                    // the helper exits immediately after consuming that frame.
+                    await monitorCancellation.CancelAsync();
+                    await monitor;
+                    await GitAskPassProtocol.WriteAsync(stream, response, GitAskPassProtocol.MaxResponseBytes, request.Token);
+                }
+                finally
+                {
+                    await monitorCancellation.CancelAsync();
+                    await monitor;
+                }
+            }
+            Volatile.Write(ref _failed, true);
+            await _shutdown.CancelAsync();
+        }
+        catch (Exception ex) when (ex is IOException or SocketException or AuthenticationException or ArgumentException or
+            OperationCanceledException or InvalidOperationException or ExtensionOperationCanceledException)
+        {
+            // Rejection, invalid input, disconnect and UI failure end this operation
+            // without fallback. Do not log raw prompts, responses or exception text.
+            if (!_shutdown.IsCancellationRequested)
+            {
+                Volatile.Write(ref _failed, true);
+                await _shutdown.CancelAsync();
+            }
+        }
+    }
+
+    private static async Task MonitorDisconnectAsync(Stream stream, CancellationTokenSource request, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // A helper that exits must dismiss its UI; no second frame is valid.
+            await stream.ReadExactlyAsync(new byte[1], cancellationToken);
+            await request.CancelAsync();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+        }
+        catch (IOException)
+        {
+            await request.CancelAsync();
         }
     }
 
@@ -144,12 +163,11 @@ internal sealed class GitAskPassSession : IAsyncDisposable
         await _shutdown.CancelAsync();
         try
         {
-            await _process;
+            await _pump;
         }
         finally
         {
-            _key = null;
-            _pin = null;
+            _listener.Dispose();
             _shutdown.Dispose();
             _directory.Dispose();
         }

@@ -49,7 +49,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
         {
             await ConfigureUnattendedSshAsync(startInfo, arguments, cancellationToken);
         }
-        if (OperatingSystem.IsMacOS() && mode != GitCommandMode.Unattended && hostEnvironment.SupportsInteractiveInput &&
+        if (mode != GitCommandMode.Unattended && hostEnvironment.SupportsInteractiveInput &&
             command is "fetch" or "ls-remote" && features.IsFeatureEnabled(KnownFeatures.ExperimentalGitAskPass, defaultValue: false))
         {
             var separator = Array.IndexOf(arguments, "--");
@@ -62,9 +62,8 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                 if (Uri.TryCreate(repository, UriKind.Absolute, out var destination) && destination.Scheme == Uri.UriSchemeHttps)
                 {
                     var helper = GitAskPassInvocation.CreateCurrentHelperCommand();
-                    await using var session = await GitAskPassSession.CreateAsync(destination,
-                        (prompt, token) => PromptForCredentialAsync(interaction, prompt, token),
-                        GitAskPassInvocation.CreateServerStartInfo(), cancellationToken);
+                    await using var session = new GitAskPassSession(destination,
+                        (prompt, token) => PromptForCredentialAsync(interaction, prompt, token), cancellationToken);
                     session.Configure(startInfo, helper);
                     try
                     {
@@ -119,12 +118,6 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             startInfo.Environment["GCM_INTERACTIVE"] = "never";
         }
         startInfo.Environment["LC_ALL"] = "C";
-        // Never adopt an inherited operation's callback authorization, including for
-        // internal URL/config probes. Each remote operation must allocate its own bridge.
-        foreach (var variable in new[] { GitAskPassProtocol.SocketVariable, GitAskPassProtocol.KeyVariable, GitAskPassProtocol.PinVariable })
-        {
-            startInfo.Environment.Remove(variable);
-        }
         FilterEnvironment(startInfo.Environment, mode);
         if (unattended)
         {
@@ -153,10 +146,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             query.Environment[name] = value;
         }
         DisableAskPass(query.Environment);
-        foreach (var variable in new[] { GitAskPassProtocol.SocketVariable, GitAskPassProtocol.KeyVariable, GitAskPassProtocol.PinVariable })
-        {
-            query.Environment.Remove(variable);
-        }
+        query.Environment.Remove(GitAskPassProtocol.SocketVariable);
 
         return query;
     }
@@ -373,6 +363,9 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
 
     internal static void FilterEnvironment(IDictionary<string, string?> environment, GitCommandMode mode)
     {
+        // An inherited callback belongs to a different operation, including for
+        // internal URL/config probes. Remote operations allocate their own listener.
+        environment.Remove(GitAskPassProtocol.SocketVariable);
         if (mode != GitCommandMode.Captured)
         {
             // Removing known names preserves the environment dictionary's platform-specific casing.

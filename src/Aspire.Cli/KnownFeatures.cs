@@ -48,7 +48,7 @@ internal static class KnownFeatures
     {
         [ExperimentalGitAskPass] = new(
             ExperimentalGitAskPass,
-            "Use masked Aspire prompts for HTTPS Git credentials on macOS",
+            "Use masked Aspire prompts for HTTPS Git credentials",
             DefaultValue: false,
             Hidden: true),
 

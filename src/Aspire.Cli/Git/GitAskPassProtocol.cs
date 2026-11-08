@@ -10,15 +10,13 @@ namespace Aspire.Cli.Git;
 internal static class GitAskPassProtocol
 {
     internal const string SocketVariable = "ASPIRE_GIT_ASKPASS_SOCKET";
-    internal const string KeyVariable = "ASPIRE_GIT_ASKPASS_KEY";
-    internal const string PinVariable = "ASPIRE_GIT_ASKPASS_PIN";
     internal const int MaxPromptBytes = 4096;
     internal const int MaxResponseBytes = 8192;
     internal static TimeSpan RequestTimeout => TimeSpan.FromSeconds(90);
     private static readonly UTF8Encoding s_encoding = new(false, true);
 
-    // One request per TLS connection: 32 authorization bytes, a big-endian uint32
-    // length, then UTF-8 Git prompt bytes. Success is a length-prefixed UTF-8
+    // One request per connection: a big-endian uint32 length, then UTF-8
+    // Git prompt bytes. Success is a length-prefixed UTF-8
     // response; an empty response is rejection. Never serialize exception messages.
     public static async Task<string> ReadAsync(Stream stream, int maximum, CancellationToken cancellationToken)
     {

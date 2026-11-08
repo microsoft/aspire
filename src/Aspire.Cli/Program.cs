@@ -1128,10 +1128,6 @@ public class Program
         // Its stdout is a credential protocol, not ordinary CLI output.
         if (GitAskPassInvocation.Matches(args))
         {
-            if (args is ["git", "askpass-server"] && OperatingSystem.IsMacOS())
-            {
-                return await GitAskPassServer.InvokeAsync(Console.OpenStandardInput(), Console.OpenStandardOutput(), Console.Error).ConfigureAwait(false);
-            }
             return await GitAskPassInvocation.InvokeAsync(args, Environment.GetEnvironmentVariable,
                 Console.Out, Console.Error, CancellationToken.None).ConfigureAwait(false);
         }

@@ -256,7 +256,7 @@ unattended acquisition disables terminal and askpass prompts while preserving
 noninteractive credential helpers and supported OpenSSH agent/key authentication.
 Captured template operations receive EOF on stdin.
 
-### Experimental HTTPS credential callback (macOS)
+### Experimental HTTPS credential callback
 
 Enable the opt-in prototype with:
 
@@ -265,42 +265,45 @@ aspire config set features.experimentalGitAskPass true --global
 ```
 
 For an input-capable Aspire session, HTTPS `fetch` and `ls-remote` can invoke the
-hidden `aspire git askpass` helper instead of Git terminal prompts. The helper
-launches the running native CLI executable (or the physical CLI assembly for
-a `dotnet`-hosted development build). Its early entry point does not initialize
+hidden `aspire git askpass` helper instead of Git terminal prompts. An
+operation-private launcher invokes the running native CLI executable (or the
+physical CLI assembly for a `dotnet`-hosted development build).
+Its early entry point does not initialize
 logging, telemetry, configuration, acquisition, or IDE services.
 `GIT_TERMINAL_PROMPT=0` prevents uncontrolled terminal fallback.
 Credential managers still run first; their browser/UI authentication is independent
 of this callback. SSH, HTTP and other transports retain their existing behavior.
-This prototype does not capture credential-manager or SSH flows and does not
-provide Linux or Windows parity. Without the flag, existing behavior is unchanged.
+This prototype does not capture credential-manager or SSH flows.
+Without the flag, existing behavior is unchanged.
 
 Each remote operation resolves Git's configured URL rewriting locally, then
-creates a fresh socket below `~/.aspire/git/<random-operation>/`. Existing shared
-socket-name, UTF-8 path-length and permission helpers are reused. Descriptor-based
-Darwin checks require current-user ownership, reject symlinks and writable/foreign
-ancestry, and refuse insecure existing directories rather than chmod them.
-The operation directory is 0700 before binding. A separate hidden
-`aspire git askpass-server` process verifies its cwd inode against the parent's
-held directory and binds a relative socket name with a process-local creation
-mask. The socket is 0600 from creation; no post-bind pathname chmod is performed,
-and the parent CLI's creation mask is unchanged. Runtime automatic pathname
-deletion is disabled in favor of held-directory/inode-checked cleanup.
-Git requires an executable `GIT_ASKPASS` path. An exclusively created 0700 script
-in the held operation directory executes only the fixed, quoted CLI launcher,
-forwarding Git's prompt through `"$@"` without shell interpolation. It contains
-no credentials or operation authorization.
-The default directory is not redirected by `ASPIRE_HOME` or a socket override.
+starts a listener in the running parent CLI, scoped to that Git operation.
+The socket is below the actual user profile's
+`.aspire/git/<random-operation>/`; `ASPIRE_HOME` does not redirect it.
+Existing shared socket-name, UTF-8 path-length and permission helpers are reused.
+On Linux/macOS, the operation directory is 0700 before binding, and the socket is
+set to 0600 and verified before Git starts. The private directory excludes other
+users even during bind/chmod; no process-global creation mask is changed.
+On Windows, the shared helper creates a protected current-user directory DACL
+with inheritable full control; the socket and launcher inherit those permissions.
+Windows pathname AF_UNIX sockets enforce filesystem write permissions on connect:
+https://devblogs.microsoft.com/commandline/af_unix-comes-to-windows/.
+Unavailable AF_UNIX support or unsafe existing permissions cause an explicit
+failure, not a fallback to an unprotected endpoint.
 
-TLS authenticates the isolated server using an operation-specific certificate pin before
-the helper sends its operation authorization key. The parent verifies that key
-before accepting a bounded UTF-8 prompt. The certificate private key exists only
-in memory. The socket path, public pin and short-lived random callback key are
-passed only in the Git child's `ASPIRE_GIT_ASKPASS_*` environment; these are not
-Git passwords or tokens. Other Git operations/probes discard inherited callback
-authorization. Access to the owning process, its environment or its memory can
-compromise this authorization: this is not a sandbox against same-user process
-compromise or administrator access. Filesystem privacy alone is not authentication.
+Git receives the endpoint in `ASPIRE_GIT_ASKPASS_SOCKET`. The helper connects to
+that parent listener and sends a bounded UTF-8 prompt. Random names prevent
+accidental operation collisions; they are not access control. The filesystem
+permissions are the boundary against other ordinary OS users. Processes running
+as the same OS user are trusted, as are administrator/SYSTEM access; there is no
+same-user process isolation, TLS, certificate handshake or separate server process.
+Other Git operations/probes discard inherited callback endpoints.
+
+Git requires an executable `GIT_ASKPASS` path. An exclusively created script in
+the private operation directory executes only the fixed, quoted CLI launcher,
+forwarding Git's prompt through `"$@"` without shell interpolation. The script is
+0700 on Unix; Git for Windows interprets its shebang through Git's shell.
+It contains no prompts, credentials or responses.
 
 Only Git's username and password prompt shapes for the resolved origin/path are
 accepted. The CLI displays a label generated from the bound origin, not Git's
@@ -315,14 +318,14 @@ stdout; failures produce a fixed credential-free stderr message and a nonzero ex
 Callback-mode remote stderr is replaced by classified diagnostics because Git can
 echo username/password URL userinfo. Parsed stdout remains unchanged.
 
-Prompts are serialized across operations. Every request is bounded, handshakes
-have ten-second deadlines, and credential entry has a 90-second budget within the
+Prompts are serialized across operations. Connections and initial frames have
+ten-second deadlines, and credential entry has a 90-second budget within the
 caller's acquisition deadline. Caller cancellation, helper disconnect and server
 exit dismiss the terminal prompt. Rejection or authenticated protocol failure ends
-the operation without fallback. Normal disposal removes only the held operation's
+the operation without fallback. Normal disposal removes only the current operation's
 socket, fixed helper script and empty directory. Abrupt process termination can leave
-private operation directories and launcher/socket files, but cannot leave a usable
-server or persisted credentials;
+private operation directories and launcher/socket files, but cannot leave a running
+parent listener or persisted credentials;
 the prototype deliberately has no broad startup deletion sweep.
 
 Captured template Git commands receive EOF on stdin rather than inheriting the
