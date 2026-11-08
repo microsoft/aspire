@@ -155,7 +155,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
         {
             for (var i = 0; i < 4; i++)
             {
-                var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("argv"),
+                await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("argv"),
                     new ChildProcessOptions
                     {
                         Lifetime = ChildProcessLifetime.OwnedTree,
@@ -163,11 +163,17 @@ public class ChildProcessTests(ProcessTestFixture fixture)
                     });
                 await process.StartAsync(TestContext.Current.CancellationToken);
                 var rootExit = process.WaitForRootExitAsync(CancellationToken.None);
-                using (var supervisor = Process.GetProcessById(process.ProcessId))
+                try
                 {
+                    using var supervisor = Process.GetProcessById(process.ProcessId);
                     await supervisor.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
                 }
+                catch (ArgumentException)
+                {
+                    // The root-exit observer already reaped the supervisor.
+                }
 
+                // Dispose explicitly, while the observer may still be reading the completion report.
                 await process.DisposeAsync();
 
                 Assert.Equal(0, await rootExit.WaitAsync(TimeSpan.FromSeconds(30)));
