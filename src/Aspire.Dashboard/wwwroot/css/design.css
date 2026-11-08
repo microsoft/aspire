@@ -14,10 +14,12 @@
     src: url("../fonts/geist/GeistMono-Variable.woff2") format("woff2");
 }
 
+/* Literal weights, not the --aspire-font-weight-* tokens: var() is invalid in an @font-face descriptor, and the faces
+   would all register at one weight, so every Poppins heading would render with the last file, 700. */
 @font-face {
     font-family: "Poppins";
     font-style: normal;
-    font-weight: var(--aspire-font-weight-semibold);
+    font-weight: 500;
     font-display: swap;
     src: url("../fonts/poppins/latin-500-normal.woff2") format("woff2");
 }
@@ -25,7 +27,7 @@
 @font-face {
     font-family: "Poppins";
     font-style: normal;
-    font-weight: var(--aspire-font-weight-semibold);
+    font-weight: 600;
     font-display: swap;
     src: url("../fonts/poppins/latin-600-normal.woff2") format("woff2");
 }
@@ -33,7 +35,7 @@
 @font-face {
     font-family: "Poppins";
     font-style: normal;
-    font-weight: var(--aspire-font-weight-semibold);
+    font-weight: 700;
     font-display: swap;
     src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
 }

@@ -853,6 +853,12 @@
     margin-bottom: 9px;
 }
 
+/* The row has no actions, so its link spans the actions rail the other rows reserve. Otherwise its counts would stop
+   short of the end and, in compact rows, jump toward the name on hover, when the rail widens for actions. */
+.resource-row.resource-row-all > .resource-row-link {
+    grid-column: 1 / -1;
+}
+
 /* The divider spans the row's full width, the same as the row's selected highlight above it. */
 .resource-row-all::after {
     content: "";
