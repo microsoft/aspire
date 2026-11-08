@@ -116,10 +116,12 @@
     overflow: visible;
 }
 
+/* The picker is a control, not the page's title: it uses the UI font at the size of the controls beside it. */
 .resource-title ::deep .resource-picker-button {
     max-width: 100%;
     font: inherit;
-    font-size: var(--fontSizeBase400);
+    font-family: var(--aspire-font-sans);
+    font-size: var(--fontSizeBase300);
 }
 
 .resource-picker-button > [slot="start"] {
@@ -875,66 +877,11 @@
     color: var(--colorBrandForeground1);
 }
 
-.resource-kind-toggle:focus-visible,
-.resource-select-all-toggle:focus-visible {
+.resource-kind-toggle:focus-visible {
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 1px;
 }
 
-.resource-select-all {
-    display: inline-flex;
-}
-
-.resource-select-all-toggle {
-    box-sizing: border-box;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--aspire-space-1);
-    min-width: 32px;
-    height: 32px;
-    padding: 0 6px;
-    border: 0;
-    border-radius: var(--aspire-radius-small);
-    background: transparent;
-    color: var(--colorNeutralForeground2);
-    font: inherit;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.resource-select-all-toggle:hover {
-    background: var(--colorSubtleBackgroundHover);
-    color: var(--colorNeutralForeground1);
-}
-
-.resource-select-all-toggle:active {
-    background: var(--colorSubtleBackgroundPressed);
-}
-
-.resource-select-all-toggle.on {
-    background: var(--colorBrandBackground);
-    color: var(--colorNeutralForegroundOnBrand);
-}
-
-.resource-select-all-toggle.on:hover {
-    background: var(--colorBrandBackgroundHover);
-    color: var(--colorNeutralForegroundOnBrand);
-}
-
-.resource-select-all-toggle.on:active {
-    background: var(--colorBrandBackgroundPressed);
-}
-
-@media (forced-colors: active) {
-    .resource-select-all-toggle.on,
-    .resource-select-all-toggle.on:hover,
-    .resource-select-all-toggle.on:active {
-        forced-color-adjust: none;
-        background: Highlight;
-        color: HighlightText;
-    }
-}
 .resource-row-all::after {
     content: "";
     position: absolute;

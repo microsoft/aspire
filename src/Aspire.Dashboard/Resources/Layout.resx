@@ -325,12 +325,6 @@
   <data name="ResourcePaneResourceActions" xml:space="preserve">
     <value>Actions for {0}</value>
   </data>
-  <data name="ResourcePaneSelectAll" xml:space="preserve">
-    <value>Select all</value>
-  </data>
-  <data name="ResourcePaneAllSelected" xml:space="preserve">
-    <value>All selected</value>
-  </data>
   <data name="ResourcePaneUnviewedErrors" xml:space="preserve">
     <value>{0} unviewed error logs</value>
   </data>

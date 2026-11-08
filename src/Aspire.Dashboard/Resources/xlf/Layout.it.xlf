@@ -367,11 +367,6 @@
         <target state="new">{0} valid duration samples. P95 appears after at least 20 samples.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneAllSelected">
-        <source>All selected</source>
-        <target state="new">All selected</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneChildOf">
         <source>Child of {0}</source>
         <target state="new">Child of {0}</target>
@@ -570,11 +565,6 @@
       <trans-unit id="ResourcePaneResourceActions">
         <source>Actions for {0}</source>
         <target state="new">Actions for {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneSelectAll">
-        <source>Select all</source>
-        <target state="new">Select all</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneSelectionAddHint">

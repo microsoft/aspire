@@ -125,7 +125,7 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         cut.Render();
         Assert.True(cut.Find(".resource-content").HasAttribute("inert"));
 
-        await cut.Find(".resource-select-all-toggle").ClickAsync();
+        await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
         cut.Render();
 
         Assert.Equal(url.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
@@ -209,7 +209,7 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         Assert.True(cut.Find(".resource-content").HasAttribute("inert"));
         Assert.Empty(cut.Instance.SelectedResourceNames);
 
-        await cut.Find(".resource-select-all-toggle").ClickAsync();
+        await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
         cut.Render();
         Assert.Equal("traces?type=server", navigation.ToBaseRelativePath(navigation.Uri));
         Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
@@ -306,7 +306,7 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         Assert.Equal(url.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
 
         await cut.Find(".resource-picker").ClickAsync();
-        await cut.Find(".resource-select-all-toggle").ClickAsync();
+        await cut.Find(".resource-row-all .resource-row-link").ClickAsync();
         cut.Render();
         Assert.Equal(expectedDestination.TrimStart('/'), navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Empty(cut.Instance.SelectedResourceNames);

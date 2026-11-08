@@ -90,18 +90,6 @@
                         @KindToggle(ResourcePaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
                         @KindToggle(ResourcePaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
                     </div>
-                    <div class="resource-select-all">
-                        <button type="button"
-                                class="resource-select-all-toggle @(IsAllSelected ? "on" : null)"
-                                aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
-                                aria-description="@(IsAllSelected ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected)].Value : null)"
-                                data-tooltip="@Loc[IsAllSelected ? nameof(Dashboard.Resources.Layout.ResourcePaneAllSelected) : nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]"
-                                data-tooltip-positioning="above"
-                                @onclick="OnAllResourcesClickAsync">
-                            <FluentIcon Value="@(new Icons.Regular.Size20.SelectAllOn())" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
-                            <span>@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneSelectAll)]</span>
-                        </button>
-                    </div>
                 </div>
             }
 
@@ -133,8 +121,8 @@
                         ? GetPaneCountText(allResourceCount, allParameterCount, allTelemetrySourceCount)
                         : GetPaneCountText(resourceCount: 0, parameterCount: 0, telemetrySourceCount: allTelemetrySourceCount);
 
-                    @if (!DashboardClient.IsEnabled)
-                    {
+                    @* "All resources" is the first row of the list rather than a button, so clearing the selection reads as
+                       choosing an item like any other. *@
                     <div class="resource-row resource-row-all @(isAllSelected ? "selected" : string.Empty)">
                         <a class="resource-row-link"
                            href="@GetSelectionUrl([])"
@@ -152,8 +140,6 @@
                             </span>
                         </a>
                     </div>
-                    }
-
                 }
 
                 @if (_isLoaded && DashboardClient.IsEnabled && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))

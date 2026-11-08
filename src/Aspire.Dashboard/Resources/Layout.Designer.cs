@@ -979,24 +979,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Select all.
-        /// </summary>
-        public static string ResourcePaneSelectAll {
-            get {
-                return ResourceManager.GetString("ResourcePaneSelectAll", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to All selected.
-        /// </summary>
-        public static string ResourcePaneAllSelected {
-            get {
-                return ResourceManager.GetString("ResourcePaneAllSelected", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to {0} unviewed error logs.
         /// </summary>
         public static string ResourcePaneUnviewedErrors {
