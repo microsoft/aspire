@@ -31,7 +31,7 @@ public sealed class AspireMenuLayoutTests : PlaywrightTestsBase<DashboardServerF
         {
             new ResourceLogs
             {
-                Resource = CreateResource(name: MockDashboardClient.TestResource1.Name, instanceId: MockDashboardClient.TestResource1.Uid),
+                Resource = TelemetryResources.Create(MockDashboardClient.TestResource1),
                 ScopeLogs =
                 {
                     new ScopeLogs

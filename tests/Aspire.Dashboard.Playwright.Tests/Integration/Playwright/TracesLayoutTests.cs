@@ -33,7 +33,7 @@ public sealed class TracesLayoutTests : PlaywrightTestsBase<DashboardServerFixtu
         {
             new ResourceSpans
             {
-                Resource = CreateResource(name: MockDashboardClient.TestResource1.Name, instanceId: MockDashboardClient.TestResource1.Uid),
+                Resource = TelemetryResources.Create(MockDashboardClient.TestResource1),
                 ScopeSpans =
                 {
                     new ScopeSpans
