@@ -1458,6 +1458,38 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Contains(menuButton.Instance.ItemsProvider(), item => item.Text == "Custom command");
     }
 
+    [Fact]
+    public async Task RowActions_ResolveTheirResourceByUniqueNameWhenADisplayNameMatchesAnotherResource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var executed = new List<(string Resource, string Command)>();
+        var stop = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "Stop", iconVariant: IconVariant.Filled);
+        // "worker-xyz" is shown as "api-abc", which is also the unique name of the resource shown as "api".
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("worker-xyz", displayName: "api-abc", state: KnownResourceState.Running, commands: [stop]),
+                ModelTestHelpers.CreateResource("api-abc", displayName: "api", state: KnownResourceState.Running, commands: [stop])
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            executeResourceCommand: (resource, _, command, _, _) =>
+            {
+                executed.Add((resource, command.Name));
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            }));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-actions").Count));
+
+        // The row shows its display name, but its actions act on the resource itself.
+        var stopButton = cut.Find("[data-resource-name='worker-xyz'] .resource-row-actions fluent-button[aria-label='Stop api-abc']");
+        await cut.InvokeAsync(() => stopButton.Click());
+        cut.WaitForAssertion(() => Assert.Equal([("worker-xyz", "resource-stop")], executed));
+        var menuButton = cut.FindComponents<AspireMenuButton>().Single(b => b.Instance.Title == "Actions for api-abc");
+        Assert.NotEmpty(menuButton.Instance.ItemsProvider());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -2630,6 +2662,28 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
         Assert.Equal(2, cut.Instance.GetSelectionTelemetryKeys(cut.Instance.SelectedResourceNames)?.Count);
         Assert.Equal("/traces?resource=api&resource=worker", cut.Instance.GetTabUrl(ResourceTab.Traces));
+    }
+
+    [Fact]
+    public async Task Standalone_RemovedTelemetrySource_DropsItsRowHandler()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        await AddTelemetryAsync("api");
+        await AddTelemetryAsync("worker");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "worker"], cut.Instance.TelemetryRowClickNames.Order()));
+
+        // Without an AppHost, the telemetry subscription is the only one, so it removes the handlers of the sources
+        // that are gone. Otherwise every source ever shown would keep its handler for the layout's lifetime.
+        await Services.GetRequiredService<SqliteTelemetryRepository>().ClearSelectedSignalsAsync(new() { ["worker"] = [AspireDataType.Resource] });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".resource-row-kind-telemetry"));
+            Assert.Equal(["api"], cut.Instance.TelemetryRowClickNames);
+        });
     }
 
     [Fact]

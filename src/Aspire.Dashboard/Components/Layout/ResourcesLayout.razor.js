@@ -225,14 +225,41 @@ export function registerTabOverflow(registrationId, dotNetRef) {
 
     state.resizeObserver = new ResizeObserver(schedule);
     state.tabsObserver = new MutationObserver(schedule);
-    // Cheap check on any DOM change (the terminal updates constantly): only a replaced strip needs attaching again.
+    // Only a replaced strip needs attaching again. The strip is rendered into the header's section outlet on desktop
+    // and into the layout's own header on mobile, so only those containers are watched: observing the whole document
+    // would run this on every console log line, terminal frame and grid update.
+    //
+    // MainLayout renders its header, and the .header-context in it, only on desktop, so switching between mobile and
+    // desktop replaces the container. The layout root is watched too, for its direct children only (the header coming
+    // and going, not content updates), and the containers are observed again whenever they've been replaced.
+    // Otherwise the observations would stay on the detached container, and a later navigation that replaces the tab
+    // strip wouldn't measure it.
+    const bindContainers = () => {
+        const containers = [".header-context", ".resource-context-header"]
+            .map(selector => document.querySelector(selector))
+            .filter(Boolean);
+        if (state.containers && containers.length === state.containers.length &&
+            containers.every((container, index) => container === state.containers[index])) {
+            return;
+        }
+        state.containers = containers;
+        state.bodyObserver.disconnect();
+        for (const container of containers.length > 0 ? containers : [document.body]) {
+            state.bodyObserver.observe(container, { childList: true, subtree: true });
+        }
+        const layoutRoot = document.querySelector(".layout");
+        if (layoutRoot) {
+            state.bodyObserver.observe(layoutRoot, { childList: true });
+        }
+    };
     state.bodyObserver = new MutationObserver(() => {
+        bindContainers();
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
         }
     });
-    state.bodyObserver.observe(document.body, { childList: true, subtree: true });
+    bindContainers();
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
     // Recording switches can mount the new layout before the old layout finishes disposing.
@@ -660,6 +687,13 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     };
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
+        // mouseover bubbles from every element in the row. The tooltip is computed from the row's layout, so moving
+        // between elements of the same link changes nothing, and the check below forces layout, so skip that.
+        // Entering the link from outside recomputes it, even if it's the link hovered last: the resource's state may
+        // have changed while the pointer was elsewhere.
+        if (event.type === 'mouseover' && link && event.relatedTarget instanceof Node && link.contains(event.relatedTarget)) {
+            return;
+        }
         const name = link?.querySelector('.resource-row-name');
         // A compact sidebar row's type and state columns give way to its actions while the row is
         // hovered or focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's
