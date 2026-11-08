@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
@@ -153,6 +154,27 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("20260720T123456790Z", runStore.RunId);
         Assert.Equal("existing", File.ReadAllText(existingFilePath));
         Assert.Equal(["existing.txt"], Directory.EnumerateFileSystemEntries(existingRunDirectory).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void RunMode_RunIdAllocationExhausted_PreservesLockAcquisitionError()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var startedAt = new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero);
+        var timeProvider = new FixedTimeProvider(startedAt);
+        var runsDirectory = DashboardRunStore.GetRunsDirectory(workspace.Path);
+
+        // A directory at each lock path makes opening the lock fail with a non-contention error.
+        for (var i = 0; i < DashboardRunStore.MaxRunIdAttempts; i++)
+        {
+            var runId = startedAt.AddMilliseconds(i).ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture);
+            Directory.CreateDirectory(DashboardRunStore.GetRunLockPath(Path.Combine(runsDirectory, runId)));
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(CreateOptions(workspace), timeProvider));
+
+        Assert.StartsWith($"Could not allocate a dashboard run in '{runsDirectory}' after {DashboardRunStore.MaxRunIdAttempts} attempts.", exception.Message);
+        Assert.IsType<UnauthorizedAccessException>(exception.InnerException);
     }
 
     [Fact]

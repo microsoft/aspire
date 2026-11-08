@@ -76,7 +76,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     // Collisions only happen when dashboards start within the same few milliseconds, so a handful of attempts is
     // normally enough. The bound stops an unwritable runs directory, where every lock attempt fails, from looping forever.
-    private const int MaxRunIdAttempts = 1000;
+    internal const int MaxRunIdAttempts = 1000;
 
     internal const string DatabaseFileName = "dashboard.db";
     internal const int MaxApplicationDirectoryNameLength = 80;
@@ -567,11 +567,22 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     /// </remarks>
     private static FileLock CreateNewRunDirectory(string runsDirectory, ref DateTimeOffset startedAt, out string runId)
     {
+        Exception? lastLockException = null;
         for (var attempt = 1; ; attempt++)
         {
             runId = FormatRunId(startedAt);
             var runDirectory = Path.Combine(runsDirectory, runId);
-            var runLock = FileLock.TryAcquire(GetRunLockPath(runDirectory));
+            FileLock? runLock = null;
+            try
+            {
+                runLock = OpenRunLock(runDirectory);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Usually another dashboard holds the lock, but this can also be a disk or permission error.
+                lastLockException = exception;
+            }
+
             if (runLock is not null)
             {
                 if (!Directory.Exists(runDirectory))
@@ -595,7 +606,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             if (attempt >= MaxRunIdAttempts)
             {
                 throw new InvalidOperationException(
-                    $"Could not allocate a dashboard run in '{runsDirectory}' after {MaxRunIdAttempts} attempts. Run '{runId}' is already in use by another dashboard process.");
+                    $"Could not allocate a dashboard run in '{runsDirectory}' after {MaxRunIdAttempts} attempts. Each candidate run ID was locked by another dashboard process, already existed, or its lock could not be acquired. Last candidate: '{runId}'.",
+                    lastLockException);
             }
 
             startedAt = startedAt.AddMilliseconds(1);
