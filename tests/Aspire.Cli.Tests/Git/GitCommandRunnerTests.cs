@@ -20,7 +20,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     public void Dispose() => _loggerFactory.Dispose();
 
     private GitCommandRunner CreateRunner() =>
-        new(TestHelpers.CreateInteractiveHostEnvironment(), new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
+        new(TestHelpers.CreateInteractiveHostEnvironment(), new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>(), new TestFeatures());
 
     [Fact]
     public void CreateStartInfo_CapturedCommandsUseLiteralArgumentsAndPreserveCredentialHelpers()
@@ -135,7 +135,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     {
         var logger = new FakeLogger<GitCommandRunner>();
         var interaction = new TestInteractionService();
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, logger);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction, logger, new TestFeatures());
         var message = $"{diagnostic}: private-repository-secret-marker";
         var startInfo = CreateShellStartInfo($"printf '%s' '{message}' >&2; exit 128",
             $"[Console]::Error.Write('{message}'); exit 128");
@@ -212,7 +212,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     {
         var interaction = new TestInteractionService();
         var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction,
-            _loggerFactory.CreateLogger<GitCommandRunner>());
+            _loggerFactory.CreateLogger<GitCommandRunner>(), new TestFeatures());
         var startInfo = CreateShellStartInfo("printf 'refs\\000blob'; printf 'Git warning' >&2",
             "[Console]::Out.Write(\"refs`0blob\"); [Console]::Error.Write('Git warning')");
 

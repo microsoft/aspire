@@ -251,9 +251,79 @@ credential helpers may authenticate there even when the checkout is already
 cached. Reusing a cached, fully specified commit SHA does not repeat the notice.
 
 Normal Git credential helpers and SSH authentication configuration remain
-available. Git's terminal credential prompts are always disabled with
-`GIT_TERMINAL_PROMPT=0`, including when Aspire itself is interactive.
-Authentication must be configured before invocation.
+available. Interactive acquisition allows Git's existing authentication UI;
+unattended acquisition disables terminal and askpass prompts while preserving
+noninteractive credential helpers and supported OpenSSH agent/key authentication.
+Captured template operations receive EOF on stdin.
+
+### Experimental HTTPS credential callback (macOS)
+
+Enable the opt-in prototype with:
+
+```bash
+aspire config set features.experimentalGitAskPass true --global
+```
+
+For an input-capable Aspire session, HTTPS `fetch` and `ls-remote` can invoke the
+hidden `aspire git askpass` helper instead of Git terminal prompts. The helper
+launches the running native CLI executable (or the physical CLI assembly for
+a `dotnet`-hosted development build). Its early entry point does not initialize
+logging, telemetry, configuration, acquisition, or IDE services.
+`GIT_TERMINAL_PROMPT=0` prevents uncontrolled terminal fallback.
+Credential managers still run first; their browser/UI authentication is independent
+of this callback. SSH, HTTP and other transports retain their existing behavior.
+This prototype does not capture credential-manager or SSH flows and does not
+provide Linux or Windows parity. Without the flag, existing behavior is unchanged.
+
+Each remote operation resolves Git's configured URL rewriting locally, then
+creates a fresh socket below `~/.aspire/git/<random-operation>/`. Existing shared
+socket-name, UTF-8 path-length and permission helpers are reused. Descriptor-based
+Darwin checks require current-user ownership, reject symlinks and writable/foreign
+ancestry, and refuse insecure existing directories rather than chmod them.
+The operation directory is 0700 before binding. A separate hidden
+`aspire git askpass-server` process verifies its cwd inode against the parent's
+held directory and binds a relative socket name with a process-local creation
+mask. The socket is 0600 from creation; no post-bind pathname chmod is performed,
+and the parent CLI's creation mask is unchanged. Runtime automatic pathname
+deletion is disabled in favor of held-directory/inode-checked cleanup.
+Git requires an executable `GIT_ASKPASS` path. An exclusively created 0700 script
+in the held operation directory executes only the fixed, quoted CLI launcher,
+forwarding Git's prompt through `"$@"` without shell interpolation. It contains
+no credentials or operation authorization.
+The default directory is not redirected by `ASPIRE_HOME` or a socket override.
+
+TLS authenticates the isolated server using an operation-specific certificate pin before
+the helper sends its operation authorization key. The parent verifies that key
+before accepting a bounded UTF-8 prompt. The certificate private key exists only
+in memory. The socket path, public pin and short-lived random callback key are
+passed only in the Git child's `ASPIRE_GIT_ASKPASS_*` environment; these are not
+Git passwords or tokens. Other Git operations/probes discard inherited callback
+authorization. Access to the owning process, its environment or its memory can
+compromise this authorization: this is not a sandbox against same-user process
+compromise or administrator access. Filesystem privacy alone is not authentication.
+
+Only Git's username and password prompt shapes for the resolved origin/path are
+accepted. The CLI displays a label generated from the bound origin, not Git's
+raw text, username, URL userinfo, query, fragment, controls or markup. Both username
+and password/token responses are masked in the terminal. IDE-hosted callback
+requests are rejected without displaying a credential UI; supporting them requires
+an IDE capability that dismisses secret input on request cancellation/disconnect.
+Configured credential helpers continue to work in IDE sessions. Responses are
+never persisted or logged, nor put in argv or
+environment variables. The helper writes only one validated credential line to
+stdout; failures produce a fixed credential-free stderr message and a nonzero exit.
+Callback-mode remote stderr is replaced by classified diagnostics because Git can
+echo username/password URL userinfo. Parsed stdout remains unchanged.
+
+Prompts are serialized across operations. Every request is bounded, handshakes
+have ten-second deadlines, and credential entry has a 90-second budget within the
+caller's acquisition deadline. Caller cancellation, helper disconnect and server
+exit dismiss the terminal prompt. Rejection or authenticated protocol failure ends
+the operation without fallback. Normal disposal removes only the held operation's
+socket, fixed helper script and empty directory. Abrupt process termination can leave
+private operation directories and launcher/socket files, but cannot leave a usable
+server or persisted credentials;
+the prototype deliberately has no broad startup deletion sweep.
 
 Captured template Git commands receive EOF on stdin rather than inheriting the
 CLI's input, so Git hooks or credential helpers cannot consume pending CLI input.

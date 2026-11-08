@@ -61,6 +61,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Git username for {0} (masked):.
+        /// </summary>
+        internal static string GitUsernamePrompt {
+            get {
+                return ResourceManager.GetString("GitUsernamePrompt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git password or token for {0} (masked):.
+        /// </summary>
+        internal static string GitPasswordPrompt {
+            get {
+                return ResourceManager.GetString("GitPasswordPrompt", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The connection to the AppHost was lost: {0}.
         /// </summary>
         internal static string AppHostConnectionLost {
