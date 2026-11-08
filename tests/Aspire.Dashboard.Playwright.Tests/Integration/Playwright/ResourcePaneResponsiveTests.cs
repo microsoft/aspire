@@ -191,7 +191,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             // These are expanded-list rows: a compact row is a single 32px line, and a spacious one keeps two lines
             // because its third-line details have their own columns here.
             foreach (var (density, fontSize, lineHeight, rowHeight) in new[]
-                { ("Compact", 11d, 16d, 32d), ("Comfortable", 12d, 18d, 52d), ("Spacious", 14d, 20d, 60d) })
+                // Secondary text sizes on the type scale: caption, secondary and body.
+                { ("Compact", 11d, 16d, 32d), ("Comfortable", 12d, 18d, 52d), ("Spacious", 13d, 20d, 60d) })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
