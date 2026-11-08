@@ -19,8 +19,9 @@ internal static class KubernetesDeployTestHelpers
     // Each download attempt must end on its own, or a stalled GitHub release connection (seen in CI on the
     // KinD download) uses the whole 90s prompt timeout and the retry loop never runs. An attempt gives up after
     // 10s without a connection, or once the transfer stays under 1 KB/s for 10s. A stall check is used instead
-    // of a total time cap so large downloads such as kubectl (~55 MB) can still finish on a slow link. Worst case:
-    // 3 attempts x ~20s + 3 x 5s retry delay = ~75s, inside the 90s budget used by the callers.
+    // of a total time cap so large downloads such as kubectl (~55 MB) can still finish on a slow link. When every
+    // attempt hangs, the worst case is 3 attempts x ~20s + 3 x 5s retry delay = ~75s, inside the callers' 90s budget.
+    // A download that keeps making progress is not cut off; it is bounded only by the caller's prompt timeout.
     internal const int DownloadAttempts = 3;
     internal const int DownloadRetryDelaySeconds = 5;
     internal const int DownloadConnectTimeoutSeconds = 10;
