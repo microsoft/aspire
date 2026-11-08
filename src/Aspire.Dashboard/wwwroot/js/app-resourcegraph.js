@@ -376,7 +376,7 @@ class ResourceGraph {
     }
 
     iconEqual(i1, i2) {
-        if (i1.path !== i2.path) {
+        if (i1.path !== i2.path || i1.imageData !== i2.imageData) {
             return false;
         }
         if (i1.color !== i2.color) {
@@ -454,6 +454,7 @@ class ResourceGraph {
         function createIcon(resourceIcon) {
             return {
                 path: resourceIcon.path,
+                imageData: resourceIcon.imageData,
                 color: resourceIcon.color,
                 tooltip: resourceIcon.tooltip
             };
@@ -858,11 +859,24 @@ class ResourceGraph {
         const iconSize = 48;
         const halfIconSize = iconSize / 2;
         const iconLiftForEndpoint = 13;
-        var iconTransform = newNodesContainer
-            .append("g")
+        newNodesContainer.append("g").attr("data-resource-icon", "");
+        // Update existing nodes too: resource snapshots can replace an icon after
+        // the graph has already created the node (including after a restart).
+        var iconTransform = newNodes.merge(this.nodeElements)
+            .select("[data-resource-icon]")
             .attr("transform", n => `translate(${-halfIconSize},${-halfIconSize - (n.endpointText ? iconLiftForEndpoint : 0)})`);
-        var iconPath = iconTransform
-            .append("path");
+        // Render embedded SVGs in image mode rather than inserting AppHost-provided
+        // SVG into the graph DOM. Image mode disables scripts and external resources.
+        iconTransform.selectAll("image")
+            .data(n => n.resourceIcon.imageData ? [n] : [])
+            .join("image")
+            .attr("href", n => n.resourceIcon.imageData)
+            .attr("width", iconSize)
+            .attr("height", iconSize)
+            .attr("data-tooltip", n => n.resourceIcon.tooltip);
+        var iconPath = iconTransform.selectAll("path")
+            .data(n => n.resourceIcon.imageData ? [] : [n])
+            .join("path");
         iconPath
             .attr("fill", n => n.resourceIcon.color)
             .attr("d", n => n.resourceIcon.path)

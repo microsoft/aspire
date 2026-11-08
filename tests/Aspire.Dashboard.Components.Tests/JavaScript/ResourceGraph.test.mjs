@@ -967,3 +967,11 @@ test("link masks follow nodes outside the viewport and selected scaling", () => 
     assert.ok(graph.linkMask.attributes.get("width") > 0);
     assert.ok(graph.linkMask.attributes.get("height") > 0);
 });
+
+test("changing embedded icon data invalidates graph icons", () => {
+    const graph = createGraph();
+    const icon = { path: "", color: "red", tooltip: "app", imageData: "data:image/png;base64,AQID" };
+    assert.equal(graph.iconEqual(icon, { ...icon }), true);
+    assert.equal(graph.iconEqual(icon, { ...icon, imageData: "data:image/png;base64,BAUG" }), false);
+    assert.equal(graph.iconEqual(icon, { ...icon, imageData: undefined, path: "M0 0" }), false);
+});

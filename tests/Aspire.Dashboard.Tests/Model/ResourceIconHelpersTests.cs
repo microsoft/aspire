@@ -14,6 +14,31 @@ public sealed class ResourceIconHelpersTests
 {
     private readonly IconResolver _iconResolver = new IconResolver(NullLogger<IconResolver>.Instance);
 
+    [Theory]
+    [InlineData("data:image/png;base64,AQID")]
+    [InlineData("data:image/svg+xml;base64,PHN2Zy8+")]
+    public void GetIconForResource_EmbeddedImageUsesImageRendering(string data)
+    {
+        var resource = ModelTestHelpers.CreateResource(iconData: data);
+        var icon = ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size16);
+        Assert.IsType<IconFromImage>(icon);
+        Assert.Equal(data, ResourceIconHelpers.GetCustomIconData(resource));
+    }
+
+    [Theory]
+    [InlineData("https://example.com/icon.png")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:text/html;base64,PHN2Zy8+")]
+    [InlineData("data:image/svg+xml,<svg onload='alert(1)'/>")]
+    [InlineData("data:image/png;base64,AQID\" onerror=\"alert(1)")]
+    [InlineData("data:image/png;base64,")]
+    public void GetIconForResource_UnsafeImageDataFallsBack(string data)
+    {
+        var resource = ModelTestHelpers.CreateResource(iconName: "Database", iconData: data);
+        Assert.Null(ResourceIconHelpers.GetCustomIconData(resource));
+        Assert.Equal("Database", ResourceIconHelpers.GetIconForResource(_iconResolver, resource, IconSize.Size16).Name);
+    }
+
     [Fact]
     public void GetIconForResource_WithCustomIcon_ReturnsCustomIcon()
     {
