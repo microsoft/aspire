@@ -151,6 +151,42 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to now.
+        /// </summary>
+        public static string ResourceStartedAgeNow {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeNow", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}m ago.
+        /// </summary>
+        public static string ResourceStartedAgeMinutes {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeMinutes", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}h ago.
+        /// </summary>
+        public static string ResourceStartedAgeHours {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeHours", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}d ago.
+        /// </summary>
+        public static string ResourceStartedAgeDays {
+            get {
+                return ResourceManager.GetString("ResourceStartedAgeDays", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to a moment ago.
         /// </summary>
         public static string DashboardRunSelectMomentAgo {

@@ -1707,15 +1707,34 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
     private bool IsSpacious => ViewPreferences.Density == ResourceListDensity.Spacious;
 
-    // Share relative ages between the sidebar and full-canvas health/start summary.
-    private string? GetStartedAge(ResourceViewModel resource) =>
-        resource.StartTimeStamp is { } startTimeStamp
-            ? Aspire.Dashboard.Components.Controls.DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), Loc)
-            : null;
+    // Rows show a short age ("7m ago") because every row repeats it; the tooltip and accessible label keep the
+    // full wording and the exact time.
+    private string? GetStartedAge(ResourceViewModel resource)
+    {
+        if (resource.StartTimeStamp is not { } startTimeStamp)
+        {
+            return null;
+        }
+
+        // Clamp so a start time slightly in the future (clock skew between processes) reads as "now".
+        var age = TimeProvider.GetUtcNow() - new DateTimeOffset(startTimeStamp);
+        if (age < TimeSpan.Zero)
+        {
+            age = TimeSpan.Zero;
+        }
+
+        return age switch
+        {
+            { TotalMinutes: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeNow)],
+            { TotalHours: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeMinutes), (int)age.TotalMinutes],
+            { TotalDays: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeHours), (int)age.TotalHours],
+            _ => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeDays), (int)age.TotalDays]
+        };
+    }
 
     private string? GetStartedTooltip(ResourceViewModel resource) =>
         resource.StartTimeStamp is { } startTimeStamp
-            ? $"{GetStartedAge(resource)} ({FormatHelpers.FormatDateTime(TimeProvider, startTimeStamp)})"
+            ? $"{Aspire.Dashboard.Components.Controls.DashboardRunSelect.FormatRunAge(new DateTimeOffset(startTimeStamp), TimeProvider.GetUtcNow(), Loc)} ({FormatHelpers.FormatDateTime(TimeProvider, startTimeStamp)})"
             : null;
 
     // Relative ages remain current even when the resource itself has no updates.

@@ -2137,10 +2137,6 @@
     }
 }
 
-.resource-row-started-prefix {
-    display: none;
-}
-
 .resource-row-endpoint-address {
     display: block;
     overflow: hidden;
@@ -2392,7 +2388,6 @@ a.resource-row-endpoint-link:focus-visible {
 }
 
 .resource-row-actions ::deep .resource-row-output,
-.resource-row-actions ::deep .resource-row-json,
 .resource-row-actions ::deep .resource-row-wide-command,
 .resource-row-actions ::deep .aspire-menu-button:has(.resource-row-more-endpoints) {
     display: none;
@@ -2480,12 +2475,8 @@ a.resource-row-endpoint-link:focus-visible {
 
 @container resource-pane (min-width: 960px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(220px, 320px) [status] 180px [endpoint] minmax(96px, 1fr) [source] 200px [insights actions] 244px [end];
+        --resource-row-tracks: [identity] minmax(220px, 320px) [status] 180px [endpoint] minmax(96px, 1fr) [source] 200px [insights actions] 212px [end];
         column-gap: var(--spacingHorizontalS);
-    }
-
-    .resource-row-started-prefix {
-        display: inline;
     }
 
     .resource-row-health {
@@ -2515,8 +2506,8 @@ a.resource-row-endpoint-link:focus-visible {
     }
 
     .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
-        grid-template-columns: 20px repeat(7, 28px);
-        width: 244px;
+        grid-template-columns: 20px repeat(6, 28px);
+        width: 212px;
         justify-self: end;
     }
 
@@ -2531,14 +2522,8 @@ a.resource-row-endpoint-link:focus-visible {
         grid-column: 6;
     }
 
-    .resource-row-actions ::deep .resource-row-json {
-        display: inline-flex;
-        grid-column: 7;
-        grid-row: 1;
-    }
-
     .resource-row-actions ::deep .aspire-menu-button:not(:has(.resource-row-more-endpoints)) {
-        grid-column: 8;
+        grid-column: 7;
     }
 }
 
@@ -2689,7 +2674,6 @@ a.resource-row-endpoint-link:focus-visible {
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-output,
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-terminal,
-.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-json,
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .aspire-menu-button:has(.resource-row-more-endpoints) {
     display: none;
 }
@@ -2759,7 +2743,7 @@ a.resource-row-endpoint-link:focus-visible {
 @container resource-pane (min-width: 1440px) {
     /* Only the endpoint track absorbs spare width; activity stays next to actions. */
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 260px [status] 180px [endpoint] minmax(200px, 1fr) [source] 200px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] 260px [status] 180px [endpoint] minmax(200px, 1fr) [source] 200px [insights] var(--resource-insight-width) [actions] 212px [end];
     }
 
     ::deep .resource-row-insights {
@@ -2798,13 +2782,13 @@ a.resource-row-endpoint-link:focus-visible {
 
 @container resource-pane (min-width: 1600px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(280px, 1fr) [source] 220px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(280px, 1fr) [source] 220px [insights] var(--resource-insight-width) [actions] 212px [end];
         column-gap: var(--spacingHorizontalL);
     }
 }
 
 @container resource-pane (min-width: 1800px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(240px, 1fr) [source] 352px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(240px, 1fr) [source] 352px [insights] var(--resource-insight-width) [actions] 212px [end];
     }
 }

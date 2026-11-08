@@ -642,6 +642,26 @@
         <target state="new">{0} unviewed error logs</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceStartedAgeDays">
+        <source>{0}d ago</source>
+        <target state="new">{0}d ago</target>
+        <note>Short relative start time shown in a resource row. {0} is the number of days</note>
+      </trans-unit>
+      <trans-unit id="ResourceStartedAgeHours">
+        <source>{0}h ago</source>
+        <target state="new">{0}h ago</target>
+        <note>Short relative start time shown in a resource row. {0} is the number of hours</note>
+      </trans-unit>
+      <trans-unit id="ResourceStartedAgeMinutes">
+        <source>{0}m ago</source>
+        <target state="new">{0}m ago</target>
+        <note>Short relative start time shown in a resource row. {0} is the number of minutes</note>
+      </trans-unit>
+      <trans-unit id="ResourceStartedAgeNow">
+        <source>now</source>
+        <target state="new">now</target>
+        <note>Short relative start time shown in a resource row, for a resource started less than a minute ago</note>
+      </trans-unit>
       <trans-unit id="ResourceTabOverview">
         <source>Overview</source>
         <target state="new">Overview</target>

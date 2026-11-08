@@ -410,7 +410,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
         Assert.Empty(cut.FindAll(".resource-row-wide-metadata"));
         Assert.Equal("Running", cut.Find("[data-resource-name='api'] .state-dot + span").TextContent);
-        Assert.Equal("10 minutes ago", cut.Find("[data-resource-name='api'] time").TextContent);
+        Assert.Equal("10m ago", cut.Find("[data-resource-name='api'] time").TextContent);
         Assert.Equal("Finished", cut.Find("[data-resource-name='finished'] .state-dot + span").TextContent);
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         ResourceSetupHelpers.ToggleResourceList(cut);
@@ -437,9 +437,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         var time = health.QuerySelector(".resource-row-start-time time")!;
         Assert.Equal(api.StartTimeStamp!.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture), time.GetAttribute("datetime"));
-        Assert.Equal("Started 10 minutes ago", time.TextContent.Trim());
-        Assert.Equal("Started", time.QuerySelector(".resource-row-started-prefix")!.TextContent);
-        Assert.Equal("10 minutes ago", time.QuerySelector(".resource-row-started-age")!.TextContent);
+        // Every row repeats its age, so the row shows the short form; the tooltip keeps the full wording.
+        Assert.Equal("10m ago", time.TextContent.Trim());
         Assert.Equal($"Started 10 minutes ago ({FormatHelpers.FormatDateTime(clock, api.StartTimeStamp.Value)})", time.GetAttribute("data-tooltip"));
         Assert.Equal("above", time.GetAttribute("data-tooltip-positioning"));
         Assert.Equal("0", time.GetAttribute("tabindex"));
@@ -456,7 +455,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         clock.UtcNow = clock.UtcNow.AddMinutes(1);
         ResourceSetupHelpers.ToggleResourceList(cut);
         ResourceSetupHelpers.ToggleResourceList(cut);
-        cut.WaitForAssertion(() => Assert.Equal("Started 11 minutes ago",
+        cut.WaitForAssertion(() => Assert.Equal("11m ago",
             cut.Find("[data-resource-name='api'] .resource-row-health time").TextContent.Trim()));
     }
 
@@ -1488,7 +1487,6 @@ public class ResourcesLayoutTests : DashboardTestContext
             spacer => Assert.True(spacer.ClassList.Contains("resource-row-toggle-spacer")),
             endpoint => Assert.True(endpoint.ClassList.Contains("resource-row-action-priority-0")),
             shortcut => Assert.True(shortcut.ClassList.Contains("resource-row-action-priority-1")),
-            json => Assert.True(json.ClassList.Contains("resource-row-json")),
             command => Assert.True(command.ClassList.Contains("resource-row-action-priority-2")),
             menu => Assert.True(menu.ClassList.Contains("aspire-menu-button")));
 

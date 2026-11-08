@@ -574,19 +574,6 @@
                     <FluentIcon Value="@outputAction.Icon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
                 </FluentButton>
             }
-            @if (!showLabels)
-            {
-                var jsonAction = ResourceMenuBuilder.CreateViewJsonMenuItem(resource, _resourceByName);
-                <FluentButton Appearance="ButtonAppearance.Transparent"
-                              Class="resource-row-action resource-row-json"
-                              IconOnly="true"
-                              data-tooltip="@jsonAction.Text"
-                              data-tooltip-positioning="above"
-                              aria-label="@($"{jsonAction.Text} {resourceName}")"
-                              OnClick="@(jsonAction.OnClick!)">
-                    <FluentIcon Value="@jsonAction.Icon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
-                </FluentButton>
-            }
             @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetResourceRowCommands(resource) : GetSidebarCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
@@ -1062,7 +1049,7 @@
                                       aria-label="@($"{Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderStarted)]} {GetStartedTooltip(resource)}")"
                                       data-tooltip="@($"{Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderStarted)]} {GetStartedTooltip(resource)}")"
                                       data-tooltip-positioning="above">
-                                    <span class="resource-row-started-prefix">@Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderStarted)]</span>@(" ")<span class="resource-row-started-age">@GetStartedAge(resource)</span>
+                                    <span class="resource-row-started-age">@GetStartedAge(resource)</span>
                                 </time>
                             }
                         </span>
