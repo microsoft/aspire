@@ -2187,6 +2187,26 @@ builder.Build().Run();
         assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
     });
 
+    test('keeps the debugger install hint fixture under the run root and defers its deletion to the runner', () => {
+        // The fixture AppHost starts DCP with --detach in its directory, and DCP can outlive a
+        // successful `aspire stop`. Deleting that directory inside the VS Code session failed with
+        // EBUSY on Windows, so run-e2e.js owns the deletion after the session's processes exit.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const hintTest = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
+
+        assert.ok(fixtures.includes('export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string>'));
+        assert.ok(hintTest.includes("const projectRoot = path.join(runRoot, `.e2e-debugger-install-hint-${++debuggerInstallHintFixtureIndex}`, 'DebuggerInstallHintApp');"));
+        assert.ok(hintTest.includes("await createEmptyAppHostProject('DebuggerInstallHintApp', projectRoot);"));
+        assert.ok(!hintTest.includes('getGeneratedAppHostPath('));
+        assert.ok(!hintTest.includes('getGeneratedProjectRoot('));
+        assert.ok(edgeCasesSource.includes('() => debuggerInstallHintAppHostPath ? stopAppHostIfRunning(debuggerInstallHintAppHostPath) : undefined,'));
+        assert.ok(!edgeCasesSource.includes('removeGeneratedProject('));
+        assert.ok(!/removePath\([^)]*debuggerInstallHint/.test(edgeCasesSource));
+        assert.ok(!/fs\.rm(Sync)?\([^)]*(debuggerInstallHint|projectRoot)/.test(edgeCasesSource));
+    });
+
     test('waits for CLI-independent settings command outcomes instead of the control apply timeout', () => {
         // The first Settings editor open can exceed the 10s control apply wait on Windows CI; the
         // command outcome wait has the budget for completion.
