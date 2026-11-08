@@ -341,44 +341,6 @@ suite('Node Debugger Deno AppHost inspector attach (js-debug)', function () {
         assert.strictEqual(await started, false);
     });
 
-    // TEMPORARY: stress the cancel path on CI to capture diagnostics for the flake. Not for merge.
-    let stressFailures = 0;
-    for (let iteration = 0; iteration < 120; iteration++) {
-        test(`STRESS ${iteration}: integrated terminal then cancel`, async function () {
-            if (stressFailures >= 3) {
-                this.skip();
-            }
-
-            stressFailures++;
-            {
-                const name = `stress-terminal-${iteration}`;
-                const debugConfig = await createAppHostAttachConfiguration(name, 2000, aspireDebugSession, 'integratedTerminal');
-                const fixtureStarted = waitForFixture();
-                const launchResponse = captureLaunchResponse(name);
-                const started = vscode.debug.startDebugging(undefined, debugConfig);
-                const fixture = await fixtureStarted;
-                assert.strictEqual((await launchResponse).success, false);
-                await fixture.closed;
-                assert.strictEqual(await started, false);
-            }
-            {
-                const name = `stress-cancel-${iteration}`;
-                const debugConfig = await createAppHostAttachConfiguration(name);
-                const fixtureStarted = waitForFixture();
-                const rootSession = waitForRootSession(name);
-                const started = vscode.debug.startDebugging(undefined, debugConfig);
-                const [session, fixture] = await Promise.all([rootSession, fixtureStarted]);
-                cleanupLog.push(`${new Date().toISOString()} [test] stopping the debug session; fixture ${fixture.pid}`);
-                await vscode.debug.stopDebugging(session);
-                cleanupLog.push(`${new Date().toISOString()} [test] debug session stopped`);
-                await fixture.closed;
-                cleanupLog.push(`${new Date().toISOString()} [test] fixture exited`);
-                assert.strictEqual(await started, false);
-            }
-            stressFailures--;
-        });
-    }
-
     test('stops the runtime when the session is cancelled as js-debug receives the launch request', async () => {
         const name = 'cancelled-during-launch';
         const debugConfig = await createAppHostAttachConfiguration(name);
