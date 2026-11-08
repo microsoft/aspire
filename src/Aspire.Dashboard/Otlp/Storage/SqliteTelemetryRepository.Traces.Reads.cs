@@ -388,7 +388,7 @@ public sealed partial class SqliteTelemetryRepository
 
         var attributePredicate = BuildStringPredicate("a.attribute_value", condition, parameterName);
         parameters.Add($"TraceField{filterIndex}", filter.Field);
-        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
+        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND +a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
     }
 
     private GetSpansResponse GetSpansFromDatabase(GetSpansRequest context, CancellationToken cancellationToken)
