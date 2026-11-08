@@ -1093,48 +1093,25 @@ internal sealed class TestTokenCredentialProvider(TokenCredential? credential = 
 /// </summary>
 internal sealed class MockProcessRunner : IProcessRunner
 {
-    /// <summary>
-    /// Gets the list of commands that were executed.
-    /// </summary>
-    public List<ExecutedCommand> ExecutedCommands { get; } = [];
+    public List<ProcessCommand> ExecutedCommands { get; } = [];
 
-    /// <summary>
-    /// Gets or sets the configured results for specific commands.
-    /// Key format: "{executablePath} {arguments}"
-    /// </summary>
-    public Dictionary<string, ProcessResult> CommandResults { get; set; } = [];
+    public Func<ProcessCommand, CancellationToken, Task<ProcessCaptureResult>> RunAsync { get; set; }
+        = static (_, _) => Task.FromResult(new ProcessCaptureResult(0, "", ""));
 
-    /// <summary>
-    /// Gets or sets the default process result to return when no specific result is configured.
-    /// </summary>
-    public ProcessResult DefaultResult { get; set; } = new(0);
+    public IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(ProcessCommand command)
+        => new ProcessEventStream(ReadEventsAsync(command));
 
-    /// <summary>
-    /// Represents a command that was executed.
-    /// </summary>
-    public sealed record ExecutedCommand(string ExecutablePath, string? Arguments, string? WorkingDirectory);
-
-    public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
+    private async IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> ReadEventsAsync(
+        ProcessCommand command, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Capture the executed command
-        var executedCommand = new ExecutedCommand(processSpec.ExecutablePath, processSpec.Arguments, processSpec.WorkingDirectory);
-        ExecutedCommands.Add(executedCommand);
-
-        // Determine the result to return
-        var commandKey = $"{processSpec.ExecutablePath} {processSpec.Arguments ?? ""}".Trim();
-        var result = CommandResults.TryGetValue(commandKey, out var configuredResult) ? configuredResult : DefaultResult;
-
-        // Create a task that completes immediately with the configured result
-        var resultTask = Task.FromResult(result);
-
-        // Create a no-op disposable
-        var disposable = new NoOpAsyncDisposable();
-
-        return (resultTask, disposable);
-    }
-
-    private sealed class NoOpAsyncDisposable : IAsyncDisposable
-    {
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        cancellationToken.ThrowIfCancellationRequested();
+        ExecutedCommands.Add(command);
+        var result = await RunAsync(command, cancellationToken);
+        yield return new ProcessEvent<ReadOnlyMemory<byte>>.Started(1);
+        yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(Encoding.UTF8.GetBytes(result.StandardOutput));
+        yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardError(Encoding.UTF8.GetBytes(result.StandardError));
+        yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted();
+        yield return new ProcessEvent<ReadOnlyMemory<byte>>.StandardErrorCompleted();
+        yield return new ProcessEvent<ReadOnlyMemory<byte>>.Exited(result.ExitCode);
     }
 }
