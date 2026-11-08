@@ -767,8 +767,11 @@ body {
     background: var(--aspire-popup-background);
 }
 
+/* :focus too: opening a menu focuses its checked item without :focus-visible, and Fluent's own focus background is
+   a neutral grey that doesn't match the dashboard's tinted surfaces. */
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):hover,
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):state(active),
+:is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):focus,
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) fluent-menu-item:not(:state(disabled)):focus-visible {
     background-color: var(--aspire-menu-item-hover-background);
 }

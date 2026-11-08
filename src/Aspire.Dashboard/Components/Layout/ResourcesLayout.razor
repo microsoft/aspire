@@ -1064,9 +1064,10 @@
                     <div class="resource-row-endpoints">
                         @if (urls.Count > 0)
                         {
-                            @* The resources grid's URLs column: links that open the URLs as they fit, then a +N button
-                               listing the rest. Links and buttons don't select the row (see ResourcesLayout.razor.js). *@
-                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@urls" />
+                            @* The resources grid's URLs column, showing the first URL and a +N button listing the rest, so a
+                               resource with many URLs doesn't widen the column. Links and buttons don't select the row
+                               (see ResourcesLayout.razor.js). *@
+                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@urls" ShowFirstUrlOnly="true" />
                         }
                     </div>
                     @* What ran the resource reads best next to its kind ("Container alpine:latest", "Project Api.csproj"),

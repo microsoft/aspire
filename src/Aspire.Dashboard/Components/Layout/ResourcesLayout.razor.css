@@ -890,13 +890,15 @@
     white-space: nowrap;
 }
 
+/* The second line (state, age) is secondary text, the same size as the full list's columns. Only the name uses the
+   row size, so each density has two sizes. */
 .resource-row-sub {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-1);
     overflow: hidden;
     color: var(--colorNeutralForeground2);
-    font-size: var(--resource-row-font-size);
+    font-size: var(--resource-secondary-font-size);
     line-height: var(--resource-row-line-height);
     white-space: nowrap;
 }
@@ -2324,7 +2326,7 @@
 
 @container resource-pane (min-width: 960px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(220px, calc(320px + var(--resource-row-identity-extra, 0px))) [status] 180px [endpoint] minmax(96px, 1fr) [source] 200px [insights actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] minmax(220px, calc(320px + var(--resource-row-identity-extra, 0px))) [status] 180px [endpoint] minmax(96px, 280px) [source] minmax(200px, 1fr) [insights actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalS);
     }
 
@@ -2796,9 +2798,10 @@
 }
 
 @container resource-pane (min-width: 1440px) {
-    /* Only the endpoint track absorbs spare width; activity stays next to actions. */
+    /* Only the source track absorbs spare width, so the URLs column keeps a readable width however wide the pane is;
+       activity stays next to actions. */
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] calc(260px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(200px, 1fr) [source] 200px [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] calc(260px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(200px, 320px) [source] minmax(200px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
     }
 
     ::deep .resource-row-insights {
@@ -2837,13 +2840,13 @@
 
 @container resource-pane (min-width: 1600px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(280px, 1fr) [source] 220px [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(240px, 360px) [source] minmax(220px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalL);
     }
 }
 
 @container resource-pane (min-width: 1800px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(240px, 1fr) [source] 352px [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [endpoint] minmax(240px, 360px) [source] minmax(352px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
     }
 }

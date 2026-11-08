@@ -73,6 +73,31 @@ public class UrlsColumnDisplayTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_ShowFirstUrlOnly_ShowsFirstUrlAndListsTheRestBehindCount()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        FluentUISetupHelpers.SetupFluentOverflow(this);
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+
+        var displayedUrls = CreateDisplayedUrls(5);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
+
+        var cut = Render<UrlsColumnDisplay>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.HasMultipleReplicas, false);
+            builder.Add(p => p.DisplayedUrls, displayedUrls);
+            builder.Add(p => p.ShowFirstUrlOnly, true);
+        });
+
+        // One URL, however many fit, so a resource with many URLs doesn't need a wider column.
+        Assert.Empty(cut.FindAll("fluent-overflow"));
+        Assert.Equal([displayedUrls[0].Text], cut.FindAll(".first-url > *").Select(item => item.TextContent.Trim()));
+        Assert.Equal("+4", cut.Find(".url-button-neutral").TextContent.Trim());
+        Assert.Equal(displayedUrls.Skip(1).Select(url => url.Text), cut.FindAll(".url-overflow-popover .url-link").Select(item => item.TextContent.Trim()));
+    }
+
+    [Fact]
     public void Render_MasksAddressesButLinksToThemAndLetsTextAddressesTakeFocus()
     {
         const string link = "https://localhost:5000/login?token=synthetic-secret";
