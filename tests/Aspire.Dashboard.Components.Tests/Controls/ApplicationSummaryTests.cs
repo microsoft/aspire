@@ -44,10 +44,11 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Single(cut.FindAll(".home-insights"));
         Assert.Single(cut.FindAll(".home-problems"));
         Assert.Empty(cut.FindAll(".resource-card, .home-resource-table"));
+        // The list layout is only offered inside the resources layout, which owns the full-page list.
         Assert.Equal(graphEnabled ? ["Summary", "Graph"] : ["Summary"],
             outlet.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
         Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
-            outlet.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Summary).Icon);
+            outlet.FindComponent<IconToggleGroup<OverviewLayout>>().Instance.Options.Single(option => option.Value == OverviewLayout.Summary).Icon);
     }
 
     [Fact]

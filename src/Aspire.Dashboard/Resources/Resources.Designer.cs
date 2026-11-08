@@ -104,6 +104,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("LayoutLabel", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to List.
+        /// </summary>
+        public static string ResourceOverviewLayoutList {
+            get {
+                return ResourceManager.GetString("ResourceOverviewLayoutList", resourceCulture);
+            }
+        }
 
         /// <summary>
         ///   Looks up a localized string similar to {0} (just now).

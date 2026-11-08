@@ -532,6 +532,11 @@
         <target state="new">Internal</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceOverviewLayoutList">
+        <source>List</source>
+        <target state="new">List</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceOverviewLogsTitle">
         <source>Structured logs</source>
         <target state="new">Structured logs</target>

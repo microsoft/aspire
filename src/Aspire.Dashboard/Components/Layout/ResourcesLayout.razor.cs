@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -170,6 +171,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     [Inject]
     public required IStringLocalizer<Resources.Resources> ResourcesLoc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.Dialogs> DialogsLoc { get; init; }
 
     [Inject]
     public required IStringLocalizer<Resources.StructuredLogs> StructuredLogsLoc { get; init; }
@@ -677,6 +681,51 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? GetLayoutStyle() => _paneWidth is { } width && ViewportInformation.IsDesktop
         ? string.Create(CultureInfo.InvariantCulture, $"--resource-pane-expanded-width: {width}px")
         : null;
+
+    /// <summary>
+    /// Whether the full-page list replaces the content of a tab other than Overview. The list is the overview's own
+    /// third layout, so the overview counts as open while the list shows for it.
+    /// </summary>
+    private bool IsContentClosed => _isPaneFullCanvas && CurrentTab != ResourceTab.Overview;
+
+    private IReadOnlyList<IconToggleOption<OverviewLayout>> GetOverviewLayoutOptions() =>
+        OverviewLayoutOptions.Create(DialogsLoc, ResourcesLoc, ViewPreferences.IsGraphEnabled);
+
+    /// <summary>
+    /// Shows the full-page list for the current scope, as the content's close button does.
+    /// </summary>
+    internal async Task ShowResourceListAsync()
+    {
+        if (DetailParentUrl is { } parentUrl)
+        {
+            await CloseDetailAsync(parentUrl);
+        }
+        else
+        {
+            SetResourceListVisible(true);
+        }
+    }
+
+    /// <summary>
+    /// Chooses an overview layout from the full-page list: the summary and graph open the overview with that
+    /// preference, for the current selection.
+    /// </summary>
+    private async Task OpenOverviewLayoutAsync(OverviewLayout layout)
+    {
+        if (layout == OverviewLayout.List)
+        {
+            return;
+        }
+
+        await ViewPreferences.SetGroupOverviewAsync(OverviewLayoutOptions.ToPreference(layout));
+        if (!_isPaneFullCanvas)
+        {
+            return;
+        }
+
+        var href = GetTabs().FirstOrDefault(t => t.Tab == ResourceTab.Overview && t.IsVisible)?.Href ?? DashboardUrls.ResourceListUrl();
+        await NavigateToTabAsync(href);
+    }
 
     internal void SetResourceListVisible(bool visible)
     {
@@ -2886,7 +2935,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 StartIcon = tab.Icon,
                 Role = MenuItemRole.Radio,
                 // Like the tab strip, the menu shows no current view while the content is closed.
-                Checked = tab.Tab == CurrentTab && !_isPaneFullCanvas,
+                Checked = tab.Tab == CurrentTab && !IsContentClosed,
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
                 OnClick = () => NavigateToTabAsync(tab.Href)
             });

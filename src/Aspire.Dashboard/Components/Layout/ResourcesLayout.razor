@@ -93,6 +93,20 @@
                             <span>@Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)]</span>
                         </button>
                     </div>
+                    @if (_isPaneFullCanvas)
+                    {
+                        @* The full-page list is one layout of the overview, next to its summary and graph. The same
+                           toggle in the overview's header leads here, so the way back is where the user came from. *@
+                        <div class="resource-pane-scope-layout">
+                            <IconToggleGroup TValue="OverviewLayout"
+                                             Label="@ResourcesLoc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
+                                             Options="@GetOverviewLayoutOptions()"
+                                             Value="OverviewLayout.List"
+                                             ValueChanged="@OpenOverviewLayoutAsync"
+                                             ShowLabel="true"
+                                             ShowCurrentLabel="false" />
+                        </div>
+                    }
                 </div>
             }
 
@@ -828,10 +842,12 @@
         // When the row no longer has room for every label, the container query swaps this for the compact dropdown
         // instead of letting the top navigation grow its own scrollbar.
         // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged). While the resource
-        // list fills the page, its content is closed and no tab is shown selected: each tab then opens that view for
-        // the selection, which is all resources once the content is closed. CurrentTab is kept for the session, so
-        // selecting resources in the list opens the tab that was last shown.
-        ResourceTab? activeTab = _isPaneFullCanvas ? null : _navigatingToTab ?? CurrentTab;
+        // list fills the page, its content is closed: each tab then opens that view for the selection, which is all
+        // resources once the content is closed. The list is the overview's third layout, so Overview stays selected
+        // when it's the current tab and choosing it again opens the overview (see OpenTabFromFullCanvasAsync); no tab
+        // is shown selected when another tab's content was closed. CurrentTab is kept for the session, so selecting
+        // resources in the list opens the tab that was last shown.
+        ResourceTab? activeTab = IsContentClosed ? null : _navigatingToTab ?? CurrentTab;
         var renderedLocation = _lastLocation;
         var currentTabItem = activeTab is { } active ? GetTabs().FirstOrDefault(t => t.Tab == active) : null;
     <div class="resource-tabs-nav">

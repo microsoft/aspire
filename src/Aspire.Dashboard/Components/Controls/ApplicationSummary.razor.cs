@@ -116,15 +116,31 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
+
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
-    private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
-        new IconToggleOption<GroupOverview>[]
+
+    // The list option only exists inside the resources layout, which owns the full-page list.
+    private IReadOnlyList<IconToggleOption<OverviewLayout>> OverviewOptions =>
+        OverviewLayoutOptions.Create(DialogsLoc, Loc, ViewPreferences.IsGraphEnabled)
+            .Where(option => option.Value != OverviewLayout.List || (ResourcesLayout is not null && ViewportInformation.IsDesktop))
+            .ToList();
+
+    private async Task SetOverviewLayoutAsync(OverviewLayout layout)
+    {
+        if (layout == OverviewLayout.List)
         {
-            new(GroupOverview.Summary, new Icons.Regular.Size20.DataBarVertical(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-            new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
+            // The same as the overview's close button: the list fills the page for the current scope.
+            if (ResourcesLayout is { } resourcesLayout)
+            {
+                await resourcesLayout.ShowResourceListAsync();
+            }
+            return;
         }
-        .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
-        .ToList();
+
+        await ViewPreferences.SetGroupOverviewAsync(OverviewLayoutOptions.ToPreference(layout));
+    }
 
     private int GetMissingParameterCount() =>
         _resourceByName.Values.Count(resource => resource.HasMissingParameterValueState() && IsInScope(resource));

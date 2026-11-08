@@ -879,9 +879,18 @@
     display: flex;
     flex: 0 0 auto;
     align-items: center;
+    gap: 8px;
     /* The same inline padding as the search row, so the button lines up with the search box. */
     padding: 2px 12px 10px;
     border-bottom: 1px solid var(--colorNeutralStroke2);
+}
+
+/* The overview layout toggle of the full-page list, at the end of the row like the overview's own toggle. */
+.resource-pane-scope-layout {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    margin-left: auto;
 }
 
 .resource-select-all-toggle:focus-visible {

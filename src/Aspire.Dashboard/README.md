@@ -59,8 +59,10 @@ The same navigation works after opening a detail link directly or in a new tab; 
 or close their terminal sessions.
 
 On desktop, closing a detail page shows the resource list across the full canvas. Selecting a resource
-opens its details and restores the normal sidebar width. There is no separate full-canvas toggle;
-the normal sidebar can still be collapsed, reopened and resized.
+opens its details and restores the normal sidebar width. The full-canvas list is also the **List** option of the
+overview's **Layout** toggle, next to **Summary** and **Graph**; the list shows the same toggle, and choosing
+**Summary** or **Graph** opens the overview with that layout for the current selection. The **Overview** tab stays
+selected while the list shows for it. The normal sidebar can still be collapsed, reopened and resized.
 Sidebar transitions use brief, eased motion and honor the system's reduced-motion preference.
 All main-tab content panels have a close button, including the all-resources overview and unscoped
 console logs, terminals, structured logs, traces and metrics. **Select all** reopens the current tab's

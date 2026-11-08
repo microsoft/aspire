@@ -23,11 +23,11 @@
                 <span class="missing-parameters-count" aria-hidden="true">@missingParameterCount</span>
             </a>
         }
-        <IconToggleGroup TValue="GroupOverview"
+        <IconToggleGroup TValue="OverviewLayout"
                          Label="@Loc[nameof(Dashboard.Resources.Resources.LayoutLabel)]"
                          Options="@OverviewOptions"
-                         Value="@ViewPreferences.GroupOverview"
-                         ValueChanged="@ViewPreferences.SetGroupOverviewAsync"
+                         Value="@OverviewLayoutOptions.FromPreference(ViewPreferences.GroupOverview)"
+                         ValueChanged="@SetOverviewLayoutAsync"
                          ShowLabel="true"
                          ShowCurrentLabel="false" />
     </div>

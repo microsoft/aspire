@@ -1902,7 +1902,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Landing_WithoutRememberedSelection_ShowsAllResourcesInTheFullCanvasListWithNoTabSelected()
+    public async Task Landing_WithoutRememberedSelection_ShowsAllResourcesInTheFullCanvasListWithOverviewSelected()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1927,9 +1927,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.True(selectAll.ClassList.Contains("on"));
         Assert.Empty(cut.FindAll(".resource-row.selected"));
 
-        // No tab is shown selected, but the overview is kept as the tab to open for a selection.
-        Assert.Equal("resource-tab-none", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        // The list is the overview's third layout, so Overview stays the selected tab and the list offers the other
+        // layouts, with the list chosen.
+        Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
         Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
+        Assert.Equal(["Summary", "Graph", "List"], cut.FindAll(".resource-pane-scope-layout .icon-toggle").Select(e => e.GetAttribute("aria-label")));
+        Assert.Equal("true", cut.Find(".resource-pane-scope-layout .icon-toggle[aria-label='List']").GetAttribute("aria-pressed"));
         Assert.Equal(DashboardUrls.ResourceOverviewUrl("api"), cut.Find("[data-resource-name='api'] .resource-row-link").GetAttribute("href"));
 
         // FluentTabs reports a change of the current tab when it syncs with the active tab too, for example right after
@@ -1946,6 +1949,41 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
         Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
+    }
+
+    [Fact]
+    public async Task FullCanvasList_ChoosingAnotherLayout_OpensTheOverviewWithIt()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceListUrl());
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
+
+        // Choosing the graph from the list opens the overview of all resources with the graph, at the same URL.
+        await cut.Find(".resource-pane-scope-layout .icon-toggle[aria-label='Graph']").ClickAsync();
+        cut.Render();
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal("resources", navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
+        Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Empty(cut.FindAll(".resource-pane-scope-layout"));
+
+        // The overview's own toggle shows the list again, as its close button does.
+        await cut.InvokeAsync(cut.Instance.ShowResourceListAsync);
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal("true", cut.Find(".resource-pane-scope-layout .icon-toggle[aria-label='List']").GetAttribute("aria-pressed"));
+
+        await cut.Find(".resource-pane-scope-layout .icon-toggle[aria-label='Summary']").ClickAsync();
+        cut.Render();
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
     }
 
     [Theory]
