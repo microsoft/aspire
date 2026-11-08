@@ -417,6 +417,12 @@ internal sealed class TrayPanel
         // returns focus there.
         _focus = more;
         _pressed = null;
+        if (_pendingState is not null)
+        {
+            _state = _pendingState;
+            _pendingState = null;
+        }
+        _scene = null;
         _hover = HitTest(x, y)?.Key;
         _scene = null;
         return PanelResponse.Changed;
@@ -1647,9 +1653,19 @@ internal sealed class TrayPanel
         {
             return "…";
         }
+        var elements = System.Globalization.StringInfo.ParseCombiningCharacters(text);
         var head = (maxCharacters - 1) / 3;
         var tail = maxCharacters - 1 - head;
-        return $"{text[..head]}…{text[^tail..]}";
+        while (head > 0 && Array.BinarySearch(elements, head) < 0)
+        {
+            head--;
+        }
+        var tailStart = text.Length - tail;
+        while (tailStart < text.Length && Array.BinarySearch(elements, tailStart) < 0)
+        {
+            tailStart++;
+        }
+        return $"{text[..head]}…{text[tailStart..]}";
     }
 
     private static string GetRowAccessibleName(AppHostMenuItem host, string detail) => $"{host.DisplayName}, {detail}";
