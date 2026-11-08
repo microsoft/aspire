@@ -243,7 +243,9 @@ VoiceOver's press on macOS. Opening it from the keyboard or a screen reader also
 keyboard focus on its first control. There are no native menus. The panel is the
 same on macOS and Windows: a header bar, as tall and colored as the footer, with the
 Aspire logo, the title, and a one-line status
-("3 running · 1 needs attention", "Connecting…") behind a colored connection dot, an
+("3 running · 1 needs attention", "Connecting…") behind a colored dot (red when an AppHost
+is unhealthy or failed or the CLI can't be used, amber when one needs attention or
+discovery is reconnecting, gray while connecting, otherwise green), an
 optional banner for real problems (storage, discovery, or a failed action), the AppHost
 list, and a footer with three icon buttons on the right: **Settings** (a gear),
 **Documentation** (a globe) and **Quit** (**Exit** on Windows, following each platform's
@@ -254,7 +256,8 @@ rows, shows a native tooltip naming its action.
 The list has **Running**, **Pinned**, and **Recent** sections. Recent is collapsed while
 other AppHosts are listed, and its header has a **Clear** button. Each row shows a
 status glyph, the AppHost name, and `{status} · {parent/folder}`; the PID is added only
-when two running AppHosts share a name. Status glyphs differ by shape as well as color:
+when two running AppHosts share a name. When the line is too long, only the path is
+shortened, in its middle, so the status and PID always stay readable. Status glyphs differ by shape as well as color:
 a check (healthy), an exclamation mark (needs attention), a cross (unhealthy), a question
 mark (unknown), an outlined stop (stopped), and a ring (starting or stopping).
 Hovering or focusing a row shows its buttons: **Open dashboard**, **Stop**, and **More**
@@ -267,7 +270,9 @@ application whose icon can't be read gets a generic glyph), **Show in Finder** o
 from recent** for a recent AppHost. It is drawn by the shared scene like the rest of the
 panel, so it looks the same on both platforms and screen readers see its items as buttons.
 Clicking **More** again, picking an item, or acting on anything else closes it.
-Clicking a row itself does nothing, whether the AppHost runs or not; only its buttons act.
+Clicking a running row (or pressing Enter or Space on it) opens its dashboard, like its
+**Open dashboard** button, and screen readers announce that. A row without a dashboard,
+such as a stopped, pinned or recent AppHost, does nothing; only its buttons act.
 The list scrolls when it is taller than the screen allows; the header and footer stay in place.
 The keyboard works too: Up/Down and Home/End move between rows and action list items, Tab
 and Shift-Tab also reach the row buttons, Enter or Space activates, and Escape steps back
@@ -275,8 +280,7 @@ out of the Open in applications, then the action list, then closes the panel. Co
 and Command-Q quits on macOS. Clicking elsewhere closes the panel.
 
 **Stop** stops the AppHost right away, without asking, like the dashboard. Clicking a
-row that is starting or stopping does nothing, and its dashboard can't be opened while
-it stops. The panel asks for confirmation inline, instead of opening dialogs, only for
+row that is starting or stopping does nothing, since its dashboard can't be opened then. The panel asks for confirmation inline, instead of opening dialogs, only for
 what can't be undone: **Clear** turns the Recent header into "Clear recent AppHosts?
 Pinned AppHosts are kept.", and **Start**, **Open in** or **Show in** on a recent AppHost
 whose source file is gone offers to remove it. Focus starts on **Cancel**, Escape cancels,

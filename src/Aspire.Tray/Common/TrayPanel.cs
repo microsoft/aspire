@@ -1210,7 +1210,9 @@ internal sealed class TrayPanel
         commands.Add(new TextCommand(new(TextLeft, top + 27, textRight - TextLeft, 16), shortDetail, PanelFontRole.Body,
             isError ? palette.Danger : palette.TextSecondary));
 
-        AddTarget(targets, rowKey, row, GetRowAccessibleName(host, detail), true, host);
+        // The row is a button that opens the dashboard; say so, since its name only describes the AppHost.
+        AddTarget(targets, rowKey, row, GetRowAccessibleName(host, detail), true, host,
+            description: host.CanOpenDashboard ? "Opens the dashboard" : null);
         var x = RowContentRight - buttons.Length * ButtonSize - (buttons.Length - 1) * ButtonGap;
         foreach (var kind in buttons)
         {

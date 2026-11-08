@@ -175,6 +175,10 @@ public class TrayPanelTests
             Assert.Equal(host.CanOpenDashboard ? new PanelAction(PanelActionKind.OpenDashboard, host, row.Bounds) : null, response.Action);
             Assert.Null(panel.ActionsRow);
         }
+        Assert.Equal(
+            state.AppHosts.Select(host => host.CanOpenDashboard ? "Opens the dashboard" : null),
+            state.AppHosts.Select(host => panel.Scene.Accessibility
+                .Single(element => element.Target is { Kind: PanelTargetKind.Row } row && row.Host == host).Description));
         var focused = Target(panel, PanelTargetKind.Row, state.AppHosts[0]);
         panel.Focus(focused.Key);
         Assert.Equal(new PanelAction(PanelActionKind.OpenDashboard, state.AppHosts[0], focused.Bounds), panel.Key(PanelKey.Enter).Action);
