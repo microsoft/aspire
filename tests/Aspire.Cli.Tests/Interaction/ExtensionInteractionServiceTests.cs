@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Text;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -17,12 +20,191 @@ namespace Aspire.Cli.Tests.Interaction;
 
 public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task PromptForStringAsync_PreCancelledRequestNeverProbesOrPrompts()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => throw new InvalidOperationException("Must not probe."),
+            PromptForSecretStringAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Must not prompt.")
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            interaction.PromptForStringAsync("Bound origin", isSecret: true, logResponse: false, cancellationToken: cancellation.Token));
+        await interaction.FlushAsync().DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData("probe", false)]
+    [InlineData("probe", true)]
+    [InlineData("prompt", false)]
+    [InlineData("prompt", true)]
+    public async Task PromptForStringAsync_LinksRequestAndServiceCancellation(string stage, bool dispose)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken received = default;
+        async Task<T> WaitForCancellationAsync<T>(CancellationToken token)
+        {
+            received = token;
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, token);
+            throw new InvalidOperationException("Unreachable.");
+        }
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, token) => stage == "probe"
+                ? WaitForCancellationAsync<bool>(token) : Task.FromResult(true),
+            PromptForSecretStringAsyncCallback = (_, _, _, token) => WaitForCancellationAsync<string>(token)
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+        using var caller = new CancellationTokenSource();
+        var result = interaction.PromptForStringAsync("Bound origin", isSecret: true, logResponse: false, cancellationToken: caller.Token);
+        await started.Task.DefaultTimeout();
+        Assert.True(received.CanBeCanceled);
+        if (dispose)
+        {
+            interaction.Dispose();
+        }
+        else
+        {
+            await caller.CancelAsync();
+        }
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => result.DefaultTimeout());
+        Assert.True(received.IsCancellationRequested);
+        Assert.Equal(received, exception.CancellationToken);
+        if (dispose)
+        {
+            await interaction.PumpTask.DefaultTimeout();
+        }
+        else
+        {
+            await interaction.FlushAsync().DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_CancelledQueuedRequestNeverOpensLater()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var prompts = 0;
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true),
+            PromptForSecretStringAsyncCallback = (_, _, _, _) =>
+            {
+                prompts++;
+                started.TrySetResult();
+                return release.Task;
+            }
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+        var first = interaction.PromptForStringAsync("First", isSecret: true, logResponse: false);
+        await started.Task.DefaultTimeout();
+        using var caller = new CancellationTokenSource();
+        var queued = interaction.PromptForStringAsync("Second", isSecret: true, logResponse: false, cancellationToken: caller.Token);
+        await caller.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued.DefaultTimeout());
+        release.SetResult("synthetic");
+        Assert.Equal("synthetic", await first.DefaultTimeout());
+        await interaction.FlushAsync().DefaultTimeout();
+        Assert.Equal(1, prompts);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public async Task PromptForStringAsync_Secret_UsesMaskedPrompt(bool hasSecretPromptsCapability, bool required)
+    public async Task PromptForStringAsync_MaskedTerminalInputObservesLinkedCancellation(bool extensionPromptEnabled, bool dispose)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var output = new StringBuilder();
+        var console = new TestAnsiConsoleWithInput(
+            AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.No,
+                ColorSystem = ColorSystemSupport.NoColors,
+                Interactive = InteractionSupport.Yes,
+                Out = new AnsiConsoleOutput(new StringWriter(output))
+            }), async (_, token) =>
+            {
+                started.TrySetResult();
+                await Task.Delay(Timeout.Infinite, token);
+                return null;
+            });
+        var consoleInteraction = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console, TextReader.Null), workspace.CreateExecutionContext(),
+            TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(),
+            NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var backchannel = new TestExtensionBackchannel { HasCapabilityAsyncCallback = (_, _) => Task.FromResult(false) };
+        using var interaction = new ExtensionInteractionService(
+            consoleInteraction, backchannel, extensionPromptEnabled, NullLogger<ExtensionInteractionService>.Instance);
+        using var caller = new CancellationTokenSource();
+        var result = interaction.PromptForStringAsync("Bound origin:", isSecret: true, logResponse: false, cancellationToken: caller.Token);
+        await started.Task.DefaultTimeout();
+        if (dispose)
+        {
+            interaction.Dispose();
+        }
+        else
+        {
+            await caller.CancelAsync();
+        }
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => result.DefaultTimeout());
+        if (dispose)
+        {
+            await interaction.PumpTask.DefaultTimeout();
+        }
+        else
+        {
+            await interaction.FlushAsync().DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_DisposalCancelsQueuedWorkAndObservesLateFailure()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var prompts = 0;
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true),
+            PromptForSecretStringAsyncCallback = (_, _, _, _) =>
+            {
+                prompts++;
+                started.TrySetResult();
+                return release.Task;
+            }
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+        var first = interaction.PromptForStringAsync("First", isSecret: true, logResponse: false);
+        await started.Task.DefaultTimeout();
+        var queued = interaction.PromptForStringAsync("Second", isSecret: true, logResponse: false);
+        interaction.Dispose();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first.DefaultTimeout());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued.DefaultTimeout());
+        release.SetException(new InvalidOperationException("Late operation failure."));
+        await interaction.PumpTask.DefaultTimeout();
+        Assert.Equal(1, prompts);
+    }
+
+    [Theory]
+    [InlineData("none", false)]
+    [InlineData("none", true)]
+    [InlineData("v1", false)]
+    [InlineData("v1", true)]
+    [InlineData("v2", false)]
+    [InlineData("v2", true)]
+    public async Task PromptForStringAsync_Secret_UsesMaskedPrompt(string capabilityVersion, bool required)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringBuilder();
@@ -48,16 +230,17 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         {
             HasCapabilityAsyncCallback = (capability, _) =>
             {
-                Assert.Equal(KnownCapabilities.SecretPrompts, capability);
-                return Task.FromResult(hasSecretPromptsCapability);
+                Assert.Equal(KnownCapabilities.CancellableSecretPrompts, capability);
+                return Task.FromResult(capabilityVersion == "v2" ||
+                    capabilityVersion == "v1" && capability == KnownCapabilities.SecretPrompts);
             },
-            PromptForSecretStringAsyncCallback = (_, _, promptRequired) =>
+            PromptForSecretStringAsyncCallback = (_, _, promptRequired, _) =>
             {
                 secretPromptCalls++;
                 Assert.Equal(required, promptRequired);
                 return Task.FromResult("y");
             },
-            PromptForStringAsyncCallback = (_, _, _, _) =>
+            PromptForStringAsyncCallback = (_, _, _, _, _) =>
             {
                 regularPromptCalls++;
                 return Task.FromResult("unmasked");
@@ -71,8 +254,51 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("y", result);
         Assert.Equal(0, regularPromptCalls);
-        Assert.Equal(hasSecretPromptsCapability ? 1 : 0, secretPromptCalls);
-        Assert.Equal(hasSecretPromptsCapability ? "" : $"Secret: *{Environment.NewLine}", output.ToString());
+        Assert.Equal(capabilityVersion == "v2" ? 1 : 0, secretPromptCalls);
+        Assert.Equal(capabilityVersion == "v2" ? "" : $"Secret: *{Environment.NewLine}", output.ToString());
+    }
+
+    [Fact]
+    public async Task CredentialPrompt_HelperDisconnectCancelsExtensionInput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == KnownCapabilities.CancellableSecretPrompts),
+            PromptForSecretStringAsyncCallback = async (prompt, _, required, token) =>
+            {
+                Assert.Equal(string.Format(InteractionServiceStrings.GitPasswordPrompt, "https://example.test"), prompt);
+                Assert.True(required);
+                opened.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, token);
+                    throw new InvalidOperationException("Unreachable.");
+                }
+                finally
+                {
+                    cancelled.TrySetResult();
+                }
+            }
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+        await using var session = new GitAskPassSession(new Uri("https://example.test"),
+            (prompt, token) => GitCommandRunner.PromptForCredentialAsync(interaction, prompt, token),
+            TestContext.Current.CancellationToken);
+        var info = new ProcessStartInfo("git");
+        session.Configure(info, "helper");
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(info.Environment[GitAskPassProtocol.SocketVariable]!),
+            TestContext.Current.CancellationToken);
+        await using var stream = new NetworkStream(socket, ownsSocket: false);
+        await GitAskPassProtocol.WriteAsync(stream, "Password for 'https://private-user@example.test': ",
+            GitAskPassProtocol.MaxPromptBytes, TestContext.Current.CancellationToken);
+        await opened.Task.DefaultTimeout();
+        socket.Dispose();
+        await cancelled.Task.DefaultTimeout();
+        await interaction.FlushAsync().DefaultTimeout();
     }
 
     [Fact]

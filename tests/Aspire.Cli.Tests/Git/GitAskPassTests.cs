@@ -78,16 +78,26 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CredentialPrompt_RejectsIdeWithoutOpeningSecretUi()
+    public async Task CredentialPrompt_UsesSharedMaskedExtensionRouting()
     {
         using var provider = new ServiceCollection()
             .AddSingleton<IExtensionBackchannel>(new TestExtensionBackchannel()).BuildServiceProvider();
+        var calls = 0;
         var interaction = new TestExtensionInteractionService(provider)
         {
-            PromptForStringCallback = (_, _, _, _, _, _) => throw new Xunit.Sdk.XunitException("IDE secret UI must not open.")
+            PromptForStringCallback = (prompt, _, secret, required, _, token) =>
+            {
+                calls++;
+                Assert.Equal("Bound origin", prompt);
+                Assert.True(secret);
+                Assert.True(required);
+                Assert.Equal(TestContext.Current.CancellationToken, token);
+                return Task.FromResult("synthetic-secret");
+            }
         };
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        Assert.Equal("synthetic-secret", await
             GitCommandRunner.PromptForCredentialAsync(interaction, "Bound origin", TestContext.Current.CancellationToken));
+        Assert.Equal(1, calls);
     }
 
     [Fact]

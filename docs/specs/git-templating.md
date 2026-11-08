@@ -308,10 +308,13 @@ It contains no prompts, credentials or responses.
 Only Git's username and password prompt shapes for the resolved origin/path are
 accepted. The CLI displays a label generated from the bound origin, not Git's
 raw text, username, URL userinfo, query, fragment, controls or markup. Both username
-and password/token responses are masked in the terminal. IDE-hosted callback
-requests are rejected without displaying a credential UI; supporting them requires
-an IDE capability that dismisses secret input on request cancellation/disconnect.
-Configured credential helpers continue to work in IDE sessions. Responses are
+and password/token responses are masked. Extensions advertising `secret-prompts.v2`
+use a dedicated masked input box that closes on request cancellation or connection
+disposal. Older extensions, including masking-only `secret-prompts.v1` clients,
+fall back to masked terminal input. The extension retains v1 compatibility with
+older CLIs. Caller and interaction-service cancellation are linked through queued
+work, capability probing, input and result waits; cancelled queued work never opens
+a later prompt. Configured credential helpers continue to work in IDE sessions. Responses are
 never persisted or logged, nor put in argv or
 environment variables. The helper writes only one validated credential line to
 stdout; failures produce a fixed credential-free stderr message and a nonzero exit.

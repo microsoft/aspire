@@ -81,9 +81,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
     }
 
     internal static Task<string> PromptForCredentialAsync(IInteractionService interaction, string prompt, CancellationToken cancellationToken)
-        => interaction is IExtensionInteractionService
-            ? throw new InvalidOperationException("Git credential callbacks require a terminal session.")
-            : interaction.PromptForStringAsync(prompt, isSecret: true, required: true, logResponse: false, cancellationToken: cancellationToken);
+        => interaction.PromptForStringAsync(prompt, isSecret: true, required: true, logResponse: false, cancellationToken: cancellationToken);
 
     private bool IsUnattended(GitCommandMode mode) =>
         mode == GitCommandMode.Unattended || mode == GitCommandMode.Interactive && !hostEnvironment.SupportsInteractiveInput;

@@ -36,6 +36,7 @@ internal static class KnownCapabilities
     public const string BuildDotnetUsingCli = "build-dotnet-using-cli";
     public const string Baseline = "baseline.v1";
     public const string SecretPrompts = "secret-prompts.v1";
+    public const string CancellableSecretPrompts = "secret-prompts.v2";
     public const string FilePickers = "file-pickers.v1";
     public const string Pipelines = "pipelines";
     public const string PipelineStepListJson = "pipeline-step-list-json.v1";
@@ -72,5 +73,5 @@ internal static class KnownCapabilities
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, DescribeAppHostPid, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile, TerminalInstanceSelection];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, CancellableSecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, DescribeAppHostPid, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile, TerminalInstanceSelection];
 }

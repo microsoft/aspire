@@ -56,10 +56,10 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public Func<string, bool, Task<bool>>? ConfirmAsyncCallback { get; set; }
 
     public TaskCompletionSource? PromptForStringAsyncCalled { get; set; }
-    public Func<string, string?, Func<string, ValidationResult>?, bool, Task<string>>? PromptForStringAsyncCallback { get; set; }
+    public Func<string, string?, Func<string, ValidationResult>?, bool, CancellationToken, Task<string>>? PromptForStringAsyncCallback { get; set; }
 
     public TaskCompletionSource? PromptForSecretStringAsyncCalled { get; set; }
-    public Func<string, Func<string, ValidationResult>?, bool, Task<string>>? PromptForSecretStringAsyncCallback { get; set; }
+    public Func<string, Func<string, ValidationResult>?, bool, CancellationToken, Task<string>>? PromptForSecretStringAsyncCallback { get; set; }
 
     public TaskCompletionSource? PromptForFilePathAsyncCalled { get; set; }
     public Func<string, string?, bool, Task<string?>>? PromptForFilePathAsyncCallback { get; set; }
@@ -235,7 +235,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     {
         PromptForStringAsyncCalled?.SetResult();
         return PromptForStringAsyncCallback != null
-            ? PromptForStringAsyncCallback.Invoke(promptText, defaultValue, validator, required)
+            ? PromptForStringAsyncCallback.Invoke(promptText, defaultValue, validator, required, cancellationToken)
             : Task.FromResult(defaultValue ?? string.Empty);
     }
 
@@ -243,7 +243,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     {
         PromptForSecretStringAsyncCalled?.SetResult();
         return PromptForSecretStringAsyncCallback != null
-            ? PromptForSecretStringAsyncCallback.Invoke(promptText, validator, required)
+            ? PromptForSecretStringAsyncCallback.Invoke(promptText, validator, required, cancellationToken)
             : Task.FromResult(string.Empty);
     }
 

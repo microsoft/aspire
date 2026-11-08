@@ -1,4 +1,4 @@
-import { MessageConnection } from 'vscode-jsonrpc';
+import { CancellationToken, MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -28,7 +28,7 @@ export interface IInteractionService extends vscode.Disposable {
     showStatus: (statusText: string | null) => void;
     clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
-    promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
+    promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient, cancellationToken?: CancellationToken) => Promise<string | null>;
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
     confirm: (promptText: string, defaultValue: boolean) => Promise<boolean | null>;
     promptForSelection: (promptText: string, choices: string[]) => Promise<string | null>;
@@ -138,6 +138,7 @@ export class InteractionService implements IInteractionService {
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
     private _isDisposed = false;
+    private readonly _secretPromptLifetime = new vscode.CancellationTokenSource();
 
     constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, private readonly _globalState?: vscode.Memento) {
         this._getAspireDebugSession = getAspireDebugSession;
@@ -188,35 +189,51 @@ export class InteractionService implements IInteractionService {
         return input ?? null;
     }
 
-    async promptForSecretString(promptText: string, required: boolean, rpcClient: ICliRpcClient): Promise<string | null> {
+    async promptForSecretString(promptText: string, required: boolean, rpcClient: ICliRpcClient, cancellationToken: CancellationToken = CancellationToken.None): Promise<string | null> {
+        if (this._isDisposed || cancellationToken.isCancellationRequested) {
+            return null;
+        }
         if (!promptText) {
             vscode.window.showErrorMessage(failedToShowPromptEmpty);
             extensionLogOutputChannel.error(failedToShowPromptEmpty);
             return null;
         }
 
-        extensionLogOutputChannel.info(`Prompting for secret string: ${promptText}`);
-        const input = await vscode.window.showInputBox({
-            prompt: formatText(promptText),
-            password: true, // This is the key difference - render as password field
-            validateInput: async (value: string) => {
-                // Check required field validation first
-                if (required && (!value || value.trim() === '')) {
-                    return fieldRequired;
-                }
-
-                // Then check RPC validation
-                const validationResult = await rpcClient.validatePromptInputString(value);
-                if (validationResult) {
-                    return validationResult.Successful ? null : validationResult.Message;
-                }
-
+        // Cancel the actual input box on either request cancellation or connection
+        // disposal, rather than only completing the CLI's result wait.
+        const cancellation = new vscode.CancellationTokenSource();
+        const requestCancellation = cancellationToken.onCancellationRequested(() => cancellation.cancel());
+        const lifetimeCancellation = this._secretPromptLifetime.token.onCancellationRequested(() => cancellation.cancel());
+        try {
+            if (cancellationToken.isCancellationRequested || this._isDisposed) {
                 return null;
-            },
-            ignoreFocusOut: true
-        });
+            }
+            extensionLogOutputChannel.info(`Prompting for secret string: ${promptText}`);
+            const input = await vscode.window.showInputBox({
+                prompt: formatText(promptText),
+                password: true,
+                validateInput: async (value: string) => {
+                    if (required && (!value || value.trim() === '')) {
+                        return fieldRequired;
+                    }
 
-        return input ?? null;
+                    const validationResult = await rpcClient.validatePromptInputString(value);
+                    if (validationResult) {
+                        return validationResult.Successful ? null : validationResult.Message;
+                    }
+
+                    return null;
+                },
+                ignoreFocusOut: true
+            }, cancellation.token);
+
+            return input ?? null;
+        }
+        finally {
+            requestCancellation.dispose();
+            lifetimeCancellation.dispose();
+            cancellation.dispose();
+        }
     }
 
     async promptForFilePath(promptText: string, defaultValue: string | null, directory: boolean): Promise<string | null> {
@@ -617,10 +634,15 @@ export class InteractionService implements IInteractionService {
     }
 
     dispose() {
+        if (this._isDisposed) {
+            return;
+        }
         // The RPC connection owning this service is going away, so tear down any progress it
         // still has on screen. Otherwise a CLI that dies with the extension leaves a permanent
         // "Building..." indicator that nothing is left alive to clear.
         this._isDisposed = true;
+        this._secretPromptLifetime.cancel();
+        this._secretPromptLifetime.dispose();
         this._progressNotifier.clear();
     }
 
@@ -731,7 +753,7 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
 
     connection.onRequest("showStatus", middleware('showStatus', interactionService.showStatus.bind(interactionService)));
     connection.onRequest("promptForString", middleware('promptForString', async (promptText: string, defaultValue: string | null, required: boolean) => interactionService.promptForString(promptText, defaultValue, required, rpcClient)));
-    connection.onRequest("promptForSecretString", middleware('promptForSecretString', async (promptText: string, required: boolean) => interactionService.promptForSecretString(promptText, required, rpcClient)));
+    connection.onRequest("promptForSecretString", middleware('promptForSecretString', async (promptText: string, required: boolean, cancellationToken: CancellationToken) => interactionService.promptForSecretString(promptText, required, rpcClient, cancellationToken)));
     connection.onRequest("promptForFilePath", middleware('promptForFilePath', async (promptText: string, defaultValue: string | null, directory: boolean) => interactionService.promptForFilePath(promptText, defaultValue, directory)));
     connection.onRequest("confirm", middleware('confirm', interactionService.confirm.bind(interactionService)));
     connection.onRequest("promptForSelection", middleware('promptForSelection', interactionService.promptForSelection.bind(interactionService)));
