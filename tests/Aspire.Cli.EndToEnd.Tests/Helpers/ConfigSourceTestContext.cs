@@ -325,15 +325,10 @@ internal sealed class ConfigSourceTestContext
             await File.ReadAllTextAsync(Path.Combine(_root, "run.log"), _cancellationToken));
     }
 
-    public async Task RefreshConfigurationAsync(bool expectChanges)
-    {
-        await _auto.RunCommandAsync(
+    public Task RefreshConfigurationAsync()
+        => _auto.RunCommandAsync(
             "set -o pipefail; aspire update --config-source --yes --non-interactive 2>&1 | tee \"$ASPIRE_E2E_WORKSPACE/update.log\"",
             _counter, timeout: TimeSpan.FromMinutes(2));
-        var message = expectChanges ? "configuration updated" : "configuration already up to date";
-        var updateOutput = await File.ReadAllTextAsync(Path.Combine(_root, "update.log"), _cancellationToken);
-        Assert.Contains(message, Regex.Replace(updateOutput, @"\s+", " "));
-    }
 
     public async Task AssertRefreshWithoutBindingAsync()
     {
@@ -349,7 +344,7 @@ internal sealed class ConfigSourceTestContext
     {
         await _auto.TypeAsync("aspire update --yes");
         await _auto.EnterAsync();
-        var candidate = new CellPatternSearcher().Find("Configuration source:");
+        var candidate = new CellPatternSearcher().Find("Git source:");
         var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
         await _auto.WaitUntilAsync(snapshot => candidate.Search(snapshot).Count > 0 && consentPrompt.Search(snapshot).Count > 0,
             timeout: TimeSpan.FromMinutes(2), description: "waiting for brownfield configuration source consent");

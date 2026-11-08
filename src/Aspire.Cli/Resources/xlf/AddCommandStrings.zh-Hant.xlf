@@ -93,8 +93,8 @@
         <note />
       </trans-unit>
       <trans-unit id="IntegrationSourceExplanation">
-        <source>One or more integration sources are configured. A integration source lets an organization share integrations to customize your development experience.</source>
-        <target state="new">One or more integration sources are configured. A integration source lets an organization share integrations to customize your development experience.</target>
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="new">One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">

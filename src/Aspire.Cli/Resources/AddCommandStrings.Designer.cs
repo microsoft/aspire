@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to One or more integration sources are configured. A integration source lets an organization share integrations to customize your development experience..
+        ///   Looks up a localized string similar to One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience..
         /// </summary>
         internal static string IntegrationSourceExplanation {
             get {

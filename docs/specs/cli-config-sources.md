@@ -551,7 +551,7 @@ Without an integration argument, interactive `aspire add` always asks the user t
 
 Before integration and version selection, when configured integration sources
 supply choices, the CLI displays **One or more integration sources are configured.
-A integration source lets an organization share integrations to customize your
+An integration source lets an organization share integrations to customize your
 development experience.** Each distinct configured feed is displayed using
 **Name**, **Package feed**, and **Package patterns**. Built-in channels and ambient
 NuGet sources are not included in these detail blocks. Configured feeds remain

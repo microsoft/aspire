@@ -1,4 +1,4 @@
-﻿ℹ️ One or more integration sources are configured. A integration source lets an organization share
+﻿ℹ️ One or more integration sources are configured. An integration source lets an organization share
    integrations to customize your development experience.
 
                [1mName[0m:  team
