@@ -53,19 +53,18 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             await Assertions.Expect(link).ToHaveAttributeAsync("href", PublicUrl);
             await Assertions.Expect(link).ToHaveAttributeAsync("target", "_blank");
             await Assertions.Expect(link).ToHaveAttributeAsync("rel", "noreferrer noopener");
-            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", MaskedPublicUrl);
-            await Assertions.Expect(catalog.Locator(".overview-endpoint-address")).ToHaveTextAsync([MaskedPublicUrl, MaskedInternalUrl]);
+            // The endpoint's other address is in the tooltip, so each endpoint is listed once.
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", $"{MaskedPublicUrl}, also at {MaskedInternalUrl}");
+            await Assertions.Expect(catalog.Locator(".overview-endpoint-address")).ToHaveTextAsync([MaskedPublicUrl]);
 
             var tooltip = page.Locator(".dashboard-tooltip");
             await link.ScrollIntoViewIfNeededAsync();
             await link.HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
-            await Assertions.Expect(tooltip).ToHaveTextAsync(MaskedPublicUrl);
+            await Assertions.Expect(tooltip).ToHaveTextAsync($"{MaskedPublicUrl}, also at {MaskedInternalUrl}");
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(tooltip).ToHaveCountAsync(0);
-            var secondary = catalog.Locator("span.overview-endpoint-address");
-            await AssertKeyboardTooltipAfterScrollingAsync(link, MaskedPublicUrl, scrollToEnd: true);
-            await AssertKeyboardTooltipAfterScrollingAsync(secondary, MaskedInternalUrl, scrollToEnd: true);
+            await AssertKeyboardTooltipAfterScrollingAsync(link, $"{MaskedPublicUrl}, also at {MaskedInternalUrl}", scrollToEnd: true);
 
             var tcp = rows.Filter(new() { Has = page.GetByText("Cache connection", new() { Exact = true }) });
             await Assertions.Expect(tcp.Locator(".overview-endpoint-address")).ToHaveTextAsync(MaskedTcpUrl);

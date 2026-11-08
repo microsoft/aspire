@@ -404,6 +404,33 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(0, false)]
+    [InlineData(5, true)]
+    public async Task RowAges_AreHiddenWhenEveryResourceShowsTheSameAge(int minutesApart, bool expectAges)
+    {
+        // Right after the app starts every row would say "now", which tells nothing, so the ages are hidden until they
+        // differ.
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var started = new DateTime(2026, 11, 8, 10, 0, 0, DateTimeKind.Utc);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, startTimeStamp: started),
+                ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Running, startTimeStamp: started.AddMinutes(minutesApart))
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var clock = Assert.IsType<TestTimeProvider>(Services.GetRequiredService<BrowserTimeProvider>());
+        clock.UtcNow = new DateTimeOffset(started).AddMinutes(10);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/structuredlogs");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        // Two-line rows show the age after the state; a compact row has no room for it.
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
+
+        Assert.Equal(expectAges ? ["10m ago", "5m ago"] : [], cut.FindAll(".resource-row-sidebar-start time").Select(time => time.TextContent));
+    }
+
+    [Theory]
     [InlineData(ResourceListDensity.Compact)]
     [InlineData(ResourceListDensity.Comfortable)]
     [InlineData(ResourceListDensity.Spacious)]

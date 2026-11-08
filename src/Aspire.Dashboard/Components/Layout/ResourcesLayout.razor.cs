@@ -1827,6 +1827,37 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
         $"{rowTime.Label} {GetShortAge(rowTime.Time)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
 
+    private bool _showRowAges = true;
+
+    // Ages are hidden when every resource shows the same one, for example right after the app starts, when each row
+    // would say "now": a column that repeats one value tells nothing. A single resource, or any that started or stopped
+    // at another time, brings them back. The tooltip on each age still has the exact time.
+    private bool ShouldShowRowAges()
+    {
+        string? firstAge = null;
+        var timedCount = 0;
+        foreach (var resource in _resourceByName.Values)
+        {
+            if (resource.IsParameter || resource.IsResourceHidden(_filter.ShowHiddenResources) || GetRowTime(resource) is not { } rowTime)
+            {
+                continue;
+            }
+
+            var age = GetShortAge(rowTime.Time);
+            timedCount++;
+            if (firstAge is null)
+            {
+                firstAge = age;
+            }
+            else if (!string.Equals(firstAge, age, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return timedCount < 2;
+    }
+
     // Rows show a short age ("7m ago") because every row repeats it; the tooltip and accessible label keep the
     // full wording and the exact time (see GetRowTimeDescription).
     private string GetShortAge(DateTime time)

@@ -124,6 +124,9 @@
                         case "state-error":
                             <FluentIcon Value="@(new Icons.Filled.Size24.Warning())" Color="Color.Custom" CustomColor="var(--error)" />
                             break;
+                        case "state-warning":
+                            <FluentIcon Value="@(new Icons.Filled.Size24.Warning())" Color="Color.Custom" CustomColor="var(--warning)" />
+                            break;
                         case "state-pending":
                             <FluentIcon Value="@(new Icons.Regular.Size24.ArrowSync())" Color="Color.Custom" CustomColor="var(--warning)" />
                             break;
@@ -149,13 +152,15 @@
                     @HealthBarSegment(summary.Running, summary.Total, "state-success")
                     @HealthBarSegment(summary.Pending, summary.Total, "state-pending")
                     @HealthBarSegment(summary.Attention, summary.Total, "state-error")
-                    @HealthBarSegment(summary.Inactive, summary.Total, "state-neutral")
+                    @HealthBarSegment(summary.Finished + summary.NotStarted + summary.Unknown, summary.Total, "state-neutral")
                 </div>
                 <ul class="home-legend">
                     @HealthLegendItem(summary.Running, "state-success", Loc[nameof(Dashboard.Resources.Resources.HomeRunningLabel)])
                     @HealthLegendItem(summary.Pending, "state-pending", Loc[nameof(Dashboard.Resources.Resources.HomePendingLabel)])
                     @HealthLegendItem(summary.Attention, "state-error", Loc[nameof(Dashboard.Resources.Resources.HomeNeedsAttentionLabel)])
-                    @HealthLegendItem(summary.Inactive, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeInactiveLabel)])
+                    @HealthLegendItem(summary.Finished, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeFinishedLabel)])
+                    @HealthLegendItem(summary.NotStarted, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeNotStartedLabel)])
+                    @HealthLegendItem(summary.Unknown, "state-neutral", Loc[nameof(Dashboard.Resources.Resources.HomeUnknownLabel)])
                 </ul>
             }
         </section>

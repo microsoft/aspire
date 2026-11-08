@@ -159,6 +159,48 @@
     display: none;
 }
 
+/* When the banners don't all fit, the area scrolls. It rests on a banner's top edge rather than partway through one,
+   and fades out at the bottom while there's more to scroll to, so a banner cut off at the edge reads as "scroll for
+   more" rather than as a clipped banner. The fade follows the scroll position (a scroll-driven animation); browsers
+   without them show no fade. */
+::deep.layout > .messagebar-container {
+    scroll-snap-type: y proximity;
+}
+
+::deep.layout > .messagebar-container .dashboard-message-bar {
+    scroll-snap-align: start;
+}
+
+@supports (animation-timeline: scroll()) {
+    ::deep.layout > .messagebar-container {
+        /* No fade unless the area scrolls: without overflow the scroll timeline is inactive and this value applies. */
+        --messagebar-fade: 0px;
+        mask-image: linear-gradient(to bottom, #000 calc(100% - var(--messagebar-fade)), transparent);
+        animation: messagebar-fade-out linear both;
+        animation-timeline: scroll(self);
+    }
+}
+
+@keyframes messagebar-fade-out {
+    from {
+        --messagebar-fade: 24px;
+    }
+
+    99% {
+        --messagebar-fade: 24px;
+    }
+
+    to {
+        --messagebar-fade: 0px;
+    }
+}
+
+@property --messagebar-fade {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+}
+
 ::deep .header-right {
     margin-left: auto;
 }

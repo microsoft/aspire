@@ -556,6 +556,10 @@
   <data name="ResourceOverviewInternalEndpoint" xml:space="preserve">
     <value>Internal</value>
   </data>
+  <data name="ResourceOverviewEndpointAlsoAt" xml:space="preserve">
+    <value>{0}, also at {1}</value>
+    <comment>Tooltip of an endpoint's address on the resource overview. {0} is the address, {1} is the same endpoint's other address, such as its localhost address</comment>
+  </data>
   <data name="ResourceOverviewCountOfTotal" xml:space="preserve">
     <value>{0} of {1}</value>
   </data>
@@ -592,8 +596,17 @@
   <data name="HomePendingLabel" xml:space="preserve">
     <value>Pending</value>
   </data>
-  <data name="HomeInactiveLabel" xml:space="preserve">
-    <value>Inactive</value>
+  <data name="HomeFinishedLabel" xml:space="preserve">
+    <value>Finished</value>
+    <comment>Legend label on the overview's health bar for resources that finished or exited without an error</comment>
+  </data>
+  <data name="HomeNotStartedLabel" xml:space="preserve">
+    <value>Not started</value>
+    <comment>Legend label on the overview's health bar for resources that haven't been started</comment>
+  </data>
+  <data name="HomeUnknownLabel" xml:space="preserve">
+    <value>Unknown</value>
+    <comment>Legend label on the overview's health bar for resources whose state the dashboard can't tell</comment>
   </data>
   <data name="HomeTelemetryLandmark" xml:space="preserve">
     <value>Telemetry</value>

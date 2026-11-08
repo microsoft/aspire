@@ -53,12 +53,11 @@ public class ResourceOverviewEndpointTests : DashboardTestContext
             Assert.Equal(2, rows.Length);
             var named = rows.Single(row => row.QuerySelector(".overview-endpoint-name") is not null);
             Assert.Equal("Catalog API", named.QuerySelector(".overview-endpoint-name")!.TextContent);
-            Assert.Equal(3, card.QuerySelectorAll(".overview-endpoint-address").Length);
-            Assert.All(card.QuerySelectorAll(".overview-endpoint-address"), address =>
-            {
-                Assert.Equal(expected, address.TextContent);
-                Assert.Equal(expected, address.GetAttribute("data-tooltip"));
-            });
+            // Each endpoint is listed once: its other address is in the tooltip, masked like the address shown.
+            Assert.Equal(2, card.QuerySelectorAll(".overview-endpoint-address").Length);
+            Assert.All(card.QuerySelectorAll(".overview-endpoint-address"), address => Assert.Equal(expected, address.TextContent));
+            Assert.Equal($"{expected}, also at {expected}", named.QuerySelector(".overview-endpoint-address")!.GetAttribute("data-tooltip"));
+            Assert.Equal(expected, rows.Single(row => row != named).QuerySelector(".overview-endpoint-address")!.GetAttribute("data-tooltip"));
             Assert.All(rows, row =>
             {
                 var primary = row.QuerySelector(".overview-endpoint-address")!;
@@ -75,10 +74,7 @@ public class ResourceOverviewEndpointTests : DashboardTestContext
                     Assert.Null(primary.GetAttribute("href"));
                 }
             });
-            var secondary = named.QuerySelectorAll(".overview-endpoint-address")[1];
-            Assert.Equal("SPAN", secondary.TagName);
-            Assert.Equal("0", secondary.GetAttribute("tabindex"));
-            Assert.Null(secondary.GetAttribute("href"));
+            Assert.Single(named.QuerySelectorAll(".overview-endpoint-address"));
         });
     }
 }

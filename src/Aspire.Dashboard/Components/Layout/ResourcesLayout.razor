@@ -24,6 +24,7 @@
     var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed && !_isPaneFullCanvas;
+    _showRowAges = ShouldShowRowAges();
 
     RenderFragment resourcePane = @<aside class="resource-pane @(showCollapsedPane ? "resource-pane-popup" : null)" aria-label="@Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneLandmark) : nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]" hidden="@(!isDesktop && !_isDrawerOpen && !_isPaneFullCanvas)">
             <div class="resource-pane-contents">
@@ -972,7 +973,7 @@
                             @* The parts have no whitespace between them. Where this line flows as text, so that it ends with
                                an ellipsis, whitespace would render as spaces on top of their margins. *@
                             <span class="state-dot @GetStateClass(resource)"></span><span>@stateViewModel.Text</span>
-                            @if (!_isPaneFullCanvas && !resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
+                            @if (_showRowAges && !_isPaneFullCanvas && !resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
                             {
                                 @* Only the age shows, after the state; the tooltip says whether it's since starting or stopping. *@
                                 var sidebarTimeDescription = GetRowTimeDescription(sidebarTime);
@@ -1052,7 +1053,7 @@
                 <div class="resource-row-wide-metadata">
                     <span class="resource-row-health">
                         <span class="resource-row-start-time">
-                            @if (GetRowTime(resource) is { } rowTime)
+                            @if (_showRowAges && GetRowTime(resource) is { } rowTime)
                             {
                                 var rowTimeDescription = GetRowTimeDescription(rowTime);
                                 <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />

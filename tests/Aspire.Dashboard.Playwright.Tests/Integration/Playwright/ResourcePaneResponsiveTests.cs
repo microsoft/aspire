@@ -2661,7 +2661,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             Create("cache", KnownResourceTypes.Container, KnownResourceState.Running, HealthStatus.Healthy, null, [], ["Backend", "Infrastructure"]),
             Create("queue", KnownResourceTypes.Container, KnownResourceState.Running, HealthStatus.Degraded, null,
                 [new("tcp", new Uri(TcpEndpoint), false, false, UrlDisplayPropertiesViewModel.Empty)], ["Infrastructure"]),
-            Create("worker", KnownResourceTypes.Executable, KnownResourceState.Exited, null, StartTime, [], ["Backend"]),
+            // The worker started a day earlier than the others: rows hide ages that are all the same, so the resources'
+            // ages differ, as they usually do once an app has been running a while.
+            Create("worker", KnownResourceTypes.Executable, KnownResourceState.Exited, null, StartTime.AddDays(-1), [], ["Backend"]),
             Create("service-key", KnownResourceTypes.Parameter, KnownResourceState.Running, null, null, [], ["Config"])
         ];
 

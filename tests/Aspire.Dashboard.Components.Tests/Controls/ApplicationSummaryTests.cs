@@ -88,6 +88,46 @@ public class ApplicationSummaryTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_MissingParameters_HeadlineSaysSo()
+    {
+        // Missing values keep resources from starting, so "no resources need attention" would be wrong.
+        var cut = RenderSummary(missingParameters: true, resources:
+        [
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter, state: KnownResourceState.ValueMissing)
+        ]);
+        cut.WaitForAssertion(() => Assert.Equal("1 parameter needs a value", cut.Find(".home-hero-headline").TextContent));
+        Assert.Contains("state-warning", cut.Find(".home-hero").ClassList);
+    }
+
+    [Fact]
+    public void Render_MissingParametersAndBrokenResource_AttentionComesFirst()
+    {
+        var cut = RenderSummary(missingParameters: true);
+        cut.WaitForAssertion(() => Assert.Equal("1 of 2 resources need attention", cut.Find(".home-hero-headline").TextContent));
+        Assert.Contains("state-error", cut.Find(".home-hero").ClassList);
+    }
+
+    [Fact]
+    public void Render_StoppedResources_LegendNamesFinishedNotStartedAndUnknown()
+    {
+        var cut = RenderSummary(resources:
+        [
+            ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("job", state: KnownResourceState.Finished),
+            ModelTestHelpers.CreateResource("migrator", state: KnownResourceState.Exited),
+            ModelTestHelpers.CreateResource("worker", state: KnownResourceState.NotStarted),
+            ModelTestHelpers.CreateResource("mystery", state: KnownResourceState.Unknown)
+        ]);
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            [("1", "Running"), ("2", "Finished"), ("1", "Not started"), ("1", "Unknown")],
+            cut.FindAll(".home-legend-item").Select(item => (
+                item.QuerySelector(".home-legend-value")!.TextContent,
+                item.QuerySelector(".home-legend-value + span")!.TextContent))));
+    }
+
+    [Fact]
     public async Task Render_ActivityAndInsights_UseLocalizedText()
     {
         var loc = new TestStringLocalizer<ResourceStrings>();
