@@ -454,6 +454,22 @@ export function isResourceTabFocused(tabId) {
     return document.activeElement?.closest("fluent-tab")?.id === tabId;
 }
 
+// The last tab the user pressed, clicked or chose with Enter or Space (see registerPaneInteractions). The tab strip is
+// re-created whenever the location changes, so a click that lands just as a navigation finishes reaches the layout
+// from the outgoing strip, along with the change events that strip raises as it's torn down. Only a real activation
+// tells the click apart from that noise.
+let recentTabActivation = null;
+
+// Returns whether the user activated the tab in the last second, and forgets the activation so it's used once.
+export function consumeRecentTabActivation(tabId) {
+    const activation = recentTabActivation;
+    if (activation && activation.id === tabId && performance.now() - activation.time < 1000) {
+        recentTabActivation = null;
+        return true;
+    }
+    return false;
+}
+
 export function unregisterPaneResizer(layoutElement) {
     if (!layoutElement) {
         return;
@@ -822,8 +838,20 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         }
     };
 
+    const onTabUserActivation = event => {
+        if (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' '))) {
+            return;
+        }
+        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
+        if (tab) {
+            recentTabActivation = { id: tab.id, time: performance.now() };
+        }
+    };
+
     layoutElement.addEventListener('contextmenu', onContextMenu);
     layoutElement.addEventListener('pointerdown', onShiftPointerDown, true);
+    document.addEventListener('pointerdown', onTabUserActivation, true);
+    document.addEventListener('keydown', onTabUserActivation, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
     window.addEventListener('keydown', onEscapeCapture, true);
@@ -838,6 +866,8 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         state.disposed = true;
         layoutElement.removeEventListener('contextmenu', onContextMenu);
         layoutElement.removeEventListener('pointerdown', onShiftPointerDown, true);
+        document.removeEventListener('pointerdown', onTabUserActivation, true);
+        document.removeEventListener('keydown', onTabUserActivation, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
         window.removeEventListener('keydown', onEscapeCapture, true);

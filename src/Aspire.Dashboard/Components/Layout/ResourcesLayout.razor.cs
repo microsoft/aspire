@@ -102,6 +102,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? _lastLocation;
     // The tab a click on the tab strip is navigating to, until the new location arrives. See OnTabChanged.
     private ResourceTab? _navigatingToTab;
+    // A close (the page's close button or Escape) clears the stored selection before it navigates to the parent, so
+    // there's a moment when it has started but the location hasn't changed. A tab chosen then waits for the close and
+    // opens for the parent's selection, rather than racing it with a URL for the resource being closed.
+    private string? _closingToLocation;
+    private ResourceTab? _tabAfterClose;
     private bool _isDisposed;
     private IReadOnlyList<string> _selectedResourceNames = [];
     private List<SelectedResourceItem> _selectedItems = [];
@@ -508,6 +513,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             IsResourceListHomeNavigation(location);
         _isPaneFullCanvas = false;
         _fullCanvasNavigation = null;
+        _closingToLocation = null;
+        var tabAfterClose = _tabAfterClose;
+        _tabAfterClose = null;
         ClearPaneActivity();
         _navigatingToTab = null;
         var previousTab = CurrentTab;
@@ -537,6 +545,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await TryRedirectLandingAsync();
         await PersistSelectedResourcesAsync();
 
+        // The close has landed: open the tab chosen while it was in flight, for the new selection.
+        if (tabAfterClose is { } chosenTab && GetTabs().FirstOrDefault(t => t.Tab == chosenTab && t.IsVisible)?.Href is { } chosenHref)
+        {
+            await NavigateToTabAsync(chosenHref);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -909,6 +922,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task CloseDetailAsync(string parentUrl)
     {
+        _closingToLocation = NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri;
         if (ParseLocation(NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri)).SelectedResourceNames.Count == 0)
         {
             // An unscoped overview normally restores the previous selection. Closing explicitly
@@ -919,8 +933,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var target = NavigationManager.ToAbsoluteUri(parentUrl).AbsoluteUri;
         if (string.Equals(target, NavigationManager.Uri, StringComparison.Ordinal))
         {
-            // Closing an unscoped tab changes presentation without changing its URL.
+            // Closing an unscoped tab changes presentation without changing its URL, so it's done: nothing will land.
+            _closingToLocation = null;
             SetResourceListVisible(true);
+            if (_tabAfterClose is { } chosenTab)
+            {
+                _tabAfterClose = null;
+                await OpenChosenTabAsync(chosenTab);
+            }
         }
         else
         {
@@ -2684,11 +2704,32 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // URL is a user selecting a tab.
         // Switching between the live view and a recording re-creates the page, and the outgoing layout's tabs
         // raise changes while they're torn down, which would otherwise navigate to another tab.
+        // A delayed event from the previous header must not navigate the newly selected resource, unless the user really
+        // chose that tab: a click that lands just as a navigation finishes reaches the layout from the outgoing header.
+        // The script records real activations, which the header's own change events while it's torn down never are.
+        var isStale = !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
+            || !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal);
+        if (isStale && newTab?.Id is { } staleId && staleId.StartsWith("tab-", StringComparison.Ordinal) &&
+            _jsModule is not null && !_isDisposed && isDesktop == ViewportInformation.IsDesktop)
+        {
+            try
+            {
+                if (await _jsModule.InvokeAsync<bool>("consumeRecentTabActivation", staleId) &&
+                    Enum.TryParse<ResourceTab>(staleId["tab-".Length..], out var staleTab) &&
+                    string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal))
+                {
+                    await OpenChosenTabAsync(staleTab);
+                }
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            return;
+        }
+
         if (_isDisposed
             || isDesktop != ViewportInformation.IsDesktop
-            // A delayed event from the previous header must not navigate the newly selected resource.
-            || !string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal)
-            || !string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal)
+            || isStale
             || newTab?.Id is not { } id
             || !id.StartsWith("tab-", StringComparison.Ordinal)
             || !Enum.TryParse<ResourceTab>(id["tab-".Length..], out var tab)
@@ -2728,6 +2769,32 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             {
                 _navigatingToTab = null;
             }
+            return;
+        }
+
+        if (_closingToLocation is not null)
+        {
+            // A close is in flight: open this tab once it lands (see OnParametersSetAsync).
+            _tabAfterClose = tab;
+            return;
+        }
+
+        await NavigateToTabAsync(href);
+    }
+
+    // Opens a tab the user chose, for the current selection. While the full-page list is showing, choosing the tab that's
+    // already current opens its content; otherwise it navigates to the tab.
+    private async Task OpenChosenTabAsync(ResourceTab tab)
+    {
+        if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href ||
+            (tab == CurrentTab && !_isPaneFullCanvas))
+        {
+            return;
+        }
+
+        if (_closingToLocation is not null)
+        {
+            _tabAfterClose = tab;
             return;
         }
 
