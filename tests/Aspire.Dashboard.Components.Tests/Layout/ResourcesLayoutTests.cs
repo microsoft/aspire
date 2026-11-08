@@ -349,11 +349,14 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-row-source"));
         ResourceSetupHelpers.ToggleResourceList(cut);
         var source = cut.Find("[data-resource-name='source'] .resource-row-source-value");
-        Assert.Equal(value, source.TextContent);
-        Assert.Equal(original, source.GetAttribute("data-tooltip"));
-        Assert.Equal($"Source: {original}", source.GetAttribute("aria-label"));
+        Assert.Equal($"{type} {value}", source.TextContent);
+        Assert.Equal(type, source.QuerySelector(".resource-row-source-type")!.TextContent);
+        Assert.Equal($"{type}: {original}", source.GetAttribute("data-tooltip"));
+        Assert.Equal($"Source: {type} {original}", source.GetAttribute("aria-label"));
         Assert.Equal("0", source.GetAttribute("tabindex"));
-        Assert.Empty(cut.Find("[data-resource-name='empty'] .resource-row-source").Children);
+        var emptySource = cut.Find("[data-resource-name='empty'] .resource-row-source-value");
+        Assert.Equal("Container", emptySource.TextContent);
+        Assert.Null(emptySource.GetAttribute("tabindex"));
         Assert.Equal(2, cut.FindAll(".resource-row-source").Count);
         Assert.Empty(cut.FindAll(".resource-relationship-summary, .resource-row-dependencies, .resource-row-references"));
     }
@@ -443,7 +446,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal($"Friendly API: {DashboardUIHelpers.MaskQueryStringValues(address)}",
             row.QuerySelector(".resource-row-primary-endpoint")!.GetAttribute("data-tooltip"));
         var absent = cut.Find("[data-resource-name='missing'] .resource-row-wide-metadata");
-        Assert.Equal(string.Empty, absent.TextContent.Trim());
+        // A resource with no source still shows its type in the source column.
+        Assert.Equal("Executable", absent.TextContent.Trim());
         Assert.Empty(absent.QuerySelectorAll("time, .resource-row-endpoint-address"));
         var parameter = cut.Find("[data-resource-name='key'] .resource-row-wide-metadata");
         Assert.Equal(string.Empty, parameter.TextContent.Trim());

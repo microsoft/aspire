@@ -2035,6 +2035,10 @@
     font-size: var(--resource-secondary-font-size);
 }
 
+.resource-row-source-type {
+    color: var(--colorNeutralForeground3);
+}
+
 .resource-row-source-value:focus-visible {
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 1px;
@@ -2481,7 +2485,7 @@ a.resource-row-endpoint-link:focus-visible {
 
 @container resource-pane (min-width: 960px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(220px, 320px) [status] 180px [endpoint] minmax(96px, 1fr) [source] 112px [insights actions] 244px [end];
+        --resource-row-tracks: [identity] minmax(220px, 320px) [status] 180px [endpoint] minmax(96px, 1fr) [source] 200px [insights actions] 244px [end];
         column-gap: var(--spacingHorizontalS);
     }
 
@@ -2507,6 +2511,12 @@ a.resource-row-endpoint-link:focus-visible {
         grid-row: 1;
         align-items: center;
         min-width: 0;
+    }
+
+    /* The source column now leads with the type, so the name's second line doesn't repeat it. */
+    .resource-row-sub .resource-row-type,
+    .resource-row-sub .resource-row-type-sep {
+        display: none;
     }
 
     .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
@@ -2754,7 +2764,7 @@ a.resource-row-endpoint-link:focus-visible {
 @container resource-pane (min-width: 1440px) {
     /* Only the endpoint track absorbs spare width; activity stays next to actions. */
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 260px [status] 180px [endpoint] minmax(200px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] 260px [status] 180px [endpoint] minmax(200px, 1fr) [source] 200px [insights] var(--resource-insight-width) [actions] 244px [end];
     }
 
     ::deep .resource-row-insights {
@@ -2793,7 +2803,7 @@ a.resource-row-endpoint-link:focus-visible {
 
 @container resource-pane (min-width: 1600px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(280px, 1fr) [source] 112px [insights] var(--resource-insight-width) [actions] 244px [end];
+        --resource-row-tracks: [identity] 320px [status] 180px [endpoint] minmax(280px, 1fr) [source] 220px [insights] var(--resource-insight-width) [actions] 244px [end];
         column-gap: var(--spacingHorizontalL);
     }
 }

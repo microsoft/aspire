@@ -27,8 +27,16 @@ public sealed partial class Home : ComponentBase
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
-    protected override void OnInitialized()
+    // The redirect runs after the first render, not in OnInitialized. When "/" is the first page the browser loads,
+    // a navigation started while the circuit is still initializing is applied without its history entry state, so
+    // the resources layout couldn't tell the home navigation apart from a plain link to /resources.
+    protected override void OnAfterRender(bool firstRender)
     {
+        if (!firstRender)
+        {
+            return;
+        }
+
         var legacyUrl = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind);
         var url = legacyUrl ?? (DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : DashboardUrls.StructuredLogsUrl());
         NavigationManager.NavigateTo(url, new NavigationOptions

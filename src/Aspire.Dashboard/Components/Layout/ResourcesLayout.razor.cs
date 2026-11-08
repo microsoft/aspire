@@ -258,6 +258,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _lastLocation = NavigationManager.Uri;
         UpdateFromLocation(_lastLocation);
 
+        // When the dashboard is first opened, "/" renders without this layout and redirects to /resources, so this
+        // layout is created by the home navigation itself. OnParametersSetAsync then sees no location change and
+        // wouldn't check for it, so the home check also runs here. No transition: there's no earlier view to animate from.
+        if (IsResourceListHomeNavigation(_lastLocation))
+        {
+            SetResourceListVisible(true);
+            _animatePaneTransition = false;
+        }
+
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
         UpdateTelemetryOnlyResources();
 

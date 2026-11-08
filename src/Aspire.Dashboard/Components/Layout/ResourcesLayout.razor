@@ -1028,7 +1028,7 @@
                             }
                             @if (_isPaneFullCanvas)
                             {
-                                <span class="resource-row-sep" aria-hidden="true">·</span>
+                                <span class="resource-row-sep resource-row-type-sep" aria-hidden="true">·</span>
                                 <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" tabindex="0" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                             }
                         </span>
@@ -1097,13 +1097,22 @@
                             </div>
                         }
                     </div>
+                    @* What ran the resource reads best next to its kind ("Container alpine:latest", "Project Api.csproj"),
+                       so on wide panes this column shows both and the name's second line keeps only the state. *@
                     <span class="resource-row-source">
+                        @{
+                            var typeLabel = GetResourceTypeLabel(resource);
+                        }
                         @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
                         {
                             <span class="resource-row-source-value" tabindex="0"
-                                  data-tooltip="@source.Tooltip"
+                                  data-tooltip="@($"{typeLabel}: {source.Tooltip}")"
                                   data-tooltip-positioning="above"
-                                  aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {source.Tooltip}")">@source.Value</span>
+                                  aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {typeLabel} {source.Tooltip}")"><span class="resource-row-source-type">@typeLabel</span> @source.Value</span>
+                        }
+                        else
+                        {
+                            <span class="resource-row-source-value"><span class="resource-row-source-type">@typeLabel</span></span>
                         }
                     </span>
                 </div>
