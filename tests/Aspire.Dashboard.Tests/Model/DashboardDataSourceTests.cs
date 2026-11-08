@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
@@ -121,16 +122,59 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void RunMode_RejectsConcurrentTimestampCollision()
+    public void RunMode_ConcurrentTimestampCollision_AllocatesNextRunId()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
         var options = CreateOptions(workspace);
         using var firstRunStore = CreateRunStore(options, timeProvider);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(options, timeProvider));
+        using var secondRunStore = CreateRunStore(options, timeProvider);
 
-        Assert.Equal($"Dashboard run '{firstRunStore.RunId}' is already in use by another dashboard process.", exception.Message);
+        Assert.Equal("20260720T123456789Z", firstRunStore.RunId);
+        Assert.Equal("20260720T123456790Z", secondRunStore.RunId);
+        Assert.Equal(secondRunStore.RunId, Path.GetFileName(secondRunStore.CurrentWorkingDirectory));
+        Assert.NotEqual(firstRunStore.DatabasePath, secondRunStore.DatabasePath);
+        var applicationDirectoryName = DashboardRunStore.GetApplicationDirectoryName("TestApp");
+        Assert.True(File.Exists(Path.Combine(secondRunStore.CurrentWorkingDirectory, applicationDirectoryName)));
+    }
+
+    [Fact]
+    public void RunMode_ExistingRunDirectoryWithSameTimestamp_IsNotReused()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
+        var existingRunDirectory = Path.Combine(DashboardRunStore.GetRunsDirectory(workspace.Path), "20260720T123456789Z");
+        Directory.CreateDirectory(existingRunDirectory);
+        var existingFilePath = Path.Combine(existingRunDirectory, "existing.txt");
+        File.WriteAllText(existingFilePath, "existing");
+
+        using var runStore = CreateRunStore(CreateOptions(workspace), timeProvider);
+
+        Assert.Equal("20260720T123456790Z", runStore.RunId);
+        Assert.Equal("existing", File.ReadAllText(existingFilePath));
+        Assert.Equal(["existing.txt"], Directory.EnumerateFileSystemEntries(existingRunDirectory).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public void RunMode_RunIdAllocationExhausted_PreservesLockAcquisitionError()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var startedAt = new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero);
+        var timeProvider = new FixedTimeProvider(startedAt);
+        var runsDirectory = DashboardRunStore.GetRunsDirectory(workspace.Path);
+
+        // A directory at each lock path makes opening the lock fail with a non-contention error.
+        for (var i = 0; i < DashboardRunStore.MaxRunIdAttempts; i++)
+        {
+            var runId = startedAt.AddMilliseconds(i).ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture);
+            Directory.CreateDirectory(DashboardRunStore.GetRunLockPath(Path.Combine(runsDirectory, runId)));
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(CreateOptions(workspace), timeProvider));
+
+        Assert.StartsWith($"Could not allocate a dashboard run in '{runsDirectory}' after {DashboardRunStore.MaxRunIdAttempts} attempts.", exception.Message);
+        Assert.IsType<UnauthorizedAccessException>(exception.InnerException);
     }
 
     [Fact]
