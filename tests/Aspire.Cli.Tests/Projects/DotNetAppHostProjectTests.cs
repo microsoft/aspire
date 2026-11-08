@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -1789,7 +1790,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         using var directory = new DotnetWatchTestDirectory();
         using var shutdown = new TestGracefulShutdownWindow();
-        await using var generation = new DotnetWatchAppHostGeneration(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance);
+        await using var generation = new DotnetWatchAppHostGeneration(shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance)
+        {
+            RequiresLauncherMonitoring = false
+        };
         var appHost = CreateProjectAppHost();
         var command = CreateBuiltAppHostCommand("AppHost");
         var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
@@ -1945,6 +1949,69 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.Equal(wrapperExitCode, exitCode);
         Assert.Equal(1, launches);
+    }
+
+    [Fact]
+    public async Task RunAsync_WatchedAppHostChildExitFailsStartupPromptlyWithRecentOutput()
+    {
+        using var directory = new DotnetWatchTestDirectory();
+        using var shutdown = new TestGracefulShutdownWindow();
+        await using var generation = new DotnetWatchAppHostGeneration(
+            shutdown, TimeSpan.FromSeconds(5), directory.RelativePath, NullLogger.Instance);
+        var appHost = CreateProjectAppHost();
+        var command = CreateBuiltAppHostCommand("AppHost");
+        var payload = TestDotnetWatchAppHostPayload.Create(directory.Directory, "10.0.403", "10.0.14");
+        var outerBackchannel = new TaskCompletionSource<Aspire.Cli.Backchannel.IAppHostCliBackchannel>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+                (0, targets.Contains(DotnetWatchAppHostLaunch.ResolveTarget)
+                    ? payload.CreateQueryDocument()
+                    : CreateAppHostInfoJson(runCommand: command.FullName)),
+            RunAppHostCommandAsyncCallback = async (_, _, _, _, _, _, options, token) =>
+            {
+                var startInfo = OperatingSystem.IsWindows()
+                    ? new ProcessStartInfo("cmd.exe") { ArgumentList = { "/c", "ping -n 2 127.0.0.1 >nul & exit /b 17" } }
+                    : new ProcessStartInfo("/bin/sh") { ArgumentList = { "-c", "sleep 0.5; exit 17" } };
+                startInfo.UseShellExecute = false;
+                using var child = Process.Start(startInfo)!;
+                var started = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(child.Id);
+                Assert.NotNull(started);
+                options.StandardErrorCallback?.Invoke("WATCH_STARTUP_FAILURE_DETAILS");
+                await DotnetWatchAppHostTestChannel.SendAsync(generation.Endpoint, new()
+                {
+                    Version = DotnetWatchAppHostProtocol.Version,
+                    Session = generation.Session,
+                    Kind = DotnetWatchAppHostProtocol.HostStarted,
+                    Instance = $"{child.Id}:{started.Value}"
+                }, token);
+                await child.WaitForExitAsync(CancellationToken.None);
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                }
+                return child.ExitCode;
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHost,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            Watch = true,
+            WatchGeneration = generation,
+            BackchannelCompletionSource = outerBackchannel
+        }, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => outerBackchannel.Task);
+        Assert.Contains("WATCH_STARTUP_FAILURE_DETAILS", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

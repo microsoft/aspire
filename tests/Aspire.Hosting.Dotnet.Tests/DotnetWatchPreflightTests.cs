@@ -11,6 +11,7 @@ using Aspire.Hosting.Dotnet.Watch;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -130,6 +131,132 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ReferencedProjectBuildContextMustRoundTrip()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var sharedPath = DotnetWatchProjectGraph.Normalize(Path.Combine(workspace.Path, "shared", "shared.csproj"));
+        var evaluator = new DotnetWatchPreflightTestServices
+        {
+            Transform = (_, globalProperties, _, graph) =>
+            {
+                var root = graph.Projects.Single();
+                var rootNode = root.Value with { References = [sharedPath] };
+                var sharedProperties = new Dictionary<string, string>(root.Value.Properties)
+                {
+                    ["REVIEW_FEATURE"] = globalProperties ? "requested" : "project-owned"
+                };
+                var shared = new DotnetWatchProjectNode(
+                    sharedPath,
+                    sharedProperties,
+                    [],
+                    [sharedPath],
+                    [Path.Combine(Path.GetDirectoryName(sharedPath)!, "bin"), Path.Combine(Path.GetDirectoryName(sharedPath)!, "obj")]);
+                return graph with
+                {
+                    Projects = new Dictionary<string, DotnetWatchProjectNode>(DotnetWatchProjectGraph.PathComparer)
+                    {
+                        [root.Key] = rootNode,
+                        [sharedPath] = shared
+                    }
+                };
+            }
+        };
+        using var builder = CreateBuilder(evaluator);
+        var service = AddProject(builder, workspace, "service")
+            .WithBuildEnvironment("REVIEW_FEATURE", "requested");
+        using var app = builder.Build();
+
+        await BeforeStartAsync(app, CancellationToken.None);
+
+        Assert.True(Metadata(service).SuppressBuild);
+        Assert.Empty(Model(app).Resources.OfType<DotnetWatchServerResource>());
+    }
+
+    [Fact]
+    public async Task ExcludedProjectUsesItsOrdinaryGraphForFinalOwnership()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var common = Path.Combine(workspace.Path, "common-output");
+        var evaluator = new DotnetWatchPreflightTestServices
+        {
+            Transform = (path, globalProperties, _, graph) =>
+            {
+                var name = Path.GetFileNameWithoutExtension(path);
+                var output = name == "incompatible" && !globalProperties
+                    ? Path.Combine(workspace.Path, "watcher-only-output")
+                    : common;
+                var projects = graph.Projects.ToDictionary(pair => pair.Key, pair =>
+                {
+                    var properties = new Dictionary<string, string>(pair.Value.Properties);
+                    if (name == "incompatible")
+                    {
+                        properties["CUSTOM_CONTEXT"] = globalProperties ? "requested" : "project-owned";
+                    }
+                    return pair.Value with
+                    {
+                        Properties = properties,
+                        Outputs = [DotnetWatchProjectGraph.Normalize(output)]
+                    };
+                }, DotnetWatchProjectGraph.PathComparer);
+                return graph with { Projects = projects };
+            }
+        };
+        using var builder = CreateBuilder(evaluator);
+        var incompatible = AddProject(builder, workspace, "incompatible").WithBuildEnvironment("CUSTOM_CONTEXT", "requested");
+        var watched = AddProject(builder, workspace, "watched");
+        using var app = builder.Build();
+
+        await BeforeStartAsync(app, CancellationToken.None);
+
+        Assert.Empty(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        Assert.Equal(
+            [Metadata(incompatible).ProjectPath, Metadata(watched).ProjectPath],
+            Model(app).Resources.OfType<DotnetProjectBuildResource>()
+                .SelectMany(build => build.ProjectPaths)
+                .Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task SharedDependencyDiagnosticNamesThePhysicalProjectAndAffectedResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var sharedPath = DotnetWatchProjectGraph.Normalize(Path.Combine(workspace.Path, "shared", "shared.csproj"));
+        var evaluator = new DotnetWatchPreflightTestServices
+        {
+            Transform = (_, _, _, graph) =>
+            {
+                var root = graph.Projects.Single();
+                var shared = root.Value with
+                {
+                    Path = sharedPath,
+                    References = [],
+                    Imports = [sharedPath],
+                    Outputs = [Path.Combine(Path.GetDirectoryName(sharedPath)!, "bin")]
+                };
+                return graph with
+                {
+                    Projects = new Dictionary<string, DotnetWatchProjectNode>(DotnetWatchProjectGraph.PathComparer)
+                    {
+                        [root.Key] = root.Value with { References = [sharedPath] },
+                        [sharedPath] = shared
+                    }
+                };
+            }
+        };
+        using var builder = CreateBuilder(evaluator);
+        AddProject(builder, workspace, "watched").WithWatch();
+        AddProject(builder, workspace, "ordinary").WithWatch(false);
+        using var app = builder.Build();
+
+        var error = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => BeforeStartAsync(app, CancellationToken.None));
+
+        Assert.Contains("'watched'", error.Message);
+        Assert.Contains("'ordinary'", error.Message);
+        Assert.Contains(sharedPath, error.Message);
+    }
+
+    [Fact]
     [UnsupportedOSPlatform("windows")]
     public async Task SymlinkedEntryPointsShareOnePhysicalRootAndLaunchGate()
     {
@@ -144,8 +271,8 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         await BeforeStartAsync(app, CancellationToken.None);
         var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
 
-        var arguments = await ArgumentEvaluator.GetArgumentListAsync(server, app.Services);
         var firstArguments = await ArgumentEvaluator.GetArgumentListAsync(first.Resource, app.Services);
+        var arguments = await ArgumentEvaluator.GetArgumentListAsync(server, app.Services);
         var secondArguments = await ArgumentEvaluator.GetArgumentListAsync(second.Resource, app.Services);
 
         Assert.Equal(1, arguments.Count(argument => argument == "--resource"));
@@ -283,6 +410,29 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task WatchedResourceStartWaitsForInitialBuildRecovery()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new());
+        var watched = AddProject(builder, workspace, "watched");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+
+        var starting = builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(watched.Resource, app.Services),
+            CancellationToken.None);
+        Assert.False(starting.IsCompleted);
+
+        await DotnetWatchCoordinator.ReportBuildCompleteForTestingAsync(
+            watched.Resource, success: false, app.Services, CancellationToken.None);
+        Assert.False(starting.IsCompleted);
+
+        await DotnetWatchCoordinator.ReportBuildCompleteForTestingAsync(
+            watched.Resource, success: true, app.Services, CancellationToken.None);
+        await starting.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
     public async Task InitialBuildInventoryValidationFinishesBeforeReleasingConsumers()
     {
         using var workspace = TemporaryWorkspace.Create(output);
@@ -312,6 +462,23 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         await waiting.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
+    [Fact]
+    public async Task BuildCompleteBeforeProcessStartedDoesNotWaitForRestartLock()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new());
+        var watched = AddProject(builder, workspace, "watched");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var barrier = Assert.Single(watched.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
+        var waiting = barrier.Callback(app.Services, CancellationToken.None);
+
+        await DotnetWatchCoordinator.ReportBuildCompleteWhileRestartLockedForTestingAsync(
+            watched.Resource, app.Services, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(10));
+
+        await waiting.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -334,14 +501,17 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         Assert.False(waiting.IsCompleted);
         invalidated = true;
 
-        var error = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+        var error = await Assert.ThrowsAsync<DotnetWatchIncompatibleGraphException>(() =>
             DotnetWatchCoordinator.ReportBuildCompleteForTestingAsync(
                 watched.Resource, success: true, app.Services, CancellationToken.None));
         var consumerError = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
             waiting.WaitAsync(TimeSpan.FromSeconds(10)));
 
-        Assert.Contains("SDK or output/build context changed", error.Message);
+        Assert.Contains(
+            changedSdk ? "SDK version changed" : "evaluated output domains changed",
+            error.Message);
         Assert.Contains("Initial watch build inventory validation failed", consumerError.Message);
+        Assert.Equal(1, consumerError.Message.Split("Restart the complete watch run.", StringSplitOptions.None).Length - 1);
         Assert.False(Metadata(watched).SuppressBuild);
     }
 
@@ -378,6 +548,203 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task TransientEvaluationFailureRetainsLastGoodGraphAndRetriesOnNextEdit()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var evaluator = new DotnetWatchPreflightTestServices();
+        using var builder = CreateBuilder(evaluator);
+        var watched = AddProject(builder, workspace, "watched");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var attempts = 0;
+        evaluator.BeforeEvaluation = _ =>
+        {
+            if (Interlocked.Increment(ref attempts) == 1)
+            {
+                throw new DistributedApplicationException("The project file is temporarily invalid.");
+            }
+            return Task.CompletedTask;
+        };
+
+        await DotnetWatchCoordinator.ReportProjectFileChangeForTestingAsync(
+            watched.Resource, Metadata(watched).ProjectPath, app.Services, TestContext.Current.CancellationToken);
+        var afterFailure = evaluator.EvaluationCount;
+
+        evaluator.BeforeEvaluation = null;
+        await DotnetWatchCoordinator.ReportProjectFileChangeForTestingAsync(
+            watched.Resource, Metadata(watched).ProjectPath, app.Services, TestContext.Current.CancellationToken);
+
+        Assert.True(evaluator.EvaluationCount > afterFailure);
+        Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        Assert.False(Metadata(watched).SuppressBuild);
+    }
+
+    [Fact]
+    public async Task RefreshOnlyMismatchBetweenWatchContextsIsRetriedOnce()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var unstable = false;
+        var evaluations = 0;
+        var generatedImport = Path.Combine(workspace.Path, "obj", "watched.csproj.nuget.g.props");
+        var evaluator = new DotnetWatchPreflightTestServices
+        {
+            TransformWithWorkingDirectory = (_, globalProperties, _, _, graph) =>
+            {
+                if (!unstable || globalProperties)
+                {
+                    return graph;
+                }
+
+                return Interlocked.Increment(ref evaluations) == 2
+                    ? WithImports(graph, generatedImport)
+                    : graph;
+            }
+        };
+        using var builder = CreateBuilder(evaluator);
+        var watched = AddProject(builder, workspace, "watched");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        unstable = true;
+
+        await DotnetWatchCoordinator.ReportProjectFileChangeForTestingAsync(
+            watched.Resource, Path.Combine(workspace.Path, "unowned.props"),
+            app.Services, TestContext.Current.CancellationToken);
+
+        Assert.Equal(6, evaluations);
+        Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        Assert.False(Metadata(watched).SuppressBuild);
+    }
+
+    [Fact]
+    public async Task IndependentExcludedBuildDoesNotBlockWatcherPreparation()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new());
+        AddProject(builder, workspace, "watched");
+        AddProject(builder, workspace, "ordinary").WithWatch(false);
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+
+        var arguments = await ArgumentEvaluator.GetArgumentListAsync(server, app.Services).AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains("--resource", arguments);
+    }
+
+    [Fact]
+    public async Task IndependentOrdinaryBuildValidationDoesNotReevaluateWatchedGraphs()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var evaluations = new Dictionary<string, int>(DotnetWatchProjectGraph.PathComparer);
+        var evaluator = new DotnetWatchPreflightTestServices
+        {
+            Transform = (path, _, _, graph) =>
+            {
+                evaluations[path] = evaluations.GetValueOrDefault(path) + 1;
+                return graph;
+            }
+        };
+        using var builder = CreateBuilder(evaluator);
+        var watched = AddProject(builder, workspace, "watched");
+        var ordinary = AddProject(builder, workspace, "ordinary").WithWatch(false);
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var watchedPath = DotnetWatchProjectGraph.Normalize(Metadata(watched).ProjectPath);
+        var ordinaryPath = DotnetWatchProjectGraph.Normalize(Metadata(ordinary).ProjectPath);
+        var watchedEvaluations = evaluations[watchedPath];
+        var ordinaryEvaluations = evaluations[ordinaryPath];
+        var build = Assert.Single(Model(app).Resources.OfType<DotnetProjectBuildResource>());
+
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(build, app.Services),
+            CancellationToken.None);
+
+        Assert.Equal(watchedEvaluations, evaluations[watchedPath]);
+        Assert.Equal(ordinaryEvaluations + 1, evaluations[ordinaryPath]);
+    }
+
+    [Fact]
+    public async Task MultiRootTempRedirectIsOmittedWhenDefaultTempPreservesTheGraph()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new());
+        AddProject(builder, workspace, "first");
+        AddProject(builder, workspace, "second");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            server, serviceProvider: app.Services);
+
+        Assert.DoesNotContain(
+            DotnetWatchCoordinator.GetTempVariables(OperatingSystem.IsWindows()),
+            environment.ContainsKey);
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task MultiRootTempRedirectUsesAShortPrivateCoreFxSafePathWhenNeeded()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "CoreFx uses named pipes instead of Unix sockets.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var defaultTemp = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath()));
+        var evaluator = new DotnetWatchPreflightTestServices
+        {
+            TransformWithWorkingDirectory = (_, globalProperties, _, workingDirectory, graph) =>
+                !globalProperties &&
+                DotnetWatchProjectGraph.PathComparer.Equals(
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(workingDirectory)), defaultTemp)
+                    ? graph with { SdkVersion = "10.0.999" }
+                    : graph
+        };
+        using var builder = CreateBuilder(evaluator);
+        AddProject(builder, workspace, "first");
+        AddProject(builder, workspace, "second");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            server, serviceProvider: app.Services);
+        var tempDirectory = environment["TMPDIR"];
+
+        Assert.StartsWith("/tmp/aspw-", tempDirectory, StringComparison.Ordinal);
+        Assert.EndsWith("/t0", tempDirectory, StringComparison.Ordinal);
+        Assert.Equal(DotnetWatchServerInfrastructure.PrivateDirectoryMode, File.GetUnixFileMode(tempDirectory));
+        DotnetWatchServerInfrastructure.ValidateCoreFxPipePath(tempDirectory);
+    }
+
+    [Fact]
+    public async Task NormalShutdownWaitsForWatchHostCleanupBeforeRemovingRunDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = CreateBuilder(new());
+        AddProject(builder, workspace, "watched");
+        await using var app = builder.Build();
+        await BeforeStartAsync(app, CancellationToken.None);
+        var server = Assert.Single(Model(app).Resources.OfType<DotnetWatchServerResource>());
+        var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            server, serviceProvider: app.Services);
+        var cleanupMarker = environment[DotnetWatchHostProtocol.CleanupMarkerVariable];
+        var runDirectory = Path.GetDirectoryName(cleanupMarker)!;
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(server, app.Services),
+            TestContext.Current.CancellationToken);
+        var acknowledge = Task.Run(async () =>
+        {
+            await Task.Delay(100);
+            await File.WriteAllTextAsync(cleanupMarker, "contained-cleanup-complete");
+        });
+
+        await app.DisposeAsync();
+        await acknowledge;
+
+        Assert.False(Directory.Exists(runDirectory));
+    }
+
+    [Fact]
     public async Task OrdinaryInitialBuildValidatesItsActualCallbackSnapshotBeforeWriting()
     {
         using var workspace = TemporaryWorkspace.Create(output);
@@ -399,7 +766,7 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         Assert.Equal(1, evaluations);
         var build = Assert.Single(Model(app).Resources.OfType<DotnetProjectBuildResource>());
 
-        var error = await Assert.ThrowsAsync<DistributedApplicationException>(() => builder.Eventing.PublishAsync(
+        var error = await Assert.ThrowsAsync<DotnetWatchIncompatibleGraphException>(() => builder.Eventing.PublishAsync(
             new BeforeResourceStartedEvent(build, app.Services), CancellationToken.None));
 
         Assert.Contains("overlap", error.Message);
@@ -431,6 +798,7 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
 
         var failure = await Assert.ThrowsAsync<DistributedApplicationException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(30)));
         Assert.Contains("overlap", failure.Message);
+        Assert.Equal(1, failure.Message.Split("Restart the complete watch run.", StringSplitOptions.None).Length - 1);
         Assert.False(Metadata(watched).SuppressBuild);
         Assert.True(Metadata(ordinary).SuppressBuild);
     }
@@ -455,6 +823,14 @@ public class DotnetWatchPreflightTests(ITestOutputHelper output)
         {
             Projects = graph.Projects.ToDictionary(pair => pair.Key,
                 pair => pair.Value with { Outputs = [DotnetWatchProjectGraph.Normalize(outputPath)] }, DotnetWatchProjectGraph.PathComparer)
+        };
+
+    private static DotnetWatchProjectGraphResult WithImports(DotnetWatchProjectGraphResult graph, string importPath) =>
+        graph with
+        {
+            Projects = graph.Projects.ToDictionary(pair => pair.Key,
+                pair => pair.Value with { Imports = [.. pair.Value.Imports, DotnetWatchProjectGraph.Normalize(importPath)] },
+                DotnetWatchProjectGraph.PathComparer)
         };
 
     private static IProjectMetadata Metadata(IResourceBuilder<DotnetProjectResource> resource) =>

@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Dotnet.Tests.Helpers;
 internal sealed class DotnetWatchPreflightTestServices : IDotnetWatchPreflight
 {
     internal Func<string, bool, IReadOnlyDictionary<string, string>, DotnetWatchProjectGraphResult, DotnetWatchProjectGraphResult>? Transform { get; set; }
+    internal Func<string, bool, IReadOnlyDictionary<string, string>, string, DotnetWatchProjectGraphResult, DotnetWatchProjectGraphResult>? TransformWithWorkingDirectory { get; set; }
     internal string? PayloadFailure { get; set; }
     internal Func<CancellationToken, Task>? BeforeEvaluation { get; set; }
     private int _evaluationCount;
@@ -52,7 +53,13 @@ internal sealed class DotnetWatchPreflightTestServices : IDotnetWatchPreflight
         var result = new DotnetWatchProjectGraphResult(
             "/model-only-sdk", "/model-only-dotnet", "10.0.403",
             new Dictionary<string, DotnetWatchProjectNode>(DotnetWatchProjectGraph.PathComparer) { [path] = node });
-        return Transform is null ? result : Transform(path, globalProperties, environment, result);
+        if (Transform is not null)
+        {
+            result = Transform(path, globalProperties, environment, result);
+        }
+        return TransformWithWorkingDirectory is null
+            ? result
+            : TransformWithWorkingDirectory(path, globalProperties, environment, workingDirectory, result);
     }
 
     public Task<DotnetWatchResolvedPayload> ResolvePayloadAsync(

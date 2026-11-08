@@ -45,9 +45,9 @@ internal sealed class DotnetWatchMember(
         var previous = resource.Annotations.OfType<ResourceSnapshotProjectionAnnotation>().LastOrDefault();
         resource.Annotations.Add(new ResourceSnapshotProjectionAnnotation((id, snapshot) =>
         {
-            var transport = CaptureTransport(id, snapshot);
+            var transport = CaptureTransport(id, snapshot, out var modelPublication);
             var projected = previous is null ? snapshot : previous.Projection(id, snapshot);
-            return ProjectSnapshot(id, projected, transport);
+            return ProjectSnapshot(id, projected, transport, modelPublication);
         }));
 
         foreach (var name in new[]
@@ -108,8 +108,8 @@ internal sealed class DotnetWatchMember(
             // Record intent before DCP publishes Stopping/Exited; internal refresh calls the
             // captured callback directly and therefore never records a user's manual Stop.
             _instances.AddOrUpdate(context.ResourceName,
-                _ => new(null, null, null, true),
-                (_, instance) => instance with { Stopped = true });
+                _ => new(null, null, null, Stopped: true, CoordinatorStopping: false, CoordinatorStarting: false),
+                (_, instance) => instance with { Stopped = true, CoordinatorStopping = false, CoordinatorStarting = false });
             return await stop(original, context).ConfigureAwait(false);
         }
 
@@ -150,22 +150,25 @@ internal sealed class DotnetWatchMember(
     internal bool IsManuallyStopped(string instanceId) =>
         _instances.TryGetValue(instanceId, out var instance) && instance.Stopped;
 
-    internal string[] IntendedRunningInstances =>
-        [.. _instances.Where(pair => !pair.Value.Stopped &&
-            IsRunningTransport(pair.Value.TransportState))
-            .Select(pair => pair.Key)];
+    internal bool IsCoordinatorStopping(string instanceId) =>
+        _instances.TryGetValue(instanceId, out var instance) && instance.CoordinatorStopping;
 
-    internal string[] ActiveTransportInstances =>
-        [.. _instances.Where(pair => IsActiveTransport(pair.Value.TransportState))
-            .Select(pair => pair.Key)];
+    internal bool IsCoordinatorStarting(string instanceId) =>
+        _instances.TryGetValue(instanceId, out var instance) && instance.CoordinatorStarting;
 
     internal void ObserveTransport(string id, CustomResourceSnapshot snapshot)
     {
         var state = snapshot.Properties.FirstOrDefault(property => property.Name == TransportStateProperty)?.Value as string;
         var pid = snapshot.Properties.FirstOrDefault(property => property.Name == TransportPidProperty)?.Value;
         var exit = snapshot.Properties.FirstOrDefault(property => property.Name == TransportExitProperty)?.Value as int?;
-        _instances.AddOrUpdate(id, _ => new(state, pid, exit, false),
-            (_, instance) => instance with { TransportState = state, TransportPid = pid, TransportExitCode = exit });
+        _instances.AddOrUpdate(id, _ => new(state, pid, exit, Stopped: false, CoordinatorStopping: false, CoordinatorStarting: false),
+            (_, instance) => instance with
+            {
+                TransportState = state,
+                TransportPid = pid,
+                TransportExitCode = exit,
+                CoordinatorStarting = instance.CoordinatorStarting && !IsRunningTransport(state)
+            });
     }
 
     internal string[] GetTransportInstances(ResourceNotificationService notifications, bool intendedOnly) =>
@@ -188,7 +191,10 @@ internal sealed class DotnetWatchMember(
             return CommandResults.Failure($"The original Stop callback for '{resource.Name}' is unavailable.");
         }
 
-        return await _stop.ExecuteCommand(new ExecuteCommandContext
+        _instances.AddOrUpdate(id,
+            _ => new(null, null, null, Stopped: false, CoordinatorStopping: true, CoordinatorStarting: false),
+            (_, instance) => instance with { CoordinatorStopping = true, CoordinatorStarting = false });
+        var result = await _stop.ExecuteCommand(new ExecuteCommandContext
         {
             ResourceName = id,
             Services = services,
@@ -196,6 +202,14 @@ internal sealed class DotnetWatchMember(
             Logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(resource),
             Arguments = new([])
         }).ConfigureAwait(false);
+        if (!result.Success)
+        {
+            _instances.AddOrUpdate(id,
+                _ => new(null, null, null, Stopped: false, CoordinatorStopping: false, CoordinatorStarting: false),
+                (_, instance) => instance with { CoordinatorStopping = false, CoordinatorStarting = false });
+        }
+
+        return result;
     }
 
     internal async Task<ExecuteCommandResult> StartOwnedAsync(string id, IServiceProvider services, CancellationToken cancellationToken)
@@ -210,14 +224,42 @@ internal sealed class DotnetWatchMember(
             return CommandResults.Failure($"The original Start callback for '{resource.Name}' is unavailable.");
         }
 
-        return await _start.ExecuteCommand(new ExecuteCommandContext
+        var notifications = services.GetRequiredService<ResourceNotificationService>();
+        _instances.AddOrUpdate(id,
+            _ => new(null, null, null, Stopped: false, CoordinatorStopping: false, CoordinatorStarting: true),
+            (_, instance) => instance with { CoordinatorStopping = false, CoordinatorStarting = true });
+        try
         {
-            ResourceName = id,
-            Services = services,
-            CancellationToken = cancellationToken,
-            Logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(resource),
-            Arguments = new([])
-        }).ConfigureAwait(false);
+            // The planned stop is projected as Waiting so dependencies retain their reason. Publish
+            // an explicit planned-start transition before invoking Aspire's generic Start callback;
+            // otherwise it treats Waiting as an already-pending DCP start and intentionally no-ops.
+            await PublishAsync(notifications).ConfigureAwait(false);
+            var result = await _start.ExecuteCommand(new ExecuteCommandContext
+            {
+                ResourceName = id,
+                Services = services,
+                CancellationToken = cancellationToken,
+                Logger = services.GetRequiredService<ResourceLoggerService>().GetLogger(resource),
+                Arguments = new([])
+            }).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                _instances.AddOrUpdate(id,
+                    _ => new(null, null, null, Stopped: false, CoordinatorStopping: false, CoordinatorStarting: false),
+                    (_, instance) => instance with { CoordinatorStarting = false });
+                await PublishAsync(notifications).ConfigureAwait(false);
+            }
+
+            return result;
+        }
+        catch
+        {
+            _instances.AddOrUpdate(id,
+                _ => new(null, null, null, Stopped: false, CoordinatorStopping: false, CoordinatorStarting: false),
+                (_, instance) => instance with { CoordinatorStarting = false });
+            await PublishAsync(notifications).ConfigureAwait(false);
+            throw;
+        }
     }
 
     internal void Observe(string type, bool? success, int? exitCode, string lastEvent)
@@ -254,24 +296,31 @@ internal sealed class DotnetWatchMember(
             });
 
     internal CustomResourceSnapshot ProjectSnapshot(string id, CustomResourceSnapshot snapshot) =>
-        ProjectSnapshot(id, snapshot, CaptureTransport(id, snapshot));
+        ProjectSnapshot(id, snapshot, CaptureTransport(id, snapshot, out var modelPublication), modelPublication);
 
-    private Instance CaptureTransport(string id, CustomResourceSnapshot snapshot)
+    private Instance CaptureTransport(string id, CustomResourceSnapshot snapshot, out bool modelPublication)
     {
         var internalUpdate = snapshot.Properties.Any(property => property.Name == InternalUpdateProperty);
         // Raw DCP executable snapshots include executable.pid, even when it is null.
         // Health/URL publications reuse already-projected properties and are not new
         // process observations. Retain transport separately across those logical updates.
         var raw = snapshot.Properties.Any(property => property.Name == "executable.pid");
+        // Aspire/model publications use these states to express startup failure or dependency
+        // waiting independently of the proxy transport. Other logical updates (for example
+        // endpoint health) reuse the projected snapshot and must not replace transport state.
+        var snapshotState = snapshot.State?.Text;
+        modelPublication = !raw && !internalUpdate &&
+            (snapshotState == KnownResourceStates.FailedToStart || snapshotState == KnownResourceStates.Waiting);
         var previous = _instances.GetValueOrDefault(id);
-        var instance = previous ?? new(snapshot.State?.Text, null, null, false);
+        var instance = previous ?? new(snapshot.State?.Text, null, null, Stopped: false, CoordinatorStopping: false, CoordinatorStarting: false);
         if (raw && !internalUpdate)
         {
             instance = instance with
             {
                 TransportState = snapshot.State?.Text,
                 TransportPid = snapshot.Properties.First(property => property.Name == "executable.pid").Value,
-                TransportExitCode = snapshot.ExitCode
+                TransportExitCode = snapshot.ExitCode,
+                CoordinatorStarting = instance.CoordinatorStarting && !IsRunningTransport(snapshot.State?.Text)
             };
         }
         else if (snapshot.Properties.Any(property => property.Name == TransportStateProperty))
@@ -284,13 +333,19 @@ internal sealed class DotnetWatchMember(
             };
         }
 
+        _instances[id] = instance;
         return instance;
     }
 
-    private CustomResourceSnapshot ProjectSnapshot(string id, CustomResourceSnapshot snapshot, Instance instance)
+    private CustomResourceSnapshot ProjectSnapshot(
+        string id,
+        CustomResourceSnapshot snapshot,
+        Instance instance,
+        bool modelPublication)
     {
         var observed = Volatile.Read(ref _observed);
         var state = instance.TransportState;
+        ResourceStateSnapshot? modelState = null;
         var applicationScope = unambiguous();
         var failed = failure();
         if (failed is not null)
@@ -301,6 +356,20 @@ internal sealed class DotnetWatchMember(
         {
             state = state is not null && KnownResourceStates.TerminalStates.Contains(state)
                 ? KnownResourceStates.Exited : KnownResourceStates.Stopping;
+        }
+        else if (instance.CoordinatorStopping)
+        {
+            state = state is not null && KnownResourceStates.TerminalStates.Contains(state)
+                ? KnownResourceStates.Waiting : KnownResourceStates.Stopping;
+        }
+        else if (instance.CoordinatorStarting)
+        {
+            state = KnownResourceStates.Starting;
+        }
+        else if (modelPublication && snapshot.State is not null)
+        {
+            modelState = snapshot.State;
+            state = snapshot.State.Text;
         }
         else if (state is not null && KnownResourceStates.TerminalStates.Contains(state))
         {
@@ -315,11 +384,13 @@ internal sealed class DotnetWatchMember(
 
         return snapshot with
         {
-            State = state is null ? null : new ResourceStateSnapshot(state,
+            State = modelState ?? (state is null ? null : new ResourceStateSnapshot(state,
                 failed is not null || state == DotnetWatchCoordinator.CrashedState || state == KnownResourceStates.FailedToStart
-                    ? KnownResourceStateStyles.Error : null),
-            ExitCode = applicationScope && !instance.Stopped && failed is null &&
-                !KnownResourceStates.TerminalStates.Contains(instance.TransportState) ? observed.ExitCode : null,
+                    ? KnownResourceStateStyles.Error : null)),
+            ExitCode = modelPublication && modelState is not null
+                ? snapshot.ExitCode
+                : applicationScope && !instance.Stopped && !instance.CoordinatorStopping && failed is null &&
+                    !KnownResourceStates.TerminalStates.Contains(instance.TransportState) ? observed.ExitCode : null,
             StartTimeStamp = null,
             StopTimeStamp = null,
             Properties =
@@ -342,6 +413,12 @@ internal sealed class DotnetWatchMember(
         };
     }
 
-    private sealed record Instance(string? TransportState, object? TransportPid, int? TransportExitCode, bool Stopped);
+    private sealed record Instance(
+        string? TransportState,
+        object? TransportPid,
+        int? TransportExitCode,
+        bool Stopped,
+        bool CoordinatorStopping,
+        bool CoordinatorStarting);
     private sealed record ObservedState(string State, int? ExitCode, string Build, long Generation, string? LastEvent);
 }

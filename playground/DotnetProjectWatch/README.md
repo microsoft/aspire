@@ -1,8 +1,13 @@
 # Selective AppHost and .NET service watch
 
-Run this playground with `aspire run --watch` to exercise combined AppHost and compatible C# service
-watching. `features.defaultWatchEnabled` selects the same mode; explicit `--watch false` disables
-CLI-controlled watching. See the [integration README](../../src/Aspire.Hosting.Dotnet/README.md#watch-apphost-and-service-changes)
+Run this playground with `aspire run --watch` to exercise compatible C# service watching.
+The repository currently selects a .NET 11 preview SDK for the AppHost, while the shipped watcher
+10.0.403 targets .NET 10, so the in-repo AppHost prints a diagnosed fallback and runs normally.
+Combined compatible C# AppHost and service watching is exercised by the package-hive
+[`DotnetWatchCSharpTests`](../../tests/Aspire.Cli.EndToEnd.Tests/DotnetWatchTests.cs), whose fixture
+selects a .NET 10 SDK. `features.defaultWatchEnabled` selects the same mode; explicit `--watch false`
+disables CLI-controlled watching. See the
+[integration README](../../src/Aspire.Hosting.Dotnet/README.md#watch-apphost-and-service-changes)
 for the current prerequisites, evaluated isolation rules, and coverage limits.
 
 The package ships watcher 10.0.403 and WatchHost; it does not acquire a tool at run time. Compatible
@@ -227,6 +232,9 @@ Prereqs: Linux or macOS. The repo's local SDK is installed by restore (`./restor
 the SDK from the root `global.json`, plus the .NET 10 runtime that restore also installs). The services select a .NET 10
 SDK (`services/global.json`), which must be installed next to the `dotnet` that runs them; for the repo-local muxer:
 `curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0 --install-dir .dotnet`.
+This direct in-repo route exercises service watching only because the AppHost itself uses the repository's .NET 11
+preview SDK. Use the package-hive `DotnetWatchCSharpTests` E2E route above to exercise combined AppHost reconstruction
+and service watching against the pinned .NET 10 watcher.
 
 ```bash
 git clone --branch spike/project-v2-csharpprogram-watch https://github.com/microsoft/aspire && cd aspire

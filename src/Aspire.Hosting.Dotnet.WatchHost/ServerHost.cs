@@ -102,9 +102,15 @@ internal static class ServerHost
             await process.StartAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
-                var code = await process.WaitForExitAsync(shutdown.Token).ConfigureAwait(false);
+                _ = await process.WaitForExitAsync(shutdown.Token).ConfigureAwait(false);
                 WriteCleanupMarker(cleanupMarker);
-                return code;
+                if (ReadExitCode(exitCodePath) is { } code)
+                {
+                    return code;
+                }
+
+                Console.Error.WriteLine($"{LogPrefix}: the watcher process did not start or did not report its completion.");
+                return ExitLaunchFailed;
             }
             catch (OperationCanceledException) when (shutdown.Token.IsCancellationRequested)
             {
@@ -129,21 +135,6 @@ internal static class ServerHost
         if (!string.IsNullOrEmpty(path))
         {
             File.WriteAllText(path, "contained-cleanup-complete");
-        }
-    }
-
-    internal static async Task StopAsync(Process process, TimeSpan grace)
-    {
-        using var timeout = new CancellationTokenSource(grace);
-        try
-        {
-            await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Includes the watcher and the services it launched (or relaunched after a file change during shutdown).
-            process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync().ConfigureAwait(false);
         }
     }
 

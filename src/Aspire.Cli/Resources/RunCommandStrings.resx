@@ -282,11 +282,11 @@
   <data name="NoBuildNotSupportedWithDefaultWatch" xml:space="preserve">
     <value>--no-build can't be used while combined watch is on by default (the defaultWatchEnabled feature). Remove --no-build, or pass --watch false to run without CLI-controlled watch.</value>
   </data>
-  <data name="WatchHandledByIde" xml:space="preserve">
-    <value>The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</value>
-  </data>
   <data name="WatchNotSupportedWithDebugger" xml:space="preserve">
     <value>--watch cannot be used with an IDE-owned or debugger-owned AppHost run. Stop the debug session and run aspire run --watch from a terminal.</value>
+  </data>
+  <data name="WatchAppHostExitedDuringStartup" xml:space="preserve">
+    <value>The watched AppHost process exited during startup before its backchannel connected.{0}</value>
   </data>
   <data name="WatchBootstrapUnavailable" xml:space="preserve">
     <value>The restored AppHost must reference an Aspire.Hosting.Dotnet package with the ResolveAspireDotnetWatch target, and that target must successfully resolve the bundled watcher and selected SDK.</value>

@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -155,6 +156,31 @@ internal static class DotnetWatchServerInfrastructure
             s_createdDirectories.Add(directory.FullName);
         }
         return directory.FullName;
+    }
+
+    internal static string CreatePrivateDirectory(string parentDirectory, string name)
+    {
+        var path = Path.Combine(parentDirectory, name);
+        EnsurePrivateDirectory(path);
+        return path;
+    }
+
+    internal static void ValidateCoreFxPipePath(string tempDirectory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var maximumBytes = OperatingSystem.IsMacOS() ? 104 : 108;
+        var candidate = Path.Combine(tempDirectory, "CoreFxPipe_" + new string('0', 32));
+        var bytes = Encoding.UTF8.GetByteCount(candidate);
+        if (bytes > maximumBytes)
+        {
+            throw new DistributedApplicationException(
+                $"The watcher's temporary directory '{tempDirectory}' leaves {bytes} bytes for its CoreFx pipe path, " +
+                $"exceeding this platform's {maximumBytes}-byte Unix socket limit.");
+        }
     }
 
     /// <summary>

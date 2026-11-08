@@ -6,6 +6,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dotnet.Watch;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Dashboard.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -92,6 +93,82 @@ public class DotnetWatchMemberTests
         Assert.Equal(KnownResourceStates.FailedToStart, stopped.Snapshot.State?.Text);
         Assert.Null(stopped.Snapshot.ExitCode);
         Assert.Equal(true, Property(stopped.Snapshot, "existing"));
+    }
+
+    [Fact]
+    public async Task AspireStatePublicationsRemainAuthoritativeAfterTransportSnapshots()
+    {
+        var resource = new DotnetProjectResource("service", ".");
+        Create(resource, unambiguous: true).Configure();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+
+        await notifications.PublishUpdateAsync(resource, "service", _ => Raw(KnownResourceStates.Running, 1234, null));
+        await notifications.PublishUpdateAsync(resource, "service", snapshot => snapshot with
+        {
+            State = KnownResourceStates.FailedToStart
+        });
+        Assert.True(notifications.TryGetCurrentState("service", out var failed));
+        Assert.Equal(KnownResourceStates.FailedToStart, failed.Snapshot.State?.Text);
+
+        await notifications.PublishUpdateAsync(resource, "service", snapshot => snapshot with
+        {
+            State = KnownResourceStates.Waiting,
+            Properties =
+            [
+                .. snapshot.Properties,
+                new(KnownProperties.Resource.WaitingFor, new[] { "dependency" })
+            ]
+        });
+        Assert.True(notifications.TryGetCurrentState("service", out var waiting));
+        Assert.Equal(KnownResourceStates.Waiting, waiting.Snapshot.State?.Text);
+        Assert.Equal(
+            new[] { "dependency" },
+            waiting.Snapshot.Properties.Single(property => property.Name == KnownProperties.Resource.WaitingFor).Value);
+    }
+
+    [Fact]
+    public async Task CoordinatorRefreshProjectsWaitingThenStarting()
+    {
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var services = new ServiceCollection()
+            .AddSingleton(notifications)
+            .AddSingleton(new ResourceLoggerService())
+            .BuildServiceProvider();
+        var resource = new DotnetProjectResource("service", ".");
+        var member = Create(resource, unambiguous: true);
+        member.Configure();
+        _ = Override(resource, KnownResourceCommands.StopCommand, _ => Task.FromResult(CommandResults.Success()));
+        string? stateAtStart = null;
+        _ = Override(resource, KnownResourceCommands.StartCommand, context =>
+        {
+            Assert.True(notifications.TryGetCurrentState(context.ResourceName, out var current));
+            stateAtStart = current.Snapshot.State?.Text;
+            return Task.FromResult(CommandResults.Success());
+        });
+        await notifications.PublishUpdateAsync(resource, "service", _ => Raw(KnownResourceStates.Running, 1234, null));
+
+        Assert.True((await member.StopOwnedAsync("service", services, CancellationToken.None)).Success);
+        Assert.True(member.IsCoordinatorStopping("service"));
+        await notifications.PublishUpdateAsync(resource, "service", _ => Raw(KnownResourceStates.Finished, null, 0));
+        Assert.True(notifications.TryGetCurrentState("service", out var stopped));
+        Assert.Equal(KnownResourceStates.Waiting, stopped.Snapshot.State?.Text);
+
+        Assert.True((await member.StartOwnedAsync("service", services, CancellationToken.None)).Success);
+        Assert.False(member.IsCoordinatorStopping("service"));
+        Assert.True(member.IsCoordinatorStarting("service"));
+        Assert.Equal(KnownResourceStates.Starting, stateAtStart);
+        Assert.True(notifications.TryGetCurrentState("service", out var plannedStart));
+        Assert.Equal(KnownResourceStates.Starting, plannedStart.Snapshot.State?.Text);
+
+        await notifications.PublishUpdateAsync(resource, "service", _ => Raw(KnownResourceStates.Finished, null, 0));
+        Assert.True(member.IsCoordinatorStarting("service"));
+        Assert.True(notifications.TryGetCurrentState("service", out var oldGenerationStopped));
+        Assert.Equal(KnownResourceStates.Starting, oldGenerationStopped.Snapshot.State?.Text);
+
+        await notifications.PublishUpdateAsync(resource, "service", _ => Raw(KnownResourceStates.Starting, 5678, null));
+        Assert.False(member.IsCoordinatorStarting("service"));
+        Assert.True(notifications.TryGetCurrentState("service", out var starting));
+        Assert.Equal(KnownResourceStates.Starting, starting.Snapshot.State?.Text);
     }
 
     [Fact]

@@ -236,6 +236,19 @@ public class ExecutionConfigurationGathererTests
             ["KEY1"] = "value1",
             ["COPIED"] = "value1"
         }, result.EnvironmentVariables);
+
+        if (anotherResource)
+        {
+            var sourceResult = new ExecutionConfigurationGathererContext();
+            await gatherer.GatherAsync(sourceResult, source.Resource, NullLogger.Instance,
+                builder.ExecutionContext, TestContext.Current.CancellationToken);
+
+            Assert.Equal(new Dictionary<string, object>
+            {
+                ["KEY1"] = "value1",
+                ["KEY2"] = "value2"
+            }, sourceResult.EnvironmentVariables);
+        }
     }
 
     [Fact]

@@ -172,12 +172,31 @@ internal static class DotnetWatchCoordinator
     internal static Task ReportBuildCompleteForTestingAsync(
         DotnetProjectResource resource, bool success, IServiceProvider services, CancellationToken cancellationToken)
     {
-        if (!s_projectStates.TryGetValue(resource, out var state) || state.Projects.Find(p => p.Resource == resource) is not { } project)
+        return GetWatchedProjectForTesting(resource).Server.OnBuildCompleteForTestingAsync(
+            success, services, cancellationToken);
+    }
+
+    /// <summary>Test hook: proves a successful build event does not wait behind a restart awaiting <c>process_started</c>.</summary>
+    internal static Task ReportBuildCompleteWhileRestartLockedForTestingAsync(
+        DotnetProjectResource resource, IServiceProvider services, CancellationToken cancellationToken) =>
+        GetWatchedProjectForTesting(resource).Server.OnBuildCompleteWhileRestartLockedForTestingAsync(
+            services, cancellationToken);
+
+    /// <summary>Test hook: reports a build-input edit and waits for the resulting guarded maintenance pass.</summary>
+    internal static Task ReportProjectFileChangeForTestingAsync(
+        DotnetProjectResource resource, string path, IServiceProvider services, CancellationToken cancellationToken) =>
+        GetWatchedProjectForTesting(resource).Server.OnProjectFileChangeForTestingAsync(
+            path, services, cancellationToken);
+
+    private static WatchedProject GetWatchedProjectForTesting(DotnetProjectResource resource)
+    {
+        if (!s_projectStates.TryGetValue(resource, out var state) ||
+            state.Projects.Find(project => ReferenceEquals(project.Resource, resource)) is not { } project)
         {
             throw new InvalidOperationException($"'{resource.Name}' isn't watched.");
         }
 
-        return project.Server.OnBuildCompleteForTestingAsync(success, services, cancellationToken);
+        return project;
     }
 
     private static string? GetProjectLaunchConfigurationType(IResource resource) =>
@@ -380,6 +399,7 @@ internal static class DotnetWatchCoordinator
 
         public WatchServer Server { get; set; } = server;
         public DotnetWatchMember? Member { get; set; }
+        public DotnetWatchProjectGraphResult? OrdinaryGraph { get; set; }
         public DotnetWatchProjectGraphResult? Graph { get; set; }
         public IReadOnlyDictionary<string, string> BuildEnvironment { get; set; } = new Dictionary<string, string>();
         public DotnetWatchResolvedPayload? Payload { get; set; }
@@ -519,6 +539,7 @@ internal static class DotnetWatchCoordinator
         public IDistributedApplicationBuilder Builder { get; }
         public string Id { get; }
         private string? _runDirectory;
+        private string? _shortTempRoot;
         private ILogger? _logger;
         public string RunDirectory => _runDirectory ?? Path.Combine(Path.GetTempPath(), $"aspw-{Id}");
 
@@ -595,6 +616,7 @@ internal static class DotnetWatchCoordinator
                     {
                         continue;
                     }
+                    project.OrdinaryGraph = ordinary;
 
                     var watcherEnvironment = GetBuildProperties([project.Metadata]);
                     foreach (var (name, value) in buildEnvironment)
@@ -605,7 +627,6 @@ internal static class DotnetWatchCoordinator
                         globalProperties: false, Builder.AppHostDirectory, cancellationToken).ConfigureAwait(false);
                     project.Graph = graph;
                     project.BuildEnvironment = watcherEnvironment;
-                    _evaluatedRoots[resource] = graph;
                     if (GetCompatibilityReason(project, ordinary, graph, buildEnvironment) is { } incompatible)
                     {
                         reasons[project] = incompatible;
@@ -640,43 +661,44 @@ internal static class DotnetWatchCoordinator
                 }
             }
 
-            var remaining = new HashSet<IResource>(_evaluatedRoots.Keys, ReferenceEqualityComparer.Instance);
-            while (remaining.Count > 0)
+            bool ownershipChanged;
+            do
             {
-                var component = new List<IResource> { remaining.First() };
-                remaining.Remove(component[0]);
-                for (var index = 0; index < component.Count; index++)
+                ApplyFinalOwnerGraphs(reasons);
+                ownershipChanged = false;
+                foreach (var component in GetOutputComponents())
                 {
-                    foreach (var candidate in remaining.ToArray())
+                    var watched = Projects.Where(project =>
+                        !reasons.ContainsKey(project) && component.Contains(project.Resource)).ToArray();
+                    if (watched.Length == 0)
                     {
-                        if (DotnetWatchProjectGraph.SharesOutputs(_evaluatedRoots[component[index]], _evaluatedRoots[candidate]))
+                        continue;
+                    }
+
+                    var ordinary = component.Where(resource =>
+                        watched.All(project => !ReferenceEquals(project.Resource, resource))).ToArray();
+                    var reason = ordinary.Length > 0
+                        ? DescribeOwnershipConflict(component, watched, ordinary, reasons)
+                        : watched.Skip(1).Any(project => !SameBuildContext(watched[0], project))
+                            ? $"Resources {FormatResourceNames(watched.Select(project => project.Resource))} share build outputs but require incompatible SDK or build-environment contexts."
+                            : null;
+                    if (reason is not null)
+                    {
+                        foreach (var project in watched)
                         {
-                            component.Add(candidate);
-                            remaining.Remove(candidate);
+                            ownershipChanged |= reasons.TryAdd(project, reason);
                         }
                     }
                 }
-                var watched = Projects.Where(project => component.Contains(project.Resource)).ToArray();
-                if (watched.Length == 0)
-                {
-                    continue;
-                }
-                var ordinary = component.FirstOrDefault(resource => watched.All(project => !ReferenceEquals(project.Resource, resource)));
-                var rejected = watched.FirstOrDefault(reasons.ContainsKey);
-                var incompatibleContext = watched.Skip(1).Any(project => !SameBuildContext(watched[0], project));
-                var reason = ordinary is not null
-                    ? $"Shares evaluated build outputs with ordinary resource '{ordinary.Name}'; automatic watch builds and ordinary Rebuild cannot own them concurrently."
-                    : rejected is not null ? $"Shares evaluated build outputs with '{rejected.Resource.Name}': {reasons[rejected]}"
-                    : incompatibleContext ? "Shared evaluated outputs require incompatible SDK or build-environment contexts."
-                    : null;
-                if (reason is not null)
-                {
-                    foreach (var project in watched)
-                    {
-                        reasons.TryAdd(project, reason);
-                    }
-                }
-                else
+            }
+            while (ownershipChanged);
+
+            ApplyFinalOwnerGraphs(reasons);
+            foreach (var component in GetOutputComponents())
+            {
+                var watched = Projects.Where(project =>
+                    !reasons.ContainsKey(project) && component.Contains(project.Resource)).ToArray();
+                if (watched.Length > 1)
                 {
                     // Shared references and duplicate entry points belong to one watcher,
                     // while every logical resource/replica retains its own proxy connection.
@@ -698,20 +720,41 @@ internal static class DotnetWatchCoordinator
                     .Distinct(DotnetWatchProjectGraph.PathComparer).Count() > 1;
                 if (multipleRoots)
                 {
-                    server.TempDirectory = CreateSdkTempDirectory(server, group[0].Graph!.SdkVersion);
+                    try
+                    {
+                        var defaultTempGraph = await evaluator.EvaluateAsync(
+                            group[0].ProjectPath,
+                            group[0].Metadata.BuildConfiguration,
+                            group[0].BuildEnvironment,
+                            globalProperties: false,
+                            Path.GetTempPath(),
+                            cancellationToken).ConfigureAwait(false);
+                        if (DotnetWatchProjectGraph.Compare(group[0].Graph!, defaultTempGraph).Kind !=
+                            DotnetWatchGraphComparisonKind.Equivalent)
+                        {
+                            server.TempDirectory = CreateSdkTempDirectory(server, group[0].Graph!.SdkVersion);
+                        }
+                    }
+                    catch (DistributedApplicationException)
+                    {
+                        server.TempDirectory = CreateSdkTempDirectory(server, group[0].Graph!.SdkVersion);
+                    }
                 }
                 foreach (var project in group)
                 {
-                    var buildDirectory = server.TempDirectory ?? Path.GetDirectoryName(project.ProjectPath)!;
+                    var buildDirectory = server.TempDirectory ??
+                        (multipleRoots ? Path.GetTempPath() : Path.GetDirectoryName(project.ProjectPath)!);
                     try
                     {
                         var buildGraph = await evaluator.EvaluateAsync(project.ProjectPath, project.Metadata.BuildConfiguration,
                             project.BuildEnvironment, globalProperties: false, buildDirectory, cancellationToken).ConfigureAwait(false);
-                        if (!SameObservedContext(project.Graph!, buildGraph))
+                        var comparison = DotnetWatchProjectGraph.Compare(project.Graph!, buildGraph);
+                        if (comparison.Kind != DotnetWatchGraphComparisonKind.Equivalent)
                         {
                             foreach (var affected in group)
                             {
-                                reasons.TryAdd(affected, "The watcher initial-build and evaluation contexts produce different SDK/output domains.");
+                                reasons.TryAdd(affected,
+                                    $"The watcher initial-build and evaluation contexts differ ({comparison.Kind}): {comparison.Describe()}.");
                             }
                         }
                     }
@@ -767,6 +810,75 @@ internal static class DotnetWatchCoordinator
             }
         }
 
+        private void ApplyFinalOwnerGraphs(IReadOnlyDictionary<WatchedProject, string> reasons)
+        {
+            foreach (var project in Projects)
+            {
+                if (project.OrdinaryGraph is null)
+                {
+                    continue;
+                }
+
+                _evaluatedRoots[project.Resource] = reasons.ContainsKey(project)
+                    ? project.OrdinaryGraph
+                    : project.Graph ?? project.OrdinaryGraph;
+            }
+        }
+
+        private List<List<IResource>> GetOutputComponents()
+        {
+            var components = new List<List<IResource>>();
+            var remaining = new HashSet<IResource>(_evaluatedRoots.Keys, ReferenceEqualityComparer.Instance);
+            while (remaining.Count > 0)
+            {
+                var component = new List<IResource> { remaining.First() };
+                remaining.Remove(component[0]);
+                for (var index = 0; index < component.Count; index++)
+                {
+                    foreach (var candidate in remaining.ToArray())
+                    {
+                        if (DotnetWatchProjectGraph.SharesOutputs(
+                            _evaluatedRoots[component[index]], _evaluatedRoots[candidate]))
+                        {
+                            component.Add(candidate);
+                            remaining.Remove(candidate);
+                        }
+                    }
+                }
+                components.Add(component);
+            }
+
+            return components;
+        }
+
+        private string DescribeOwnershipConflict(
+            IReadOnlyList<IResource> component,
+            IReadOnlyList<WatchedProject> watched,
+            IReadOnlyList<IResource> ordinary,
+            IReadOnlyDictionary<WatchedProject, string> reasons)
+        {
+            var sharedProjects = watched
+                .SelectMany(project => ordinary.SelectMany(resource =>
+                    DotnetWatchProjectGraph.SharedProjects(_evaluatedRoots[project.Resource], _evaluatedRoots[resource])))
+                .Distinct(DotnetWatchProjectGraph.PathComparer)
+                .ToArray();
+            var affected = FormatResourceNames(component);
+            var ownership = sharedProjects.Length > 0
+                ? $"share physical project{(sharedProjects.Length == 1 ? "" : "s")} {string.Join(", ", sharedProjects.Select(path => $"'{path}'"))}"
+                : "have overlapping evaluated output or intermediate directories";
+            var rejectedDetails = ordinary
+                .Select(resource => Projects.FirstOrDefault(project => ReferenceEquals(project.Resource, resource)))
+                .OfType<WatchedProject>()
+                .Where(reasons.ContainsKey)
+                .Select(project => $" '{project.Resource.Name}' retained ordinary ownership because {reasons[project]}")
+                .ToArray();
+            return $"Resources {affected} {ownership}; automatic watch builds and ordinary builds cannot own them concurrently." +
+                string.Concat(rejectedDetails);
+        }
+
+        private static string FormatResourceNames(IEnumerable<IResource> resources) =>
+            string.Join(", ", resources.Select(resource => $"'{resource.Name}'"));
+
         private static string GetOrdinaryWorkingDirectory(IResource resource, IProjectMetadata metadata)
         {
             if (!string.IsNullOrEmpty(metadata.BuildWorkingDirectory))
@@ -780,40 +892,20 @@ internal static class DotnetWatchCoordinator
 
         private string CreateSdkTempDirectory(WatchServer server, string sdkVersion)
         {
-            var directory = Path.Combine(RunDirectory, $"tmp-{server.Resource.Name}");
+            var root = OperatingSystem.IsWindows()
+                ? RunDirectory
+                : _shortTempRoot ??= DotnetWatchServerInfrastructure.CreatePrivateDirectory(
+                    "/tmp", $"aspw-{Id}");
+            var directory = Path.Combine(root, $"t{_servers.IndexOf(server)}");
             Directory.CreateDirectory(directory);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(directory, DotnetWatchServerInfrastructure.PrivateDirectoryMode);
+            }
             File.WriteAllText(Path.Combine(directory, "global.json"),
                 $$"""{ "sdk": { "version": "{{sdkVersion}}", "rollForward": "disable", "allowPrerelease": true } }""");
+            DotnetWatchServerInfrastructure.ValidateCoreFxPipePath(directory);
             return directory;
-        }
-
-        private static bool SameObservedContext(DotnetWatchProjectGraphResult previous, DotnetWatchProjectGraphResult current)
-        {
-            if (!PathsEqual(previous.SdkDirectory, current.SdkDirectory) || !PathsEqual(previous.Muxer, current.Muxer) ||
-                previous.SdkVersion != current.SdkVersion)
-            {
-                return false;
-            }
-            foreach (var (path, node) in previous.Projects)
-            {
-                if (!current.Projects.TryGetValue(path, out var updated))
-                {
-                    continue;
-                }
-                if (!node.Outputs.SequenceEqual(updated.Outputs, DotnetWatchProjectGraph.PathComparer))
-                {
-                    return false;
-                }
-                foreach (var property in new[] { "Configuration", "TargetFramework", "TargetFrameworks", "TargetPath", "OutputType",
-                    "RunCommand", "RunArguments", "RunWorkingDirectory", "Optimize", "StartupHookSupport", "MetadataUpdaterSupport" })
-                {
-                    if (node.Properties.GetValueOrDefault(property) != updated.Properties.GetValueOrDefault(property))
-                    {
-                        return false;
-                    }
-                }
-            }
-            return true;
         }
 
         private readonly object _inventoryGate = new();
@@ -827,6 +919,21 @@ internal static class DotnetWatchCoordinator
                     Projects.Any(project => project.Server == server && ReferenceEquals(project.Resource, pair.Key)))
                     .SelectMany(pair => pair.Value.Projects.Values)
                     .SelectMany(node => node.Imports.Append(node.Path)).Distinct(DotnetWatchProjectGraph.PathComparer)];
+            }
+        }
+
+        public List<WatchedProject> GetExcludedBuildBarriers(WatchServer server)
+        {
+            lock (_inventoryGate)
+            {
+                var watchedGraphs = Projects.Where(project => project.Server == server)
+                    .Select(project => project.Graph!)
+                    .ToArray();
+                return ExcludedProjects.Where(project =>
+                    project.BuildCoordinator is not null &&
+                    project.OrdinaryGraph is { } ordinary &&
+                    watchedGraphs.Any(graph => DotnetWatchProjectGraph.SharesOutputs(graph, ordinary)))
+                    .ToList();
             }
         }
 
@@ -865,25 +972,10 @@ internal static class DotnetWatchCoordinator
         private async Task ValidateOrdinaryBuildAsync(
             IResource resource, IProjectMetadata metadata, IServiceProvider services, CancellationToken cancellationToken)
         {
-            foreach (var server in Projects.Select(project => project.Server).Distinct())
-            {
-                bool changed;
-                try
-                {
-                    changed = await RevalidateAsync(server, services, commit: false, evaluateCallbacks: false, cancellationToken).ConfigureAwait(false);
-                }
-                catch (DistributedApplicationException exception)
-                {
-                    server.RequestFailure(exception.Message);
-                    throw;
-                }
-                if (changed)
-                {
-                    server.RequestRefresh(services);
-                    throw new DistributedApplicationException("A watch group's evaluated inputs changed. Retry Rebuild after guarded refresh, or restart the watch run.");
-                }
-            }
             var evaluator = services.GetRequiredService<IDotnetWatchPreflight>();
+            // Watch groups revalidate after their first successful restore and whenever an observed input changes.
+            // Re-evaluating an unrelated group here can race that restore while it creates generated NuGet imports,
+            // making an independent ordinary build incorrectly fence the watcher.
             var current = await evaluator.EvaluateAsync(metadata.ProjectPath,
                 metadata is DotnetProjectMetadata dotnet ? dotnet.BuildConfiguration : null,
                 GetOrdinaryBuildEnvironment(resource, metadata), globalProperties: true,
@@ -896,7 +988,7 @@ internal static class DotnetWatchCoordinator
                     {
                         var reason = $"Ordinary build '{resource.Name}' now overlaps watched output ownership for '{project.Resource.Name}'. Restart the complete watch run.";
                         project.Server.RequestFailure(reason);
-                        throw new DistributedApplicationException(reason);
+                        throw new DotnetWatchIncompatibleGraphException(reason);
                     }
                 }
                 _evaluatedRoots[resource] = current;
@@ -926,27 +1018,46 @@ internal static class DotnetWatchCoordinator
                 if (environment.Count != project.BuildEnvironment.Count ||
                     environment.Any(pair => !project.BuildEnvironment.TryGetValue(pair.Key, out var value) || value != pair.Value))
                 {
-                    throw new DistributedApplicationException("The watch build environment changed. Restart the complete watch run.");
+                    throw new DotnetWatchIncompatibleGraphException(
+                        "The watch build environment changed. Restart the complete watch run.");
                 }
-                var current = await evaluator.EvaluateAsync(project.ProjectPath, project.Metadata.BuildConfiguration,
-                    environment, globalProperties: false, Builder.AppHostDirectory, cancellationToken).ConfigureAwait(false);
-                if (!SameObservedContext(project.Graph!, current))
+                DotnetWatchProjectGraphResult current;
+                DotnetWatchGraphComparison comparison;
+                for (var attempt = 0; ; attempt++)
                 {
-                    throw new DistributedApplicationException("The observed SDK or output/build context changed. Restart the complete watch run.");
-                }
-                var build = await evaluator.EvaluateAsync(project.ProjectPath, project.Metadata.BuildConfiguration, environment,
-                    globalProperties: false, server.TempDirectory ?? Path.GetDirectoryName(project.ProjectPath)!, cancellationToken).ConfigureAwait(false);
-                if (!SameObservedContext(current, build))
-                {
-                    throw new DistributedApplicationException("The refreshed watch evaluation and build no longer agree. Restart the watch run.");
+                    current = await evaluator.EvaluateAsync(project.ProjectPath, project.Metadata.BuildConfiguration,
+                        environment, globalProperties: false, Builder.AppHostDirectory, cancellationToken).ConfigureAwait(false);
+                    comparison = DotnetWatchProjectGraph.Compare(project.Graph!, current);
+                    if (comparison.Kind == DotnetWatchGraphComparisonKind.Incompatible)
+                    {
+                        throw new DotnetWatchIncompatibleGraphException(
+                            $"The observed watch graph became incompatible: {comparison.Describe()}. Restart the complete watch run.");
+                    }
+                    var build = await evaluator.EvaluateAsync(project.ProjectPath, project.Metadata.BuildConfiguration, environment,
+                        globalProperties: false, server.TempDirectory ?? Path.GetDirectoryName(project.ProjectPath)!, cancellationToken).ConfigureAwait(false);
+                    var buildComparison = DotnetWatchProjectGraph.Compare(current, build);
+                    if (buildComparison.Kind == DotnetWatchGraphComparisonKind.Equivalent)
+                    {
+                        break;
+                    }
+
+                    // The active watcher can restore a newly discovered project between these evaluations:
+                    // the first graph omits obj/<project>.nuget.g.props/targets while the second includes them.
+                    // Retry one complete pair after a refresh-only mismatch so ownership is decided from one
+                    // settled inventory. Incompatible context differences are never retried.
+                    if (attempt == 0 && buildComparison.Kind == DotnetWatchGraphComparisonKind.RefreshRequired)
+                    {
+                        logger.LogDebug(
+                            "Watch evaluation inventory changed while comparing build contexts for {Project}; retrying once.",
+                            project.ProjectPath);
+                        continue;
+                    }
+
+                    throw new DotnetWatchIncompatibleGraphException(
+                        $"The refreshed watch evaluation and build no longer agree ({buildComparison.Kind}): {buildComparison.Describe()}. Restart the watch run.");
                 }
                 _ = await evaluator.ResolvePayloadAsync(current, Builder, logger, cancellationToken).ConfigureAwait(false);
-                structureChanged |= project.Graph!.Projects.Count != current.Projects.Count ||
-                    current.Projects.Any(pair => !project.Graph.Projects.TryGetValue(pair.Key, out var old) ||
-                        !old.References.SequenceEqual(pair.Value.References, DotnetWatchProjectGraph.PathComparer) ||
-                        !old.Imports.SequenceEqual(pair.Value.Imports, DotnetWatchProjectGraph.PathComparer) ||
-                        old.Properties.GetValueOrDefault("CompileItems") != pair.Value.Properties.GetValueOrDefault("CompileItems") ||
-                        old.Properties.GetValueOrDefault("PackageReferences") != pair.Value.Properties.GetValueOrDefault("PackageReferences"));
+                structureChanged |= comparison.Kind == DotnetWatchGraphComparisonKind.RefreshRequired;
                 replacements.Add(project, current);
             }
 
@@ -967,8 +1078,12 @@ internal static class DotnetWatchCoordinator
                         }
                         if (DotnetWatchProjectGraph.SharesOutputs(current, existing))
                         {
-                            throw new DistributedApplicationException(
-                                $"Refreshed inputs for '{project.Resource.Name}' overlap '{resource.Name}'. Restart the complete watch run.");
+                            var shared = DotnetWatchProjectGraph.SharedProjects(current, existing);
+                            var detail = shared.Length == 0
+                                ? "overlapping evaluated output or intermediate directories"
+                                : $"shared physical project{(shared.Length == 1 ? "" : "s")} {string.Join(", ", shared.Select(path => $"'{path}'"))}";
+                            throw new DotnetWatchIncompatibleGraphException(
+                                $"Refreshed inputs for '{project.Resource.Name}' overlap '{resource.Name}' through {detail}. Restart the complete watch run.");
                         }
                     }
                 }
@@ -1007,7 +1122,7 @@ internal static class DotnetWatchCoordinator
                 return "The bundled service watcher supports C# projects and file apps; this language retains ordinary build and launch.";
             }
             var path = DotnetWatchProjectGraph.Normalize(project.ProjectPath);
-            if (!watcher.Projects.TryGetValue(path, out var root) || !ordinary.Projects.TryGetValue(path, out var normal))
+            if (!watcher.Projects.TryGetValue(path, out var root) || !ordinary.Projects.ContainsKey(path))
             {
                 return "SDK evaluation did not return the physical entry point.";
             }
@@ -1017,9 +1132,10 @@ internal static class DotnetWatchCoordinator
             {
                 return "Build environment callbacks cannot configure reserved AppHost watch/ownership variables.";
             }
-            if (!string.IsNullOrEmpty(properties.GetValueOrDefault("TargetFrameworks")))
+            if (!string.IsNullOrEmpty(properties.GetValueOrDefault("TargetFrameworks")) &&
+                string.IsNullOrEmpty(properties.GetValueOrDefault("TargetFramework")))
             {
-                return "The watcher cannot select one target framework of a multi-targeted service.";
+                return "The watcher cannot select one target framework of a multi-targeted runnable project. Set TargetFramework explicitly for the watch build.";
             }
             if (properties.GetValueOrDefault("TargetFrameworkIdentifier") != ".NETCoreApp" ||
                 properties.GetValueOrDefault("OutputType") is not ("Exe" or "WinExe"))
@@ -1037,17 +1153,13 @@ internal static class DotnetWatchCoordinator
             {
                 return "The evaluated build disables the watch agent; watcher environment adaptations cannot override those project properties.";
             }
-            foreach (var name in buildEnvironment.Keys.Concat(new[] { "Configuration", "TargetFramework", "TargetPath" }))
+            var comparison = DotnetWatchProjectGraph.Compare(
+                ordinary,
+                watcher,
+                ((IProjectMetadata)project.Metadata).IsFileBasedApp ? path : null);
+            if (comparison.Kind != DotnetWatchGraphComparisonKind.Equivalent)
             {
-                if (normal.Properties.GetValueOrDefault(name) != properties.GetValueOrDefault(name))
-                {
-                    return $"The watcher cannot preserve MSBuild property '{name}' through its lower-precedence process environment.";
-                }
-            }
-            if (!normal.Outputs.SequenceEqual(root.Outputs, DotnetWatchProjectGraph.PathComparer) ||
-                !normal.References.SequenceEqual(root.References, DotnetWatchProjectGraph.PathComparer))
-            {
-                return "The normal and watcher build contexts evaluate different outputs or references.";
+                return $"The ordinary and watcher build graphs differ ({comparison.Kind}): {comparison.Describe()}.";
             }
             return null;
         }
@@ -1206,9 +1318,16 @@ internal static class DotnetWatchCoordinator
         private async Task DisposeCoreAsync()
         {
             await Task.WhenAll(_servers.Select(server => server.ShutdownAsync())).ConfigureAwait(false);
-            if (_runDirectory is not null)
+            if (_servers.All(server => server.CleanupAcknowledged))
             {
-                CleanupRunDirectory();
+                if (_runDirectory is not null)
+                {
+                    CleanupRunDirectory();
+                }
+                if (_shortTempRoot is not null && Directory.Exists(_shortTempRoot))
+                {
+                    Directory.Delete(_shortTempRoot, recursive: true);
+                }
             }
         }
 
@@ -1243,12 +1362,16 @@ internal static class DotnetWatchCoordinator
         private Task? _failureTask;
         private CancellationTokenSource? _shutdown;
         private Task? _shutdownTask;
+        private int _launchAttempted;
+        private int _cleanupAcknowledged = 1;
         private volatile bool _shuttingDown;
         private ResourceNotificationService? _notifications;
         private ILogger? _noticeLogger;
         private ILogger? _serverLogger;
         private DotnetWatchProjectFileWatcher? _projectFileWatcher;
-        private int _generation;
+        // Launch-tool arguments can be evaluated before the server's environment/arguments prepare it.
+        // Start at the first real generation so every proxy and the server agree before either callback runs.
+        private int _generation = 1;
         private volatile bool _ready;
         private volatile string? _lastBuildError;
 
@@ -1297,6 +1420,11 @@ internal static class DotnetWatchCoordinator
                         ctx.EnvironmentVariables[name] = value;
                     }
                 });
+            builder.Eventing.Subscribe<BeforeResourceStartedEvent>(Builder.Resource, (_, _) =>
+            {
+                Volatile.Write(ref _launchAttempted, 1);
+                return Task.CompletedTask;
+            });
 
             // Each (re)start of the server gets a fresh prepare (new status pipe + listener, re-resolved SDK).
             builder.Eventing.Subscribe<ResourceStoppedEvent>(Builder.Resource, (_, _) =>
@@ -1376,7 +1504,8 @@ internal static class DotnetWatchCoordinator
                     // The AppHost was disposed without stopping (ApplicationStopping never fired).
                     projectFileWatcher?.Dispose();
                 }
-            }, s_projectFileDebounce, exception => RequestFailure($"Build-input observation failed: {exception.Message} Restart the watch run."));
+            }, s_projectFileDebounce, exception =>
+                _serverLogger.LogWarning(exception, "Build-input polling failed; the next poll will retry."));
             projectFileWatcher.Start();
             _projectFileWatcher = projectFileWatcher;
             _stopping.Register(() =>
@@ -1402,6 +1531,8 @@ internal static class DotnetWatchCoordinator
                         var state = update.Snapshot.Properties.FirstOrDefault(property =>
                             property.Name == DotnetWatchMember.TransportStateProperty)?.Value as string;
                         if (!_fenced && !member.IsManuallyStopped(update.ResourceId) &&
+                            !member.IsCoordinatorStopping(update.ResourceId) &&
+                            !member.IsCoordinatorStarting(update.ResourceId) &&
                             state is not null && KnownResourceStates.TerminalStates.Contains(state))
                         {
                             RequestFailure($"The resource proxy '{update.ResourceId}' stopped unexpectedly. Restart the watch run.");
@@ -1431,6 +1562,9 @@ internal static class DotnetWatchCoordinator
                 (original, context) => StopAsync(project, original, context));
             project.Member = member;
             member.Configure();
+            _state.Builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
+                project.Resource,
+                (_, cancellationToken) => WaitForSuccessfulBuildAsync(cancellationToken));
         }
 
         public Task<PreparedServer> PrepareAsync(IServiceProvider services, CancellationToken cancellationToken)
@@ -1446,7 +1580,9 @@ internal static class DotnetWatchCoordinator
                     _lastBuildError = null;
                     lock (_noticeGate)
                     {
-                        _interpreter = new DotnetWatchEventInterpreter(Projects.Select(p => (p.ProjectPath, p.Resource.Name)));
+                        _interpreter = new DotnetWatchEventInterpreter(
+                            Projects.Select(p => (p.ProjectPath, p.Resource.Name)),
+                            Resource.Name);
                     }
 
                     if (_successfulBuild.Task.IsCompleted)
@@ -1454,7 +1590,7 @@ internal static class DotnetWatchCoordinator
                         _successfulBuild = new(TaskCreationOptions.RunContinuationsAsynchronously);
                     }
 
-                    _prepareTask = PrepareWithNoticeAsync(services, ++_generation, _successfulBuild, _monitorCts.Token, cancellationToken);
+                    _prepareTask = PrepareWithNoticeAsync(services, _generation, _successfulBuild, _monitorCts.Token, cancellationToken);
                     _preparations.RemoveWhere(task => task.IsCompleted);
                     _preparations.Add(_prepareTask);
                 }
@@ -1490,6 +1626,21 @@ internal static class DotnetWatchCoordinator
             return OnBuildCompleteAsync(success, error: null, successfulBuild, services, cancellationToken);
         }
 
+        internal async Task OnBuildCompleteWhileRestartLockedForTestingAsync(
+            IServiceProvider services, CancellationToken cancellationToken)
+        {
+            await _restartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await OnBuildCompleteForTestingAsync(
+                    success: true, services, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                _restartLock.Release();
+            }
+        }
+
         /// <summary>Records a <c>build_complete</c> status from the watcher run that <paramref name="successfulBuild"/> belongs to.</summary>
         private async Task OnBuildCompleteAsync(
             bool success, string? error, TaskCompletionSource successfulBuild,
@@ -1501,20 +1652,19 @@ internal static class DotnetWatchCoordinator
             }
             if (success)
             {
-                await _restartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
+                if (!ReferenceEquals(successfulBuild, _successfulBuild) || _failure is not null)
                 {
-                    if (!ReferenceEquals(successfulBuild, _successfulBuild) || _failure is not null)
+                    return;
+                }
+                lock (_maintenanceGate)
+                {
+                    if (_pendingChanges.Count != 0)
                     {
                         return;
                     }
-                    lock (_maintenanceGate)
-                    {
-                        if (_pendingChanges.Count != 0)
-                        {
-                            return;
-                        }
-                    }
+                }
+                try
+                {
                     if (!successfulBuild.Task.IsCompleted)
                     {
                         // The watcher's initial restore can create active NuGet imports that did not
@@ -1542,12 +1692,10 @@ internal static class DotnetWatchCoordinator
                 }
                 catch (DistributedApplicationException exception)
                 {
-                    RequestFailure($"Initial watch build inventory validation failed: {exception.Message} Restart the complete watch run.");
+                    RequestFailure(WithRestartInstruction(
+                        $"Initial watch build inventory validation failed: {exception.Message}",
+                        "Restart the complete watch run."));
                     throw;
-                }
-                finally
-                {
-                    _restartLock.Release();
                 }
             }
             else
@@ -1591,7 +1739,7 @@ internal static class DotnetWatchCoordinator
 
             // Projects that aren't watched are built by Aspire's coordinated build. Let it finish first so the watcher's
             // build doesn't race it over shared project outputs.
-            var excluded = _state.ExcludedProjects.Where(p => p.BuildCoordinator is not null).ToList();
+            var excluded = _state.GetExcludedBuildBarriers(this);
             if (excluded.Count > 0)
             {
                 logger.LogInformation("Waiting for the coordinated build of the projects that aren't watched: {Projects}", string.Join(", ", excluded.Select(p => p.Resource.Name)));
@@ -1690,6 +1838,7 @@ internal static class DotnetWatchCoordinator
                 name != DotnetWatchHostProtocol.CleanupMarkerVariable).ToArray();
             var prepared = new PreparedServer(sdk.Muxer, watchHost, args, environment, restored, cleanupMarker);
             _prepared = prepared;
+            Volatile.Write(ref _cleanupAcknowledged, 0);
             return prepared;
         }
 
@@ -1751,7 +1900,7 @@ internal static class DotnetWatchCoordinator
                             continue;
                         }
 
-                        await OnBuildCompleteAsync(status.Success == true, DotnetWatchEventInterpreter.FailureDetail(status.Error),
+                        await OnBuildCompleteAsync(status.Success == true, DotnetWatchEventInterpreter.FailureDetail(status.Error, Resource.Name),
                             successfulBuild, services, cts.Token).ConfigureAwait(false);
                     }
 
@@ -1763,7 +1912,7 @@ internal static class DotnetWatchCoordinator
 
                     EmitNotices(services, notices);
 
-                    foreach (var path in projects.Distinct(StringComparer.Ordinal))
+                    foreach (var path in projects.Distinct(DotnetWatchProjectGraph.PathComparer))
                     {
                         if (status.Type == DotnetWatchStatusTypes.ProcessStarted)
                         {
@@ -1885,7 +2034,7 @@ internal static class DotnetWatchCoordinator
             {
                 foreach (var (path, started) in _pendingRestarts)
                 {
-                    if (string.Equals(path, projectPath, StringComparison.Ordinal))
+                    if (PathsEqual(path, projectPath))
                     {
                         started.TrySetResult();
                     }
@@ -1908,6 +2057,21 @@ internal static class DotnetWatchCoordinator
                 _pendingChanges.UnionWith(changed);
             }
             ScheduleMaintenance(resume: false);
+        }
+
+        internal async Task OnProjectFileChangeForTestingAsync(
+            string path, IServiceProvider services, CancellationToken cancellationToken)
+        {
+            OnProjectFilesChanged(services, [path]);
+            Task? maintenance;
+            lock (_maintenanceGate)
+            {
+                maintenance = _maintenanceTask;
+            }
+            if (maintenance is not null)
+            {
+                await maintenance.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
         }
 
         private readonly SemaphoreSlim _restartLock = new(1, 1);
@@ -1997,11 +2161,38 @@ internal static class DotnetWatchCoordinator
             catch (OperationCanceledException) when (_stopping.IsCancellationRequested)
             {
             }
+            catch (DotnetWatchIncompatibleGraphException exception)
+            {
+                services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
+                    .LogError(exception, "Guarded watch refresh failed.");
+                RequestFailure(WithRestartInstruction(
+                    $"Guarded watch refresh failed: {exception.Message}",
+                    "Restart the complete watch run."));
+            }
+            catch (DistributedApplicationException exception)
+            {
+                services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
+                    .LogWarning(exception, "Build-input evaluation failed; retaining the last successful watch graph until another edit.");
+                var loggers = services.GetRequiredService<ResourceLoggerService>();
+                foreach (var project in Projects)
+                {
+                    loggers.GetLogger(project.Resource).LogWarning(
+                        "[watch] Build-input evaluation failed: {Message} Running services and the last successful graph were preserved; save another edit to retry.",
+                        exception.Message);
+                }
+                lock (_maintenanceGate)
+                {
+                    _maintenanceTask = null;
+                    _fenced = _pendingResume is not null && !_ready;
+                }
+            }
             catch (Exception exception)
             {
                 services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
                     .LogError(exception, "Guarded watch refresh failed.");
-                RequestFailure($"Guarded watch refresh failed: {exception.Message} Restart the complete watch run.");
+                RequestFailure(WithRestartInstruction(
+                    $"Guarded watch refresh failed: {exception.Message}",
+                    "Restart the complete watch run."));
             }
             finally
             {
@@ -2050,7 +2241,8 @@ internal static class DotnetWatchCoordinator
         {
             var replacement = new DotnetWatchProjectFileWatcher(BuildInputs,
                 changed => OnProjectFilesChanged(services, changed), s_projectFileDebounce,
-                exception => RequestFailure($"Build-input observation failed: {exception.Message} Restart the watch run."));
+                exception => services.GetRequiredService<ResourceLoggerService>().GetLogger(Resource)
+                    .LogWarning(exception, "Build-input polling failed; the next poll will retry."));
             try
             {
                 replacement.Start();
@@ -2143,7 +2335,7 @@ internal static class DotnetWatchCoordinator
                 await monitor.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
             }
             if (prepared is not null &&
-                (!File.Exists(prepared.CleanupMarker) || await File.ReadAllTextAsync(prepared.CleanupMarker, cancellationToken).ConfigureAwait(false) != "contained-cleanup-complete"))
+                !await WaitForContainedCleanupAsync(prepared, cancellationToken).ConfigureAwait(false))
             {
                 throw new DistributedApplicationException("Contained watcher cleanup was not acknowledged; replacement is fenced. Restart the watch run.");
             }
@@ -2160,6 +2352,45 @@ internal static class DotnetWatchCoordinator
                 throw new DistributedApplicationException(result.Message ?? "The watch lifecycle operation failed.");
             }
         }
+
+        private async Task<bool> WaitForContainedCleanupAsync(PreparedServer prepared, CancellationToken cancellationToken)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            try
+            {
+                while (true)
+                {
+                    try
+                    {
+                        if (File.Exists(prepared.CleanupMarker) &&
+                            await File.ReadAllTextAsync(prepared.CleanupMarker, timeout.Token).ConfigureAwait(false) == "contained-cleanup-complete")
+                        {
+                            Volatile.Write(ref _cleanupAcknowledged, 1);
+                            Volatile.Write(ref _launchAttempted, 0);
+                            return true;
+                        }
+                    }
+                    catch (IOException)
+                    {
+                        // The WatchHost can still be replacing or flushing the marker.
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        // Retry until the bounded cleanup deadline in case ownership is still settling.
+                    }
+
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), timeout.Token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
+            {
+                return false;
+            }
+        }
+
+        private static string WithRestartInstruction(string message, string instruction) =>
+            message.Contains(instruction, StringComparison.Ordinal) ? message : $"{message} {instruction}";
 
         private void SettleRestartWaiters(Exception exception)
         {
@@ -2270,11 +2501,24 @@ internal static class DotnetWatchCoordinator
                     await work.ConfigureAwait(false);
                 }
             }
+            if (Volatile.Read(ref _launchAttempted) != 0 && _prepared is { } prepared &&
+                !await WaitForContainedCleanupAsync(prepared, CancellationToken.None).ConfigureAwait(false))
+            {
+                _serverLogger?.LogWarning(
+                    "Contained watcher cleanup was not acknowledged before shutdown; preserving the owned watch run directory {Directory}.",
+                    _state.RunDirectory);
+            }
+            else if (Volatile.Read(ref _launchAttempted) == 0)
+            {
+                Volatile.Write(ref _cleanupAcknowledged, 1);
+            }
             _monitorCts?.Dispose();
             _monitorCts = null;
             _shutdown?.Dispose();
             _shutdown = null;
         }
+
+        public bool CleanupAcknowledged => Volatile.Read(ref _cleanupAcknowledged) != 0;
 
         // The watcher names a file-based app by its virtual project path (app.cs.csproj); the model has the .cs file.
         private string[] ToEntryPointPaths(string[] paths) =>
@@ -2328,7 +2572,7 @@ internal static class DotnetWatchCoordinator
                 // Before the first successful build every service is waiting on the server, so tell all of them why.
                 var targets = notice.Kind == WatchNoticeKind.BuildFailed && !_ready
                     ? projects
-                    : projects.Where(p => notice.ProjectPaths.Contains(p.ProjectPath, StringComparer.Ordinal)).ToList();
+                    : projects.Where(project => notice.ProjectPaths.Any(path => PathsEqual(path, project.ProjectPath))).ToList();
                 foreach (var target in targets)
                 {
                     loggers.GetLogger(target.Resource).Log(notice.Level, "[watch] {Message}", notice.Message);

@@ -9,6 +9,7 @@ using Aspire.Hosting.Dcp.Model;
 using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
@@ -215,10 +216,11 @@ public class ExecutableLaunchPlanTests
                 [DotnetWatchOwnership.OwnerEnvironmentVariable] = owner
             })
             .Build();
+        var logger = new FakeLogger();
         var context = new ExecutableLaunchContext(resource, configuration, new DistributedApplicationOptions(),
             CreateExecutionConfiguration([]),
             new ExecutableLaunchDecision(ExecutableLaunchMechanism.Process, ExecutableLaunchMode.NoDebug),
-            NullLogger.Instance, TestContext.Current.CancellationToken);
+            logger, TestContext.Current.CancellationToken);
 
         var plan = await ProjectExecutableLaunchRecipe.Instance.CreateLaunchPlanAsync(context);
 
@@ -231,6 +233,8 @@ public class ExecutableLaunchPlanTests
         }
         expected.Add("--no-launch-profile");
         Assert.Equal(expected, plan.Arguments);
+        Assert.Equal(owner == DotnetWatchOwnership.CliOwner, logger.Collector.GetSnapshot().Any(record =>
+            record.Message.Contains("Migrate it from AddProject to AddDotnetProject", StringComparison.Ordinal)));
     }
 
     [Fact]

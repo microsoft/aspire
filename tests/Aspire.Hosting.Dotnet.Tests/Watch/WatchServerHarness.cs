@@ -95,7 +95,7 @@ internal sealed class WatchServerHarness : IAsyncDisposable
     public static async Task<WatchServerHarness> StartAsync(ITestOutputHelper output, Action<string>? prepareApp = null)
     {
         // Short root: Unix socket paths are limited to ~108 characters.
-        var directory = Path.Combine(Path.GetTempPath(), $"awc-{Guid.NewGuid().ToString("N")[..8]}");
+        var directory = System.IO.Directory.CreateTempSubdirectory("awc-").FullName;
         var harness = new WatchServerHarness(output, directory);
         try
         {

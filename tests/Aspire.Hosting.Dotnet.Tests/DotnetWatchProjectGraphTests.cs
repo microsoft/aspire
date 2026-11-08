@@ -188,7 +188,10 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
 
         fixture.Write("app.cs", source.Replace("first.cs", "second.cs", StringComparison.Ordinal).Replace("1.0.0", "2.0.0", StringComparison.Ordinal));
         var structural = await fixture.EvaluateAsync(project);
-        Assert.True(DotnetWatchProjectGraph.Equivalent(first, structural));
+        var comparison = DotnetWatchProjectGraph.Compare(first, structural);
+        Assert.Equal(DotnetWatchGraphComparisonKind.RefreshRequired, comparison.Kind);
+        Assert.Contains(comparison.Details, detail => detail.Contains("CompileItems", StringComparison.Ordinal));
+        Assert.Contains(comparison.Details, detail => detail.Contains("PackageReferences", StringComparison.Ordinal));
         await Verify(JsonSerializer.Serialize(new
         {
             Initial = Items(first),
@@ -212,7 +215,6 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
     [InlineData("AdditionalProperties", "Configuration=Release")]
     [InlineData("SetConfiguration", "Configuration=Release")]
     [InlineData("SetPlatform", "Platform=x64")]
-    [InlineData("SetTargetFramework", "TargetFramework=net10.0")]
     [InlineData("Targets", "Build")]
     [InlineData("GlobalPropertiesToRemove", "Configuration")]
     [RequiresTools(["dotnet"])]
@@ -409,7 +411,7 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresTools(["dotnet"])]
-    public async Task DiagnosesMultipleFrameworkContextsAndCyclesWithoutBuilding()
+    public async Task MultiTargetedRootsRequireSelectionAndReferencedLibrariesUseTheirParentFramework()
     {
         using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
         var multi = fixture.Write("Multi/Multi.csproj", """
@@ -418,11 +420,27 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
             </Project>
             """);
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => fixture.EvaluateAsync(multi));
-        Assert.Contains("multiple target-framework contexts", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("requires an explicit target framework", exception.Message, StringComparison.Ordinal);
+
+        var selected = await fixture.EvaluateAsync(
+            multi,
+            environment: new Dictionary<string, string> { ["TargetFramework"] = "net10.0" });
+        Assert.Equal("net10.0", selected.Projects[DotnetWatchProjectGraph.Normalize(multi)].Properties["TargetFramework"]);
+
+        var app = fixture.Project("App", """<ItemGroup><ProjectReference Include="../Multi/Multi.csproj" /></ItemGroup>""");
+        var graph = await fixture.EvaluateAsync(app);
+        Assert.Equal("net10.0", graph.Projects[DotnetWatchProjectGraph.Normalize(multi)].Properties["TargetFramework"]);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task DiagnosesCyclesWithoutBuilding()
+    {
+        using var fixture = await DotnetWatchEvaluationFixture.CreateAsync(output);
 
         var first = fixture.Project("First", """<ItemGroup><ProjectReference Include="../Second/Second.csproj" /></ItemGroup>""");
         fixture.Project("Second", """<ItemGroup><ProjectReference Include="../First/First.csproj" /></ItemGroup>""");
-        exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => fixture.EvaluateAsync(first));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => fixture.EvaluateAsync(first));
         Assert.Contains("cyclic reference graph", exception.Message, StringComparison.Ordinal);
     }
 
@@ -451,19 +469,146 @@ public class DotnetWatchProjectGraphTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void EquivalentAllowsImportInventoryRefreshButFencesGraphSdkOutputAndContextDrift()
+    public void GraphComparisonSeparatesRefreshableAndIncompatibleChanges()
     {
         var first = Graph("App.csproj", "output");
         var path = first.Projects.Keys.Single();
         var node = first.Projects[path];
-        Assert.True(DotnetWatchProjectGraph.Equivalent(first, WithNode(first, node with { Imports = [System.IO.Path.GetFullPath("new.input")] })));
-        Assert.False(DotnetWatchProjectGraph.Equivalent(first, first with { SdkVersion = "10.0.404" }));
-        Assert.False(DotnetWatchProjectGraph.Equivalent(first, first with { SdkDirectory = System.IO.Path.GetFullPath("different-sdk") }));
-        Assert.False(DotnetWatchProjectGraph.Equivalent(first, first with { Muxer = System.IO.Path.GetFullPath("different-dotnet") }));
-        Assert.False(DotnetWatchProjectGraph.Equivalent(first, WithNode(first, node with { References = [System.IO.Path.GetFullPath("New.csproj")] })));
-        Assert.False(DotnetWatchProjectGraph.Equivalent(first, WithNode(first, node with { Outputs = [System.IO.Path.GetFullPath("new-output")] })));
-        Assert.False(DotnetWatchProjectGraph.Equivalent(first, WithNode(first, node with { Properties = new Dictionary<string, string> { ["Configuration"] = "Release" } })));
-        Assert.False(DotnetWatchProjectGraph.Equivalent(first, Graph("Different.csproj", "output")));
+        var refreshedProperties = node.Properties.ToDictionary(
+            pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+        refreshedProperties["DefineConstants"] = "TRACE;WATCH_IMPORTED";
+        Assert.Equal(DotnetWatchGraphComparisonKind.RefreshRequired,
+            DotnetWatchProjectGraph.Compare(first, WithNode(first, node with { Imports = [System.IO.Path.GetFullPath("new.input")] })).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.RefreshRequired,
+            DotnetWatchProjectGraph.Compare(first, WithNode(first, node with { References = [System.IO.Path.GetFullPath("New.csproj")] })).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.RefreshRequired,
+            DotnetWatchProjectGraph.Compare(first, WithNode(first, node with
+            {
+                Properties = refreshedProperties
+            })).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.Incompatible,
+            DotnetWatchProjectGraph.Compare(first, first with { SdkVersion = "10.0.404" }).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.Incompatible,
+            DotnetWatchProjectGraph.Compare(first, first with { SdkDirectory = System.IO.Path.GetFullPath("different-sdk") }).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.Incompatible,
+            DotnetWatchProjectGraph.Compare(first, first with { Muxer = System.IO.Path.GetFullPath("different-dotnet") }).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.Incompatible,
+            DotnetWatchProjectGraph.Compare(first, WithNode(first, node with { Outputs = [System.IO.Path.GetFullPath("new-output")] })).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.Incompatible,
+            DotnetWatchProjectGraph.Compare(first, WithNode(first, node with { Properties = new Dictionary<string, string> { ["Configuration"] = "Release" } })).Kind);
+        Assert.Equal(DotnetWatchGraphComparisonKind.RefreshRequired,
+            DotnetWatchProjectGraph.Compare(first, Graph("Different.csproj", "output")).Kind);
+    }
+
+    [Fact]
+    public void GraphComparisonCanonicalizesEquivalentOutputPathPropertySpelling()
+    {
+        var projectPath = DotnetWatchProjectGraph.Normalize(System.IO.Path.GetFullPath("App/App.csproj"));
+        var projectDirectory = System.IO.Path.GetDirectoryName(projectPath)!;
+        var outputPath = DotnetWatchProjectGraph.Normalize(System.IO.Path.Combine(projectDirectory, "bin", "Debug", "net10.0"));
+        var intermediatePath = DotnetWatchProjectGraph.Normalize(System.IO.Path.Combine(projectDirectory, "obj", "Debug", "net10.0"));
+        var ordinaryNode = new DotnetWatchProjectNode(
+            projectPath,
+            new Dictionary<string, string>
+            {
+                ["Configuration"] = "Debug",
+                ["OutputPath"] = System.IO.Path.Combine("bin", "Debug", "net10.0"),
+                ["OutDir"] = System.IO.Path.Combine("bin", "Debug", "net10.0"),
+                ["BaseOutputPath"] = "bin",
+                ["IntermediateOutputPath"] = System.IO.Path.Combine("obj", "Debug", "net10.0")
+            },
+            [],
+            [],
+            [outputPath, intermediatePath]);
+        var watcherNode = ordinaryNode with
+        {
+            Properties = new Dictionary<string, string>
+            {
+                ["Configuration"] = "Debug",
+                ["OutputPath"] = outputPath,
+                ["OutDir"] = outputPath,
+                ["BaseOutputPath"] = System.IO.Path.Combine(projectDirectory, "bin"),
+                ["IntermediateOutputPath"] = intermediatePath
+            }
+        };
+        var ordinary = new DotnetWatchProjectGraphResult(
+            System.IO.Path.GetFullPath("sdk/10.0.403"),
+            System.IO.Path.GetFullPath("dotnet"),
+            "10.0.403",
+            new Dictionary<string, DotnetWatchProjectNode>(DotnetWatchProjectGraph.PathComparer)
+            {
+                [projectPath] = ordinaryNode
+            });
+        var watcher = WithNode(ordinary, watcherNode);
+
+        Assert.Equal(DotnetWatchGraphComparisonKind.Equivalent, DotnetWatchProjectGraph.Compare(ordinary, watcher).Kind);
+
+        var incompatibleProperties = watcherNode.Properties.ToDictionary(pair => pair.Key, pair => pair.Value);
+        incompatibleProperties["BaseOutputPath"] = System.IO.Path.Combine(projectDirectory, "different");
+        var incompatible = WithNode(watcher, watcherNode with { Properties = incompatibleProperties });
+        var comparison = DotnetWatchProjectGraph.Compare(ordinary, incompatible);
+        Assert.Equal(DotnetWatchGraphComparisonKind.Incompatible, comparison.Kind);
+        Assert.Contains(comparison.Details, detail => detail.Contains("BaseOutputPath", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FileAppWatcherAdaptationsAreAllowedOnlyOnTheSanctionedRoot()
+    {
+        var ordinary = Graph("app.cs", "output");
+        var rootPath = ordinary.Projects.Keys.Single();
+        var dependencyPath = DotnetWatchProjectGraph.Normalize(System.IO.Path.GetFullPath("Dependency.csproj"));
+        var ordinaryRoot = ordinary.Projects[rootPath] with
+        {
+            Properties = new Dictionary<string, string>
+            {
+                ["StartupHookSupport"] = "false",
+                ["MetadataUpdaterSupport"] = "false"
+            }
+        };
+        var ordinaryDependency = new DotnetWatchProjectNode(
+            dependencyPath,
+            new Dictionary<string, string> { ["StartupHookSupport"] = "false" },
+            [],
+            [],
+            [DotnetWatchProjectGraph.Normalize(System.IO.Path.GetFullPath("dependency-output"))]);
+        ordinary = ordinary with
+        {
+            Projects = new Dictionary<string, DotnetWatchProjectNode>(DotnetWatchProjectGraph.PathComparer)
+            {
+                [rootPath] = ordinaryRoot,
+                [dependencyPath] = ordinaryDependency
+            }
+        };
+        var watcherRoot = ordinaryRoot with
+        {
+            Properties = new Dictionary<string, string>
+            {
+                ["StartupHookSupport"] = "true",
+                ["MetadataUpdaterSupport"] = "true"
+            }
+        };
+        var rootOnlyAdaptation = ordinary with
+        {
+            Projects = new Dictionary<string, DotnetWatchProjectNode>(DotnetWatchProjectGraph.PathComparer)
+            {
+                [rootPath] = watcherRoot,
+                [dependencyPath] = ordinaryDependency
+            }
+        };
+
+        Assert.Equal(
+            DotnetWatchGraphComparisonKind.Equivalent,
+            DotnetWatchProjectGraph.Compare(ordinary, rootOnlyAdaptation, rootPath).Kind);
+
+        var transitiveProjects = rootOnlyAdaptation.Projects.ToDictionary(pair => pair.Key, pair => pair.Value, DotnetWatchProjectGraph.PathComparer);
+        transitiveProjects[dependencyPath] = ordinaryDependency with
+        {
+            Properties = new Dictionary<string, string> { ["StartupHookSupport"] = "true" }
+        };
+        var transitiveAdaptation = rootOnlyAdaptation with { Projects = transitiveProjects };
+        Assert.Equal(
+            DotnetWatchGraphComparisonKind.Incompatible,
+            DotnetWatchProjectGraph.Compare(ordinary, transitiveAdaptation, rootPath).Kind);
     }
 
     [Fact]

@@ -262,10 +262,11 @@ public class ResourceProxyTests
     [Fact]
     public async Task ConnectTimesOutWithoutAServer()
     {
+        using var testPipe = TestPipe.Create();
         Environment.SetEnvironmentVariable(DotnetWatchHostProtocol.ConnectTimeoutVariable, "1");
         try
         {
-            var exitCode = await ResourceProxy.RunAsync(["--server", $"aspire-proxy-test-{Guid.NewGuid():N}", "--entrypoint", "/src/Api/Api.csproj"])
+            var exitCode = await ResourceProxy.RunAsync(["--server", testPipe.Name, "--entrypoint", "/src/Api/Api.csproj"])
                 .WaitAsync(TimeSpan.FromSeconds(30));
 
             Assert.Equal(ResourceProxy.ExitConnectFailed, exitCode);
@@ -387,20 +388,30 @@ public class ResourceProxyTests
     /// </summary>
     private sealed class TestPipe : IDisposable
     {
-        private TestPipe(string name) => Name = name;
+        private readonly DirectoryInfo? _directory;
+
+        private TestPipe(string name, DirectoryInfo? directory)
+        {
+            Name = name;
+            _directory = directory;
+        }
 
         public string Name { get; }
 
-        public static TestPipe Create() => new(OperatingSystem.IsWindows()
-            ? $"aspire-proxy-test-{Guid.NewGuid():N}"
-            : Path.Combine("/tmp", $"apx-{Guid.NewGuid().ToString("N")[..12]}.sock"));
+        public static TestPipe Create()
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                return new($"aspire-proxy-test-{Guid.NewGuid():N}", directory: null);
+            }
+
+            var directory = Directory.CreateTempSubdirectory("apx-");
+            return new(Path.Combine(directory.FullName, "pipe.sock"), directory);
+        }
 
         public void Dispose()
         {
-            if (!OperatingSystem.IsWindows())
-            {
-                File.Delete(Name);
-            }
+            _directory?.Delete(recursive: true);
         }
     }
 }

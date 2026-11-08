@@ -444,6 +444,15 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         resource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation);
         resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride);
 
+        if (context.Configuration.GetBool("DOTNET_WATCH") is true &&
+            Aspire.Shared.DotnetWatch.DotnetWatchOwnership.IsCliOwned(
+                context.Configuration[Aspire.Shared.DotnetWatch.DotnetWatchOwnership.OwnerEnvironmentVariable]))
+        {
+            context.ResourceLogger.LogWarning(
+                "[watch] Legacy project resource '{ResourceName}' is not watched by 'aspire run --watch'. Migrate it from AddProject to AddDotnetProject to enable service hot reload.",
+                resource.Name);
+        }
+
         var command = executableAnnotation?.Command ?? "dotnet";
         var workingDirectory = executableAnnotation?.WorkingDirectory ?? Path.GetDirectoryName(projectMetadata.ProjectPath) ?? string.Empty;
         var projectArguments = new List<string>();

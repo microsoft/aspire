@@ -53,10 +53,6 @@ internal static class DotnetWatchToolResolver
         return major;
     }
 
-    /// <summary>Returns the shipped tool directory for the AppHost (see <see cref="GetPayloadDirectory"/>).</summary>
-    public static string? GetToolsDirectory(DistributedApplicationOptions options) =>
-        GetToolsDirectory(string.IsNullOrEmpty(options.AssemblyName) ? Assembly.GetEntryAssembly() : Assembly.Load(options.AssemblyName));
-
     /// <summary>Returns the shipped tool directory for <paramref name="appHostAssembly"/> (see <see cref="GetPayloadDirectory"/>).</summary>
     public static string? GetToolsDirectory(Assembly? appHostAssembly) =>
         GetPayloadDirectory(appHostAssembly, ToolsDirectoryMetadataKey, ToolsPackageFolder, typeof(DotnetWatchToolResolver).Assembly.Location);
@@ -286,22 +282,6 @@ internal static class DotnetWatchToolResolver
         }
 
         throw new DistributedApplicationException($"Could not locate SDK '{version}' selected for '{projectDirectory}'.");
-    }
-
-    /// <summary>
-    /// The SDK version <paramref name="muxer"/> selects in <paramref name="workingDirectory"/> (honoring its
-    /// <c>global.json</c> scope), or <see langword="null"/> if none can be selected there.
-    /// </summary>
-    public static async Task<string?> TryGetSdkVersionAsync(string muxer, string workingDirectory, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return (await RunDotnetAsync(workingDirectory, "--version", cancellationToken, muxer).ConfigureAwait(false)).Trim();
-        }
-        catch (DistributedApplicationException)
-        {
-            return null;
-        }
     }
 
     private static async Task<string> RunDotnetAsync(string workingDirectory, string argument, CancellationToken cancellationToken, string muxer = "dotnet")

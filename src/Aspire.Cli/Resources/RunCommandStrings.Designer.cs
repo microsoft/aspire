@@ -531,15 +531,15 @@ namespace Aspire.Cli.Resources {
             }
         }
         
-        internal static string WatchHandledByIde {
-            get {
-                return ResourceManager.GetString("WatchHandledByIde", resourceCulture);
-            }
-        }
-
         internal static string WatchNotSupportedWithDebugger {
             get {
                 return ResourceManager.GetString("WatchNotSupportedWithDebugger", resourceCulture);
+            }
+        }
+
+        internal static string WatchAppHostExitedDuringStartup {
+            get {
+                return ResourceManager.GetString("WatchAppHostExitedDuringStartup", resourceCulture);
             }
         }
 

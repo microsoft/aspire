@@ -1,82 +1,81 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+
 namespace Aspire.Hosting.Dotnet.Watch;
 
 /// <summary>
-/// Watches evaluated project/import inputs and SDK/build-scope files, reporting changes once saves settle.
+/// Polls evaluated project/import inputs and SDK/build-scope files, reporting content changes once saves settle.
 /// </summary>
 /// <remarks>
 /// The watcher (10.0.x) re-evaluates and restores a changed project but doesn't rebuild it, so a new package is never
 /// deployed: code that uses it is hot reloaded and then fails with FileNotFoundException. The protocol has no event
-/// for a project file change, so the coordinator observes these files itself and restarts the watcher, whose initial
-/// build deploys the change.
+/// for a project file change, so the coordinator observes the finite evaluated input set itself and restarts the
+/// watcher, whose initial build deploys the change.
 /// </remarks>
 internal sealed class DotnetWatchProjectFileWatcher : IDisposable
 {
     private static readonly string[] s_ancestorFiles =
-        ["Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json", "NuGet.config"];
+        ["Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", "global.json"];
 
-    private readonly List<FileSystemWatcher> _watchers = [];
-    private readonly Dictionary<string, bool> _directories;
+    private static readonly StringComparer s_pathComparer =
+        OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
+
     private readonly Action<IReadOnlyList<string>> _onChanged;
     private readonly Action<Exception> _onError;
-    private readonly HashSet<string> _inputs;
     private readonly TimeSpan _debounce;
+    private readonly TimeSpan _pollInterval;
     private readonly object _gate = new();
-    private readonly List<string> _pending = [];
-    private Timer? _timer;
+    private readonly HashSet<string> _candidates;
+    private readonly Dictionary<string, FileState> _states = new(s_pathComparer);
+    private readonly HashSet<string> _pending = new(s_pathComparer);
+    private CancellationTokenSource? _stop;
+    private Task? _pollTask;
+    private DateTimeOffset? _flushAfter;
     private bool _disposed;
 
     /// <param name="projectPaths">Evaluated physical project and import paths, including file-app entry points.</param>
-    /// <param name="onChanged">Called with the changed files, once no change happened for <paramref name="debounce"/>.</param>
+    /// <param name="onChanged">Called with changed files after no further change occurs for <paramref name="debounce"/>.</param>
     /// <param name="debounce">How long saves must settle.</param>
-    /// <param name="onError">Reports lost observation or infrastructure failure to the owning group.</param>
+    /// <param name="onError">Reports a polling failure; observation continues on the next tick.</param>
+    /// <param name="pollInterval">Optional polling interval used by tests.</param>
     public DotnetWatchProjectFileWatcher(
-        IEnumerable<string> projectPaths, Action<IReadOnlyList<string>> onChanged, TimeSpan debounce, Action<Exception> onError)
+        IEnumerable<string> projectPaths,
+        Action<IReadOnlyList<string>> onChanged,
+        TimeSpan debounce,
+        Action<Exception> onError,
+        TimeSpan? pollInterval = null)
     {
         _onChanged = onChanged;
         _onError = onError;
         _debounce = debounce;
-        _inputs = projectPaths.Select(Path.GetFullPath).ToHashSet(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
-        _directories = GetWatchedDirectories(_inputs);
+        _pollInterval = pollInterval ?? TimeSpan.FromMilliseconds(250);
+        _candidates = GetObservedFiles(projectPaths).ToHashSet(s_pathComparer);
     }
 
-    /// <summary>The directories to watch, and whether only the <c>Directory.*</c> files count in each.</summary>
-    internal static Dictionary<string, bool> GetWatchedDirectories(IEnumerable<string> projectPaths)
+    /// <summary>
+    /// Returns evaluated inputs plus the ancestor files whose creation, deletion, or content can change SDK/build scope.
+    /// </summary>
+    internal static string[] GetObservedFiles(IEnumerable<string> projectPaths)
     {
-        var comparer = OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
-        var directories = new Dictionary<string, bool>(comparer);
+        var files = new HashSet<string>(s_pathComparer);
         foreach (var projectPath in projectPaths)
         {
-            var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
-            directories[projectDirectory] = false;
-        }
-
-        foreach (var directory in directories.Keys.ToArray())
-        {
-            for (var parent = Path.GetDirectoryName(directory); parent is not null; parent = Path.GetDirectoryName(parent))
+            var fullPath = Path.GetFullPath(projectPath);
+            files.Add(fullPath);
+            for (var directory = Path.GetDirectoryName(fullPath);
+                directory is not null;
+                directory = Path.GetDirectoryName(directory))
             {
-                directories.TryAdd(parent, true);
+                foreach (var name in s_ancestorFiles)
+                {
+                    files.Add(Path.Combine(directory, name));
+                }
             }
         }
 
-        return directories;
-    }
-
-    /// <summary>Whether a change to <paramref name="path"/> can change what the watched projects build or reference.</summary>
-    internal static bool IsBuildFile(string path, bool ancestorOnly)
-    {
-        var name = Path.GetFileName(path);
-        if (s_ancestorFiles.Contains(name, StringComparer.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return !ancestorOnly && Path.GetExtension(name) is { } extension &&
-            (extension.EndsWith("proj", StringComparison.OrdinalIgnoreCase)
-                || extension.Equals(".props", StringComparison.OrdinalIgnoreCase)
-                || extension.Equals(".targets", StringComparison.OrdinalIgnoreCase));
+        return [.. files];
     }
 
     public void Start()
@@ -84,45 +83,59 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            foreach (var (directory, ancestorOnly) in _directories)
+            if (_pollTask is not null)
             {
-                var watcher = new FileSystemWatcher(directory)
-                {
-                    IncludeSubdirectories = false,
-                    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                };
-                FileSystemEventHandler handler = (_, e) => OnChange(e.FullPath, ancestorOnly);
-                watcher.Changed += handler;
-                watcher.Created += handler;
-                watcher.Deleted += handler;
-                watcher.Renamed += (_, e) =>
-                {
-                    OnChange(e.OldFullPath, ancestorOnly);
-                    OnChange(e.FullPath, ancestorOnly);
-                };
-                watcher.Error += (_, e) =>
-                {
-                    lock (_gate)
-                    {
-                        if (!_disposed)
-                        {
-                            _onError(e.GetException());
-                        }
-                    }
-                };
-                watcher.EnableRaisingEvents = true;
-                _watchers.Add(watcher);
+                throw new InvalidOperationException("Project-file observation has already started.");
             }
+
+            foreach (var path in _candidates)
+            {
+                if (TryReadState(path, previous: null, out var state))
+                {
+                    _states[path] = state;
+                }
+            }
+
+            _stop = new CancellationTokenSource();
+            _pollTask = Task.Run(() => PollAsync(_stop.Token), CancellationToken.None);
         }
     }
 
-    private void OnChange(string path, bool ancestorOnly)
+    private async Task PollAsync(CancellationToken cancellationToken)
     {
-        if (!IsBuildFile(path, ancestorOnly) && !_inputs.Contains(Path.GetFullPath(path)))
+        using var timer = new PeriodicTimer(_pollInterval);
+        try
         {
-            return;
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                PollOnce();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private void PollOnce()
+    {
+        List<string>? changed = null;
+        foreach (var path in _candidates)
+        {
+            _states.TryGetValue(path, out var previous);
+            if (!TryReadState(path, previous, out var current))
+            {
+                continue;
+            }
+
+            _states[path] = current;
+            if (previous is not null && previous.ContentHash != current.ContentHash)
+            {
+                changed ??= [];
+                changed.Add(path);
+            }
         }
 
+        IReadOnlyList<string>? settled = null;
         lock (_gate)
         {
             if (_disposed)
@@ -130,50 +143,98 @@ internal sealed class DotnetWatchProjectFileWatcher : IDisposable
                 return;
             }
 
-            _pending.Add(path);
-            _timer ??= new Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
-            _timer.Change(_debounce, Timeout.InfiniteTimeSpan);
+            if (changed is not null)
+            {
+                _pending.UnionWith(changed);
+                _flushAfter = DateTimeOffset.UtcNow + _debounce;
+            }
+
+            if (_pending.Count > 0 && DateTimeOffset.UtcNow >= _flushAfter)
+            {
+                settled = [.. _pending];
+                _pending.Clear();
+                _flushAfter = null;
+            }
+        }
+
+        if (settled is not null)
+        {
+            _onChanged(settled);
         }
     }
 
-    private void Flush()
+    private bool TryReadState(string path, FileState? previous, out FileState state)
     {
-        lock (_gate)
+        try
         {
-            if (_disposed || _pending.Count == 0)
+            var info = new FileInfo(path);
+            var metadata = info.Exists
+                ? new FileMetadata(true, info.Length, info.LastWriteTimeUtc.Ticks)
+                : FileMetadata.Missing;
+            if (previous is not null && previous.Metadata == metadata)
             {
-                return;
+                state = previous;
+                return true;
             }
 
-            var changed = _pending.Distinct(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase).ToArray();
-            _pending.Clear();
-            _onChanged(changed);
+            // Metadata checks keep the steady-state poll cheap. Hash only after existence, size, or write time changes
+            // so timestamp-only touches do not force a guarded refresh.
+            ulong? hash = metadata.Exists ? XxHash3.HashToUInt64(File.ReadAllBytes(path)) : null;
+            state = new(metadata, hash);
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _onError(exception);
+            state = previous ?? new(FileMetadata.Missing, ContentHash: null);
+            return false;
         }
     }
 
     /// <summary>Stops observation and returns queued edits for transfer to a replacement inventory.</summary>
     internal string[] DisposeAndGetPendingChanges()
     {
-        string[] pending;
+        CancellationTokenSource? stop;
+        Task? pollTask;
         lock (_gate)
         {
             if (_disposed)
             {
                 return [];
             }
-            _disposed = true;
-            _timer?.Dispose();
-            pending = [.. _pending.Distinct(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase)];
-            _pending.Clear();
+            stop = _stop;
+            pollTask = _pollTask;
         }
 
-        foreach (var watcher in _watchers)
+        stop?.Cancel();
+        try
         {
-            watcher.Dispose();
+            pollTask?.GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException) when (stop?.IsCancellationRequested == true)
+        {
         }
 
-        return pending;
+        // Capture a final metadata transition that occurred after the last timer tick.
+        PollOnce();
+
+        lock (_gate)
+        {
+            _disposed = true;
+            var pending = _pending.ToArray();
+            _pending.Clear();
+            _flushAfter = null;
+            stop?.Dispose();
+            return pending;
+        }
     }
 
     public void Dispose() => DisposeAndGetPendingChanges();
+
+    private sealed record FileState(FileMetadata Metadata, ulong? ContentHash);
+
+    private readonly record struct FileMetadata(bool Exists, long Length, long LastWriteTicks)
+    {
+        internal static FileMetadata Missing => new(false, 0, 0);
+    }
 }

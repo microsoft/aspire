@@ -11,6 +11,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Watch;
 using Aspire.Hosting;
+using Aspire.Shared.DotnetWatch;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -95,6 +96,19 @@ internal sealed partial class DotNetAppHostProject
         watchOptions.DotNetExecutablePath = launch.DotnetPath;
         watchOptions.DisableExtensionLaunch = true;
         watchOptions.BackchannelConnectionReady = generation.HostStarted;
+        var recentOutput = new Queue<string>();
+        var standardOutput = watchOptions.StandardOutputCallback;
+        var standardError = watchOptions.StandardErrorCallback;
+        watchOptions.StandardOutputCallback = line =>
+        {
+            CaptureRecentOutput(line);
+            standardOutput?.Invoke(line);
+        };
+        watchOptions.StandardErrorCallback = line =>
+        {
+            CaptureRecentOutput(line);
+            standardError?.Invoke(line);
+        };
         var arguments = launch.CreateArguments(context.AppHostFile, watchOptions, context.UnmatchedTokens);
         watchOptions.AppHostArgumentStartIndex = context.UnmatchedTokens.Length > 0
             ? arguments.Length - context.UnmatchedTokens.Length
@@ -102,6 +116,9 @@ internal sealed partial class DotNetAppHostProject
         using var stopAttempt = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stopStartupWait = CancellationTokenSource.CreateLinkedTokenSource(stopAttempt.Token);
         Task? startupDisconnect = null;
+        var childExit = generation.RequiresLauncherMonitoring
+            ? WaitForAnnouncedHostExitAsync(generation.HostStarted, stopStartupWait.Token)
+            : null;
         var watchBackchannel = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = _runner.RunAppHostCommandAsync(
             context.AppHostFile,
@@ -115,7 +132,12 @@ internal sealed partial class DotNetAppHostProject
 
         try
         {
-            await Task.WhenAny(run, watchBackchannel.Task).ConfigureAwait(false);
+            await Task.WhenAny(childExit is null ? [run, watchBackchannel.Task] : [run, watchBackchannel.Task, childExit])
+                .ConfigureAwait(false);
+            if (childExit?.IsCompletedSuccessfully == true)
+            {
+                return await FailExitedChildStartupAsync().ConfigureAwait(false);
+            }
             if (watchBackchannel.Task.IsCompletedSuccessfully)
             {
                 var backchannel = await watchBackchannel.Task.ConfigureAwait(false);
@@ -123,7 +145,13 @@ internal sealed partial class DotNetAppHostProject
                 startupDisconnect = backchannel.WaitForDisconnectAsync(stopStartupWait.Token);
                 // RunCommand's existing startup budget and cancellation bound this wait. A
                 // healthy backchannel alone cannot establish the initial real process identity.
-                await Task.WhenAny(generation.HostStarted, startupDisconnect, run).WaitAsync(cancellationToken).ConfigureAwait(false);
+                await Task.WhenAny(childExit is null
+                    ? [generation.HostStarted, startupDisconnect, run]
+                    : [generation.HostStarted, startupDisconnect, run, childExit]).WaitAsync(cancellationToken).ConfigureAwait(false);
+                if (childExit?.IsCompletedSuccessfully == true)
+                {
+                    return await FailExitedChildStartupAsync().ConfigureAwait(false);
+                }
                 if (!announcedBeforeConnection || startupDisconnect.IsCompleted)
                 {
                     // The real runner gates the connection on HostStarted. Reject any earlier
@@ -173,6 +201,16 @@ internal sealed partial class DotNetAppHostProject
                     {
                     }
                 }
+                if (childExit is not null)
+                {
+                    try
+                    {
+                        await childExit.ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (stopStartupWait.IsCancellationRequested)
+                    {
+                    }
+                }
             }
             finally
             {
@@ -186,6 +224,54 @@ internal sealed partial class DotNetAppHostProject
                 }
                 _ = watchBackchannel.Task.Exception;
             }
+        }
+
+        void CaptureRecentOutput(string line)
+        {
+            lock (recentOutput)
+            {
+                if (recentOutput.Count == 20)
+                {
+                    recentOutput.Dequeue();
+                }
+                recentOutput.Enqueue(line);
+            }
+        }
+
+        async Task<int> FailExitedChildStartupAsync()
+        {
+            string details;
+            lock (recentOutput)
+            {
+                details = recentOutput.Count == 0
+                    ? ""
+                    : Environment.NewLine + string.Join(Environment.NewLine, recentOutput);
+            }
+            var message = string.Format(
+                CultureInfo.CurrentCulture,
+                RunCommandStrings.WatchAppHostExitedDuringStartup,
+                details);
+            _logger.LogError("{Message}", message);
+            backchannelCompletionSource.TrySetException(new InvalidOperationException(message));
+            await stopAttempt.CancelAsync().ConfigureAwait(false);
+            return CliExitCodes.FailedToDotnetRunAppHost;
+        }
+    }
+
+    internal static async Task WaitForAnnouncedHostExitAsync(
+        Task<string> hostStarted,
+        CancellationToken cancellationToken)
+    {
+        var instance = await hostStarted.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!DotnetWatchAppHostProtocol.TryParseInstance(instance, out var processId, out var started))
+        {
+            throw new InvalidDataException("The watched AppHost announced an invalid process identity.");
+        }
+
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+        while (ProcessStartTimeHelper.IsProcessRunning(processId, started) &&
+            await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+        {
         }
     }
 }

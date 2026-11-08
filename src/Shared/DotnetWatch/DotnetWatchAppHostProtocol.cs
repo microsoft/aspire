@@ -81,8 +81,16 @@ internal static class DotnetWatchAppHostProtocol
     internal static bool IsSession([NotNullWhen(true)] string? session)
         => session is { Length: 32 } && Guid.TryParseExact(session, "N", out _);
 
-    internal static bool IsInstance(string? instance)
+    internal static bool IsInstance(string? instance) =>
+        TryParseInstance(instance, out _, out _);
+
+    internal static bool TryParseInstance(
+        string? instance,
+        out int processId,
+        out long startTimeUnixMilliseconds)
     {
+        processId = 0;
+        startTimeUnixMilliseconds = 0;
         if (instance is not { Length: > 0 and <= 64 })
         {
             return false;
@@ -90,8 +98,9 @@ internal static class DotnetWatchAppHostProtocol
 
         var separator = instance.IndexOf(':');
         return separator > 0 &&
-            int.TryParse(instance.AsSpan(0, separator), NumberStyles.None, CultureInfo.InvariantCulture, out var pid) && pid > 0 &&
-            long.TryParse(instance.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var start) && start > 0;
+            int.TryParse(instance.AsSpan(0, separator), NumberStyles.None, CultureInfo.InvariantCulture, out processId) && processId > 0 &&
+            long.TryParse(instance.AsSpan(separator + 1), NumberStyles.None, CultureInfo.InvariantCulture, out startTimeUnixMilliseconds) &&
+            startTimeUnixMilliseconds > 0;
     }
 
     internal static async Task<Stream> ConnectAsync(string endpoint, CancellationToken cancellationToken)

@@ -7,45 +7,81 @@ using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
 
-public sealed class DotnetWatchTests(ITestOutputHelper output)
+public sealed class DotnetWatchCSharpTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task CSharpAppHostReconstructsTheModelAndCleansOldGenerations() => RunAsync("csharp");
+    public Task CSharpAppHostReconstructsTheModelAndCleansOldGenerations() =>
+        DotnetWatchTestRunner.RunAsync(output, "csharp");
+}
 
+public sealed class DotnetWatchTypeScriptTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task TypeScriptAppHostAndManagedServicesUseTheSameWatchSelection() => RunAsync("typescript");
+    public Task TypeScriptAppHostAndManagedServicesUseTheSameWatchSelection() =>
+        DotnetWatchTestRunner.RunAsync(output, "typescript");
+}
 
+public sealed class DotnetWatchNativeTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task NativeTypeScriptAppHostRetainsItsSelectedServerWithReducedCoverage() => RunAsync("native");
+    public Task NativeTypeScriptAppHostRetainsItsSelectedServerWithReducedCoverage() =>
+        DotnetWatchTestRunner.RunAsync(output, "native");
+}
 
+public sealed class DotnetWatchReplicaTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task ReplicasAndDuplicateLaunchesKeepStoppedInstanceIntentDuringRefresh() => RunAsync("replicas");
+    public Task ReplicasAndDuplicateLaunchesKeepStoppedInstanceIntentDuringRefresh() =>
+        DotnetWatchTestRunner.RunAsync(output, "replicas");
+}
 
+public sealed class DotnetWatchBuildTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task InitialBuildRecoveryAndCommandsRespectWatchBuildOwnership() => RunAsync("builds");
+    public Task InitialBuildRecoveryAndCommandsRespectWatchBuildOwnership() =>
+        DotnetWatchTestRunner.RunAsync(output, "builds");
+}
 
+public sealed class DotnetWatchCompatibilityTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task ManagedFileAppsAndLaunchContextsRemainWatchCompatible() => RunAsync("compatibility");
+    public Task ManagedFileAppsAndLaunchContextsRemainWatchCompatible() =>
+        DotnetWatchTestRunner.RunAsync(output, "compatibility");
+}
 
+public sealed class DotnetWatchIsolationTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task GuardedRefreshReevaluatesReferencesImportsAndSdkOutputIsolation() => RunAsync("isolation");
+    public Task GuardedRefreshReevaluatesReferencesImportsAndSdkOutputIsolation() =>
+        DotnetWatchTestRunner.RunAsync(output, "isolation");
+}
 
+public sealed class DotnetWatchHttpsTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task HttpsTrustAndPrivateWatchEnvironmentStayWithTheirOwners() => RunAsync("https");
+    public Task HttpsTrustAndPrivateWatchEnvironmentStayWithTheirOwners() =>
+        DotnetWatchTestRunner.RunAsync(output, "https");
+}
 
+public sealed class DotnetWatchPayloadTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task PackedWatchPayloadResolvesWithoutRuntimeAcquisition() => RunAsync("payload");
+    public Task PackedWatchPayloadResolvesWithoutRuntimeAcquisition() =>
+        DotnetWatchTestRunner.RunAsync(output, "payload");
+}
 
-    private async Task RunAsync(string scenario)
+internal static class DotnetWatchTestRunner
+{
+    internal static async Task RunAsync(ITestOutputHelper output, string scenario)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);

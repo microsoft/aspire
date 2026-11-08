@@ -13,9 +13,9 @@ public class DotnetWatchEventInterpreterTests
     private static readonly string s_api = Path.Combine(s_root, "Api", "Api.csproj");
     private static readonly string s_worker = Path.Combine(s_root, "Worker", "Worker.csproj");
 
-    private static DotnetWatchEventInterpreter CreateReady()
+    private static DotnetWatchEventInterpreter CreateReady(string watchResourceName = "dotnet-watch")
     {
-        var interpreter = new DotnetWatchEventInterpreter([(s_api, "api"), (s_worker, "worker")]);
+        var interpreter = new DotnetWatchEventInterpreter([(s_api, "api"), (s_worker, "worker")], watchResourceName);
         Assert.Empty(interpreter.OnStatus("building", [s_api, s_worker], null, null));
         var notice = Assert.Single(interpreter.OnStatus("build_complete", [s_api, s_worker], true, null));
         Assert.Equal(WatchNoticeKind.Watching, notice.Kind);
@@ -35,13 +35,13 @@ public class DotnetWatchEventInterpreterTests
     [Fact]
     public void HotReloadIsReportedForTheProjectsTheEventNames()
     {
-        var interpreter = CreateReady();
+        var interpreter = CreateReady("dotnet-watch-api");
 
         var notice = Assert.Single(interpreter.OnStatus("hot_reload_applied", [s_api], null, null));
 
-        // The event follows every apply attempt (applied, blocked by compile errors, no changes), so it says "processed".
+        // The event follows every apply attempt (applied, blocked by compile errors, no changes), so the notice is outcome-neutral.
         Assert.Equal(WatchNoticeKind.HotReloadApplied, notice.Kind);
-        Assert.Equal("🔥 Hot reload processed the change for api. Compile errors, if any, are in the 'dotnet-watch' resource logs.", notice.Message);
+        Assert.Equal("⌚ The watcher processed the change for api. Watcher 10.0.403 does not report whether hot reload applied. Open 'dotnet-watch-api' Console logs in the dashboard, or run 'aspire logs dotnet-watch-api --tail 50'.", notice.Message);
         Assert.Equal([s_api], notice.ProjectPaths);
     }
 
@@ -55,7 +55,7 @@ public class DotnetWatchEventInterpreterTests
     [Fact]
     public void InitialBuildFailureThenRecovery()
     {
-        var interpreter = new DotnetWatchEventInterpreter([(s_api, "api"), (s_worker, "worker")]);
+        var interpreter = new DotnetWatchEventInterpreter([(s_api, "api"), (s_worker, "worker")], "dotnet-watch");
         Assert.Empty(interpreter.OnStatus("building", [s_api, s_worker], null, null));
 
         // 10.0.x leaves `error` empty: the notice points at the watcher's logs.
@@ -139,6 +139,6 @@ public class DotnetWatchEventInterpreterTests
     [InlineData("  ")]
     public void FailureDetailFallsBackToTheLogs(string? error)
     {
-        Assert.Equal("see the 'dotnet-watch' resource logs for the errors", DotnetWatchEventInterpreter.FailureDetail(error));
+        Assert.Equal("see the 'dotnet-watch-api' resource logs for the errors", DotnetWatchEventInterpreter.FailureDetail(error, "dotnet-watch-api"));
     }
 }

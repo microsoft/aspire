@@ -544,11 +544,14 @@ class Fixture:
         write(directory / "Program.cs", service_source(shared))
         return project
 
-    def shared(self, name="Shared", value="shared-before"):
+    def shared(self, name="Shared", value="shared-before", properties=""):
         directory = self.root / name
-        write(directory / f"{directory.name}.csproj", """
+        write(directory / f"{directory.name}.csproj", f"""
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+{properties}
+  </PropertyGroup>
 </Project>
 """)
         write(directory / "SharedValue.cs", f"""
@@ -1704,9 +1707,9 @@ def structured_log_has(fixture, name, text):
 
 def verify_compatibility(context):
     fixture = Fixture(context, "file-app-and-release-launch-context")
-    fixture.shared()
     release_watch_properties = """    <Optimize>false</Optimize>
     <MetadataUpdaterSupport>true</MetadataUpdaterSupport>"""
+    fixture.shared(properties=release_watch_properties)
     fixture.service("Api", shared=True, properties=release_watch_properties)
     fixture.service("Worker", shared=True, properties=release_watch_properties)
     working_directory = fixture.root / "run-directory"
@@ -1780,14 +1783,16 @@ builder.Configuration["AppHost:BuildConfiguration"] = "Release";""")
     require(len(servers) == 2, f"A managed file app should have a dedicated owner, plus the shared project group: {servers}")
     _, multi_root_server = fixture.server_for("Api/Api.csproj")
     server_environment = multi_root_server.environment()
-    sdk_temp = pathlib.Path(server_environment["TMPDIR"]).resolve()
-    require(sdk_temp != application_temp and sdk_temp.is_relative_to(application_temp)
-            and sdk_temp.name.startswith("tmp-") and sdk_temp.parent.name.startswith("aspw-")
-            and sdk_temp.parent.stat().st_mode & 0o777 == 0o700,
-            f"The multi-root server did not receive an owned SDK-temp directory: {sdk_temp}")
-    sdk_pin = read_json(sdk_temp / "global.json")
-    require(sdk_pin["sdk"]["version"] == SDK_VERSION and sdk_pin["sdk"]["rollForward"] == "disable",
-            f"Multi-root SDK selection is not explicitly pinned: {sdk_pin}")
+    sdk_temp = pathlib.Path(server_environment.get("TMPDIR", str(application_temp))).resolve()
+    sdk_pin = None
+    if sdk_temp != application_temp:
+        require(sdk_temp.is_relative_to(application_temp)
+                and sdk_temp.name.startswith("tmp-") and sdk_temp.parent.name.startswith("aspw-")
+                and sdk_temp.parent.stat().st_mode & 0o777 == 0o700,
+                f"The multi-root server did not receive a private owned SDK-temp directory: {sdk_temp}")
+        sdk_pin = read_json(sdk_temp / "global.json")
+        require(sdk_pin["sdk"]["version"] == SDK_VERSION and sdk_pin["sdk"]["rollForward"] == "disable",
+                f"Redirected multi-root SDK selection is not explicitly pinned: {sdk_pin}")
     selected = fixture.command([fixture.dotnet, "--version"], cwd=sdk_temp, environment=server_environment)
     require(selected.stdout.strip() == SDK_VERSION, f"The actual multi-root build temp selected {selected.stdout!r}")
     context.evidence.check("managed-file-app-release-profiles-working-directory-literal-args-and-sdk-temp",
@@ -1929,7 +1934,8 @@ def verify_isolation(context):
             "Unsupported watch context lost its ordinary-coverage diagnostic.")
     require(collision.resource()["properties"].get("dotnet-watch.enabled") is not True,
             "A nonliteral evaluated shared-output collision was incorrectly handed to the watcher.")
-    require(structured_log_has(collision, "api", "Shares evaluated build outputs"),
+    require(structured_log_has(collision, "api", "share physical project")
+            and structured_log_has(collision, "api", str(collision.root / "Shared" / "Shared.csproj")),
             "The preflight ordinary fallback lost its evaluated collision diagnostic.")
     collision.command_state("api", "rebuild", "Enabled")
     collision.application_snapshot("worker")
@@ -2063,16 +2069,25 @@ public static class AddedValue
     alternate = next((version for version in context.sdks if version.startswith("11.")), None)
     if alternate:
         sdk_scope.pin_sdk(sdk_scope.root / "Api", alternate)
+        invalidated = fenced_group(sdk_scope, "api", sdk_owner, application)
+        context.evidence.check("new-sdk-scope-fenced-and-waits-settled", selectedSdk=alternate,
+                              snapshot=invalidated)
     else:
-        # A runner with only SDK 10 still exercises the unknown-SDK guard with a
-        # deliberately unavailable exact pin. This is not SDK substitution.
+        # An unavailable exact pin cannot establish a changed SDK identity. Preserve
+        # the last-good graph and service until another edit can be evaluated.
         write(sdk_scope.root / "Api" / "global.json", json.dumps({
             "sdk": {"version": "10.0.999", "rollForward": "disable",
                     "paths": [str(context.sdks[SDK_VERSION])]}
         }, indent=2))
-    invalidated = fenced_group(sdk_scope, "api", sdk_owner, application)
-    context.evidence.check("new-sdk-scope-fenced-and-waits-settled", selectedSdk=alternate or "10.0.999",
-                          snapshot=invalidated)
+        wait_for(lambda: structured_log_has(
+            sdk_scope, "api", "Build-input evaluation failed: Watch SDK selection failed"),
+            "waiting for unknown SDK evaluation fallback")
+        preserved = sdk_scope.response()
+        verify_same_application(current, preserved, "Unknown SDK scope evaluation fallback")
+        require(sdk_owner.alive() and application.alive(),
+                "Unknown SDK evaluation stopped the last-good watcher or application.")
+        context.evidence.check("unknown-sdk-scope-preserves-last-good-state",
+                              selectedSdk="10.0.999", response=preserved)
     sdk_scope.stop()
 
 
@@ -2543,6 +2558,14 @@ def main():
                         print(f"Owned fixture cleanup failed: {error}", file=sys.stderr)
                 fixture.close()
             context.evidence.save()
+        permissions = subprocess.run(
+            ["chmod", "-R", "a+rwX", str(root)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if permissions.returncode != 0:
+            print(f"Could not make preserved diagnostics host-readable: {permissions.stderr}", file=sys.stderr)
     print(f"WATCH_E2E_OK:{arguments.scenario}", flush=True)
 
 

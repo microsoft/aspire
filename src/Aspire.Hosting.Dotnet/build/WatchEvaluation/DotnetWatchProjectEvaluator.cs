@@ -133,13 +133,25 @@ internal static class DotnetWatchProjectEvaluator
         var constructor = instanceType.GetConstructor([typeof(string), typeof(IDictionary<string, string>), typeof(string), collectionType])
             ?? throw new EvaluationException("The selected SDK does not support isolated project evaluation.");
         var projects = new Dictionary<string, DotnetWatchProjectNode>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-        var pending = new Queue<string>();
-        pending.Enqueue(NormalizePhysicalPath(request.ProjectPath));
+        var evaluatedFrameworks = new Dictionary<string, string?>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var rootPath = NormalizePhysicalPath(request.ProjectPath);
+        var pending = new Queue<(string Path, string? TargetFramework)>();
+        pending.Enqueue((rootPath, TargetFramework: null));
+        var propertyNames = DotnetWatchProjectEvaluationProtocol.PropertyNames.Concat(request.Environment.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         Type? virtualBuilder = null;
-        while (pending.TryDequeue(out var path))
+        while (pending.TryDequeue(out var work))
         {
+            var (path, requestedTargetFramework) = work;
             if (projects.ContainsKey(path))
             {
+                if (evaluatedFrameworks[path] is { } evaluatedTargetFramework &&
+                    requestedTargetFramework is not null &&
+                    !string.Equals(evaluatedTargetFramework, requestedTargetFramework, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new EvaluationException(
+                        $"Project '{path}' is required in multiple target-framework contexts; watch output isolation is unknown.");
+                }
                 continue;
             }
             if (projects.Count >= DotnetWatchProjectEvaluationProtocol.MaxProjects)
@@ -182,9 +194,34 @@ internal static class DotnetWatchProjectEvaluator
                 instance = constructor.Invoke([path, globalProperties, null, collection]);
             }
 
-            var properties = DotnetWatchProjectEvaluationProtocol.PropertyNames.Concat(request.Environment.Keys)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(name => name, name => (string)getValue.Invoke(instance, [name])!, StringComparer.OrdinalIgnoreCase);
+            var properties = ReadProperties(instance);
+            if (!path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(properties["TargetFrameworks"]) &&
+                string.IsNullOrEmpty(properties["TargetFramework"]))
+            {
+                if (requestedTargetFramework is null)
+                {
+                    var role = path == rootPath ? "runnable root" : "referenced project";
+                    throw new EvaluationException(
+                        $"Multi-targeted {role} '{path}' requires an explicit target framework; watch output isolation is unknown.");
+                }
+
+                var targetedProperties = new Dictionary<string, string>(globalProperties, StringComparer.OrdinalIgnoreCase)
+                {
+                    ["TargetFramework"] = requestedTargetFramework
+                };
+                instance = constructor.Invoke([path, targetedProperties, null, collection]);
+                properties = ReadProperties(instance);
+                if (string.IsNullOrEmpty(properties["TargetFramework"]))
+                {
+                    throw new EvaluationException(
+                        $"Project '{path}' could not be evaluated in parent-selected framework '{requestedTargetFramework}'.");
+                }
+            }
+            evaluatedFrameworks[path] = string.IsNullOrEmpty(properties["TargetFrameworks"])
+                ? null
+                : properties["TargetFramework"];
+
             var compileItems = ((IEnumerable)getItems.Invoke(instance, ["Compile"])!).Cast<object>()
                 .Select(item => new DotnetWatchCompileItem(
                     (string)item.GetType().GetProperty("EvaluatedInclude")!.GetValue(item)!,
@@ -214,10 +251,6 @@ internal static class DotnetWatchProjectEvaluator
                 .ToArray();
             properties["CompileItems"] = JsonSerializer.Serialize(compileItems, DotnetWatchProjectEvaluationJsonContext.Default.DotnetWatchCompileItemArray);
             properties["PackageReferences"] = JsonSerializer.Serialize(packages, DotnetWatchProjectEvaluationJsonContext.Default.DotnetWatchPackageReferenceArray);
-            if (!string.IsNullOrEmpty(properties["TargetFrameworks"]) && string.IsNullOrEmpty(properties["TargetFramework"]))
-            {
-                throw new EvaluationException($"Project '{path}' requires multiple target-framework contexts; watch output isolation is unknown.");
-            }
             ValidateRunArguments(instanceType, instance, path);
             var fullPath = (string)fullPathProperty.GetValue(instance)!;
             if (string.IsNullOrEmpty(fullPath) || string.IsNullOrEmpty(properties["MSBuildProjectDirectory"]))
@@ -229,7 +262,7 @@ internal static class DotnetWatchProjectEvaluator
             foreach (var reference in (IEnumerable)getItems.Invoke(instance, ["ProjectReference"])!)
             {
                 var metadata = GetMethod(reference.GetType(), "GetMetadataValue", [typeof(string)]);
-                foreach (var name in new[] { "AdditionalProperties", "SetConfiguration", "SetPlatform", "SetTargetFramework", "Targets", "GlobalPropertiesToRemove" })
+                foreach (var name in new[] { "AdditionalProperties", "SetConfiguration", "SetPlatform", "Targets", "GlobalPropertiesToRemove" })
                 {
                     var setting = (string)metadata.Invoke(reference, [name])!;
                     if (string.IsNullOrEmpty(setting))
@@ -247,6 +280,8 @@ internal static class DotnetWatchProjectEvaluator
                     }
                     throw new EvaluationException($"A project reference in '{path}' changes its build context through '{name}'; watch output isolation is unknown.");
                 }
+                var referenceTargetFramework = ParseTargetFramework(
+                    (string)metadata.Invoke(reference, ["SetTargetFramework"])!) ?? properties["TargetFramework"];
                 var referencePath = (string)metadata.Invoke(reference, ["FullPath"])!;
                 if (string.IsNullOrEmpty(referencePath) || Directory.Exists(referencePath))
                 {
@@ -264,7 +299,7 @@ internal static class DotnetWatchProjectEvaluator
                 }
                 referencePath = NormalizePhysicalPath(referencePath);
                 references.Add(referencePath);
-                pending.Enqueue(referencePath);
+                pending.Enqueue((referencePath, referenceTargetFramework));
             }
 
             var imports = ((IEnumerable)importsProperty.GetValue(instance)!).Cast<string>().ToList();
@@ -287,6 +322,25 @@ internal static class DotnetWatchProjectEvaluator
         }
 
         return new(sdkDirectory, request.Muxer, request.SdkVersion, projects);
+
+        Dictionary<string, string> ReadProperties(object projectInstance) =>
+            propertyNames.ToDictionary(
+                name => name,
+                name => (string)getValue.Invoke(projectInstance, [name])!,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string? ParseTargetFramework(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        const string prefix = "TargetFramework=";
+        var assignment = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .SingleOrDefault(part => part.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        return assignment?[prefix.Length..];
     }
 
     private static void ValidateRunArguments(Type instanceType, object instance, string path)

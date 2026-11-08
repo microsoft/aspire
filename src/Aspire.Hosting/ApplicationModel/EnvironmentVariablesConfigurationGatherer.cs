@@ -29,8 +29,9 @@ internal class EnvironmentVariablesExecutionConfigurationGatherer : IExecutionCo
             foreach (var ann in envVarAnnotations)
             {
                 // Cached callbacks return an earlier snapshot. Later callbacks must
-                // receive that dictionary, not the initial, potentially empty context.
-                var callbackContext = new EnvironmentCallbackContext(executionContext, resource, envVars, cancellationToken: cancellationToken)
+                // receive a copy of that dictionary so they cannot mutate the cached result.
+                var callbackEnvironment = new Dictionary<string, object>(envVars, StringComparers.EnvironmentVariableName);
+                var callbackContext = new EnvironmentCallbackContext(executionContext, resource, callbackEnvironment, cancellationToken: cancellationToken)
                 {
                     Logger = resourceLogger,
                 };

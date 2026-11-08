@@ -3716,19 +3716,16 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_DefaultWatchInIdeOwnedRun_AllowsNoBuildWithoutNotice()
+    public async Task RunCommand_DefaultWatchInIdeOwnedRun_AllowsNoBuild()
     {
-        var messages = new List<string>();
         var context = await RunWithTestAppHostProjectAsync(
             "run --no-build",
             "csharp",
             defaultWatchEnabled: true,
-            configureInteraction: interaction => interaction.DisplayMessageCallback = (_, message, _) => messages.Add(message),
             configuration: config => config["DEBUG_SESSION_PORT"] = "12345");
 
         Assert.False(context.Watch);
         Assert.True(context.NoBuild);
-        Assert.DoesNotContain(RunCommandStrings.WatchHandledByIde, messages);
     }
 
     private async Task<AppHostProjectContext> RunWithTestAppHostProjectAsync(
@@ -5232,13 +5229,12 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("run --watch false", true, false)]
-    [InlineData("run", false, false)]
-    public async Task RunCommand_WhenDelegatingToExtension_LeavesWatchToTheIde(string commandLine, bool defaultWatchEnabled, bool expectNotice)
+    [InlineData("run --watch false", true)]
+    [InlineData("run", false)]
+    public async Task RunCommand_WhenDelegatingToExtension_LeavesWatchToTheIde(string commandLine, bool defaultWatchEnabled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         DebugSessionOptions? options = null;
-        var consoleLines = new List<string>();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, testOptions =>
         {
@@ -5248,7 +5244,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             {
                 var service = new TestExtensionInteractionService(sp);
                 service.StartDebugSessionCallback = (_, _, _, debugSessionOptions) => options = debugSessionOptions;
-                service.DisplayConsoleWriteLineMessage = consoleLines.Add;
                 return service;
             };
         });
@@ -5261,7 +5256,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(options);
         Assert.DoesNotContain(options.Args!, a => a.StartsWith("--watch", StringComparison.Ordinal));
-        Assert.Equal(expectNotice, consoleLines.Contains(RunCommandStrings.WatchHandledByIde));
     }
 
     [Theory]

@@ -66,26 +66,34 @@ internal static class DotnetWatchStatusTypes
 /// </remarks>
 internal sealed class DotnetWatchEventInterpreter
 {
-    private const string LogsPointer = "see the 'dotnet-watch' resource logs for the errors";
-
     private readonly IReadOnlyList<(string ProjectPath, string Name)> _projects;
-    private readonly HashSet<string> _crashed = new(StringComparer.Ordinal);
+    private readonly string _watchResourceName;
+    private readonly HashSet<string> _crashed = new(DotnetWatchProjectGraph.PathComparer);
     private bool _ready;
     private bool _inError;
 
     /// <param name="projects">The watched projects and their resource names.</param>
-    public DotnetWatchEventInterpreter(IEnumerable<(string ProjectPath, string Name)> projects)
+    /// <param name="watchResourceName">The exact hidden watch resource that owns the console output.</param>
+    public DotnetWatchEventInterpreter(
+        IEnumerable<(string ProjectPath, string Name)> projects,
+        string watchResourceName)
     {
-        _projects = projects.ToArray();
+        _projects = projects.Select(project =>
+            (DotnetWatchProjectGraph.Normalize(project.ProjectPath), project.Name)).ToArray();
+        _watchResourceName = watchResourceName;
     }
 
     /// <summary>The detail shown for a failed build: the event's <c>error</c>, or a pointer to the watcher's logs.</summary>
-    public static string FailureDetail(string? error) => string.IsNullOrWhiteSpace(error) ? LogsPointer : error;
+    public static string FailureDetail(string? error, string watchResourceName) =>
+        string.IsNullOrWhiteSpace(error) ? $"see the '{watchResourceName}' resource logs for the errors" : error;
 
     public IReadOnlyList<WatchNotice> OnStatus(string type, IReadOnlyList<string>? projects, bool? success, int? exitCode, string? error = null)
     {
         var notices = new List<WatchNotice>();
-        projects = (projects ?? []).Distinct(StringComparer.Ordinal).ToArray();
+        projects = (projects ?? [])
+            .Select(DotnetWatchProjectGraph.Normalize)
+            .Distinct(DotnetWatchProjectGraph.PathComparer)
+            .ToArray();
 
         switch (type)
         {
@@ -102,7 +110,7 @@ internal sealed class DotnetWatchEventInterpreter
                     _ready = true;
                     var recovered = _inError ? "✅ Build succeeded. " : "";
                     _inError = false;
-                    var all = _projects.Select(p => p.ProjectPath).Distinct(StringComparer.Ordinal).ToArray();
+                    var all = _projects.Select(p => p.ProjectPath).Distinct(DotnetWatchProjectGraph.PathComparer).ToArray();
                     notices.Add(Notice(WatchNoticeKind.Watching, LogLevel.Information,
                         $"{recovered}👀 Watching {Names(all)} for changes. Edits are hot reloaded; changes that need a restart restart only the affected service.", all));
                 }
@@ -115,7 +123,7 @@ internal sealed class DotnetWatchEventInterpreter
 
             case DotnetWatchStatusTypes.BuildComplete:
                 _inError = true;
-                var detail = FailureDetail(error);
+                var detail = FailureDetail(error, _watchResourceName);
                 notices.Add(_ready
                     ? Notice(WatchNoticeKind.BuildFailed, LogLevel.Error, $"❌ Build failed for {Names(projects)}: {detail}. Fix it and save.", projects)
                     : Notice(WatchNoticeKind.BuildFailed, LogLevel.Error, $"❌ Initial build failed: {detail}. Fix it and save; {Names(projects)} start once the build succeeds.", projects));
@@ -127,7 +135,7 @@ internal sealed class DotnetWatchEventInterpreter
                 if (updated.Length > 0)
                 {
                     notices.Add(Notice(WatchNoticeKind.HotReloadApplied, LogLevel.Information,
-                        $"🔥 Hot reload processed the change for {Names(updated)}. Compile errors, if any, are in the 'dotnet-watch' resource logs.", updated));
+                        $"⌚ The watcher processed the change for {Names(updated)}. Watcher 10.0.403 does not report whether hot reload applied. Open '{_watchResourceName}' Console logs in the dashboard, or run 'aspire logs {_watchResourceName} --tail 50'.", updated));
                 }
                 break;
 
@@ -159,7 +167,8 @@ internal sealed class DotnetWatchEventInterpreter
     private string Names(IEnumerable<string> projectPaths)
     {
         var names = projectPaths
-            .SelectMany(path => _projects.Where(p => string.Equals(p.ProjectPath, path, StringComparison.Ordinal)).Select(p => p.Name).DefaultIfEmpty(Path.GetFileNameWithoutExtension(path)))
+            .SelectMany(path => _projects.Where(p => DotnetWatchProjectGraph.PathComparer.Equals(p.ProjectPath, path))
+                .Select(p => p.Name).DefaultIfEmpty(Path.GetFileNameWithoutExtension(path)))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         return names.Length == 0 ? "services" : string.Join(", ", names);

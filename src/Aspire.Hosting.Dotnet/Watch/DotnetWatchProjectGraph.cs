@@ -11,6 +11,22 @@ using Aspire.Shared.DotnetWatch;
 
 namespace Aspire.Hosting.Dotnet.Watch;
 
+internal enum DotnetWatchGraphComparisonKind
+{
+    Equivalent,
+    RefreshRequired,
+    Incompatible
+}
+
+internal sealed record DotnetWatchGraphComparison(
+    DotnetWatchGraphComparisonKind Kind,
+    IReadOnlyList<string> Details)
+{
+    internal string Describe() => Details.Count == 0 ? Kind.ToString() : string.Join("; ", Details);
+}
+
+internal sealed class DotnetWatchIncompatibleGraphException(string message) : DistributedApplicationException(message);
+
 /// <summary>Evaluates watch build fidelity and output isolation using an SDK-bound child process.</summary>
 internal static class DotnetWatchProjectGraph
 {
@@ -148,32 +164,164 @@ internal static class DotnetWatchProjectGraph
                 .Any(right => ContainsPath(left, right) || ContainsPath(right, left)));
     }
 
-    /// <summary>Checks whether a refresh preserves SDK, physical graph, output, and evaluated build/launch context.</summary>
-    internal static bool Equivalent(DotnetWatchProjectGraphResult leftResult, DotnetWatchProjectGraphResult rightResult)
+    /// <summary>
+    /// Classifies graph differences as equivalent, requiring a fresh watcher, or incompatible with retained ownership.
+    /// </summary>
+    internal static DotnetWatchGraphComparison Compare(
+        DotnetWatchProjectGraphResult leftResult,
+        DotnetWatchProjectGraphResult rightResult,
+        string? sanctionedFileAppRoot = null)
     {
-        if (!PathComparer.Equals(leftResult.SdkDirectory, rightResult.SdkDirectory) ||
-            !PathComparer.Equals(leftResult.Muxer, rightResult.Muxer) || leftResult.SdkVersion != rightResult.SdkVersion ||
-            leftResult.Projects.Count != rightResult.Projects.Count)
+        var refresh = new List<string>();
+        var incompatible = new List<string>();
+
+        if (!PathComparer.Equals(leftResult.SdkDirectory, rightResult.SdkDirectory))
         {
-            return false;
+            incompatible.Add($"SDK directory changed from '{leftResult.SdkDirectory}' to '{rightResult.SdkDirectory}'");
         }
+        if (!PathComparer.Equals(leftResult.Muxer, rightResult.Muxer))
+        {
+            incompatible.Add($"dotnet host changed from '{leftResult.Muxer}' to '{rightResult.Muxer}'");
+        }
+        if (leftResult.SdkVersion != rightResult.SdkVersion)
+        {
+            incompatible.Add($"SDK version changed from '{leftResult.SdkVersion}' to '{rightResult.SdkVersion}'");
+        }
+
+        var leftPaths = leftResult.Projects.Keys.ToHashSet(PathComparer);
+        var rightPaths = rightResult.Projects.Keys.ToHashSet(PathComparer);
+        foreach (var removed in leftPaths.Except(rightPaths, PathComparer).Take(4))
+        {
+            refresh.Add($"project removed: '{removed}'");
+        }
+        foreach (var added in rightPaths.Except(leftPaths, PathComparer).Take(4))
+        {
+            refresh.Add($"project added: '{added}'");
+        }
+
         foreach (var (path, left) in leftResult.Projects)
         {
-            if (!rightResult.Projects.TryGetValue(path, out var right) || !PathComparer.Equals(left.Path, right.Path) ||
-                !new HashSet<string>(left.References, PathComparer).SetEquals(right.References) ||
-                !new HashSet<string>(left.Outputs, PathComparer).SetEquals(right.Outputs) ||
-                left.Properties.Count != right.Properties.Count ||
-                left.Properties.Any(property => !IsRefreshMetadata(property.Key) &&
-                    (!right.Properties.TryGetValue(property.Key, out var value) || property.Value != value)))
+            if (!rightResult.Projects.TryGetValue(path, out var right))
             {
-                return false;
+                continue;
+            }
+            if (!PathComparer.Equals(left.Path, right.Path))
+            {
+                incompatible.Add($"physical project identity changed for '{path}'");
+            }
+            if (!new HashSet<string>(left.References, PathComparer).SetEquals(right.References))
+            {
+                refresh.Add($"project references changed for '{path}'");
+            }
+            if (!new HashSet<string>(left.Imports, PathComparer).SetEquals(right.Imports))
+            {
+                refresh.Add($"evaluated imports changed for '{path}'");
+            }
+            if (!new HashSet<string>(left.Outputs, PathComparer).SetEquals(right.Outputs))
+            {
+                incompatible.Add($"evaluated output domains changed for '{path}'");
+            }
+
+            var propertyNames = left.Properties.Keys.Concat(right.Properties.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in propertyNames)
+            {
+                if (name.Equals("MSBuildStartupDirectory", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var leftValue = left.Properties.GetValueOrDefault(name);
+                var rightValue = right.Properties.GetValueOrDefault(name);
+                if (leftValue == rightValue)
+                {
+                    continue;
+                }
+                if (AreEquivalentOutputPathProperties(name, leftValue, rightValue, Path.GetDirectoryName(path)!))
+                {
+                    continue;
+                }
+                if (sanctionedFileAppRoot is not null &&
+                    PathComparer.Equals(path, sanctionedFileAppRoot) &&
+                    IsSanctionedFileAppWatcherAdaptation(name, leftValue, rightValue))
+                {
+                    continue;
+                }
+
+                if (IsRefreshMetadata(name))
+                {
+                    refresh.Add($"evaluated {name} changed for '{path}'");
+                }
+                else
+                {
+                    incompatible.Add($"MSBuild property '{name}' changed for '{path}'");
+                }
             }
         }
 
-        // Imports can legitimately change while the evaluated context is unchanged. The caller must rebuild its
-        // observed-input inventory and confirm old watcher teardown; this is not permission for live repartition.
-        return true;
+        if (incompatible.Count > 0)
+        {
+            return new(DotnetWatchGraphComparisonKind.Incompatible,
+                incompatible.Distinct(StringComparer.Ordinal).Take(8).ToArray());
+        }
+        if (refresh.Count > 0)
+        {
+            return new(DotnetWatchGraphComparisonKind.RefreshRequired,
+                refresh.Distinct(StringComparer.Ordinal).Take(8).ToArray());
+        }
+
+        return new(DotnetWatchGraphComparisonKind.Equivalent, []);
     }
+
+    private static bool AreEquivalentOutputPathProperties(
+        string name,
+        string? leftValue,
+        string? rightValue,
+        string projectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(leftValue) ||
+            string.IsNullOrWhiteSpace(rightValue) ||
+            !IsOutputPathProperty(name))
+        {
+            return false;
+        }
+
+        try
+        {
+            // MSBuild can spell the same project-relative output as either a relative or absolute path
+            // when the ordinary build uses global properties and the watcher uses environment properties.
+            return PathComparer.Equals(
+                NormalizeRelative(leftValue, projectDirectory),
+                NormalizeRelative(rightValue, projectDirectory));
+        }
+        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsOutputPathProperty(string name) =>
+        name.Equals("BaseOutputPath", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("ArtifactsPath", StringComparison.OrdinalIgnoreCase) ||
+        DotnetWatchProjectEvaluationProtocol.OutputPropertyNames.Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    // File apps can report an empty or false ordinary default. An explicit project value that the
+    // watcher environment cannot override stays false and is rejected before graph comparison.
+    private static bool IsSanctionedFileAppWatcherAdaptation(string name, string? ordinaryValue, string? watcherValue) =>
+        (name.Equals("StartupHookSupport", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("MetadataUpdaterSupport", StringComparison.OrdinalIgnoreCase)) &&
+        ordinaryValue?.Equals("true", StringComparison.OrdinalIgnoreCase) != true &&
+        watcherValue?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>Checks whether two graphs have no meaningful differences.</summary>
+    internal static bool Equivalent(DotnetWatchProjectGraphResult leftResult, DotnetWatchProjectGraphResult rightResult) =>
+        Compare(leftResult, rightResult).Kind == DotnetWatchGraphComparisonKind.Equivalent;
+
+    /// <summary>Returns physical projects present in both evaluated graphs.</summary>
+    internal static string[] SharedProjects(
+        DotnetWatchProjectGraphResult leftResult,
+        DotnetWatchProjectGraphResult rightResult) =>
+        [.. leftResult.Projects.Keys.Intersect(rightResult.Projects.Keys, PathComparer).Order(PathComparer)];
 
     private static DotnetWatchProjectGraphResult NormalizeGraph(DotnetWatchProjectGraphResult graph, string root)
     {
@@ -251,9 +399,9 @@ internal static class DotnetWatchProjectGraph
         path.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
 
     private static bool IsRefreshMetadata(string name) =>
-        name.Equals("MSBuildStartupDirectory", StringComparison.OrdinalIgnoreCase) ||
         name.Equals("CompileItems", StringComparison.OrdinalIgnoreCase) ||
-        name.Equals("PackageReferences", StringComparison.OrdinalIgnoreCase);
+        name.Equals("PackageReferences", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("DefineConstants", StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateSdkOverrides(IReadOnlyDictionary<string, string> environment, string sdkDirectory, string muxer, string version)
     {

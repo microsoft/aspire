@@ -32,12 +32,20 @@ public class ServerHostTests
     [Fact]
     public async Task ReportsALaunchFailure()
     {
-        var missing = Path.Combine(Path.GetTempPath(), $"aspire-watch-missing-{Guid.NewGuid():N}");
+        var directory = Directory.CreateTempSubdirectory("aspire-watch-host-test-");
+        try
+        {
+            var missing = Path.Combine(directory.FullName, "missing");
 
-        var (exitCode, _, stderr) = await RunHostAsync([DotnetWatchHostProtocol.ServerCommand, "--", missing]);
+            var (exitCode, _, stderr) = await RunHostAsync([DotnetWatchHostProtocol.ServerCommand, "--", missing]);
 
-        Assert.Equal(ServerHost.ExitLaunchFailed, exitCode);
-        Assert.Contains("dotnet-watch server:", stderr);
+            Assert.Equal(ServerHost.ExitLaunchFailed, exitCode);
+            Assert.Contains("dotnet-watch server:", stderr);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -74,24 +82,31 @@ public class ServerHostTests
     public async Task StopSignalEndsTheWatcherTreeAfterTheGracePeriod()
     {
         // A watcher that ignores SIGTERM (as it does under DCP) with a child that would outlive it.
-        var pidFile = Path.Combine(Path.GetTempPath(), $"aspire-watch-host-{Guid.NewGuid():N}.pid");
-        using var host = StartHost(
-            [DotnetWatchHostProtocol.ServerCommand, "--", "/bin/sh", "-c", $"trap '' TERM; sleep 60 & echo $! > {pidFile}; wait"],
-            new() { [DotnetWatchHostProtocol.ShutdownGraceVariable] = "200" });
+        var directory = Directory.CreateTempSubdirectory("aspire-watch-host-test-");
         try
         {
-            var childId = await ReadPidAsync(pidFile);
+            var pidFile = Path.Combine(directory.FullName, "child.pid");
+            using var host = StartHost(
+                [DotnetWatchHostProtocol.ServerCommand, "--", "/bin/sh", "-c", $"trap '' TERM; sleep 60 & echo $! > {pidFile}; wait"],
+                new() { [DotnetWatchHostProtocol.ShutdownGraceVariable] = "200" });
+            try
+            {
+                var childId = await ReadPidAsync(pidFile);
 
-            Process.Start("kill", ["-TERM", host.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)])!.WaitForExit();
-            await host.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                Process.Start("kill", ["-TERM", host.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)])!.WaitForExit();
+                await host.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
 
-            Assert.Equal(0, host.ExitCode);
-            await WaitUntilGoneAsync(childId);
+                Assert.Equal(0, host.ExitCode);
+                await WaitUntilGoneAsync(childId);
+            }
+            finally
+            {
+                KillIfRunning(host);
+            }
         }
         finally
         {
-            File.Delete(pidFile);
-            KillIfRunning(host);
+            directory.Delete(recursive: true);
         }
     }
 
@@ -100,21 +115,28 @@ public class ServerHostTests
     public async Task KilledHostTakesTheWatcherTreeWithIt()
     {
         // SIGKILL can't be handled, so only the guardian (owner liveness + process group) cleans up.
-        var pidFile = Path.Combine(Path.GetTempPath(), $"aspire-watch-host-{Guid.NewGuid():N}.pid");
-        using var host = StartHost([DotnetWatchHostProtocol.ServerCommand, "--", "/bin/sh", "-c", $"sleep 60 & echo $! > {pidFile}; wait"]);
+        var directory = Directory.CreateTempSubdirectory("aspire-watch-host-test-");
         try
         {
-            var childId = await ReadPidAsync(pidFile);
+            var pidFile = Path.Combine(directory.FullName, "child.pid");
+            using var host = StartHost([DotnetWatchHostProtocol.ServerCommand, "--", "/bin/sh", "-c", $"sleep 60 & echo $! > {pidFile}; wait"]);
+            try
+            {
+                var childId = await ReadPidAsync(pidFile);
 
-            host.Kill();
-            await host.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+                host.Kill();
+                await host.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
 
-            await WaitUntilGoneAsync(childId);
+                await WaitUntilGoneAsync(childId);
+            }
+            finally
+            {
+                KillIfRunning(host);
+            }
         }
         finally
         {
-            File.Delete(pidFile);
-            KillIfRunning(host);
+            directory.Delete(recursive: true);
         }
     }
 
@@ -127,51 +149,6 @@ public class ServerHostTests
     public void ShutdownGraceDefaultsWhenInvalid(string? value, int expectedMilliseconds)
     {
         Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), ServerHost.GetShutdownGrace(value ?? ""));
-    }
-
-    [Fact]
-    [SkipOnPlatform(TestPlatforms.Windows, "Uses /bin/sh to create a process tree.")]
-    public async Task StopKillsTheWholeProcessTreeAfterTheGracePeriod()
-    {
-        // A parent that ignores SIGTERM (like the watcher under DCP) with a child that would outlive it.
-        var pidFile = Path.Combine(Path.GetTempPath(), $"aspire-watch-host-{Guid.NewGuid():N}.pid");
-        var startInfo = new ProcessStartInfo("/bin/sh")
-        {
-            ArgumentList = { "-c", $"trap '' TERM; sleep 60 & echo $! > {pidFile}; wait" },
-            UseShellExecute = false,
-        };
-        using var process = Process.Start(startInfo)!;
-        try
-        {
-            var deadline = DateTime.UtcNow.AddSeconds(10);
-            while (!File.Exists(pidFile) || new FileInfo(pidFile).Length == 0)
-            {
-                Assert.True(DateTime.UtcNow < deadline, "child did not start");
-                await Task.Delay(50);
-            }
-
-            var childId = int.Parse(File.ReadAllText(pidFile).Trim(), System.Globalization.CultureInfo.InvariantCulture);
-            var stopwatch = Stopwatch.StartNew();
-
-            await ServerHost.StopAsync(process, TimeSpan.FromMilliseconds(200));
-
-            Assert.True(process.HasExited);
-            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), stopwatch.Elapsed.ToString());
-            deadline = DateTime.UtcNow.AddSeconds(5);
-            while (IsRunning(childId))
-            {
-                Assert.True(DateTime.UtcNow < deadline, $"child {childId} survived");
-                await Task.Delay(50);
-            }
-        }
-        finally
-        {
-            File.Delete(pidFile);
-            if (!process.HasExited)
-            {
-                process.Kill(entireProcessTree: true);
-            }
-        }
     }
 
     private static string GetHostPath()

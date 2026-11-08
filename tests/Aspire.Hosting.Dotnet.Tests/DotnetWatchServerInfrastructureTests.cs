@@ -251,6 +251,20 @@ public class DotnetWatchServerInfrastructureTests(ITestOutputHelper outputHelper
         }
     }
 
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public void CoreFxPipePathValidationAcceptsShortPathsAndRejectsOversizedPaths()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "CoreFx uses named pipes instead of Unix sockets.");
+
+        DotnetWatchServerInfrastructure.ValidateCoreFxPipePath("/tmp/aspw-test/t0");
+        var exception = Assert.Throws<DistributedApplicationException>(() =>
+            DotnetWatchServerInfrastructure.ValidateCoreFxPipePath(
+                "/tmp/" + new string('x', OperatingSystem.IsMacOS() ? 64 : 72)));
+
+        Assert.Contains("Unix socket limit", exception.Message, StringComparison.Ordinal);
+    }
+
     private static string CreateProject(string root)
     {
         var path = Path.Combine(root, "Service", "Service.csproj");

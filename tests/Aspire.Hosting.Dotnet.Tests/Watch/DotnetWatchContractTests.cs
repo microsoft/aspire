@@ -133,7 +133,7 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
     /// <summary>The notices <c>aspire run --watch</c> derives from the status events of the edit lifecycle.</summary>
     internal static IReadOnlyList<WatchNotice> Interpret(WatchServerHarness harness, string name)
     {
-        var interpreter = new DotnetWatchEventInterpreter([(harness.ProjectPath, name)]);
+        var interpreter = new DotnetWatchEventInterpreter([(harness.ProjectPath, name)], "dotnet-watch");
         var notices = new List<WatchNotice>();
         foreach (var status in harness.Observations.Where(o => o.Kind == WatchObservationKind.Status).Select(o => o.Status))
         {
@@ -154,9 +154,9 @@ public class DotnetWatchContractTests(ITestOutputHelper output)
         {
             (WatchNoticeKind.BuildFailed, "❌ Initial build failed: "),
             (WatchNoticeKind.Watching, "✅ Build succeeded. 👀 Watching contract"),
-            (WatchNoticeKind.HotReloadApplied, "🔥 Hot reload processed the change for contract."),
-            (WatchNoticeKind.HotReloadApplied, "🔥 Hot reload processed the change for contract."),
-            (WatchNoticeKind.HotReloadApplied, "🔥 Hot reload processed the change for contract."),
+            (WatchNoticeKind.HotReloadApplied, "⌚ The watcher processed the change for contract."),
+            (WatchNoticeKind.HotReloadApplied, "⌚ The watcher processed the change for contract."),
+            (WatchNoticeKind.HotReloadApplied, "⌚ The watcher processed the change for contract."),
             (WatchNoticeKind.Rebuilding, "⌚ Rebuilding contract"),
             (WatchNoticeKind.Restarting, "🔄 Restarting contract"),
             (WatchNoticeKind.Crashed, "💥 contract exited with code 42."),

@@ -27,6 +27,10 @@ public sealed class ProcessInvocationOptionsTests
             LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,
+            DisableExtensionLaunch = true,
+            DotNetExecutablePath = "/test/dotnet",
+            QueryTargetResults = true,
+            BackchannelConnectionReady = Task.CompletedTask,
             SuppressLogging = true,
             // Non-default: this property initializes to true, so false is the "changed" value.
             KillEntireProcessTreeOnCancel = false,

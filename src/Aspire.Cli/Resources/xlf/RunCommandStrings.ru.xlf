@@ -262,6 +262,11 @@
         <target state="new">This preview requires a single-targeted Debug AppHost build because the watcher host has no build-configuration or target-framework options.</target>
         <note />
       </trans-unit>
+      <trans-unit id="WatchAppHostExitedDuringStartup">
+        <source>The watched AppHost process exited during startup before its backchannel connected.{0}</source>
+        <target state="new">The watched AppHost process exited during startup before its backchannel connected.{0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="WatchAppHostFallback">
         <source>C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible C# service groups can still be watched.</source>
         <target state="new">C# AppHost watching is unavailable: {0} The AppHost will run normally; independently compatible C# service groups can still be watched.</target>
@@ -320,11 +325,6 @@
       <trans-unit id="WatchEnabledSummary">
         <source>Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</source>
         <target state="new">Combined watching requested (preview). Supported AppHosts and C# services will be watched; coverage diagnostics describe unavailable paths.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="WatchHandledByIde">
-        <source>The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</source>
-        <target state="new">The IDE runs this AppHost and owns its services' launch, change tracking and restarts, so --watch is not used. To use Aspire hot reload, run 'aspire run --watch' in a regular terminal.</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchNativeServerUnsupported">
