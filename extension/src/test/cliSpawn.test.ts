@@ -15,6 +15,7 @@ import { EnvironmentVariables } from '../utils/environment';
 import { createE2ePsFollowProcessTracker } from '../testing/e2eStateFileBridge';
 import { getPsFollowProcessLogPath, readPsFollowProcesses } from '../testing/psFollowProcessLog';
 
+import { useScopedFakeTimers } from './helpers/scopedFakeTimers';
 import { removeDirectorySafely } from './testHelpers';
 suite('spawnCliProcess tests', () => {
     test('records native ps followers before output and across extension-host tracker replacement', () => {
@@ -70,7 +71,7 @@ suite('spawnCliProcess tests', () => {
     for (const platform of ['linux', 'win32']) {
         test(`PID-less termination remains bounded without a confirmed close on ${platform}`, async () => {
             const platformStub = sinon.stub(process, 'platform').value(platform);
-            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            const clock = useScopedFakeTimers();
             const child = createTestChildProcess(4807);
             Object.defineProperty(child, 'pid', { value: undefined });
             child.kill.returns(false);
@@ -192,7 +193,7 @@ suite('spawnCliProcess tests', () => {
     test('force kills a POSIX process group after the grace period while its leader is alive', async () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');
         const processKillStub = sinon.stub(process, 'kill').returns(true);
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const childProcess = createTestChildProcess(4242);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -237,7 +238,7 @@ suite('spawnCliProcess tests', () => {
 
             return true;
         });
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const childProcess = createTestChildProcess(4343);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -278,7 +279,7 @@ suite('spawnCliProcess tests', () => {
     test('rejects when a POSIX process group remains alive after forced termination', async () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');
         const processKillStub = sinon.stub(process, 'kill').returns(true);
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const childProcess = createTestChildProcess(4595);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -322,7 +323,7 @@ suite('spawnCliProcess tests', () => {
                 }
                 return true;
             });
-            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            const clock = useScopedFakeTimers();
             const childProcess = createTestChildProcess(4596);
             const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
             const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -364,7 +365,7 @@ suite('spawnCliProcess tests', () => {
         const processKillStub = sinon.stub(process, 'kill');
         processKillStub.onFirstCall().returns(true);
         processKillStub.onSecondCall().throws(noSuchProcess);
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const childProcess = createTestChildProcess(4444);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -399,7 +400,7 @@ suite('spawnCliProcess tests', () => {
 
             return true;
         });
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const childProcess = createTestChildProcess(4545, 0);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
@@ -875,7 +876,7 @@ suite('spawnCliProcess tests', () => {
 
     test('rejects when taskkill does not complete within the bounded deadline', async () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const taskkillKill = sinon.stub().returns(true);
         const taskkillProcess = Object.assign(new EventEmitter(), { kill: taskkillKill });
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
@@ -907,7 +908,7 @@ suite('spawnCliProcess tests', () => {
 
     test('best-effort kills the leader but reports failure when taskkill cannot start', async () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
             taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
@@ -1056,7 +1057,7 @@ suite('spawnCliProcess tests', () => {
         // Windows denies TerminateProcess for a process that is already exiting, so a forced taskkill
         // that races a short-lived CLI command's own successful exit fails before Node observes the exit.
         const platformStub = sinon.stub(process, 'platform').value('win32');
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
             taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
@@ -1098,7 +1099,7 @@ suite('spawnCliProcess tests', () => {
 
     test('preserves a failed taskkill when the leader was terminated rather than finishing on its own', async () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
             taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
@@ -1132,7 +1133,7 @@ suite('spawnCliProcess tests', () => {
 
     test('rejects when a Windows child does not close after successful taskkill', async () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const taskkillProcess = Object.assign(new EventEmitter(), { kill: sinon.stub().returns(true) });
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(
             taskkillProcess as unknown as nodeChildProcess.ChildProcessWithoutNullStreams);
@@ -1172,7 +1173,7 @@ suite('spawnCliProcess tests', () => {
 
             return true;
         });
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const clock = useScopedFakeTimers();
         const childProcess = createTestChildProcess(4646);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
         const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
