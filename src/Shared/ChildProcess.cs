@@ -40,6 +40,7 @@ internal partial class ChildProcess : IChildProcess
     private long _lastActivityTimestamp;
     private DirectoryInfo? _completionDirectory;
     private string? _completionPath;
+    private int? _reportedExitCode;
 
     internal ChildProcess(
         ProcessStartInfo startInfo,
@@ -310,9 +311,18 @@ internal partial class ChildProcess : IChildProcess
         {
             return process.ExitCode;
         }
-        if (File.Exists(_completionPath))
+        // Root-exit observers race owner disposal, which deletes a private completion file.
+        // Read the report under the lifecycle lock so disposal captures it before deleting.
+        lock (_lifecycleLock)
         {
-            return int.Parse(File.ReadAllText(_completionPath), CultureInfo.InvariantCulture);
+            if (_reportedExitCode is null && File.Exists(_completionPath))
+            {
+                _reportedExitCode = int.Parse(File.ReadAllText(_completionPath), CultureInfo.InvariantCulture);
+            }
+            if (_reportedExitCode is { } reportedExitCode)
+            {
+                return reportedExitCode;
+            }
         }
         if (process.ExitCode == 0)
         {
@@ -569,7 +579,7 @@ internal partial class ChildProcess : IChildProcess
 
         if (process is null)
         {
-            _completionDirectory?.Delete(recursive: true);
+            DeleteCompletionDirectory();
             return;
         }
 
@@ -603,7 +613,27 @@ internal partial class ChildProcess : IChildProcess
         finally
         {
             process.Dispose();
-            _completionDirectory?.Delete(recursive: true);
+            DeleteCompletionDirectory();
+        }
+    }
+
+    private void DeleteCompletionDirectory()
+    {
+        lock (_lifecycleLock)
+        {
+            if (_completionDirectory is null)
+            {
+                return;
+            }
+            // Preserve a report written before teardown for observers that resume after deletion.
+            // A supervisor killed mid-write can leave a partial report; it never becomes the status.
+            if (_reportedExitCode is null && File.Exists(_completionPath)
+                && int.TryParse(File.ReadAllText(_completionPath), NumberStyles.Integer, CultureInfo.InvariantCulture, out var exitCode))
+            {
+                _reportedExitCode = exitCode;
+            }
+            _completionDirectory.Delete(recursive: true);
+            _completionDirectory = null;
         }
     }
 

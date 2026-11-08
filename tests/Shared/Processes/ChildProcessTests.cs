@@ -145,6 +145,36 @@ public class ChildProcessTests(ProcessTestFixture fixture)
         await process.DisposeAsync();
     }
 
+    [Fact]
+    public async Task OwnedTree_DisposalRacingRootExitObserverPreservesCommandStatus()
+    {
+        // ProcessScope observes root exit while its owner disposes on a disconnect
+        // (https://github.com/microsoft/aspire/issues/21940). Neither path may lose the
+        // reported status or fail cleanup because the other is using the completion file.
+        await Task.WhenAll(Enumerable.Range(0, 16).Select(async _ =>
+        {
+            for (var i = 0; i < 4; i++)
+            {
+                var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("argv"),
+                    new ChildProcessOptions
+                    {
+                        Lifetime = ChildProcessLifetime.OwnedTree,
+                        CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo
+                    });
+                await process.StartAsync(TestContext.Current.CancellationToken);
+                var rootExit = process.WaitForRootExitAsync(CancellationToken.None);
+                using (var supervisor = Process.GetProcessById(process.ProcessId))
+                {
+                    await supervisor.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+                }
+
+                await process.DisposeAsync();
+
+                Assert.Equal(0, await rootExit.WaitAsync(TimeSpan.FromSeconds(30)));
+            }
+        }));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(23)]
