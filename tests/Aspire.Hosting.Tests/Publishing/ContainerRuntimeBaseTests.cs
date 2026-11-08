@@ -531,6 +531,9 @@ public class ContainerRuntimeBaseTests
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException("This test runner supports only line execution.");
 
+        public IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(ProcessCommand command)
+            => throw new NotSupportedException("This test runner supports legacy execution until its callers are migrated.");
+
         public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
         {
             ArgumentLists.Add(processSpec.ArgumentList);

@@ -4,41 +4,13 @@
 namespace Aspire.Hosting.Dcp.Process;
 
 /// <summary>
-/// Runs external processes.
+/// Owns external process execution and cleanup for each invocation.
 /// </summary>
-internal interface IProcessRunner
+internal partial interface IProcessRunner
 {
     /// <summary>
-    /// Runs a process with the specified configuration.
+    /// Creates one pending invocation. The stream permits one enumerator acquisition, even if never advanced.
+    /// The first advance launches the process; cancellation or disposal aborts and joins execution.
     /// </summary>
-    (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec);
-
-    /// <summary>
-    /// Captures UTF-8 output and error text while sending exact input bytes followed by EOF.
-    /// </summary>
-    Task<ProcessCaptureResult> RunAndCaptureTextAsync(
-        string executablePath,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        ReadOnlyMemory<byte> standardInput = default,
-        CancellationToken cancellationToken = default);
-}
-
-/// <summary>
-/// Runs external processes by delegating to <see cref="ProcessUtil"/>.
-/// </summary>
-internal sealed class DefaultProcessRunner : IProcessRunner
-{
-    public (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
-        => ProcessUtil.Run(processSpec);
-
-    public Task<ProcessCaptureResult> RunAndCaptureTextAsync(
-        string executablePath,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        ReadOnlyMemory<byte> standardInput = default,
-        CancellationToken cancellationToken = default)
-        => ProcessUtil.RunAndCaptureTextAsync(executablePath, arguments, workingDirectory, environmentVariables, standardInput, cancellationToken);
+    IAsyncEnumerable<ProcessEvent<ReadOnlyMemory<byte>>> CreateExecution(ProcessCommand command);
 }
