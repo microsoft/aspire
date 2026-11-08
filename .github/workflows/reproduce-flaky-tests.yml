@@ -20,7 +20,8 @@ on:
 env:
   # Test project shortname (maps to tests/Aspire.{name}.Tests/ or tests/{name}.Tests/)
   # Examples: Hosting, Core, Dashboard, Components.Common, Cli.EndToEnd
-  TEST_PROJECT: "Hosting"
+  TEST_PROJECT: "Cli"
+  TEST_SOURCE_SHA: "b0bd522534d602be663948915084f4fb9e214de1"
 
   # Test filter arguments passed to dotnet test (after the -- separator).
   # Use quotes around wildcard patterns to prevent shell glob expansion.
@@ -28,18 +29,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true" --report-trx'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "ubuntu-latest,windows-latest,macos-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
   RUNNERS_PER_OS: "3"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -166,6 +167,32 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TEST_SOURCE_SHA }}
+
+      - name: Record source and runner provenance
+        shell: pwsh
+        run: |
+          $source = git --no-pager rev-parse HEAD
+          $tree = git --no-pager rev-parse 'HEAD^{tree}'
+          $status = @(git --no-pager status --porcelain)
+          if ($LASTEXITCODE -ne 0 -or $source -ne $env:TEST_SOURCE_SHA -or $status.Count -ne 0) {
+            throw "Unexpected test source or dirty checkout."
+          }
+          @{
+            source = $source
+            tree = $tree
+            status = $status
+            os = $env:RUNNER_OS
+            arch = $env:RUNNER_ARCH
+            worker = "${{ runner.name }}"
+            run_id = $env:GITHUB_RUN_ID
+            run_attempt = $env:GITHUB_RUN_ATTEMPT
+            job_index = "${{ matrix.index }}"
+            project = "${{ github.workspace }}/tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj"
+            filter = $env:TEST_FILTER
+          } | ConvertTo-Json | Set-Content -Encoding utf8 provenance.json
+          Get-Content provenance.json
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -254,6 +281,28 @@ jobs:
           /p:InstallBrowsersForPlaywright=false
           /p:RunQuarantinedTests=true
 
+      - name: Record SDK and installed runtimes
+        shell: pwsh
+        run: |
+          & "${{ env.DOTNET_SCRIPT }}" --info
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Shutdown build servers
+        run: ${{ env.DOTNET_SCRIPT }} build-server shutdown
+
+      - name: Check source before test invocation
+        shell: pwsh
+        run: |
+          $source = git --no-pager rev-parse HEAD
+          $tree = git --no-pager rev-parse 'HEAD^{tree}'
+          $status = @(git --no-pager status --porcelain --untracked-files=no)
+          if ($LASTEXITCODE -ne 0 -or $source -ne $env:TEST_SOURCE_SHA -or $status.Count -ne 0) {
+            throw "Test source changed during build."
+          }
+          @{ source = $source; tree = $tree; status = $status } |
+            ConvertTo-Json | Set-Content -Encoding utf8 postbuild-provenance.json
+          Get-Content postbuild-provenance.json
+
       - name: Run test iterations (Linux/macOS)
         if: runner.os != 'Windows'
         env:
@@ -270,25 +319,27 @@ jobs:
           for i in $(seq 1 "$ITERATIONS"); do
             echo "::group::Iteration $i/$ITERATIONS"
 
-            # Cleanup between iterations
-            rm -rf "${{ github.workspace }}/testresults" 2>/dev/null || true
-            pgrep -lf "dcp" 2>/dev/null | grep -E "\bdcp(\.exe|ctl)?\b" | awk '{print $1}' | while read pid; do
-              kill -9 "$pid" 2>/dev/null || true
-            done
             sleep 1
+
+            ${{ env.DOTNET_SCRIPT }} "${{ github.workspace }}/tools/scripts/Heartbeat.cs" 60 &
+            HEARTBEAT_PID=$!
 
             # Run test (capture output for zero-test detection)
             ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
             set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
             ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
+              /p:ContinuousIntegrationBuild=true \
+              --no-launch-profile \
               --no-restore \
               --no-build \
               -- \
-              --timeout 10m \
               --results-directory "${{ github.workspace }}/testresults" \
               ${{ env.TEST_FILTER }} \
               2>&1 | tee "$ITER_OUTPUT"
             RESULT=${PIPESTATUS[0]}
+            echo "$RESULT" > "${{ github.workspace }}/test-exit-code.txt"
+            kill "$HEARTBEAT_PID" 2>/dev/null || true
+            wait "$HEARTBEAT_PID" 2>/dev/null || true
             set -e
 
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
@@ -298,7 +349,6 @@ jobs:
                 RESULT=8
               fi
             fi
-            rm -f "$ITER_OUTPUT"
 
             if [ "$RESULT" -eq 0 ]; then
               echo "✅ Iteration $i: PASS"
@@ -331,6 +381,7 @@ jobs:
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Skip default quarantine/outerloop exclusion filters so the target test can run
           SkipDefaultTestFilters: true
+          UseSharedCompilation: false
         run: |
           $pass = 0
           $fail = 0
@@ -339,21 +390,27 @@ jobs:
           for ($i = 1; $i -le $iterations; $i++) {
             Write-Host "::group::Iteration $i/$iterations"
 
-            # Cleanup between iterations
-            Remove-Item -Recurse -Force "${{ github.workspace }}/testresults" -ErrorAction SilentlyContinue
-            Get-Process | Where-Object { $_.ProcessName -match '^dcp' } | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 1
+
+            $heartbeatProcess = Start-Process -FilePath "${{ env.DOTNET_SCRIPT }}" `
+              -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
+              -NoNewWindow -PassThru
 
             # Run test (capture output for zero-test detection)
             $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
             & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
+              /p:ContinuousIntegrationBuild=true `
+              --no-launch-profile `
               --no-restore `
               --no-build `
               -- `
-              --timeout 10m `
               --results-directory "${{ github.workspace }}/testresults" `
               ${{ env.TEST_FILTER }} *> $iterOutput
             $result = $LASTEXITCODE
+            Set-Content -Path "${{ github.workspace }}/test-exit-code.txt" -Value $result
+            if ($heartbeatProcess -and !$heartbeatProcess.HasExited) {
+              $heartbeatProcess | Stop-Process -Force -ErrorAction SilentlyContinue
+            }
             Get-Content $iterOutput
 
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.targets masks exit code 8)
@@ -364,7 +421,6 @@ jobs:
                 $result = 8
               }
             }
-            Remove-Item $iterOutput -ErrorAction SilentlyContinue
 
             if ($result -eq 0) {
               Write-Host "✅ Iteration ${i}: PASS"
@@ -389,13 +445,18 @@ jobs:
 
           if ($fail -gt 0) { exit 1 }
 
-      - name: Upload failure logs
-        if: failure()
+      - name: Upload validation evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
-          path: all-results/
-          if-no-files-found: ignore
+          name: results-${{ matrix.os }}-${{ matrix.index }}
+          path: |
+            testresults/
+            iter-output-*.log
+            provenance.json
+            postbuild-provenance.json
+            test-exit-code.txt
+          if-no-files-found: error
 
   results:
     if: ${{ always() && github.repository == 'microsoft/aspire' }}
