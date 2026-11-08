@@ -416,7 +416,11 @@ public class ResourcesLayoutTests : DashboardTestContext
         var endpoint = Assert.Single(row.QuerySelectorAll(".resource-row-endpoint-address"));
         Assert.Equal(DashboardUIHelpers.MaskQueryStringValues(address), endpoint.TextContent);
         Assert.Equal(endpoint.TextContent, endpoint.GetAttribute("data-tooltip"));
-        Assert.Equal("0", endpoint.GetAttribute("tabindex"));
+        // The URL itself opens the endpoint.
+        Assert.Equal("A", endpoint.TagName);
+        Assert.Equal(address, endpoint.GetAttribute("href"));
+        Assert.Equal("_blank", endpoint.GetAttribute("target"));
+        Assert.Equal("noreferrer noopener", endpoint.GetAttribute("rel"));
         var openEndpoint = row.QuerySelector("a.resource-row-primary-endpoint")!;
         Assert.Equal(address, openEndpoint.GetAttribute("href"));
         Assert.Equal("_blank", openEndpoint.GetAttribute("target"));
@@ -1944,6 +1948,43 @@ public class ResourcesLayoutTests : DashboardTestContext
         Render<Aspire.Dashboard.Components.Pages.Home>();
 
         Assert.Equal(expectedUrl, navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        Assert.Equal(resourceServiceEnabled ? ResourcesLayout.ResourceListHomeHistoryEntryState : null, navigationManager.HistoryEntryState);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public void HomeNavigation_OpensFullResourceListOnDesktop(bool isDesktop, bool expectFullCanvas)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: () => channel));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/resources", new NavigationOptions { HistoryEntryState = ResourcesLayout.ResourceListHomeHistoryEntryState });
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        Assert.Equal(expectFullCanvas, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal("http://localhost/resources", navigation.Uri);
+    }
+
+    [Fact]
+    public void ResourcesUrlWithoutHomeState_KeepsOverviewSummary()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: () => channel));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources");
+
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
     }
 
     [Theory]

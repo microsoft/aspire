@@ -67,6 +67,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _isDrawerOpen;
     private bool _isPaneFullCanvas;
     private string? _fullCanvasNavigation;
+
+    /// <summary>
+    /// History entry state for a navigation to the dashboard's home: the unscoped resources URL opened as the
+    /// full-width resource list rather than the overview summary.
+    /// </summary>
+    internal const string ResourceListHomeHistoryEntryState = "aspire-resource-list-home";
     private bool _animatePaneTransition;
     private bool _isPaneSelectionReveal;
     private Task? _paneInteractionsRegistration;
@@ -482,7 +488,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _startPaneSelectionReveal = _isPaneSelectionReveal ? location : null;
         _focusPaneSelectionReveal = null;
         _animatedPaneNavigation = null;
-        var showResourceList = restoringPageState || string.Equals(location, _fullCanvasNavigation, StringComparison.Ordinal);
+        var showResourceList = restoringPageState || string.Equals(location, _fullCanvasNavigation, StringComparison.Ordinal) ||
+            IsResourceListHomeNavigation(location);
         _isPaneFullCanvas = false;
         _fullCanvasNavigation = null;
         ClearPaneActivity();
@@ -654,6 +661,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string? GetLayoutStyle() => _paneWidth is { } width && ViewportInformation.IsDesktop
         ? string.Create(CultureInfo.InvariantCulture, $"--resource-pane-expanded-width: {width}px")
         : null;
+
+    // The home page is the full-width resource list, with its URLs, on desktop. The overview summary stays at the
+    // same URL and opens from the list's "All resources" row, so links to /resources keep showing the summary.
+    private bool IsResourceListHomeNavigation(string location)
+    {
+        if (!ViewportInformation.IsDesktop || !DashboardClient.IsEnabled ||
+            !string.Equals(NavigationManager.HistoryEntryState, ResourceListHomeHistoryEntryState, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var parsed = ParseLocation(NavigationManager.ToBaseRelativePath(location));
+        return parsed.Tab == ResourceTab.Overview && parsed.RouteResourceName is null && parsed.SelectedResourceNames.Count == 0;
+    }
 
     internal void SetResourceListVisible(bool visible)
     {

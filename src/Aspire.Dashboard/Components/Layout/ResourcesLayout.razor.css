@@ -2171,6 +2171,22 @@
     font-size: var(--resource-row-font-size);
 }
 
+/* The endpoint URL is a link in the wide list, in the link colour, so the app's URLs are one click away. */
+a.resource-row-endpoint-link {
+    color: var(--colorBrandForeground1);
+    text-decoration: none;
+}
+
+a.resource-row-endpoint-link:hover {
+    text-decoration: underline;
+}
+
+a.resource-row-endpoint-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+    border-radius: 4px;
+}
+
 .resource-row-wide-metadata .resource-row-start-time {
     display: flex;
     height: var(--resource-row-line-height);

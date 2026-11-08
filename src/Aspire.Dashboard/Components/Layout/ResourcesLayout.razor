@@ -1076,9 +1076,24 @@
                                 {
                                     <span class="resource-row-endpoint-name" tabindex="0" data-tooltip="@friendlyName">@friendlyName</span>
                                 }
-                                <span class="resource-row-endpoint-address"
-                                      tabindex="0"
-                                      data-tooltip="@maskedAddress">@maskedAddress</span>
+                                @if (url.Url is { } endpointHref)
+                                {
+                                    @* The URL itself is the link: getting to the app's URLs is a main job of this list. *@
+                                    <a class="resource-row-endpoint-address resource-row-endpoint-link"
+                                       href="@endpointHref"
+                                       target="_blank"
+                                       rel="noreferrer noopener"
+                                       data-tooltip="@maskedAddress"
+                                       data-tooltip-positioning="above"
+                                       @onclick:stopPropagation="true"
+                                       @onkeydown:stopPropagation="true">@maskedAddress</a>
+                                }
+                                else
+                                {
+                                    <span class="resource-row-endpoint-address"
+                                          tabindex="0"
+                                          data-tooltip="@maskedAddress">@maskedAddress</span>
+                                }
                             </div>
                         }
                     </div>

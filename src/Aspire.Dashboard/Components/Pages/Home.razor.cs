@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Pages;
 
 /// <summary>
-/// The root URL. It redirects to the resources, with all resources selected, whose overview summarizes the app.
+/// The root URL. It redirects to the resources, with all resources selected, shown as the full resource list.
 /// </summary>
 /// <remarks>
 /// The root URL used to host the resources page. Links created by older tools, such as
@@ -29,9 +29,14 @@ public sealed partial class Home : ComponentBase
 
     protected override void OnInitialized()
     {
-        var url = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind)
-            ?? (DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : DashboardUrls.StructuredLogsUrl());
-        NavigationManager.NavigateTo(url, new NavigationOptions { ReplaceHistoryEntry = true });
+        var legacyUrl = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind);
+        var url = legacyUrl ?? (DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : DashboardUrls.StructuredLogsUrl());
+        NavigationManager.NavigateTo(url, new NavigationOptions
+        {
+            ReplaceHistoryEntry = true,
+            // The resources URL opens as the full resource list, the dashboard's home.
+            HistoryEntryState = legacyUrl is null && DashboardClient.IsEnabled ? Aspire.Dashboard.Components.Layout.ResourcesLayout.ResourceListHomeHistoryEntryState : null
+        });
     }
 
     internal static string? TryGetLegacyRedirectUrl(string? resourceName, string? viewKind)
