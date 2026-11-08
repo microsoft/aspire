@@ -43,6 +43,27 @@
                     <strong class="resource-filter-header-title">@Title</strong>
                 </div>
                 <div class="resource-filter-body">
+                    @if (Kinds?.Invoke() is { Count: > 0 } kinds)
+                    {
+                        <section class="resource-filter-group resource-filter-kinds" aria-label="@Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneFilterShow)]">
+                            <div class="resource-filter-group-header resource-filter-kinds-header">
+                                <span class="resource-filter-group-name">@Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneFilterShow)]</span>
+                            </div>
+                            <div class="resource-filter-options">
+                                @foreach (var kind in kinds)
+                                {
+                                    <div class="resource-filter-option" @key="@($"kind:{kind.Id}")">
+                                        <FluentCheckbox Label="@kind.Label"
+                                                        Class="aspire-checkbox resource-filter-kind"
+                                                        data-kind="@kind.Id"
+                                                        @bind-Value:get="kind.IsShown"
+                                                        @bind-Value:set="@(value => SetKindAsync(kind, value))" />
+                                        <span class="resource-filter-count" aria-hidden="true">@kind.Count</span>
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
                     @foreach (var group in groups)
                     {
                         var options = group.Values.ToArray().OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).ToList();

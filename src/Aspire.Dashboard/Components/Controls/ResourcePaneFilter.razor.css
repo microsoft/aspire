@@ -205,3 +205,10 @@
     line-height: 18px;
     text-align: center;
 }
+
+/* "Show" isn't collapsible, so its header is a plain label rather than a button. */
+.resource-filter-kinds-header,
+.resource-filter-kinds-header:hover {
+    background: transparent;
+    cursor: default;
+}

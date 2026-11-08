@@ -412,6 +412,11 @@
         <target state="new">Reset</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneFilterShow">
+        <source>Show</source>
+        <target state="new">Show</target>
+        <note>Heading in the resource filter for the kinds of items the list shows: resources, parameters and telemetry sources</note>
+      </trans-unit>
       <trans-unit id="ResourcePaneGroupReorderUnavailable">
         <source>Clear search and filters, and try reordering groups again.</source>
         <target state="new">Clear search and filters, and try reordering groups again.</target>
@@ -437,21 +442,6 @@
         <target state="new">State</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneKindHide">
-        <source>Select to hide {0}</source>
-        <target state="new">Select to hide {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneKindShow">
-        <source>Select to show {0}</source>
-        <target state="new">Select to show {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneKindsLandmark">
-        <source>Types to show</source>
-        <target state="new">Types to show</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneLandmark">
         <source>Resources</source>
         <target state="new">Resources</target>
@@ -473,8 +463,8 @@
         <note>{0} is the moved resource name; {1} is the target resource name.</note>
       </trans-unit>
       <trans-unit id="ResourcePaneNoKindsHint">
-        <source>Turn on a type above to list it.</source>
-        <target state="new">Turn on a type above to list it.</target>
+        <source>Choose what to list under Show in the filter.</source>
+        <target state="new">Choose what to list under Show in the filter.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneNoKindsShown">

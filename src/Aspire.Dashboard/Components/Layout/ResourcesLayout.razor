@@ -50,6 +50,7 @@
                                         Title="@filterTitle"
                                         Groups="@GetFilterGroups"
                                         Resources="@GetFilterCountResources"
+                                        Kinds="@GetFilterKinds"
                                         @* The popover stays open when a value changes. Handling the callback re-renders the pane. *@
                                         OnChanged="@(() => Task.CompletedTask)" />
                     <AspireMenuButton MenuButtonId="@GroupingButtonId"
@@ -75,23 +76,6 @@
                                   aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClose)]" />
                 }
             </div>
-
-            @if (_isLoaded && DashboardClient.IsEnabled)
-            {
-                var allResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
-                var allResourceCount = allResources.Count(r => !r.IsParameter);
-                var allParameterCount = allResources.Count(r => r.IsParameter);
-
-                @* The toggles are outside the scrolling list, so a scrollbar appearing or leaving never changes their
-                   width or layout. They decide what the list shows and what "all resources" covers. *@
-                <div class="resource-pane-kinds">
-                    <div class="resource-kind-toggles" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneKindsLandmark)]">
-                        @KindToggle(ResourcePaneKind.Resources, allResourceCount, new Icons.Regular.Size20.AppFolder(), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)])
-                        @KindToggle(ResourcePaneKind.Parameters, allParameterCount, new Icons.Regular.Size20.Key(), Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)])
-                        @KindToggle(ResourcePaneKind.TelemetrySources, _telemetryOnlyResources.Count, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
-                    </div>
-                </div>
-            }
 
             <nav class="resource-pane-list @(IsCompact ? "density-compact" : IsSpacious ? "density-spacious" : null)"
                  data-reorder-enabled="@CanReorderResources.ToString().ToLowerInvariant()"
@@ -144,7 +128,7 @@
 
                 @if (_isLoaded && DashboardClient.IsEnabled && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
                 {
-                    @* Below the toggles, which are the way to bring items back when every kind is off. *@
+                    @* The filter's "Show" section is the way to bring items back when every kind is off. *@
                     <div class="resource-pane-message">
                         @(!_showResources && !_showParameters && !_showTelemetryOnlyResources
                             ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoKindsHint)]
@@ -391,7 +375,9 @@
                             <SectionOutlet SectionName="@TabToolbarSectionName" />
                         </div>
                     }
-                    @if (isDesktop && DetailParentUrl is { } parentUrl)
+                    @* The full resource table lives on the Overview tab, the dashboard's home. The data tabs don't close
+                       into it: their own back links (such as "Traces" on a trace) and the tabs cover navigation there. *@
+                    @if (isDesktop && !IsDataTab && DetailParentUrl is { } parentUrl)
                     {
                         <DetailPageCloseButton ParentUrl="@parentUrl" OnClose="@(() => CloseDetailAsync(parentUrl))" />
                     }
@@ -597,28 +583,6 @@
         </div>
     };
 
-    private RenderFragment KindToggle(ResourcePaneKind kind, int count, Icon icon, string fullLabel) => __builder =>
-    {
-        var isOn = IsKindShown(kind);
-        var countText = kind switch
-        {
-            ResourcePaneKind.Resources => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], count),
-            ResourcePaneKind.Parameters => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountSingular) : nameof(Dashboard.Resources.Layout.ResourcePaneParameterCountPlural)], count),
-            _ => string.Format(CultureInfo.CurrentCulture, Loc[count == 1 ? nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular) : nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural)], count)
-        };
-
-        @* Icon-only, like the layout switcher. The name and count are the tooltip and the accessible description. The segments are the same size on or off, so toggling never moves the list below. *@
-        <button type="button"
-                class="resource-kind-toggle @(isOn ? "on" : null)"
-                aria-pressed="@(isOn ? "true" : "false")"
-                aria-label="@fullLabel"
-                aria-description="@countText"
-                data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[isOn ? nameof(Dashboard.Resources.Layout.ResourcePaneKindHide) : nameof(Dashboard.Resources.Layout.ResourcePaneKindShow)], countText)"
-                data-tooltip-positioning="above"
-                @onclick="@(() => ToggleKindAsync(kind))">
-            <FluentIcon Value="@icon" Width="20px" Color="Color.Custom" CustomColor="currentColor" />
-        </button>
-    };
     private RenderFragment RenderPaneCounts(int resourceCount, int parameterCount, int telemetrySourceCount) => __builder =>
     {
         <span class="resource-pane-counts" aria-hidden="true">

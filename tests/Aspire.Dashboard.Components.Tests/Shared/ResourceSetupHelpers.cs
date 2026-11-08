@@ -32,6 +32,17 @@ internal static class ResourceSetupHelpers
         component.InvokeAsync(() => layout.SetResourceListVisible(visible)).GetAwaiter().GetResult();
     }
 
+    // The kinds of items the pane lists are switched in the filter's "Show" section. Tests switch them through the
+    // same callbacks the filter's checkboxes use, without opening the popover.
+    public static IReadOnlyList<ResourcePaneFilter.FilterKind> GetFilterKinds<T>(IRenderedComponent<T> component) where T : class, IComponent =>
+        component.FindComponent<ResourcePaneFilter>().Instance.Kinds!();
+
+    public static void ToggleFilterKind<T>(IRenderedComponent<T> component, string label) where T : class, IComponent
+    {
+        var kind = GetFilterKinds(component).Single(k => k.Label == label);
+        component.InvokeAsync(kind.ToggleAsync).GetAwaiter().GetResult();
+    }
+
     public static void SetupResourceOverview(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient,
         Action<IServiceCollection>? configureServices = null)
     {

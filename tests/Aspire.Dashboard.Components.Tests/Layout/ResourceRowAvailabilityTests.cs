@@ -299,7 +299,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         if (appModelEnabled)
         {
-            await cut.Find(".resource-kind-toggle[aria-label='Telemetry sources']").ClickAsync();
+            ResourceSetupHelpers.ToggleFilterKind(cut, "Telemetry sources");
         }
         if (addCollisionAfterRender)
         {

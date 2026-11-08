@@ -1490,6 +1490,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             key => string.IsNullOrEmpty(key) ? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)] : key)
     ];
 
+    // The kinds of items the list shows. They're in the filter's "Show" section; telemetry-only sources start hidden.
+    private IReadOnlyList<ResourcePaneFilter.FilterKind> GetFilterKinds()
+    {
+        var resources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
+        return
+        [
+            new(nameof(ResourcePaneKind.Resources), ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)],
+                resources.Count(r => !r.IsParameter), _showResources, IsShownByDefault: true, () => ToggleKindAsync(ResourcePaneKind.Resources)),
+            new(nameof(ResourcePaneKind.Parameters), Loc[nameof(Resources.Layout.NavMenuParametersTab)],
+                resources.Count(r => r.IsParameter), _showParameters, IsShownByDefault: true, () => ToggleKindAsync(ResourcePaneKind.Parameters)),
+            new(nameof(ResourcePaneKind.TelemetrySources), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
+                _telemetryOnlyResources.Count, _showTelemetryOnlyResources, IsShownByDefault: false, () => ToggleKindAsync(ResourcePaneKind.TelemetrySources))
+        ];
+    }
+
     private IEnumerable<ResourceViewModel> GetFilterCountResources() =>
         _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources));
 
@@ -1703,6 +1718,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     // The density is set in the settings panel, which isn't part of this layout.
     private void OnViewPreferencesChanged() => InvokeAsync(StateHasChanged);
+
+    // Tabs that show a resource's data rather than the resource itself.
+    private bool IsDataTab => CurrentTab is ResourceTab.Console or ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
 
     private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
     private bool IsSpacious => ViewPreferences.Density == ResourceListDensity.Spacious;

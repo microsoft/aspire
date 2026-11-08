@@ -35,8 +35,21 @@ public partial class ResourcePaneFilter
     [Parameter, EditorRequired]
     public required string Title { get; set; }
 
+    /// <summary>
+    /// A kind of item the pane can show or hide as a whole, such as parameters. Unlike a group's values, a kind has a
+    /// default that isn't "shown" (telemetry-only sources start hidden), and showing or hiding one is handled by the
+    /// pane, which also remembers the choice.
+    /// </summary>
+    public sealed record FilterKind(string Id, string Label, int Count, bool IsShown, bool IsShownByDefault, Func<Task> ToggleAsync);
+
     [Parameter, EditorRequired]
     public required Func<IReadOnlyList<FilterGroup>> Groups { get; set; }
+
+    /// <summary>
+    /// Gets or sets the kinds of items listed first, under "Show".
+    /// </summary>
+    [Parameter]
+    public Func<IReadOnlyList<FilterKind>>? Kinds { get; set; }
 
     /// <summary>
     /// Gets or sets the resources that value counts are taken from, whatever the other filters hide.
@@ -50,7 +63,9 @@ public partial class ResourcePaneFilter
     [Parameter, EditorRequired]
     public required EventCallback OnChanged { get; set; }
 
-    private bool IsFiltered => Groups().Any(group => group.Values.Values.Any(isVisible => !isVisible));
+    private bool IsFiltered =>
+        Groups().Any(group => group.Values.Values.Any(isVisible => !isVisible)) ||
+        (Kinds?.Invoke() ?? []).Any(kind => kind.IsShown != kind.IsShownByDefault);
 
     private void TogglePopover() => _isOpen = !_isOpen;
 
@@ -116,8 +131,21 @@ public partial class ResourcePaneFilter
         await OnChanged.InvokeAsync();
     }
 
+    private static async Task SetKindAsync(FilterKind kind, bool isShown)
+    {
+        if (kind.IsShown != isShown)
+        {
+            await kind.ToggleAsync();
+        }
+    }
+
     private async Task ResetAsync()
     {
+        foreach (var kind in Kinds?.Invoke() ?? [])
+        {
+            await SetKindAsync(kind, kind.IsShownByDefault);
+        }
+
         foreach (var group in Groups())
         {
             foreach (var key in group.Values.Keys)
