@@ -43,33 +43,14 @@
                     <strong class="resource-filter-header-title">@Title</strong>
                 </div>
                 <div class="resource-filter-body">
-                    @if (Kinds?.Invoke() is { Count: > 0 } kinds)
-                    {
-                        <section class="resource-filter-group resource-filter-kinds" aria-label="@Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneFilterShow)]">
-                            <div class="resource-filter-group-header resource-filter-kinds-header">
-                                <span class="resource-filter-group-name">@Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneFilterShow)]</span>
-                            </div>
-                            <div class="resource-filter-options">
-                                @foreach (var kind in kinds)
-                                {
-                                    <div class="resource-filter-option" @key="@($"kind:{kind.Id}")">
-                                        <FluentCheckbox Label="@kind.Label"
-                                                        Class="aspire-checkbox resource-filter-kind"
-                                                        data-kind="@kind.Id"
-                                                        @bind-Value:get="kind.IsShown"
-                                                        @bind-Value:set="@(value => SetKindAsync(kind, value))" />
-                                        <span class="resource-filter-count" aria-hidden="true">@kind.Count</span>
-                                    </div>
-                                }
-                            </div>
-                        </section>
-                    }
                     @foreach (var group in groups)
                     {
                         var options = group.Values.ToArray().OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).ToList();
-                        var selectedCount = options.Count(pair => pair.Value);
+                        var trailingOptions = group.TrailingOptions ?? [];
+                        var optionCount = options.Count + trailingOptions.Count;
+                        var selectedCount = options.Count(pair => pair.Value) + trailingOptions.Count(option => option.IsVisible());
                         var isExpanded = IsExpanded(group, options);
-                        var allState = selectedCount == options.Count ? true : selectedCount == 0 ? false : (bool?)null;
+                        var allState = selectedCount == optionCount ? true : selectedCount == 0 ? false : (bool?)null;
 
                         <section class="resource-filter-group" @key="group.Id">
                             <button type="button"
@@ -80,7 +61,7 @@
                                 @if (allState != true)
                                 {
                                     @* Only a group that filters something says so. A group that shows everything stays quiet. *@
-                                    <span class="resource-filter-group-summary" data-tooltip="@($"{selectedCount}/{options.Count}")">@selectedCount/@options.Count</span>
+                                    <span class="resource-filter-group-summary" data-tooltip="@($"{selectedCount}/{optionCount}")">@selectedCount/@optionCount</span>
                                 }
                                 <span class="resource-filter-chevron @(isExpanded ? null : "collapsed")" aria-hidden="true">
                                     <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
@@ -110,6 +91,18 @@
                                             <span class="resource-filter-count" aria-hidden="true">@counts[group.Id].GetValueOrDefault(key)</span>
                                         </div>
                                     }
+                                    @foreach (var option in trailingOptions)
+                                    {
+                                        var isVisible = option.IsVisible();
+                                        <div class="resource-filter-option" @key="@($"{group.Id}:trailing:{option.Key}")">
+                                            <FluentCheckbox Label="@option.Label"
+                                                            Class="aspire-checkbox"
+                                                            data-tooltip="@option.Label"
+                                                            @bind-Value:get="isVisible"
+                                                            @bind-Value:set="@(value => SetOptionAsync(option, value))" />
+                                            <span class="resource-filter-count" aria-hidden="true">@option.GetCount()</span>
+                                        </div>
+                                    }
                                 </div>
                             }
                         </section>
@@ -118,9 +111,12 @@
 
                 @* Changes apply as they are made. OK only closes the popover, so there is always a way to dismiss it. *@
                 <div class="resource-filter-footer">
+                    @* aria-disabled as well as Disabled: the disabled attribute on the custom element isn't a native one, so
+                       accessibility checkers and assistive technology otherwise read the dimmed button as an active one. *@
                     <FluentButton Appearance="ButtonAppearance.Default"
                                   Class="resource-filter-reset"
                                   Disabled="@(!IsFiltered)"
+                                  aria-disabled="@(!IsFiltered ? "true" : null)"
                                   OnClick="@ResetAsync">
                         @Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneFilterReset)]
                     </FluentButton>

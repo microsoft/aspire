@@ -79,7 +79,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             {
                 await close.ClickAsync();
             }
-            await pane.Locator(".resource-select-all-toggle").ClickAsync();
+            await pane.Locator(".resource-row-all .resource-row-link").ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
             await Assertions.Expect(content).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas,.drawer-open")).ToHaveCountAsync(0);
@@ -182,7 +182,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                 await page.Locator(".resource-picker").ClickAsync();
             }
 
-            await page.Locator(".resource-select-all-toggle").ClickAsync();
+            await page.Locator(".resource-row-all .resource-row-link").ClickAsync();
 
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(expectedDestination) + "$"));
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
@@ -236,7 +236,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                 await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = message })).ToBeVisibleAsync();
                 await page.ReloadAsync();
                 await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = message })).ToBeVisibleAsync();
-                await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".resource-row-all.selected")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
             });
@@ -302,8 +302,10 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             await link.Locator(".resource-row-name").HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync(reason);
+            // Moving the pointer away dismisses the hover tooltip. (Escape would close the content on desktop, as its
+            // close button does, once no tooltip is shown.)
             await page.Mouse.MoveAsync(1, 1);
-            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToBeHiddenAsync();
             await page.Keyboard.PressAsync("Tab");
             await link.FocusAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();

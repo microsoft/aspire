@@ -43,6 +43,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         navigation.NavigateTo(url);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await UseComfortableDensityAsync(cut);
 
         var row = cut.Find("[data-resource-name='key']");
         var link = row.QuerySelector(".resource-row-link")!;
@@ -68,6 +69,65 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Assert.Null(cut.Find("[data-resource-name='key'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
     }
 
+    [Fact]
+    public async Task CompactDensity_UnavailableRowKeepsReasonWithoutBadge()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test-TestId")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/structuredlogs");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await UseComfortableDensityAsync(cut);
+        // Rows have no availability badge at any density: an unavailable row is muted instead.
+        Assert.Empty(cut.FindAll("[data-resource-name='test-TestId'] .resource-row-availability"));
+
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Compact));
+
+        // A single-line row stays muted and keeps the reason in its tooltip and accessible description.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
+        var row = cut.Find("[data-resource-name='test-TestId']");
+        var link = row.QuerySelector(".resource-row-link")!;
+        Assert.Empty(row.QuerySelectorAll(".resource-row-availability"));
+        Assert.True(row.ClassList.Contains("resource-row-unavailable"));
+        Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogs, link.GetAttribute("data-tooltip"));
+        Assert.Contains(Resources.Layout.ResourcePaneNoStructuredLogs, link.GetAttribute("aria-description"));
+    }
+
+    [Fact]
+    public async Task ClosedContent_ShowsEveryRowAvailableUntilAViewOpens()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test-TestId"), ModelTestHelpers.CreateResource("key", resourceType: KnownResourceTypes.Parameter)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/structuredlogs");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await UseComfortableDensityAsync(cut);
+        Assert.Equal(["test-TestId", "key"], GetUnavailableRows());
+
+        // Showing the full resource list leaves no view selected, so nothing is unavailable for it any more. The data
+        // tabs have no close button for it (the full list lives on the Overview tab), so the test opens it directly.
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Empty(GetUnavailableRows());
+        Assert.Empty(cut.FindAll(".resource-row-availability"));
+        Assert.Null(cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-tooltip"));
+
+        // Opening the view again shows which rows have nothing for it.
+        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-StructuredLogs"));
+        cut.Render();
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(["test-TestId", "key"], GetUnavailableRows());
+
+        IEnumerable<string?> GetUnavailableRows() =>
+            cut.FindAll(".resource-row.resource-row-unavailable").Select(row => row.GetAttribute("data-resource-name"));
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs, "/structuredlogs", "/structuredlogs/resource/test-TestId")]
     [InlineData(AspireDataType.Traces, "/traces", "/traces/resource/test-TestId")]
@@ -83,6 +143,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         navigation.NavigateTo(url);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await UseComfortableDensityAsync(cut);
         var tooltip = signal switch
         {
             AspireDataType.StructuredLogs => Resources.Layout.ResourcePaneNoStructuredLogs,
@@ -143,7 +204,8 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         navigation.NavigateTo(url);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        Assert.Null(cut.Find("[data-resource-name='test-TestId'] .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
+        await UseComfortableDensityAsync(cut);
+        Assert.Empty(cut.FindAll("[data-resource-name='test-TestId'] .resource-row-availability"));
         await cut.Find("[data-resource-name='test-TestId'] .resource-row-link").ClickAsync();
         cut.Render();
         cut.WaitForAssertion(() => Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames));
@@ -225,6 +287,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/traces/resource/cache");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await UseComfortableDensityAsync(cut);
 
         Assert.Equal(reportedSignal is null || reportAfterSpan, repository.GetResourceByCompositeName("cache")!.UninstrumentedPeer);
         Assert.False(cut.Find("[data-resource-name='cache']").ClassList.Contains("resource-row-unavailable"));
@@ -297,10 +360,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo("/structuredlogs");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        if (appModelEnabled)
-        {
-            ResourceSetupHelpers.ToggleFilterKind(cut, "Telemetry sources");
-        }
+        await UseComfortableDensityAsync(cut);
         if (addCollisionAfterRender)
         {
             await AddSourceAsync("api", "a-1");
@@ -338,6 +398,7 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         navigation.NavigateTo("/structuredlogs");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await UseComfortableDensityAsync(cut);
 
         Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogs, cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("data-tooltip"));
         Assert.Equal(Resources.Layout.ResourcePaneNoStructuredLogs, cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("data-resource-unavailable-reason"));
@@ -368,7 +429,14 @@ public class ResourceRowAvailabilityTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo(url);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await UseComfortableDensityAsync(cut);
 
         Assert.Equal(unavailable, cut.Find("[data-resource-name='test-TestId']").ClassList.Contains("resource-row-unavailable"));
     }
+
+    // The "No logs" and "Not applicable" badges are on the second line of a row, so these tests use a two-line
+    // density. The list starts compact, where an unavailable row is only muted (see
+    // CompactDensity_UnavailableRowKeepsReasonWithoutBadge). Set after loading, which applies stored preferences.
+    private Task UseComfortableDensityAsync(IRenderedComponent<ResourcesLayout> cut) =>
+        cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
 }

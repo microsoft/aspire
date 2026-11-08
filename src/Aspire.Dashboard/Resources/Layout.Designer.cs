@@ -187,15 +187,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Show.
-        /// </summary>
-        public static string ResourcePaneFilterShow {
-            get {
-                return ResourceManager.GetString("ResourcePaneFilterShow", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to a moment ago.
         /// </summary>
         public static string DashboardRunSelectMomentAgo {
@@ -709,6 +700,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Stopped.
+        /// </summary>
+        public static string ResourceHeaderStopped {
+            get {
+                return ResourceManager.GetString("ResourceHeaderStopped", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Hide resource list.
         /// </summary>
         public static string ResourcePaneClose {
@@ -1020,24 +1020,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcePaneFilterReset {
             get {
                 return ResourceManager.GetString("ResourcePaneFilterReset", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Choose what to list under Show in the filter..
-        /// </summary>
-        public static string ResourcePaneNoKindsHint {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoKindsHint", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Nothing shown.
-        /// </summary>
-        public static string ResourcePaneNoKindsShown {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoKindsShown", resourceCulture);
             }
         }
 

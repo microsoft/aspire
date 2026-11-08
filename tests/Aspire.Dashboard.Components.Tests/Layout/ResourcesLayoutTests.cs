@@ -53,6 +53,12 @@ public class ResourcesLayoutTests : DashboardTestContext
             : DashboardUrls.StructuredLogsUrl(selected ? "api" : null));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        if (appHostEnabled && !selected)
+        {
+            // The dashboard opens on the full-page list. "All resources" opens their overview next to the collapsed pane.
+            Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+            await cut.InvokeAsync(() => cut.Find(".resource-row-all .resource-row-link").Click());
+        }
 
         var picker = cut.Find("#resourcePanePickerButton");
         Assert.Equal(selected ? "api" : appHostEnabled ? "All resources" : "All sources", picker.TextContent.Trim());
@@ -360,6 +366,43 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-relationship-summary, .resource-row-dependencies, .resource-row-references"));
     }
 
+    [Fact]
+    public async Task RowTime_ShowsWhenAStoppedResourceStopped()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var started = new DateTime(2026, 11, 6, 10, 0, 0, DateTimeKind.Utc);
+        var stopped = started.AddHours(3);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, startTimeStamp: started),
+                ModelTestHelpers.CreateResource("worker", state: KnownResourceState.Exited, startTimeStamp: started, stopTimeStamp: stopped)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var clock = Assert.IsType<TestTimeProvider>(Services.GetRequiredService<BrowserTimeProvider>());
+        clock.UtcNow = new DateTimeOffset(stopped).AddMinutes(1);
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
+
+        // A two-line row shows the age after the state. A stopped resource's is how long ago it stopped, which says
+        // more than how long ago it started; the tooltip says which.
+        var workerTime = cut.Find("[data-resource-name='worker'] .resource-row-sidebar-start time");
+        Assert.Equal("1m ago", workerTime.TextContent);
+        Assert.Equal(stopped.ToString("O", System.Globalization.CultureInfo.InvariantCulture), workerTime.GetAttribute("datetime"));
+        Assert.Equal($"Stopped 1 minute ago ({FormatHelpers.FormatDateTime(clock, stopped)})", workerTime.GetAttribute("data-tooltip"));
+        Assert.Equal(workerTime.GetAttribute("data-tooltip"), workerTime.GetAttribute("aria-label"));
+        var apiTime = cut.Find("[data-resource-name='api'] .resource-row-sidebar-start time");
+        Assert.Equal($"Started 3h ago ({FormatHelpers.FormatDateTime(clock, started)})", apiTime.GetAttribute("data-tooltip"));
+
+        // The expanded list shows the same short age; the state beside it and the tooltip say which it is.
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        var wideWorkerTime = cut.Find("[data-resource-name='worker'] .resource-row-wide-metadata time");
+        Assert.Equal("1m ago", wideWorkerTime.TextContent.Trim());
+        Assert.Equal($"Stopped 1 minute ago ({FormatHelpers.FormatDateTime(clock, stopped)})", wideWorkerTime.GetAttribute("data-tooltip"));
+        Assert.Equal("3h ago", cut.Find("[data-resource-name='api'] .resource-row-wide-metadata time").TextContent.Trim());
+    }
+
     [Theory]
     [InlineData(ResourceListDensity.Compact)]
     [InlineData(ResourceListDensity.Comfortable)]
@@ -407,31 +450,33 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
+        var compact = density is ResourceListDensity.Compact;
         Assert.Empty(cut.FindAll(".resource-row-wide-metadata"));
-        Assert.Equal("Running", cut.Find("[data-resource-name='api'] .state-dot + span").TextContent);
-        Assert.Equal("10m ago", cut.Find("[data-resource-name='api'] time").TextContent);
-        Assert.Equal("Finished", cut.Find("[data-resource-name='finished'] .state-dot + span").TextContent);
+        Assert.Equal("Running", GetStateText(cut.Find("[data-resource-name='api']")));
+        // A compact sidebar row is a single line without the start time. The expanded list below has a column for it.
+        Assert.Equal(compact ? [] : ["10m ago"], cut.FindAll("[data-resource-name='api'] time").Select(time => time.TextContent));
+        Assert.Equal("Finished", GetStateText(cut.Find("[data-resource-name='finished']")));
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         ResourceSetupHelpers.ToggleResourceList(cut);
 
         var row = cut.Find("[data-resource-name='api']");
-        var endpoint = Assert.Single(row.QuerySelectorAll(".resource-row-endpoint-address"));
-        Assert.Equal(DashboardUIHelpers.MaskQueryStringValues(address), endpoint.TextContent);
-        Assert.Equal(endpoint.TextContent, endpoint.GetAttribute("data-tooltip"));
-        // The URL itself opens the endpoint.
-        Assert.Equal("A", endpoint.TagName);
-        Assert.Equal(address, endpoint.GetAttribute("href"));
-        Assert.Equal("_blank", endpoint.GetAttribute("target"));
-        Assert.Equal("noreferrer noopener", endpoint.GetAttribute("rel"));
+        // The URLs column is the resources grid's: the URL opens in a new tab, and the tcp address isn't a link but takes
+        // focus for its tooltip. Addresses are masked. The internal and inactive URLs aren't listed.
+        var urls = row.QuerySelector(".resource-row-endpoints .url-container")!;
+        var link = Assert.Single(urls.QuerySelectorAll("a"));
+        Assert.Equal(address, link.GetAttribute("href"));
+        Assert.Equal("_blank", link.GetAttribute("target"));
+        Assert.Equal("Friendly API", link.TextContent);
+        Assert.Equal(DashboardUIHelpers.MaskUrlForDisplay(address), link.GetAttribute("data-tooltip"));
+        var tcp = Assert.Single(urls.QuerySelectorAll("span[tabindex='0']"));
+        Assert.Equal(DashboardUIHelpers.MaskUrlForDisplay(tcpAddress), tcp.TextContent);
         var openEndpoint = row.QuerySelector("a.resource-row-primary-endpoint")!;
         Assert.Equal(address, openEndpoint.GetAttribute("href"));
         Assert.Equal("_blank", openEndpoint.GetAttribute("target"));
         Assert.Equal("noreferrer noopener", openEndpoint.GetAttribute("rel"));
-        Assert.Equal("Friendly API", row.QuerySelector(".resource-row-endpoint-name")!.TextContent);
-        Assert.Equal("+1", row.QuerySelector(".resource-row-more-endpoints")!.TextContent.Trim());
         var health = row.QuerySelector(".resource-row-health")!;
         Assert.Empty(row.QuerySelectorAll(".resource-row-health-status"));
-        Assert.Equal("Running", row.QuerySelector(".state-dot + span")!.TextContent);
+        Assert.Equal("Running", GetStateText(row));
         Assert.Contains("Healthy", row.QuerySelector(".resource-row-link")!.GetAttribute("aria-description"));
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         var time = health.QuerySelector(".resource-row-start-time time")!;
@@ -446,16 +491,21 @@ public class ResourcesLayoutTests : DashboardTestContext
         var absent = cut.Find("[data-resource-name='missing'] .resource-row-wide-metadata");
         // A resource with no source still shows its type in the source column.
         Assert.Equal("Executable", absent.TextContent.Trim());
-        Assert.Empty(absent.QuerySelectorAll("time, .resource-row-endpoint-address"));
+        Assert.Empty(absent.QuerySelectorAll("time, .url-container"));
         var parameter = cut.Find("[data-resource-name='key'] .resource-row-wide-metadata");
         Assert.Equal(string.Empty, parameter.TextContent.Trim());
-        Assert.Empty(parameter.QuerySelectorAll("time, .resource-row-health-status, .resource-row-endpoint-address"));
+        Assert.Empty(parameter.QuerySelectorAll("time, .resource-row-health-status, .url-container"));
 
         clock.UtcNow = clock.UtcNow.AddMinutes(1);
         ResourceSetupHelpers.ToggleResourceList(cut);
         ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Equal("11m ago",
             cut.Find("[data-resource-name='api'] .resource-row-health time").TextContent.Trim()));
+
+        // Compact rows show the state as a dot that names it in its tooltip. The other densities spell it out.
+        string? GetStateText(AngleSharp.Dom.IElement resourceRow) => compact
+            ? resourceRow.QuerySelector(".resource-row-meta-state")!.GetAttribute("data-tooltip")
+            : resourceRow.QuerySelector(".state-dot + span")!.TextContent;
     }
 
     [Theory]
@@ -995,8 +1045,14 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("Telemetry sources", sourceRow.QuerySelector(".resource-row-kind-label")!.TextContent);
     }
 
-    [Fact]
-    public async Task AppHost_TelemetryOnlyResourcesAreHiddenUntilEnabled()
+    // The pane used to have a toggle for each kind of item, stored as a list such as "Resources,Parameters". Telemetry
+    // sources, off by default then, stay hidden for someone who never turned them on. Without a stored value they're
+    // listed, like everything the filter starts with.
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("Resources,Parameters", false)]
+    [InlineData("Resources,Parameters,TelemetrySources", true)]
+    public async Task AppHost_TelemetryOnlyResourcesAreListedUnlessFilteredOut(string? storedKinds, bool initiallyListed)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1004,27 +1060,31 @@ public class ResourcesLayoutTests : DashboardTestContext
             initialResources: [ModelTestHelpers.CreateResource("cache")],
             resourceChannelProvider: () => channel));
         await AddTelemetryAsync("browser");
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneKinds && storedKinds is not null ? (true, storedKinds) : (false, null);
+        var stored = new Dictionary<string, object?>();
+        storage.OnSetUnprotectedAsync = (key, value) => stored[key] = value;
 
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
-        Assert.Equal(["cache"], cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label")));
+        string[] listed = initiallyListed ? ["cache", "browser"] : ["cache"];
+        cut.WaitForAssertion(() => Assert.Equal(listed, cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label"))));
+        Assert.Equal(initiallyListed ? "1 resource, 1 telemetry source" : "1 resource", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
 
-        var telemetry = ResourceSetupHelpers.GetFilterKinds(cut).Single(k => k.Label == "Telemetry sources");
-        Assert.False(telemetry.IsShown);
-        Assert.False(telemetry.IsShownByDefault);
-        Assert.Equal(1, telemetry.Count);
+        // The filter's "Telemetry sources" option changes it, and the choice is remembered.
+        var filter = OpenFilter(cut);
+        var option = GetFilterCheckboxes(filter, "types").Single(box => box.Instance.Label == "Telemetry sources");
+        Assert.Equal(initiallyListed, option.Instance.Value);
+        await cut.InvokeAsync(() => option.Instance.ValueChanged.InvokeAsync(!initiallyListed));
 
-        ResourceSetupHelpers.ToggleFilterKind(cut, "Telemetry sources");
-
-        cut.WaitForAssertion(() => Assert.Equal(
-            ["cache", "browser"],
-            cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label"))));
-        Assert.Equal("1 resource, 1 telemetry source", cut.Find(".resource-pane-foot > span").GetAttribute("aria-label"));
+        string[] toggled = initiallyListed ? ["cache"] : ["cache", "browser"];
+        cut.WaitForAssertion(() => Assert.Equal(toggled, cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label"))));
+        Assert.Equal(initiallyListed ? string.Empty : "TelemetrySources", stored[BrowserStorageKeys.ResourcePaneKinds]);
     }
 
     [Fact]
-    public void AppHost_CountsResourcesAndParametersSeparately()
+    public async Task AppHost_CountsResourcesAndParametersSeparately()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1038,6 +1098,9 @@ public class ResourcesLayoutTests : DashboardTestContext
             resourceChannelProvider: () => channel));
 
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        // In the two-line densities a parameter row has no type: its kind is clear from its icon and section.
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
 
         cut.WaitForAssertion(() =>
         {
@@ -1046,9 +1109,6 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal("parameter", parameter.GetAttribute("data-resource-name"));
             Assert.Empty(parameter.QuerySelectorAll(".resource-row-type"));
             Assert.EndsWith("Parameter", parameter.QuerySelector(".resource-row-link")!.GetAttribute("aria-description"));
-            Assert.Equal(
-                [("Resources", 2), ("Parameters", 1), ("Telemetry sources", 0)],
-                ResourceSetupHelpers.GetFilterKinds(cut).Select(kind => (kind.Label, kind.Count)));
             var countSummary = cut.Find(".resource-pane-foot > span");
             Assert.Equal("img", countSummary.GetAttribute("role"));
             Assert.Equal("2 resources, 1 parameter", countSummary.GetAttribute("aria-label"));
@@ -1107,7 +1167,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task CompactDensity_PreservesIdentityStatusAndPersistenceWithoutSidebarType()
+    public async Task CompactDensity_ShowsOneLineWithTypeAndStateColumns()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1121,20 +1181,107 @@ public class ResourcesLayoutTests : DashboardTestContext
                 })
             ], resourceChannelProvider: () => channel));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name] .resource-row-sub").Count));
-        Assert.Empty(cut.FindAll(".resource-row-meta"));
+
+        // The list starts compact.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
+        AssertCompactRows();
 
         // The setting applies right away, without reloading the page.
-        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Compact));
-
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Comfortable));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name] .resource-row-sub").Count));
+        Assert.Empty(cut.FindAll(".resource-row-meta"));
+        await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Compact));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-compact")));
-        Assert.Equal(2, cut.FindAll("[data-resource-name] .resource-row-sub").Count);
-        Assert.Empty(cut.FindAll(".resource-row-type"));
+        AssertCompactRows();
         Assert.Empty(cut.FindAll("[data-resource-name='api'] .persistent-container-badge"));
         Assert.Single(cut.FindAll("[data-resource-name='cache'] .persistent-container-badge"));
+        Assert.Equal("Running; Project; Health state: Healthy", cut.Find("[data-resource-name='api'] .resource-row-link").GetAttribute("aria-description"));
+
+        // The expanded resource list keeps the same single-line identity next to its metadata columns.
         ResourceSetupHelpers.ToggleResourceList(cut);
-        Assert.Equal("Project", cut.Find("[data-resource-name='api'] .resource-row-type").TextContent);
-        Assert.Equal("Container (persistent)", cut.Find("[data-resource-name='cache'] .resource-row-type").TextContent);
+        AssertCompactRows();
+
+        // One line per resource: the name, then the type and state columns, with no second line of state text.
+        void AssertCompactRows()
+        {
+            Assert.Empty(cut.FindAll("[data-resource-name] .resource-row-sub"));
+            Assert.Equal("Project", Assert.Single(cut.FindAll("[data-resource-name='api'] .resource-row-meta .resource-row-type")).TextContent);
+            var cacheType = Assert.Single(cut.FindAll("[data-resource-name='cache'] .resource-row-meta .resource-row-type"));
+            Assert.Equal("Container (persistent)", cacheType.TextContent);
+            Assert.True(cacheType.ClassList.Contains("resource-row-type-persistent"));
+            Assert.Equal(["Running", "Running"],
+                cut.FindAll("[data-resource-name] .resource-row-meta-state").Select(state => state.GetAttribute("data-tooltip")));
+        }
+    }
+
+    [Fact]
+    public async Task SpaciousSidebarDetail_PrefersUnhealthyStatusThenEndpointThenSource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        const string address = "https://example.test/api?token=synthetic-secret&mode=preview";
+        const string tcpAddress = "tcp://example.test:5432?password=synthetic-secret";
+        const string credentialsAddress = "redis://:synthetic-secret@example.test:6379/?token=synthetic-secret#access_token=synthetic-secret";
+        var projectPath = Path.Combine("workspace", "MyFrontend.csproj");
+        UrlViewModel Url(string name, string url, string? displayName = null) =>
+            new(name, new Uri(url), false, false, displayName is null ? UrlDisplayPropertiesViewModel.Empty : new(displayName, 0));
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("unhealthy", state: KnownResourceState.Running, reportHealthStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+                    urls: [Url("https", address, "Friendly API")]),
+                ModelTestHelpers.CreateResource("named", state: KnownResourceState.Running, urls: [Url("https", address, "Friendly API")]),
+                ModelTestHelpers.CreateResource("unnamed", state: KnownResourceState.Running, urls: [Url("https", address)]),
+                // tcp:// can't be opened as a link, so it isn't the row's primary URL, but it's still the endpoint to show.
+                ModelTestHelpers.CreateResource("tcp", state: KnownResourceState.Running, urls: [Url("tcp", tcpAddress)]),
+                ModelTestHelpers.CreateResource("credentials", state: KnownResourceState.Running, urls: [Url("redis", credentialsAddress)]),
+                ModelTestHelpers.CreateResource("project", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, properties: new()
+                {
+                    [KnownProperties.Project.Path] = new(KnownProperties.Project.Path, Value.ForString(projectPath), false, null, 0, null, false)
+                }),
+                ModelTestHelpers.CreateResource("key", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: () => channel));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.Empty(cut.FindAll(".resource-row-detail"));
+
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Spacious));
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-spacious")));
+        // Query values, credentials and fragments can carry secrets. The detail masks query values and drops the
+        // others, as the resource overview does.
+        const string maskedAddress = "https://example.test/api?token=●●●●●●●●&mode=●●●●●●●●";
+        const string maskedTcpAddress = "tcp://example.test:5432?password=●●●●●●●●";
+        const string maskedCredentialsAddress = "redis://example.test:6379/?token=●●●●●●●●";
+
+        // An unhealthy status needs attention first, so it wins over the endpoint. It's short and already in the link's
+        // accessible description, so it doesn't take focus.
+        var unhealthy = GetDetail("unhealthy");
+        Assert.Equal("Unhealthy", unhealthy.TextContent.Trim());
+        Assert.Null(unhealthy.GetAttribute("tabindex"));
+
+        AssertFocusableDetail(GetDetail("named"), "Friendly API", maskedAddress, $"Friendly API: {maskedAddress}");
+        AssertFocusableDetail(GetDetail("unnamed"), maskedAddress, maskedAddress, $"https: {maskedAddress}");
+        AssertFocusableDetail(GetDetail("tcp"), maskedTcpAddress, maskedTcpAddress, $"tcp: {maskedTcpAddress}");
+        AssertFocusableDetail(GetDetail("credentials"), maskedCredentialsAddress, maskedCredentialsAddress, $"redis: {maskedCredentialsAddress}");
+        AssertFocusableDetail(GetDetail("project"), "MyFrontend.csproj", projectPath, $"Source: {projectPath}");
+        Assert.Empty(cut.FindAll("[data-resource-name='key'] .resource-row-detail"));
+
+        // The expanded list has endpoint and source columns instead.
+        ResourceSetupHelpers.ToggleResourceList(cut);
+        Assert.Empty(cut.FindAll(".resource-row-detail"));
+
+        AngleSharp.Dom.IElement GetDetail(string resourceName) =>
+            Assert.Single(cut.FindAll($"[data-resource-name='{resourceName}'] .resource-row-detail"));
+
+        static void AssertFocusableDetail(AngleSharp.Dom.IElement detail, string text, string tooltip, string label)
+        {
+            Assert.Equal(text, detail.TextContent.Trim());
+            Assert.Equal(tooltip, detail.GetAttribute("data-tooltip"));
+            Assert.Equal(label, detail.GetAttribute("aria-label"));
+            Assert.Equal("0", detail.GetAttribute("tabindex"));
+        }
     }
 
     [Fact]
@@ -1212,9 +1359,10 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
+        // "resource-tab-none" is the tab that's active while no view is shown selected. It's never displayed.
         cut.WaitForAssertion(() => Assert.Equal(
             ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible).Select(t => t.Instance.Id)));
+            cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible && t.Instance.Id != "resource-tab-none").Select(t => t.Instance.Id)));
         Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
         // The resources send no telemetry, so their telemetry tabs are flagged unavailable but stay enabled.
         Assert.DoesNotContain(cut.FindComponents<FluentTab>(), t => t.Instance.Disabled);
@@ -1454,7 +1602,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [InlineData(true, ResourceListDensity.Compact)]
     [InlineData(true, ResourceListDensity.Spacious)]
     [InlineData(false, ResourceListDensity.Comfortable)]
-    public async Task RowTerminal_SelectsOnlyItsResourceAndPreservesViewState(bool desktop, ResourceListDensity density)
+    public async Task RowMenuTerminal_SelectsOnlyItsResourceAndPreservesViewState(bool desktop, ResourceListDensity density)
     {
         var viewport = new ViewportInformation(IsDesktop: desktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var stop = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "Stop", iconVariant: IconVariant.Filled);
@@ -1479,15 +1627,15 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
 
-        var terminal = Assert.Single(cut.FindAll(".resource-row-terminal"));
-        Assert.Equal(terminalUrl, terminal.GetAttribute("href"));
-        Assert.Equal("Open terminal for shell", terminal.GetAttribute("aria-label"));
-        Assert.Equal("Open terminal for shell", terminal.GetAttribute("data-tooltip"));
-        Assert.Collection(terminal.ParentElement!.Children,
-            spacer => Assert.True(spacer.ClassList.Contains("resource-row-toggle-spacer")),
+        // The rail has the endpoint, the command and the menu, which has the terminal. A compact sidebar row puts the
+        // toggle, here its spacer, after the actions, so the tab order matches the screen. The other densities keep it
+        // first.
+        var rail = cut.Find("a.resource-row-primary-endpoint").ParentElement!.Children.ToList();
+        var spacer = density == ResourceListDensity.Compact ? rail[^1] : rail[0];
+        Assert.True(spacer.ClassList.Contains("resource-row-toggle-spacer"));
+        Assert.Collection(rail.Where(child => child != spacer),
             endpoint => Assert.True(endpoint.ClassList.Contains("resource-row-action-priority-0")),
-            shortcut => Assert.True(shortcut.ClassList.Contains("resource-row-action-priority-1")),
-            command => Assert.True(command.ClassList.Contains("resource-row-action-priority-2")),
+            command => Assert.True(command.ClassList.Contains("resource-row-action-priority-1")),
             menu => Assert.True(menu.ClassList.Contains("aspire-menu-button")));
 
         if (!desktop)
@@ -1496,17 +1644,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         }
 
-        // Modifier clicks on the shortcut must not invoke the row's multi-selection behavior.
-        await cut.InvokeAsync(() => cut.Find(".resource-row-terminal").Click(new Microsoft.AspNetCore.Components.Web.MouseEventArgs { CtrlKey = true }));
-        Assert.Equal("http://localhost" + terminalUrl, navigation.Uri);
-        cut.Render();
-        Assert.Equal(["shell"], cut.Instance.SelectedResourceNames);
-        Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
-        Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
-
-        // The narrow-pane overflow menu must have the same navigation semantics as the shortcut.
-        navigation.NavigateTo(initialUrl);
-        cut.Render();
+        // Opening the terminal from the row's menu selects only its resource and keeps the other URL state.
         var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for shell");
         var terminalItem = Assert.Single(menu.Instance.ItemsProvider(), item => item.Text == "Terminal");
         await cut.InvokeAsync(Assert.IsType<Func<Task>>(terminalItem.OnClick));
@@ -1514,10 +1652,11 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         Assert.Equal(["shell"], cut.Instance.SelectedResourceNames);
         Assert.Equal(ResourceTab.Terminal, cut.Instance.CurrentTab);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
     }
 
     [Fact]
-    public void RowTerminal_IsUnavailableInReadOnlyDashboards()
+    public void RowMenuTerminal_IsUnavailableInReadOnlyDashboards()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true, isReadOnly: true,
@@ -1526,7 +1665,6 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
-        Assert.Empty(cut.FindAll(".resource-row-terminal"));
         var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for shell");
         Assert.All(menu.Instance.ItemsProvider(), item => Assert.NotEqual("Terminal", item.Text));
         Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
@@ -1698,7 +1836,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task FilterKinds_HideAndShowEachKindOfItem()
+    public async Task Filter_ListsTelemetrySourcesAfterTheResourceTypes()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1712,37 +1850,38 @@ public class ResourcesLayoutTests : DashboardTestContext
         await AddTelemetryAsync("api");
         await AddTelemetryAsync("browser");
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
-
-        // Resources and parameters are shown, telemetry sources are hidden. The filter's "Show" section lists each kind
-        // with its count.
-        Assert.Equal(
-            [("Resources", 1, true), ("Parameters", 1, true), ("Telemetry sources", 1, false)],
-            ResourceSetupHelpers.GetFilterKinds(cut).Select(kind => (kind.Label, kind.Count, kind.IsShown)));
-        Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
-
-        ResourceSetupHelpers.ToggleFilterKind(cut, "Parameters");
-        cut.WaitForAssertion(() => Assert.Equal(["api"], cut.FindAll("[data-resource-name]").Select(e => e.GetAttribute("data-resource-name"))));
-        Assert.False(ResourceSetupHelpers.GetFilterKinds(cut).Single(k => k.Label == "Parameters").IsShown);
-        Assert.Equal(["api"], cut.Instance.GetScopeResourceNames());
-
-        ResourceSetupHelpers.ToggleFilterKind(cut, "Telemetry sources");
-        cut.WaitForAssertion(() => Assert.Equal(["api", "browser"], cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(e => e.TextContent.Trim())));
-        Assert.Equal(["Resources, Telemetry sources"], cut.FindAll(".resource-header-title").Select(e => e.TextContent.Trim()));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "parameter", "browser"], GetRowNames()));
         Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
 
-        ResourceSetupHelpers.ToggleFilterKind(cut, "Resources");
-        cut.WaitForAssertion(() => Assert.Equal(["browser"], cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(e => e.TextContent.Trim())));
-        Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+        // Telemetry sources aren't a resource type, so their option comes after the types, with its own count.
+        var filter = OpenFilter(cut);
+        var types = GetFilterCheckboxes(filter, "types");
+        Assert.Equal(["(All)", KnownResourceTypes.Container, KnownResourceTypes.Parameter, "Telemetry sources"], types.Select(box => box.Instance.Label));
+        Assert.Equal(["1", "1", "1"], filter.FindAll(".resource-filter-count").Select(count => count.TextContent));
+        Assert.True(cut.Find(".resource-filter-reset").HasAttribute("disabled"));
 
-        ResourceSetupHelpers.ToggleFilterKind(cut, "Telemetry sources");
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name")));
-        Assert.Equal("Nothing shown", cut.Find(".resource-header-title").TextContent.Trim());
-        Assert.Contains(Resources.Layout.ResourcePaneNoKindsHint, cut.Find(".resource-pane-message").TextContent);
+        // Hiding them takes them out of the list and out of what "all resources" covers.
+        await cut.InvokeAsync(() => types.Single(box => box.Instance.Label == "Telemetry sources").Instance.ValueChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "parameter"], GetRowNames()));
+        Assert.Equal(["api"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+        Assert.Equal("2/3", filter.Find(".resource-filter-group-summary").TextContent);
+        Assert.False(cut.Find(".resource-filter-reset").HasAttribute("disabled"));
+
+        // Parameters are a resource type, so the types filter them like the other resources.
+        types = GetFilterCheckboxes(filter, "types");
+        await cut.InvokeAsync(() => types.Single(box => box.Instance.Label == KnownResourceTypes.Parameter).Instance.ValueChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() => Assert.Equal(["api"], GetRowNames()));
+
+        // Reset shows everything again, telemetry sources included.
+        cut.Find(".resource-filter-reset").Click();
+        cut.WaitForAssertion(() => Assert.Equal(["api", "parameter", "browser"], GetRowNames()));
+        Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+
+        IEnumerable<string> GetRowNames() => cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(name => name.TextContent.Trim());
     }
 
     [Fact]
-    public void Landing_WithoutRememberedSelection_KeepsAllResourcesSelected()
+    public async Task Landing_WithoutRememberedSelection_ShowsAllResourcesInTheFullCanvasListWithNoTabSelected()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1752,16 +1891,100 @@ public class ResourcesLayoutTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
 
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-name]").Count));
+        // The dashboard opens on the list of all resources, filling the page, with no view open yet.
+        cut.WaitForAssertion(() => Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
+        Assert.Equal(2, cut.FindAll("[data-resource-name]").Count);
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
         var allRow = cut.Find(".resource-row-all");
         Assert.Equal("All resources", allRow.QuerySelector(".resource-row-name")!.TextContent.Trim());
         Assert.True(allRow.ClassList.Contains("selected"));
         Assert.Equal("page", allRow.QuerySelector(".resource-row-link")!.GetAttribute("aria-current"));
         Assert.Empty(cut.FindAll(".resource-row.selected[data-resource-name]"));
+        // No tab is shown selected, but the overview is kept as the tab to open for a selection.
+        Assert.Equal("resource-tab-none", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
+        Assert.Equal(DashboardUrls.ResourceOverviewUrl("api"), cut.Find("[data-resource-name='api'] .resource-row-link").GetAttribute("href"));
+
+        // FluentTabs reports a change of the current tab when it syncs with the active tab too, for example right after
+        // the content closes with that tab focused, so such a change doesn't open the content.
+        var overview = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
+        await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(overview));
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        // Clicking it, which the layout's script reports, opens it for all resources although the URL doesn't change.
+        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        cut.Render();
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
+        Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Landing_ShowsWhatTheBrowserTabLastShowed(bool contentOpen)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var stored = new Dictionary<string, object?> { [BrowserStorageKeys.ResourceContentOpen] = contentOpen };
+        var writes = new List<(string Key, object? Value)>();
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => stored.TryGetValue(key, out var value) ? (true, value) : (false, null),
+            OnSetAsync = (key, value) => writes.Add((key, value))
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        // The overview of all resources has the dashboard's landing URL, so reloading it shows the full-page list only
+        // when the list was what the browser tab showed. A link such as /graph stores the content as open too.
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        cut.WaitForAssertion(() => Assert.Equal(!contentOpen, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
+        Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
+        // What was read is already stored, so only the full-page list the dashboard lands on is written.
+        object?[] expectedWrites = contentOpen ? [] : [false];
+        cut.WaitForAssertion(() => Assert.Equal(expectedWrites,
+            writes.Where(write => write.Key == BrowserStorageKeys.ResourceContentOpen).Select(write => write.Value)));
+    }
+
+    [Fact]
+    public async Task Landing_RemembersWhetherTheContentIsOpenForTheBrowserTab()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var writes = new List<object?>();
+        var sessionStorage = new TestSessionStorage
+        {
+            OnSetAsync = (key, value) =>
+            {
+                if (key == BrowserStorageKeys.ResourceContentOpen)
+                {
+                    writes.Add(value);
+                }
+            }
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        // Nothing was open in the tab, so the dashboard opens on the full-page list, and remembers it. The content shown
+        // before the landing decided isn't remembered as open.
+        cut.WaitForAssertion(() => Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas")));
+        cut.WaitForAssertion(() => Assert.Equal([false], writes));
+
+        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        cut.WaitForAssertion(() => Assert.Equal([false, true], writes));
     }
 
     [Theory]
@@ -1817,7 +2040,6 @@ public class ResourcesLayoutTests : DashboardTestContext
         navigation.NavigateTo("/resources/api");
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        ResourceSetupHelpers.ToggleFilterKind(cut, "Telemetry sources");
         cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll(".resource-row:not(.resource-row-all)").Count));
 
         await cut.InvokeAsync(() => cut.Find(".resource-row-all .resource-row-link").Click());
@@ -1827,7 +2049,6 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-row.selected:not(.resource-row-all)"));
         Assert.Empty(cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link[aria-current]"));
         Assert.Empty(cut.Instance.SelectedResourceNames);
-        Assert.Null(cut.Instance.GetScopeResourceNames());
         Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
 
         await cut.InvokeAsync(() => cut.Find(".resource-row-kind-telemetry .resource-row-link").Click());
@@ -1965,22 +2186,6 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("http://localhost/resources", navigation.Uri);
     }
 
-    [Fact]
-    public void ResourcesUrlWithoutHomeState_KeepsOverviewSummary()
-    {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("api")],
-            resourceChannelProvider: () => channel));
-        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources");
-
-        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-
-        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-    }
-
     [Theory]
     [InlineData("/resources/catalogservice-old", "resources/catalogservice-new")]
     [InlineData("/resources?resource=catalogservice-old&resource=gone-old&resource=cache", "resources?resource=catalogservice-new&resource=cache")]
@@ -2112,7 +2317,9 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
 
-        Assert.Empty(cut.FindAll("[data-resource-name='cache'] .resource-row-type"));
+        // Only compact sidebar rows have a type column; the other densities show the start time instead.
+        Assert.Equal(density is ResourceListDensity.Compact ? [expectedType] : [],
+            cut.FindAll("[data-resource-name='cache'] .resource-row-type").Select(type => type.TextContent));
         Assert.Equal($"Running; {expectedType}; Health state: Healthy", cut.Find("[data-resource-name='cache'] .resource-row-link").GetAttribute("aria-description"));
         ResourceSetupHelpers.ToggleResourceList(cut);
         var type = cut.Find("[data-resource-name='cache'] .resource-row-type");
@@ -2337,7 +2544,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.Equal("true", cut.Find("#resourcePaneFilterButton").GetAttribute("aria-expanded"));
         Assert.Single(cut.FindAll(".resource-filter"));
-        Assert.Equal(["Show", "Resource types", "State", "Health state", "Tags"], cut.FindAll(".resource-filter-group-name").Select(name => name.TextContent.Trim()));
+        Assert.Equal(["Resource types", "State", "Health state", "Tags"], cut.FindAll(".resource-filter-group-name").Select(name => name.TextContent.Trim()));
     }
 
     [Theory]
@@ -2476,8 +2683,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         {
             Assert.False(cut.Instance.IsTelemetryPane);
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
-            Assert.Equal(["api"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
-            Assert.Equal([DashboardUrls.StructuredLogsUrl("api")],
+            // Telemetry sources are listed by default, so "all resources" covers browser too.
+            Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
+            Assert.Equal([DashboardUrls.StructuredLogsUrl("api"), DashboardUrls.StructuredLogsUrl("browser")],
                 cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("href")));
         });
 
@@ -2488,7 +2696,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.True(cut.Instance.IsTelemetryPane);
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             Assert.Equal(["browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
-            Assert.Equal(["/structuredlogs/resource/api"],
+            Assert.Equal(["/structuredlogs/resource/api", "/structuredlogs/resource/browser"],
                 cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("href")));
         });
         navigation.NavigateTo(DashboardUrls.AddTelemetryPane(DashboardUrls.TracesUrl("browser")));
@@ -2531,7 +2739,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Empty(cut.FindAll(".resource-pane-message"));
             Assert.Equal(["api"], cut.Instance.GetAllResourceNames());
             Assert.Empty(cut.Instance.GetSelectionTelemetryKeys(null)!);
-            Assert.Equal(3, ResourceSetupHelpers.GetFilterKinds(cut).Count);
+            Assert.Single(cut.FindAll(".resource-row-all"));
         });
     }
 

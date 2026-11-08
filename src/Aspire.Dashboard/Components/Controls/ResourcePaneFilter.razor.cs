@@ -27,7 +27,19 @@ public partial class ResourcePaneFilter
         string Header,
         ConcurrentDictionary<string, bool> Values,
         Func<ResourceViewModel, IEnumerable<string>> GetKeys,
-        Func<string, string>? GetText = null);
+        Func<string, string>? GetText = null,
+        IReadOnlyList<FilterOption>? TrailingOptions = null);
+
+    /// <summary>
+    /// An option listed after a group's values that isn't one of them, such as telemetry sources after the resource
+    /// types. It counts in the group's "All" option, summary and reset like the values do.
+    /// </summary>
+    public sealed record FilterOption(
+        string Key,
+        string Label,
+        Func<int> GetCount,
+        Func<bool> IsVisible,
+        Func<bool, Task> SetVisibleAsync);
 
     [Parameter, EditorRequired]
     public required string ButtonId { get; set; }
@@ -35,21 +47,8 @@ public partial class ResourcePaneFilter
     [Parameter, EditorRequired]
     public required string Title { get; set; }
 
-    /// <summary>
-    /// A kind of item the pane can show or hide as a whole, such as parameters. Unlike a group's values, a kind has a
-    /// default that isn't "shown" (telemetry-only sources start hidden), and showing or hiding one is handled by the
-    /// pane, which also remembers the choice.
-    /// </summary>
-    public sealed record FilterKind(string Id, string Label, int Count, bool IsShown, bool IsShownByDefault, Func<Task> ToggleAsync);
-
     [Parameter, EditorRequired]
     public required Func<IReadOnlyList<FilterGroup>> Groups { get; set; }
-
-    /// <summary>
-    /// Gets or sets the kinds of items listed first, under "Show".
-    /// </summary>
-    [Parameter]
-    public Func<IReadOnlyList<FilterKind>>? Kinds { get; set; }
 
     /// <summary>
     /// Gets or sets the resources that value counts are taken from, whatever the other filters hide.
@@ -63,9 +62,9 @@ public partial class ResourcePaneFilter
     [Parameter, EditorRequired]
     public required EventCallback OnChanged { get; set; }
 
-    private bool IsFiltered =>
-        Groups().Any(group => group.Values.Values.Any(isVisible => !isVisible)) ||
-        (Kinds?.Invoke() ?? []).Any(kind => kind.IsShown != kind.IsShownByDefault);
+    private bool IsFiltered => Groups().Any(group => group.Values.Values.Any(isVisible => !isVisible) || HidesTrailingOption(group));
+
+    private static bool HidesTrailingOption(FilterGroup group) => group.TrailingOptions?.Any(option => !option.IsVisible()) == true;
 
     private void TogglePopover() => _isOpen = !_isOpen;
 
@@ -88,7 +87,7 @@ public partial class ResourcePaneFilter
     private bool IsExpanded(FilterGroup group, List<KeyValuePair<string, bool>> options) =>
         _expandedOverrides.TryGetValue(group.Id, out var expanded)
             ? expanded
-            : s_defaultExpandedGroups.Contains(group.Id) || options.Any(pair => !pair.Value);
+            : s_defaultExpandedGroups.Contains(group.Id) || options.Any(pair => !pair.Value) || HidesTrailingOption(group);
 
     private void ToggleGroup(string groupId, bool isExpanded) => _expandedOverrides[groupId] = !isExpanded;
 
@@ -121,39 +120,38 @@ public partial class ResourcePaneFilter
         await OnChanged.InvokeAsync();
     }
 
+    private async Task SetOptionAsync(FilterOption option, bool isVisible)
+    {
+        await option.SetVisibleAsync(isVisible);
+        await OnChanged.InvokeAsync();
+    }
+
     private async Task SetAllAsync(FilterGroup group, bool isVisible)
+    {
+        await SetGroupAsync(group, isVisible);
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task ResetAsync()
+    {
+        foreach (var group in Groups())
+        {
+            await SetGroupAsync(group, isVisible: true);
+        }
+
+        await OnChanged.InvokeAsync();
+    }
+
+    private static async Task SetGroupAsync(FilterGroup group, bool isVisible)
     {
         foreach (var key in group.Values.Keys)
         {
             group.Values[key] = isVisible;
         }
 
-        await OnChanged.InvokeAsync();
-    }
-
-    private static async Task SetKindAsync(FilterKind kind, bool isShown)
-    {
-        if (kind.IsShown != isShown)
+        foreach (var option in group.TrailingOptions ?? [])
         {
-            await kind.ToggleAsync();
+            await option.SetVisibleAsync(isVisible);
         }
-    }
-
-    private async Task ResetAsync()
-    {
-        foreach (var kind in Kinds?.Invoke() ?? [])
-        {
-            await SetKindAsync(kind, kind.IsShownByDefault);
-        }
-
-        foreach (var group in Groups())
-        {
-            foreach (var key in group.Values.Keys)
-            {
-                group.Values[key] = true;
-            }
-        }
-
-        await OnChanged.InvokeAsync();
     }
 }

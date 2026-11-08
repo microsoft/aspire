@@ -241,10 +241,6 @@
     <value>{0}d ago</value>
     <comment>Short relative start time shown in a resource row. {0} is the number of days</comment>
   </data>
-  <data name="ResourcePaneFilterShow" xml:space="preserve">
-    <value>Show</value>
-    <comment>Heading in the resource filter for the kinds of items the list shows: resources, parameters and telemetry sources</comment>
-  </data>
   <data name="DashboardRunSelectMomentAgo" xml:space="preserve">
     <value>a moment ago</value>
   </data>
@@ -356,6 +352,10 @@
   <data name="ResourceHeaderStarted" xml:space="preserve">
     <value>Started</value>
   </data>
+  <data name="ResourceHeaderStopped" xml:space="preserve">
+    <value>Stopped</value>
+    <comment>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</comment>
+  </data>
   <data name="ResourceHeaderNotFound" xml:space="preserve">
     <value>Resource not found</value>
   </data>
@@ -385,12 +385,6 @@
   </data>
   <data name="ResourcePaneFilterReset" xml:space="preserve">
     <value>Reset</value>
-  </data>
-  <data name="ResourcePaneNoKindsHint" xml:space="preserve">
-    <value>Choose what to list under Show in the filter.</value>
-  </data>
-  <data name="ResourcePaneNoKindsShown" xml:space="preserve">
-    <value>Nothing shown</value>
   </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>

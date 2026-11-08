@@ -210,6 +210,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
 
             var navigationCount = await page.EvaluateAsync<int>("() => performance.getEntriesByType('navigation').length");
 
@@ -237,6 +238,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
                 .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
                 .ClickAsync();
@@ -383,6 +385,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
                 .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
                 .ClickAsync();
@@ -480,6 +483,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
                 .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
                 .ClickAsync();

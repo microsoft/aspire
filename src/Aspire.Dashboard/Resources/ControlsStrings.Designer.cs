@@ -1258,6 +1258,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Close (Esc).
+        /// </summary>
+        public static string SummaryDetailsViewCloseViewWithShortcut {
+            get {
+                return ResourceManager.GetString("SummaryDetailsViewCloseViewWithShortcut", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Split horizontal.
         /// </summary>
         public static string SummaryDetailsViewSplitHorizontal {

@@ -394,8 +394,24 @@ internal sealed class NewCommand : BaseCommand
             var label = GetUniqueTemplateLabel(
                 $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}", labels);
             choices.Add(new(label, result.Template, true,
-                new SelectionChoiceGroup($"source:{result.SourceName}", result.SourceDisplayName ?? result.SourceName)));
+                CreateTemplateSourceGroup(result)));
         }
+    }
+
+    internal static SelectionChoiceGroup CreateTemplateSourceGroup(ConfiguredTemplate template)
+    {
+        var name = template.SourceDisplayName ?? template.SourceName;
+        var source = template.Source;
+        // Use the configured ref, not the acquired commit: an omitted ref means the
+        // repository's default branch. Configuration validation rejects embedded credentials.
+        var location = source.Repository is null
+            ? source.Path
+            : $"{source.Repository} @ {source.RepositoryRef ?? ConfigSourceStrings.DefaultBranch}";
+
+        return new($"source:{template.SourceName}", $"{name} ({location})")
+        {
+            Style = new Style(Color.Green)
+        };
     }
 
     internal static string FormatTemplateDisplayLabel(ITemplate template) =>

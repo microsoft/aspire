@@ -103,8 +103,9 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
             await longAddress.HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync(s_maskedLongUrl);
-            await page.Mouse.MoveAsync(0, 0);
+            // Escape while the tooltip shows dismisses it. Once nothing is shown, Escape would close the content.
             await page.Keyboard.PressAsync("Escape");
+            await page.Mouse.MoveAsync(0, 0);
             await longAddress.FocusAsync();
             await Assertions.Expect(longAddress).ToBeFocusedAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
