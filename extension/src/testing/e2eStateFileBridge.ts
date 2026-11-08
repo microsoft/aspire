@@ -34,6 +34,7 @@ import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
 import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
+import { ResumeInterruptedInspectionRequests } from './resumeInterruptedInspectionRequests';
 
 let atomicWriteSequence = 0;
 
@@ -1364,6 +1365,8 @@ async function proveAttachedResourceDebugging(
   const terminatedSessionIds = new Set<string>();
   const attachRequests: DebugAdapterMessageSummary[] = [];
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
+  const resumeInterruptedInspectionResponses: DebugAdapterMessageSummary[] = [];
+  const resumeInterruptedInspectionRequests = new ResumeInterruptedInspectionRequests();
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
   const pendingBreakpointRequests = new Map<string, { sourcePath?: string; lines: number[]; afterRemoval: boolean }>();
@@ -1381,6 +1384,7 @@ async function proveAttachedResourceDebugging(
     createDebugAdapterTracker(session) {
       return {
         onWillReceiveMessage(message) {
+          resumeInterruptedInspectionRequests.onRequest(session.id, message);
           if (message?.type === 'request' && message.command === 'attach') {
             attachRequests.push({
               sessionId: session.id,
@@ -1402,8 +1406,10 @@ async function proveAttachedResourceDebugging(
           }
         },
         onDidSendMessage(message) {
+          resumeInterruptedInspectionRequests.onEvent(session.id, message);
+          const interruptedByResume = resumeInterruptedInspectionRequests.onResponse(session.id, message);
           if (message?.type === 'response' && message.success === false) {
-            debugAdapterResponses.push({
+            (interruptedByResume ? resumeInterruptedInspectionResponses : debugAdapterResponses).push({
               sessionId: session.id,
               sessionType: session.type,
               sessionName: session.name,
@@ -1629,6 +1635,7 @@ async function proveAttachedResourceDebugging(
       attachRequests,
       breakpointResponses,
       debugAdapterResponses,
+      resumeInterruptedInspectionResponses,
       resourceResponseAfterDetach: responseBody,
       sessionTerminated: true,
     };
@@ -1639,6 +1646,7 @@ async function proveAttachedResourceDebugging(
       attachRequests,
       breakpointResponses,
       debugAdapterResponses,
+      resumeInterruptedInspectionResponses,
       stoppedEvents,
       terminatedSessionIds: [...terminatedSessionIds],
       toolPayload,
