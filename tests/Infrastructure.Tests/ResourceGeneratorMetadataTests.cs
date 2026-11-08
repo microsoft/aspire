@@ -33,15 +33,12 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
         // diagnostic to standard output alongside the -getItem JSON. Inject that exact line so the
         // item query is verified independently of whatever else the CLI writes to its streams.
         using var workspace = TemporaryWorkspace.Create(output);
-        var dotnet = CreateDotNetWithStandardOutputDiagnostic(workspace, MSBuildServerFallbackDiagnostic);
+        var dotnet = await MSBuildServerFallbackDiagnostic.CreateDotNetWrapperAsync(workspace.Path, DotNetPath);
 
         var result = await VerifyResourceMetadataAsync(workspace, "Aspire.Hosting.Testing", "Properties", "ResXFileCodeGenerator", dotnet);
 
-        Assert.Contains(MSBuildServerFallbackDiagnostic, result.Output);
+        Assert.Contains(MSBuildServerFallbackDiagnostic.Message, result.Output);
     }
-
-    private const string MSBuildServerFallbackDiagnostic =
-        "MSBuild server unavailable: could not connect to the server within the timeout window; the server may have failed to start. Falling back to an in-process build.";
 
     private async Task<CommandResult> VerifyResourceMetadataAsync(
         TemporaryWorkspace workspace, string projectName, string resourceDirectory, string generator, string? dotnet = null)
@@ -176,31 +173,4 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
     }
 
     private static string DotNetPath => Path.Combine(RepoRoot.Path, ".dotnet", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
-
-    private static string CreateDotNetWithStandardOutputDiagnostic(TemporaryWorkspace workspace, string diagnostic)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            var wrapper = Path.Combine(workspace.Path, "dotnet-with-diagnostic.cmd");
-            File.WriteAllText(wrapper, $"""
-                @echo off
-                "{DotNetPath}" %*
-                set exitCode=%ERRORLEVEL%
-                echo {diagnostic}
-                exit /b %exitCode%
-                """);
-            return wrapper;
-        }
-
-        var script = Path.Combine(workspace.Path, "dotnet-with-diagnostic.sh");
-        File.WriteAllText(script, $"""
-            #!/bin/sh
-            "{DotNetPath}" "$@"
-            exitCode=$?
-            echo '{diagnostic}'
-            exit $exitCode
-            """);
-        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        return script;
-    }
 }
