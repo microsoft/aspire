@@ -131,6 +131,9 @@ the existing table, JSON array, and follow-mode delta output described below.
 ]
 ```
 
+`name` is included when `appHost.name` is set in the AppHost's `aspire.config.json`
+(see [AppHost names](#apphost-names)); otherwise it is omitted. The table output is unchanged.
+
 `aspire ps` returns only AppHost-level information. Use [`aspire describe`](#aspire-describe) to inspect or stream the resources that belong to an AppHost.
 
 `aspire ps --follow --format json` streams newline-delimited AppHost objects. New or changed AppHosts are emitted with `"status": "running"`. When an AppHost stops, it is emitted one last time with `"status": "stopped"` so consumers can remove it from their state:
@@ -201,6 +204,10 @@ it does not disconnect or stop AppHosts. An RPC that has not acknowledged cancel
 retains its concurrency slot across snapshots, and is not retried while outstanding.
 Paths and PIDs identify AppHosts, not launcher CLI
 processes. Dashboard URLs may contain login tokens and should not be logged.
+
+`name` is an additive, optional field in protocol version 1 with the same meaning
+as in `aspire ps --format json`. Consumers fall back to a name derived from
+`appHostPath` when it is missing.
 
 `health` is an additive, optional field in protocol version 1. Known values are
 `healthy`, `warning`, and `unhealthy`. Missing or unrecognized values mean **unknown**,
@@ -829,3 +836,28 @@ Each entry in `capabilities` includes an `isExperimental` boolean indicating whe
 The top-level fields are `schemaVersion`, `language`, `generator`, `package`, `modules`, and `declarations`. The language exporter owns the schema; the CLI passes it through without reshaping it.
 
 TypeScript (`--language typescript`) and Go (`--language go`) ship exporters. The Go exporter projects through the same code paths as the Go SDK generator, so every `declaration` is the Go the generator emits, including the surface that is written by hand rather than discovered from capabilities: `Build()` on the builder, the `Get`, `Required`, `Value`, and `RequiredValue` helpers on interaction input collections, `Err()` on every handle, `ToMap()` on options and DTO structs, and the runtime types. Go `modules[].items[]` have kind `function`, `interface`, `augmentation`, `dto`, `options`, `enum`, `variable`, or `type`; an `augmentation` lists the members a package adds to a type that another package declares. Capability-backed members carry `capabilityId`, and members that the generator writes itself are marked `synthesized`. The top-level `declarations` hold the Go fragments that signatures refer to. Go names are resolved over the exported package and the types it references, not over a whole app host. When an app host combines integrations whose names collide, the generated SDK can qualify a name that this reference gives bare, and an `options` struct that several packages could share is documented by each package under its own `typeId`. The `Any<Type>` interfaces, which accept a handle type or any type derived from it, follow the same rule: one exists only when the set holds a type derived from its base, so a signature here can name a handle interface where an app host that includes the derived type's integration accepts `Any<Type>`.
+
+## AppHost names
+
+`appHost.name` in `aspire.config.json` gives an AppHost a friendly name, which is
+useful for single-file AppHosts (`apphost.cs`) in a folder with a generic name:
+
+```json
+{
+  "appHost": {
+    "path": "src/apphost.cs",
+    "name": "Contoso Shop"
+  }
+}
+```
+
+The name comes from the nearest `aspire.config.json` at or above the AppHost's
+directory, and applies only when that file's `appHost.path` resolves to the
+AppHost (or the file has no path and sits in the AppHost's own directory).
+
+- `aspire run` and `aspire start` pass it to the AppHost as `ASPIRE_APPHOST_NAME`,
+  which becomes the dashboard application name unless the AppHost sets
+  `DashboardApplicationName` in code. An explicitly set `ASPIRE_APPHOST_NAME` wins
+  over the config file.
+- `aspire ps --format json`, its snapshot stream (used by the tray), and the MCP
+  `list_apphosts` tool report it as `name`.

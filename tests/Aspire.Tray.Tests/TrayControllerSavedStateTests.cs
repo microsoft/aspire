@@ -259,6 +259,32 @@ public class TrayControllerSavedStateTests
     }
 
     [Fact]
+    public async Task StoppedRowsKeepTheLastConfiguredNameUntilDiscoveryReportsAnother()
+    {
+        using var directory = new TestTrayStateDirectory();
+        var path = directory.CreateAppHost("src/apphost.cs");
+        var client = new TestAppHostClient();
+        var controller = new TrayController(client);
+        await using var lifetime = controller.ConfigureAwait(true);
+        controller.Start();
+        await client.PublishAndWaitAsync(controller, new([Host(42) with { AppHostPath = path, Name = "Contoso Shop" }], DiscoveryState.Live));
+        controller.SetPinned(path, true);
+        Assert.Equal("Contoso Shop", Assert.Single(controller.State.AppHosts).Title);
+
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        var offline = Assert.Single(controller.State.AppHosts);
+        Assert.False(offline.IsRunning);
+        Assert.Equal("Contoso Shop", offline.Title);
+        Assert.Equal("Contoso Shop", offline.DisplayName);
+
+        // Removing appHost.name from the config clears the remembered name on the next run.
+        await client.PublishAndWaitAsync(controller, new([Host(43, 2000) with { AppHostPath = path }], DiscoveryState.Live));
+        Assert.Equal("src", Assert.Single(controller.State.AppHosts).Title);
+        await client.PublishAndWaitAsync(controller, new([], DiscoveryState.Live));
+        Assert.Equal("src", Assert.Single(controller.State.AppHosts).Title);
+    }
+
+    [Fact]
     public async Task MultipleLiveInstancesShareOnePinAndOneRecentPath()
     {
         using var directory = new TestTrayStateDirectory();

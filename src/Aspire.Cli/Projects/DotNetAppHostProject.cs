@@ -1619,7 +1619,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             var appHostDirectory = effectiveAppHostFile.Directory ?? _executionContext.WorkingDirectory;
             if (directRun is not null)
             {
-                await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(directRun.Environment, appHostDirectory, cancellationToken);
+                await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(directRun.Environment, effectiveAppHostFile, appHostDirectory, cancellationToken);
 
                 // The direct command line has no "--" separator, so the forwarded-argument boundary
                 // has to be carried alongside it for logging. Clone rather than mutate because the
@@ -1639,7 +1639,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     cancellationToken);
             }
 
-            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
+            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, effectiveAppHostFile, appHostDirectory, cancellationToken);
 
             return await _runner.RunAsync(
                 effectiveAppHostFile,

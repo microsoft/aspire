@@ -46,6 +46,8 @@ internal static class CliProtocol
             var host = new AppHostInfo(item.AppHostPath, item.AppHostPid, item.DashboardUrl)
             {
                 ProcessStartTimeUnixMilliseconds = item.ProcessStartTimeUnixMilliseconds,
+                // The name is cosmetic; treat a blank one as absent rather than rejecting the snapshot.
+                Name = string.IsNullOrWhiteSpace(item.Name) ? null : item.Name.Trim(),
                 Health = item.Health switch
                 {
                     "healthy" => AppHostHealth.Healthy,

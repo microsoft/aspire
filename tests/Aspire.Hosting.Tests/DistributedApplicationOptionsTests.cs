@@ -169,4 +169,30 @@ public class DistributedApplicationOptionsTests
 
         Assert.Null(options.DashboardApplicationName);
     }
+
+    [Theory]
+    [InlineData(null, "Contoso Shop", "Contoso Shop")]
+    [InlineData(null, "  ", "Tailspin")]
+    [InlineData(null, null, "Tailspin")]
+    [InlineData("Set in code", "Contoso Shop", "Set in code")]
+    public void DashboardApplicationName_PrefersConfiguredAppHostNameOverDerivedName(string? explicitName, string? configuredName, string expected)
+    {
+        var appHostFilePath = OperatingSystem.IsWindows() ? @"C:\projects\Tailspin\apphost.cs" : "/projects/Tailspin/apphost.cs";
+        var options = new DistributedApplicationOptions
+        {
+            // The CLI projects appHost.name as ASPIRE_APPHOST_NAME. Pass it on the command line so
+            // the test doesn't mutate process-wide environment variables shared with other tests.
+            Args = configuredName is null ? [] : [$"--{KnownConfigNames.AppHostName}={configuredName}"],
+            ProjectDirectory = null,
+            AppHostFilePath = appHostFilePath
+        };
+        if (explicitName is not null)
+        {
+            options.DashboardApplicationName = explicitName;
+        }
+
+        var builder = DistributedApplication.CreateBuilder(options);
+
+        Assert.Equal(expected, builder.Configuration["AppHost:DashboardApplicationName"]);
+    }
 }

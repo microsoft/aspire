@@ -35,6 +35,29 @@ public class AppHostPresentationTests
     }
 
     [Fact]
+    public void ConfiguredNameReplacesTheNameDerivedFromThePath()
+    {
+        var path = Path.GetFullPath("worktree-a/src/apphost.cs");
+        var unnamed = new AppHostInfo(path, 42, null);
+        var named = unnamed with { Name = "Contoso\nShop" };
+
+        Assert.Equal("src", AppHostPresentation.GetDisplayName(unnamed));
+        Assert.Equal("Contoso Shop", AppHostPresentation.GetDisplayName(named));
+        Assert.Equal("Contoso Shop", AppHostPresentation.GetTitle(named));
+        Assert.Equal($"{Path.Combine("worktree-a", "src")} \u00b7 PID 42", AppHostPresentation.GetSubtitle(named));
+    }
+
+    [Fact]
+    public void LongConfiguredNamesAreCompactedInTheTitle()
+    {
+        var name = new string('a', 50);
+        var host = new AppHostInfo(Path.GetFullPath("worktree-a/src/apphost.cs"), 42, null) { Name = name };
+
+        Assert.Equal(name, AppHostPresentation.GetDisplayName(host));
+        Assert.Equal(new string('a', 21) + "\u2026" + new string('a', 22), AppHostPresentation.GetTitle(host));
+    }
+
+    [Fact]
     public void SameProjectInDifferentWorktreesKeepsItsLocationVisible()
     {
         var first = new AppHostInfo(Path.GetFullPath("worktree-a/Shop.AppHost/Shop.AppHost.csproj"), 42, null);

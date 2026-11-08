@@ -288,9 +288,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         ConfigurePipelineOptions(options);
 
-        // Compute the dashboard application name - use DashboardApplicationName if set for file-based apps,
-        // otherwise fall back to the environment's ApplicationName
-        var dashboardApplicationName = options.DashboardApplicationName ?? _innerBuilder.Environment.ApplicationName;
+        // Compute the dashboard application name. A name set in code wins; then appHost.name from
+        // aspire.config.json, which the CLI projects as ASPIRE_APPHOST_NAME at launch; then the name
+        // derived from the AppHost directory for file-based apps; then the environment's ApplicationName.
+        var configuredAppHostName = GetAspirePrefixedConfigurationValue(_innerBuilder.Configuration, KnownConfigNames.AppHostName, aspireEnvironmentProvider);
+        var dashboardApplicationName = options.ExplicitDashboardApplicationName
+            ?? (string.IsNullOrWhiteSpace(configuredAppHostName) ? null : configuredAppHostName.Trim())
+            ?? options.DashboardApplicationName
+            ?? _innerBuilder.Environment.ApplicationName;
 
         _innerBuilder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {

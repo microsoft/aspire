@@ -257,7 +257,10 @@ The list has **Running**, **Pinned**, and **Recent** sections. Recent is collaps
 other AppHosts are listed, and its header has a **Clear** button. Each row shows a
 status glyph, the AppHost name, and `{status} · {parent/folder}`; the PID is added only
 when two running AppHosts share a name. When the line is too long, only the path is
-shortened, in its middle, so the status and PID always stay readable. Status glyphs differ by shape as well as color:
+shortened, in its middle, so the status and PID always stay readable. The name is
+`appHost.name` from the AppHost's `aspire.config.json` when set, for example
+`{ "appHost": { "path": "src/apphost.cs", "name": "Contoso Shop" } }`; otherwise it is
+derived from the path (a single-file `apphost.cs` takes its folder's name). Status glyphs differ by shape as well as color:
 a check (healthy), an exclamation mark (needs attention), a cross (unhealthy), a question
 mark (unknown), an outlined stop (stopped), and a ring (starting or stopping).
 Hovering or focusing a row shows its buttons: **Open dashboard**, **Stop**, and **More**

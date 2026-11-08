@@ -26,7 +26,7 @@ namespace Aspire.Cli.Configuration;
 /// <para>Example <c>aspire.config.json</c>:</para>
 /// <code>
 /// {
-///   "appHost": { "path": "app.ts", "language": "typescript/nodejs" },
+///   "appHost": { "path": "app.ts", "language": "typescript/nodejs", "name": "Contoso Shop" },
 ///   "sdk": { "version": "9.2.0" },
 ///   "channel": "stable",
 ///   "docs": {
@@ -518,6 +518,13 @@ internal sealed class AspireConfigAppHost
     [JsonPropertyName("language")]
     [Description("Language identifier (e.g., \"typescript/nodejs\", \"python\"). Used to determine which runtime to use for execution.")]
     public string? Language { get; set; }
+
+    /// <summary>
+    /// Friendly display name for the AppHost.
+    /// </summary>
+    [JsonPropertyName("name")]
+    [Description("Friendly display name for the AppHost. Used as the dashboard application name and shown by aspire ps and the Aspire tray instead of a name derived from the AppHost path. Useful for single-file AppHosts (apphost.cs) whose folder name is generic.")]
+    public string? Name { get; set; }
 }
 
 /// <summary>

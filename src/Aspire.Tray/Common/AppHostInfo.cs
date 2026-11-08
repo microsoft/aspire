@@ -8,6 +8,11 @@ internal sealed record AppHostInfo(string AppHostPath, int AppHostPid, string? D
     public long? ProcessStartTimeUnixMilliseconds { get; init; }
     public AppHostHealth Health { get; init; }
 
+    /// <summary>
+    /// The friendly name from <c>appHost.name</c> in <c>aspire.config.json</c>, when the CLI reports one.
+    /// </summary>
+    public string? Name { get; init; }
+
     public AppHostId Id => new(AppHostPath, AppHostPid, ProcessStartTimeUnixMilliseconds);
 
     public Uri? DashboardUri => Uri.TryCreate(DashboardUrl, UriKind.Absolute, out var uri)

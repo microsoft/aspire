@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
@@ -15,7 +16,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
-public class TrayWatchStreamTests
+public class TrayWatchStreamTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task EmptyInitialSnapshotPrecedesHeartbeatAndQuietBrokenPipeStopsWatcher()
@@ -1082,6 +1083,41 @@ public class TrayWatchStreamTests
     }
 
     [Fact]
+    public async Task SnapshotsCarryTheNameConfiguredForEachAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var named = Path.Combine(workspace.WorkspaceRoot.FullName, "src", "apphost.cs");
+        var unnamed = Path.Combine(workspace.WorkspaceRoot.FullName, "tools", "apphost.cs");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{ "appHost": { "path": "src/apphost.cs", "name": "Contoso Shop" } }""");
+        using var cancellation = new CancellationTokenSource();
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            WatchConnectionsHandler = token => Snapshots([Connection(named, 10), Connection(unnamed, 20)], token)
+        };
+        TrayWatchMessage? snapshot = null;
+
+        var result = await CreateStream(monitor, new FakeTimeProvider()).RunAsync((json, _) =>
+        {
+            snapshot = Deserialize(json);
+            cancellation.Cancel();
+            return Task.CompletedTask;
+        }, cancellation.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        Assert.Collection(snapshot!.AppHosts!,
+            host => { Assert.Equal(named, host.AppHostPath); Assert.Equal("Contoso Shop", host.Name); },
+            host => { Assert.Equal(unnamed, host.AppHostPath); Assert.Null(host.Name); });
+
+        static async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> Snapshots(
+            IReadOnlyList<IAppHostAuxiliaryBackchannel> connections, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return connections;
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task SharedMessagesUseCompactVersionedSchema()
     {
         var host = new TrayAppHost { AppHostPath = "/project/apphost.cs", AppHostPid = 42, ProcessStartTimeUnixMilliseconds = 1000 };
@@ -1097,6 +1133,7 @@ public class TrayWatchStreamTests
             JsonSerializer.Serialize(snapshot with { AppHosts = [host with { Health = "healthy" }] }, TrayCliJsonContext.Default.TrayWatchMessage),
             JsonSerializer.Serialize(snapshot with { AppHosts = [host with { Health = "warning" }] }, TrayCliJsonContext.Default.TrayWatchMessage),
             JsonSerializer.Serialize(snapshot with { AppHosts = [host with { Health = "unhealthy" }] }, TrayCliJsonContext.Default.TrayWatchMessage),
+            JsonSerializer.Serialize(snapshot with { AppHosts = [host with { Name = "Contoso Shop" }] }, TrayCliJsonContext.Default.TrayWatchMessage),
             JsonSerializer.Serialize(stop, TrayCliJsonContext.Default.TrayStopMessage)), "txt");
     }
 

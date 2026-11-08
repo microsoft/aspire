@@ -623,7 +623,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
-            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
+            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, appHostFile, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
             if (appHostServerProject is NativeAppHostServerProject)
             {

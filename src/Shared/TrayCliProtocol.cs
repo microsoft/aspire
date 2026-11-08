@@ -27,6 +27,12 @@ internal sealed record TrayAppHost
     public long? ProcessStartTimeUnixMilliseconds { get; init; }
     public string? DashboardUrl { get; init; }
     public string? Health { get; init; }
+
+    /// <summary>
+    /// Gets the friendly name configured by <c>appHost.name</c> in <c>aspire.config.json</c>, if any.
+    /// Older CLIs omit it, so consumers fall back to a name derived from <see cref="AppHostPath"/>.
+    /// </summary>
+    public string? Name { get; init; }
 }
 
 /// <summary>

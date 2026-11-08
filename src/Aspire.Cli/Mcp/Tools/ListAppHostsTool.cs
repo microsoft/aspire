@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Configuration;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Mcp.Tools;
@@ -13,7 +14,12 @@ namespace Aspire.Cli.Mcp.Tools;
 /// <summary>
 /// Represents information about a detected AppHost.
 /// </summary>
-internal sealed record AppHostListInfo(string AppHostPath, int AppHostPid, int? CliPid);
+internal sealed record AppHostListInfo(
+    string AppHostPath,
+    int AppHostPid,
+    int? CliPid,
+    // appHost.name from aspire.config.json, omitted when unset.
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name);
 
 [JsonSerializable(typeof(List<AppHostListInfo>))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
@@ -46,18 +52,12 @@ internal sealed class ListAppHostsTool(IAuxiliaryBackchannelMonitor auxiliaryBac
 
         var inScopeAppHosts = connections
             .Where(c => c.IsInScope)
-            .Select(c => new AppHostListInfo(
-                c.AppHostInfo?.AppHostPath ?? "Unknown",
-                c.AppHostInfo?.ProcessId ?? 0,
-                c.AppHostInfo?.CliProcessId))
+            .Select(CreateListInfo)
             .ToList();
 
         var outOfScopeAppHosts = connections
             .Where(c => !c.IsInScope)
-            .Select(c => new AppHostListInfo(
-                c.AppHostInfo?.AppHostPath ?? "Unknown",
-                c.AppHostInfo?.ProcessId ?? 0,
-                c.AppHostInfo?.CliProcessId))
+            .Select(CreateListInfo)
             .ToList();
 
         var responseBuilder = new StringBuilder();
@@ -81,4 +81,11 @@ internal sealed class ListAppHostsTool(IAuxiliaryBackchannelMonitor auxiliaryBac
             Content = [new TextContentBlock { Text = responseBuilder.ToString() }]
         };
     }
+
+    private static AppHostListInfo CreateListInfo(IAppHostAuxiliaryBackchannel connection)
+        => new(
+            connection.AppHostInfo?.AppHostPath ?? "Unknown",
+            connection.AppHostInfo?.ProcessId ?? 0,
+            connection.AppHostInfo?.CliProcessId,
+            connection.AppHostInfo?.AppHostPath is { } path ? AppHostDisplayNameResolver.GetConfiguredName(path) : null);
 }

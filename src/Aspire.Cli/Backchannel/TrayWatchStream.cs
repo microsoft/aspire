@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Threading.Channels;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Processes;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
@@ -217,7 +218,10 @@ internal sealed class TrayWatchStream(
                         {
                             AppHostPath = info.AppHostPath,
                             AppHostPid = info.ProcessId,
-                            ProcessStartTimeUnixMilliseconds = startedAt is > 0 ? startedAt : null
+                            ProcessStartTimeUnixMilliseconds = startedAt is > 0 ? startedAt : null,
+                            // Re-read on each connection change, so an edited name shows up the next
+                            // time the connection set changes rather than only on CLI restart.
+                            Name = AppHostDisplayNameResolver.GetConfiguredName(info.AppHostPath)
                         }));
                     }
 

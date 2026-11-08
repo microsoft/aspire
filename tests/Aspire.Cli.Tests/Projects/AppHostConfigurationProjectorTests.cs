@@ -9,7 +9,7 @@ using Aspire.Hosting;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class AppHostConfigurationProjectorTests
+public class AppHostConfigurationProjectorTests(ITestOutputHelper outputHelper)
 {
     private const string ConfiguredImage = "example.com/aspire-tunnel:configured";
 
@@ -29,7 +29,7 @@ public class AppHostConfigurationProjectorTests
         var environmentVariables = new Dictionary<string, string>();
         var projector = new AppHostConfigurationProjector(configurationService, new TestEnvironment());
 
-        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, appHostDirectory);
+        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new FileInfo("/app/apphost.cs"), appHostDirectory);
 
         Assert.Equal(ConfiguredImage, environmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
     }
@@ -48,7 +48,7 @@ public class AppHostConfigurationProjectorTests
         };
         var projector = new AppHostConfigurationProjector(configurationService, new TestEnvironment());
 
-        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new DirectoryInfo("/app"));
+        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new FileInfo("/app/apphost.cs"), new DirectoryInfo("/app"));
 
         Assert.Equal(launchImage, environmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
     }
@@ -68,7 +68,7 @@ public class AppHostConfigurationProjectorTests
         var environmentVariables = new Dictionary<string, string>();
         var projector = new AppHostConfigurationProjector(configurationService, environment);
 
-        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new DirectoryInfo("/app"));
+        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new FileInfo("/app/apphost.cs"), new DirectoryInfo("/app"));
 
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.ContainerTunnelBaseImage));
     }
@@ -83,8 +83,48 @@ public class AppHostConfigurationProjectorTests
         var environmentVariables = new Dictionary<string, string>();
         var projector = new AppHostConfigurationProjector(configurationService, new TestEnvironment());
 
-        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new DirectoryInfo("/app"));
+        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new FileInfo("/app/apphost.cs"), new DirectoryInfo("/app"));
 
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.ContainerTunnelBaseImage));
+    }
+
+    [Fact]
+    public async Task ApplyEnvironmentVariablesAsync_ProjectsConfiguredAppHostName()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = WriteNamedAppHost(workspace);
+        var environmentVariables = new Dictionary<string, string>();
+        var projector = new AppHostConfigurationProjector(new TestConfigurationService(), new TestEnvironment());
+
+        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, appHostFile, appHostFile.Directory!);
+
+        Assert.Equal("Contoso Shop", environmentVariables[KnownConfigNames.AppHostName]);
+    }
+
+    [Fact]
+    public async Task ApplyEnvironmentVariablesAsync_DoesNotReplaceExplicitAppHostName()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = WriteNamedAppHost(workspace);
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [KnownConfigNames.AppHostName] = "Launch name"
+        };
+        var projector = new AppHostConfigurationProjector(new TestConfigurationService(), new TestEnvironment());
+
+        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, appHostFile, appHostFile.Directory!);
+
+        Assert.Equal("Launch name", environmentVariables[KnownConfigNames.AppHostName]);
+    }
+
+    private static FileInfo WriteNamedAppHost(TemporaryWorkspace workspace)
+    {
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "src", "apphost.cs"));
+        appHostFile.Directory!.Create();
+        File.WriteAllText(appHostFile.FullName, "");
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{ "appHost": { "path": "src/apphost.cs", "name": "Contoso Shop" } }""");
+        return appHostFile;
     }
 }
