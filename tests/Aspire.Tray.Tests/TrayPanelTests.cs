@@ -185,6 +185,40 @@ public class TrayPanelTests
     }
 
     [Fact]
+    public void RightClickingARowOrItsButtonsOpensItsActionList()
+    {
+        var state = TrayPanelSamples.Typical();
+        var panel = new TrayPanel(state, TrayPanelPalette.Light) { OpenInApplications = s_applications };
+        var first = state.AppHosts[0];
+        var second = state.AppHosts[1];
+
+        var row = Target(panel, PanelTargetKind.Row, first).HitBounds;
+        Assert.Equal(PanelResponse.Changed, panel.SecondaryClick(row.X + 10, row.CenterY));
+        Assert.Equal((PanelSection.Running, first.Id), panel.ActionsRow);
+        Assert.Equal(new PanelTargetKey(PanelTargetKind.More, PanelSection.Running, first.Id), panel.FocusedTarget);
+
+        // Again on the same row keeps the list open rather than toggling it closed.
+        panel.SecondaryClick(row.X + 10, row.CenterY);
+        Assert.Equal((PanelSection.Running, first.Id), panel.ActionsRow);
+
+        // On a button of another row, it moves the list there without running the button's action.
+        var dashboard = Target(panel, PanelTargetKind.Dashboard, second).HitBounds;
+        Assert.Null(panel.SecondaryClick(dashboard.CenterX, dashboard.CenterY).Action);
+        Assert.Equal((PanelSection.Running, second.Id), panel.ActionsRow);
+    }
+
+    [Fact]
+    public void RightClickingOutsideARowDoesNothing()
+    {
+        var panel = new TrayPanel(TrayPanelSamples.Typical(), TrayPanelPalette.Light);
+        var settings = panel.Scene.Targets.Single(target => target.Kind == PanelTargetKind.Settings).HitBounds;
+
+        Assert.Equal(PanelResponse.None, panel.SecondaryClick(settings.CenterX, settings.CenterY));
+        Assert.Equal(PanelResponse.None, panel.SecondaryClick(TrayPanel.Width / 2, TrayPanel.HeaderHeight / 2));
+        Assert.Null(panel.ActionsRow);
+    }
+
+    [Fact]
     public void ClickingARowClosesAnOpenActionList()
     {
         var state = TrayPanelSamples.Typical();

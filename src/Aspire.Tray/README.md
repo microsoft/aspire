@@ -269,7 +269,9 @@ application whose icon can't be read gets a generic glyph), **Show in Finder** o
 **Copy path** (the folder that contains the AppHost), **Pin** or **Unpin**, and **Remove
 from recent** for a recent AppHost. It is drawn by the shared scene like the rest of the
 panel, so it looks the same on both platforms and screen readers see its items as buttons.
-Clicking **More** again, picking an item, or acting on anything else closes it.
+Right-clicking a row or one of its buttons (or Control-clicking on macOS) opens the same
+list, as a context menu would, without acting on the row. Clicking **More** again, picking
+an item, or acting on anything else closes it.
 Clicking a running row (or pressing Enter or Space on it) opens its dashboard, like its
 **Open dashboard** button, and screen readers announce that. A row without a dashboard,
 such as a stopped, pinned or recent AppHost, does nothing; only its buttons act.
@@ -745,7 +747,8 @@ clicks through the pointer handlers, presses the way VoiceOver does (AXPress), a
 through the panel host. It checks that every activation of the status item opens the panel
 (left and right clicks, keyboard and VoiceOver activation with keyboard focus, and the
 button's own click) and that no menu is ever attached, Command-comma, the panel rows against
-the view state, the row action list (items, keyboard, VoiceOver), connection badges and
+the view state, the row action list (items, keyboard, VoiceOver, and real right-click and
+Control-click events), connection badges and
 accessibility labels, live health transitions, Stop without a confirmation by click and
 AXPress, a stale action after process replacement, pin and unpin from the action list,
 offline pins, explicit Start, Copy path (including Unicode and an injected clipboard

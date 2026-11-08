@@ -394,6 +394,35 @@ internal sealed class TrayPanel
     }
 
     /// <summary>
+    /// A right-click (or Control-click on macOS) on a row, or on one of its buttons, opens that row's
+    /// action list, the panel's stand-in for a context menu, as if its More button were clicked.
+    /// Anywhere else it does nothing. It never runs an action itself.
+    /// </summary>
+    public PanelResponse SecondaryClick(double x, double y)
+    {
+        _pointer = (x, y);
+        if (HitTest(x, y) is not { Host: not null } target
+            || target.Kind is not (PanelTargetKind.Row or PanelTargetKind.Dashboard or PanelTargetKind.Stop
+                or PanelTargetKind.Start or PanelTargetKind.More))
+        {
+            return PanelResponse.None;
+        }
+        var more = target.Key with { Kind = PanelTargetKind.More };
+        if (_actions != (more.Section, more.Host!.Value))
+        {
+            _confirm = null;
+            ToggleActions(more);
+        }
+        // Focus the More button, as a click on it would, so Down moves into the list and Escape
+        // returns focus there.
+        _focus = more;
+        _pressed = null;
+        _hover = HitTest(x, y)?.Key;
+        _scene = null;
+        return PanelResponse.Changed;
+    }
+
+    /// <summary>
     /// Scrolls the list by <paramref name="deltaY"/> DIPs. A positive delta reveals content above,
     /// matching both NSEvent.scrollingDeltaY and a positive WM_MOUSEWHEEL delta (wheel pushed away).
     /// </summary>

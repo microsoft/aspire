@@ -164,6 +164,8 @@ internal sealed class NativeSmokeHarness
                 Require(_dashboardCalls == 1, "Dashboard did not use the panel's native callback.");
                 VerifyCopy(_first.Id, _first.AppHostPath);
                 _application.VerifyActionListForSmoke(_second.Id);
+                _application.VerifySecondaryClickForSmoke(_first.Id);
+                Require(_dashboardCalls == 1, "A right-click or Control-click on a row must not open its dashboard.");
                 _phase++;
                 _application.ClickPanelForSmoke(PanelTargetKind.Stop, _first.Id);
                 break;
@@ -378,7 +380,7 @@ internal sealed class NativeSmokeHarness
                 Console.WriteLine("Flyout " + _application.VerifyPanelForSmoke(
                     Environment.GetEnvironmentVariable("ASPIRE_TRAY_SMOKE_PANEL_CAPTURE_DIR") is { Length: > 0 } capture ? capture : null) + ".");
                 _finished = true;
-                Console.WriteLine($"Native smoke passed: 23 phases; every status item activation opens the flyout (left, right, keyboard and VoiceOver with focus, AXPress) and none attaches a menu; Command-comma Settings; panel open/size/Escape and Settings view; action list items, keyboard and VoiceOver; monochrome 1x/2x logo template; idle/running/attention/dimmed status dot; exact Unicode Copy path for live/pinned/recent rows and clipboard failure reporting (injected, real clipboard untouched); unconfirmed Stop by click and AXPress with stale-lifetime safety; pin/unpin from the action list; missing-pin pruning; explicit start; inline Clear and missing-file removal; Documentation; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
+                Console.WriteLine($"Native smoke passed: 23 phases; every status item activation opens the flyout (left, right, keyboard and VoiceOver with focus, AXPress) and none attaches a menu; Command-comma Settings; panel open/size/Escape and Settings view; action list items, keyboard, VoiceOver, right-click and Control-click; monochrome 1x/2x logo template; idle/running/attention/dimmed status dot; exact Unicode Copy path for live/pinned/recent rows and clipboard failure reporting (injected, real clipboard untouched); unconfirmed Stop by click and AXPress with stale-lifetime safety; pin/unpin from the action list; missing-pin pruning; explicit start; inline Clear and missing-file removal; Documentation; CLI discovery: {(_discovery is null ? "not requested" : "live")}.");
                 if (_interactiveSmokeRequested)
                 {
                     _inspectionMode = true;
