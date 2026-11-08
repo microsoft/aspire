@@ -12,7 +12,7 @@ const clearMethods: ReadonlySet<ScopedTimerMethod> = new Set(['clearTimeout', 'c
 const fakeTimerScope = new AsyncLocalStorage<object>();
 
 /**
- * Fakes timers, `Date`, `process.nextTick` and `queueMicrotask` only for the calling test's async context.
+ * Runs `body` with timers, `Date`, `process.nextTick` and `queueMicrotask` faked only for its async context.
  *
  * `sinon.useFakeTimers()` replaces those globals for the whole process. Inside the VS Code extension host
  * that process also runs host and other-extension callbacks, and `clock.tickAsync()` yields to them through
@@ -21,11 +21,23 @@ const fakeTimerScope = new AsyncLocalStorage<object>();
  * started (seen on the Windows unit-test job, see https://github.com/microsoft/aspire/issues/21886).
  *
  * This installs sinon's clock on a private object and routes each global to it only when the caller runs in
- * the async context that created the clock - the test body and everything it awaits or schedules. Callbacks
- * from async contexts that existed before the clock keep the real implementations, so `countTimers()` only
- * sees the test's own work. Clearing is routed by handle, so either kind of timer can be cleared anywhere.
+ * `body`'s async context - the body and everything it awaits or schedules. Callbacks from any other async
+ * context, including the test runner that called us, keep the real implementations, so `countTimers()` only
+ * sees the body's own work. Clearing is routed by handle, so either kind of timer can be cleared anywhere.
+ * The clock is restored when `body` settles.
  */
-export function useScopedFakeTimers(): sinon.SinonFakeTimers {
+export async function withScopedFakeTimers<T>(body: (clock: sinon.SinonFakeTimers) => T | Promise<T>): Promise<T> {
+    const scope = {};
+    const clock = installScopedFakeTimers(scope);
+    try {
+        return await fakeTimerScope.run(scope, () => body(clock));
+    }
+    finally {
+        clock.restore();
+    }
+}
+
+function installScopedFakeTimers(scope: object): sinon.SinonFakeTimers {
     const realProcess = process;
     const realGlobals = Object.fromEntries(scopedTimerMethods.map(name => [name, globalThis[name]])) as Record<ScopedTimerMethod, (...args: unknown[]) => unknown>;
     const realDate = globalThis.Date;
@@ -48,7 +60,6 @@ export function useScopedFakeTimers(): sinon.SinonFakeTimers {
         shouldClearNativeTimers: true,
     } as Parameters<typeof sinon.useFakeTimers>[0]);
 
-    const scope = {};
     const inScope = () => fakeTimerScope.getStore() === scope;
     const fakeMethods = fakeGlobal as unknown as Record<ScopedTimerMethod, (...args: unknown[]) => unknown>;
 
@@ -63,7 +74,7 @@ export function useScopedFakeTimers(): sinon.SinonFakeTimers {
 
     globalThis.Date = new Proxy(realDate, {
         apply: (_target, thisArg, args) => Reflect.apply(inScope() ? fakeGlobal.Date : realDate, thisArg, args),
-        construct: (_target, args) => Reflect.construct(inScope() ? fakeGlobal.Date : realDate, args),
+        construct: (_target, args, newTarget) => Reflect.construct(inScope() ? fakeGlobal.Date : realDate, args, newTarget),
         get: (target, property) => {
             if (property === 'now') {
                 return () => (inScope() ? fakeGlobal.Date : realDate).now();
@@ -75,8 +86,6 @@ export function useScopedFakeTimers(): sinon.SinonFakeTimers {
     realProcess.nextTick = ((...args: Parameters<typeof process.nextTick>) =>
         (inScope() ? fakeGlobal.process.nextTick : realNextTick).apply(realProcess, args)) as typeof process.nextTick;
 
-    fakeTimerScope.enterWith(scope);
-
     const uninstall = clock.restore.bind(clock);
     const restore = () => {
         for (const name of scopedTimerMethods) {
@@ -85,9 +94,6 @@ export function useScopedFakeTimers(): sinon.SinonFakeTimers {
         globalThis.Date = realDate;
         realProcess.nextTick = realNextTick;
         uninstall();
-        if (inScope()) {
-            fakeTimerScope.enterWith(undefined as unknown as object);
-        }
     };
     clock.restore = restore;
     return clock;
