@@ -1,0 +1,94 @@
+{
+  "run_id": 42493145199,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/42493145199",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-08T15:38:16Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 21913,
+    "title": "Allocate the next dashboard run ID when two dashboards start in the same millisecond",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "aspireagent/dashboard-run-id-collision",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/21913",
+    "merged_at": "2026-11-08T15:06:56Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "2f471dc6f8019fc1660e1f1ea153078c99be5e85",
+    "failed_sha": "fbad38832128f625a6a28705236a55a38419acf3",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "fbad38832128f625a6a28705236a55a38419acf3",
+        "message": "Allocate the next dashboard run ID when two dashboards start in the same millisecond (#21913) ## Description **What failed:** `DashboardUrlTests.DashboardRejectsWrongCrossApplicationAndBogusLoginTokens` failed 3 times on ubuntu in 7 days ([42064740887](https://github.com/microsoft/aspire/actions/runs/42064740887) on main, [41606741729](https://github.com/microsoft/aspire/actions/runs/41606741729), [42142277750](https://github.com/microsoft/aspire/actions/runs/42142277750)). `aspire-dashboard` fa",
+        "html_url": "https://github.com/microsoft/aspire/commit/fbad38832128f625a6a28705236a55a38419acf3",
+        "pull_request": {
+          "number": 21913,
+          "title": "Allocate the next dashboard run ID when two dashboards start in the same millisecond",
+          "url": "https://github.com/microsoft/aspire/pull/21913",
+          "merged_at": "2026-11-08T15:06:56Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "id": 128770191090,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42493145199/job/128770191090",
+      "classification": "flaky-test",
+      "reason": "Windows RemoteHost crash-loop test missed an expected log line; output was captured mid-run, indicating a timing race.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 128773737134,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/42493145199/job/128773737134",
+      "classification": "flaky-test",
+      "reason": "Windows tree-actions E2E intermittently fails because e2e-worker exposes no endpoint URL yet.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "Expected e2e-worker to expose an endpoint URL.",
+      "stack_trace": "AssertionError [ERR_ASSERTION]: Expected e2e-worker to expose an endpoint URL.\n    at Context.<anonymous> (out\\test-e2e\\test-e2e\\treeActions.e2e.test.js:326:16)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Endpoint-not-yet-exposed timing failure matching a recorded intermittent Windows tree-actions mechanism.",
+      "job_id": 128773737134,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    },
+    {
+      "name": "Aspire.Hosting.RemoteHost.Tests.IntegrationHostProcessTests.CrashLoop_StopsTheSessionAfterThreeRestartAttempts",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.RemoteHost.Tests, Hosting.RemoteHost, Hosting.RemoteHos... / Hosting.RemoteHost (windows-latest)",
+      "error": "Assert.Contains() Failure: Sub-string not found\nString:    \"info: Aspire.Hosting.RemoteHost.JsonRpcServer[0]\\r\\n\"···\nNot found: \"failed after 3 restart attempts. Stopping the AppH\"···",
+      "stack_trace": "   at Aspire.Hosting.RemoteHost.Tests.IntegrationHostProcessTests.CrashLoop_StopsTheSessionAfterThreeRestartAttempts() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.RemoteHost.Tests\\IntegrationHostProcessTests.cs:line 130\n   at Aspire.Hosting.RemoteHost.Tests.IntegrationHostProcessTests.CrashLoop_StopsTheSessionAfterThreeRestartAttempts() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.RemoteHost.Tests\\IntegrationHostProcessTests.cs:line 133\n--- End of stack trace from previous location ---",
+      "standard_output": "info: Aspire.Hosting.RemoteHost.JsonRpcServer[0]\n      Starting RemoteAppHost JsonRpc Server on aspire-host-lifetime-222d9e781f7343ee8d3084f7eed098ef...\ninfo: Aspire.Hosting.RemoteHost.JsonRpcServer[0]\n      Starting JsonRpc server on named pipe: aspire-host-lifetime-222d9e781f7343ee8d3084f7eed098ef\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Launching integration host 'lifetime-test' [test/node]: C:\\Program Files\\nodejs\\node.EXE (entry: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\oet1mfqh.0hg\\c0d8e0a9\\host.js, cwd: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\oet1mfqh.0hg\\c0d8e0a9).\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Started integration host supervisor 'lifetime-test' (PID 8680).\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Integration host 'lifetime-test' registration started: attempt 8637be4858f244d39c083026eb5bbf50, supervisor PID 8680, timeout 00:02:00.\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Process supervisor 8680: Started 'C:\\Program Files\\nodejs\\node.EXE' (runtime PID 8984, owner PID 7820, cwd 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\oet1mfqh.0hg\\c0d8e0a9').\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration host connected (44739154), total: 1\ninfo: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Integration host 'lifetime-test' registered: attempt 8637be4858f244d39c083026eb5bbf50, supervisor PID 8680, connection 44739154, elapsed 00:00:00.2258331.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Initializing 1 integration host(s)...\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration capability discovery started: package lifetime-test, connection 44739154, timeout 00:02:00.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration capability discovery finished: package lifetime-test, connection 44739154, elapsed 00:00:00.0482081, timeout 00:02:00.\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Registered external capability: test.external/value\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration hosts initialized. External capabilities: 1\ninfo: Microsoft.Hosting.Lifetime[0]\n      Application started. Press Ctrl+C to shut down.\ninfo: Microsoft.Hosting.Lifetime[0]\n      Hosting environment: Production\ninfo: Microsoft.Hosting.Lifetime[0]\n      Content root path: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\oet1mfqh.0hg\\c0d8e0a9\ninfo: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation 4f387ee4bac141f9b7e7e485a0233dc6 started: capability test.external/value, host 44739154, timeout 00:01:00.\nwarn: Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher[0]\n      Process supervisor 8680: Supervised command 'C:\\Program Files\\nodejs\\node.EXE' exited with code 23.\nfail: Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry[0]\n      Integration invocation 4f387ee4bac141f9b7e7e485a0233dc6 failed: capability test.external/value, host 44739154, elapsed 00:00:00.0335288.\n      StreamJsonRpc.ConnectionLostException: The JSON-RPC connection with the remote party was lost before the request could complete.\n         at StreamJsonRpc.JsonRpc.InvokeCoreAsync(JsonRpcRequest request, Type expectedResultType, CancellationToken cancellationToken)\n         at StreamJsonRpc.JsonRpc.InvokeCoreAsync[TResult](RequestId id, String targetName, IReadOnlyList`1 arguments, IReadOnlyList`1 positionalArgumentDeclaredTypes, IReadOnlyDictionary`2 namedArgumentDeclaredTypes, CancellationToken cancellationToken, Boolean isParameterObject)\n         at Aspire.Hosting.RemoteHost.Ats.ExternalCapabilityRegistry.TryInvokeAsync(String capabilityId, JsonObject args, JsonRpcCallbackInvoker ownerInvoker, CancellationToken cancellationToken) in /_/src/Aspire.Hosting.RemoteHost/Ats/ExternalCapabilityRegistry.cs:line 478\ninf",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Expected restart-attempts log message absent from captured output while the supervised process exit and RPC loss were still being processed.",
+      "job_id": 128770191090,
+      "execution_id": "bc21f43f-b29c-43ee-a54c-8cfb2f319db9",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-worker-endpoint-missing",
+    "remotehost-crashloop-restart-log-missing"
+  ]
+}
