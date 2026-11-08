@@ -72,7 +72,8 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
             await page.GotoAsync("/resources?resource=apigateway&resource=TestResource");
             await Assertions.Expect(page.Locator(".home-hero-headline")).ToHaveTextAsync("All 2 resources are running");
             await Assertions.Expect(page.Locator(".home-activity")).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator(".home-insights")).ToHaveCountAsync(1);
+            // The fixture has no request telemetry, so the insight panels stay hidden.
+            await Assertions.Expect(page.Locator(".home-insights")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".home-problems")).ToHaveCountAsync(1);
             await page.GotoAsync("/resources/TestResource");
             await Assertions.Expect(page.Locator(".overview-grid")).ToBeVisibleAsync();

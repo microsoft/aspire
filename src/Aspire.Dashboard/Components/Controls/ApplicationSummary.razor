@@ -338,6 +338,14 @@
     {
         var activity = _telemetry?.Activity;
 
+        // Three "No recent requests" placeholders under an empty activity chart read as noise rather than
+        // reassurance. Keep the panels out of the page until there is request or error telemetry to rank;
+        // the activity chart above already says the dashboard is waiting for requests.
+        if (activity is null || activity is { SlowestEndpoints.Count: 0, BusiestResources.Count: 0, ErrorHotspots.Count: 0 })
+        {
+            return;
+        }
+
         <section class="home-insights" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeInsightsLabel)]">
             <div class="home-insight">
                 <div class="home-insight-header">

@@ -152,7 +152,7 @@
 .overview-card-link {
     margin-inline-start: auto;
     color: var(--colorBrandForegroundLink);
-    font-size: 12.5px;
+    font-size: 13px;
     text-decoration: none;
 }
 
@@ -214,7 +214,7 @@
     background: transparent;
     color: var(--colorBrandForegroundLink);
     font: inherit;
-    font-size: 12.5px;
+    font-size: 13px;
     text-align: start;
     cursor: pointer;
 }
@@ -250,7 +250,7 @@
 
 /* Match the density of the other card lists, and align the first column with the card header. */
 .overview-card ::deep .overview-property-grid td {
-    font-size: 12.5px;
+    font-size: 13px;
 }
 
 .overview-card ::deep .overview-property-grid td:first-child {
@@ -278,7 +278,7 @@
     flex: 1 1 auto;
     min-height: 40px;
     color: var(--colorNeutralForeground2);
-    font-size: 12.5px;
+    font-size: 13px;
 }
 
 .overview-properties {
@@ -346,7 +346,7 @@
     min-width: 0;
     padding: 6px 0;
     border-top: 1px solid var(--colorNeutralStroke3);
-    font-size: 12.5px;
+    font-size: 13px;
 }
 
 .overview-list li:first-child {
@@ -442,7 +442,7 @@ a.overview-endpoint-address:hover {
 .overview-level {
     flex: 0 0 auto;
     min-width: 58px;
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 600;
 }
 
@@ -490,7 +490,7 @@ a.overview-stat:hover .overview-stat-label {
 
 .overview-stat-label {
     color: var(--colorNeutralForeground2);
-    font-size: 11.5px;
+    font-size: 12px;
 }
 
 .overview-stat.warning .overview-stat-value {
@@ -510,7 +510,7 @@ a.overview-stat:hover .overview-stat-label {
     background: var(--console-background-color, #1b1b1b);
     color: var(--console-foreground-color, #e6e6e6);
     font-family: var(--aspire-font-mono);
-    font-size: 11.5px;
+    font-size: 12px;
     line-height: 1.6;
 }
 
@@ -533,7 +533,7 @@ a.overview-stat:hover .overview-stat-label {
 }
 
 .overview-terminal ::deep .terminal-focus-hint {
-    font-size: 11.5px;
+    font-size: 12px;
 }
 
 .overview-console-line {
@@ -596,7 +596,7 @@ a.overview-stat:hover .overview-stat-label {
 
 ::deep .overview-metric-name {
     color: var(--colorBrandForegroundLink);
-    font-size: 12.5px;
+    font-size: 13px;
 }
 
 .overview-selection-groups {
@@ -685,7 +685,7 @@ a.overview-selection-card-title:hover {
     align-items: center;
     gap: 6px;
     min-width: 0;
-    font-size: 12.5px;
+    font-size: 13px;
 }
 
 .overview-selection-url > a,
@@ -743,7 +743,7 @@ a.overview-selection-card-title:hover {
     border-radius: 8px;
     background: var(--error);
     color: var(--colorNeutralForegroundOnBrand, #fff);
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 600;
     line-height: 16px;
     text-align: center;

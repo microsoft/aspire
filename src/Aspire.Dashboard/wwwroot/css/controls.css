@@ -190,7 +190,7 @@ fluent-field.aspire-input > fluent-number-input::part(control),
 
 .aspire-field-label,
 .aspire-dialog-fields fluent-field > label[slot="label"] {
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: var(--fontWeightMedium);
 }
 

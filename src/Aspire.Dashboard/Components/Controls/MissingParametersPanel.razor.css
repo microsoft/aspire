@@ -45,7 +45,7 @@
 .missing-parameters-description {
     margin: 0 0 10px 34px;
     color: var(--colorNeutralForeground2);
-    font-size: 12.5px;
+    font-size: 13px;
     line-height: 18px;
 }
 
@@ -104,7 +104,7 @@
     align-items: center;
     gap: 6px;
     color: var(--colorNeutralForeground2);
-    font-size: 12.5px;
+    font-size: 13px;
 }
 
 .missing-parameter-file-name.error {

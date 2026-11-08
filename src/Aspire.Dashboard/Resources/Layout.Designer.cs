@@ -745,42 +745,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No logs.
-        /// </summary>
-        public static string ResourcePaneNoStructuredLogsLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoStructuredLogsLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No traces.
-        /// </summary>
-        public static string ResourcePaneNoTracesLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoTracesLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No metrics.
-        /// </summary>
-        public static string ResourcePaneNoMetricsLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoMetricsLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Not applicable.
-        /// </summary>
-        public static string ResourcePaneNotApplicableLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneNotApplicableLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Collapse resource list.
         /// </summary>
         public static string ResourcePaneCollapse {

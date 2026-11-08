@@ -261,11 +261,11 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
     public async Task UnavailableRows_RemainInteractiveAndUpdateWhenSignalsArriveAndClear(int width, AspireDataType signal)
     {
         var writer = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
-        var (path, label, reason) = signal switch
+        var (path, reason) = signal switch
         {
-            AspireDataType.StructuredLogs => ("structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogsLabel, Resources.Layout.ResourcePaneNoStructuredLogs),
-            AspireDataType.Traces => ("traces", Resources.Layout.ResourcePaneNoTracesLabel, Resources.Layout.ResourcePaneNoTraces),
-            AspireDataType.Metrics => ("metrics", Resources.Layout.ResourcePaneNoMetricsLabel, Resources.Layout.ResourcePaneNoMetrics),
+            AspireDataType.StructuredLogs => ("structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogs),
+            AspireDataType.Traces => ("traces", Resources.Layout.ResourcePaneNoTraces),
+            AspireDataType.Metrics => ("metrics", Resources.Layout.ResourcePaneNoMetrics),
             _ => throw new ArgumentOutOfRangeException(nameof(signal))
         };
         await writer.ClearSelectedSignalsAsync(new() { ["tag-a"] = [signal] });
@@ -293,7 +293,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             var row = page.Locator("[data-resource-name='tag-a']");
             var link = row.Locator(".resource-row-link");
             await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
-            await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveTextAsync(label);
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-resource-unavailable-reason", reason);
             await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", reason);
             await Assertions.Expect(link).ToBeEnabledAsync();
             Assert.Null(await link.GetAttributeAsync("aria-disabled"));
@@ -353,7 +353,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
             try
             {
                 await Assertions.Expect(row).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
-                await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveCountAsync(0);
+                Assert.Null(await link.GetAttributeAsync("data-resource-unavailable-reason"));
                 await Assertions.Expect(link).Not.ToHaveAttributeAsync("data-tooltip", reason);
                 await Assertions.Expect(tooltip).ToHaveCountAsync(0);
                 await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("selected"));
@@ -372,7 +372,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                 await writer.ClearSelectedSignalsAsync(new() { ["tag-a"] = [signal], ["tag-b"] = [signal] });
             }
             await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
-            await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveTextAsync(label);
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-resource-unavailable-reason", reason);
             await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", reason);
             await page.Mouse.MoveAsync(1, 1);
             await link.Locator(".resource-row-name").HoverAsync();
@@ -425,7 +425,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                 }
                 var row = page.Locator(".resource-row[data-resource-name='api-key']");
                 var link = row.Locator(".resource-row-link");
-                await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveTextAsync(Resources.Layout.ResourcePaneNotApplicableLabel);
+                await Assertions.Expect(link).ToHaveAttributeAsync("data-resource-unavailable-reason", reason);
                 await Assertions.Expect(link).ToHaveAttributeAsync("href", "/resources/api-key");
                 await Assertions.Expect(link).ToHaveAttributeAsync("aria-description", new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(reason)));
                 await Assertions.Expect(link).ToBeEnabledAsync();
@@ -446,7 +446,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                     await page.Locator(".resource-picker").ClickAsync();
                 }
                 await Assertions.Expect(row).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
-                await Assertions.Expect(row.Locator(".resource-row-availability")).ToHaveCountAsync(0);
+                Assert.Null(await link.GetAttributeAsync("data-resource-unavailable-reason"));
                 await Assertions.Expect(link).ToHaveAttributeAsync("aria-current", "page");
                 await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(1);
                 await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
@@ -459,7 +459,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
     [InlineData(768)]
     [InlineData(1440)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task AvailabilityBadges_FollowTabChangesWithoutChangingSelection(int width)
+    public async Task AvailabilityState_FollowsTabChangesWithoutChangingSelection(int width)
     {
         await RunTestAsync(async page =>
         {
@@ -470,15 +470,15 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                 await page.Locator(".resource-picker").ClickAsync();
             }
             var row = page.Locator("[data-resource-name='tag-a']");
-            var badge = row.Locator(".resource-row-availability");
-            await Assertions.Expect(badge).ToHaveTextAsync(Resources.Layout.ResourcePaneNoStructuredLogsLabel);
+            var link = row.Locator(".resource-row-link");
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-resource-unavailable-reason", Resources.Layout.ResourcePaneNoStructuredLogs);
 
-            foreach (var (tabId, path, label) in new (string, string, string?)[]
+            foreach (var (tabId, path, reason) in new (string, string, string?)[]
             {
-                ("Traces", "traces", Resources.Layout.ResourcePaneNoTracesLabel),
-                ("Metrics", "metrics", Resources.Layout.ResourcePaneNoMetricsLabel),
+                ("Traces", "traces", Resources.Layout.ResourcePaneNoTraces),
+                ("Metrics", "metrics", Resources.Layout.ResourcePaneNoMetrics),
                 ("Console", "consolelogs", null),
-                ("StructuredLogs", "structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogsLabel)
+                ("StructuredLogs", "structuredlogs", Resources.Layout.ResourcePaneNoStructuredLogs)
             })
             {
                 if (width <= 768)
@@ -503,16 +503,16 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                 {
                     await page.Locator(".resource-picker").ClickAsync();
                 }
-                if (label is not null)
+                if (reason is not null)
                 {
-                    await Assertions.Expect(badge).ToBeVisibleAsync();
-                    await Assertions.Expect(badge).ToHaveTextAsync(label);
+                    await Assertions.Expect(row).ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
+                    await Assertions.Expect(link).ToHaveAttributeAsync("data-resource-unavailable-reason", reason);
                 }
                 else
                 {
-                    await Assertions.Expect(badge).ToHaveCountAsync(0);
+                    await Assertions.Expect(row).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("resource-row-unavailable"));
                 }
-                await Assertions.Expect(row.Locator(".resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
+                await Assertions.Expect(link).ToHaveAttributeAsync("aria-current", "page");
             }
         });
     }

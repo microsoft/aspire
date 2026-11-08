@@ -331,10 +331,6 @@
                                     <span class="resource-row-text">
                                         <span class="resource-row-title">
                                             <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@telemetryResourceName" /></span>
-                                            @if (unavailableReason is not null)
-                                            {
-                                                <span class="resource-row-availability" aria-hidden="true">@GetResourceUnavailableLabel(isParameter: false)</span>
-                                            }
                                         </span>
                                         <span class="resource-row-sub resource-row-kind-label">@Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]</span>
                                     </span>
@@ -1009,10 +1005,6 @@
                     <span class="resource-row-text">
                         <span class="resource-row-title">
                             <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
-                            @if (unavailableReason is not null)
-                            {
-                                <span class="resource-row-availability" aria-hidden="true">@GetResourceUnavailableLabel(resource.IsParameter)</span>
-                            }
                         </span>
                         <span class="resource-row-sub">
                             @if (resource.IsResourceHidden(showHiddenResources: false))

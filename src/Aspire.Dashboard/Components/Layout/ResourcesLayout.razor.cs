@@ -1957,14 +1957,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         };
     }
 
-    private string GetResourceUnavailableLabel(bool isParameter) => CurrentTab switch
-    {
-        ResourceTab.StructuredLogs when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoStructuredLogsLabel)].Value,
-        ResourceTab.Traces when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoTracesLabel)].Value,
-        ResourceTab.Metrics when !isParameter => Loc[nameof(Resources.Layout.ResourcePaneNoMetricsLabel)].Value,
-        _ => Loc[nameof(Resources.Layout.ResourcePaneNotApplicableLabel)].Value
-    };
-
     internal int GetUnviewedErrorCount(ResourceViewModel resource)
     {
         return _unviewedErrorCounts is not null &&

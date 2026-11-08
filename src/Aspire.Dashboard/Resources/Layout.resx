@@ -417,18 +417,6 @@
   <data name="ResourcePaneParameterNoTerminal" xml:space="preserve">
     <value>Parameters do not support terminal sessions. Select to view this parameter's overview.</value>
   </data>
-  <data name="ResourcePaneNoStructuredLogsLabel" xml:space="preserve">
-    <value>No logs</value>
-  </data>
-  <data name="ResourcePaneNoTracesLabel" xml:space="preserve">
-    <value>No traces</value>
-  </data>
-  <data name="ResourcePaneNoMetricsLabel" xml:space="preserve">
-    <value>No metrics</value>
-  </data>
-  <data name="ResourcePaneNotApplicableLabel" xml:space="preserve">
-    <value>Not applicable</value>
-  </data>
   <data name="ResourceTabOverview" xml:space="preserve">
     <value>Overview</value>
   </data>

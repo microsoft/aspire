@@ -492,19 +492,9 @@
         <target state="new">No metrics are currently available for this resource. Select to open its metrics view.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneNoMetricsLabel">
-        <source>No metrics</source>
-        <target state="new">No metrics</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneNoStructuredLogs">
         <source>No structured logs are currently available for this resource. Select to open its logs view.</source>
         <target state="new">No structured logs are currently available for this resource. Select to open its logs view.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneNoStructuredLogsLabel">
-        <source>No logs</source>
-        <target state="new">No logs</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneNoTagsDescription">
@@ -520,16 +510,6 @@
       <trans-unit id="ResourcePaneNoTraces">
         <source>No traces are currently available for this resource. Select to open its traces view.</source>
         <target state="new">No traces are currently available for this resource. Select to open its traces view.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneNoTracesLabel">
-        <source>No traces</source>
-        <target state="new">No traces</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneNotApplicableLabel">
-        <source>Not applicable</source>
-        <target state="new">Not applicable</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneOpen">
