@@ -328,6 +328,46 @@ export async function answerActiveInput(value: string, expectedPlaceholder: stri
     await input.confirm();
 }
 
+// VS Code's simple file dialog (files.simpleDialog.enable) navigates asynchronously as the path is typed. If Enter
+// arrives while that navigation is still pending, the dialog consumes Enter to refresh its listing instead of
+// resolving, leaving the prompt open. Only confirm once the dialog has settled on the typed path's parent folder.
+export async function answerActiveSimpleFileDialog(folderPath: string, timeoutMs = 30000): Promise<void> {
+    const input = await waitForActiveInput('Folder path', undefined, timeoutMs);
+    const expectedLabel = folderPath.split(/[\\/]/).filter(segment => segment.length > 0).pop() ?? folderPath;
+    let lastState = '<none>';
+    const readDialogState = async (): Promise<{ value: string; labels: string[] }> => {
+        const value = await input.getText();
+        const picks = await input.getQuickPicks();
+        const labels = await Promise.all(picks.map(pick => pick.getLabel()));
+        lastState = `value '${value}', visible labels: ${labels.join(', ') || '<none>'}`;
+        return { value, labels };
+    };
+
+    // Typing before the initial listing has loaded lets the dialog's first navigation overwrite the typed path.
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return (await readDialogState()).labels.length > 0;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for the folder dialog listing to load. Last state: ${lastState}.`);
+
+    await input.setText(folderPath);
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const { value, labels } = await readDialogState();
+            return value === folderPath && labels.includes(expectedLabel);
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for the folder dialog to navigate to '${folderPath}'. Last state: ${lastState}.`);
+    await input.confirm();
+}
+
 export async function waitForActiveInput(expectedPlaceholder: string, expectedTitle?: string, timeoutMs = 30000): Promise<InputBox> {
     let lastPrompt = '<none>';
     return await VSBrowser.instance.driver.wait(async () => {
