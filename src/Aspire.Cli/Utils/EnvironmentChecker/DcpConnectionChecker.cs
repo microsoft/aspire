@@ -30,6 +30,8 @@ internal sealed class DcpConnectionChecker(
     private static readonly TimeSpan s_connectionTimeout = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan s_processExitTimeout = TimeSpan.FromSeconds(5);
 
+    private const string DcpStopRequestMediaType = "application/merge-patch+json";
+
     public async Task<EnvironmentCheckResult> TestConnectionAsync(string dcpDirectory, bool useDeveloperCertificate, CancellationToken cancellationToken)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -205,6 +207,7 @@ internal sealed class DcpConnectionChecker(
         private readonly OutputCollector _output;
         private readonly ILogger _logger;
         private bool _stopRequested;
+        private bool _stopAccepted;
 
         private DcpConnectionTestSession(IProcessExecution process, string sessionDirectory, string kubeconfigPath, OutputCollector output, ILogger logger)
         {
@@ -333,10 +336,16 @@ internal sealed class DcpConnectionChecker(
             {
                 using var request = new HttpRequestMessage(HttpMethod.Patch, new Uri(kubeconfig.Server, "/admin/execution"))
                 {
-                    Content = new StringContent("""{"status":"Stopping","shutdownResourceCleanup":"None"}""", Encoding.UTF8, "application/merge-patch+json")
+                    Content = new StringContent("""{"status":"Stopping","shutdownResourceCleanup":"None"}""", Encoding.UTF8)
                 };
 
+                // DCP matches the media type exactly and answers 415 when StringContent appends
+                // "; charset=utf-8", which would leave the process to be killed instead of stopped.
+                // This mirrors the header DcpKubernetesClient sends for the same PATCH.
+                request.Content.Headers.ContentType = new MediaTypeHeaderValue(DcpStopRequestMediaType);
+
                 using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                _stopAccepted = response.IsSuccessStatusCode;
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogDebug("DCP doctor stop request returned HTTP {StatusCode}.", response.StatusCode);
@@ -352,6 +361,19 @@ internal sealed class DcpConnectionChecker(
         {
             try
             {
+                if (_stopAccepted && !_process.HasExited)
+                {
+                    using var gracefulExitCts = new CancellationTokenSource(s_processExitTimeout);
+                    try
+                    {
+                        await _process.WaitForExitAsync(gracefulExitCts.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (gracefulExitCts.IsCancellationRequested)
+                    {
+                        _logger.LogDebug("DCP doctor process did not exit within {Timeout} after an accepted stop request.", s_processExitTimeout);
+                    }
+                }
+
                 if (!_process.HasExited)
                 {
                     _process.Kill(entireProcessTree: true);
