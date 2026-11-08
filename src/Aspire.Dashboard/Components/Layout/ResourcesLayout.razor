@@ -24,7 +24,6 @@
     var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed && !_isPaneFullCanvas;
-    _showRowAges = ShouldShowRowAges();
 
     RenderFragment resourcePane = @<aside class="resource-pane @(showCollapsedPane ? "resource-pane-popup" : null)" aria-label="@Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneLandmark) : nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]" hidden="@(!isDesktop && !_isDrawerOpen && !_isPaneFullCanvas)">
             <div class="resource-pane-contents">
@@ -935,6 +934,15 @@
                        colors and on the reason in its tooltip and accessible description. *@
                     <span class="resource-row-text">
                         <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
+                        @if (_isPaneFullCanvas)
+                        {
+                            @* The full-page list's name column is wide, so the state dot follows the name ("frontend ●")
+                               rather than ending the column, far from the name it describes. The narrow sidebar keeps
+                               it in an aligned column at the end of the row. *@
+                            <span class="resource-row-meta-state" data-tooltip="@stateViewModel.Text">
+                                <span class="state-dot @GetStateClass(resource)"></span>
+                            </span>
+                        }
                         @if (resource.IsResourceHidden(showHiddenResources: false))
                         {
                             <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())"
@@ -950,10 +958,18 @@
                         <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
                     }
                     <span class="resource-row-meta">
-                        <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
-                        <span class="resource-row-meta-state" data-tooltip="@stateViewModel.Text">
-                            <span class="state-dot @GetStateClass(resource)"></span>
-                        </span>
+                        @* A parameter's type says nothing its key icon and the Parameters section don't, and in the
+                           full-page list the other rows' types are in the Source column, so it's left out there. *@
+                        @if (!(_isPaneFullCanvas && resource.IsParameter))
+                        {
+                            <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
+                        }
+                        @if (!_isPaneFullCanvas)
+                        {
+                            <span class="resource-row-meta-state" data-tooltip="@stateViewModel.Text">
+                                <span class="state-dot @GetStateClass(resource)"></span>
+                            </span>
+                        }
                     </span>
                 }
                 else
@@ -973,7 +989,7 @@
                             @* The parts have no whitespace between them. Where this line flows as text, so that it ends with
                                an ellipsis, whitespace would render as spaces on top of their margins. *@
                             <span class="state-dot @GetStateClass(resource)"></span><span>@stateViewModel.Text</span>
-                            @if (_showRowAges && !_isPaneFullCanvas && !resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
+                            @if (!_isPaneFullCanvas && !resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
                             {
                                 @* Only the age shows, after the state; the tooltip says whether it's since starting or stopping. *@
                                 var sidebarTimeDescription = GetRowTimeDescription(sidebarTime);
@@ -1053,7 +1069,7 @@
                 <div class="resource-row-wide-metadata">
                     <span class="resource-row-health">
                         <span class="resource-row-start-time">
-                            @if (_showRowAges && GetRowTime(resource) is { } rowTime)
+                            @if (GetRowTime(resource) is { } rowTime)
                             {
                                 var rowTimeDescription = GetRowTimeDescription(rowTime);
                                 <FluentIcon Value="@(new Icons.Regular.Size12.Clock())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />

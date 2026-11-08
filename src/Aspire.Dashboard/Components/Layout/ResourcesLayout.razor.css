@@ -339,8 +339,9 @@
     min-height: 34px;
 }
 
+/* The checkmark marks the chosen grouping, so the item has no background of its own: Fluent's subtle hover grey
+   didn't match the menu's tinted surface. Hover and focus tint it like any menu item (see controls.css). */
 .resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item[checked] {
-    background: var(--colorSubtleBackgroundHover);
     color: var(--colorNeutralForeground1);
 }
 
@@ -2009,6 +2010,14 @@
     align-items: center;
     gap: var(--aspire-space-1);
     min-width: 0;
+}
+
+/* The state dot right after a compact row's name in the full-page list. The name shrinks first, so a long name
+   ends with an ellipsis before the dot rather than pushing it out. */
+.resource-row-text > .resource-row-meta-state {
+    flex: 0 0 auto;
+    /* With the row's 4px gap, 8px from the name. */
+    margin-inline-start: var(--aspire-space-1);
 }
 
 .resource-row-start-time {

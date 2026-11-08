@@ -403,20 +403,18 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("3h ago", cut.Find("[data-resource-name='api'] .resource-row-wide-metadata time").TextContent.Trim());
     }
 
-    [Theory]
-    [InlineData(0, false)]
-    [InlineData(5, true)]
-    public async Task RowAges_AreHiddenWhenEveryResourceShowsTheSameAge(int minutesApart, bool expectAges)
+    [Fact]
+    public async Task RowAges_ShowWhenEveryResourceShowsTheSameAge()
     {
-        // Right after the app starts every row would say "now", which tells nothing, so the ages are hidden until they
-        // differ.
+        // Right after the app starts every row says the same age. They still show: hiding them until they differed
+        // left the column blank for minutes, which read as the ages not loading.
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var started = new DateTime(2026, 11, 8, 10, 0, 0, DateTimeKind.Utc);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
             [
                 ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, startTimeStamp: started),
-                ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Running, startTimeStamp: started.AddMinutes(minutesApart))
+                ModelTestHelpers.CreateResource("cache", state: KnownResourceState.Running, startTimeStamp: started)
             ],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var clock = Assert.IsType<TestTimeProvider>(Services.GetRequiredService<BrowserTimeProvider>());
@@ -427,7 +425,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         // Two-line rows show the age after the state; a compact row has no room for it.
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
 
-        Assert.Equal(expectAges ? ["10m ago", "5m ago"] : [], cut.FindAll(".resource-row-sidebar-start time").Select(time => time.TextContent));
+        Assert.Equal(["10m ago", "10m ago"], cut.FindAll(".resource-row-sidebar-start time").Select(time => time.TextContent));
     }
 
     [Theory]
@@ -528,6 +526,14 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Equal("11m ago",
             cut.Find("[data-resource-name='api'] .resource-row-health time").TextContent.Trim()));
+
+        // In the full-page list, a compact row's state dot follows its name rather than ending the wide name column.
+        // There is one dot per row.
+        if (compact)
+        {
+            var dot = Assert.Single(cut.FindAll("[data-resource-name='api'] .resource-row-meta-state"));
+            Assert.Equal("resource-row-text", dot.ParentElement!.ClassName);
+        }
 
         // Compact rows show the state as a dot that names it in its tooltip. The other densities spell it out.
         string? GetStateText(AngleSharp.Dom.IElement resourceRow) => compact

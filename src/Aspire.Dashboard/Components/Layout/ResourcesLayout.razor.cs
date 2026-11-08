@@ -37,9 +37,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private const string FilterButtonId = "resourcePaneFilterButton";
     private const string GroupingButtonId = "resourcePaneGroupingButton";
     private const string ResourcePickerButtonId = "resourcePanePickerButton";
-    internal const int MinimumPaneWidthPx = 420;
+    // The list has layouts down to this width (see the resource-pane container queries in ResourcesLayout.razor.css):
+    // the type column narrows and the lowest-priority row actions give way first. It opens wider, at the default.
+    internal const int MinimumPaneWidthPx = 300;
     internal const int MaximumPaneWidthPx = 560;
-    internal const int DefaultPaneWidthPx = MinimumPaneWidthPx;
+    internal const int DefaultPaneWidthPx = 420;
     private const string ResourcesSectionKey = "section:resources";
     private const string ParametersSectionKey = "section:parameters";
     private const string TelemetrySectionKey = "section:telemetry";
@@ -614,7 +616,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
             if (registrationChanged && showResizer)
             {
-                await _jsModule.InvokeVoidAsync("registerPaneResizer", _layoutElement, _selfRef, MinimumPaneWidthPx, MaximumPaneWidthPx);
+                await _jsModule.InvokeVoidAsync("registerPaneResizer", _layoutElement, _selfRef, MinimumPaneWidthPx, MaximumPaneWidthPx, DefaultPaneWidthPx);
             }
             else if (registrationChanged)
             {
@@ -1826,37 +1828,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // name includes the visible text (WCAG 2.5.3, label in name: https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
         $"{rowTime.Label} {GetShortAge(rowTime.Time)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
-
-    private bool _showRowAges = true;
-
-    // Ages are hidden when every resource shows the same one, for example right after the app starts, when each row
-    // would say "now": a column that repeats one value tells nothing. A single resource, or any that started or stopped
-    // at another time, brings them back. The tooltip on each age still has the exact time.
-    private bool ShouldShowRowAges()
-    {
-        string? firstAge = null;
-        var timedCount = 0;
-        foreach (var resource in _resourceByName.Values)
-        {
-            if (resource.IsParameter || resource.IsResourceHidden(_filter.ShowHiddenResources) || GetRowTime(resource) is not { } rowTime)
-            {
-                continue;
-            }
-
-            var age = GetShortAge(rowTime.Time);
-            timedCount++;
-            if (firstAge is null)
-            {
-                firstAge = age;
-            }
-            else if (!string.Equals(firstAge, age, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return timedCount < 2;
-    }
 
     // Rows show a short age ("7m ago") because every row repeats it; the tooltip and accessible label keep the
     // full wording and the exact time (see GetRowTimeDescription).

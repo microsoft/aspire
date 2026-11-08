@@ -254,7 +254,7 @@ export function unregisterTabOverflow(registrationId) {
     window.removeEventListener("resize", state.schedule);
 }
 
-export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth) {
+export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth, defaultWidth) {
     unregisterPaneResizer(layoutElement);
 
     const pane = layoutElement.querySelector(':scope > .resource-pane');
@@ -405,7 +405,8 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
     const onDoubleClick = e => {
         e.preventDefault();
         handle.focus({ preventScroll: true });
-        resizeTo(minimumWidth);
+        // Double-click restores the default width, which is wider than the minimum the pane can be dragged to.
+        resizeTo(defaultWidth);
         commit();
     };
 
