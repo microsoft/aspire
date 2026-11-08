@@ -2857,15 +2857,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             yield break;
         }
 
-        var resource = SelectedResource;
         var isTelemetryOnly = SelectedTelemetryOnlyResource is not null;
-        var isMultiSelection = IsMultiSelection;
 
         // Every tab is always rendered and hidden when it doesn't apply. Removing a FluentTab makes FluentTabs
         // activate its first tab, which would navigate away from the current page.
         var errorCount = _selectedItems.Sum(i => i.Resource is { } r ? GetUnviewedErrorCount(r) : 0);
+        // Overview stays for a resource that isn't known, such as a replica that was replaced: its page says the
+        // resource wasn't found, and the tab is the way back to it from the resource's other pages.
         yield return CreateTab(ResourceTab.Overview, Loc[nameof(Resources.Layout.ResourceTabOverview)], new Icons.Regular.Size24.Board(),
-            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly && (resource is not null || isMultiSelection || _selectedItems.Count == 0));
+            isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
             isVisible: DashboardClient.IsEnabled && !isTelemetryOnly);
         yield return CreateTab(ResourceTab.Terminal, TerminalLoc[nameof(TerminalStrings.TerminalTitle)], new Icons.Regular.Size20.WindowConsole(),

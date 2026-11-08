@@ -398,6 +398,12 @@
     overflow: auto;
 }
 
+/* Rows show activity only for resources that have some. When none does, the activity track collapses rather than
+   leaving an empty gap before the actions; the rows' tracks match, since the list decides for all of them. */
+.resource-pane-list:not(:has(.resource-row-insights)) {
+    --resource-insight-width: 0px;
+}
+
 .resource-pane-section-label {
     padding: 12px 6px 5px;
     color: var(--colorNeutralForeground3);
@@ -659,8 +665,7 @@
     outline-offset: -2px;
 }
 
-.resource-row-kind-label,
-.resource-row-kind-parameter .resource-row-type {
+.resource-row-kind-label {
     color: var(--resource-row-kind-accent);
 }
 
@@ -760,11 +765,14 @@
     bottom: -1px;
 }
 
-/* The full-page list leads each parent row with its expand toggle, like a file tree. Every row's icon moves right by
-   the toggle's width so the icons stay aligned, and the section headers and tree guides, which are measured from
-   the same offset, move with them. */
-.resources-layout.pane-full-canvas {
+/* A parent row leads with its expand toggle, like a file tree. When the list has one, every row's icon moves right
+   by the toggle's width so the icons stay aligned, and the section headers and tree guides, which are measured from
+   the same offset, move with them. A list without parents keeps its icons aligned with the filter box above it. */
+.resource-pane-list:has(.resource-row-toggle-leading) {
     --resource-row-icon-offset: 30px;
+}
+
+.resources-layout.pane-full-canvas {
     /* Two lifecycle commands and the menu: 3 x 28px + 2 x 4px. The toggle leads the row instead, and the URLs column
        replaces the open-URL button. */
     --resource-row-actions-width: 92px;
@@ -792,7 +800,7 @@
     transform: rotate(-90deg);
 }
 
-/* Elsewhere, the expand toggle sits on the right so resource icons stay aligned with the filter box above the list. */
+/* The expand toggle's own look; where it sits is above (.resource-row-toggle-leading). */
 .resource-row-toggle {
     display: inline-flex;
     flex: 0 0 auto;
@@ -1314,6 +1322,7 @@
     display: flex;
     flex: 1 1 auto;
     align-items: center;
+    gap: var(--aspire-space-3);
     min-width: 0;
     min-height: 32px;
 }
@@ -2375,7 +2384,7 @@
 
 @container resource-pane (min-width: 960px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] minmax(220px, calc(320px + var(--resource-row-identity-extra, 0px))) [status] 180px [source] minmax(200px, 1fr) [endpoint] minmax(96px, 280px) [insights actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] minmax(220px, calc(320px + var(--resource-row-identity-extra, 0px))) [status] 96px [source] minmax(200px, 1fr) [endpoint] minmax(96px, 1fr) [insights actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalS);
     }
 
@@ -2847,10 +2856,10 @@
 }
 
 @container resource-pane (min-width: 1440px) {
-    /* Only the source track absorbs spare width, so the URLs column keeps a readable width however wide the pane is;
-       activity stays next to actions. */
+    /* Source and URLs share the spare width, so neither bunches up against the other; activity stays next to
+       actions. The status track holds only the age ("58m ago"). */
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] calc(260px + var(--resource-row-identity-extra, 0px)) [status] 180px [source] minmax(200px, 1fr) [endpoint] minmax(200px, 320px) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] calc(260px + var(--resource-row-identity-extra, 0px)) [status] 96px [source] minmax(200px, 1fr) [endpoint] minmax(200px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
     }
 
     ::deep .resource-row-insights {
@@ -2889,14 +2898,14 @@
 
 @container resource-pane (min-width: 1600px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [source] minmax(220px, 1fr) [endpoint] minmax(240px, 360px) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 96px [source] minmax(220px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalL);
     }
 }
 
 @container resource-pane (min-width: 1800px) {
     .resource-row:has(> .resource-row-wide-metadata) {
-        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 180px [source] minmax(352px, 1fr) [endpoint] minmax(240px, 360px) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 96px [source] minmax(352px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
     }
 }
 

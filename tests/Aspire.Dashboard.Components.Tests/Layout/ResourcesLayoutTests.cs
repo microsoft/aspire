@@ -1376,6 +1376,25 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public void Tabs_KeepOverviewForAResourceThatIsNotFound()
+    {
+        // A replica that was replaced leaves its pages' URLs behind. Its overview says it wasn't found, so the tab stays
+        // as the way back to it from the resource's console logs. The tabs render in this component below the desktop
+        // breakpoint (on desktop they're in the app header).
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api-replaced"));
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
+            cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible && t.Instance.Id != "resource-tab-none").Select(t => t.Instance.Id)));
+    }
+
+    [Fact]
     public void Tabs_ShowTheSelectionsPagesAndNeverDisableThoseWithoutTelemetry()
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);

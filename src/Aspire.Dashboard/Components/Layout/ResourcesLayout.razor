@@ -481,10 +481,11 @@
         // the tab order stays the order on screen. Other rails keep the toggle first.
         var toggleLast = IsCompact && !_isPaneFullCanvas;
         <div class="@(showLabels ? "resource-actions" : "resource-row-actions")">
-            @* The full-page list puts the toggle before the row's icon, like a file tree (see the row markup). *@
+            @* The toggle itself leads the row (see the row markup). The sidebar's rail keeps its slot, so the actions
+               don't move; the full-page list's rail has no slot for it. *@
             @if (!showLabels && !toggleLast && !_isPaneFullCanvas)
             {
-                RenderRowToggle(__builder, row);
+                RenderRowToggleSlot(__builder);
             }
             @* The full-page list has a URLs column, so an open button would repeat its first link. *@
             @if (!showLabels && !_isPaneFullCanvas && primaryUrl?.Url is { } primaryEndpointUrl)
@@ -538,29 +539,16 @@
                               Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
             @if (!showLabels && toggleLast)
             {
-                RenderRowToggle(__builder, row);
+                RenderRowToggleSlot(__builder);
             }
         </div>
     };
 
-    // The expand toggle of a parent row, or a spacer that keeps the other rows' actions aligned with it.
-    private void RenderRowToggle(RenderTreeBuilder __builder, ResourceGridViewModel? row)
+    // The empty slot the sidebar's action rail keeps where the expand toggle was, so the actions stay where they were
+    // in every row. The toggle itself leads the row, before its icon.
+    private static void RenderRowToggleSlot(RenderTreeBuilder __builder)
     {
-        @if (row is { Children.Count: > 0 })
-        {
-            <FluentButton Appearance="ButtonAppearance.Transparent"
-                          Class="@($"resource-row-toggle {(row.IsCollapsed ? "collapsed" : string.Empty)}")"
-                          IconOnly="true"
-                          aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]"
-                          aria-expanded="@((!row.IsCollapsed).ToString().ToLowerInvariant())"
-                          OnClick="@(() => OnToggleCollapseAsync(row))">
-                <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
-            </FluentButton>
-        }
-        else
-        {
-            <span class="resource-row-toggle-spacer" aria-hidden="true"></span>
-        }
+        <span class="resource-row-toggle-spacer" aria-hidden="true"></span>
     }
 
     private RenderFragment RenderPaneCounts(int resourceCount, int parameterCount, int telemetrySourceCount) => __builder =>
@@ -905,11 +893,10 @@
                     <span class="resource-tree-stem" aria-hidden="true"></span>
                 }
             }
-            @if (_isPaneFullCanvas && row is { Children.Count: > 0 })
+            @if (row is { Children.Count: > 0 })
             {
-                @* In the full-page list, a parent's expand toggle comes before its icon, like a file tree, rather than
-                   in the actions column at the far end of the wide row. A sibling of the row link, not inside it: a
-                   button can't be nested in a link. *@
+                @* A parent's expand toggle comes before its icon, like a file tree, rather than among the actions at
+                   the end of the row. A sibling of the row link, not inside it: a button can't be nested in a link. *@
                 <FluentButton Appearance="ButtonAppearance.Transparent"
                               Class="@($"resource-row-toggle resource-row-toggle-leading {(row.IsCollapsed ? "collapsed" : string.Empty)}")"
                               IconOnly="true"
@@ -974,9 +961,9 @@
                         <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
                     }
                     <span class="resource-row-meta">
-                        @* A parameter's type says nothing its key icon and the Parameters section don't, and in the
-                           full-page list the other rows' types are in the Source column, so it's left out there. *@
-                        @if (!(_isPaneFullCanvas && resource.IsParameter))
+                        @* A parameter's type says nothing its key icon and the Parameters section don't, so it's left
+                           out, which leaves its name the room. *@
+                        @if (!resource.IsParameter)
                         {
                             <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         }
