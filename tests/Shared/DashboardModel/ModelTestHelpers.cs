@@ -30,7 +30,8 @@ public static class ModelTestHelpers
         ImmutableArray<HealthReportViewModel>? healthReports = null,
         string? resourceTypeDisplayName = null,
         DateTime? startTimeStamp = null,
-        DateTime? stopTimeStamp = null)
+        DateTime? stopTimeStamp = null,
+        string? iconData = null)
     {
         return new ResourceViewModel
         {
@@ -54,6 +55,7 @@ public static class ModelTestHelpers
             Commands = commands ?? [],
             Relationships = relationships ?? [],
             IsHidden = hidden,
+            IconData = iconData,
             IconName = iconName,
             IconVariant = iconVariant
         };

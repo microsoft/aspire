@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS dashboard_resources (
     stopped_at_nanos INTEGER NULL,
     is_hidden INTEGER NOT NULL,
     supports_detailed_telemetry INTEGER NOT NULL,
+    icon_data TEXT NULL,
     icon_name TEXT NULL,
     icon_variant INTEGER NULL,
     console_logs_loaded INTEGER NOT NULL,

@@ -27,7 +27,7 @@ public sealed partial class SqliteResourceRepository
                 "resource_name", "replica_index", "resource_type", "display_name", "uid", "state",
                 "created_at_seconds", "created_at_nanos", "state_style",
                 "started_at_seconds", "started_at_nanos", "stopped_at_seconds", "stopped_at_nanos",
-                "is_hidden", "supports_detailed_telemetry", "icon_name", "icon_variant", "console_logs_loaded", "resource_type_display_name"
+                "is_hidden", "supports_detailed_telemetry", "icon_name", "icon_variant", "console_logs_loaded", "resource_type_display_name", "icon_data"
             ],
             static (resourceToSave, parameters) =>
             {
@@ -51,6 +51,7 @@ public sealed partial class SqliteResourceRepository
                 parameters[16].Value = resource.HasIconVariant ? (int)resource.IconVariant : DBNull.Value;
                 parameters[17].Value = resourceToSave.ConsoleLogsLoaded;
                 parameters[18].Value = resource.HasResourceTypeDisplayName ? resource.ResourceTypeDisplayName : DBNull.Value;
+                parameters[19].Value = resource.HasIconData ? resource.IconData : DBNull.Value;
             });
 
         var resourceModels = resources.Select(resource => resource.Resource).ToArray();
@@ -379,6 +380,7 @@ public sealed partial class SqliteResourceRepository
                 stopped_at_nanos AS StoppedAtNanos,
                 is_hidden AS IsHidden,
                 supports_detailed_telemetry AS SupportsDetailedTelemetry,
+                icon_data AS IconData,
                 icon_name AS IconName,
                 icon_variant AS IconVariant,
                 console_logs_loaded AS ConsoleLogsLoaded
@@ -639,6 +641,10 @@ public sealed partial class SqliteResourceRepository
         {
             resource.StoppedAt = CreateTimestamp(record.StoppedAtSeconds.Value, record.StoppedAtNanos);
         }
+        if (record.IconData is not null)
+        {
+            resource.IconData = record.IconData;
+        }
         if (record.IconName is not null)
         {
             resource.IconName = record.IconName;
@@ -682,6 +688,7 @@ public sealed partial class SqliteResourceRepository
         public int? StoppedAtNanos { get; init; }
         public required bool IsHidden { get; init; }
         public required bool SupportsDetailedTelemetry { get; init; }
+        public string? IconData { get; init; }
         public string? IconName { get; init; }
         public int? IconVariant { get; init; }
         public required bool ConsoleLogsLoaded { get; init; }
