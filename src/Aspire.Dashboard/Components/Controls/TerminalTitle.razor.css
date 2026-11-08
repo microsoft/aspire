@@ -6,7 +6,7 @@
     flex: 1;
     color: var(--colorNeutralForeground1);
     font-family: var(--fontFamilyBase);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .terminal-title-container {

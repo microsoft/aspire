@@ -36,23 +36,23 @@
 }
 
 ::deep .message-container .message-title {
-    font-size: var(--fontSizeBase400);
+    font-size: var(--aspire-font-size-heading);
     display: flex;
     align-items: center;
 }
 
 ::deep .section-title {
     font-family: var(--aspire-font-display);
-    font-size: var(--fontSizeBase400);
-    font-weight: 600;
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .dialog-title-grid ::deep .trace-id {
     display: inline;
     color: var(--foreground-subtext-rest);
     padding-left: 0.5rem;
-    font-size: 12px;
-    font-weight: normal;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 1;
 }
 
@@ -109,7 +109,7 @@
 ::deep .category-badge {
     border-radius: var(--aspire-radius-small);
     margin-left: 8px;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     line-height: 18px;
     padding: 0px 2px;
     column-gap: 2px;
@@ -121,8 +121,8 @@
     background-color: var(--llm-background-color);
     color: var(--llm-color);
     margin-right: 8px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     pointer-events: none;
 }
 
@@ -163,7 +163,7 @@
 ::deep .message-header-details {
     display: flex;
     flex-flow: column;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     margin-left: auto;
     margin-right: 8px;
 }
@@ -175,7 +175,7 @@
 
 ::deep .message-header-date {
     color: var(--colorNeutralForeground3);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 ::deep .tab-container {
@@ -239,7 +239,7 @@
 ::deep .no-message-content,
 ::deep .no-message-content-content {
     color: var(--colorNeutralForeground3);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 ::deep .display-error-message {
@@ -248,7 +248,7 @@
 
 ::deep .error-message-text {
     color: var(--error);
-    font-weight: 500;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep .display-error-content {
@@ -272,7 +272,7 @@
     border-color: transparent;
     border-radius: var(--aspire-radius-small);
     color: var(--colorNeutralForeground1);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
     margin-left: auto;
     margin-top: 4px;
     margin-right: 4px;
@@ -345,7 +345,7 @@
 }
 
 ::deep .tab-container .tool-heading .tool-name {
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
     white-space: nowrap;
 }
 
@@ -365,7 +365,7 @@
 
 ::deep .tab-container .tool-footer {
     padding-left: 4px;
-    font-weight: 500;
+    font-weight: var(--aspire-font-weight-semibold);
     margin-bottom: 8px;
 }
 
@@ -387,11 +387,11 @@
 }
 
 ::deep .tab-container strong {
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep .tab-container th.tool-cell {
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep .tab-container .tool-cell-nowrap {
@@ -413,7 +413,7 @@
     flex-direction: row;
     column-gap: var(--aspire-space-2);
     align-items: center;
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep .tab-container .evaluation-divider {

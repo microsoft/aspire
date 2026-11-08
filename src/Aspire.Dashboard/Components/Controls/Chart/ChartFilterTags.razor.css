@@ -3,7 +3,7 @@
     padding: 1px 3px;
     border: var(--strokeWidthThin) solid transparent;
     background: var(--colorNeutralBackground1Selected);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
     color: inherit;
     font-family: inherit;

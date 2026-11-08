@@ -11,7 +11,7 @@
     background-color: var(--messagebar-info-background-color);
     column-gap: var(--aspire-space-2);
     color: var(--messagebar-foreground-color);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
 }
 
@@ -54,7 +54,7 @@
 }
 
 .dashboard-message-bar-title {
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
     padding-inline-end: 8px;
 }
 
@@ -91,7 +91,7 @@
     border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
     color: var(--colorNeutralForeground1);
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
     text-decoration: none;
 }
 

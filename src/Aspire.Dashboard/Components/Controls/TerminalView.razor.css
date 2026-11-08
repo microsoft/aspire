@@ -51,7 +51,7 @@
     border-top: 1px solid var(--colorNeutralStroke1);
     background: var(--colorNeutralBackground2);
     color: var(--colorNeutralForeground1);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
     /* Fluent controls consume these tokens inside their shadow roots. */
     --fontSizeBase300: var(--fontSizeBase200);
@@ -137,7 +137,7 @@
 .terminal-font-size {
     min-width: 32px;
     text-align: center;
-    font-weight: var(--fontWeightMedium);
+    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 

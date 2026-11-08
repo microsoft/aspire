@@ -77,9 +77,9 @@
     min-height: 0;
     padding: 1px 14px;
     border-radius: var(--aspire-radius-small);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 ::deep.url-list {

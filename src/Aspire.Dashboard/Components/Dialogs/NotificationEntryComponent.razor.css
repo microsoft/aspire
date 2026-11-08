@@ -39,8 +39,8 @@
     grid-row: 1;
     padding: 10px 0;
     align-self: center;
-    font-weight: 600;
-    font-size: 12px;
+    font-weight: var(--aspire-font-weight-semibold);
+    font-size: var(--aspire-font-size-secondary);
     line-height: 16px;
     white-space: unset;
 }
@@ -63,14 +63,14 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--aspire-space-2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     word-break: break-word;
 }
 
 .notification-entry-time {
     grid-column: 2 / 4;
     grid-row: 3;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     text-align: right;
     padding: 4px 4px 8px 0px;
     color: var(--colorNeutralForeground3);

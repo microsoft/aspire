@@ -60,6 +60,6 @@
 
 .error-message {
     color: var(--error);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     margin-top: 8px;
 }

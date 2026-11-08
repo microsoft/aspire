@@ -8,7 +8,7 @@
 .runs-description {
     margin: 0;
     color: var(--colorNeutralForeground3);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
 }
 
@@ -23,8 +23,8 @@
 .runs-group-header {
     margin: 12px 0 4px;
     color: var(--colorNeutralForeground3);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .runs-empty {

@@ -7,8 +7,8 @@
     gap: var(--aspire-space-1);
     margin-bottom: 18px;
     color: var(--colorNeutralForeground3);
-    font-size: 11px;
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
     letter-spacing: .04em;
     text-transform: uppercase;
 }
@@ -46,7 +46,7 @@
 
 .dashboard-feedback-step-header h2 {
     margin: 0;
-    font-size: 18px;
+    font-size: var(--aspire-font-size-heading);
     line-height: 24px;
 }
 
@@ -168,7 +168,7 @@
     padding: 10px 12px;
     border-radius: var(--aspire-radius-medium) var(--aspire-radius-medium) 0 0;
     color: var(--colorBrandForegroundLink);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     cursor: pointer;
 }
 
@@ -181,7 +181,7 @@
 .dashboard-feedback-preview-header {
     padding: 0 12px 6px;
     color: var(--colorNeutralForeground3);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
 }
 
 .dashboard-feedback-preview {
@@ -193,7 +193,7 @@
     background: transparent;
     color: var(--colorNeutralForeground1);
     font-family: var(--aspire-font-monospace);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     line-height: 1.5;
     white-space: pre-wrap;
 }

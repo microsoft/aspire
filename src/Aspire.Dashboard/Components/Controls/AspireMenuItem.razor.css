@@ -24,7 +24,7 @@ span.aspire-menu-secondary-action-container:has(.aspire-menu-item-count) {
 
 .aspire-menu-item-description {
     color: var(--colorNeutralForeground3);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     white-space: nowrap;
 }
 
@@ -35,7 +35,7 @@ span.aspire-menu-secondary-action-container:has(.aspire-menu-item-count) {
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     line-height: 18px;
     text-align: center;
 }
@@ -99,8 +99,8 @@ fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
     border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
     color: var(--colorNeutralForeground2);
     font-family: var(--fontFamilyBase);
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: var(--lineHeightBase300);
     cursor: default;
     user-select: none;
@@ -126,7 +126,7 @@ fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
     padding: 4px 8px 6px 36px;
     color: var(--colorNeutralForeground3);
     font-family: var(--fontFamilyBase);
-    font-size: var(--fontSizeBase300);
+    font-size: var(--aspire-font-size-body);
     font-style: italic;
     line-height: var(--lineHeightBase300);
     cursor: default;
@@ -138,8 +138,8 @@ fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
     padding: 6px 8px 2px 36px;
     color: var(--colorNeutralForeground3);
     font-family: var(--fontFamilyBase);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: var(--lineHeightBase200);
     cursor: default;
     user-select: none;

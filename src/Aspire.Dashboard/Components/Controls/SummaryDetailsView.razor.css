@@ -117,8 +117,8 @@
 
 ::deep .details-container > header > .details-header-title {
     grid-area: title;
-    font-size: var(--fontSizeBase400);
-    font-weight: 600;
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 36px;
     text-overflow: ellipsis;
     white-space: nowrap;

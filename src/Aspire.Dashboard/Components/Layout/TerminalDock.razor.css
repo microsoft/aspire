@@ -117,7 +117,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     /* Include the close button's inset around its 12px icon in the tab's trailing spacing. */
     padding-inline-end: calc(12px - (var(--aspire-control-height) - 12px) / 2);
     max-width: 220px;
@@ -197,21 +197,21 @@
     padding: 24px;
     text-align: center;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     line-height: 1.5;
 }
 
 .terminal-dock-panel-heading {
     margin: 0;
     color: var(--colorNeutralForeground1);
-    font-size: 14px;
+    font-size: var(--aspire-font-size-body);
     line-height: 1.5;
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .terminal-dock-panel-hint {
     margin: 0;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     line-height: 1.5;
 }
 
@@ -280,7 +280,7 @@
     gap: var(--aspire-space-3);
     height: 100%;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .terminal-dock-detached-actions {
@@ -292,5 +292,5 @@
     align-self: center;
     padding-right: 8px;
     color: #f0883e;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }

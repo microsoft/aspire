@@ -190,8 +190,8 @@ fluent-field.aspire-input > fluent-number-input::part(control),
 
 .aspire-field-label,
 .aspire-dialog-fields fluent-field > label[slot="label"] {
-    font-size: 14px;
-    font-weight: var(--fontWeightMedium);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .aspire-button,
@@ -204,7 +204,7 @@ fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button::part(control) 
     min-height: var(--aspire-control-height);
     padding-inline: 14px;
     border-radius: var(--aspire-control-radius);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .aspire-compact-button,
@@ -213,8 +213,8 @@ fluent-drawer fluent-drawer-body > [slot="footer"] fluent-button::part(control) 
     min-height: 24px;
     padding-inline: 14px;
     border-radius: var(--aspire-control-radius);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 20px;
 }
 
@@ -300,7 +300,7 @@ fluent-drawer fluent-drawer-body > [slot="close"] fluent-button::part(control) {
     border-radius: var(--aspire-control-radius);
     background-color: var(--aspire-button-background);
     color: var(--aspire-button-foreground);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .aspire-link-button,
@@ -391,7 +391,7 @@ fluent-field.aspire-checkbox > fluent-checkbox {
 .validation-message,
 .fluent-validation-message {
     color: var(--error);
-    font-size: var(--fontSizeBase300);
+    font-size: var(--aspire-font-size-body);
     line-height: var(--lineHeightBase300);
     margin: 0;
 }
@@ -649,13 +649,13 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
     grid-column: 2;
     padding: 8px 0;
     align-self: center;
-    font-size: 12px;
-    font-weight: 400;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 16px;
 }
 
 .block-warning-message .title {
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
     padding: 0 4px 0 0;
 }
 
@@ -720,8 +720,8 @@ body {
     background-color: var(--aspire-popup-background);
     color: var(--aspire-dropdown-option-foreground);
     font-family: var(--fontFamilyBase);
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: var(--lineHeightBase300);
 }
 
@@ -946,7 +946,7 @@ body .fluent-multi-splitter > .fluent-multi-splitter-bar {
 
 fluent-button {
     min-width: 32px;
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 fluent-text-input[type="search"] [slot="start"] svg {
@@ -968,8 +968,8 @@ fluent-text-input[type="search"] [slot="start"] svg {
     display: block;
     margin-bottom: 8px;
     font-family: var(--aspire-font-display);
-    font-size: 16px;
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: normal;
 }
 
@@ -1058,7 +1058,7 @@ fluent-tab.tab-label fluent-badge {
     border-radius: var(--aspire-radius-round);
     background: var(--colorNeutralBackground3);
     color: currentColor;
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 fluent-tab[aria-selected="true"],
@@ -1066,7 +1066,7 @@ fluent-tab[aria-selected="true"],
     color: var(--colorNeutralForeground1);
     background-color: var(--colorNeutralBackground3);
     border-color: var(--colorNeutralStroke1);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 /* Fluent v5 renders hover/selection indicators on the tab and tablist. The v4 design represents
@@ -1116,7 +1116,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
     display: flex;
     justify-content: center;
     align-items: center;
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .aspire-empty-message {
@@ -1133,7 +1133,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
 .fluent-data-grid > thead > tr > th > fluent-button,
 .fluent-data-grid > thead > tr > th [col-title-text] {
     color: var(--colorNeutralForeground3);
-    font-weight: 400 !important;
+    font-weight: var(--aspire-font-weight-regular) !important;
 }
 
 .fluent-data-grid > thead > tr > th [col-title-text] {
@@ -1211,7 +1211,7 @@ fluent-accordion-item.property-details-accordion-item::part(button) {
     direction: ltr;
     text-align: left;
     font-family: var(--aspire-font-display);
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 fluent-badge.property-details-accordion-badge {
@@ -1223,7 +1223,7 @@ fluent-badge.property-details-accordion-badge {
     box-shadow: none;
     background-color: var(--property-grid-badge-background-color);
     color: var(--colorNeutralForeground1);
-    font-weight: 400;
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .fluent-data-grid > thead > tr[row-type="sticky-header"] > th {

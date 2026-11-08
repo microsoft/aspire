@@ -12,7 +12,7 @@
     background: color-mix(in srgb, var(--aspire-status-warning) 16%, var(--aspire-page-background));
     color: var(--colorNeutralForeground1);
     font: inherit;
-    font-size: var(--fontSizeBase300);
+    font-size: var(--aspire-font-size-body);
     cursor: pointer;
 }
 

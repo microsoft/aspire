@@ -36,8 +36,8 @@
 .settings-group-title {
 	margin: 0;
 	color: var(--colorNeutralForeground2);
-	font-size: 11px;
-	font-weight: var(--fontWeightSemibold);
+	font-size: var(--aspire-font-size-caption);
+	font-weight: var(--aspire-font-weight-semibold);
 	letter-spacing: .06em;
 	line-height: 16px;
 	text-transform: uppercase;
@@ -54,7 +54,7 @@
 	flex-direction: column;
 	gap: 2px;
 	color: var(--colorNeutralForeground2);
-	font-size: 11px;
+	font-size: var(--aspire-font-size-caption);
 	line-height: 16px;
 	text-align: start;
 }
@@ -91,8 +91,8 @@
 
 ::deep fluent-radio-group > fluent-field > label[slot="label"] {
 	color: var(--colorNeutralForeground1);
-	font-size: var(--fontSizeBase300);
-	font-weight: var(--fontWeightRegular);
+	font-size: var(--aspire-font-size-body);
+	font-weight: var(--aspire-font-weight-regular);
 	line-height: var(--lineHeightBase300);
 }
 
@@ -108,7 +108,7 @@
 
 .setting-subtext {
 	color: var(--foreground-settings-text);
-	font-size: 12px;
+	font-size: var(--aspire-font-size-secondary);
 	line-height: 20px;
 	margin: 0;
 }

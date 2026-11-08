@@ -22,14 +22,14 @@
 .live-metric-tile-unit {
     overflow: hidden;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     text-overflow: ellipsis;
 }
 
 .live-metric-tile-number {
     color: var(--colorNeutralForeground1);
-    font-size: 15px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 

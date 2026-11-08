@@ -81,7 +81,7 @@
     background: transparent;
     color: var(--colorNeutralForeground3);
     font-family: var(--aspire-font-mono);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     line-height: 16px;
 }
 
@@ -129,7 +129,7 @@
 
 .meter-card-name {
     overflow: hidden;
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -139,7 +139,7 @@
     overflow: hidden;
     min-height: 2.6em;
     color: var(--colorNeutralForeground3);
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--aspire-font-size-secondary);
     line-height: 1.3em;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -163,13 +163,13 @@
 
 .meter-card-value-label {
     color: var(--colorNeutralForeground3);
-    font-size: var(--type-ramp-minus-1-font-size);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .meter-card-value-number {
     font-family: var(--aspire-font-display);
-    font-size: 22px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 

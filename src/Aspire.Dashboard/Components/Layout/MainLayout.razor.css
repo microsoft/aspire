@@ -20,8 +20,8 @@
     overflow: hidden;
     color: var(--colorNeutralForeground1);
     font-family: var(--aspire-font-display);
-    font-size: 20px;
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 28px;
     text-decoration: none;
     text-overflow: ellipsis;
@@ -95,7 +95,7 @@
     padding: 0;
     background-color: var(--colorNeutralBackgroundInverted);
     color: var(--colorNeutralForegroundInverted);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
     pointer-events: none;
 }
 
@@ -120,11 +120,11 @@
 }
 
 ::deep fluent-toast-b.resource-command-toast::part(dialog) {
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 ::deep fluent-toast-b.resource-command-toast > [slot="title"] {
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep.layout {
@@ -232,7 +232,7 @@
         border: 0;
         border-radius: var(--aspire-radius-medium);
         background: transparent;
-        font-weight: var(--fontWeightSemibold);
+        font-weight: var(--aspire-font-weight-semibold);
     }
 
     ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="true"] {

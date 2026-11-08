@@ -29,7 +29,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep .trace-header-nav .trace-id {
@@ -40,8 +40,8 @@
 ::deep .trace-id {
     color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
-    font-size: 12px;
-    font-weight: normal;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 1;
 }
 
@@ -170,7 +170,7 @@
 }
 
 ::deep .span-container .span-bar-label {
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     color: var(--colorNeutralForeground3);
     padding: 0 0.5em;
     height: min-content;
@@ -194,7 +194,7 @@
 ::deep .uninstrumented-peer {
     padding-left: 0.25rem;
     color: var(--colorNeutralForeground3);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 ::deep .span-kind-icon {

@@ -22,7 +22,7 @@
 
 ::deep .notifications-dismiss-all {
     padding: 0 2px;
-    font-size: 14px;
+    font-size: var(--aspire-font-size-body);
     line-height: 20px;
 }
 

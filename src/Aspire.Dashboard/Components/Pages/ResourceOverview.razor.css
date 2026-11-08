@@ -134,8 +134,8 @@
 
 .overview-card-header h2 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     /* Headings inherit a 40px line height from the global styles, which is too tall for a card header. */
     line-height: 20px;
 }
@@ -145,14 +145,14 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .overview-card-link {
     margin-inline-start: auto;
     color: var(--colorBrandForegroundLink);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     text-decoration: none;
 }
 
@@ -214,7 +214,7 @@
     background: transparent;
     color: var(--colorBrandForegroundLink);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     text-align: start;
     cursor: pointer;
 }
@@ -235,7 +235,7 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
 }
 
 .overview-badge.overview-volume-type {
@@ -250,7 +250,7 @@
 
 /* Match the density of the other card lists, and align the first column with the card header. */
 .overview-card ::deep .overview-property-grid td {
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-card ::deep .overview-property-grid td:first-child {
@@ -269,7 +269,7 @@
     gap: var(--aspire-space-1);
     margin-top: 8px;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-empty {
@@ -278,7 +278,7 @@
     flex: 1 1 auto;
     min-height: 40px;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-properties {
@@ -286,11 +286,14 @@
     grid-template-columns: auto minmax(0, 1fr);
     gap: var(--aspire-space-1) var(--aspire-space-3);
     margin: 0;
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
+/* Labels are regular weight in the secondary grey, so the values beside them are what stands out. Fluent's reboot
+   stylesheet makes <dt> bold. */
 .overview-properties dt {
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground3);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .overview-properties dd {
@@ -303,12 +306,12 @@
 
 .overview-mono {
     font-family: var(--aspire-font-mono);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-error-text {
     color: var(--error);
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .overview-state {
@@ -346,7 +349,7 @@
     min-width: 0;
     padding: 6px 0;
     border-top: 1px solid var(--colorNeutralStroke3);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-list li:first-child {
@@ -442,8 +445,8 @@ a.overview-endpoint-address:hover {
 .overview-level {
     flex: 0 0 auto;
     min-width: 58px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .overview-level.error {
@@ -483,14 +486,14 @@ a.overview-stat:hover .overview-stat-label {
 
 .overview-stat-value {
     font-family: var(--aspire-font-display);
-    font-size: 22px;
+    font-size: var(--aspire-font-size-title);
     line-height: 1.15;
     font-variant-numeric: tabular-nums;
 }
 
 .overview-stat-label {
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-stat.warning .overview-stat-value {
@@ -510,7 +513,7 @@ a.overview-stat:hover .overview-stat-label {
     background: var(--console-background-color, #1b1b1b);
     color: var(--console-foreground-color, #e6e6e6);
     font-family: var(--aspire-font-mono);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     line-height: 1.6;
 }
 
@@ -533,7 +536,7 @@ a.overview-stat:hover .overview-stat-label {
 }
 
 .overview-terminal ::deep .terminal-focus-hint {
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-console-line {
@@ -596,7 +599,7 @@ a.overview-stat:hover .overview-stat-label {
 
 ::deep .overview-metric-name {
     color: var(--colorBrandForegroundLink);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-selection-groups {
@@ -611,8 +614,8 @@ a.overview-stat:hover .overview-stat-label {
     gap: var(--aspire-space-2);
     margin: 0 0 10px;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -648,8 +651,8 @@ a.overview-stat:hover .overview-stat-label {
     min-width: 0;
     overflow: hidden;
     color: var(--colorNeutralForeground1);
-    font-size: 14px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     text-decoration: none;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -666,7 +669,7 @@ a.overview-selection-card-title:hover {
     min-height: 18px;
     padding-inline-start: 28px;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .overview-selection-footer {
@@ -685,7 +688,7 @@ a.overview-selection-card-title:hover {
     align-items: center;
     gap: var(--aspire-space-1);
     min-width: 0;
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .overview-selection-url > a,
@@ -743,8 +746,8 @@ a.overview-selection-card-title:hover {
     border-radius: var(--aspire-radius-medium);
     background: var(--error);
     color: var(--colorNeutralForegroundOnBrand, #fff);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 16px;
     text-align: center;
 }

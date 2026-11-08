@@ -14,8 +14,8 @@
 .help-section-heading {
     margin: 0 0 10px;
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     letter-spacing: .02em;
     text-transform: uppercase;
 }
@@ -71,12 +71,12 @@
 }
 
 .help-link-title {
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .help-link-description {
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
 }
 
@@ -85,7 +85,7 @@
     padding-top: 12px;
     border-top: 1px solid var(--colorNeutralStroke2);
     color: var(--colorNeutralForeground3);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 @media (max-width: 600px) {

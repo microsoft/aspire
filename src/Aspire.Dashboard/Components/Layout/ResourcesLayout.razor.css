@@ -3,9 +3,9 @@
     --resource-pane-width: var(--resource-pane-expanded-width, 420px);
     --resource-row-height: var(--aspire-density-resource-row-height, 52px);
     --resource-row-icon-size: 32px;
-    --resource-row-font-size: var(--fontSizeBase300);
+    --resource-row-font-size: var(--aspire-font-size-body);
     --resource-row-line-height: var(--lineHeightBase300);
-    --resource-secondary-font-size: var(--fontSizeBase200);
+    --resource-secondary-font-size: var(--aspire-font-size-secondary);
     --resource-secondary-line-height: 18px;
     /* The full canvas's action rail from 960px: the 20px toggle, four 28px buttons and the four 4px gaps between. */
     --resource-row-actions-width: 148px;
@@ -46,9 +46,9 @@
        minimums made the row wider than the pane at 540-584px, 720-730px and 960-998px, which pushed the actions out
        of view. */
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
-    --resource-row-font-size: var(--fontSizeBase200);
+    --resource-row-font-size: var(--aspire-font-size-secondary);
     --resource-row-line-height: var(--lineHeightBase200);
-    --resource-secondary-font-size: 11px;
+    --resource-secondary-font-size: var(--aspire-font-size-caption);
     --resource-secondary-line-height: 16px;
     --resource-insight-height: 24px;
     --resource-insight-icon-size: 12px;
@@ -79,9 +79,9 @@
 .resource-pane-list.density-spacious {
     --resource-row-height: var(--aspire-density-resource-row-height, 60px);
     --resource-row-icon-size: 40px;
-    --resource-row-font-size: var(--fontSizeBase400);
+    --resource-row-font-size: var(--aspire-font-size-large);
     --resource-row-line-height: var(--lineHeightBase400);
-    --resource-secondary-font-size: var(--fontSizeBase300);
+    --resource-secondary-font-size: var(--aspire-font-size-body);
     --resource-secondary-line-height: 20px;
     --resource-insight-height: 32px;
     --resource-insight-icon-size: 16px;
@@ -154,7 +154,7 @@
     max-width: 100%;
     font: inherit;
     font-family: var(--aspire-font-sans);
-    font-size: var(--fontSizeBase300);
+    font-size: var(--aspire-font-size-body);
 }
 
 .resource-picker-button > [slot="start"] {
@@ -401,8 +401,8 @@
 .resource-pane-section-label {
     padding: 12px 6px 5px;
     color: var(--colorNeutralForeground3);
-    font-size: 11px;
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 16px;
     text-transform: uppercase;
 }
@@ -417,8 +417,8 @@
     background: transparent;
     color: var(--colorNeutralForeground3);
     font: inherit;
-    font-size: 11px;
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 16px;
     text-align: left;
     text-transform: uppercase;
@@ -455,14 +455,14 @@
     justify-content: center;
     padding: 16px 8px;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .resource-pane-group {
     margin: 10px 6px 4px;
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
     letter-spacing: .04em;
     text-transform: uppercase;
 }
@@ -525,8 +525,8 @@
     padding: 4px 8px;
     border-radius: var(--aspire-radius-medium);
     color: var(--colorNeutralForeground1);
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     text-decoration: none;
 }
 
@@ -545,7 +545,7 @@
 
 .untagged .resource-tag-name {
     color: var(--colorNeutralForeground2);
-    font-weight: 400;
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .resource-tag-count {
@@ -555,7 +555,7 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     line-height: 18px;
     text-align: center;
 }
@@ -579,13 +579,13 @@
 
 .resource-tags-empty-title {
     margin-top: 4px;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .resource-tags-empty-description {
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .resource-row {
@@ -871,7 +871,7 @@
 }
 
 .resource-row-all .resource-row-name {
-    font-weight: 700;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .resource-row-text {
@@ -885,7 +885,7 @@
     overflow: hidden;
     font-size: var(--resource-row-font-size);
     line-height: var(--resource-row-line-height);
-    font-weight: 500;
+    font-weight: var(--aspire-font-weight-semibold);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -909,7 +909,7 @@
     gap: var(--aspire-space-1);
     overflow: hidden;
     color: var(--colorNeutralForeground3);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     white-space: nowrap;
 }
 
@@ -954,8 +954,8 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--error);
     color: #fff;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 /* In a flex row the link follows the row link, which fills the row up to the actions, so it lands where an inline
@@ -988,7 +988,7 @@
     padding: 4px 6px;
     border-top: 1px solid var(--colorNeutralStroke3);
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .resource-pane-foot > span:first-child {
@@ -1005,7 +1005,7 @@
     grid-template-columns: max-content;
     align-items: center;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     line-height: 14px;
 }
 
@@ -1209,7 +1209,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     white-space: nowrap;
 }
 
@@ -1228,7 +1228,7 @@
     min-width: 0;
     margin-left: auto;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     white-space: nowrap;
 }
 
@@ -1306,8 +1306,8 @@
     margin: 0;
     overflow: hidden;
     font-family: var(--aspire-font-display);
-    font-size: 18px;
-    font-weight: 500;
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 24px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1322,7 +1322,7 @@
     min-height: 20px;
     margin-top: 2px;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .resource-header-urls {
@@ -1338,8 +1338,8 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 /* Status colors don't reach text contrast on the tinted pill, so only the icon carries the state color. */
@@ -1702,8 +1702,8 @@
         background: color-mix(in srgb, var(--colorBrandBackground) 5%, var(--aspire-control-background));
         color: var(--colorNeutralForeground1);
         font: inherit;
-        font-size: 14px;
-        font-weight: 600;
+        font-size: var(--aspire-font-size-body);
+        font-weight: var(--aspire-font-weight-semibold);
         line-height: 22px;
         text-align: start;
         cursor: pointer;
@@ -1790,8 +1790,8 @@
         border-color: var(--colorNeutralStroke2);
         background: var(--aspire-page-background);
         color: var(--colorNeutralForeground1);
-        font-size: 14px;
-        font-weight: 600;
+        font-size: var(--aspire-font-size-body);
+        font-weight: var(--aspire-font-weight-semibold);
     }
 
     .resource-tabs-nav ::deep .resource-tabs-compact-button::part(control) {
@@ -1835,7 +1835,7 @@
         height: 44px;
         min-height: 44px;
         padding: 0 16px;
-        font-size: var(--fontSizeBase400);
+        font-size: var(--aspire-font-size-heading);
     }
 
 }
@@ -1882,7 +1882,7 @@
     align-items: center;
     gap: var(--aspire-space-2);
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .resource-row-meta-state {

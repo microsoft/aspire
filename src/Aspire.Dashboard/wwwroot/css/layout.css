@@ -10,7 +10,7 @@
 
 .log-container {
     font-family: var(--aspire-font-mono);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     line-height: 20px;
     overflow: visible;
     display: flex;
@@ -168,7 +168,7 @@
 .pane-details-subtext {
     color: var(--foreground-subtext-rest);
     padding-left: 0.5rem;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 fluent-dialog-body > [slot="title"],
@@ -303,8 +303,8 @@ fluent-dialog-body.text-visualizer-dialog-body::part(content) {
 
 fluent-dialog-body > [slot="title"] {
     font-family: var(--aspire-font-display);
-    font-size: var(--fontSizeBase600);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: var(--lineHeightBase600);
 }
 
@@ -354,16 +354,16 @@ fluent-dialog-body.help-dialog-body h5,
 fluent-dialog-body.help-dialog-body h6,
 fluent-dialog-body.ai-agents-dialog-body .markdown-container h4 {
     font-family: var(--aspire-font-display);
-    font-weight: var(--fontWeightMedium);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 fluent-dialog-body.help-dialog-body h5 {
-    font-size: var(--fontSizeBase400);
+    font-size: var(--aspire-font-size-heading);
     line-height: var(--lineHeightBase400);
 }
 
 fluent-dialog-body.help-dialog-body h6 {
-    font-size: var(--fontSizeBase300);
+    font-size: var(--aspire-font-size-body);
     line-height: var(--lineHeightBase300);
 }
 
@@ -400,8 +400,8 @@ fluent-drawer fluent-drawer-body > [slot="title"] {
     position: relative;
     top: 3px;
     left: 3px;
-    font-size: var(--fontSizeBase600);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: var(--lineHeightBase600);
 }
 
@@ -422,8 +422,8 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
     justify-content: flex-end;
     min-width: 0;
     gap: var(--aspire-space-2);
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: var(--lineHeightBase300);
 }
 
@@ -443,8 +443,8 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
 
 .mobile-filter-toolbar fluent-field:has(> :is(fluent-text-input, fluent-dropdown)) > label {
     margin-bottom: 4px;
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .mobile-filter-toolbar .toolbar-end {
@@ -489,8 +489,8 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
 }
 
 .mobile-filter-toolbar .filter-group > legend {
-    font-size: 20px;
-    font-weight: 500;
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .mobile-filter-toolbar .filter-group > .fluent-stack-vertical {
@@ -498,8 +498,8 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
 }
 
 .mobile-filter-toolbar fluent-field.aspire-checkbox > label {
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 .mobile-filter-toolbar fluent-button > [slot="start"],
@@ -808,7 +808,7 @@ fluent-dialog-body .fluent-message-box {
 }
 
 .details-layout > .details-toolbar strong {
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .details-toolbar > .toolbar-end {

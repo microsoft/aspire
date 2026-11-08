@@ -60,7 +60,7 @@
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
     color: var(--foreground-settings-text);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description p,

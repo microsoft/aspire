@@ -50,8 +50,8 @@
     padding: 0 8px 4px 4px;
     border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
     color: var(--colorNeutralForeground3);
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
 }
 
@@ -116,8 +116,8 @@
     background: transparent;
     color: var(--colorNeutralForeground1);
     font: inherit;
-    font-size: var(--fontSizeBase300);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     text-align: start;
     cursor: pointer;
     transition: background-color 120ms ease;
@@ -159,8 +159,8 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--resource-brand-soft);
     color: var(--colorNeutralForeground1);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 18px;
 }
 .resource-filter-options {
@@ -201,7 +201,7 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: 18px;
     text-align: center;
 }

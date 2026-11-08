@@ -17,7 +17,7 @@
 @font-face {
     font-family: "Poppins";
     font-style: normal;
-    font-weight: 500;
+    font-weight: var(--aspire-font-weight-semibold);
     font-display: swap;
     src: url("../fonts/poppins/latin-500-normal.woff2") format("woff2");
 }
@@ -25,7 +25,7 @@
 @font-face {
     font-family: "Poppins";
     font-style: normal;
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
     font-display: swap;
     src: url("../fonts/poppins/latin-600-normal.woff2") format("woff2");
 }
@@ -33,7 +33,7 @@
 @font-face {
     font-family: "Poppins";
     font-style: normal;
-    font-weight: 700;
+    font-weight: var(--aspire-font-weight-semibold);
     font-display: swap;
     src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
 }
@@ -74,6 +74,24 @@
     --aspire-space-4: 16px;
     --aspire-space-5: 20px;
     --aspire-space-6: 24px;
+    /* Type: six sizes and two weights. Caption for counts and badges; secondary for row details, columns and
+       timestamps; body for text and controls; large for spacious rows and standalone names; heading for section and
+       dialog titles; title for the page title and big numbers. Use these instead of pixel values. */
+    --aspire-font-size-caption: 11px;
+    --aspire-font-size-secondary: 12px;
+    --aspire-font-size-body: 13px;
+    --aspire-font-size-large: 14px;
+    --aspire-font-size-heading: 16px;
+    --aspire-font-size-title: 20px;
+    --aspire-font-weight-regular: 400;
+    --aspire-font-weight-semibold: 600;
+    /* Fluent's controls (buttons, inputs, menus, tabs) size their text with its type ramp. Its base sizes are mapped
+       onto the scale above so a Fluent button reads at the same size as the text around it. */
+    --fontSizeBase100: var(--aspire-font-size-caption);
+    --fontSizeBase200: var(--aspire-font-size-secondary);
+    --fontSizeBase300: var(--aspire-font-size-body);
+    --fontWeightMedium: var(--aspire-font-weight-semibold);
+    --fontWeightBold: var(--aspire-font-weight-semibold);
     --disabled-opacity: 0.3;
 
     --aspire-page-background: #f7f7f7;

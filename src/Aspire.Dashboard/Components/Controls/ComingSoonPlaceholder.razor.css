@@ -22,8 +22,8 @@
 
 .coming-soon-title {
     margin: 0;
-    font-size: var(--fontSizeBase500);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-semibold);
     /* Headings inherit a tall line height from the global styles. */
     line-height: var(--lineHeightBase500);
 }
@@ -40,6 +40,6 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
 }

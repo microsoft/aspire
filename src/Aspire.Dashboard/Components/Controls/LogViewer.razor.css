@@ -33,7 +33,7 @@
     border: var(--strokeWidthThin) solid transparent;
     border-radius: var(--aspire-radius-small);
     font-family: var(--fontFamilyBase);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
     font-weight: initial;
     user-select: none;
@@ -50,7 +50,7 @@
     color: #fff;
     user-select: none;
     font-family: var(--fontFamilyBase);
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
     padding: var(--spacingHorizontalXL);
     display: flex;
     align-items: center;

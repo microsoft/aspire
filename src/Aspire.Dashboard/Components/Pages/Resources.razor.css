@@ -128,8 +128,8 @@
 
 .resources-filter-popup-container ::deep .resources-filter-popup .filter-group > legend {
     font-family: var(--aspire-font-display);
-    font-size: 16px;
-    font-weight: 500;
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 27px;
 }
 
@@ -208,7 +208,7 @@
 ::deep .resource-name {
     fill: var(--colorNeutralForeground1);
     stroke: var(--aspire-page-background);
-    font-size: 15px;
+    font-size: var(--aspire-font-size-large);
     text-anchor: middle;
     stroke-width: 0.5em;
     paint-order: stroke;
@@ -279,7 +279,7 @@
 
 ::deep .resource-endpoint {
     fill: var(--foreground-subtext-rest);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     text-anchor: middle;
 }
 

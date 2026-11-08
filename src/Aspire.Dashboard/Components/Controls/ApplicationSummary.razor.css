@@ -33,8 +33,8 @@
     border-radius: var(--aspire-control-radius);
     background: color-mix(in srgb, var(--warning) 10%, transparent);
     color: var(--colorNeutralForeground1);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightSemibold);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
     text-decoration: none;
 }
 
@@ -139,7 +139,7 @@
 
 ::deep .resource-name {
     fill: var(--colorNeutralForeground1);
-    font-size: 15px;
+    font-size: var(--aspire-font-size-large);
     text-anchor: middle;
 }
 
@@ -193,7 +193,7 @@
 
 ::deep .resource-endpoint {
     fill: var(--foreground-subtext-rest);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     text-anchor: middle;
 }
 
@@ -348,15 +348,15 @@
 .home-hero-headline {
     margin: 0;
     font-family: var(--aspire-font-display);
-    font-size: 20px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-semibold);
     /* Headings inherit a 40px line height from the global styles. */
     line-height: 26px;
 }
 
 .home-hero-sub {
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .home-health-bar {
@@ -382,7 +382,7 @@
     padding: 0;
     list-style: none;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .home-legend-item {
@@ -400,7 +400,7 @@
 
 .home-legend-value {
     color: var(--colorNeutralForeground1);
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 
@@ -429,14 +429,14 @@
 
 .home-activity-title h2 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
 }
 
 .home-activity-window {
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 /* Pulsing dot signals the chart updates live. */
@@ -488,7 +488,7 @@
 .home-activity-totals {
     display: flex;
     gap: var(--aspire-space-4);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .home-activity-totals a {
@@ -503,7 +503,7 @@
 
 .home-activity-totals strong {
     color: var(--colorNeutralForeground1);
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 
@@ -528,7 +528,7 @@
 
 .home-stat-value {
     font-family: var(--aspire-font-display);
-    font-size: 24px;
+    font-size: var(--aspire-font-size-title);
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
 }
@@ -538,7 +538,7 @@
     align-items: center;
     gap: var(--aspire-space-1);
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .home-stat.error .home-stat-label::before {
@@ -596,7 +596,7 @@
     top: -4px;
     left: 4px;
     color: var(--colorNeutralForeground3);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     font-variant-numeric: tabular-nums;
 }
 
@@ -607,7 +607,7 @@
     align-items: center;
     justify-content: center;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .home-chart-axis {
@@ -615,7 +615,7 @@
     justify-content: space-between;
     margin-top: 4px;
     color: var(--colorNeutralForeground3);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
 }
 
 .home-insights {
@@ -642,15 +642,15 @@
 
 .home-insight-header h2 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
 }
 
 .home-insight-hint {
     margin-inline-start: auto;
     color: var(--colorNeutralForeground3);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     white-space: nowrap;
 }
 
@@ -701,15 +701,15 @@
     gap: var(--aspire-space-1);
     min-width: 0;
     overflow: hidden;
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .home-insight-value {
     flex: 0 0 auto;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     font-variant-numeric: tabular-nums;
 }
 
@@ -774,8 +774,8 @@
 
 .home-section-header h2 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     /* Headings inherit a 40px line height from the global styles, which is too tall for a card header. */
     line-height: 20px;
 }
@@ -783,7 +783,7 @@
 .home-section-link {
     margin-inline-start: auto;
     color: var(--colorBrandForegroundLink);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     text-decoration: none;
 }
 
@@ -797,7 +797,7 @@
     gap: var(--aspire-space-1);
     min-height: 40px;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .home-error-badge {
@@ -811,8 +811,8 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--error);
     color: #fff;
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .home-event-list {
@@ -844,7 +844,7 @@
 
 .home-event-title {
     overflow: hidden;
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -855,7 +855,7 @@
     gap: var(--aspire-space-1);
     min-width: 0;
     color: var(--colorNeutralForeground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     white-space: nowrap;
 }
 

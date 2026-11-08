@@ -28,8 +28,8 @@
 
 .missing-parameters-header h2 {
     margin: 0;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
 }
 
@@ -38,14 +38,14 @@
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .missing-parameters-description {
     margin: 0 0 10px 34px;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     line-height: 18px;
 }
 
@@ -104,7 +104,7 @@
     align-items: center;
     gap: var(--aspire-space-1);
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 .missing-parameter-file-name.error {

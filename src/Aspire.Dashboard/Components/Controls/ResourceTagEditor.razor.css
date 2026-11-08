@@ -23,7 +23,7 @@
     border: 1px solid var(--colorNeutralStroke2);
     border-radius: var(--aspire-radius-large);
     background: var(--colorNeutralBackground2);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .tag-chip-name {
@@ -73,7 +73,7 @@
     background: transparent;
     color: var(--colorNeutralForeground2);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     cursor: pointer;
 }
 
@@ -102,7 +102,7 @@
     background: transparent;
     color: var(--colorNeutralForeground1);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .tag-input::placeholder {
@@ -133,7 +133,7 @@
     gap: var(--aspire-space-1);
     padding: 5px 8px;
     border-radius: var(--aspire-radius-small);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
     white-space: nowrap;
     cursor: pointer;
 }

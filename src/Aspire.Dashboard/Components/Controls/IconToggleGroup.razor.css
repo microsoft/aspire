@@ -15,8 +15,8 @@
 
 .icon-toggle-label {
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase300);
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .icon-toggle {
@@ -53,7 +53,7 @@
     background: var(--colorNeutralBackground1);
     color: currentColor;
     font-size: 8px;
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 10px;
 }
 
@@ -79,7 +79,7 @@
 
 .icon-toggle-current {
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .icon-toggle-group.labeled {
@@ -115,14 +115,14 @@
     }
 
     .icon-toggle-group.labeled .icon-toggle-option-text {
-        font-size: 11px;
+        font-size: var(--aspire-font-size-caption);
     }
 }
 
 .icon-toggle-option-text {
     min-width: 0;
     overflow: hidden;
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
