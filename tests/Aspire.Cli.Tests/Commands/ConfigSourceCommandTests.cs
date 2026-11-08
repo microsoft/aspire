@@ -55,8 +55,9 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             options.CliUpdateNotifierFactory = _ => notifier;
         }).BuildServiceProvider();
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
+        var prompt = new string('x', 70 * 1024) + "Enter passphrase: ";
         git.InspectConfiguration = (_, _) => timeout
-            ? throw new ConfigSourceException(ConfigSourceStrings.GitTimeout)
+            ? throw new ConfigSourceException(ConfigSourceStrings.GitTimeout) { GitOutput = prompt }
             : Task.FromResult("version-2");
         var service = provider.GetRequiredService<ConfigSourceService>();
         service.CheckForConfigSourceUpdates(workspace.WorkspaceRoot, CancellationToken.None);
@@ -71,7 +72,13 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             ? string.Format(System.Globalization.CultureInfo.CurrentCulture, ConfigSourceStrings.CheckFailed, ConfigSourceStrings.GitTimeout)
             : ConfigSourceStrings.UpdateAvailable;
         Assert.Equal(notify ? 1 : 0, interaction.DisplayedMessages.Count(message => message.Message == expectedMessage));
-        if (!notify)
+        if (notify && timeout)
+        {
+            Assert.Equal((prompt[^(64 * 1024)..], (ConsoleOutput?)ConsoleOutput.Error), Assert.Single(interaction.DisplayedRawText));
+            service.NotifyIfUpdateAvailable();
+            Assert.Single(interaction.DisplayedRawText);
+        }
+        else if (!notify)
         {
             Assert.Equal(("[]", (ConsoleOutput?)ConsoleOutput.Standard), Assert.Single(interaction.DisplayedRawText));
         }
@@ -274,9 +281,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task UpdateConfigSource_AcquisitionFailureRemainsCommandFailureWithoutRawOutput(bool timeout)
+    [InlineData(false, 0)]
+    [InlineData(true, 0)]
+    [InlineData(true, 64 * 1024)]
+    [InlineData(true, 64 * 1024 + 1)]
+    public async Task UpdateConfigSource_AcquisitionFailureRemainsCommandFailure(bool timeout, int outputLength)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
@@ -286,7 +295,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interaction;
         }).BuildServiceProvider();
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
-        git.ReadConfiguration = (_, _) => throw new ConfigSourceException(timeout ? ConfigSourceStrings.GitTimeout : ConfigSourceStrings.AuthenticationFailed);
+        var prompt = outputLength == 0 ? "Enter passphrase: " : new string('x', outputLength - 1) + "?";
+        git.ReadConfiguration = (_, _) => throw new ConfigSourceException(timeout ? ConfigSourceStrings.GitTimeout : ConfigSourceStrings.AuthenticationFailed)
+        {
+            GitOutput = timeout ? prompt : null
+        };
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var previous = await File.ReadAllTextAsync(path);
         var result = provider.GetRequiredService<RootCommand>().Parse("update --config-source --yes --non-interactive");
@@ -296,7 +309,15 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, git.Calls);
         Assert.Equal(0, git.CheckCalls);
         Assert.Equal(previous, await File.ReadAllTextAsync(path));
-        Assert.Empty(interaction.DisplayedRawText);
+        if (timeout)
+        {
+            var expectedOutput = outputLength > 64 * 1024 ? prompt[^(64 * 1024)..] : prompt;
+            Assert.Equal((expectedOutput, (ConsoleOutput?)ConsoleOutput.Error), Assert.Single(interaction.DisplayedRawText));
+        }
+        else
+        {
+            Assert.Empty(interaction.DisplayedRawText);
+        }
     }
 
     [Theory]

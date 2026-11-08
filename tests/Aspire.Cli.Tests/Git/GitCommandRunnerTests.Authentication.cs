@@ -7,43 +7,45 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Git;
 
 public partial class GitCommandRunnerTests
 {
     [Theory]
-    [InlineData(nameof(GitCommandMode.Unattended))]
-    [InlineData(nameof(GitCommandMode.Interactive))]
-    [InlineData(nameof(GitCommandMode.Captured))]
-    public void CreateStartInfo_AllModesDisableInteractiveAuthentication(string mode)
+    [InlineData(nameof(GitCommandMode.Unattended), true, true)]
+    [InlineData(nameof(GitCommandMode.Interactive), false, true)]
+    [InlineData(nameof(GitCommandMode.Interactive), true, false)]
+    [InlineData(nameof(GitCommandMode.Captured), false, false)]
+    public void CreateStartInfo_AskPassPolicyFollowsEffectiveInteractivity(string mode, bool interactiveHost, bool disabled)
     {
-        var info = GitCommandRunner.CreateStartInfo(Environment.CurrentDirectory, ["ls-remote", "--", "repository"], Enum.Parse<GitCommandMode>(mode));
+        var runner = new GitCommandRunner(interactiveHost
+            ? TestHelpers.CreateInteractiveHostEnvironment()
+            : TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
+        var info = runner.CreateStartInfo(Environment.CurrentDirectory, ["ls-remote", "--", "repository"], Enum.Parse<GitCommandMode>(mode));
 
-        Assert.Equal(["--literal-pathspecs", "-c", "core.askPass=", "ls-remote", "--", "repository"], info.ArgumentList);
-        Assert.Equal("", info.Environment["GIT_ASKPASS"]);
-        Assert.Equal("", info.Environment["SSH_ASKPASS"]);
-        Assert.Equal("never", info.Environment["SSH_ASKPASS_REQUIRE"]);
-        Assert.Equal("never", info.Environment["GCM_INTERACTIVE"]);
-        Assert.Equal("0", info.Environment["GIT_TERMINAL_PROMPT"]);
-        Assert.True(info.RedirectStandardInput);
-        Assert.True(info.RedirectStandardOutput);
-        Assert.True(info.RedirectStandardError);
-        Assert.True(info.CreateNoWindow);
+        Assert.Equal(disabled
+            ? ["--literal-pathspecs", "-c", "core.askPass=", "ls-remote", "--", "repository"]
+            : ["--literal-pathspecs", "ls-remote", "--", "repository"], info.ArgumentList);
+        info.Environment.TryGetValue("GIT_ASKPASS", out var gitAskPass);
+        info.Environment.TryGetValue("SSH_ASKPASS", out var sshAskPass);
+        info.Environment.TryGetValue("SSH_ASKPASS_REQUIRE", out var sshAskPassRequire);
+        Assert.Equal(disabled ? "" : Environment.GetEnvironmentVariable("GIT_ASKPASS"), gitAskPass);
+        Assert.Equal(disabled ? "" : Environment.GetEnvironmentVariable("SSH_ASKPASS"), sshAskPass);
+        Assert.Equal(disabled ? "never" : Environment.GetEnvironmentVariable("SSH_ASKPASS_REQUIRE"), sshAskPassRequire);
+        Assert.Equal(disabled || mode == nameof(GitCommandMode.Captured), info.RedirectStandardInput);
     }
 
     [Theory]
-    [InlineData("git", nameof(GitCommandMode.Unattended))]
-    [InlineData("core", nameof(GitCommandMode.Unattended))]
-    [InlineData("ssh", nameof(GitCommandMode.Unattended))]
-    [InlineData("git", nameof(GitCommandMode.Interactive))]
-    [InlineData("core", nameof(GitCommandMode.Interactive))]
-    [InlineData("ssh", nameof(GitCommandMode.Interactive))]
-    [InlineData("git", nameof(GitCommandMode.Captured))]
-    [InlineData("core", nameof(GitCommandMode.Captured))]
-    [InlineData("ssh", nameof(GitCommandMode.Captured))]
+    [InlineData("git", true)]
+    [InlineData("core", true)]
+    [InlineData("ssh", true)]
+    [InlineData("git", false)]
+    [InlineData("core", false)]
+    [InlineData("ssh", false)]
     [RequiresTools(["git"])]
-    public async Task RunProcess_RealGit401DisablesAskPassFallbacks(string mechanism, string commandMode)
+    public async Task RunProcess_RealGit401DisablesAskPassFallbacksButCapturedModePreservesThem(string mechanism, bool unattended)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await using var server = new GitAuthenticationServer();
@@ -59,9 +61,9 @@ public partial class GitCommandRunnerTests
         var config = Path.Combine(workspace.Path, "gitconfig");
         await File.WriteAllTextAsync(config, "[credential]\nhelper =\n"
             + (mechanism == "core" ? $"[core]\naskPass = \"{helperCommand.Replace("\\", "\\\\", StringComparison.Ordinal)}\"\n" : ""));
-        var mode = Enum.Parse<GitCommandMode>(commandMode);
+        var mode = unattended ? GitCommandMode.Unattended : GitCommandMode.Captured;
         var runner = CreateRunner();
-        var info = GitCommandRunner.CreateStartInfo(workspace.Path, ["ls-remote", "--", server.Repository], mode);
+        var info = runner.CreateStartInfo(workspace.Path, ["ls-remote", "--", server.Repository], mode);
         IsolateGit(info, workspace.Path, config);
         if (mechanism == "git")
         {
@@ -71,26 +73,26 @@ public partial class GitCommandRunnerTests
         {
             info.Environment["SSH_ASKPASS"] = helperCommand;
         }
-        GitCommandRunner.DisableAskPass(info.Environment);
+        if (unattended)
+        {
+            GitCommandRunner.DisableAskPass(info.Environment);
+        }
         using var timeout = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 15_000);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeout.Token);
 
         var exception = await Assert.ThrowsAsync<GitCommandException>(() =>
-            runner.RunProcessAsync(info, cancellation.Token));
+            runner.RunProcessAsync(info, captureCancellationOutput: false, mode, cancellation.Token));
 
         Assert.Equal(GitFailure.AuthenticationFailed, exception.Failure);
-        Assert.False(File.Exists(marker));
-        Assert.Equal(1, server.Requests);
+        Assert.Equal(!unattended, File.Exists(marker));
+        Assert.Equal(unattended ? 1 : 2, server.Requests);
         Assert.Equal("[credential]\nhelper =\n"
             + (mechanism == "core" ? $"[core]\naskPass = \"{helperCommand.Replace("\\", "\\\\", StringComparison.Ordinal)}\"\n" : ""), await File.ReadAllTextAsync(config));
     }
 
-    [Theory]
-    [InlineData(nameof(GitCommandMode.Unattended))]
-    [InlineData(nameof(GitCommandMode.Interactive))]
-    [InlineData(nameof(GitCommandMode.Captured))]
+    [Fact]
     [RequiresTools(["git"])]
-    public async Task RunProcess_RealGit401PreservesNoninteractiveCredentialHelpers(string commandMode)
+    public async Task RunProcess_RealGit401PreservesNoninteractiveCredentialHelpers()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await using var server = new GitAuthenticationServer();
@@ -107,15 +109,14 @@ public partial class GitCommandRunnerTests
         var configuration = $"[credential]\nhelper =\nhelper = !'{ShellPath(helper)}'\n";
         await File.WriteAllTextAsync(config, configuration);
         var runner = CreateRunner();
-        var mode = Enum.Parse<GitCommandMode>(commandMode);
-        var info = GitCommandRunner.CreateStartInfo(workspace.Path, ["ls-remote", "--", server.Repository], mode);
+        var info = runner.CreateStartInfo(workspace.Path, ["ls-remote", "--", server.Repository], GitCommandMode.Unattended);
         IsolateGit(info, workspace.Path, config);
         GitCommandRunner.DisableAskPass(info.Environment);
         using var timeout = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(milliseconds: 15_000);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken, timeout.Token);
 
         var exception = await Assert.ThrowsAsync<GitCommandException>(() =>
-            runner.RunProcessAsync(info, cancellation.Token));
+            runner.RunProcessAsync(info, captureCancellationOutput: false, GitCommandMode.Unattended, cancellation.Token));
 
         Assert.Equal(GitFailure.AuthenticationFailed, exception.Failure);
         Assert.Equal(["get", "erase"], await File.ReadAllLinesAsync(marker));
@@ -177,7 +178,7 @@ public partial class GitCommandRunnerTests
         await File.WriteAllTextAsync(config, configuration);
         string[] arguments = ["ls-remote", "--", repository];
         var runner = CreateRunner();
-        var info = GitCommandRunner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
         IsolateGit(info, workspace.Path, config);
         if (setting != "core.sshCommand")
         {
@@ -214,7 +215,7 @@ public partial class GitCommandRunnerTests
         await File.WriteAllTextAsync(config, configuration);
         string[] arguments = ["ls-remote", "--", rewritten ? "https://example.test/repository" : "ssh://git@example.test/repository"];
         var runner = CreateRunner();
-        var info = GitCommandRunner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
         IsolateGit(info, workspace.Path, config);
         info.Environment["SSH_AUTH_SOCK"] = "preserved-agent";
         if (setting is not null && setting != "core.sshCommand")
@@ -281,7 +282,7 @@ public partial class GitCommandRunnerTests
         var relative = Path.GetRelativePath(Environment.CurrentDirectory, sshDirectory);
         string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
         var runner = CreateRunner();
-        var info = GitCommandRunner.CreateStartInfo(directory.FullName, arguments, GitCommandMode.Unattended);
+        var info = runner.CreateStartInfo(directory.FullName, arguments, GitCommandMode.Unattended);
         IsolateGit(info, workspace.Path, config);
         info.Environment["PATH"] = $"{relative}{Path.PathSeparator}{sshDirectory}{Path.PathSeparator}{info.Environment["PATH"]}";
 
@@ -304,7 +305,7 @@ public partial class GitCommandRunnerTests
         File.CreateSymbolicLink(ssh, PathLookupHelper.ResolveExecutablePath("ssh"));
         string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
         var runner = CreateRunner();
-        var info = GitCommandRunner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
         IsolateGit(info, workspace.Path, config);
         info.Environment["GIT_EXEC_PATH"] = executables.FullName;
 
@@ -331,7 +332,7 @@ public partial class GitCommandRunnerTests
         await File.WriteAllTextAsync(config, configuration);
         string[] arguments = ["ls-remote", "--", "ssh://git@example.test/repository"];
         var runner = CreateRunner();
-        var info = GitCommandRunner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
+        var info = runner.CreateStartInfo(workspace.Path, arguments, GitCommandMode.Unattended);
         IsolateGit(info, workspace.Path, config);
         info.Environment["PATH"] = string.Join(Path.PathSeparator,
             info.Environment["PATH"]!.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
@@ -389,7 +390,7 @@ public partial class GitCommandRunnerTests
         var selection = OperatingSystem.IsWindows()
             ? "!cygpath -aw \"$(command -v ssh.exe)\""
             : "!command -v ssh";
-        var query = GitCommandRunner.CreateStartInfo(source.WorkingDirectory,
+        var query = CreateRunner().CreateStartInfo(source.WorkingDirectory,
             ["-c", $"alias.aspire-test-ssh={selection}", "aspire-test-ssh"], GitCommandMode.Unattended);
         query.Environment.Clear();
         foreach (var (name, value) in source.Environment)
@@ -397,7 +398,8 @@ public partial class GitCommandRunnerTests
             query.Environment[name] = value;
         }
 
-        return (await CreateRunner().RunProcessAsync(query, TestContext.Current.CancellationToken)).TrimEnd('\r', '\n');
+        return (await CreateRunner().RunProcessAsync(query, captureCancellationOutput: false,
+            GitCommandMode.Unattended, TestContext.Current.CancellationToken)).TrimEnd('\r', '\n');
     }
 
     private static void IsolateGit(ProcessStartInfo info, string home, string config)

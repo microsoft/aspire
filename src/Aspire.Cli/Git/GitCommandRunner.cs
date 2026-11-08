@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,7 +16,7 @@ internal interface IGitCommandRunner
     Task<string> RunAsync(DirectoryInfo workingDirectory, string[] arguments, GitCommandMode mode, CancellationToken cancellationToken);
 }
 
-internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitCommandRunner
+internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ILogger<GitCommandRunner> logger) : IGitCommandRunner
 {
     private static readonly HashSet<string> s_repositoryEnvironmentVariables = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -34,35 +35,52 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
         var startInfo = CreateStartInfo(workingDirectory.FullName, arguments, mode);
         var command = arguments[0].StartsWith("--git-dir=", StringComparison.Ordinal) ? arguments[1] : arguments[0];
         using var scope = logger.BeginScope("Git {Operation} ({OperationId})", command, Guid.NewGuid());
-        if (command is "fetch" or "ls-remote")
+        if (IsUnattended(mode) && command is "fetch" or "ls-remote")
         {
             await ConfigureUnattendedSshAsync(startInfo, arguments, cancellationToken);
         }
-        return await RunProcessAsync(startInfo, cancellationToken);
+        return await RunProcessAsync(startInfo, captureCancellationOutput: command is "fetch" or "ls-remote" && mode != GitCommandMode.Captured && startInfo.RedirectStandardOutput,
+            mode, cancellationToken);
     }
 
-    internal static ProcessStartInfo CreateStartInfo(string directory, string[] arguments, GitCommandMode mode)
+    private bool IsUnattended(GitCommandMode mode) =>
+        mode == GitCommandMode.Unattended || mode == GitCommandMode.Interactive && !hostEnvironment.SupportsInteractiveInput;
+
+    internal ProcessStartInfo CreateStartInfo(string directory, string[] arguments, GitCommandMode mode)
     {
-        // Git authentication must be established outside Aspire, even in an interactive
-        // CLI host. Capture both streams for parsing and safe failure classification,
-        // never passing raw Git output or credential prompts through to the console.
-        var startInfo = new ProcessStartInfo("git", ["--literal-pathspecs", "-c", "core.askPass=", .. arguments])
+        var interactive = mode == GitCommandMode.Interactive && hostEnvironment.SupportsInteractiveInput;
+        var unattended = IsUnattended(mode);
+        var command = arguments[0].StartsWith("--git-dir=", StringComparison.Ordinal) ? arguments[1] : arguments[0];
+        var interactiveFetch = command == "fetch" && interactive;
+        // Ref resolution needs stdout for object IDs, but authentication instructions on
+        // stderr must remain visible before an interactive credential prompt completes.
+        var interactiveRemote = interactive && command is "fetch" or "ls-remote";
+        var startInfo = new ProcessStartInfo("git", unattended
+            ? ["--literal-pathspecs", "-c", "core.askPass=", .. arguments]
+            : ["--literal-pathspecs", .. arguments])
         {
             WorkingDirectory = directory,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            CreateNoWindow = true
+            RedirectStandardInput = mode == GitCommandMode.Captured || unattended,
+            // Fetch prompts need not end in a newline, and Git must control password echo.
+            RedirectStandardOutput = !interactiveFetch,
+            RedirectStandardError = !interactiveRemote,
+            StandardOutputEncoding = interactiveFetch ? null : Encoding.UTF8,
+            StandardErrorEncoding = interactiveRemote ? null : Encoding.UTF8,
+            CreateNoWindow = !interactive
         };
-        startInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
-        // GIT_TERMINAL_PROMPT does not govern GCM UI. Keep cached credentials usable.
-        // https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/environment.md#gcm_interactive
-        startInfo.Environment["GCM_INTERACTIVE"] = "never";
+        startInfo.Environment["GIT_TERMINAL_PROMPT"] = interactive ? "1" : "0";
+        if (!interactive && mode != GitCommandMode.Captured)
+        {
+            // GIT_TERMINAL_PROMPT does not govern GCM UI. Keep cached credentials usable.
+            // https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/environment.md#gcm_interactive
+            startInfo.Environment["GCM_INTERACTIVE"] = "never";
+        }
         startInfo.Environment["LC_ALL"] = "C";
         FilterEnvironment(startInfo.Environment, mode);
-        DisableAskPass(startInfo.Environment);
+        if (unattended)
+        {
+            DisableAskPass(startInfo.Environment);
+        }
 
         return startInfo;
     }
@@ -77,7 +95,7 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
         environment["SSH_ASKPASS_REQUIRE"] = "never";
     }
 
-    private static ProcessStartInfo CreateUnattendedQuery(ProcessStartInfo source, string[] arguments)
+    private ProcessStartInfo CreateUnattendedQuery(ProcessStartInfo source, string[] arguments)
     {
         var query = CreateStartInfo(source.WorkingDirectory, arguments, GitCommandMode.Unattended);
         query.Environment.Clear();
@@ -103,7 +121,7 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
         // https://git-scm.com/docs/git-ls-remote#Documentation/git-ls-remote.txt---get-url
         var urlQuery = CreateUnattendedQuery(startInfo,
             [.. repositoryArguments, "ls-remote", "--get-url", "--", arguments[separator + 1]]);
-        var repository = (await RunProcessAsync(urlQuery, cancellationToken)).TrimEnd('\r', '\n');
+        var repository = (await RunProcessAsync(urlQuery, captureCancellationOutput: false, GitCommandMode.Unattended, cancellationToken)).TrimEnd('\r', '\n');
         if (!UsesSsh(repository))
         {
             return;
@@ -118,7 +136,7 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
             {
                 // --null emits "<command>\0", preserving newlines inside the
                 // value so invalid shell commands cannot normalize into "ssh".
-                command = (await RunProcessAsync(configQuery, cancellationToken)).TrimEnd('\0');
+                command = (await RunProcessAsync(configQuery, captureCancellationOutput: false, GitCommandMode.Unattended, cancellationToken)).TrimEnd('\0');
             }
             catch (GitCommandException ex) when (ex.ExitCode is 1)
             {
@@ -223,7 +241,7 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
         string childPath;
         try
         {
-            childPath = await RunProcessAsync(pathQuery, cancellationToken);
+            childPath = await RunProcessAsync(pathQuery, captureCancellationOutput: false, GitCommandMode.Unattended, cancellationToken);
         }
         catch (GitCommandException ex) when (ex.Failure == GitFailure.CommandFailed)
         {
@@ -321,7 +339,7 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
         }
     }
 
-    internal async Task<string> RunProcessAsync(ProcessStartInfo startInfo, CancellationToken cancellationToken)
+    internal async Task<string> RunProcessAsync(ProcessStartInfo startInfo, bool captureCancellationOutput, GitCommandMode mode, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = Stopwatch.StartNew();
@@ -355,6 +373,10 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
             () => null, NullLogger.Instance, cancellationToken);
         logger.LogDebug("Git process completed after {Elapsed}; exit code {ExitCode}, failure {Failure}, cancelled {Cancelled}.",
             stopwatch.Elapsed, result.ExitCode, result.FailureKind, result.Cancelled);
+        if (cancellationToken.IsCancellationRequested && captureCancellationOutput && result.Capture is { } interrupted)
+        {
+            throw new GitProcessCanceledException(interrupted.StandardOutput + interrupted.StandardError, cancellationToken);
+        }
         cancellationToken.ThrowIfCancellationRequested();
         if (result.FailureKind is ProcessCaptureFailureKind.StartFailed)
         {
@@ -364,20 +386,27 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
         {
             throw new GitCommandException(GitFailure.RepositoryUnavailable, null);
         }
+        if (capture.StandardError.Length > 0)
+        {
+            // Quiet acquisition suppresses routine Git output, not diagnostics. Keep
+            // captured stderr visible without copying parsed stdout or private content
+            // into logs and exception messages. Interactive remote stderr is inherited.
+            interaction.DisplayRawText(capture.StandardError, ConsoleOutput.Error);
+        }
         if (result.ExitCode != 0)
         {
-            throw CreateCommandException(capture.StandardError, result.ExitCode);
+            throw CreateCommandException(capture.StandardError, result.ExitCode, mode);
         }
 
         return capture.StandardOutput;
     }
 
-    internal static GitCommandException CreateCommandException(string stderr, int exitCode)
+    internal static GitCommandException CreateCommandException(string stderr, int exitCode, GitCommandMode mode)
     {
         var authentication = stderr.Contains("authentication", StringComparison.OrdinalIgnoreCase)
             || stderr.Contains("permission denied", StringComparison.OrdinalIgnoreCase)
             || stderr.Contains("could not read Username", StringComparison.OrdinalIgnoreCase)
-            || stderr.Contains("could not read Password", StringComparison.OrdinalIgnoreCase);
+            || (mode == GitCommandMode.Captured && stderr.Contains("could not read Password", StringComparison.OrdinalIgnoreCase));
         var unavailable = stderr.Contains("repository not found", StringComparison.OrdinalIgnoreCase)
             || stderr.Contains("could not resolve host", StringComparison.OrdinalIgnoreCase)
             || stderr.Contains("unable to access", StringComparison.OrdinalIgnoreCase)
@@ -413,4 +442,10 @@ internal sealed class GitCommandRunner(ILogger<GitCommandRunner> logger) : IGitC
     }
 
     private sealed record GitOutput(string StandardOutput, string StandardError);
+}
+
+internal sealed class GitProcessCanceledException(string output, CancellationToken cancellationToken) : OperationCanceledException(cancellationToken)
+{
+    // For explicit user display on timeout only, never exception messages, logs or telemetry.
+    public string Output { get; } = output;
 }

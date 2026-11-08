@@ -52,14 +52,10 @@ internal sealed class GitClient(IGitCommandRunner commands) : IGitClient
 
     public Task InitializeAsync(DirectoryInfo workingDirectory, GitRepositoryLocation repository, string? objectFormat, GitCommandMode mode, CancellationToken cancellationToken)
     {
-        List<string> arguments = ["init"];
+        List<string> arguments = ["init", "--quiet"];
         if (repository.IsBare)
         {
             arguments.Add("--bare");
-        }
-        else
-        {
-            arguments.Add("--quiet");
         }
         if (objectFormat is not null)
         {
@@ -71,10 +67,10 @@ internal sealed class GitClient(IGitCommandRunner commands) : IGitClient
     }
 
     public Task FetchAsync(GitRepositoryLocation destination, string repository, string reference, GitCommandMode mode, CancellationToken cancellationToken) =>
-        RunAsync(destination, ["fetch", "--depth", "1", "--no-tags", "--", repository, reference], mode, cancellationToken);
+        RunAsync(destination, ["fetch", "--quiet", "--depth", "1", "--no-tags", "--", repository, reference], mode, cancellationToken);
 
     public Task CheckoutAsync(GitRepositoryLocation repository, GitCommandMode mode, CancellationToken cancellationToken) =>
-        RunAsync(repository, ["checkout", "--detach", "--force", "FETCH_HEAD"], mode, cancellationToken);
+        RunAsync(repository, ["checkout", "--quiet", "--detach", "--force", "FETCH_HEAD"], mode, cancellationToken);
 
     public async Task<string> GetCommitAsync(GitRepositoryLocation repository, string reference, GitCommandMode mode, CancellationToken cancellationToken) =>
         (await RunAsync(repository, repository.IsBare ? ["rev-parse", reference] : ["rev-parse", "--verify", reference], mode, cancellationToken)).Trim();

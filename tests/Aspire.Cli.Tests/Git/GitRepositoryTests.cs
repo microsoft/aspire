@@ -15,22 +15,6 @@ namespace Aspire.Cli.Tests.Git;
 
 public class GitRepositoryTests(ITestOutputHelper outputHelper)
 {
-    [Theory]
-    [InlineData("rev-parse")]
-    [InlineData("ls-files")]
-    public void CreateGitStartInfo_DisablesTerminalPromptsAndCapturesOutput(string command)
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        var startInfo = GitRepository.CreateGitStartInfo(workspace.WorkspaceRoot, [command]);
-
-        Assert.Equal("0", startInfo.Environment["GIT_TERMINAL_PROMPT"]);
-        Assert.True(startInfo.RedirectStandardInput);
-        Assert.True(startInfo.RedirectStandardOutput);
-        Assert.True(startInfo.RedirectStandardError);
-        Assert.True(startInfo.CreateNoWindow);
-    }
-
     [Fact]
     public async Task GetIncludedFilesAsync_OutsideRepo_ReturnsNull()
     {

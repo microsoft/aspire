@@ -78,4 +78,8 @@ internal sealed record ConfigSourceCheckMetadata(
 
 internal sealed record ConfigSourceSnapshot(ConfigSourceMetadata Metadata, JsonObject Configuration);
 
-internal sealed class ConfigSourceException(string message) : Exception(message);
+internal sealed class ConfigSourceException(string message) : Exception(message)
+{
+    // Captured fetch diagnostics are for user display only, never logs or telemetry.
+    public string? GitOutput { get; init; }
+}

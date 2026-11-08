@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
@@ -13,6 +15,23 @@ namespace Aspire.Cli.Tests.Templating;
 
 public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task RepositoryTemplate_QuietAcquisitionDoesNotDisplayRoutineGitOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (repository, commit) = await CreateRepositoryAsync(workspace, "content", [1, 2, 3]);
+        var interaction = new TestInteractionService();
+        var services = CreateServices(workspace);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Single(await GetFactory(provider).GetTemplatesAsync(
+            new TemplateSource(".", repository.FullName, "main"), TestContext.Current.CancellationToken));
+
+        Assert.Equal(new byte[] { 1, 2, 3 }, await File.ReadAllBytesAsync(Path.Combine(GetCheckout(workspace, commit), "content")));
+        Assert.Empty(interaction.DisplayedRawText);
+    }
+
     [Theory]
     [InlineData("sha1", "settings[1].json")]
     [InlineData("sha256", "settings with spaces.json")]
@@ -87,15 +106,11 @@ public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelpe
         Assert.Equal(string.Format(NewCommandStrings.TemplateRepositoryGitExited, 128, ErrorStrings.GitRepositoryUnavailable), exception.Message);
         Assert.Null(exception.InnerException);
         var logs = logger.Collector.GetSnapshot();
-        Assert.NotEmpty(logs);
-        foreach (var commandLogs in logs.Chunk(4))
-        {
-            Assert.Collection(commandLogs,
-                entry => Assert.Equal("Starting Git process.", entry.Message),
-                entry => Assert.StartsWith("Git process ", entry.Message),
-                entry => Assert.StartsWith("Git process ", entry.Message),
-                entry => Assert.StartsWith("Git process completed after ", entry.Message));
-        }
+        Assert.Collection(logs,
+            entry => Assert.Equal("Starting Git process.", entry.Message),
+            entry => Assert.StartsWith("Git process ", entry.Message),
+            entry => Assert.StartsWith("Git process ", entry.Message),
+            entry => Assert.StartsWith("Git process completed after ", entry.Message));
         Assert.All(logs, entry => Assert.False(entry.Message.Contains("private-repository-secret-marker", StringComparison.Ordinal)));
     }
 

@@ -618,5 +618,5 @@ public partial class NewCommandLocalTemplateTests
 
     private static IReadOnlyList<(string Repository, DirectoryInfo Destination, string CommitSha)> GetGitFetches(TestGitCommandRunner git) =>
         git.Commands.Where(call => call.Arguments[0] == "fetch")
-            .Select(call => (call.Arguments[5], call.WorkingDirectory, call.Arguments[6])).ToArray();
+            .Select(call => (call.Arguments[Array.IndexOf(call.Arguments, "--") + 1], call.WorkingDirectory, call.Arguments[Array.IndexOf(call.Arguments, "--") + 2])).ToArray();
 }
