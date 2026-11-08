@@ -69,6 +69,9 @@ internal static class KnownConfigNames
 
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
     public const string AppHostLogLevel = "ASPIRE_APPHOST_LOGLEVEL";
+    // Friendly AppHost name from appHost.name in aspire.config.json, projected by the CLI at launch.
+    // The AppHost uses it as the dashboard application name unless code sets one explicitly.
+    public const string AppHostName = "ASPIRE_APPHOST_NAME";
     public const string AspireLogLevel = "ASPIRE_LOGLEVEL";
     public const string TestingDisableHttpClient = "ASPIRE_TESTING_DISABLE_HTTP_CLIENT";
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";

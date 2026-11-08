@@ -523,7 +523,7 @@ internal sealed class AspireConfigAppHost
     /// Friendly display name for the AppHost.
     /// </summary>
     [JsonPropertyName("name")]
-    [Description("Friendly display name for the AppHost, shown by tools such as the Aspire tray instead of a name derived from the AppHost path. Useful for single-file AppHosts (apphost.cs) whose folder name is generic.")]
+    [Description("Friendly display name for the AppHost. Used as the dashboard application name and shown by aspire ps and the Aspire tray instead of a name derived from the AppHost path. Useful for single-file AppHosts (apphost.cs) whose folder name is generic.")]
     public string? Name { get; set; }
 }
 

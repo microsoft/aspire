@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
@@ -32,6 +33,13 @@ internal sealed class AppHostDisplayInfo
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LogFilePath { get; init; }
+
+    /// <summary>
+    /// The friendly name from <c>appHost.name</c> in <c>aspire.config.json</c>. Omitted when unset,
+    /// so existing JSON consumers see no change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Name { get; init; }
 }
 
 internal static class AppHostDisplayStatus
@@ -360,7 +368,8 @@ internal sealed partial class PsCommand
             SdkVersion = appHost.SdkVersion,
             CliPid = appHost.CliPid,
             DashboardUrl = appHost.DashboardUrl,
-            LogFilePath = appHost.LogFilePath
+            LogFilePath = appHost.LogFilePath,
+            Name = appHost.Name
         };
     }
 
@@ -441,7 +450,8 @@ internal sealed partial class PsCommand
                 SdkVersion = sdkVersion,
                 CliPid = cliPid,
                 DashboardUrl = dashboardUrl,
-                LogFilePath = cliLogFilePath
+                LogFilePath = cliLogFilePath,
+                Name = appHostPath is null ? null : AppHostDisplayNameResolver.GetConfiguredName(appHostPath)
             });
         }
 

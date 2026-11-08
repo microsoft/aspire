@@ -126,6 +126,11 @@ public sealed class DistributedApplicationOptions
     }
 
     /// <summary>
+    /// The dashboard application name set in code, without the name derived from the AppHost path.
+    /// </summary>
+    internal string? ExplicitDashboardApplicationName => _dashboardApplicationName;
+
+    /// <summary>
     /// Gets or sets the fully qualified path to the AppHost file (either .csproj, .cs, .ts, or .py file).
     /// For .csproj-based AppHosts, this returns the path to the .csproj file.
     /// For single-file or polyglot AppHosts, this returns the path to the source file.
