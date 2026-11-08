@@ -22,6 +22,30 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
     public async Task ResourceMetadataCoversExistingAndNewFiles(string projectName, string resourceDirectory, string generator)
     {
         using var workspace = TemporaryWorkspace.Create(output);
+        await VerifyResourceMetadataAsync(workspace, projectName, resourceDirectory, generator);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task ResourceMetadataIgnoresMSBuildServerFallbackDiagnostics()
+    {
+        // Under CI load the dotnet CLI can fail to reach the MSBuild server and prints a fallback
+        // diagnostic to standard output alongside the -getItem JSON. Inject that exact line so the
+        // item query is verified independently of whatever else the CLI writes to its streams.
+        using var workspace = TemporaryWorkspace.Create(output);
+        var dotnet = CreateDotNetWithStandardOutputDiagnostic(workspace, MSBuildServerFallbackDiagnostic);
+
+        var result = await VerifyResourceMetadataAsync(workspace, "Aspire.Hosting.Testing", "Properties", "ResXFileCodeGenerator", dotnet);
+
+        Assert.Contains(MSBuildServerFallbackDiagnostic, result.Output);
+    }
+
+    private const string MSBuildServerFallbackDiagnostic =
+        "MSBuild server unavailable: could not connect to the server within the timeout window; the server may have failed to start. Falling back to an in-process build.";
+
+    private async Task<CommandResult> VerifyResourceMetadataAsync(
+        TemporaryWorkspace workspace, string projectName, string resourceDirectory, string generator, string? dotnet = null)
+    {
         var projectDirectory = Path.Combine(RepoRoot.Path, "src", projectName);
         var source = XDocument.Load(Path.Combine(RepoRoot.Path, "Directory.Build.targets"));
         var configuration = XDocument.Load(Path.Combine(projectDirectory, $"{projectName}.csproj"));
@@ -84,20 +108,24 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
         var projectPath = Path.Combine(workspace.Path, "Resources.proj");
         project.Save(projectPath);
         var script = Path.Combine(workspace.Path, "evaluate.ps1");
+        // MSBuild writes -getItem results to this file, separate from diagnostics such as the CLI's
+        // "MSBuild server unavailable" fallback message that can appear on standard output.
+        var resultPath = Path.Combine(workspace.Path, "evaluation_results.json");
         await File.WriteAllTextAsync(script, """
-            & $env:TEST_DOTNET msbuild $env:TEST_PROJECT -nologo -getItem:EmbeddedResource,Compile
+            & $env:TEST_DOTNET msbuild $env:TEST_PROJECT -nologo -getItem:EmbeddedResource,Compile "-getResultOutputFile:$env:TEST_RESULT"
             exit $LASTEXITCODE
             """);
         using var command = new PowerShellCommand(script, output)
             .WithWorkingDirectory(workspace.Path)
             .WithTimeout(TimeSpan.FromMinutes(2))
-            .WithEnvironmentVariable("TEST_DOTNET", Path.Combine(RepoRoot.Path, ".dotnet", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"))
+            .WithEnvironmentVariable("TEST_DOTNET", dotnet ?? DotNetPath)
             .WithEnvironmentVariable("TEST_PROJECT", projectPath)
+            .WithEnvironmentVariable("TEST_RESULT", resultPath)
             .WithEnvironmentVariable("MSBUILDTERMINALLOGGER", "false");
         var result = await command.ExecuteAsync();
         result.EnsureSuccessful();
 
-        using var document = JsonDocument.Parse(result.Output);
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(resultPath));
         var items = document.RootElement.GetProperty("Items");
         var resources = items.GetProperty("EmbeddedResource").EnumerateArray().ToArray();
         Assert.Equal(neutralResources.Concat(otherResources), resources.Select(item => item.GetProperty("Identity").GetString()));
@@ -143,5 +171,36 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
                 Assert.False(sourceItem.TryGetProperty("AutoGen", out _));
             }
         }
+
+        return result;
+    }
+
+    private static string DotNetPath => Path.Combine(RepoRoot.Path, ".dotnet", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+
+    private static string CreateDotNetWithStandardOutputDiagnostic(TemporaryWorkspace workspace, string diagnostic)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var wrapper = Path.Combine(workspace.Path, "dotnet-with-diagnostic.cmd");
+            File.WriteAllText(wrapper, $"""
+                @echo off
+                "{DotNetPath}" %*
+                set exitCode=%ERRORLEVEL%
+                echo {diagnostic}
+                exit /b %exitCode%
+                """);
+            return wrapper;
+        }
+
+        var script = Path.Combine(workspace.Path, "dotnet-with-diagnostic.sh");
+        File.WriteAllText(script, $"""
+            #!/bin/sh
+            "{DotNetPath}" "$@"
+            exitCode=$?
+            echo '{diagnostic}'
+            exit $exitCode
+            """);
+        File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return script;
     }
 }
