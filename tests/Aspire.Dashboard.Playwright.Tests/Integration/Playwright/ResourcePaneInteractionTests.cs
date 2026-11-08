@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Layout;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -192,9 +193,11 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             if (minimumPaneWidth)
             {
                 var resizer = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                // The separator handles keys only once its script is registered.
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-disabled", "false");
                 await resizer.FocusAsync();
                 await page.Keyboard.PressAsync("Home");
-                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", ResourcesLayout.MinimumPaneWidthPx.ToString(CultureInfo.InvariantCulture));
             }
 
             var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourceHeaderAllResources, Exact = true });
@@ -468,7 +471,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
                     const requests = [];
                     module.registerPaneResizer(layout, {
                         invokeMethodAsync: (_, width) => new Promise(resolve => requests.push({ width, resolve }))
-                    }, 420, 560);
+                    }, 420, 560, 420);
                     window.resizeRace = {
                         requests,
                         render: width => {

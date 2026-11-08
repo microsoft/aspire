@@ -261,7 +261,7 @@ export function unregisterTabOverflow(registrationId) {
     window.removeEventListener("resize", state.schedule);
 }
 
-export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth) {
+export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maximumWidth, defaultWidth) {
     unregisterPaneResizer(layoutElement);
 
     const pane = layoutElement.querySelector(':scope > .resource-pane');
@@ -409,10 +409,12 @@ export function registerPaneResizer(layoutElement, dotNetRef, minimumWidth, maxi
         }
     };
 
+    // Double-clicking a splitter restores the default size. The minimum is narrower than the default, and Home already
+    // goes there.
     const onDoubleClick = e => {
         e.preventDefault();
         handle.focus({ preventScroll: true });
-        resizeTo(minimumWidth);
+        resizeTo(defaultWidth);
         commit();
     };
 
@@ -771,7 +773,10 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     // listener is on the window, which comes before the document: the tooltip provider removes a shown tooltip in its
     // own capture listener on the document.
     let escapeIsFree = false;
-    const escapeOwnerSelector = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, ' +
+    // Whether the user's last interaction before the current key was with a pointer rather than the keyboard.
+    let lastInteractionWasPointer = false;
+    let escapeFollowsPointer = false;
+    const escapeOwnerSelector ='input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, ' +
         '[popover], fluent-popover-b, fluent-menu, fluent-dialog, dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]';
     const hasOpenOverlay = () => {
         // A control whose popup is open says so (aria-haspopup with aria-expanded="true"), whatever the popup is built
@@ -801,7 +806,15 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             return false;
         }
     };
+    const onPointerDown = () => {
+        lastInteractionWasPointer = true;
+    };
     const onEscapeCapture = event => {
+        escapeFollowsPointer = lastInteractionWasPointer;
+        // Modifier keys alone, for example while a shortcut is being typed, don't mean keyboard navigation.
+        if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) {
+            lastInteractionWasPointer = false;
+        }
         escapeIsFree = event.key === 'Escape' && !event.isComposing && !event.repeat &&
             !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
             !event.composedPath().some(target => target instanceof Element && target.matches(escapeOwnerSelector)) &&
@@ -821,6 +834,16 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         if (close && close.getClientRects().length > 0 && !close.closest('[inert]')) {
             event.preventDefault();
             close.click();
+            // A key press makes the browser show focus on the focused element, as if it had been reached with the
+            // keyboard. After clicking a resource in the list beside the content, its link keeps focus, so closing with
+            // Escape would outline the resource's whole row in the full-page list, which looks like a selection. Focus
+            // that came from a pointer was never shown, so it's dropped instead. Re-focusing with focusVisible: false
+            // would keep it but count as keyboard focus for the tooltip provider (app-tooltips.js), which would show
+            // the row's tooltip right after Escape dismissed tooltips. Keyboard focus stays, and stays visible.
+            // https://drafts.csswg.org/selectors-4/#the-focus-visible-pseudo
+            if (escapeFollowsPointer && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+                document.activeElement.blur();
+            }
         }
     };
 
@@ -843,6 +866,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
     window.addEventListener('keydown', onEscapeCapture, true);
+    window.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('keydown', onEscape);
     document.addEventListener('click', onTabActivate);
     document.addEventListener('keydown', onTabActivate);
@@ -857,6 +881,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
         window.removeEventListener('keydown', onEscapeCapture, true);
+        window.removeEventListener('pointerdown', onPointerDown, true);
         document.removeEventListener('keydown', onEscape);
         document.removeEventListener('click', onTabActivate);
         document.removeEventListener('keydown', onTabActivate);

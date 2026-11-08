@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Layout;
 using System.Collections.Immutable;
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -442,7 +443,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(page.Locator("html")).ToHaveAttributeAsync("lang", culture);
                 await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, MetadataResourcesFixture.CreateDynamicChild(0))]);
                 await Assertions.Expect(page.Locator("[data-resource-name='rebuilder-0']")).ToBeVisibleAsync();
-                foreach (var width in new[] { 420, 560, 769, 1279, 1280, 1440, 2000 })
+                foreach (var width in new[] { ResourcesLayout.MinimumPaneWidthPx, 560, 769, 1279, 1280, 1440, 2000 })
                 {
                     if (await page.Locator(".pane-full-canvas").CountAsync() > 0)
                     {
@@ -451,7 +452,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     await page.SetViewportSizeAsync(width <= 560 ? 2000 : width, 1000);
                     if (width <= 560)
                     {
-                        await page.Locator(".resource-pane-resizer").PressAsync(width == 420 ? "Home" : "End");
+                        await page.Locator(".resource-pane-resizer").PressAsync(width == ResourcesLayout.MinimumPaneWidthPx ? "Home" : "End");
                         await Assertions.Expect(page.Locator(".resource-pane-resizer"))
                             .ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
                     }
@@ -494,7 +495,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     [InlineData(false)]
     [InlineData(true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task Resizer_DoubleClickRestoresMinimumAcrossPresentationAndNavigation(bool reducedMotion)
+    public async Task Resizer_DoubleClickRestoresDefaultAcrossPresentationAndNavigation(bool reducedMotion)
     {
         await RunTestAsync(async page =>
         {
@@ -1025,7 +1026,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
                 await AssertGeometryAsync(density);
                 var pane = page.Locator(".resource-pane");
-                foreach (var width in new[] { 420, 560, 769, 960, 990, 1279, 1280, 1281, 1304, 1439, 1440, 1441, 1599, 1600, 1601, 1799, 1800, 1801, 2000 })
+                foreach (var width in new[] { ResourcesLayout.MinimumPaneWidthPx, 560, 769, 960, 990, 1279, 1280, 1281, 1304, 1439, 1440, 1441, 1599, 1600, 1601, 1799, 1800, 1801, 2000 })
                 {
                     stage = $"{density}-{width}-expanded";
                     if (await page.Locator(".pane-full-canvas").CountAsync() > 0)
@@ -1037,7 +1038,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     {
                         var separator = page.Locator(".resource-pane-resizer");
                         await separator.FocusAsync();
-                        await separator.PressAsync(width == 420 ? "Home" : "End");
+                        await separator.PressAsync(width == ResourcesLayout.MinimumPaneWidthPx ? "Home" : "End");
                         await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
                     }
                     else
@@ -1902,6 +1903,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
             var pane = page.Locator(".resource-pane");
             var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+            // The settings drawer stays over the page while it animates closed, and would take the drag's pointer
+            // down. A drag is also handled only once the separator's script is registered.
+            await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);
+            await Assertions.Expect(separator).ToHaveAttributeAsync("aria-disabled", "false");
             var handle = await separator.BoundingBoxAsync();
             var initialPane = await pane.BoundingBoxAsync();
             Assert.NotNull(handle);
@@ -2262,6 +2267,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
         var pane = page.Locator(".resource-pane");
         var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+        // The settings drawer stays over the page while it animates closed, and would take the drag's pointer down.
+        // A drag is also handled only once the separator's script is registered.
+        await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);
+        await Assertions.Expect(separator).ToHaveAttributeAsync("aria-disabled", "false");
         var handle = await separator.BoundingBoxAsync();
         var initialPane = await pane.BoundingBoxAsync();
         Assert.NotNull(handle);
@@ -2493,7 +2502,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             Assert.NotNull(targetBox);
             await page.Locator(".detail-page-close").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
-            await Assertions.Expect(layoutActions).Not.ToBeVisibleAsync();
+            // The full-page list is the overview's List layout and shows the same toggle, with List pressed.
+            await Assertions.Expect(layoutActions).ToBeVisibleAsync();
+            await Assertions.Expect(layoutActions.GetByRole(AriaRole.Button, new() { Name = Resources.Resources.ResourceOverviewLayoutList, Exact = true }))
+                .ToHaveAttributeAsync("aria-pressed", "true");
             await AssertRowGapsAsync();
             await pane.Locator(".resource-select-all-toggle").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);

@@ -127,8 +127,8 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
                 """);
             await Assertions.Expect(page.Locator(".resource-content")).Not.ToBeVisibleAsync();
             await Assertions.Expect(navigation).ToBeVisibleAsync();
-            // With the content closed, no view is shown selected. The overview is kept for the next selection.
-            await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "false");
+            // The full-page list is the overview's List layout, so closing the overview keeps the Overview tab selected.
+            await Assertions.Expect(navigation.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "true");
             await Assertions.Expect(filter).ToHaveValueAsync("tag-");
             await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
             Assert.True(await originalPane.EvaluateAsync<bool>("pane => pane === document.querySelector('.resource-pane')"));
@@ -225,7 +225,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task Dashboard_OpensOnTheCompactFullPageListWithNoViewSelected()
+    public async Task Dashboard_OpensOnTheCompactFullPageListWithOverviewSelected()
     {
         await RunTestAsync(async page =>
         {
@@ -237,10 +237,11 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             var allResources = page.Locator(".resource-select-all-toggle");
             await Assertions.Expect(allResources).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
             await Assertions.Expect(allResources).ToHaveClassAsync(new Regex(@"\bon\b"));
-            await AssertNoTabSelectedAsync(page);
 
-            // The overview is the view kept for a selection, and choosing it opens it for all resources.
+            // The full-page list is the overview's List layout, so the Overview tab is selected, and choosing it again
+            // opens the overview's summary or graph for all resources.
             var overview = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
+            await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
             await overview.ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
@@ -298,7 +299,48 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
         });
     }
 
-    // While the content is closed, the active tab is a hidden placeholder, so no visible tab is selected.
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Escape_AfterClickingResource_DoesNotShowFocusOnItsRow()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            var fullCanvas = page.Locator(".resources-layout.pane-full-canvas");
+            var title = page.Locator("h1.resource-title");
+            var link = page.Locator(".resource-row[data-resource-name='tag-b'] .resource-row-link");
+            var visibleFocus = page.Locator(".resource-row-link:focus-visible");
+
+            // With the list already beside the content, clicking a resource leaves focus on its link, without showing it.
+            await page.GotoAsync("/resources/tag-a");
+            await Assertions.Expect(title).ToHaveTextAsync("tag-a");
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
+            await link.ClickAsync();
+            await Assertions.Expect(title).ToHaveTextAsync("tag-b");
+            await Assertions.Expect(link).ToBeFocusedAsync();
+            await Assertions.Expect(visibleFocus).ToHaveCountAsync(0);
+
+            // Escape is a key press, which would show that focus in the full-page list as an outline around the row.
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await Assertions.Expect(visibleFocus).ToHaveCountAsync(0);
+            Assert.True(await page.EvaluateAsync<bool>("() => document.activeElement === document.body"));
+
+            // Opened with the keyboard, the resource keeps focus after Escape, and it stays visible.
+            await page.GotoAsync("/resources/tag-a");
+            await Assertions.Expect(title).ToHaveTextAsync("tag-a");
+            await link.FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(title).ToHaveTextAsync("tag-b");
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await Assertions.Expect(link).ToBeFocusedAsync();
+            await Assertions.Expect(visibleFocus).ToHaveCountAsync(1);
+        });
+    }
+
+    // While the content of a tab other than Overview is closed, the active tab is a hidden placeholder, so no visible
+    // tab is selected.
     private static Task AssertNoTabSelectedAsync(IPage page) =>
         Assertions.Expect(page.Locator(".resources-tab-header fluent-tab[aria-selected='true']:visible")).ToHaveCountAsync(0);
 }

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Resize;
 using System.Collections.Concurrent;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
@@ -50,7 +51,14 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
             await page.WaitForFunctionAsync("key => JSON.parse(localStorage.getItem(key)) === 'Summary'", BrowserStorageKeys.GroupOverview);
             await Assertions.Expect(page.Locator(".home-hero-headline")).ToHaveTextAsync("All 3 resources are running");
             var layout = page.GetByRole(AriaRole.Group, new() { Name = ResourceStrings.LayoutLabel, Exact = true });
-            await Assertions.Expect(layout.GetByRole(AriaRole.Button)).ToHaveCountAsync(2);
+            // On desktop the toggle also offers the full-page resource list as the List layout.
+            var isDesktop = width > ViewportInformation.MobileCutoffPixelWidth;
+            await Assertions.Expect(layout.GetByRole(AriaRole.Button)).ToHaveCountAsync(isDesktop ? 3 : 2);
+            if (isDesktop)
+            {
+                await Assertions.Expect(layout.GetByRole(AriaRole.Button, new() { Name = ResourceStrings.ResourceOverviewLayoutList, Exact = true }))
+                    .ToHaveAttributeAsync("aria-pressed", "false");
+            }
             var summary = layout.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogGroupOverviewSummary, Exact = true });
             var graph = layout.GetByRole(AriaRole.Button, new() { Name = ResourceStrings.GraphPageTitle, Exact = true });
             await Assertions.Expect(summary).ToHaveAttributeAsync("aria-pressed", "true");

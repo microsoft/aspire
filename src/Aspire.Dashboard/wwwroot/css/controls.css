@@ -1304,3 +1304,39 @@ fluent-badge.property-details-accordion-badge {
     vertical-align: text-bottom;
     margin-inline-start: var(--inline-icon-margin);
 }
+
+/* A single line of tags. app-tag-overflow.js marks the tags that don't fit and fills the "+N" tag. */
+aspire-tag-overflow {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+aspire-tag-overflow > * {
+    flex: 0 0 auto;
+}
+
+/* Same as .visually-hidden: the tag leaves the line but screen readers still read it. */
+aspire-tag-overflow > [data-tag-overflow-hidden] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+aspire-tag-overflow > [data-tag-overflow-more]:not([data-count]) {
+    display: none;
+}
+
+/* The count is presentational: the hidden tags are still in the accessibility tree. */
+aspire-tag-overflow > [data-tag-overflow-more]::before {
+    content: attr(data-count);
+}

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Utils;
@@ -144,7 +145,12 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             else
             {
-                await page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize }).PressAsync("Home");
+                // The separator handles keys only once its script is registered. Before the minimum width was lowered
+                // below the default, a Home press that came too early went unnoticed.
+                var resizer = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-disabled", "false");
+                await resizer.PressAsync("Home");
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", ResourcesLayout.MinimumPaneWidthPx.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("""
@@ -204,7 +210,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             await Assertions.Expect(page.Locator(".resource-content")).Not.ToHaveAttributeAsync("inert", "");
             var layoutBox = await page.Locator(".resources-layout").BoundingBoxAsync();
             Assert.NotNull(layoutBox);
-            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? 420 : 0);
+            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? ResourcesLayout.MinimumPaneWidthPx : 0);
             Assert.NotEmpty(frames);
             Assert.All(await page.EvaluateAsync<string[]>("() => window.selectionRevealTitles"),
                 title => Assert.Equal("api", title));
@@ -544,7 +550,15 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                     Assert.Equal(toolbarBox.Height, frame[10]);
                     Assert.Equal(1, frame[11]);
                 });
-                await Assertions.Expect(page.GetByRole(AriaRole.Group, new() { Name = "Layout", Exact = true })).ToHaveCountAsync(expanding ? 0 : width > 768 ? 1 : 0);
+                // The full-page list is the overview's List layout, so the Layout toggle shows in both presentations,
+                // with List pressed while the list fills the page.
+                var layoutToggle = page.GetByRole(AriaRole.Group, new() { Name = "Layout", Exact = true });
+                await Assertions.Expect(layoutToggle).ToHaveCountAsync(width > 768 ? 1 : 0);
+                if (width > 768)
+                {
+                    await Assertions.Expect(layoutToggle.GetByRole(AriaRole.Button, new() { Name = Resources.Resources.ResourceOverviewLayoutList, Exact = true }))
+                        .ToHaveAttributeAsync("aria-pressed", expanding ? "true" : "false");
+                }
                 var intermediate = frames.Any(frame => frame[0] > Math.Min(start.Width, end.Width) + 0.1 && frame[0] < Math.Max(start.Width, end.Width) - 0.1);
                 Assert.Equal(!reducedMotion, intermediate);
                 await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"resource-pane-motion-{width}-{reducedMotion}-{expanding}.png") });
