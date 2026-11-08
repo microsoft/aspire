@@ -367,10 +367,13 @@ public partial class InteractionsProviderTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task ReceiveData_ParameterInputsShownInlineAndFormRemoved_OpenDialog()
+    public async Task ReceiveData_ParameterInputsShownInlineAndFormRemoved_SendCompletion()
     {
         var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
-        var dashboardClient = new TestDashboardClient(isEnabled: true, interactionChannelProvider: () => interactionsChannel);
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
         var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
 
         SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
@@ -402,12 +405,14 @@ public partial class InteractionsProviderTests : DashboardTestContext
             "Wait for the prompt to be shown in the parameter form.");
         Assert.Null(instance._interactionDialogReference);
 
-        // Navigating away removes the form. The prompt must still be visible, so it moves to a dialog.
+        // Navigating away removes the form. Leaving is a choice to enter the values later, so the prompt is cancelled
+        // rather than moved to a dialog, and the AppHost shows its notification again.
         await cut.InvokeAsync(() => panel!.Dispose());
 
-        await AsyncTestHelpers.AssertIsTrueRetryAsync(
-            () => instance._interactionDialogReference?.InteractionId == 1,
-            "Wait for the prompt to be shown in a dialog.");
+        var update = await sendInteractionUpdatesChannel.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(1, update.InteractionId);
+        Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.Complete, update.KindCase);
+        Assert.Null(instance._interactionDialogReference);
         Assert.Null(state.Current);
 
         await instance.DisposeAsync().DefaultTimeout();
