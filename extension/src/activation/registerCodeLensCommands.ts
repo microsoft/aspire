@@ -14,6 +14,7 @@ import { executeResourceCommand } from '../views/resourceCommandExecution';
 import { AppHostDataRepository, isMatchingAppHostPath, ResourceCommandJson } from '../data/AppHostDataRepository';
 import { DebuggerInstallHint, DebuggerInstallHintService } from '../debugger/debuggerInstallHints';
 import { registerInstrumentedCommand } from './instrumentedCommand';
+import { hideCodeLensGuidance } from '../editor/codeLensGuidance';
 import { getCliPathTargetForUri, windowCliPathTarget } from '../utils/cliPathVariables';
 
 export function registerCodeLensCommands(
@@ -37,6 +38,7 @@ export function registerCodeLensCommands(
     'aspire-vscode.installDebuggerExtension',
     'codelens',
     (hint: DebuggerInstallHint) => debuggerInstallHintService.installDebuggerExtension(hint));
+  const hideCodeLensGuidanceRegistration = registerInstrumentedCommand('aspire-vscode.hideCodeLensGuidance', 'codelens', (setting: string) => hideCodeLensGuidance(setting));
   const codeLensDebugPipelineStepRegistration = registerInstrumentedCommand('aspire-vscode.codeLensDebugPipelineStep', 'codelens', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
   const codeLensResourceActionRegistration = registerInstrumentedCommand('aspire-vscode.codeLensResourceAction', 'codelens', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
     const effectiveResourceCommand = getCurrentResourceCommand(dataRepository, resourceName, action, appHostPath) ?? resourceCommand;
@@ -112,6 +114,7 @@ export function registerCodeLensCommands(
   return [
     codeLensRegistration,
     installDebuggerExtensionRegistration,
+    hideCodeLensGuidanceRegistration,
     codeLensDebugPipelineStepRegistration,
     codeLensResourceActionRegistration,
     codeLensViewLogsRegistration,
