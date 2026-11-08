@@ -2,6 +2,7 @@
 const stoppedStateInspectionCommands: ReadonlySet<string> = new Set(['stackTrace', 'scopes', 'variables', 'evaluate']);
 
 interface SessionInspectionState {
+  proofResumeExpected: boolean;
   pendingInspectionRequests: Set<number>;
   interruptedInspectionRequests: Set<number>;
   resumedSinceLastStop: boolean;
@@ -16,6 +17,12 @@ interface SessionInspectionState {
 export class ResumeInterruptedInspectionRequests {
   private readonly sessions = new Map<string, SessionInspectionState>();
 
+  // Call immediately before the proof sends its own `continue` to the session. Only that request starts
+  // classification, so a `continue` sent by any other session or caller cannot hide failures.
+  expectProofResume(sessionId: string): void {
+    this.getState(sessionId).proofResumeExpected = true;
+  }
+
   onRequest(sessionId: string, message: { type?: unknown; seq?: unknown; command?: unknown } | undefined): void {
     if (message?.type !== 'request' || typeof message.seq !== 'number' || typeof message.command !== 'string') {
       return;
@@ -23,6 +30,11 @@ export class ResumeInterruptedInspectionRequests {
 
     const state = this.getState(sessionId);
     if (message.command === 'continue') {
+      if (!state.proofResumeExpected) {
+        return;
+      }
+
+      state.proofResumeExpected = false;
       for (const sequence of state.pendingInspectionRequests) {
         state.interruptedInspectionRequests.add(sequence);
       }
@@ -63,7 +75,7 @@ export class ResumeInterruptedInspectionRequests {
   private getState(sessionId: string): SessionInspectionState {
     let state = this.sessions.get(sessionId);
     if (!state) {
-      state = { pendingInspectionRequests: new Set(), interruptedInspectionRequests: new Set(), resumedSinceLastStop: false };
+      state = { proofResumeExpected: false, pendingInspectionRequests: new Set(), interruptedInspectionRequests: new Set(), resumedSinceLastStop: false };
       this.sessions.set(sessionId, state);
     }
 

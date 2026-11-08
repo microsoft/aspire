@@ -1594,6 +1594,7 @@ async function proveAttachedResourceDebugging(
         extensionLogOutputChannel.info(`Resource debug E2E ${expectedDebugType} adapter acknowledged breakpoint removal.`);
       },
       continueExecution: async () => {
+        resumeInterruptedInspectionRequests.expectProofResume(attachedSessionForDetach.id);
         await attachedSessionForDetach.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
       },
       waitForResourceResponse: async phase => {

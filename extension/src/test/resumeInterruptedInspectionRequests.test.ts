@@ -8,10 +8,18 @@ const attachedSessionId = 'attached';
 
 // Replays messages the way the attach proof's debug adapter tracker observes them and returns the failed
 // responses it would still report in debugAdapterResponses.
-function reportedFailures(trace: Array<{ sessionId?: string; direction: 'toAdapter' | 'fromAdapter'; message: DapMessage }>): DapMessage[] {
+type TraceStep = { sessionId?: string; direction: 'toAdapter' | 'fromAdapter' | 'proofResume'; message: DapMessage };
+
+function reportedFailures(trace: TraceStep[]): DapMessage[] {
     const tracker = new ResumeInterruptedInspectionRequests();
     const failures: DapMessage[] = [];
     for (const { sessionId = attachedSessionId, direction, message } of trace) {
+        if (direction === 'proofResume') {
+            tracker.expectProofResume(sessionId);
+            tracker.onRequest(sessionId, message);
+            continue;
+        }
+
         if (direction === 'toAdapter') {
             tracker.onRequest(sessionId, message);
             continue;
@@ -31,6 +39,9 @@ const request = (seq: number, command: string, sessionId?: string) =>
     ({ sessionId, direction: 'toAdapter' as const, message: { type: 'request', seq, command } });
 const response = (requestSeq: number, command: string, success: boolean, message?: string, sessionId?: string) =>
     ({ sessionId, direction: 'fromAdapter' as const, message: { type: 'response', request_seq: requestSeq, command, success, message } });
+// The proof's own customRequest('continue') on the attached session.
+const proofContinue = (seq: number, sessionId?: string) =>
+    ({ sessionId, direction: 'proofResume' as const, message: { type: 'request', seq, command: 'continue' } });
 const stopped = (sessionId?: string) =>
     ({ sessionId, direction: 'fromAdapter' as const, message: { type: 'event', event: 'stopped' } });
 
@@ -45,7 +56,7 @@ suite('Resume-interrupted inspection requests', () => {
             request(11, 'scopes'),
             response(11, 'scopes', true),
             request(13, 'variables'),
-            request(14, 'continue'),
+            proofContinue(14),
             response(14, 'continue', true),
             response(13, 'variables', false, 'Evaluation aborted.'),
         ]);
@@ -58,7 +69,7 @@ suite('Resume-interrupted inspection requests', () => {
             stopped(),
             request(10, 'stackTrace'),
             response(10, 'stackTrace', true),
-            request(11, 'continue'),
+            proofContinue(11),
             request(12, 'scopes'),
             response(11, 'continue', true),
             response(12, 'scopes', false, 'Unable to get scopes: the target process is running.'),
@@ -72,7 +83,7 @@ suite('Resume-interrupted inspection requests', () => {
             stopped(),
             request(13, 'variables'),
             response(13, 'variables', false, 'Evaluation aborted.'),
-            request(14, 'continue'),
+            proofContinue(14),
             response(14, 'continue', true),
         ]);
 
@@ -82,7 +93,7 @@ suite('Resume-interrupted inspection requests', () => {
     test('reports inspection failures after the debuggee stops again', () => {
         const failures = reportedFailures([
             stopped(),
-            request(14, 'continue'),
+            proofContinue(14),
             response(14, 'continue', true),
             stopped(),
             request(15, 'variables'),
@@ -96,7 +107,7 @@ suite('Resume-interrupted inspection requests', () => {
         const failures = reportedFailures([
             stopped(),
             request(13, 'setBreakpoints'),
-            request(14, 'continue'),
+            proofContinue(14),
             response(13, 'setBreakpoints', false, 'Failed to set breakpoints.'),
             response(14, 'continue', false, 'Failed to continue.'),
         ]);
@@ -109,11 +120,25 @@ suite('Resume-interrupted inspection requests', () => {
             stopped('other'),
             request(13, 'variables', 'other'),
             stopped(),
-            request(14, 'continue'),
+            proofContinue(14),
             response(14, 'continue', true),
             response(13, 'variables', false, 'Evaluation aborted.', 'other'),
         ]);
 
         assert.deepStrictEqual(failures.map(failure => failure.request_seq), [13]);
+    });
+
+    test('reports inspection failures after a continue the proof did not send', () => {
+        const failures = reportedFailures([
+            stopped('other'),
+            request(13, 'variables', 'other'),
+            request(14, 'continue', 'other'),
+            request(15, 'scopes', 'other'),
+            response(14, 'continue', true, undefined, 'other'),
+            response(13, 'variables', false, 'Evaluation aborted.', 'other'),
+            response(15, 'scopes', false, 'Unable to get scopes: the target process is running.', 'other'),
+        ]);
+
+        assert.deepStrictEqual(failures.map(failure => failure.request_seq), [13, 15]);
     });
 });
