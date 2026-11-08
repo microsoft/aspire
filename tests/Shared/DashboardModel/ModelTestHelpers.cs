@@ -29,7 +29,9 @@ public static class ModelTestHelpers
         ImmutableArray<VolumeViewModel>? volumes = null,
         ImmutableArray<HealthReportViewModel>? healthReports = null,
         string? customState = null,
-        string? resourceTypeDisplayName = null)
+        string? resourceTypeDisplayName = null,
+        DateTime? startTimeStamp = null,
+        DateTime? stopTimeStamp = null)
     {
         return new ResourceViewModel
         {
@@ -40,8 +42,8 @@ public static class ModelTestHelpers
             Uid = Guid.NewGuid().ToString(),
             ReplicaIndex = 0,
             CreationTimeStamp = DateTime.UtcNow,
-            StartTimeStamp = DateTime.UtcNow,
-            StopTimeStamp = DateTime.UtcNow,
+            StartTimeStamp = startTimeStamp ?? DateTime.UtcNow,
+            StopTimeStamp = stopTimeStamp ?? DateTime.UtcNow,
             Environment = environment ?? [],
             Urls = urls ?? [],
             Volumes = volumes ?? [],

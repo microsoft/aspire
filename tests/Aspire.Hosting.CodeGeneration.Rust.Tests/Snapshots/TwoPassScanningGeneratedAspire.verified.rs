@@ -389,6 +389,10 @@ pub enum EndpointProperty {
     HostAndPort,
     #[serde(rename = "TlsEnabled")]
     TlsEnabled,
+    #[serde(rename = "BrowserOrigins")]
+    BrowserOrigins,
+    #[serde(rename = "PrimaryBrowserOrigin")]
+    PrimaryBrowserOrigin,
 }
 
 impl std::fmt::Display for EndpointProperty {
@@ -402,6 +406,8 @@ impl std::fmt::Display for EndpointProperty {
             Self::TargetPort => write!(f, "TargetPort"),
             Self::HostAndPort => write!(f, "HostAndPort"),
             Self::TlsEnabled => write!(f, "TlsEnabled"),
+            Self::BrowserOrigins => write!(f, "BrowserOrigins"),
+            Self::PrimaryBrowserOrigin => write!(f, "PrimaryBrowserOrigin"),
         }
     }
 }
@@ -8683,6 +8689,24 @@ impl EndpointReference {
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.endpointName", args)?;
         Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+    pub fn browser_origins(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
+    }
+
+    /// Gets the deferred primary browser-facing origin associated with this endpoint.
+    pub fn primary_browser_origin(&self) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
     }
 
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.

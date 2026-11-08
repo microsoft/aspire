@@ -4,8 +4,7 @@
     "language": "go"
   },
   "packages": {
-    "Aspire.Hosting.Go": "{{aspireVersion}}",
-    "Aspire.Hosting.Redis": "{{aspireVersion}}"
+    "Aspire.Hosting.Go": "{{aspireVersion}}"
   },
   "profiles": {
     "https": {

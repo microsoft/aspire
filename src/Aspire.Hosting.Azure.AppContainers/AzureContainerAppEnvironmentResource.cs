@@ -430,6 +430,16 @@ public class AzureContainerAppEnvironmentResource :
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && IsExpress)
+        {
+            ValidatePublicEndpointReference(endpointReference);
+        }
+        if (property is (EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin) && (!endpoint.IsExternal || endpoint.UriScheme is not ("http" or "https")))
+        {
+            throw new NotSupportedException(
+                $"Azure Container Apps environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it is not an external HTTP(S) endpoint. " +
+                "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.");
+        }
         var scheme = PreserveHttpEndpoints ? endpoint.UriScheme : "https";
         var port = string.Equals(scheme, "http", StringComparison.OrdinalIgnoreCase) ? 80 : 443;
         var tlsEnabled = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase) || endpoint.TlsEnabled;
@@ -437,6 +447,8 @@ public class AzureContainerAppEnvironmentResource :
 
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Url => ReferenceExpression.Create($"{scheme}://{host}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host,
             EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),

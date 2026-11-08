@@ -75,6 +75,7 @@ public sealed class GoEmptyAppHostTemplateTests(ITestOutputHelper output)
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         Assert.True(File.Exists(Path.Combine(projectRoot, "apphost.go")), $"Expected apphost.go in {projectRoot}");
         Assert.True(File.Exists(Path.Combine(projectRoot, "go.mod")), $"Expected go.mod in {projectRoot}");
+        GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");
 
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));

@@ -309,9 +309,6 @@
   <data name="ResourcePaneResourceActions" xml:space="preserve">
     <value>Actions for {0}</value>
   </data>
-  <data name="ResourcePaneSelectAll" xml:space="preserve">
-    <value>Select all</value>
-  </data>
   <data name="ResourcePaneAllSelected" xml:space="preserve">
     <value>All selected</value>
   </data>
@@ -341,6 +338,10 @@
   </data>
   <data name="ResourceHeaderStarted" xml:space="preserve">
     <value>Started</value>
+  </data>
+  <data name="ResourceHeaderStopped" xml:space="preserve">
+    <value>Stopped</value>
+    <comment>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</comment>
   </data>
   <data name="ResourceHeaderNotFound" xml:space="preserve">
     <value>Resource not found</value>
@@ -372,26 +373,47 @@
   <data name="ResourcePaneFilterReset" xml:space="preserve">
     <value>Reset</value>
   </data>
-  <data name="ResourcePaneKindShow" xml:space="preserve">
-    <value>Select to show {0}</value>
-  </data>
-  <data name="ResourcePaneKindHide" xml:space="preserve">
-    <value>Select to hide {0}</value>
-  </data>
-  <data name="ResourcePaneNoKindsHint" xml:space="preserve">
-    <value>Turn on a type above to list it.</value>
-  </data>
-  <data name="ResourcePaneNoKindsShown" xml:space="preserve">
-    <value>Nothing shown</value>
-  </data>
-  <data name="ResourcePaneKindsLandmark" xml:space="preserve">
-    <value>Types to show</value>
-  </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>
   </data>
   <data name="ResourceTabUnavailable" xml:space="preserve">
     <value>Not available for this resource</value>
+  </data>
+  <data name="ResourcePaneNoStructuredLogs" xml:space="preserve">
+    <value>No structured logs are currently available for this resource. Select to open its logs view.</value>
+  </data>
+  <data name="ResourcePaneNoTraces" xml:space="preserve">
+    <value>No traces are currently available for this resource. Select to open its traces view.</value>
+  </data>
+  <data name="ResourcePaneNoMetrics" xml:space="preserve">
+    <value>No metrics are currently available for this resource. Select to open its metrics view.</value>
+  </data>
+  <data name="ResourcePaneParameterNoConsoleLogs" xml:space="preserve">
+    <value>Parameters do not produce console logs. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoStructuredLogs" xml:space="preserve">
+    <value>Parameters do not produce structured logs. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoTraces" xml:space="preserve">
+    <value>Parameters do not produce traces. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoMetrics" xml:space="preserve">
+    <value>Parameters do not produce metrics. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneParameterNoTerminal" xml:space="preserve">
+    <value>Parameters do not support terminal sessions. Select to view this parameter's overview.</value>
+  </data>
+  <data name="ResourcePaneNoStructuredLogsLabel" xml:space="preserve">
+    <value>No logs</value>
+  </data>
+  <data name="ResourcePaneNoTracesLabel" xml:space="preserve">
+    <value>No traces</value>
+  </data>
+  <data name="ResourcePaneNoMetricsLabel" xml:space="preserve">
+    <value>No metrics</value>
+  </data>
+  <data name="ResourcePaneNotApplicableLabel" xml:space="preserve">
+    <value>Not applicable</value>
   </data>
   <data name="ResourceTabOverview" xml:space="preserve">
     <value>Overview</value>
@@ -439,9 +461,6 @@
   <data name="ResourcePaneReorderUnavailable" xml:space="preserve">
     <value>Clear search, filters and grouping, and move resources within the same parent.</value>
   </data>
-  <data name="ResourcePaneReorderFailed" xml:space="preserve">
-    <value>Unable to save the resource order. Try again.</value>
-  </data>
   <data name="ResourcePaneMovedBefore" xml:space="preserve">
     <value>{0} moved before {1}.</value>
     <comment>{0} is the moved resource name; {1} is the target resource name.</comment>
@@ -452,9 +471,6 @@
   </data>
   <data name="ResourcePaneGroupReorderUnavailable" xml:space="preserve">
     <value>Clear search and filters, and try reordering groups again.</value>
-  </data>
-  <data name="ResourcePaneGroupReorderFailed" xml:space="preserve">
-    <value>Unable to save the group order. Try again.</value>
   </data>
   <data name="NavMenuToggleExpand" xml:space="preserve">
     <value>Expand navigation labels</value>

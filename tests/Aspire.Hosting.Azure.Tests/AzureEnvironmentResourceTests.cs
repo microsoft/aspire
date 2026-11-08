@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.ApplicationModel;
 #pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Storage;
@@ -15,6 +18,118 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureEnvironmentResourceTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false, false, EndpointProperty.BrowserOrigins)]
+    [InlineData(true, false, EndpointProperty.BrowserOrigins)]
+    [InlineData(false, true, EndpointProperty.BrowserOrigins)]
+    [InlineData(true, true, EndpointProperty.BrowserOrigins)]
+    [InlineData(false, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData(true, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData(false, true, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData(true, true, EndpointProperty.PrimaryBrowserOrigin)]
+    public void ComputeEnvironmentExplainsUnsupportedBrowserOrigins(bool appService, bool nonHttp, EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        IComputeEnvironmentResource environment = appService
+            ? builder.AddAzureAppServiceEnvironment("env").Resource
+            : builder.AddAzureContainerAppEnvironment("env").Resource;
+        var frontend = builder.AddContainer("frontend", "image")
+            .WithEndpoint(name: "endpoint", scheme: nonHttp ? "tcp" : "http", targetPort: 8080, isExternal: nonHttp);
+
+#pragma warning disable ASPIRECOMPUTE002 // Verify owner-level endpoint resolution matches native publication.
+        var error = Assert.Throws<NotSupportedException>(() =>
+            environment.GetEndpointPropertyExpression(frontend.GetEndpoint("endpoint").Property(property)));
+#pragma warning restore ASPIRECOMPUTE002
+
+        var platform = appService ? "Azure App Service" : "Azure Container Apps";
+        Assert.Equal(
+            $"{platform} environment 'env' cannot provide browser origins for endpoint 'endpoint' on resource 'frontend' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserUrlProjectionsUseAzureWorkloadExpressions(bool appService)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        if (appService)
+        {
+            builder.AddAzureAppServiceEnvironment("env");
+        }
+        else
+        {
+            builder.AddAzureContainerAppEnvironment("env");
+        }
+#pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
+        var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        var origin = frontend.GetEndpoint("http").PrimaryBrowserOrigin;
+        var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithEnvironment("ORIGIN", origin)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origin}"));
+#pragma warning restore CS0618
+        using var app = builder.Build();
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+
+        Assert.True(backend.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target));
+        var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(provisioningResource);
+        await Verify(manifest.ToString(), "json").AppendContentAsFile(bicep, "bicep").UseParameters(appService);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginsFollowEndpointVisibility(bool appService)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, workspace.Path);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new InMemoryDeploymentStateManager());
+        if (appService)
+        {
+            builder.AddAzureAppServiceEnvironment("env");
+        }
+        else
+        {
+            builder.AddAzureContainerAppEnvironment("env");
+        }
+#pragma warning disable CS0618 // Exercise legacy ProjectResource publishing with synthetic project metadata.
+        var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null).WithHttpEndpoint(targetPort: 8080);
+        var origins = frontend.GetEndpoint("http").PrimaryBrowserOrigin;
+        var backend = builder.AddProject<TestProject>("backend", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints()
+            .WithEnvironment("ORIGIN", origins)
+            .WithEnvironment("ORIGINS", frontend.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={origins}"));
+#pragma warning restore CS0618
+        using var app = builder.Build();
+
+        if (appService)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None));
+            var cause = Assert.IsType<NotSupportedException>(exception.GetBaseException());
+            Assert.Equal("The endpoint 'http' on resource 'frontend' is not external. App Service only supports external endpoints.", cause.Message);
+            return;
+        }
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
+        var target = backend.Resource.GetDeploymentTargetAnnotation()!;
+        var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var error = Assert.Throws<NotSupportedException>(provisioningResource.GetBicepTemplateString);
+        Assert.Equal(
+            "Azure Container Apps cannot provide browser origins for endpoint 'http' on resource 'frontend' because it is not an external HTTP(S) endpoint. " +
+            "Reference an external HTTP(S) endpoint or supply an explicit origin parameter.", error.Message);
+    }
+
     [Fact]
     public async Task WhenUsedWithAzureContainerAppsEnvironment_GeneratesProperBicep()
     {

@@ -16,6 +16,13 @@ public partial class DetailPageCloseButton
     [Parameter]
     public EventCallback OnClose { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the page's Escape key also closes it, as the resources view's does. The tooltip then names
+    /// the key. The button doesn't handle the key itself.
+    /// </summary>
+    [Parameter]
+    public bool ClosesOnEscape { get; set; }
+
     private async Task CloseAsync()
     {
         await OnClose.InvokeAsync();

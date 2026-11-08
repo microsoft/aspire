@@ -157,6 +157,12 @@ internal sealed class NuGetClient(
         = static (workingDirectory, machineWideSettings) =>
             Settings.LoadDefaultSettings(workingDirectory, configFileName: null, machineWideSettings);
 
+    /// <summary>
+    /// Creates the repository used to query a package source, allowing tests to supply in-memory protocol resources.
+    /// </summary>
+    internal Func<PackageSource, SourceRepository> SourceRepositoryFactory { get; init; }
+        = static source => Repository.Factory.GetCoreV3(source);
+
     public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
         string framework,
@@ -680,7 +686,7 @@ internal sealed class NuGetClient(
         INuGetLogger nuGetLogger,
         CancellationToken cancellationToken)
     {
-        var repository = Repository.Factory.GetCoreV3(source);
+        var repository = SourceRepositoryFactory(source);
         var searchResource = await repository.GetResourceAsync<PackageSearchResource>(cancellationToken).ConfigureAwait(false);
         if (searchResource is null)
         {

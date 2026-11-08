@@ -1,0 +1,6 @@
+﻿parameters: {}
+secrets: {}
+config:
+  consumer:
+    web_http_PrimaryBrowserOrigin: "https://public.example"
+    web_http_BrowserOrigins: "https://public.example,https://alias.example"

@@ -522,6 +522,84 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Contains("Install or use the .NET SDK 10.0 or later", result.Output);
     }
 
+    [Theory]
+    [InlineData("DefinitelyInvalid")]
+    [InlineData("DnxPinnedd")]
+    public async Task ComputeRunArgumentsWarnsAndUsesPathModeWhenInvocationModeIsUnsupported(string invocationMode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+
+        var result = await RunComputeRunArgumentsAsync(project, CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("warning ASPIRE014", result.Output);
+        Assert.Contains($"AspireCliInvocationMode={invocationMode}, which is not a supported value", result.Output);
+        Assert.Contains("Supported values are Path, Dnx, and DnxPinned", result.Output);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            environment: CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal(GetExpectedAspireRunCommand(aspireCliPath), properties["RunCommand"]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Path")]
+    [InlineData("pAtH")]
+    [InlineData("Dnx")]
+    [InlineData("DnxPinned")]
+    public async Task ComputeRunArgumentsDoesNotWarnWhenInvocationModeIsSupported(string? invocationMode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var extraProjectXml = invocationMode is null
+            ? null
+            : $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """;
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, extraProjectXml);
+
+        var result = await RunComputeRunArgumentsAsync(project, CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE014", result.Output);
+    }
+
+    [Fact]
+    public async Task UnsupportedInvocationModeWarningCanBeSuppressed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>DefinitelyInvalid</AspireCliInvocationMode>
+                <NoWarn>$(NoWarn);ASPIRE014</NoWarn>
+              </PropertyGroup>
+            """);
+
+        var result = await RunComputeRunArgumentsAsync(project, CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE014", result.Output);
+    }
+
     [Fact]
     public async Task ComputeRunArgumentsSkipsNonExecutableDnxOnUnix()
     {
@@ -703,22 +781,80 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("ASPIRE010")]
-    public async Task DisabledCliBundleFailsBuildEvenWithWarningSuppression(string? noWarn)
+    [InlineData("C#", false, null, "error ASPIRE013")]
+    [InlineData("C#", false, "ASPIRE010", "error ASPIRE013")]
+    [InlineData("C#", false, "ASPIRE013", "error ASPIRE013")]
+    [InlineData("C#", true, null, null)]
+    [InlineData("F#", false, null, "warning ASPIRE010")]
+    [InlineData("F#", false, "ASPIRE010", null)]
+    [InlineData("F#", false, "ASPIRE013", "warning ASPIRE010")]
+    [InlineData("F#", true, null, null)]
+    public async Task CliBundleDiagnosticsRespectLanguageAndWarningSuppression(string language, bool aspireUseCliBundle, string? noWarn, string? expectedDiagnostic)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: false);
-        var arguments = new List<string> { "msbuild", "-nologo", "-restore", "-t:PrepareForBuild" };
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle);
+        var arguments = new List<string> { "msbuild", "-nologo", "-restore", "-t:PrepareForBuild", $"-p:Language={language}" };
         if (noWarn is not null)
         {
             arguments.Add($"-p:NoWarn={noWarn}");
         }
         var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory, [.. arguments]);
 
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("error ASPIRE010", result.Output);
-        Assert.Contains("https://get.aspire.dev", result.Output);
+        Assert.Equal(expectedDiagnostic is "error ASPIRE013" ? 1 : 0, result.ExitCode);
+        // MSBuild emits lines such as "AppHost.targets(166,5): warning ASPIRE010: ... [AppHost.csproj]".
+        // Check every Aspire diagnostic so required-bundle errors do not also emit the optional warning.
+        string[] expectedDiagnostics = expectedDiagnostic is null ? [] : [expectedDiagnostic];
+        Assert.Equal(expectedDiagnostics, Regex.Matches(result.Output, @"\b(?:warning|error) ASPIRE\d+:").Select(match => match.Value.TrimEnd(':')));
+
+        if (expectedDiagnostic is "warning ASPIRE010")
+        {
+            Assert.Contains("AppHost is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle. See https://aka.ms/aspire/diagnostics/aspire010 for more information.", result.Output);
+        }
+        else if (expectedDiagnostic is "error ASPIRE013")
+        {
+            Assert.Contains("AppHost requires the Aspire CLI bundle. Remove AspireUseCliBundle or set it to true, and install the matching Aspire CLI from https://get.aspire.dev. ASPIRE013 cannot be suppressed to disable the bundle. See https://aka.ms/aspire/diagnostics/aspire013 for more information.", result.Output);
+        }
+    }
+
+    [Theory]
+    [InlineData(".fsproj", "F#", null)]
+    [InlineData(".fsproj", "F#", "ASPIRE010")]
+    [InlineData(".fsproj", "F#", "ASPIRE013")]
+    [InlineData(".vbproj", "VB", null)]
+    [InlineData(".vbproj", "VB", "ASPIRE010")]
+    [InlineData(".vbproj", "VB", "ASPIRE013")]
+    public async Task NonCSharpAppHostsDefaultToDisabledCliBundle(string projectExtension, string expectedLanguage, string? noWarn)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: null, projectExtension: projectExtension);
+        var arguments = new List<string>
+        {
+            "msbuild",
+            "-nologo",
+            "-restore",
+            "-t:PrepareForBuild",
+            "-getProperty:Language,AspireUseCliBundle",
+            project.ProjectFile
+        };
+        if (noWarn is not null)
+        {
+            arguments.Add($"-p:NoWarn={noWarn}");
+        }
+
+        var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory, [.. arguments]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        var jsonStart = result.StandardOutput.IndexOf('{');
+        var jsonEnd = result.StandardOutput.LastIndexOf('}');
+        Assert.True(jsonStart >= 0 && jsonEnd > jsonStart, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput[jsonStart..(jsonEnd + 1)]);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(expectedLanguage, properties.GetProperty("Language").GetString());
+        Assert.Equal("false", properties.GetProperty("AspireUseCliBundle").GetString());
+
+        // MSBuild prefixes warnings before the property JSON, for example "warning ASPIRE010: ... [AppHost.fsproj]".
+        string[] expectedDiagnostics = noWarn is "ASPIRE010" ? [] : ["warning ASPIRE010"];
+        Assert.Equal(expectedDiagnostics, Regex.Matches(result.Output, @"\b(?:warning|error) ASPIRE\d+:").Select(match => match.Value.TrimEnd(':')));
     }
 
     [Theory]
@@ -1599,9 +1735,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
     private static async Task<RunHookProject> CreateRunHookProjectAsync(
         string workspace,
-        bool aspireUseCliBundle,
+        bool? aspireUseCliBundle,
         string? extraProjectXml = null,
-        bool includeBundlePaths = true)
+        bool includeBundlePaths = true,
+        string projectExtension = ".csproj")
     {
         var repoRoot = GetRepoRoot();
         var projectDirectory = Path.Combine(workspace, "AppHost");
@@ -1612,7 +1749,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var appHostTargets = await File.ReadAllTextAsync(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"));
         await File.WriteAllTextAsync(appHostTargetsFile, appHostTargets.Replace("@VERSION@", AspireCliVersion));
         var appHostTargetsPath = SecurityElement.Escape(appHostTargetsFile);
-        var projectFile = Path.Combine(projectDirectory, "AppHost.csproj");
+        var projectFile = Path.Combine(projectDirectory, $"AppHost{projectExtension}");
+        var cliBundleXml = aspireUseCliBundle is { } useCliBundle
+            ? $"<AspireUseCliBundle>{useCliBundle.ToString().ToLowerInvariant()}</AspireUseCliBundle>"
+            : string.Empty;
         var bundlePathsXml = includeBundlePaths
             ? """
                 <AspireDashboardPath>$(MSBuildProjectDirectory)/Aspire.Dashboard.dll</AspireDashboardPath>
@@ -1630,7 +1770,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 <OutputType>Exe</OutputType>
                 <TargetFramework>net10.0</TargetFramework>
                 <AspireHostingSDKVersion>{{AspireCliVersion}}</AspireHostingSDKVersion>
-                <AspireUseCliBundle>{{aspireUseCliBundle.ToString().ToLowerInvariant()}}</AspireUseCliBundle>
+                {{cliBundleXml}}
             {{bundlePathsXml}}
                 <_AspireTasksAssembly>{{SecurityElement.Escape(GetAspireHostingTasksAssemblyPath())}}</_AspireTasksAssembly>
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
@@ -1663,6 +1803,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             extraArguments,
             environment);
     }
+
+    private static Task<DotNetResult> RunComputeRunArgumentsAsync(RunHookProject project, IDictionary<string, string> environment)
+        => RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            environment);
 
     private static async Task<Dictionary<string, string>> GetResolveAspireCliBundlePathPropertiesAsync(
         RunHookProject project,

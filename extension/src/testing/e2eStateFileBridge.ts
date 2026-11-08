@@ -676,6 +676,10 @@ export async function executeE2eControlCommand(
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       return getActiveEditorInfo();
     }
+    case 'clearAllNotifications': {
+      markStarted();
+      return await vscode.commands.executeCommand('notifications.clearAll');
+    }
     case 'getRegisteredAspireCommands': {
       markStarted();
       const commands = await vscode.commands.getCommands(true);
@@ -1929,6 +1933,7 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
         matchingStackFrame: resourceHit.matchingFrame,
         topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
       },
+      appHostCodeLenses: await getCodeLensesForFile(appHostSourcePath),
       debugSessions,
       launchRequests,
       debugAdapterResponses,

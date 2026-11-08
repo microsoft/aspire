@@ -74,10 +74,12 @@ builder.AddProject<Projects.Api>("api")
 
 `WithTags` accepts a single tag or multiple tags using `params ReadOnlySpan<string>`,
 avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags.
-It uses the reserved trait `Aspire_Dashboard_Tag`. These tags participate in
-dashboard tag grouping but cannot be removed in the dashboard. User-added tags are
-stored separately in the application settings database, so restarting an AppHost
-does not lose customizations or copy declared tags from a different run.
+It uses the reserved trait `Aspire_Tag`, which is not dashboard-specific: it also
+appears as the `resource.trait.Aspire_Tag` property in `aspire describe --format json`.
+These tags participate in dashboard tag grouping but cannot be removed in the
+dashboard. User-added tags are stored separately in browser local storage, so
+restarting an AppHost does not lose customizations or copy declared tags from a
+different run.
 
 `WithDashboardPosition` uses `Aspire_Dashboard_Position`; repeated calls replace the
 previous value. Lower positions appear first; defaults can change between runs until

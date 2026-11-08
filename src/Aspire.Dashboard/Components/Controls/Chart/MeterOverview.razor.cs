@@ -30,6 +30,13 @@ public partial class MeterOverview : LiveSparklinesBase
     public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
 
     /// <summary>
+    /// Gets or sets the names of the resources that a card's pin applies to: those of the current selection, so the
+    /// cards of an instrument reported by several of them share one pin.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<string> PinResourceNames { get; set; }
+
+    /// <summary>
     /// Gets or sets the resource label shown as a pill on each card. Null hides it, for lists of a single resource.
     /// </summary>
     [Parameter]

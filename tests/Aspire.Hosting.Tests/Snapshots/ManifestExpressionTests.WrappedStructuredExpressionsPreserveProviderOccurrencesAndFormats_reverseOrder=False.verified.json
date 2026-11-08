@@ -1,0 +1,34 @@
+﻿{
+  "resources": {
+    "first": {
+      "type": "parameter.v0",
+      "value": "{first.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "second": {
+      "type": "parameter.v0",
+      "value": "{second.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "VALUES": "{first.value}|{second-uri-encoded.value}|{first.value}"
+      }
+    },
+    "second-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{second.value}",
+      "filter": "uri"
+    }
+  }
+}

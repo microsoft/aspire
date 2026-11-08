@@ -53,6 +53,8 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
     /// </summary>
     internal Dictionary<string, CapturedEnvironmentVariable> CapturedEnvironmentVariables { get; } = [];
 
+    internal EndpointPropertyInputCache EndpointInputs { get; } = new();
+
     internal Dictionary<IResource, DockerComposeServiceResource> ResourceMapping { get; } = new(new ResourceNameComparer());
 
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();
@@ -272,6 +274,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
     private Task PublishAsync(PipelineStepContext context)
     {
+        EndpointInputs.ReserveModelNames(context.Model.Resources);
         var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
         var imageBuilder = context.Services.GetRequiredService<IResourceContainerImageManager>();
 

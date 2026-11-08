@@ -72,10 +72,17 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         navigation.NavigateTo(url);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await OpenStartPageContentAsync(cut, url, isDesktop);
 
         var close = Assert.Single(cut.FindComponents<Components.Controls.DetailPageCloseButton>());
         Assert.Equal(expectedParent, close.Instance.ParentUrl);
         Assert.Equal(ButtonAppearance.Default, close.FindComponent<FluentButton>().Instance.Appearance);
+        // Escape closes the view too (see ResourcesLayout.razor.js), so the tooltip names the key. The accessible name
+        // stays the action, and the key is announced from aria-keyshortcuts.
+        var closeButton = cut.Find(".detail-page-close");
+        Assert.Equal("Close (Esc)", closeButton.GetAttribute("data-tooltip"));
+        Assert.Equal("Close", closeButton.GetAttribute("aria-label"));
+        Assert.Equal("Escape", closeButton.GetAttribute("aria-keyshortcuts"));
         await cut.Find(".detail-page-close").ClickAsync();
         cut.Render();
 
@@ -120,6 +127,7 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         navigation.NavigateTo(url);
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        await OpenStartPageContentAsync(cut, url, isDesktop);
 
         await cut.Find(".detail-page-close").ClickAsync();
         cut.Render();
@@ -391,5 +399,18 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
 
         Assert.Equal(navigation.ToAbsoluteUri(layout.Instance.GetTraceDetailUrl("trace")).AbsoluteUri, navigation.Uri);
         Assert.Equal("traces/detail/trace?resource=api&resource=cache&type=server&filters=example", navigation.ToBaseRelativePath(navigation.Uri));
+    }
+
+    // The dashboard opens /resources on the full-page list (see ResourcesLayout.TryRedirectLandingAsync), so there's
+    // no content to close until "All resources" opens the overview.
+    private static async Task OpenStartPageContentAsync(IRenderedComponent<ResourcesLayout> cut, string url, bool isDesktop)
+    {
+        if (isDesktop && url == DashboardUrls.ResourceListUrl())
+        {
+            Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+            await cut.Find(".resource-select-all-toggle").ClickAsync();
+            cut.Render();
+            Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        }
     }
 }

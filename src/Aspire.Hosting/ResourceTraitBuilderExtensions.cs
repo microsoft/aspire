@@ -46,7 +46,7 @@ public static class ResourceTraitBuilderExtensions
 
         foreach (var tag in tags)
         {
-            builder.WithTrait(KnownResourceTraits.DashboardTag, tag);
+            builder.WithTrait(KnownResourceTraits.Tag, tag);
         }
 
         return builder;

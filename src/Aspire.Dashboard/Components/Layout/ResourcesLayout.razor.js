@@ -17,7 +17,6 @@ export function usesCommandSelectionModifier() {
 
 export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
     unregisterPaneActivityVisibility(layoutElement);
-    const pane = layoutElement.querySelector(':scope > .resource-pane');
     let frame = 0;
     let reported;
     let forceRefresh = false;
@@ -37,8 +36,9 @@ export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
         }
         frame = requestAnimationFrame(() => {
             frame = 0;
+            const pane = layoutElement.querySelector(':scope > .resource-pane');
             // Match the activity disclosure boundary, not the saved compact sidebar width.
-            const visible = document.visibilityState === 'visible' &&
+            const visible = pane !== null && document.visibilityState === 'visible' &&
                 layoutElement.classList.contains('pane-full-canvas') &&
                 pane.getBoundingClientRect().width >= 1440;
             const force = forceRefresh;
@@ -67,9 +67,28 @@ export function registerPaneActivityVisibility(layoutElement, dotNetRef) {
     };
     const reconnectModal = document.getElementById('components-reconnect-modal');
     const resize = new ResizeObserver(() => schedule());
-    const presentation = new MutationObserver(() => schedule());
-    resize.observe(pane);
-    presentation.observe(layoutElement, { attributes: true, attributeFilter: ['class'] });
+    let observedPane = null;
+    const observePane = () => {
+        const pane = layoutElement.querySelector(':scope > .resource-pane');
+        if (pane !== observedPane) {
+            if (observedPane) {
+                resize.unobserve(observedPane);
+            }
+            observedPane = pane;
+            if (pane) {
+                resize.observe(pane);
+            }
+        }
+    };
+    const presentation = new MutationObserver(() => {
+        observePane();
+        schedule();
+    });
+    // Grid-track animations resize the pane without resizing its workspace.
+    // Collapse can remove the pane, so rebind its observation when it is remounted.
+    resize.observe(layoutElement);
+    observePane();
+    presentation.observe(layoutElement, { attributes: true, attributeFilter: ['class'], childList: true });
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('pageshow', resume);
     window.addEventListener('focus', resume);
@@ -91,15 +110,51 @@ export function unregisterPaneActivityVisibility(layoutElement) {
     activityRegistrations.delete(layoutElement);
 }
 
+const resourcePickers = new WeakMap();
+
+export function setResourcePickerOpen(layoutElement, dotNetRef, open) {
+    const picker = layoutElement.querySelector(':scope > .resource-picker-popover');
+    let registration = resourcePickers.get(layoutElement);
+    if (registration?.picker !== picker) {
+        unregisterResourcePicker(layoutElement);
+        if (!picker) {
+            return;
+        }
+
+        const onToggle = event => {
+            // Only the native popover's own toggle closes the picker. Nested controls can emit bubbling toggle events.
+            // https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/toggle_event
+            if (event.target === picker && event.newState === "closed") {
+                dotNetRef.invokeMethodAsync("OnResourcePickerClosedAsync");
+            }
+        };
+        picker.addEventListener("toggle", onToggle);
+        registration = { picker, onToggle };
+        resourcePickers.set(layoutElement, registration);
+    }
+
+    if (picker.matches(":popover-open") !== open) {
+        picker.togglePopover(open);
+    }
+}
+
+export function unregisterResourcePicker(layoutElement) {
+    const registration = resourcePickers.get(layoutElement);
+    if (registration) {
+        registration.picker.removeEventListener("toggle", registration.onToggle);
+        resourcePickers.delete(layoutElement);
+    }
+}
+
 // Priority+ overflow for the tab strip in the header. Tabs that no longer fit are marked with data-tab-overflow (hidden
 // by CSS) from the right, and their ids are reported to .NET, which lists them in the "..." menu. Hiding is done in the
 // DOM, rather than by rendering, so resizing never waits for a server round trip.
-let tabOverflow = null;
+const tabOverflowRegistrations = new Map();
 
-export function registerTabOverflow(dotNetRef) {
-    unregisterTabOverflow();
+export function registerTabOverflow(registrationId, dotNetRef) {
+    unregisterTabOverflow(registrationId);
 
-    const state = { dotNetRef, nav: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0 };
+    const state = { dotNetRef, nav: null, tablist: null, resizeObserver: null, tabsObserver: null, reported: "", frame: 0 };
     const schedule = () => {
         if (!state.frame) {
             state.frame = requestAnimationFrame(() => {
@@ -114,16 +169,20 @@ export function registerTabOverflow(dotNetRef) {
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav) {
             state.resizeObserver.disconnect();
-            state.tabsObserver.disconnect();
             state.nav = nav;
             state.reported = "";
             if (nav) {
                 state.resizeObserver.observe(nav);
-                const tablist = nav.querySelector(".resources-tab-header");
-                if (tablist) {
-                    // Attributes are filtered so setting data-tab-overflow below doesn't re-trigger a measurement.
-                    state.tabsObserver.observe(tablist, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
-                }
+            }
+        }
+        // Navigation replaces the keyed FluentTabs without necessarily replacing its surrounding strip.
+        const tablist = nav?.querySelector(".resources-tab-header") ?? null;
+        if (tablist !== state.tablist) {
+            state.tabsObserver.disconnect();
+            state.tablist = tablist;
+            if (tablist) {
+                // Attributes are filtered so setting data-tab-overflow below doesn't re-trigger a measurement.
+                state.tabsObserver.observe(tablist, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "class"] });
             }
         }
         measure();
@@ -168,23 +227,26 @@ export function registerTabOverflow(dotNetRef) {
     state.tabsObserver = new MutationObserver(schedule);
     // Cheap check on any DOM change (the terminal updates constantly): only a replaced strip needs attaching again.
     state.bodyObserver = new MutationObserver(() => {
-        if (document.querySelector(".resource-tabs-nav") !== state.nav) {
+        const nav = document.querySelector(".resource-tabs-nav");
+        if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
         }
     });
     state.bodyObserver.observe(document.body, { childList: true, subtree: true });
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
-    tabOverflow = state;
+    // Recording switches can mount the new layout before the old layout finishes disposing.
+    // Use a per-layout ID: Blazor cannot resolve an ElementReference after its DOM element is removed.
+    tabOverflowRegistrations.set(registrationId, state);
     schedule();
 }
 
-export function unregisterTabOverflow() {
-    const state = tabOverflow;
+export function unregisterTabOverflow(registrationId) {
+    const state = tabOverflowRegistrations.get(registrationId);
     if (!state) {
         return;
     }
-    tabOverflow = null;
+    tabOverflowRegistrations.delete(registrationId);
     cancelAnimationFrame(state.frame);
     state.resizeObserver.disconnect();
     state.tabsObserver.disconnect();
@@ -545,7 +607,10 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     unregisterResourceContextMenu(layoutElement);
 
     const state = { trigger: null, selectionTrigger: null, disposed: false };
-    const interactiveSelector = 'a, button, fluent-button, fluent-menu-item, input, select, textarea, .resource-relationship-summary, [role="button"], [role="checkbox"], [contenteditable]';
+    // A popover opened from a row, such as the URLs column's list of URLs, renders inside the row. Clicking its
+    // text mustn't select the row either. FluentPopover's host element (fluent-popover-b) is the ancestor a click in
+    // its content finds: the element with the popover attribute is in its shadow root.
+    const interactiveSelector = 'a, button, fluent-button, fluent-menu-item, input, select, textarea, .resource-relationship-summary, [role="button"], [role="checkbox"], [contenteditable], [popover], fluent-popover-b';
     const open = (event, keyboard) => {
         const row = event.target.closest('.resource-pane-list .resource-row[data-resource-name]');
         const link = row?.querySelector('.resource-row-link');
@@ -579,10 +644,28 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
         const name = link?.querySelector('.resource-row-name');
-        // Ordinary names remain quiet. Only the finite-width extreme-name fallback
-        // needs a tooltip; the native link always retains its complete accessible name.
-        if (name && name.scrollWidth > name.clientWidth) {
-            link.setAttribute('data-tooltip', link.getAttribute('aria-label'));
+        // A compact sidebar row's type and state columns give way to its actions while the row is
+        // hovered or focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's
+        // tooltip names them instead, from the full text the hidden columns keep in data-tooltip:
+        //   <span class="resource-row-meta">
+        //     <span class="resource-row-type" data-tooltip="Container (persistent)">…</span>
+        //     <span class="resource-row-meta-state" data-tooltip="Running (Unhealthy)">…</span>
+        //   </span>
+        // The columns may not be hidden yet when the event arrives, so this decides from the layout
+        // (compact, sidebar, a hovering pointer) rather than from their visibility.
+        const meta = link?.querySelector('.resource-row-meta');
+        const metaText = meta && !link.closest('.pane-full-canvas') && window.matchMedia('(hover: hover)').matches
+            ? [...meta.querySelectorAll('[data-tooltip]')].map(el => el.getAttribute('data-tooltip')).filter(Boolean).join(' · ')
+            : null;
+        // Keep availability explanations even when the name fits. Clipped names also
+        // need their full identity; other available rows remain quiet.
+        const tooltip = [
+            name && name.scrollWidth > name.clientWidth ? link.getAttribute('aria-label') : null,
+            metaText,
+            link?.getAttribute('data-resource-unavailable-reason')
+        ].filter(Boolean).join('\n');
+        if (tooltip) {
+            link.setAttribute('data-tooltip', tooltip);
             link.setAttribute('data-tooltip-positioning', 'above');
         }
         else if (link) {
@@ -665,10 +748,88 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             event.target.click();
         }
     };
+    // Escape closes the resource content, as the header's close button does, when nothing else uses the key. Menus,
+    // popovers and dialogs close themselves with it, and text fields and the terminal keep it. Some of them close in
+    // their own keydown handler, so whether the key is free is decided in the capture phase, before any of them runs,
+    // and the button is clicked in the bubble phase, only if no handler took the key (preventDefault). The capture
+    // listener is on the window, which comes before the document: the tooltip provider removes a shown tooltip in its
+    // own capture listener on the document.
+    let escapeIsFree = false;
+    const escapeOwnerSelector = 'input, textarea, select, [contenteditable=""], [contenteditable="true"], .xterm, ' +
+        '[popover], fluent-popover-b, fluent-menu, fluent-dialog, dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="combobox"], [role="textbox"]';
+    const hasOpenOverlay = () => {
+        // A control whose popup is open says so (aria-haspopup with aria-expanded="true"), whatever the popup is built
+        // with: the filter button's popover isn't a native popover, and focus stays on the button after clicking it.
+        // A tree toggle has aria-expanded but no popup, so it doesn't count.
+        if (document.querySelector('[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]')) {
+            return true;
+        }
+        // A shown tooltip is dismissed by Escape (see app-tooltips.js), and the same key mustn't also close the content.
+        // https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+        if (document.querySelector('aspire-tooltip-provider fluent-tooltip:not([aria-hidden="true"])')) {
+            return true;
+        }
+        // A FluentPopover's dialog is in its shadow root, out of reach of the query below, and the button opening it
+        // doesn't always say so, like the URLs column's +N button. Its host says whether it's open:
+        //   <fluent-popover-b class="content-list-popover url-overflow-popover" anchor-id="…-more" opened="true">
+        if (document.querySelector('fluent-popover-b[opened="true"]')) {
+            return true;
+        }
+        try {
+            // Hidden tooltips can stay in the popover layer, so they're left to the check above.
+            return [...document.querySelectorAll(':popover-open, dialog[open]')]
+                .some(element => element.localName !== 'fluent-tooltip' && !element.closest('aspire-tooltip-provider'));
+        }
+        catch {
+            // Browsers without the popover API have no open popovers to protect.
+            return false;
+        }
+    };
+    const onEscapeCapture = event => {
+        escapeIsFree = event.key === 'Escape' && !event.isComposing && !event.repeat &&
+            !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
+            !event.composedPath().some(target => target instanceof Element && target.matches(escapeOwnerSelector)) &&
+            !hasOpenOverlay();
+    };
+    const onEscape = event => {
+        const isFree = escapeIsFree;
+        escapeIsFree = false;
+        // Fluent's tab list cancels the keys it receives, Escape included, without doing anything with Escape. So a
+        // focused tab, for example the one just clicked to open the content, doesn't keep Escape from closing it.
+        const isFromTabList = event.composedPath().some(target => target instanceof Element && target.matches('[role="tablist"]'));
+        if (!isFree || (event.defaultPrevented && !isFromTabList)) {
+            return;
+        }
+        // The header renders the button only while there's content to close (see DetailPageCloseButton).
+        const close = layoutElement.querySelector('.resource-header-controls .detail-page-close');
+        if (close && close.getClientRects().length > 0 && !close.closest('[inert]')) {
+            event.preventDefault();
+            close.click();
+        }
+    };
+
+    // While the resource list fills the page, no tab is shown selected, and choosing the current tab opens its content.
+    // The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or Space on a tab is
+    // passed on. The tabs are in the page header, outside the layout, so this listens on the document.
+    const onTabActivate = event => {
+        if (!layoutElement.classList.contains('pane-full-canvas') ||
+            (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')))) {
+            return;
+        }
+        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
+        if (tab) {
+            dotNetRef.invokeMethodAsync('OpenTabFromFullCanvasAsync', tab.id).catch(() => { });
+        }
+    };
+
     layoutElement.addEventListener('contextmenu', onContextMenu);
     layoutElement.addEventListener('pointerdown', onShiftPointerDown, true);
     layoutElement.addEventListener('mousedown', onShiftPointerDown, true);
     document.addEventListener('keydown', onContextMenuDismiss, true);
+    window.addEventListener('keydown', onEscapeCapture, true);
+    document.addEventListener('keydown', onEscape);
+    document.addEventListener('click', onTabActivate);
+    document.addEventListener('keydown', onTabActivate);
     layoutElement.addEventListener('click', onClick);
     layoutElement.addEventListener('keydown', onKeyDown);
     layoutElement.addEventListener('mouseover', onIdentityInteraction);
@@ -679,6 +840,10 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         layoutElement.removeEventListener('pointerdown', onShiftPointerDown, true);
         layoutElement.removeEventListener('mousedown', onShiftPointerDown, true);
         document.removeEventListener('keydown', onContextMenuDismiss, true);
+        window.removeEventListener('keydown', onEscapeCapture, true);
+        document.removeEventListener('keydown', onEscape);
+        document.removeEventListener('click', onTabActivate);
+        document.removeEventListener('keydown', onTabActivate);
         layoutElement.removeEventListener('click', onClick);
         layoutElement.removeEventListener('keydown', onKeyDown);
         layoutElement.removeEventListener('mouseover', onIdentityInteraction);

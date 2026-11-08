@@ -11443,7 +11443,9 @@ public enum EndpointProperty implements WireValueEnum {
     SCHEME("Scheme"),
     TARGET_PORT("TargetPort"),
     HOST_AND_PORT("HostAndPort"),
-    TLS_ENABLED("TlsEnabled");
+    TLS_ENABLED("TlsEnabled"),
+    BROWSER_ORIGINS("BrowserOrigins"),
+    PRIMARY_BROWSER_ORIGIN("PrimaryBrowserOrigin");
 
     private final String value;
 
@@ -11490,6 +11492,22 @@ public class EndpointReference extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.endpointName", reqArgs);
         return (String) result;
+    }
+
+    /** Gets a deferred comma-separated list of browser-facing origins associated with this endpoint. */
+    public EndpointReferenceExpression browserOrigins() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", reqArgs);
+        return (EndpointReferenceExpression) result;
+    }
+
+    /** Gets the deferred primary browser-facing origin associated with this endpoint. */
+    public EndpointReferenceExpression primaryBrowserOrigin() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", reqArgs);
+        return (EndpointReferenceExpression) result;
     }
 
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */

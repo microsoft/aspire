@@ -322,6 +322,11 @@
         <target state="new">Started</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceHeaderStopped">
+        <source>Stopped</source>
+        <target state="new">Stopped</target>
+        <note>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</note>
+      </trans-unit>
       <trans-unit id="ResourcePaneActivityContext">
         <source>{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</source>
         <target state="new">{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</target>
@@ -417,11 +422,6 @@
         <target state="new">Reset</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneGroupReorderFailed">
-        <source>Unable to save the group order. Try again.</source>
-        <target state="new">Unable to save the group order. Try again.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneGroupReorderUnavailable">
         <source>Clear search and filters, and try reordering groups again.</source>
         <target state="new">Clear search and filters, and try reordering groups again.</target>
@@ -447,21 +447,6 @@
         <target state="new">State</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneKindHide">
-        <source>Select to hide {0}</source>
-        <target state="new">Select to hide {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneKindShow">
-        <source>Select to show {0}</source>
-        <target state="new">Select to show {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneKindsLandmark">
-        <source>Types to show</source>
-        <target state="new">Types to show</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcePaneLandmark">
         <source>Resources</source>
         <target state="new">Resources</target>
@@ -482,14 +467,24 @@
         <target state="new">{0} moved before {1}.</target>
         <note>{0} is the moved resource name; {1} is the target resource name.</note>
       </trans-unit>
-      <trans-unit id="ResourcePaneNoKindsHint">
-        <source>Turn on a type above to list it.</source>
-        <target state="new">Turn on a type above to list it.</target>
+      <trans-unit id="ResourcePaneNoMetrics">
+        <source>No metrics are currently available for this resource. Select to open its metrics view.</source>
+        <target state="new">No metrics are currently available for this resource. Select to open its metrics view.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ResourcePaneNoKindsShown">
-        <source>Nothing shown</source>
-        <target state="new">Nothing shown</target>
+      <trans-unit id="ResourcePaneNoMetricsLabel">
+        <source>No metrics</source>
+        <target state="new">No metrics</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoStructuredLogs">
+        <source>No structured logs are currently available for this resource. Select to open its logs view.</source>
+        <target state="new">No structured logs are currently available for this resource. Select to open its logs view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoStructuredLogsLabel">
+        <source>No logs</source>
+        <target state="new">No logs</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneNoTagsDescription">
@@ -500,6 +495,21 @@
       <trans-unit id="ResourcePaneNoTagsTitle">
         <source>No tags yet</source>
         <target state="new">No tags yet</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTraces">
+        <source>No traces are currently available for this resource. Select to open its traces view.</source>
+        <target state="new">No traces are currently available for this resource. Select to open its traces view.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTracesLabel">
+        <source>No traces</source>
+        <target state="new">No traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNotApplicableLabel">
+        <source>Not applicable</source>
+        <target state="new">Not applicable</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneOpen">
@@ -517,15 +527,35 @@
         <target state="new">{0} parameter</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoConsoleLogs">
+        <source>Parameters do not produce console logs. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce console logs. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoMetrics">
+        <source>Parameters do not produce metrics. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce metrics. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoStructuredLogs">
+        <source>Parameters do not produce structured logs. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce structured logs. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTerminal">
+        <source>Parameters do not support terminal sessions. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not support terminal sessions. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTraces">
+        <source>Parameters do not produce traces. Select to view this parameter's overview.</source>
+        <target state="new">Parameters do not produce traces. Select to view this parameter's overview.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcePaneReferences">
         <source>References {0}</source>
         <target state="new">References {0}</target>
         <note>{0} lists logical resource names referenced by this resource. A reference does not imply waiting for startup.</note>
-      </trans-unit>
-      <trans-unit id="ResourcePaneReorderFailed">
-        <source>Unable to save the resource order. Try again.</source>
-        <target state="new">Unable to save the resource order. Try again.</target>
-        <note />
       </trans-unit>
       <trans-unit id="ResourcePaneReorderUnavailable">
         <source>Clear search, filters and grouping, and move resources within the same parent.</source>
@@ -540,11 +570,6 @@
       <trans-unit id="ResourcePaneResourceActions">
         <source>Actions for {0}</source>
         <target state="new">Actions for {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourcePaneSelectAll">
-        <source>Select all</source>
-        <target state="new">Select all</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcePaneSelectionAddHint">

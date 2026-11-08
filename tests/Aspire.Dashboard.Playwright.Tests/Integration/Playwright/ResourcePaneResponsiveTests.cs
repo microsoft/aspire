@@ -25,6 +25,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
+using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -35,6 +36,68 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright;
 public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.MetadataResourcesFixture fixture)
     : PlaywrightTestsBase<ResourcePaneResponsiveTests.MetadataResourcesFixture>(fixture)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CollapsedPicker_ControlsRemainReachableAtPopupWidth(bool savedWidth)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneCollapsed}', 'true')");
+            if (savedWidth)
+            {
+                await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneWidth}', '560')");
+            }
+            await page.GotoAsync("/resources/cache?pane=tags");
+            var picker = page.Locator("#resourcePanePickerButton");
+            await picker.ClickAsync();
+            var popup = page.Locator(".resource-picker-popover:popover-open");
+            var selectAll = popup.Locator(".resource-select-all-toggle");
+            await Assertions.Expect(selectAll).ToBeInViewportAsync(new() { Ratio = 1 });
+            await Assertions.Expect(popup.Locator(".resource-row[data-resource-name='cache'] .resource-row-actions").First)
+                .ToBeInViewportAsync(new() { Ratio = 1 });
+            await selectAll.ClickAsync();
+            await Assertions.Expect(picker).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/resources(?:\?.*)?$"));
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Activity_ResumesAfterAnimatedExpansion(bool remountPane)
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.SeedActivityAsync();
+            await page.SetViewportSizeAsync(2000, 1000);
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.NoPreference });
+            await page.GotoAsync("/resources/cache?pane=tags");
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='cache']").First).ToBeVisibleAsync();
+            if (remountPane)
+            {
+                var toggle = page.Locator(".resource-header-row .resource-pane-toggle-button");
+                await toggle.ClickAsync();
+                await Assertions.Expect(page.Locator(".resources-layout > .resource-pane")).ToHaveCountAsync(0);
+                var picker = page.Locator("#resourcePanePickerButton");
+                await picker.ClickAsync();
+                await Assertions.Expect(page.Locator(".resource-picker-popover .resource-pane")).ToBeVisibleAsync();
+                await page.Keyboard.PressAsync("Escape");
+                await Assertions.Expect(picker).ToHaveAttributeAsync("aria-expanded", "false");
+                await toggle.ClickAsync();
+                await Assertions.Expect(page.Locator(".resources-layout > .resource-pane")).ToBeVisibleAsync();
+            }
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".resource-row[data-resource-name='api'] .resource-row-insight-requests").First)
+                .ToHaveTextAsync("20 incoming");
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".resource-row-insight")).ToHaveCountAsync(0);
+        });
+    }
+
     [Theory]
     [InlineData(390, false)]
     [InlineData(390, true)]
@@ -125,34 +188,38 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.SetViewportSizeAsync(2000, 1000);
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.GotoAsync("/resources/cache?pane=tags");
+            // These are expanded-list rows: a compact row is a single 32px line, and a spacious one keeps two lines
+            // because its third-line details have their own columns here.
             foreach (var (density, fontSize, lineHeight, rowHeight) in new[]
-                { ("Compact", 11d, 16d, 44d), ("Comfortable", 12d, 18d, 52d), ("Spacious", 14d, 20d, 60d) })
+                { ("Compact", 11d, 16d, 32d), ("Comfortable", 12d, 18d, 52d), ("Spacious", 14d, 20d, 60d) })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = dark ? "Dark" : "Light", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
                 await ResourcePaneNavigation.ToggleResourceListAsync(page);
-                var address = page.Locator(".resource-row[data-resource-name='api'] .resource-row-endpoint-address").First;
-                await Assertions.Expect(address).ToBeVisibleAsync();
-                var metrics = await address.EvaluateAsync<double[]>("""
-                    address => {
-                        const row=address.closest('.resource-row'),source=row.querySelector('.resource-row-source-value'),
-                            time=row.querySelector('.resource-row-start-time time'),a=getComputedStyle(address),
-                            s=getComputedStyle(source),t=getComputedStyle(time),b=address.getBoundingClientRect(),
+                // The URLs column is the resources grid's: a link per URL, named by its display name.
+                var link = page.Locator(".resource-row[data-resource-name='api'] .resource-row-endpoints a").First;
+                await Assertions.Expect(link).ToBeVisibleAsync();
+                await Assertions.Expect(link).ToHaveTextAsync("Friendly API");
+                await Assertions.Expect(link).ToHaveAttributeAsync("href", MetadataResourcesFixture.Endpoint);
+                await Assertions.Expect(link).ToHaveAttributeAsync("target", "_blank");
+                var metrics = await link.EvaluateAsync<double[]>("""
+                    link => {
+                        const row=link.closest('.resource-row'),source=row.querySelector('.resource-row-source-value'),
+                            time=row.querySelector('.resource-row-start-time time'),a=getComputedStyle(link),
+                            s=getComputedStyle(source),t=getComputedStyle(time),b=link.getBoundingClientRect(),
                             sb=source.getBoundingClientRect(),tb=time.getBoundingClientRect();
                         return [parseFloat(a.fontSize),parseFloat(a.lineHeight),parseFloat(a.fontWeight),
                             parseFloat(s.fontSize),parseFloat(t.fontSize),b.y+b.height/2-sb.y-sb.height/2,
                             b.y+b.height/2-tb.y-tb.height/2,row.getBoundingClientRect().height,
-                            a.color===s.color?1:0,a.textOverflow==='ellipsis'?1:0];
+                            a.textOverflow==='ellipsis'?1:0];
                     }
                     """);
                 Assert.Equal([fontSize, lineHeight, 400d, fontSize, fontSize], metrics[..5]);
                 Assert.All(metrics[5..7], value => Assert.InRange(Math.Abs(value), 0, .5));
                 Assert.Equal(rowHeight, metrics[7]);
-                Assert.Equal([1d, 1d], metrics[8..]);
-                await Assertions.Expect(address).ToHaveAttributeAsync("data-tooltip",
-                    DashboardUIHelpers.MaskQueryStringValues(MetadataResourcesFixture.Endpoint));
+                Assert.Equal(1d, metrics[8]);
                 await ResourcePaneNavigation.ToggleResourceListAsync(page);
             }
         });
@@ -191,9 +258,6 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name='rebuilder-91']")).ToBeVisibleAsync();
             await AssertSavedWidthAsync(507);
 
-            var kinds = page.Locator(".resource-kind-toggle[aria-label='Parameters']");
-            await kinds.ClickAsync();
-            await AssertSavedWidthAsync(507);
             await page.Locator("#resourcePaneGroupingButton").ClickAsync();
             await page.GetByRole(AriaRole.Menuitemradio, new() { Name = "Resource type", Exact = true }).ClickAsync();
             await AssertSavedWidthAsync(507);
@@ -567,7 +631,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         {
             await page.SetViewportSizeAsync(width, height);
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
-            await page.GotoAsync("/resources/cache?pane=tags");
+            // The expanded list is opened by closing a resource's console logs rather than its overview. The overview's
+            // data grids initialize in the browser after they render, and leaving the page in the middle of that, as
+            // this test would right after the page loads, makes FluentDataGrid use a disposed JS module and end the circuit.
+            await page.GotoAsync(fullCanvas ? "/consolelogs/resource/cache?pane=tags" : "/resources/cache?pane=tags");
             if (width <= 768)
             {
                 await page.Locator(".resource-picker").ClickAsync();
@@ -591,9 +658,13 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(surface).ToBeVisibleAsync();
                 if (filter)
                 {
-                    while (await page.Locator(".resource-filter-group-header[aria-expanded='false']").CountAsync() > 0)
+                    // Expanding a group re-renders the popover. Wait for each to expand before looking for the next, or
+                    // a header that's already been clicked can still be counted as collapsed.
+                    var collapsed = page.Locator(".resource-filter-group-header[aria-expanded='false']");
+                    for (var remaining = await collapsed.CountAsync(); remaining > 0; remaining = await collapsed.CountAsync())
                     {
-                        await page.Locator(".resource-filter-group-header[aria-expanded='false']").First.ClickAsync();
+                        await collapsed.First.ClickAsync();
+                        await Assertions.Expect(collapsed).ToHaveCountAsync(remaining - 1);
                     }
                 }
                 await AssertContainedAsync(surface);
@@ -763,7 +834,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(page.Locator(".resource-row:not(.selected)[data-resource-name]").First).ToBeVisibleAsync();
             await page.Locator(".resource-select-all-toggle").ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
-            await Assertions.Expect(page.Locator(".resource-row:not(.selected)[data-resource-name]")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
             foreach (var density in new[] { "Compact", "Comfortable", "Spacious" })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
@@ -842,14 +914,15 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             Assert.Equal("2px", await selected.EvaluateAsync<string>("row => getComputedStyle(row).outlineWidth"));
             await AssertSurfaceAsync(selected, "--colorNeutralBackground1");
 
-            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = "Select all", Exact = true });
+            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourceHeaderAllResources, Exact = true });
             await selectAll.FocusAsync();
             await selectAll.PressAsync("Space");
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
-            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(8);
+            await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
             foreach (var row in await page.Locator(".resource-row[data-resource-name]").AllAsync())
             {
-                await AssertSurfaceAsync(row, "--colorNeutralBackground1");
+                await AssertSurfaceAsync(row, null);
             }
             var selectedBounds = await selected.BoundingBoxAsync();
             Assert.NotNull(selectedBounds);
@@ -864,11 +937,6 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.Mouse.MoveAsync(1, 1);
             await AssertSurfaceAsync(rest, "--colorNeutralBackground1");
             await AssertSurfaceAsync(selected, null);
-            await ResourcePaneNavigation.ToggleResourceListAsync(page);
-            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
-            await page.Mouse.MoveAsync(1, 1);
-            await AssertSurfaceAsync(rest, "--colorNeutralBackground1");
-            await AssertSurfaceAsync(selected, "--colorNeutralBackground1");
             await page.EmulateMediaAsync(new() { ForcedColors = ForcedColors.Active });
             Assert.True(await rest.EvaluateAsync<bool>("""
             row => {
@@ -879,6 +947,13 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             }
             """));
             await page.EmulateMediaAsync(new() { ForcedColors = ForcedColors.None });
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(0);
+            await page.Mouse.MoveAsync(1, 1);
+            await AssertSurfaceAsync(rest, null);
+            await AssertSurfaceAsync(selected, null);
 
             static async Task AssertSurfaceAsync(ILocator row, string? token)
             {
@@ -897,6 +972,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     if(token){ctx.fillStyle=style.getPropertyValue(token);ctx.fillRect(0,0,1,1);}
                     const expected=[...ctx.getImageData(0,0,1,1).data].slice(0,3);
                     return {actual,expected,background:style.backgroundColor,border:style.borderTopWidth,
+                        classes:row.className,hover:row.matches(':hover'),
                         rail:getComputedStyle(row,'::before').width,
                         railColor:getComputedStyle(row,'::before').backgroundColor,
                         gap:row.querySelector('.resource-row-icon').getBoundingClientRect().x-
@@ -906,7 +982,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 """, token);
                 var actual = sample.GetProperty("actual").EnumerateArray().Select(v => v.GetInt32()).ToArray();
                 var expected = sample.GetProperty("expected").EnumerateArray().Select(v => v.GetInt32()).ToArray();
-                Assert.All(actual.Zip(expected), pair => Assert.InRange(Math.Abs(pair.First - pair.Second), 0, 1));
+                Assert.All(actual.Zip(expected), pair => Assert.True(Math.Abs(pair.First - pair.Second) <= 1,
+                    $"Unexpected selection surface for {token ?? "the pane background"}: {sample}"));
                 Assert.Equal("0px", sample.GetProperty("border").GetString());
                 Assert.Equal(sample.GetProperty("selected").GetBoolean() ? "3px" : "2px", sample.GetProperty("rail").GetString());
                 Assert.Equal(!sample.GetProperty("selected").GetBoolean(),
@@ -940,15 +1017,15 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var additions = Enumerable.Range(0, 22).Select(MetadataResourcesFixture.CreateDynamicChild).ToArray();
             await fixture.PublishAsync(additions.Select(resource => new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, resource)).ToArray());
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(28);
-            foreach (var (density, height) in new[] { ("Compact", 44d), ("Comfortable", 52d), ("Spacious", 60d) })
+            foreach (var density in new[] { "Compact", "Comfortable", "Spacious" })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = dark ? "Dark" : "Light", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
-                await AssertGeometryAsync(height);
+                await AssertGeometryAsync(density);
                 var pane = page.Locator(".resource-pane");
-                foreach (var width in new[] { 420, 560, 769, 1279, 1280, 1281, 1304, 1439, 1440, 1441, 1599, 1600, 1601, 1799, 1800, 1801, 2000 })
+                foreach (var width in new[] { 420, 560, 769, 960, 990, 1279, 1280, 1281, 1304, 1439, 1440, 1441, 1599, 1600, 1601, 1799, 1800, 1801, 2000 })
                 {
                     stage = $"{density}-{width}-expanded";
                     if (await page.Locator(".pane-full-canvas").CountAsync() > 0)
@@ -983,7 +1060,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     {
                         await Assertions.Expect(page.Locator(".resource-row-insight-requests").First).Not.ToBeVisibleAsync();
                     }
-                    await AssertGeometryAsync(height);
+                    await AssertGeometryAsync(density);
                     await page.ScreenshotAsync(new()
                     {
                         Path = Path.Combine(AppContext.BaseDirectory, $"ux29-final-{(dark ? "dark" : "light")}-{density}-pane{width}.png")
@@ -993,28 +1070,28 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     await parent.PressAsync("ArrowLeft");
                     await Assertions.Expect(page.Locator("[data-resource-name='rebuilder-0']")).ToHaveCountAsync(0);
                     stage = $"{density}-{width}-collapsed";
-                    await AssertGeometryAsync(height);
+                    await AssertGeometryAsync(density);
                     await parent.PressAsync("ArrowRight");
                     await Assertions.Expect(page.Locator("[data-resource-name='rebuilder-0']")).ToBeVisibleAsync();
                     var filter = pane.GetByRole(AriaRole.Searchbox);
                     await filter.FillAsync("rebuilder");
                     await Assertions.Expect(page.Locator("[data-resource-name='worker']")).ToHaveCountAsync(0);
                     stage = $"{density}-{width}-filtered";
-                    await AssertGeometryAsync(height);
+                    await AssertGeometryAsync(density);
                     await filter.FillAsync("");
                     await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(28);
                     stage = $"{density}-{width}-filter-cleared";
-                    await AssertGeometryAsync(height);
+                    await AssertGeometryAsync(density);
                 }
             }
             await fixture.PublishAsync(additions.Take(11).Select(resource => new ResourceViewModelChange(ResourceViewModelChangeType.Delete, resource)).ToArray());
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(17);
             stage = "eleven-removed";
-            await AssertGeometryAsync(60);
+            await AssertGeometryAsync("Spacious");
             await fixture.PublishAsync(additions.Reverse().Select(resource => new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, resource)).ToArray());
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(28);
             stage = "reinserted-reverse-order";
-            await AssertGeometryAsync(60);
+            await AssertGeometryAsync("Spacious");
             // OrderStore survives browser contexts; choose a movable child in the actual order.
             var siblings = page.Locator(".resource-row[data-resource-parent='api']");
             var expectedOrder = await siblings.EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.resourceName)");
@@ -1051,38 +1128,45 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 throw;
             }
             stage = "reordered";
-            await AssertGeometryAsync(60);
-            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = "Select all", Exact = true });
+            await AssertGeometryAsync("Spacious");
+            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourceHeaderAllResources, Exact = true });
             await selectAll.ClickAsync();
-            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(28);
+            await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
             stage = "all-nested-selected";
-            await AssertGeometryAsync(60);
+            await AssertGeometryAsync("Spacious");
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
             stage = "all-nested-selected-sidebar";
-            await AssertGeometryAsync(60);
+            await AssertGeometryAsync("Spacious");
             await page.Locator("#resourcePaneGroupingButton").ClickAsync();
             await page.GetByRole(AriaRole.Menuitemradio, new() { Name = "Tags", Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".resource-tag-group").First).ToBeVisibleAsync();
             stage = "grouped-tags";
-            await AssertGeometryAsync(60);
+            await AssertGeometryAsync("Spacious");
             await page.ReloadAsync();
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(8);
             stage = "reloaded";
-            await AssertGeometryAsync(60);
+            await AssertGeometryAsync("Spacious");
             await page.Locator("#resourcePaneGroupingButton").ClickAsync();
             await page.GetByRole(AriaRole.Menuitemradio, new() { Name = "None", Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(6);
             stage = "ungrouped-after-reload";
-            await AssertGeometryAsync(60);
+            await AssertGeometryAsync("Spacious");
             await File.WriteAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, $"dynamic-geometry-{(dark ? "dark" : "light")}.json"),
                 JsonSerializer.Serialize(snapshots, new JsonSerializerOptions { WriteIndented = true }));
 
-            async Task AssertGeometryAsync(double height)
+            async Task AssertGeometryAsync(string density)
             {
                 var result = await page.Locator(".resource-pane-list").EvaluateAsync<JsonElement>("""
-                    (list, {height, stage}) => {
+                    (list, {density, stage}) => {
                         const errors = [], rows = [...list.querySelectorAll('.resource-row[data-resource-name]')];
+                        const compact = density === 'Compact', comfortable = density === 'Comfortable';
+                        const fullCanvas = !!list.closest('.pane-full-canvas');
+                        // A compact row is a single line. A spacious sidebar row adds a third line for its health,
+                        // endpoint or source; the expanded list has columns for those, so its rows keep two lines.
+                        const height = compact ? 32 : comfortable ? 52 : fullCanvas ? 60 : 76;
+                        const iconBox = compact ? 22 : comfortable ? 32 : 40, glyphSize = density === 'Spacious' ? 20 : 16;
                         const nameOffsets = rows.map(row =>
                             row.querySelector('.resource-row-name').getBoundingClientRect().x -
                             row.querySelector('.resource-row-icon').getBoundingClientRect().right);
@@ -1095,20 +1179,20 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                 icon.x - b.x - parseFloat(rail.width) < 7)
                                 errors.push(`${row.dataset.resourceName}: selection rail/spacing`);
                             if (b.height !== height) errors.push(`${row.dataset.resourceName}: height ${b.height}`);
-                            if (icon.width !== 32 || icon.height !== 32) errors.push(`${row.dataset.resourceName}: icon box`);
+                            if (icon.width !== iconBox || icon.height !== iconBox) errors.push(`${row.dataset.resourceName}: icon box`);
                             const mainGlyph = row.querySelector('.resource-row-glyph svg').getBoundingClientRect();
-                            if (mainGlyph.width !== 16 || mainGlyph.height !== 16) errors.push(`${row.dataset.resourceName}: glyph`);
-                            const expectedFont = height === 44 ? 12 : height === 52 ? 14 : 16;
+                            if (mainGlyph.width !== glyphSize || mainGlyph.height !== glyphSize) errors.push(`${row.dataset.resourceName}: glyph`);
+                            const expectedFont = compact ? 12 : comfortable ? 14 : 16;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
                             for (const chip of row.querySelectorAll('.resource-row-insight')) {
                                 const chipBox = chip.getBoundingClientRect();
                                 if (!chipBox.width) continue;
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const font = height === 44 ? 11 : height === 52 ? 12 : 14;
-                                const line = height === 44 ? 16 : height === 52 ? 18 : 20;
-                                const target = height === 44 ? 24 : height === 52 ? 28 : 32;
-                                const iconSize = height === 44 ? 12 : height === 52 ? 14 : 16;
+                                const font = compact ? 11 : comfortable ? 12 : 14;
+                                const line = compact ? 16 : comfortable ? 18 : 20;
+                                const target = compact ? 24 : comfortable ? 28 : 32;
+                                const iconSize = compact ? 12 : comfortable ? 14 : 16;
                                 if (parseFloat(style.fontSize) !== font || parseFloat(style.lineHeight) !== line ||
                                     chipBox.height !== target || chipBox.width < target ||
                                     glyph.width !== iconSize || glyph.height !== iconSize ||
@@ -1135,9 +1219,12 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             const badge = row.querySelector('.persistent-container-badge');
                             if (badge) {
                                 const bb = badge.getBoundingClientRect(), style = getComputedStyle(badge);
+                                // A compact row's 22px icon box leaves no room under its 16px glyph for the 10px badge
+                                // inside a 32px row, so there the badge overlaps the glyph's lower corner, as it did
+                                // before #21727. It must still stay inside the row and clear of the name.
                                 if (style.position !== 'absolute' || style.pointerEvents !== 'none' ||
                                     bb.right !== icon.right + 4 || bb.bottom !== icon.bottom + 3 ||
-                                    bb.y < mainGlyph.bottom || bb.bottom > b.bottom ||
+                                    (!compact && bb.y < mainGlyph.bottom) || bb.bottom > b.bottom ||
                                     bb.right > row.querySelector('.resource-row-name').getBoundingClientRect().x)
                                     errors.push(`${i}: badge overlay/clipping`);
                             }
@@ -1152,13 +1239,15 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                     errors.push(`${row.dataset.resourceName}: incomplete start time; client=${time.clientWidth}; scroll=${time.scrollWidth}; text=${time.textContent}`);
                             }
                         }
-                        const fullCanvas = !!list.closest('.pane-full-canvas');
                         const paneWidth = list.closest('.resource-pane').getBoundingClientRect().width;
+                        // The row tracks' minimums must fit the pane at every width, or the actions scroll out of view.
+                        if (list.scrollWidth > list.clientWidth + 1)
+                            errors.push(`horizontal overflow; client=${list.clientWidth}; scroll=${list.scrollWidth}`);
                         const columns = {};
                         if (fullCanvas && paneWidth >= 960) {
                             const templates = new Set(rows.map(row => getComputedStyle(row).gridTemplateColumns));
                             if (templates.size !== 1) errors.push('content-dependent grid tracks');
-                            for (const selector of ['.resource-row-health','.resource-row-endpoint',
+                            for (const selector of ['.resource-row-health','.resource-row-endpoints .url-container',
                                 '.resource-row-source','.resource-row-insights',
                                 '.resource-row-insight-requests','.resource-row-insight-latency','.resource-row-insight-failed',
                                 '.resource-row-actions']) {
@@ -1194,11 +1283,6 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                     if (label.getBoundingClientRect().width && label.scrollWidth > label.clientWidth)
                                         errors.push(`${row.dataset.resourceName}: non-truncatable ${label.className}; client=${label.clientWidth}; scroll=${label.scrollWidth}; text=${label.textContent}`);
                                 }
-                                const friendly = row.querySelector('.resource-row-endpoint-name');
-                                const address = row.querySelector('.resource-row-endpoint-address');
-                                if (paneWidth < 1600 && friendly?.getBoundingClientRect().width &&
-                                    friendly.scrollWidth > friendly.clientWidth && address?.scrollWidth > address?.clientWidth)
-                                    errors.push(`${row.dataset.resourceName}: both endpoint summaries truncated`);
                             }
                         }
                         return {stage, height, errors, columns,
@@ -1209,7 +1293,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                 icon:row.querySelector('.resource-row-icon').getBoundingClientRect().toJSON(),
                                 badge:row.querySelector('.persistent-container-badge')?.getBoundingClientRect().toJSON()}))};
                     }
-                    """, new { height, stage });
+                    """, new { density, stage });
                 var errors = result.GetProperty("errors").EnumerateArray().Select(error => error.GetString()).ToArray();
                 Assert.True(errors.Length == 0, $"{stage}: {string.Join("; ", errors)}");
                 snapshots.Add(result);
@@ -1389,7 +1473,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     row => {
                         const box = selector => row.querySelector(selector).getBoundingClientRect();
                         const time = box('.resource-row-start-time');
-                        const detail = box('.resource-row-endpoints'), endpoint = box('.resource-row-endpoint-address');
+                        const detail = box('.resource-row-endpoints'), endpoint = box('.resource-row-endpoints a');
                         const source = box('.resource-row-source'), rail = box('.resource-row-actions');
                         const center = b => b.y + b.height / 2;
                         return [center(time) - center(row.getBoundingClientRect()), center(endpoint) - center(detail),
@@ -1410,10 +1494,11 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     row => {
                         const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d', {willReadFrequently:true});
                         canvas.width = canvas.height = 1;
-                        const luminance = rgb => rgb.slice(0,3).map(v => {
+                        // getImageData's pixels are a Uint8ClampedArray, whose map would round each linear value to 0 or 1.
+                        const luminance = rgb => Array.from(rgb).slice(0,3).map(v => {
                             v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4;
                         }).reduce((sum,v,i) => sum + v * [.2126,.7152,.0722][i], 0);
-                        return [...row.querySelectorAll('.resource-row-name,.resource-row-sub,.resource-row-start-time,.resource-row-endpoint-address,.resource-row-source-value,.resource-row-insight')].map(e => {
+                        return [...row.querySelectorAll('.resource-row-name,.resource-row-sub,.resource-row-start-time,.resource-row-endpoints a,.resource-row-source-value,.resource-row-insight')].map(e => {
                             const ancestors = []; for (let a = e; a; a = a.parentElement) ancestors.unshift(a);
                             ctx.fillStyle = 'white'; ctx.fillRect(0,0,1,1);
                             for (const a of ancestors) { ctx.fillStyle = getComputedStyle(a).backgroundColor; ctx.fillRect(0,0,1,1); }
@@ -1430,21 +1515,20 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     $"{state}; dark={dark}; contrast={sample}"));
             }
             await Assertions.Expect(row.Locator(".resource-relationship-summary")).ToHaveCountAsync(0);
-            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = "Select all", Exact = true });
+            var selectAll = page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourceHeaderAllResources, Exact = true });
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
             await selectAll.FocusAsync();
             await selectAll.PressAsync("Space");
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
-            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(8);
+            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
             foreach (var density in new[] { "Compact", "Comfortable", "Spacious" })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
                 await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
-                Assert.All(await page.Locator(".resource-row.selected[data-resource-name]").EvaluateAllAsync<string[]>(
-                    "rows => rows.map(row => getComputedStyle(row).backgroundColor)"),
-                    background => Assert.NotEqual("rgba(0, 0, 0, 0)", background));
+                await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+                await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
             }
             await row.Locator(".resource-row-link").ClickAsync();
             await Assertions.Expect(selectAll).Not.ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
@@ -1457,7 +1541,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(4);
             await selectAll.ClickAsync();
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-description", Resources.Layout.ResourcePaneAllSelected);
-            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(8);
+            await Assertions.Expect(page.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
         });
     }
 
@@ -1556,24 +1641,29 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         });
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("/resources/cache?pane=tags", false)]
+    [InlineData("/structuredlogs/resource/cache", true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ExtremeName_RetainsFullAccessibleAndHoverKeyboardDisclosure()
+    public async Task ExtremeName_RetainsFullAccessibleAndHoverKeyboardDisclosure(string url, bool unavailable)
     {
         await RunTestAsync(async page =>
         {
             await page.SetViewportSizeAsync(1440, 900);
-            await page.GotoAsync("/resources/cache?pane=tags");
+            await page.GotoAsync(url);
+            var expectedTooltip = unavailable
+                ? $"{MetadataResourcesFixture.LongResourceName}\n{Resources.Layout.ResourcePaneNoStructuredLogs}"
+                : MetadataResourcesFixture.LongResourceName;
             var link = page.Locator(".resource-row[data-resource-name='worker'] .resource-row-link").First;
             await Assertions.Expect(link).ToHaveAttributeAsync("aria-label", MetadataResourcesFixture.LongResourceName);
             Assert.True(await link.Locator(".resource-row-name").EvaluateAsync<bool>("el => el.scrollWidth > el.clientWidth"));
             await link.Locator(".resource-row-name").HoverAsync();
-            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", MetadataResourcesFixture.LongResourceName);
-            await Assertions.Expect(page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']")).ToHaveTextAsync(MetadataResourcesFixture.LongResourceName);
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", expectedTooltip);
+            await Assertions.Expect(page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']")).ToHaveTextAsync(expectedTooltip);
             await page.Mouse.MoveAsync(1, 1);
             await page.Keyboard.PressAsync("Tab");
             await link.FocusAsync();
-            await Assertions.Expect(page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']")).ToHaveTextAsync(MetadataResourcesFixture.LongResourceName);
+            await Assertions.Expect(page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']")).ToHaveTextAsync(expectedTooltip);
             await link.PressAsync("Shift+F10");
             await Assertions.Expect(page.Locator("#resource-pane-context-menu-header")).ToHaveTextAsync(MetadataResourcesFixture.LongResourceName);
             await page.Keyboard.PressAsync("Escape");
@@ -1594,7 +1684,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         {
             await page.SetViewportSizeAsync(1440, 900);
             await page.GotoAsync("/resources/cache?pane=tags");
-            foreach (var (density, height) in new[] { ("Compact", 44d), ("Comfortable", 52d), ("Spacious", 60d) })
+            // A spacious sidebar row has a third line; the expanded list keeps two because it has columns for those details.
+            foreach (var (density, sidebarHeight, fullCanvasHeight) in new[] { ("Compact", 32d, 32d), ("Comfortable", 52d, 52d), ("Spacious", 76d, 60d) })
             {
                 await page.SetViewportSizeAsync(1440, 900);
                 if (await page.Locator(".resources-layout.pane-full-canvas").CountAsync() > 0)
@@ -1642,32 +1733,65 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             """);
                     }
                     await Assertions.Expect(pane).ToBeVisibleAsync();
-                    var rows = await pane.EvaluateAsync<double[][]>("""
-                        pane => [...pane.querySelectorAll('.resource-row[data-resource-name]')].map(row => {
+                    // Compact sidebar rows reveal their actions on hover, so measure them with the pointer away first.
+                    await page.Mouse.MoveAsync(1, 1);
+                    const string measureRows = """
+                        rows => rows.map(row => {
                             const rect = row.getBoundingClientRect();
                             const next = row.nextElementSibling;
                             const rail = row.querySelector('.resource-row-actions');
                             const shown = el => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
-                            const overflow = rail.querySelector('.aspire-menu-button:not(:has(.resource-row-more-endpoints))');
+                            const overflow = rail.querySelector('.aspire-menu-button');
                             const essential = [...rail.querySelectorAll('.resource-row-highlighted, .resource-row-primary-endpoint')];
                             return [rect.height,
                                 next?.matches('.resource-row[data-resource-name]') ? next.getBoundingClientRect().top - rect.bottom : 1,
                                 rail.getBoundingClientRect().width, shown(overflow) ? 1 : 0,
-                                essential.every(shown) ? 1 : 0];
+                                essential.every(shown) ? 1 : 0,
+                                [...rail.querySelectorAll('.resource-row-action')].some(shown) ? 1 : 0,
+                                row.matches(':hover, :focus-within') ? 1 : 0];
                         })
-                        """);
+                        """;
+                    var resourceRows = pane.Locator(".resource-row[data-resource-name]");
+                    var rows = await resourceRows.EvaluateAllAsync<double[][]>(measureRows);
                     Assert.NotEmpty(rows);
+                    var compactSidebar = density == "Compact" && !fullCanvas;
                     Assert.All(rows, values =>
                     {
-                        Assert.Equal(height, values[0]);
+                        Assert.Equal(fullCanvas ? fullCanvasHeight : sidebarHeight, values[0]);
                         Assert.Equal(1, values[1]);
-                        Assert.Equal(1, values[3]);
-                        if (!fullCanvas)
+                        if (compactSidebar && values[6] == 0)
                         {
-                            Assert.Equal(112, values[2]);
-                            Assert.Equal(1, values[4]);
+                            // At rest, a compact row's rail narrows to the expand toggle and hides every action, so the
+                            // name gets the room. Hovering or focusing it brings the actions back (checked below).
+                            Assert.Equal(20, values[2]);
+                            Assert.Equal(0, values[5]);
+                        }
+                        else
+                        {
+                            Assert.Equal(1, values[3]);
+                            if (!fullCanvas)
+                            {
+                                Assert.Equal(112, values[2]);
+                                Assert.Equal(1, values[4]);
+                            }
                         }
                     });
+                    if (compactSidebar)
+                    {
+                        // At most one row can still have focus from the controls used above; the others are at rest.
+                        Assert.True(rows.Count(values => values[6] == 0) >= rows.Length - 1);
+                        // Hover reveals the full rail, and so does keyboard focus, so the actions stay reachable
+                        // without a pointer.
+                        foreach (var reveal in new Func<ILocator, Task>[] { row => row.HoverAsync(), row => row.Locator(".resource-row-link").FocusAsync() })
+                        {
+                            var revealed = resourceRows.First;
+                            await reveal(revealed);
+                            var values = (await revealed.EvaluateAsync<double[][]>($"row => ({measureRows})([row])"))[0];
+                            Assert.Equal(new double[] { 112, 1, 1, 1 }, values[2..6]);
+                            await page.Mouse.MoveAsync(1, 1);
+                            await revealed.Locator(".resource-row-link").BlurAsync();
+                        }
+                    }
                     var list = pane.Locator(".resource-pane-list");
                     Assert.True(await list.EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth + 1"),
                         $"{density}; full canvas={fullCanvas}; " + await list.EvaluateAsync<string>("""
@@ -1789,23 +1913,29 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", paneWidth.ToString(CultureInfo.InvariantCulture));
 
             var row = pane.Locator("[data-resource-name='api']").First;
-            await Assertions.Expect(row.Locator(".resource-row-type")).ToHaveCountAsync(0);
-            await Assertions.Expect(row.Locator(".resource-row-endpoint-address")).Not.ToBeVisibleAsync();
-            await Assertions.Expect(row.Locator(".resource-row-link .state-dot + span")).ToHaveTextAsync("Running (Unhealthy)");
+            var endpoint = row.Locator(".resource-row-primary-endpoint");
+            // A compact row is one line: the name, then the type and state columns. The state is a dot that names
+            // itself in its tooltip. At rest the actions are hidden, so the name gets the action rail's room.
+            await page.Mouse.MoveAsync(1, 1);
+            await Assertions.Expect(row.Locator(".resource-row-meta .resource-row-type")).ToBeVisibleAsync();
+            await Assertions.Expect(row.Locator(".resource-row-sub")).ToHaveCountAsync(0);
+            await Assertions.Expect(row.Locator(".resource-row-endpoints")).ToHaveCountAsync(0);
+            await Assertions.Expect(row.Locator(".resource-row-meta-state")).ToHaveAttributeAsync("data-tooltip", "Running (Unhealthy)");
             await Assertions.Expect(row.Locator(".resource-row-link")).ToHaveAttributeAsync("aria-description", new System.Text.RegularExpressions.Regex("Unhealthy"));
             await Assertions.Expect(row.Locator(".resource-row-link .state-dot")).ToHaveCountAsync(1);
+            await Assertions.Expect(endpoint).Not.ToBeVisibleAsync();
             Assert.True(await row.Locator(".resource-row-text").EvaluateAsync<double>("el => el.clientWidth") >= 160);
+            // Hover and focus swap the type and state columns for the actions, which keeps the name's room.
             await row.HoverAsync();
             await row.Locator(".resource-row-link").FocusAsync();
+            await Assertions.Expect(row.Locator(".resource-row-meta")).Not.ToBeVisibleAsync();
             Assert.True(await row.Locator(".resource-row-text").EvaluateAsync<double>("el => el.clientWidth") >= 160);
 
-            var endpoint = row.Locator(".resource-row-primary-endpoint");
             await Assertions.Expect(endpoint).ToBeVisibleAsync();
             await Assertions.Expect(endpoint).ToHaveAttributeAsync("href", MetadataResourcesFixture.Endpoint);
             await Assertions.Expect(endpoint).ToHaveAttributeAsync("target", "_blank");
             await Assertions.Expect(endpoint).ToHaveAttributeAsync("rel", "noreferrer noopener");
             Assert.Equal(1, await row.Locator(".resource-row-actions a:visible").CountAsync());
-            await Assertions.Expect(row.Locator(".resource-row-more-endpoints")).Not.ToBeVisibleAsync();
             await Assertions.Expect(pane.Locator("[data-resource-name='service-key'] .resource-row-primary-endpoint")).ToHaveCountAsync(0);
             var before = page.Url;
             await page.Context.RouteAsync("https://example.test/**", route => route.FulfillAsync(new() { Body = "Local endpoint navigation proof." }));
@@ -1817,6 +1947,330 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             Assert.True(await pane.Locator(".resource-pane-list").EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth + 1"));
             Assert.True(await page.EvaluateAsync<bool>("() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1"));
         });
+    }
+
+    [Theory]
+    [InlineData(420)]
+    [InlineData(560)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CompactSidebar_ErrorBadgeKeepsItsPlaceWhileActionsShow(int paneWidth)
+    {
+        // The fixture's persistent "cache" container widens every row's compact type column. That is when the badge
+        // used to move: at rest it sat before the wide columns, and while the actions showed it went to the end of the
+        // narrower name track, out from under a pointer that was on it.
+        await AddErrorLogsAsync("api", "cache");
+
+        try
+        {
+            await RunTestAsync(async page =>
+            {
+                await page.SetViewportSizeAsync(1440, 900);
+                await page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Light });
+                await page.GotoAsync("/resources/cache?pane=tags");
+                await UseCompactSidebarAsync(page, paneWidth);
+                var pane = page.Locator(".resource-pane");
+
+                // Per row: the badge's box; whether it is the topmost element at its center; the hidden spacer's box,
+                // which stops the name before the badge; the end of the name's text; whether the badge overlaps a
+                // shown column or action; and whether any action is shown.
+                const string measure = """
+                    row => {
+                        const box = el => el.getBoundingClientRect();
+                        const shown = el => box(el).width > 0 && box(el).height > 0 && getComputedStyle(el).visibility !== 'hidden';
+                        const badge = row.querySelector(':scope > .resource-row-error-link');
+                        const b = box(badge);
+                        const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+                        const spacer = box(row.querySelector('.error-badge-spacer'));
+                        const others = [...row.querySelectorAll('.resource-row-meta > *, .resource-row-actions .resource-row-action, .resource-row-actions .resource-row-toggle')]
+                            .filter(shown);
+                        const overlaps = others.some(el => { const o = box(el); return o.left < b.right - 0.5 && o.right > b.left + 0.5; });
+                        return [b.left, b.top, b.right, b.bottom, top?.closest('.resource-row-error-link') === badge ? 1 : 0,
+                            spacer.left, spacer.right, box(row.querySelector('.resource-row-text')).right, overlaps ? 1 : 0,
+                            [...row.querySelectorAll('.resource-row-actions .resource-row-action')].some(shown) ? 1 : 0];
+                    }
+                    """;
+
+                // With the persistent type in the list, the wide columns decide the badge's place. Filtered down to
+                // "api", the columns are 64px and the actions decide it instead.
+                await AssertRowAsync("api", "persistent types", typeWidth: 128);
+                await AssertRowAsync("cache", "persistent types", typeWidth: 128);
+                await pane.GetByRole(AriaRole.Searchbox).FillAsync("api");
+                await Assertions.Expect(pane.Locator("[data-resource-name='cache']")).ToHaveCountAsync(0);
+                await AssertRowAsync("api", "no persistent types", typeWidth: 64);
+
+                async Task AssertRowAsync(string name, string stage, double typeWidth)
+                {
+                    var row = pane.Locator($"[data-resource-name='{name}']").First;
+                    var badge = row.Locator(":scope > .resource-row-error-link");
+                    var context = $"{name} ({stage})";
+                    await row.ScrollIntoViewIfNeededAsync();
+                    await page.Mouse.MoveAsync(1, 1);
+                    await Assertions.Expect(badge).ToHaveTextAsync("1");
+                    var type = await row.Locator(".resource-row-meta .resource-row-type").BoundingBoxAsync();
+                    Assert.NotNull(type);
+                    Assert.Equal(typeWidth, type.Width, 0.5);
+                    var rest = await row.EvaluateAsync<double[]>(measure);
+                    AssertBadge(rest, rest, context, "rest", actionsShown: false);
+
+                    // Pointing at the row or at the badge itself, focusing the row, and opening its menu all show the
+                    // actions in place of the columns. None of them may move or cover the badge.
+                    await row.Locator(".resource-row-name").HoverAsync();
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "row hover", actionsShown: true);
+
+                    await page.Mouse.MoveAsync(1, 1);
+                    await page.Mouse.MoveAsync((float)((rest[0] + rest[2]) / 2), (float)((rest[1] + rest[3]) / 2));
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "badge hover", actionsShown: true);
+
+                    await page.Mouse.MoveAsync(1, 1);
+                    await row.Locator(".resource-row-link").FocusAsync();
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "focus", actionsShown: true);
+
+                    await row.HoverAsync();
+                    await row.Locator(".resource-row-actions .aspire-menu-button").Last.ClickAsync();
+                    await page.Mouse.MoveAsync(1, 1);
+                    AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "menu open", actionsShown: true);
+                    await page.Keyboard.PressAsync("Escape");
+                }
+
+                static void AssertBadge(double[] rest, double[] current, string row, string state, bool actionsShown)
+                {
+                    var context = $"{row}, {state}";
+                    Assert.True(Math.Abs(current[0] - rest[0]) < 0.5 && Math.Abs(current[1] - rest[1]) < 0.5,
+                        $"{context}: the badge moved from ({rest[0]}, {rest[1]}) to ({current[0]}, {current[1]}).");
+                    Assert.True(current[4] == 1, $"{context}: something covers the badge.");
+                    Assert.True(Math.Abs(current[5] - current[0]) < 0.5 && Math.Abs(current[6] - current[2]) < 0.5,
+                        $"{context}: the spacer ({current[5]}-{current[6]}) is not under the badge ({current[0]}-{current[2]}).");
+                    Assert.True(current[7] <= current[0] + 0.5, $"{context}: the name ends at {current[7]}, under the badge at {current[0]}.");
+                    Assert.True(current[8] == 0, $"{context}: the badge overlaps a column or an action.");
+                    Assert.Equal(actionsShown ? 1d : 0d, current[9]);
+                }
+            });
+        }
+        finally
+        {
+            await ClearErrorLogsAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData("Comfortable")]
+    [InlineData("Spacious")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TwoLineRows_EndTheSecondLineWithOneEllipsisBeforeTheErrorBadge(string density)
+    {
+        await AddErrorLogsAsync("api");
+        try
+        {
+            await RunTestAsync(async page =>
+            {
+                await page.SetViewportSizeAsync(1440, 900);
+                await page.GotoAsync("/resources/cache?pane=tags");
+                await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
+                await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
+                var row = page.Locator(".resource-pane [data-resource-name='api']").First;
+                await Assertions.Expect(row.Locator(":scope > .resource-row-error-link")).ToHaveTextAsync("1");
+                await page.Mouse.MoveAsync(1, 1);
+
+                // At the default pane width, "Running (Unhealthy)" and the age don't both fit before the badge. The line
+                // flows as text, so it's cut once, at its end, rather than each part getting an ellipsis or being cut
+                // off; the state comes first, so it stays whole.
+                await AssertSecondLineAsync(row, stateIsWhole: true);
+
+                // The full-page list's second line, the state and type, ends the same way before the badge. Its identity
+                // column is narrower than the sidebar, so at the spacious density the state is cut too.
+                await ResourcePaneNavigation.ToggleResourceListAsync(page);
+                await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+                await page.Mouse.MoveAsync(1, 1);
+                await AssertSecondLineAsync(row, stateIsWhole: density == "Comfortable");
+            });
+
+            static async Task AssertSecondLineAsync(ILocator row, bool stateIsWhole)
+            {
+                var line = await row.EvaluateAsync<double[]>("""
+                    row => {
+                        const sub = row.querySelector('.resource-row-sub');
+                        const state = sub.querySelector('.state-dot + span');
+                        const badge = row.querySelector(':scope > .resource-row-error-link').getBoundingClientRect();
+                        const box = sub.getBoundingClientRect();
+                        const style = getComputedStyle(sub);
+                        return [style.display === 'block' ? 1 : 0, style.textOverflow === 'ellipsis' ? 1 : 0,
+                            sub.scrollWidth > sub.clientWidth ? 1 : 0, box.right, badge.left, state.getBoundingClientRect().right];
+                    }
+                    """);
+                Assert.Equal([1d, 1d, 1d], line[..3]);
+                Assert.True(line[3] <= line[4] + 0.5, $"The second line ends at {line[3]}, under the badge at {line[4]}.");
+                if (stateIsWhole)
+                {
+                    Assert.True(line[5] <= line[3] + 0.5, $"The state ends at {line[5]}, past the end of the line at {line[3]}.");
+                }
+            }
+        }
+        finally
+        {
+            await ClearErrorLogsAsync();
+        }
+    }
+
+    // Unviewed error logs give the resources' rows an error badge.
+    private async Task AddErrorLogsAsync(params string[] resourceNames)
+    {
+        await fixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            resourceNames.Select(name =>
+            {
+                var resource = CreateResource(name);
+                resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+                return new ResourceLogs
+                {
+                    Resource = resource,
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope(), LogRecords = { CreateLogRecord(message: $"{name} failed", severity: SeverityNumber.Error) } } }
+                };
+            })
+        });
+    }
+
+    // The fixture is shared by the class, so later tests must not see the badges.
+    private async Task ClearErrorLogsAsync()
+    {
+        var services = fixture.DashboardApp.Services;
+        await services.GetRequiredService<ITelemetryRepositoryWriter>().ClearStructuredLogsAsync();
+        services.GetRequiredService<ITelemetryRepository>().MarkViewedErrorLogs(null);
+    }
+
+    [Theory]
+    [InlineData(420)]
+    [InlineData(560)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CompactSidebar_ExpandToggleKeepsItsPlaceAndTabOrderWhileActionsShow(int paneWidth)
+    {
+        await RunTestAsync(async page =>
+        {
+            fixture.StartDynamicSession();
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Light });
+            await page.GotoAsync("/resources/cache");
+            await page.Locator("#resourcePaneGroupingButton").ClickAsync();
+            await page.GetByRole(AriaRole.Menuitemradio, new() { Name = "None", Exact = true }).ClickAsync();
+            await UseCompactSidebarAsync(page, paneWidth);
+            // A child makes "api" a parent too. With an endpoint and two highlighted commands, it needs the rail's
+            // tightest layout; "cache" shows only its menu beside the toggle.
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, MetadataResourcesFixture.CreateDynamicChild(0))]);
+            var pane = page.Locator(".resource-pane");
+            await Assertions.Expect(pane.Locator("[data-resource-name='rebuilder-0']")).ToBeVisibleAsync();
+
+            // Per row: the toggle's position; whether it is the topmost element at its center; whether the shown
+            // controls, in DOM (tab) order, run left to right without overlapping; whether the toggle is the last of
+            // them; how many are shown; and whether the name ends before the first of them.
+            const string measure = """
+                row => {
+                    const box = el => el.getBoundingClientRect();
+                    const toggle = row.querySelector('.resource-row-actions > .resource-row-toggle');
+                    const t = box(toggle);
+                    const top = document.elementFromPoint(t.left + t.width / 2, t.top + t.height / 2);
+                    const controls = [...row.querySelectorAll('.resource-row-actions .resource-row-action, .resource-row-actions > .resource-row-toggle')]
+                        .filter(el => box(el).width > 0 && box(el).height > 0);
+                    const ordered = controls.every((el, i) => i === 0 || box(controls[i - 1]).right <= box(el).left + 0.5);
+                    return [t.left, t.top, top?.closest('.resource-row-toggle') === toggle ? 1 : 0, ordered ? 1 : 0,
+                        controls.at(-1) === toggle ? 1 : 0, controls.length,
+                        box(row.querySelector('.resource-row-text')).right <= box(controls[0]).left + 0.5 ? 1 : 0];
+                }
+                """;
+
+            foreach (var (name, shownControls) in new[] { ("cache", 2d), ("api", 5d) })
+            {
+                var row = pane.Locator($"[data-resource-name='{name}']").First;
+                await row.ScrollIntoViewIfNeededAsync();
+                await page.Mouse.MoveAsync(1, 1);
+                await Assertions.Expect(row.Locator(".resource-row-actions > .resource-row-toggle")).ToBeVisibleAsync();
+                var rest = await row.EvaluateAsync<double[]>(measure);
+                AssertToggle(rest, rest, name, "rest", 1, checkTopmost: true);
+
+                await row.Locator(".resource-row-name").HoverAsync();
+                AssertToggle(rest, await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls, checkTopmost: true);
+
+                await page.Mouse.MoveAsync(1, 1);
+                await row.Locator(".resource-row-link").FocusAsync();
+                AssertToggle(rest, await row.EvaluateAsync<double[]>(measure), name, "focus", shownControls, checkTopmost: true);
+
+                // The open menu's popup may lie over the toggle, so only its place and order are checked.
+                await row.HoverAsync();
+                await row.Locator(".resource-row-actions .aspire-menu-button").Last.ClickAsync();
+                await page.Mouse.MoveAsync(1, 1);
+                AssertToggle(rest, await row.EvaluateAsync<double[]>(measure), name, "menu open", shownControls, checkTopmost: false);
+                await page.Keyboard.PressAsync("Escape");
+            }
+
+            static void AssertToggle(double[] rest, double[] current, string row, string state, double shownControls, bool checkTopmost)
+            {
+                var context = $"{row}, {state}";
+                Assert.True(Math.Abs(current[0] - rest[0]) < 0.5 && Math.Abs(current[1] - rest[1]) < 0.5,
+                    $"{context}: the toggle moved from ({rest[0]}, {rest[1]}) to ({current[0]}, {current[1]}).");
+                Assert.True(!checkTopmost || current[2] == 1, $"{context}: something covers the toggle.");
+                Assert.True(current[3] == 1, $"{context}: the shown controls overlap or don't run left to right in tab order.");
+                Assert.True(current[4] == 1, $"{context}: the toggle isn't the last control.");
+                Assert.Equal(shownControls, current[5]);
+                Assert.True(current[6] == 1, $"{context}: the name runs into the actions.");
+            }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CompactSidebar_RowTooltipNamesTypeAndStateWhileActionsShow()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync("/resources/cache?pane=tags");
+            await UseCompactSidebarAsync(page, 420);
+            var pane = page.Locator(".resource-pane");
+            var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
+
+            // While the actions show in place of the type and state columns, the row's tooltip names them, for the
+            // pointer and for the keyboard.
+            foreach (var (name, expected) in new[] { ("api", "Project · Running (Unhealthy)"), ("cache", "Container (persistent) · Running") })
+            {
+                var link = pane.Locator($"[data-resource-name='{name}'] .resource-row-link").First;
+                await page.Mouse.MoveAsync(1, 1);
+                await link.Locator(".resource-row-name").HoverAsync();
+                await Assertions.Expect(link.Locator(".resource-row-meta")).Not.ToBeVisibleAsync();
+                await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", expected);
+                await Assertions.Expect(tooltip).ToHaveTextAsync(expected);
+                await page.Mouse.MoveAsync(1, 1);
+                await page.Keyboard.PressAsync("Tab");
+                await link.FocusAsync();
+                await Assertions.Expect(tooltip).ToHaveTextAsync(expected);
+            }
+
+            // The expanded list keeps its columns showing, so its rows stay quiet.
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            var expandedLink = pane.Locator("[data-resource-name='api'] .resource-row-link").First;
+            await page.Mouse.MoveAsync(1, 1);
+            await expandedLink.Locator(".resource-row-name").HoverAsync();
+            await Assertions.Expect(expandedLink.Locator(".resource-row-type")).ToBeVisibleAsync();
+            Assert.Null(await expandedLink.GetAttributeAsync("data-tooltip"));
+        });
+    }
+
+    // Switches the list to Compact and drags the resource pane's resizer to the given width.
+    private static async Task UseCompactSidebarAsync(IPage page, int paneWidth)
+    {
+        await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Compact", Exact = true }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
+        var pane = page.Locator(".resource-pane");
+        var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+        var handle = await separator.BoundingBoxAsync();
+        var initialPane = await pane.BoundingBoxAsync();
+        Assert.NotNull(handle);
+        Assert.NotNull(initialPane);
+        await page.Mouse.MoveAsync(handle.X + handle.Width / 2, handle.Y + handle.Height / 2);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(handle.X + handle.Width / 2 + paneWidth - initialPane.Width, handle.Y + handle.Height / 2);
+        await page.Mouse.UpAsync();
+        await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", paneWidth.ToString(CultureInfo.InvariantCulture));
     }
 
     [Theory]
@@ -1896,7 +2350,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             var pane = page.Locator(".resource-pane");
             var row = pane.Locator("[data-resource-name='frontend']");
-            await Assertions.Expect(row.Locator(".resource-row-endpoint-name")).ToHaveTextAsync(MetadataResourcesFixture.LongFriendlyName);
+            await Assertions.Expect(row.Locator(".resource-row-endpoints a")).ToHaveTextAsync(MetadataResourcesFixture.LongFriendlyName);
+            await Assertions.Expect(row.Locator(".resource-row-endpoints a")).ToHaveAttributeAsync("href", "https://example.test/frontend");
             await Assertions.Expect(row.Locator(".resource-row-primary-endpoint")).ToHaveAttributeAsync("href", "https://example.test/frontend");
             await Assertions.Expect(row.Locator(".resource-row-primary-endpoint")).ToHaveAttributeAsync("aria-label",
                 $"{MetadataResourcesFixture.LongFriendlyName}: https://example.test/frontend");
@@ -1904,7 +2359,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             {
                 await AssertBoundedEndpointAsync(pane);
                 Assert.True(await pane.EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth + 1"));
-                var nameBox = await row.Locator(".resource-row-endpoint-name").BoundingBoxAsync();
+                var nameBox = await row.Locator(".resource-row-endpoints a").BoundingBoxAsync();
                 var paneBox = await pane.BoundingBoxAsync();
                 Assert.NotNull(paneBox);
                 if (nameBox is not null)
@@ -1914,10 +2369,54 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             }
             else
             {
-                await Assertions.Expect(row.Locator(".resource-row-endpoint-address")).Not.ToBeVisibleAsync();
+                await Assertions.Expect(row.Locator(".resource-row-endpoints")).Not.ToBeVisibleAsync();
                 await Assertions.Expect(row.Locator(".resource-row-link")).ToBeVisibleAsync();
             }
             await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"resource-pane-label-canvas-{width}.png") });
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FullCanvasUrls_ListTheOtherUrlsInAPopoverWithoutSelectingTheResource()
+    {
+        await RunTestAsync(async page =>
+        {
+            fixture.StartDynamicSession();
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync("/resources?pane=tags");
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            const string first = "https://example.test/a-long-address-that-fills-the-urls-column-on-its-own-and-more";
+            const string second = "https://example.test/second";
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api",
+                state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, urls:
+                [
+                    new("https", new Uri(first), false, false, UrlDisplayPropertiesViewModel.Empty),
+                    new("http", new Uri(second), false, false, UrlDisplayPropertiesViewModel.Empty)
+                ]))]);
+            var pane = page.Locator(".resource-pane");
+            var api = pane.Locator("[data-resource-name='api']").First;
+
+            // Like the resources grid, the URLs that don't fit are behind a +N button, which lists them.
+            var more = api.Locator(".resource-row-endpoints .url-button");
+            await Assertions.Expect(more).ToHaveTextAsync("+1");
+            await more.ClickAsync();
+            var list = api.Locator(".url-overflow-popover");
+            var listed = list.Locator("a");
+            await Assertions.Expect(listed).ToBeVisibleAsync();
+            Assert.Contains(await listed.GetAttributeAsync("href"), new[] { first, second });
+
+            // Neither the button nor the list selects the resource, though they're in its row.
+            await list.Locator("strong").ClickAsync();
+            await Assertions.Expect(listed).ToBeVisibleAsync();
+            await Assertions.Expect(pane.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+
+            // Escape closes the list.
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(listed).Not.ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
         });
     }
 
@@ -1951,7 +2450,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "resource-pane-label-resize-560.png") });
             await Assertions.Expect(api.Locator("time")).ToHaveAttributeAsync("datetime", MetadataResourcesFixture.StartTime.ToString("O", CultureInfo.InvariantCulture));
             await Assertions.Expect(pane.Locator("[data-resource-name='cache'] time")).ToHaveCountAsync(0);
-            await Assertions.Expect(pane.Locator("[data-resource-name='cache'] .resource-row-endpoint-address")).ToHaveCountAsync(0);
+            await Assertions.Expect(pane.Locator("[data-resource-name='cache'] .url-container")).ToHaveCountAsync(0);
             Assert.Equal(url, page.Url);
             Assert.Equal(rowOrder, await pane.Locator("[data-resource-name]").EvaluateAllAsync<string[]>("rows => rows.map(row => row.dataset.resourceName)"));
 
@@ -1960,40 +2459,32 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(metadata.Locator(".resource-row-health-status")).ToHaveCountAsync(0);
             await Assertions.Expect(metadata.Locator("time")).ToBeVisibleAsync();
             await AssertBoundedEndpointAsync(pane);
-            var endpoint = api.Locator("span.resource-row-endpoint-address");
-            var masked = DashboardUIHelpers.MaskQueryStringValues(MetadataResourcesFixture.Endpoint);
-            await Assertions.Expect(endpoint).ToHaveTextAsync(masked);
-            await Assertions.Expect(endpoint).ToHaveAttributeAsync("data-tooltip", masked);
-            await endpoint.ScrollIntoViewIfNeededAsync();
-            await endpoint.HoverAsync();
-            var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip");
-            await Assertions.Expect(tooltip).ToBeVisibleAsync();
-            await Assertions.Expect(tooltip).ToHaveTextAsync(masked);
-            await page.Keyboard.PressAsync("Escape");
-            await page.Keyboard.PressAsync("Tab");
-            await endpoint.FocusAsync();
-            await Assertions.Expect(tooltip).ToBeVisibleAsync();
-            await Assertions.Expect(tooltip).ToHaveTextAsync(masked);
-            await page.Keyboard.PressAsync("Escape");
             var openEndpoint = api.Locator(".resource-row-primary-endpoint");
             await Assertions.Expect(openEndpoint).ToHaveAttributeAsync("href", MetadataResourcesFixture.Endpoint);
             await Assertions.Expect(openEndpoint).ToHaveAttributeAsync("target", "_blank");
             await Assertions.Expect(openEndpoint).ToHaveAttributeAsync("rel", "noreferrer noopener");
             await page.Context.RouteAsync("https://example.test/**", route => route.FulfillAsync(new() { Body = "Synthetic endpoint; no external request." }));
-            var popup = await page.RunAndWaitForPopupAsync(() => openEndpoint.ClickAsync());
-            try
+            // The URLs column's link and the open action both open the URL without selecting the resource.
+            foreach (var opener in new[] { api.Locator(".resource-row-endpoints a"), openEndpoint })
             {
-                await Assertions.Expect(popup).ToHaveURLAsync(MetadataResourcesFixture.Endpoint);
-                Assert.Equal(url, page.Url);
-                Assert.Equal(8, await pane.Locator(".resource-row.selected[data-resource-name]").CountAsync());
+                var popup = await page.RunAndWaitForPopupAsync(() => opener.ClickAsync());
+                try
+                {
+                    await Assertions.Expect(popup).ToHaveURLAsync(MetadataResourcesFixture.Endpoint);
+                    Assert.Equal(url, page.Url);
+                    await Assertions.Expect(pane.Locator(".resource-select-all-toggle.on")).ToHaveCountAsync(1);
+                    await Assertions.Expect(pane.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
+                    await Assertions.Expect(pane.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(8);
+                }
+                finally
+                {
+                    await popup.CloseAsync();
+                }
             }
-            finally
-            {
-                await popup.CloseAsync();
-            }
-            var tcp = pane.Locator("[data-resource-name='queue'] span.resource-row-endpoint-address");
-            await Assertions.Expect(tcp).ToHaveTextAsync(DashboardUIHelpers.MaskQueryStringValues(MetadataResourcesFixture.TcpEndpoint));
-            await Assertions.Expect(tcp).ToHaveAttributeAsync("tabindex", "0");
+            // A tcp address can't be opened, so it isn't a link.
+            var queueUrls = pane.Locator("[data-resource-name='queue'] .url-container");
+            await Assertions.Expect(queueUrls.Locator("span")).ToBeVisibleAsync();
+            await Assertions.Expect(queueUrls.Locator("a")).ToHaveCountAsync(0);
             await page.Locator(".resource-select-all-toggle").ClickAsync();
             await page.WaitForFunctionAsync("() => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width - 560) < 0.05");
 
@@ -2003,7 +2494,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.Locator(".detail-page-close").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(layoutActions).Not.ToBeVisibleAsync();
-            await AssertSelectedGapsAsync();
+            await AssertRowGapsAsync();
             await pane.Locator(".resource-select-all-toggle").ClickAsync();
             await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
             await page.WaitForFunctionAsync("() => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width - 560) < 0.05");
@@ -2017,7 +2508,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(pane.Locator("[data-resource-name='frontend'].selected")).ToHaveCountAsync(0);
             await Assertions.Expect(pane.Locator("[data-resource-name='api'].selected")).ToHaveCountAsync(2);
             await Assertions.Expect(pane.Locator("[data-resource-name='cache'].selected")).ToHaveCountAsync(2);
-            await AssertSelectedGapsAsync();
+            await AssertRowGapsAsync();
             var selectedTargetBox = await target.BoundingBoxAsync();
             Assert.NotNull(selectedTargetBox);
             Assert.Equal(targetBox.Height, selectedTargetBox.Height);
@@ -2039,33 +2530,33 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
             }
 
-            async Task AssertSelectedGapsAsync()
+            async Task AssertRowGapsAsync()
             {
-                var gaps = await pane.Locator(".resource-row.selected").EvaluateAllAsync<double[]>(
-                    "rows => rows.filter(row => row.nextElementSibling?.matches('.resource-row.selected')).map(row => row.nextElementSibling.getBoundingClientRect().top - row.getBoundingClientRect().bottom)");
+                var gaps = await pane.Locator(".resource-row").EvaluateAllAsync<double[]>(
+                    "rows => rows.filter(row => row.nextElementSibling?.matches('.resource-row')).map(row => row.nextElementSibling.getBoundingClientRect().top - row.getBoundingClientRect().bottom)");
                 Assert.NotEmpty(gaps);
                 Assert.All(gaps, gap => Assert.InRange(gap, 0.95, 1.05));
             }
         });
     }
 
+    // A long URL name ends with an ellipsis in the URLs column rather than widening the column or the row.
     private static async Task AssertBoundedEndpointAsync(ILocator pane)
     {
         var row = pane.Locator("[data-resource-name='frontend']");
-        var friendlyName = row.Locator(".resource-row-endpoint-name");
-        await Assertions.Expect(friendlyName).ToHaveTextAsync(MetadataResourcesFixture.LongFriendlyName);
-        var disclosure = await row.Locator(".resource-row-endpoints").EvaluateAsync<double[]>("""
+        var link = row.Locator(".resource-row-endpoints a");
+        await Assertions.Expect(link).ToHaveTextAsync(MetadataResourcesFixture.LongFriendlyName);
+        // The column shows once the pane is wide enough, which can take a moment after the list fills the page.
+        await Assertions.Expect(link).ToBeVisibleAsync();
+        var bounds = await row.Locator(".resource-row-endpoints").EvaluateAsync<double[]>("""
             endpoints => {
-                const name=endpoints.querySelector('.resource-row-endpoint-name');
-                return [endpoints.getBoundingClientRect().width,name.getBoundingClientRect().width,name.scrollWidth,name.clientWidth];
+                const link=endpoints.querySelector('a'),box=endpoints.getBoundingClientRect(),linkBox=link.getBoundingClientRect();
+                return [link.scrollWidth > link.clientWidth ? 1 : 0, getComputedStyle(link).textOverflow === 'ellipsis' ? 1 : 0,
+                    linkBox.right - box.right];
             }
             """);
-        Assert.Equal(disclosure[0] >= 480, disclosure[1] > 0);
-        if (disclosure[1] > 0)
-        {
-            Assert.True(disclosure[2] > disclosure[3]);
-        }
-        await Assertions.Expect(row.Locator(".resource-row-endpoint-address")).ToBeVisibleAsync();
+        Assert.Equal([1d, 1d], bounds[..2]);
+        Assert.True(bounds[2] <= .5, $"The link ends {bounds[2]}px past the URLs column.");
         var rowBox = await row.BoundingBoxAsync();
         var normalLabelRowBox = await pane.Locator("[data-resource-name='api']").First.BoundingBoxAsync();
         Assert.NotNull(rowBox);
@@ -2172,7 +2663,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         private static ResourceViewModel Create(string name, string type, KnownResourceState state, HealthStatus? health,
             DateTime? startTime, ImmutableArray<UrlViewModel> urls, string[] tags)
         {
-            var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+            var tagKey = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
             var properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty.Add(tagKey,
                 new(tagKey, Value.ForList([.. tags.Select(Value.ForString)]), false, null, 0, null, false));
             if (type != KnownResourceTypes.Parameter)
