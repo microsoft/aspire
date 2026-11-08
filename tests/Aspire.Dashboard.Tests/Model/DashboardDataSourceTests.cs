@@ -121,16 +121,38 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void RunMode_RejectsConcurrentTimestampCollision()
+    public void RunMode_ConcurrentTimestampCollision_AllocatesNextRunId()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
         var options = CreateOptions(workspace);
         using var firstRunStore = CreateRunStore(options, timeProvider);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(options, timeProvider));
+        using var secondRunStore = CreateRunStore(options, timeProvider);
 
-        Assert.Equal($"Dashboard run '{firstRunStore.RunId}' is already in use by another dashboard process.", exception.Message);
+        Assert.Equal("20260720T123456789Z", firstRunStore.RunId);
+        Assert.Equal("20260720T123456790Z", secondRunStore.RunId);
+        Assert.Equal(secondRunStore.RunId, Path.GetFileName(secondRunStore.CurrentWorkingDirectory));
+        Assert.NotEqual(firstRunStore.DatabasePath, secondRunStore.DatabasePath);
+        var applicationDirectoryName = DashboardRunStore.GetApplicationDirectoryName("TestApp");
+        Assert.True(File.Exists(Path.Combine(secondRunStore.CurrentWorkingDirectory, applicationDirectoryName)));
+    }
+
+    [Fact]
+    public void RunMode_ExistingRunDirectoryWithSameTimestamp_IsNotReused()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
+        var existingRunDirectory = Path.Combine(DashboardRunStore.GetRunsDirectory(workspace.Path), "20260720T123456789Z");
+        Directory.CreateDirectory(existingRunDirectory);
+        var existingFilePath = Path.Combine(existingRunDirectory, "existing.txt");
+        File.WriteAllText(existingFilePath, "existing");
+
+        using var runStore = CreateRunStore(CreateOptions(workspace), timeProvider);
+
+        Assert.Equal("20260720T123456790Z", runStore.RunId);
+        Assert.Equal("existing", File.ReadAllText(existingFilePath));
+        Assert.Equal(["existing.txt"], Directory.EnumerateFileSystemEntries(existingRunDirectory).Select(Path.GetFileName));
     }
 
     [Fact]
