@@ -481,11 +481,13 @@
         // the tab order stays the order on screen. Other rails keep the toggle first.
         var toggleLast = IsCompact && !_isPaneFullCanvas;
         <div class="@(showLabels ? "resource-actions" : "resource-row-actions")">
-            @if (!showLabels && !toggleLast)
+            @* The full-page list puts the toggle before the row's icon, like a file tree (see the row markup). *@
+            @if (!showLabels && !toggleLast && !_isPaneFullCanvas)
             {
                 RenderRowToggle(__builder, row);
             }
-            @if (!showLabels && primaryUrl?.Url is { } primaryEndpointUrl)
+            @* The full-page list has a URLs column, so an open button would repeat its first link. *@
+            @if (!showLabels && !_isPaneFullCanvas && primaryUrl?.Url is { } primaryEndpointUrl)
             {
                 var primaryEndpointLabel = $"{primaryUrl.DisplayName ?? primaryUrl.Name}: {DashboardUIHelpers.MaskQueryStringValues(primaryEndpointUrl)}";
                 <a class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-primary-endpoint")"
@@ -902,6 +904,20 @@
                 {
                     <span class="resource-tree-stem" aria-hidden="true"></span>
                 }
+            }
+            @if (_isPaneFullCanvas && row is { Children.Count: > 0 })
+            {
+                @* In the full-page list, a parent's expand toggle comes before its icon, like a file tree, rather than
+                   in the actions column at the far end of the wide row. A sibling of the row link, not inside it: a
+                   button can't be nested in a link. *@
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              Class="@($"resource-row-toggle resource-row-toggle-leading {(row.IsCollapsed ? "collapsed" : string.Empty)}")"
+                              IconOnly="true"
+                              aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]"
+                              aria-expanded="@((!row.IsCollapsed).ToString().ToLowerInvariant())"
+                              OnClick="@(() => OnToggleCollapseAsync(row))">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
+                </FluentButton>
             }
             <a class="resource-row-link"
                href="@GetRowUrl(resourceName)"

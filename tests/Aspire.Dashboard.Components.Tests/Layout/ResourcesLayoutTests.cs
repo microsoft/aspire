@@ -495,10 +495,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(DashboardUIHelpers.MaskUrlForDisplay(address), link.GetAttribute("data-tooltip"));
         var tcp = Assert.Single(urls.QuerySelectorAll("span[tabindex='0']"));
         Assert.Equal(DashboardUIHelpers.MaskUrlForDisplay(tcpAddress), tcp.TextContent);
-        var openEndpoint = row.QuerySelector("a.resource-row-primary-endpoint")!;
-        Assert.Equal(address, openEndpoint.GetAttribute("href"));
-        Assert.Equal("_blank", openEndpoint.GetAttribute("target"));
-        Assert.Equal("noreferrer noopener", openEndpoint.GetAttribute("rel"));
+        // The URLs column has the links, so the row has no open-URL button that would repeat the first one.
+        Assert.Empty(row.QuerySelectorAll(".resource-row-primary-endpoint"));
         var health = row.QuerySelector(".resource-row-health")!;
         Assert.Empty(row.QuerySelectorAll(".resource-row-health-status"));
         Assert.Equal("Running", GetStateText(row));
@@ -511,8 +509,6 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal($"Started 10m ago ({FormatHelpers.FormatDateTime(clock, api.StartTimeStamp.Value)})", time.GetAttribute("data-tooltip"));
         Assert.Equal("above", time.GetAttribute("data-tooltip-positioning"));
         Assert.Equal("0", time.GetAttribute("tabindex"));
-        Assert.Equal($"Friendly API: {DashboardUIHelpers.MaskQueryStringValues(address)}",
-            row.QuerySelector(".resource-row-primary-endpoint")!.GetAttribute("data-tooltip"));
         var absent = cut.Find("[data-resource-name='missing'] .resource-row-wide-metadata");
         // A resource with no source still shows its type in the source column.
         Assert.Equal("Executable", absent.TextContent.Trim());
