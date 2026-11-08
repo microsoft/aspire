@@ -216,11 +216,11 @@ namespace Projects%3B
     <_AspireCliInvocationMode Condition="'$(AspireCliInvocationMode)' != ''">$(AspireCliInvocationMode)</_AspireCliInvocationMode>
     <_AspireUseDnxCliRunHook Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' or '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned'">true</_AspireUseDnxCliRunHook>
     <_AspireCliDnxPackageId>aspire.cli</_AspireCliDnxPackageId>
-    <!-- An explicit Dnx mode leaves the package unversioned so DNX can honor an in-scope tool manifest,
-         or select the latest package when no manifest applies. Path fallback and DnxPinned use the CLI
-         version paired with the AppHost package, independently of any retained obsolete SDK version.
-         See https://github.com/microsoft/aspire/issues/16386. -->
-    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx'">$(_AspireCliDnxPackageId)</_AspireCliDnxPackageReference>
+    <!-- Dnx leaves the package unversioned unless AspireDnxCliVersion is explicitly configured,
+         so DNX can honor a tool manifest or select the latest package. DnxPinned and Path fallback
+         always use the CLI version paired with the AppHost package. -->
+    <_AspireCliDnxPackageReference>$(_AspireCliDnxPackageId)</_AspireCliDnxPackageReference>
+    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx' and '$(AspireDnxCliVersion)' != ''">$(_AspireCliDnxPackageId)@$(AspireDnxCliVersion)</_AspireCliDnxPackageReference>
     <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx'">$(_AspireCliDnxPackageId)@$(_AspireAppHostPackageVersion)</_AspireCliDnxPackageReference>
   </PropertyGroup>
 
