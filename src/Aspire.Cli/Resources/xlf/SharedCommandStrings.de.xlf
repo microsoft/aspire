@@ -257,11 +257,6 @@
         <target state="new">Git ref</target>
         <note />
       </trans-unit>
-      <trans-unit id="SourceRepository">
-        <source>Git repository</source>
-        <target state="new">Git repository</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SourceTrustWarning">
         <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
         <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>

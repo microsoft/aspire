@@ -16,7 +16,7 @@
    Package patterns:  Acme.Hosting.*
 
                Name:  company
-     Git repository:  https://example
+         Git source:  https://example
                       .test/skills
         Marketplace:  company-skills
             Plugins:  aspire@company-

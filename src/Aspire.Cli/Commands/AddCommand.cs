@@ -359,8 +359,8 @@ internal sealed class AddCommand : BaseCommand
                     promptForSingleFuzzyPackage)
             };
             var selectedNuGetPackage = selection.Package;
-            source ??= selection.SourceOverride;
-            if (source is not null && PackageSourceOverrideMappings.HasCredentialMaterial(source))
+            var selectedSource = source ?? selection.SourceOverride;
+            if (selectedSource is not null && PackageSourceOverrideMappings.HasCredentialMaterial(selectedSource))
             {
                 InteractionService.DisplayError(AddCommandStrings.SourceWithCredentialsNotSupported);
                 return CommandResult.Failure(CliExitCodes.InvalidCommand);
@@ -408,8 +408,11 @@ internal sealed class AddCommand : BaseCommand
                 }
             }
 
+            // Native --source excludes other SDK and dependency feeds. Named picker selections instead
+            // use persistent NuGet configuration; polyglot restores already compose exact overrides.
+            var restoreSource = source ?? (project.LanguageId == KnownLanguageId.CSharp ? null : selection.SourceOverride);
             DotNetAppHostNuGetConfigMergerCandidate? configurationCandidate = null;
-            if (source is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
+            if (restoreSource is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
             {
                 // Prepare an exact package mapping so later builds can still restore the integration.
                 // Unlike --source, this keeps ambient feeds available for the SDK and dependencies.
@@ -441,9 +444,9 @@ internal sealed class AddCommand : BaseCommand
                 RequestedChannel = GetRequestedRestoreChannel(
                     selectedNuGetPackage.Channel,
                     selectedNuGetPackage.Package.Id,
-                    source),
-                Source = source,
-                SourcePackagePattern = source is null
+                    selectedSource),
+                Source = restoreSource,
+                SourcePackagePattern = restoreSource is null
                     ? null
                     : selectedNuGetPackage.Package.Id
             };
@@ -860,7 +863,13 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             .OrderByDescending(package => package.Channel.Type is PackageChannelType.Explicit &&
                 string.Equals(package.Channel.Name, configuredChannel, StringComparisons.ChannelName))
             .ThenByDescending(package => package.Channel.Type is PackageChannelType.Implicit)
-            .DistinctBy(package => (Source: GetSourceIdentity(package), package.Package.Version))
+            .GroupBy(package => (Source: GetSourceIdentity(package), package.Package.Version))
+            // Retain configured provenance without reordering distinct feeds or changing pinned defaults.
+            .Select(group => group
+                .OrderByDescending(package => package.Channel.Type is PackageChannelType.Explicit &&
+                    string.Equals(package.Channel.Name, configuredChannel, StringComparisons.ChannelName))
+                .ThenByDescending(package => package.Channel.IntegrationSource is not null)
+                .First())
             .ToArray();
         if (choices.Length == 1)
         {
@@ -888,7 +897,10 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
         var candidates = packages.ToArray();
         var filteredPackages = candidates
             .GroupBy(package => (Id: package.Package.Id.ToUpperInvariant(), Source: GetSourceIdentity(package)))
-            .Select(g => g.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer).First())
+            .Select(group => group
+                .OrderByDescending(package => SemVersion.Parse(package.Package.Version), SemVersion.PrecedenceComparer)
+                .ThenByDescending(package => package.Channel.IntegrationSource is not null)
+                .First())
             .ToArray();
 
         DisplaySources(candidates);

@@ -405,7 +405,7 @@ internal sealed class AgentInitCommand : BaseCommand
                     List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
                     if (usesPlugins)
                     {
-                        details.Add((SharedCommandStrings.SourceRepository, skillSource.GetRepositoryUrl()));
+                        details.Add((SharedCommandStrings.SourceGitRepository, skillSource.GetRepositoryUrl()));
                         if (skillSource.Ref is not null)
                         {
                             details.Add((SharedCommandStrings.SourceRef, skillSource.Ref));

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Commands;
@@ -139,9 +140,11 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AddCommandPrompter_ConfiguredSourcesExplainBeforeSelectionDespiteAmbientDuplicates(bool versions)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AddCommandPrompter_ConfiguredSourcesExplainBeforeSelectionDespiteAmbientDuplicates(bool versions, bool ambientFirst)
     {
         var cache = new FakeNuGetPackageCache();
         var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
@@ -161,6 +164,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = PackageSources.NuGetOrg }, configuredChannel),
             ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "2.0.0", Source = "https://example.test/ambient" }, implicitChannel)
         ];
+        if (!ambientFirst)
+        {
+            (packages[0], packages[1]) = (packages[1], packages[0]);
+        }
         var interaction = new TestInteractionService();
         interaction.PromptForSelectionCallback = (_, choices, _, _) =>
         {
@@ -176,7 +183,16 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
                     Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
                 });
-            return choices.Cast<object>().First();
+            Assert.Equal(PackageSources.NuGetOrg,
+                choices.Cast<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>().First().Package.Source);
+            var selected = Assert.Single(
+                choices.Cast<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>(),
+                package => package.Package.Source == PackageSources.NuGetOrg);
+            Assert.Same(configuredChannel, selected.Channel);
+            var configuredChoice = Assert.Single(Assert.Single(interaction.GroupedSelectionPromptCalls),
+                choice => choice.Group?.Id == AddCommandPrompter.GetSourceIdentity(selected));
+            Assert.Equal("team", configuredChoice.Group!.Label);
+            return selected;
         };
         var prompter = new AddCommandPrompter(interaction);
 
@@ -187,6 +203,156 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         else
         {
             await prompter.PromptForIntegrationAsync(packages, TestContext.Current.CancellationToken);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false, true, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(false, true, true, true)]
+    [InlineData(true, true, true, true)]
+    [InlineData(false, true, false, true)]
+    [InlineData(true, true, false, true)]
+    [InlineData(false, false, true, false)]
+    [InlineData(true, false, true, false)]
+    [InlineData(false, true, true, false)]
+    [InlineData(true, true, true, false)]
+    public async Task AddCommand_NativeSourceSelectionPreservesAmbientPolicy(bool versions, bool mappingEnabled, bool installSucceeds, bool configuredSources)
+    {
+        const string packageId = "Acme.Hosting.Redis";
+        const string selectedSource = "https://example.test/second";
+        const string sdkSource = "https://example.test/sdk";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), configuredSources ? """
+            {
+              "integrationSources": {
+                "default": {"enabled": false},
+                "first": {"source": "https://example.test/first", "patterns": ["Acme.Hosting.*"]},
+                "second": {"source": "https://example.test/second", "patterns": ["Acme.Hosting.*"]}
+              }
+            }
+            """ : "{}");
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        var ambientSources = configuredSources ? string.Empty : """
+                <add key="first" value="https://example.test/first" />
+                <add key="second" value="https://example.test/second" />
+            """;
+        var ambientMappings = configuredSources ? string.Empty : """
+                <packageSource key="first"><package pattern="Acme.Hosting.*" /></packageSource>
+                <packageSource key="second"><package pattern="Acme.Hosting.*" /></packageSource>
+            """;
+        var mappings = mappingEnabled ? $$"""
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="sdk"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+            {{ambientMappings}}
+              </packageSourceMapping>
+            """ : string.Empty;
+        File.WriteAllText(configPath, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="sdk" value="{{sdkSource}}" />
+                <add key="public" value="{{PackageSources.NuGetOrg}}" />
+            {{ambientSources}}
+              </packageSources>
+            {{mappings}}
+            </configuration>
+            """);
+        var originalContent = File.ReadAllBytes(configPath);
+        string[] expectedSources = configuredSources
+            ? [sdkSource, PackageSources.NuGetOrg, selectedSource]
+            : [sdkSource, PackageSources.NuGetOrg, "https://example.test/first", selectedSource];
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            {
+                Assert.Equal(versions
+                    ? string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SelectAVersionOfPackage, packageId)
+                    : AddCommandStrings.SelectAnIntegrationToAdd, prompt);
+                return choices.Cast<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>()
+                    .Single(package => package.Package.Source == selectedSource);
+            }
+        };
+        Task<IEnumerable<NuGetPackage>> GetPackages(FileInfo? config)
+        {
+            var sources = XDocument.Load(config?.FullName ?? configPath).Root!.Element("packageSources")!.Elements("add")
+                .Select(element => element.Attribute("value")!.Value)
+                .Where(source => source is "https://example.test/first" or selectedSource);
+            return Task.FromResult<IEnumerable<NuGetPackage>>(
+                sources.Select(source => new NuGetPackage { Id = packageId, Version = source == selectedSource ? "2.0.0" : "1.0.0", Source = source }).ToArray());
+        }
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, _, _, _, config, _, _) => GetPackages(config),
+            GetIntegrationPackagesAsyncCallback = (_, _, config, _) => GetPackages(config)
+        };
+        AddPackageContext? added = null;
+        var policyValidated = false;
+        var factory = new TestAppHostProjectFactory
+        {
+            LanguageId = KnownLanguageId.CSharp,
+            AddPackageAsyncCallback = (context, _) =>
+            {
+                added = context;
+                Assert.Null(context.Source);
+                Assert.Null(context.SourcePackagePattern);
+                var settings = NuGetTestHelper.LoadSettings(workspace.Path);
+                var sources = new PackageSourceProvider(settings).LoadPackageSources().Where(source => source.IsEnabled).ToArray();
+                Assert.Equal(expectedSources, sources.Select(source => source.Source));
+                Assert.Equal(configuredSources ? "aspire-integration-second" : "second",
+                    Assert.Single(sources, source => source.Source == selectedSource).Name);
+                if (mappingEnabled)
+                {
+                    string[] eligibleSources = configuredSources ? [selectedSource] : ["https://example.test/first", selectedSource];
+                    Assert.Equal(eligibleSources, NuGetTestHelper.GetEligiblePackageSources(workspace.Path, packageId));
+                    Assert.Equal([sdkSource], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.AppHost.Sdk"));
+                    Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Newtonsoft.Json"));
+                }
+                else
+                {
+                    Assert.Empty(new PackageSourceMappingProvider(settings).GetPackageSourceMappingItems());
+                }
+                policyValidated = true;
+                return Task.FromResult(installSucceeds);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+            options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>());
+        });
+        services.AddSingleton<INuGetPackageCache>(cache);
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+        var integrationArgument = versions ? packageId : string.Empty;
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"add {integrationArgument} --apphost \"{appHostFile.FullName}\"").InvokeAsync().DefaultTimeout();
+
+        if (installSucceeds)
+        {
+            Assert.True(interaction.DisplayedErrors.Count == 0, string.Join(Environment.NewLine, interaction.DisplayedErrors));
+        }
+        Assert.Equal(installSucceeds ? CliExitCodes.Success : CliExitCodes.FailedToAddPackage, exitCode);
+        Assert.NotNull(added);
+        Assert.True(policyValidated);
+        Assert.Equal(packageId, added.PackageId);
+        Assert.Equal("2.0.0", added.PackageVersion);
+        if (installSucceeds && configuredSources)
+        {
+            Assert.Equal(expectedSources,
+                new PackageSourceProvider(NuGetTestHelper.LoadSettings(workspace.Path)).LoadPackageSources()
+                    .Where(source => source.IsEnabled).Select(source => source.Source));
+        }
+        else
+        {
+            Assert.Equal(originalContent, await File.ReadAllBytesAsync(configPath));
         }
     }
 

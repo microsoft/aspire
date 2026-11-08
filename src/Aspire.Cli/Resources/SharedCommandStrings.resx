@@ -255,9 +255,6 @@
   <data name="SourceName" xml:space="preserve">
     <value>Name</value>
   </data>
-  <data name="SourceRepository" xml:space="preserve">
-    <value>Git repository</value>
-  </data>
   <data name="SourceGitRepository" xml:space="preserve">
     <value>Git source</value>
   </data>

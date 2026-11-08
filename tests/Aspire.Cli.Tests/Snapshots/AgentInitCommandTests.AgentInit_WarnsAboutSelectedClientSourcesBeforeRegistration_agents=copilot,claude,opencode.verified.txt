@@ -1,17 +1,17 @@
 ﻿{
   Sources:
                   Name:  pluginsOnly
-        Git repository:  https://github.com/example/plugins
+            Git source:  https://github.com/example/plugins
                Plugins:  aspire@pluginsOnly
 
                   Name:  team
-        Git repository:  https://github.com/example/team
+            Git source:  https://github.com/example/team
                Plugins:  aspire@TEAM
    OpenCode V1 catalog:  https://team.example/skills/
    OpenCode V2 catalog:  https://team.example/skills/
 
                   Name:  teamAlias
-        Git repository:  https://github.com/example/team
+            Git source:  https://github.com/example/team
                Git ref:  source-demo
            Marketplace:  team-marketplace
                Plugins:  aspire@team-marketplace

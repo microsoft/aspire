@@ -507,7 +507,7 @@ Each additional source requires a GitHub `owner/repository` or Git repository ad
 
 Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. HTTPS and SSH URL schemes and hostnames match case-insensitively; non-GitHub repository paths and SSH usernames remain case-sensitive. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged.
 
-Before skill selection, when additional enabled sources apply to the selected clients, the CLI displays **One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.** Aligned source-detail blocks identify those sources using **Name**. The `default` source's details are omitted without changing its registration. Selected plugin clients see **Git repository**, an explicit **Git ref**, and **Plugins**. **Marketplace** is displayed only when it differs from the source name, compared case-insensitively like source and marketplace identifiers. OpenCode clients see configured V1/V2 catalog URLs. Disabled sources and catalogs unused by the selected clients are omitted. The shared source-trust warning follows the details on stderr, even if configuration or template onboarding already displayed it. Default-only registration does not display source onboarding.
+Before skill selection, when additional enabled sources apply to the selected clients, the CLI displays **One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.** Aligned source-detail blocks identify those sources using **Name**. The `default` source's details are omitted without changing its registration. Selected plugin clients see **Git source**, an explicit **Git ref**, and **Plugins**. **Marketplace** is displayed only when it differs from the source name, compared case-insensitively like source and marketplace identifiers. OpenCode clients see configured V1/V2 catalog URLs. Disabled sources and catalogs unused by the selected clients are omitted. The shared source-trust warning follows the details on stderr, even if configuration or template onboarding already displayed it. Default-only registration does not display source onboarding.
 
 Successful registration is summarized as **Configured sources in {files}**, listing configuration file paths with their agent names in parentheses, for example `.github/copilot/settings.json (GitHub Copilot)`. Multiple files are separated by commas. Repository and catalog URLs are not repeated in this summary.
 
@@ -560,10 +560,17 @@ SDK search results that identify feeds by their NuGet source names are resolved
 to configured feed locations before selection and installation, matching native
 search results.
 Pickers group choices under source names only when multiple feeds supply choices.
+When ambient and configured sources offer the same package and version from the
+same feed, the choice retains its configured source name.
 The trust warning is displayed immediately before selection if any feed is not
 nuget.org. A package offered by several sources remains selectable in each source;
-choosing a source group restricts version lookup and restore to that feed. Existing
-pinned-channel preferences and non-interactive selection remain unchanged.
+choosing a source group restricts version lookup to that feed. Native C# adds
+persist the selected configured feed and use an exact package mapping when mapping is already
+enabled, rather than passing a picker selection as `dotnet package add --source`.
+Existing SDK and dependency feeds remain available, and previously disabled mapping
+stays disabled. Ambient feed selections leave existing NuGet mappings unchanged.
+Polyglot adds retain their exact-package source override. Explicit
+`--source`, pinned-channel preferences, and non-interactive selection remain unchanged.
 
 Sources and their fields merge case-insensitively across global and selected-app settings. As with `skillSources`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
 

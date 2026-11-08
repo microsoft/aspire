@@ -529,15 +529,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Git repository.
-        /// </summary>
-        internal static string SourceRepository {
-            get {
-                return ResourceManager.GetString("SourceRepository", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Only use sources you trust. Content from these sources can run code on your machine..
         /// </summary>
         internal static string SourceTrustWarning {

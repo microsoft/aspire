@@ -12,7 +12,7 @@
    [1;32mPackage patterns[0m:  Acme.Hosting.*
 
                [1;32mName[0m:  company
-     [1;32mGit repository[0m:  https://example.test/skills
+         [1;32mGit source[0m:  https://example.test/skills
         [1;32mMarketplace[0m:  company-skills
             [1;32mPlugins[0m:  aspire@company-skills
 

@@ -64,7 +64,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
             [(SharedCommandStrings.SourceGitRepository, "https://example.test/config"), (SharedCommandStrings.SourceRef, "release/[team]")],
             [(SharedCommandStrings.SourceName, "Company [templates]"), (SharedCommandStrings.SourceGitRepository, "https://example.test/templates"), (SharedCommandStrings.SourceGitPath, "templates"), (SharedCommandStrings.SourceRef, "release/[team]")],
             [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceFeed, "https://example.test/nuget"), (SharedCommandStrings.SourcePatterns, "Acme.Hosting.*")],
-            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceRepository, "https://example.test/skills"), (SharedCommandStrings.SourceMarketplace, "company-skills"), (SharedCommandStrings.SourcePlugins, "aspire@company-skills")]
+            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceGitRepository, "https://example.test/skills"), (SharedCommandStrings.SourceMarketplace, "company-skills"), (SharedCommandStrings.SourcePlugins, "aspire@company-skills")]
         ]);
 
         await Verify(output.ToString(), "txt").UseParameters(ansi, width).ScrubLinesWithReplace(line => line.TrimEnd());
