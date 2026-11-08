@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 using Xunit;
 
@@ -50,7 +51,11 @@ public static class DashboardResourceAssertions
                     continue;
                 }
 
-                var state = (await row.Locator(".resource-row-sub > .state-dot + span").InnerTextAsync()).Trim();
+                var state = await GetRowStateAsync(row);
+                if (state is null)
+                {
+                    continue;
+                }
                 if (expected.State != state && state != "Finished" && !state.Contains("failed", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -85,6 +90,36 @@ public static class DashboardResourceAssertions
 
         return foundRows.Values.ToArray();
     }
+
+    // Compact rows, the dashboard's default, show the state as a dot whose name is in the tooltip of its column.
+    // Comfortable and spacious rows show the state's name as text after the dot.
+    private const string CompactStateSelector = ".resource-row-meta-state";
+    private const string StateTextSelector = ".resource-row-sub > .state-dot + span";
+
+    /// <summary>
+    /// Gets the state a resource row shows, at any density, or <see langword="null"/> if the row hasn't rendered one yet.
+    /// </summary>
+    public static Task<string?> GetRowStateAsync(ILocator row) =>
+        row.EvaluateAsync<string?>(
+            """
+            (row, selectors) => {
+                const compact = row.querySelector(selectors.compact);
+                if (compact) {
+                    return compact.getAttribute('data-tooltip')?.trim() ?? null;
+                }
+                return row.querySelector(selectors.text)?.textContent?.trim() ?? null;
+            }
+            """,
+            new { compact = CompactStateSelector, text = StateTextSelector });
+
+    /// <summary>
+    /// Locates the element that shows <paramref name="state"/> in a resource row, at any density.
+    /// </summary>
+    public static ILocator RowState(ILocator row, string state) =>
+        row.Locator($"{CompactStateSelector}[data-tooltip=\"{EscapeCssString(state)}\"]")
+            .Or(row.Locator(StateTextSelector).Filter(new() { HasTextRegex = new Regex($"^{Regex.Escape(state)}$") }));
+
+    private static string EscapeCssString(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 }
 
 public sealed record ResourceRow(string Type, string Name, string State, string SourceContains);
