@@ -149,12 +149,11 @@
     overflow: visible;
 }
 
-/* The picker is a control, not the page's title: it uses the UI font at the size of the controls beside it. */
+/* The picker takes the title's place and shows the same text, so it keeps the title's font and size: the name
+   doesn't change shape when the resource list is collapsed or opened. */
 .resource-title ::deep .resource-picker-button {
     max-width: 100%;
     font: inherit;
-    font-family: var(--aspire-font-sans);
-    font-size: var(--aspire-font-size-body);
 }
 
 .resource-picker-button > [slot="start"] {
@@ -1341,11 +1340,13 @@
     margin-left: auto;
 }
 
+/* The heading size rather than the title size: when the resource list is collapsed, a picker button takes the
+   title's place and shows the same text, so the two match (see .resource-picker). */
 .resource-title {
     margin: 0;
     overflow: hidden;
     font-family: var(--aspire-font-display);
-    font-size: var(--aspire-font-size-title);
+    font-size: var(--aspire-font-size-heading);
     font-weight: var(--aspire-font-weight-semibold);
     line-height: 24px;
     text-overflow: ellipsis;
@@ -1740,9 +1741,8 @@
         border-radius: var(--aspire-control-radius);
         background: color-mix(in srgb, var(--colorBrandBackground) 5%, var(--aspire-control-background));
         color: var(--colorNeutralForeground1);
+        /* The title's font and size: the picker shows the same text in the same place. */
         font: inherit;
-        font-size: var(--aspire-font-size-body);
-        font-weight: var(--aspire-font-weight-semibold);
         line-height: 22px;
         text-align: start;
         cursor: pointer;
