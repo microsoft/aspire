@@ -66,6 +66,20 @@ public class CliProtocolTests
         Assert.Equal(1000, host.ProcessStartTimeUnixMilliseconds);
     }
 
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("  Contoso Shop ", "Contoso Shop")]
+    public void OptionalNameIsTrimmedWithoutChangingProcessIdentity(string? name, string? expected)
+    {
+        var original = Assert.Single(Parse(Snapshot(Host(42))).AppHosts);
+        var named = Assert.Single(Parse(Snapshot(Host(42) with { Name = name })).AppHosts);
+
+        Assert.Equal(expected, named.Name);
+        Assert.Equal(original.Id, named.Id);
+    }
+
     [Fact]
     public void PathIdentityUsesPlatformCaseSemantics()
     {

@@ -16,6 +16,10 @@ internal sealed class TrayController : IAsyncDisposable
     private readonly CancellationTokenSource _shutdown = new();
     private readonly Dictionary<AppHostId, StopOperation> _stops = [];
     private readonly Dictionary<string, StartOperation> _starts = new(TrayAppHostPath.Comparer);
+    // Saved state stores only paths, and its store rejects unknown properties, so persisting names
+    // would break older trays reading the file. Remember configured names for this session instead,
+    // so a stopped or pinned row keeps the name it had while running.
+    private readonly Dictionary<string, string> _configuredNames = new(TrayAppHostPath.Comparer);
     private HashSet<AppHostId> _lastLiveIds = [];
     private TraySavedState _savedState = TraySavedState.Empty;
     private AppHostSnapshot _snapshot = new([], DiscoveryState.Connecting);
@@ -325,6 +329,18 @@ internal sealed class TrayController : IAsyncDisposable
                     .Distinct(TrayAppHostPath.Comparer).ToArray();
                 _lastLiveIds = snapshot.AppHosts.Select(host => host.Id).ToHashSet();
                 _snapshot = snapshot;
+                foreach (var host in snapshot.AppHosts)
+                {
+                    var path = TrayAppHostPath.Normalize(host.AppHostPath);
+                    if (host.Name is { } name)
+                    {
+                        _configuredNames[path] = name;
+                    }
+                    else
+                    {
+                        _configuredNames.Remove(path);
+                    }
+                }
                 // Only real instance arrivals update history. Heartbeats and reconnects must
                 // not restore a recent entry the user cleared while its AppHost was running.
                 RememberLocked(arrivingPaths.Reverse());
@@ -634,7 +650,10 @@ internal sealed class TrayController : IAsyncDisposable
 
     private AppHostMenuItem CreateSavedMenuItem(SavedAppHost saved, bool live)
     {
-        var host = new AppHostInfo(saved.AppHostPath, 0, null);
+        var host = new AppHostInfo(saved.AppHostPath, 0, null)
+        {
+            Name = _configuredNames.GetValueOrDefault(saved.AppHostPath)
+        };
         _starts.TryGetValue(saved.AppHostPath, out var start);
         var starting = start?.IsPending == true;
         var error = GetStartError(start);

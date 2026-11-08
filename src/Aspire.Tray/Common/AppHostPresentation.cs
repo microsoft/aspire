@@ -9,6 +9,11 @@ internal static class AppHostPresentation
 {
     public static string GetDisplayName(AppHostInfo host)
     {
+        if (host.Name is { } configuredName)
+        {
+            return ToSingleLine(configuredName);
+        }
+
         var name = Path.GetFileNameWithoutExtension(host.AppHostPath);
         var directory = GetDirectory(host);
         // File-based hosts often use apphost.cs/apphost.mts inside an AppHost directory.
