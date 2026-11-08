@@ -429,7 +429,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             ],
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName);
-        Assert.Equal(["selected", selectedFeed.FullName], sdkResults.Select(package => package.Source));
+        Assert.Equal([selectedFeed.FullName, selectedFeed.FullName], sdkResults.Select(package => package.Source));
 
         var results = await client.SearchAsync(
             packageId,
@@ -448,7 +448,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             framework: "net10.0",
             runtimeIdentifier: null,
             restoreDirectory.FullName,
-            sources: [],
+            sources: [sdkResults[0].Source],
             nugetConfigPaths: snapshot.ConfigPaths,
             workspace.WorkspaceRoot.FullName,
             globalPackagesFolderOverride: null,

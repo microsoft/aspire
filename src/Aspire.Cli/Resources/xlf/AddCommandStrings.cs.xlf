@@ -92,6 +92,11 @@
         <target state="translated">Vyhledávací dotaz integrace.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. A integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="new">One or more integration sources are configured. A integration source lets an organization share integrations to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Nenašly se žádné integrační balíčky. Zkontrolujte prosím připojení k internetu nebo zdrojovou konfiguraci NuGet.</target>

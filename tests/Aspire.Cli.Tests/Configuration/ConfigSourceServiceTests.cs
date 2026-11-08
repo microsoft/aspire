@@ -75,7 +75,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
             message =>
             {
-                Assert.Equal(ConfigSourceStrings.FetchingSource, message.Message);
+                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource, SharedCommandStrings.GitFetchConfigurationSource)}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             });
         var definition = Assert.Single(sources);
@@ -1031,7 +1031,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         ];
         if (consent is not false)
         {
-            expectedMessages.Add(interactive ? ConfigSourceStrings.FetchingSourceWithAuthentication : ConfigSourceStrings.FetchingSource);
+            expectedMessages.Add($"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
+                SharedCommandStrings.GitFetchConfigurationSource)}[/]");
         }
         Assert.Equal(expectedMessages, interaction.DisplayedMessages.Select(message => message.Message));
         Assert.Single(interaction.DisplayedRenderables);
@@ -1710,7 +1711,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
-        var fetchMessage = interactive ? ConfigSourceStrings.FetchingSourceWithAuthentication : ConfigSourceStrings.FetchingSource;
+        var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
+            SharedCommandStrings.GitFetchConfigurationSource)}[/]";
         var notified = false;
         interaction.DisplayMessageCallback = (emoji, message, consoleOverride) =>
         {
@@ -2089,10 +2091,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             },
             message =>
             {
-                Assert.Equal(ConfigSourceStrings.FetchingSource, message.Message);
+                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource, SharedCommandStrings.GitFetchConfigurationSource)}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
-            },
-            message => Assert.Contains(changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, message.Message));
+            });
         if (!changed)
         {
             Assert.Equal(original, await File.ReadAllTextAsync(path));

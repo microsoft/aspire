@@ -1,0 +1,17 @@
+﻿ℹ️ One or more integration sources are configured. A integration source lets an organization share
+   integrations to customize your development experience.
+
+               [1mName[0m:  team
+       [1mPackage feed[0m:  https://example.test/team
+   [1mPackage patterns[0m:  Aspire.Hosting.*
+
+🚨 Only use sources you trust. Content from these sources can run code on your machine.
+[?25lSelect an integration to add:
+
+[1m  [0m[1mteam[0m
+  > redis (Aspire.Hosting.Redis)
+[1m  [0m[1mhttps://example.test/other[0m
+    postgres (Aspire.Hosting.Postgres)
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect an integration to add: redis (Aspire.Hosting.Redis)

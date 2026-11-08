@@ -92,6 +92,11 @@
         <target state="translated">통합 검색 쿼리입니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. A integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="new">One or more integration sources are configured. A integration source lets an organization share integrations to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">통합 패키지를 찾을 수 없습니다. 인터넷 연결 또는 NuGet 원본 구성을 확인하세요.</target>

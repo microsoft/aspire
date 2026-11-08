@@ -753,7 +753,19 @@ internal sealed class NuGetClient(
         var settings = LoadSearchSettings(nugetConfigPath, workingDirectory);
         var sources = new PackageSourceProvider(settings).LoadPackageSources().ToArray();
         var filter = CreatePackageSearchSourceFilter(settings, sources);
-        return packages.Where(package => filter(package.Id, package.Source)).ToArray();
+        return packages.Where(package => filter(package.Id, package.Source)).Select(package =>
+        {
+            // SDK JSON can report "sourceName":"private-feed" instead of the feed location.
+            // Return locations like native search so selecting a feed cannot turn its name into a local path.
+            var source = sources.FirstOrDefault(candidate => candidate.IsEnabled &&
+                string.Equals(candidate.Name, package.Source, StringComparison.OrdinalIgnoreCase));
+            return source is null ? package : new NuGetPackage
+            {
+                Id = package.Id,
+                Version = package.Version,
+                Source = source.Source
+            };
+        }).ToArray();
     }
 
     private static Func<string, string, bool> CreatePackageSearchSourceFilter(

@@ -19,7 +19,6 @@ using Aspire.Shared;
 using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Spectre.Console;
 
 namespace Aspire.Cli.Configuration;
 
@@ -188,7 +187,7 @@ internal sealed class ConfigSourceService(
         interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.Explanation);
         List<(string Label, string Value)> details =
         [
-            (ConfigSourceStrings.ConfigurationSource, source.Repository)
+            (SharedCommandStrings.SourceGitRepository, source.Repository)
         ];
         if (source.Path != AspireConfigFile.FileName)
         {
@@ -196,23 +195,11 @@ internal sealed class ConfigSourceService(
         }
         if (source.Ref is not null)
         {
-            details.Add((ConfigSourceStrings.ConfigurationRef, source.Ref));
+            details.Add((SharedCommandStrings.SourceRef, source.Ref));
         }
         details.Add((ConfigSourceStrings.SourceOrigin, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
 
-        var grid = new Grid();
-        grid.AddColumn();
-        grid.AddColumn();
-        grid.Columns[0].Width = details.Max(detail => detail.Label.Length) + 1;
-        foreach (var (label, value) in details)
-        {
-            grid.AddRow(
-                new Align(new Markup($"[bold green]{label.EscapeMarkup()}[/]:"), HorizontalAlignment.Right),
-                new Text(value));
-        }
-        interaction.DisplayEmptyLine();
-        interaction.DisplayRenderable(new Padder(grid, new Padding(3, 0)));
-        interaction.DisplayEmptyLine();
+        interaction.DisplaySourceDetails([details]);
         if (readmeUrl is not null)
         {
             interaction.DisplayMessage(KnownEmojis.Information,
@@ -401,7 +388,7 @@ internal sealed class ConfigSourceService(
             // Replace all case-equivalent local sections, preserving every source section
             // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
             // Keep the original position so an unchanged section does not reorder the file
-            // and make an otherwise identical refresh report changes.
+            // and make an otherwise identical refresh rewrite the file.
             var insertionIndex = configuration.Count;
             foreach (var key in configuration.Select(property => property.Key)
                 .Where(key => key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray())
@@ -441,9 +428,6 @@ internal sealed class ConfigSourceService(
         {
             _projectChecked = true;
         }
-        interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.UseNotice,
-            source.Repository, source.Path, snapshot.Metadata.Commit,
-            changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, path), consoleOverride: ConsoleOutput.Error);
     }
 
     public async Task CheckProjectAsync(DirectoryInfo directory, bool force, CancellationToken cancellationToken)
@@ -611,11 +595,8 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
-            interaction.DisplayMessage(KnownEmojis.InboxTray,
-                allowInteractiveInput && hostEnvironment.SupportsInteractiveInput
-                    ? ConfigSourceStrings.FetchingSourceWithAuthentication
-                    : ConfigSourceStrings.FetchingSource,
-                consoleOverride: ConsoleOutput.Error);
+            interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchConfigurationSource,
+                allowInteractiveInput && hostEnvironment.SupportsInteractiveInput);
             var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken);
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();

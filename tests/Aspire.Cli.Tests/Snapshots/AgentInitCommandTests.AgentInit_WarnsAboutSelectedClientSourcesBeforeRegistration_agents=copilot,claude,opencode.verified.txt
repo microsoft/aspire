@@ -1,10 +1,25 @@
-﻿[
-  Skill sources:
-https://github.com/microsoft/aspire-skills
-https://third-party.example/skills/
-https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/
-https://github.com/example/plugins
-https://github.com/example/team
-https://team.example/skills/,
-  [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
-]
+﻿{
+  Sources:
+                  Name:  pluginsOnly
+        Git repository:  https://github.com/example/plugins
+               Plugins:  aspire@pluginsOnly
+
+                  Name:  team
+        Git repository:  https://github.com/example/team
+               Plugins:  aspire@TEAM
+   OpenCode V1 catalog:  https://team.example/skills/
+   OpenCode V2 catalog:  https://team.example/skills/
+
+                  Name:  teamAlias
+        Git repository:  https://github.com/example/team
+               Git ref:  source-demo
+           Marketplace:  team-marketplace
+               Plugins:  aspire@team-marketplace
+   OpenCode V1 catalog:  https://team.example/skills/
+
+,
+  Warnings: [
+    One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.,
+    [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+  ]
+}

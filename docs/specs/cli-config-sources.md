@@ -86,13 +86,13 @@ Git supports a ref name or a fully spelled object ID as the source of a [fetch r
 
 ### Prompt during project creation
 
-Before acquiring or using the remote configuration, `aspire new` and `aspire init` display the candidate repository and whether it came from the environment or employee detection. The file path is shown only when it differs from the default `aspire.config.json`, and the branch/commit selector is shown only when explicitly specified:
+Before acquiring or using the remote configuration, `aspire new` and `aspire init` display the candidate repository as **Git source** and whether it came from the environment or employee detection as **Source origin**. The file path is shown only when it differs from the default `aspire.config.json`, and the branch/commit selector is shown as **Git ref** only when explicitly specified:
 
 ```text
 A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.
 
-   Configuration source:  https://msft.ghe.com/coreai/aspire-1p-init
-          Source origin:  Microsoft employee default
+      Git source:  https://msft.ghe.com/coreai/aspire-1p-init
+   Source origin:  Microsoft employee default
 
 Read more about this configuration source
 
@@ -113,6 +113,8 @@ Before Git acquisition begins, the CLI writes an informational notice to stderr:
 Non-interactive acquisitions show **Fetching configuration source using Git...**
 instead, because authentication prompts are disabled. Reusing an in-memory
 snapshot does not repeat the notice, and background version checks remain quiet.
+Repository templates reuse these notices with **templates** as the content being
+fetched, keeping the download and authentication guidance consistent.
 
 - **Accept:** acquire and validate the remote file, then materialize allowlisted values and a `configSource` binding in the created or initialized project's `aspire.config.json`.
 - **Decline:** continue normally without Git acquisition or template-source inheritance from that source for the rest of the command, and save `"configSource": { "optOut": true }` after successful project creation or initialization. Independently configured global template sources remain available.
@@ -184,6 +186,13 @@ The same warning is used for Git-backed templates, `aspire template source add`,
 and explicit package sources supplied through `aspire new --source` or
 `aspire add --source`. Warnings go to stderr to preserve machine-readable stdout.
 They do not introduce new confirmation prompts or change existing automation flags.
+
+Configuration, template, skill, and integration sources use aligned detail blocks
+with bold-green labels and literal values. Each source is separated by one blank
+line. Template and integration pickers use source-name groups only when more than
+one source supplies choices. Directly before those pickers, the shared trust warning
+is shown if templates are not all built-in or integrations come from a feed other
+than nuget.org.
 
 ### Acquire using Git
 
@@ -371,7 +380,7 @@ This is a configuration-update mode of `aspire update`, separate from its packag
 - Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into the declaring configuration file, and save its applied version with those values, preserving unrelated settings.
 - On acquisition, validation, or write failure, stop and exit nonzero without changing the app configuration or its applied version.
 - Publish the fetched source JSON and fetch metadata in Aspire home as tracking data. Record a successful fetch/check time even if the selected file's version is unchanged. If tracking publication fails, report it explicitly; do not use shared tracking as proof that an app was updated.
-- Report the source, resolved commit, and whether the app configuration changed. Make clear that supplied allowlisted values can replace local edits.
+- Successful application does not display a completion summary with the repository, resolved commit, or settings-file path. Git acquisition notices, source-trust warnings, and errors remain visible. Supplied allowlisted values can replace local edits.
 - Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and performs an advisory source check for saved bindings; unbound projects can explicitly adopt a source as described above.
 - Follow `aspire update`'s existing non-interactive confirmation contract: automation uses `aspire update --config-source --yes --non-interactive`. The saved binding supplies source consent; this command does not establish a new binding or prompt to enable one.
 
@@ -455,7 +464,7 @@ aspire new
 
 Only `templateSources` participates in this runtime overlay. Other remote settings retain their existing allowlisted project-materialization behavior. Project-level `templateSources` are not used. Sources must satisfy the same complete-definition validation as global template discovery; malformed or inaccessible init configuration fails explicitly. Template repository discovery failures retain the normal per-source warnings.
 
-The optional `displayName` supplies the friendly name in the terminal selector's source heading. Missing or blank values use the alias. Git headings also show the configured repository and ref (`default branch` when omitted); directory headings show the local path instead. Aliases remain the source and group identity even when headings match.
+The optional `displayName` supplies the friendly name in the terminal selector's source heading. Missing or blank values use the alias. Before fetching templates, the CLI explains configured template sources, lists their details, and displays the shared trust warning. Git details use **Name**, **Git source**, **Git path**, and **Git ref** labels; repository-root paths and omitted or `HEAD` refs are hidden. Local directory sources use **Path**. Built-in templates are not listed as a source. A single source has no group heading. Aliases remain the source and group identity even when headings match.
 
 Merge source names case-insensitively with global `templateSources`. The user's entire global definition wins on a collision: do not retain an inherited `repository`, `ref`, `path`, or `displayName` when the user replaces that source with a local directory or a different repository. Non-colliding global and inherited sources are both searchable and listed, including their branch refs.
 
@@ -496,7 +505,11 @@ Standalone agent initialization honors the configured AppHost or discovers one f
 
 Each additional source requires a GitHub `owner/repository` or Git repository address. The marketplace identifier defaults to the source name; marketplace identifiers must be unique. The `plugins` array selects one or more plugin names within that marketplace and defaults to `["aspire"]` when omitted. Empty lists and invalid plugin identifiers are rejected. Like other configuration arrays, plugin entries merge by index across configuration layers. An optional `ref` selects a branch or full commit for newly registered marketplaces. Copilot and Claude register each marketplace once and enable each selected plugin (for example, `aspire@aspire1p` and `deployment@aspire1p`). OpenCode uses the catalog for its existing settings format, falling back to the other catalog when only one is supplied; sources without catalog URLs are not registered with OpenCode. Plugin selections do not filter OpenCode catalogs. Catalog URLs must use HTTPS. The CLI registers sources without acquiring their content; agent clients perform acquisition and authentication.
 
-Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. HTTPS and SSH URL schemes and hostnames match case-insensitively; non-GitHub repository paths and SSH usernames remain case-sensitive. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged. Before registering sources, a separate list identifies repository URLs for selected plugin clients and configured V1/V2 catalog URLs for OpenCode across all enabled sources. Each URL appears on its own line below the "Skill sources" heading, aligned with the heading text. Duplicate URLs are shown once; disabled sources are omitted. The shared source-trust warning is displayed once on stderr, using the same wording as Git templates and configuration sources.
+Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. HTTPS and SSH URL schemes and hostnames match case-insensitively; non-GitHub repository paths and SSH usernames remain case-sensitive. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged.
+
+Before skill selection, when additional enabled sources apply to the selected clients, the CLI displays **One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.** Aligned source-detail blocks identify those sources using **Name**. The `default` source's details are omitted without changing its registration. Selected plugin clients see **Git repository**, an explicit **Git ref**, and **Plugins**. **Marketplace** is displayed only when it differs from the source name, compared case-insensitively like source and marketplace identifiers. OpenCode clients see configured V1/V2 catalog URLs. Disabled sources and catalogs unused by the selected clients are omitted. The shared source-trust warning follows the details on stderr, even if configuration or template onboarding already displayed it. Default-only registration does not display source onboarding.
+
+Successful registration is summarized as **Configured sources in {files}**, listing configuration file paths with their agent names in parentheses, for example `.github/copilot/settings.json (GitHub Copilot)`. Multiple files are separated by commas. Repository and catalog URLs are not repeated in this summary.
 
 The allowlist copies the entire supplied `skillSources` section, including arbitrary nested properties, replacing the existing local section. If `skillSources` is omitted, the local section remains untouched. Sources still merge by name across runtime configuration layers such as global and local settings. Refreshing `configSource` updates configuration only, not agent registrations. Run `aspire agent init` to register newly configured sources. `--skills none` and suppressed agent initialization do not register remote sources. Aspire does not acquire or install bundled Aspire skill files.
 
@@ -535,6 +548,22 @@ Paginated searches apply [nuget.org's limits](https://learn.microsoft.com/nuget/
 If a NuGet source fails during discovery, `aspire add`, `aspire integration list`, and `aspire integration search` retain results from successful sources and display a warning on stderr for each failed source after the search completes. This includes missing or unreadable local package directories, both during package discovery and polyglot compatibility scans. Cancellation still cancels the operation rather than reporting a failed source. Source names are redacted and escaped for display, and repeated failures across queries or channels produce only one warning per source. Warnings are displayed even if no packages remain; JSON listings keep stdout valid JSON.
 
 Without an integration argument, interactive `aspire add` always asks the user to select a package, even when discovery returns only one package. An exact package ID or friendly name on the command line can bypass that selection. Non-interactive `aspire add` requires an integration argument and never installs an unnamed discovery result.
+
+Before integration and version selection, when configured integration sources
+supply choices, the CLI displays **One or more integration sources are configured.
+A integration source lets an organization share integrations to customize your
+development experience.** Each distinct configured feed is displayed using
+**Name**, **Package feed**, and **Package patterns**. Built-in channels and ambient
+NuGet sources are not included in these detail blocks. Configured feeds remain
+visible when ambient discovery also supplies packages from the same feed.
+SDK search results that identify feeds by their NuGet source names are resolved
+to configured feed locations before selection and installation, matching native
+search results.
+Pickers group choices under source names only when multiple feeds supply choices.
+The trust warning is displayed immediately before selection if any feed is not
+nuget.org. A package offered by several sources remains selectable in each source;
+choosing a source group restricts version lookup and restore to that feed. Existing
+pinned-channel preferences and non-interactive selection remain unchanged.
 
 Sources and their fields merge case-insensitively across global and selected-app settings. As with `skillSources`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
 

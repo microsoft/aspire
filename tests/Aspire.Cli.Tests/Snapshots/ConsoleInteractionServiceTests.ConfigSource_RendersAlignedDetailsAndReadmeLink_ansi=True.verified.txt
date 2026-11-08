@@ -1,9 +1,9 @@
 ﻿[94mℹ️[0m A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.
 
-   [1;32mConfiguration source[0m:  https://git.example/configuration
-     [1;32mConfiguration file[0m:  teams/[platform].json
-      [1;32mConfiguration ref[0m:  config-preview
-          [1;32mSource origin[0m:  ASPIRE_INIT_SOURCE_URL
+           [1;32mGit source[0m:  https://git.example/configuration
+   [1;32mConfiguration file[0m:  teams/[platform].json
+              [1;32mGit ref[0m:  config-preview
+        [1;32mSource origin[0m:  ASPIRE_INIT_SOURCE_URL
 
 [94mℹ️[0m ]8;id=link-id;https://docs.example/config-source?team=[platform]\Read more about this configuration source]8;;\
 [91m🚨[0m [93mOnly use sources you trust. Content from these sources can run code on your machine.[0m

@@ -37,16 +37,6 @@
         <target state="new">Configuration file</target>
         <note />
       </trans-unit>
-      <trans-unit id="ConfigurationRef">
-        <source>Configuration ref</source>
-        <target state="new">Configuration ref</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ConfigurationSource">
-        <source>Configuration source</source>
-        <target state="new">Configuration source</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConsentRequired">
         <source>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</source>
         <target state="new">A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</target>
@@ -65,16 +55,6 @@
       <trans-unit id="Explanation">
         <source>A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.</source>
         <target state="new">A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FetchingSource">
-        <source>Fetching configuration source using Git...</source>
-        <target state="new">Fetching configuration source using Git...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="FetchingSourceWithAuthentication">
-        <source>Fetching configuration source using Git. Git may prompt you to authenticate.</source>
-        <target state="new">Fetching configuration source using Git. Git may prompt you to authenticate.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitNotFound">
@@ -157,16 +137,6 @@
         <target state="new">Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI.</target>
         <note />
       </trans-unit>
-      <trans-unit id="Refreshed">
-        <source>configuration updated</source>
-        <target state="new">configuration updated</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="RefreshedUnchanged">
-        <source>configuration already up to date</source>
-        <target state="new">configuration already up to date</target>
-        <note />
-      </trans-unit>
       <trans-unit id="RepositoryUnavailable">
         <source>Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</source>
         <target state="new">Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry.</target>
@@ -181,13 +151,6 @@
         <source>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</source>
         <target state="new">A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</target>
         <note>Do not translate "aspire update --config-source".</note>
-      </trans-unit>
-      <trans-unit id="UseNotice">
-        <source>Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</source>
-        <target state="new">Configuration source {0} ({1}) at commit {2}: {3}.
-Settings file: {4}</target>
-        <note>{0} is the Git repository address, {1} is the repository-relative configuration file path, {2} is the resolved Git commit SHA, {3} is the localized configuration update result, and {4} is the destination settings file path.</note>
       </trans-unit>
       <trans-unit id="UseSourceOptionDescription">
         <source>Use the proposed Git configuration source. Specify false to decline it.</source>

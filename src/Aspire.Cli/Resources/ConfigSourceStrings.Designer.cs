@@ -124,24 +124,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Configuration ref.
-        /// </summary>
-        internal static string ConfigurationRef {
-            get {
-                return ResourceManager.GetString("ConfigurationRef", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Configuration source.
-        /// </summary>
-        internal static string ConfigurationSource {
-            get {
-                return ResourceManager.GetString("ConfigurationSource", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode..
         /// </summary>
         internal static string ConsentRequired {
@@ -174,24 +156,6 @@ namespace Aspire.Cli.Resources {
         internal static string Explanation {
             get {
                 return ResourceManager.GetString("Explanation", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Fetching configuration source using Git....
-        /// </summary>
-        internal static string FetchingSource {
-            get {
-                return ResourceManager.GetString("FetchingSource", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Fetching configuration source using Git. Git may prompt you to authenticate..
-        /// </summary>
-        internal static string FetchingSourceWithAuthentication {
-            get {
-                return ResourceManager.GetString("FetchingSourceWithAuthentication", resourceCulture);
             }
         }
 
@@ -331,24 +295,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to configuration updated.
-        /// </summary>
-        internal static string Refreshed {
-            get {
-                return ResourceManager.GetString("Refreshed", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to configuration already up to date.
-        /// </summary>
-        internal static string RefreshedUnchanged {
-            get {
-                return ResourceManager.GetString("RefreshedUnchanged", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI..
         /// </summary>
         internal static string RefreshOptionDescription {
@@ -381,15 +327,6 @@ namespace Aspire.Cli.Resources {
         internal static string UpdateAvailable {
             get {
                 return ResourceManager.GetString("UpdateAvailable", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Configuration source {0} ({1}) at commit {2}: {3}. Settings file: {4}.
-        /// </summary>
-        internal static string UseNotice {
-            get {
-                return ResourceManager.GetString("UseNotice", resourceCulture);
             }
         }
         

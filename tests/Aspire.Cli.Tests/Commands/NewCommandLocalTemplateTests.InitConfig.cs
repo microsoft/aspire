@@ -163,8 +163,8 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(1, selectionCount);
         Assert.Equal(1, git.Calls);
         Assert.Equal(
-            [new SelectionChoiceGroup("source:enterprise", $"Team [templates] ({Path.Combine(workspace.Path, "enterprise")})") { Style = new Style(Color.Green) },
-                new SelectionChoiceGroup("source:personal", $"Team [templates] ({Path.Combine(workspace.Path, "personal")})") { Style = new Style(Color.Green) }],
+            [new SelectionChoiceGroup("source:enterprise", "Team [templates]") { Style = new Style(Color.Green) },
+                new SelectionChoiceGroup("source:personal", "Team [templates]") { Style = new Style(Color.Green) }],
             Assert.Single(interaction.GroupedSelectionPromptCalls).TakeLast(2).Select(choice => choice.Group));
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
         var projectConfig = Path.Combine(workspace.Path, "out", AspireConfigFile.FileName);

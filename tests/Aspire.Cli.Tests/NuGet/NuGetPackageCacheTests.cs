@@ -143,8 +143,8 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 SearchPackagesAsyncCallback = (_, _, exactMatch, _, _, _, _, _, _, _) => exactMatch
                     ? (0, [
-                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = ambientFeed },
-                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = selectedFeed }
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = "ambient" },
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = "selected" }
                     ])
                     : (0, [
                         new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = "ambient" },
@@ -167,8 +167,13 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal("Aspire.Hosting.Redis", package.Id);
                 Assert.Equal("1.0.0", package.Version);
+                Assert.Equal(selectedFeed, package.Source);
             },
-            package => Assert.Equal("CommunityToolkit.Aspire.Hosting.Custom", package.Id));
+            package =>
+            {
+                Assert.Equal("CommunityToolkit.Aspire.Hosting.Custom", package.Id);
+                Assert.Equal(ambientFeed, package.Source);
+            });
 
         var versions = await cache.GetPackageVersionsAsync(
             configuration,

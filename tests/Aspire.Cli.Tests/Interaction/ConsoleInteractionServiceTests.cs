@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
@@ -17,6 +18,7 @@ using Spectre.Console;
 using Spectre.Console.Rendering;
 using NewCommand = Aspire.Cli.Commands.NewCommand;
 using NewCommandPrompter = Aspire.Cli.Commands.NewCommandPrompter;
+using AddCommandPrompter = Aspire.Cli.Commands.AddCommandPrompter;
 
 using System.CommandLine;
 using System.Globalization;
@@ -39,6 +41,157 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+    }
+
+    [Theory]
+    [InlineData(false, 40)]
+    [InlineData(false, 120)]
+    [InlineData(true, 120)]
+    public async Task SourceDetails_RendersConsistently(bool ansi, int width)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
+            ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = width;
+        var interaction = CreateInteractionService(console);
+        interaction.DisplaySourceDetails(
+        [
+            [(SharedCommandStrings.SourceGitRepository, "https://example.test/config"), (SharedCommandStrings.SourceRef, "release/[team]")],
+            [(SharedCommandStrings.SourceName, "Company [templates]"), (SharedCommandStrings.SourceGitRepository, "https://example.test/templates"), (SharedCommandStrings.SourceGitPath, "templates"), (SharedCommandStrings.SourceRef, "release/[team]")],
+            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceFeed, "https://example.test/nuget"), (SharedCommandStrings.SourcePatterns, "Acme.Hosting.*")],
+            [(SharedCommandStrings.SourceName, "company"), (SharedCommandStrings.SourceRepository, "https://example.test/skills"), (SharedCommandStrings.SourceMarketplace, "company-skills"), (SharedCommandStrings.SourcePlugins, "aspire@company-skills")]
+        ]);
+
+        await Verify(output.ToString(), "txt").UseParameters(ansi, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task SourceSelection_IntegrationGroupsAndTrustNotice(bool customSource, bool multipleSources)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        var cache = new FakeNuGetPackageCache();
+        var implicitChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = customSource ? "https://example.test/team" : PackageSources.NuGetOrg;
+        var channel = customSource ? new PackageChannel("integration:team", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.Hosting.*", source)], cache, new TestFeatures(), NullLogger.Instance)
+        {
+            IntegrationSource = new IntegrationSourceConfiguration
+            {
+                Name = "team",
+                Source = source,
+                Patterns = ["Aspire.Hosting.*"]
+            }
+        } : implicitChannel;
+        List<(string FriendlyName, Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages =
+        [
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = source }, channel)
+        ];
+        if (multipleSources)
+        {
+            packages.Add(("postgres", new() { Id = "Aspire.Hosting.Postgres", Version = "2.0.0", Source = "https://example.test/other" }, implicitChannel));
+        }
+
+        var selected = await new AddCommandPrompter(interaction).PromptForIntegrationAsync(packages, CancellationToken.None);
+
+        Assert.Equal("Aspire.Hosting.Redis", selected.Package.Id);
+        await Verify(output.ToString(), "txt").UseParameters(customSource, multipleSources).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false, 40)]
+    [InlineData(false, 120)]
+    [InlineData(true, 40)]
+    [InlineData(true, 120)]
+    public async Task SourceSelection_TemplateSourcesExplainBeforeFetching(bool nonDefaultGitValues, int width)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, []);
+        console.Profile.Width = width;
+        var executionContext = CreateExecutionContext();
+        executionContext.TryMarkSourceTrustWarningDisplayed();
+        var interaction = CreateInteractionService(console, executionContext);
+        interaction.DisplayTemplateSources(
+        [
+            ("aspire[1p]", new TemplateSource(nonDefaultGitValues ? "templates/[team]" : ".",
+                "https://example.test/templates.git", nonDefaultGitValues ? "release/[team]" : null)),
+            ("another", new TemplateSource("./", "ssh://git@example.test/another.git", "HEAD")),
+            ("third", new TemplateSource(".\\", "https://example.test/third.git", null)),
+            ("local", new TemplateSource("C:\\Templates\\Company [local]", null, null))
+        ], executionContext);
+        interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchTemplates, mayPromptForAuthentication: false);
+
+        Assert.False(executionContext.TryMarkSourceTrustWarningDisplayed());
+        await Verify(output.ToString(), "txt").UseParameters(nonDefaultGitValues, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Fact]
+    public void SourceSelection_NoTemplateSourcesDoesNotDisplayOnboarding()
+    {
+        var interaction = new TestInteractionService();
+
+        interaction.DisplayTemplateSources([], CreateExecutionContext());
+
+        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Empty(interaction.DisplayedRenderables);
+        Assert.Equal(0, interaction.DisplayEmptyLineCount);
+    }
+
+    [Fact]
+    public async Task SourceDetails_WideLabelsUseTerminalCellWidths()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 40;
+        CreateInteractionService(console).DisplaySourceDetails(
+        [
+            [("配置来源", "company"), ("仓库", "https://example.test/repo")],
+            [("Source", "another")]
+        ]);
+
+        await Verify(output.ToString(), "txt").ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SourceSelection_IntegrationVersionsUseSourceGroups(bool multipleSources)
+    {
+        var output = new StringBuilder();
+        var console = CreateSelectionConsole(output, [new ConsoleKeyInfo('\r', ConsoleKey.Enter, false, false, false)]);
+        var interaction = CreateInteractionService(console);
+        var cache = new FakeNuGetPackageCache();
+        var defaultChannel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+        var source = multipleSources ? "https://example.test/daily" : PackageSources.NuGetOrg;
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", source)], cache, new TestFeatures(), NullLogger.Instance);
+        (string FriendlyName, Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)[] packages =
+        [
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = PackageSources.NuGetOrg }, defaultChannel),
+            ("redis", new() { Id = "Aspire.Hosting.Redis", Version = "2.0.0", Source = source }, dailyChannel)
+        ];
+
+        var selected = await new AddCommandPrompter(interaction).PromptForIntegrationVersionAsync(packages, "daily", CancellationToken.None);
+
+        Assert.Same(dailyChannel, selected.Channel);
+        Assert.Equal("2.0.0", selected.Package.Version);
+        await Verify(output.ToString(), "txt").UseParameters(multipleSources).ScrubLinesWithReplace(line => line.TrimEnd());
     }
 
     [Theory]

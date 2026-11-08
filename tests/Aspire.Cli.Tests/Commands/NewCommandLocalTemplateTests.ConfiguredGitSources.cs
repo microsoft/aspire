@@ -37,6 +37,17 @@ public partial class NewCommandLocalTemplateTests
         interaction.SetupStringPromptResponse("Hello");
         var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
             CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
+        var runGit = git.RunCallback ?? throw new InvalidOperationException("A template checkout must configure the Git runner.");
+        git.RunCallback = (command, token) =>
+        {
+            Assert.Equal(
+                [NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+                    $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication, SharedCommandStrings.GitFetchTemplates)}[/]"],
+                interaction.DisplayedMessages.Select(message => message.Message));
+            Assert.Single(interaction.DisplayedRenderables);
+            Assert.Empty(interaction.DisplayedPlainText);
+            return runGit(command, token);
+        };
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
@@ -50,8 +61,7 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var choice = Assert.Single(interaction.GroupedSelectionPromptCalls)[^1];
-        Assert.Equal(new SelectionChoiceGroup("source:company",
-            $"{displayName ?? "company"} ({repository} @ {reference ?? ConfigSourceStrings.DefaultBranch})")
+        Assert.Equal(new SelectionChoiceGroup("source:company", displayName ?? "company")
         {
             Style = new Style(Color.Green)
         }, choice.Group);
@@ -144,8 +154,7 @@ public partial class NewCommandLocalTemplateTests
                 providerTemplates.Select(template => template.Description),
                 options.Select(formatter).SkipLast(2));
             Assert.Equal(
-                [string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, "local-source"),
-                    NewCommandStrings.ResolvingTemplateRepository, NewCommandStrings.CloningTemplateRepository],
+                [NewCommandStrings.ResolvingTemplateRepository, NewCommandStrings.CloningTemplateRepository],
                 interaction.ShownStatuses);
             return options[^2];
         };
@@ -283,7 +292,8 @@ public partial class NewCommandLocalTemplateTests
             3 => ErrorStrings.GitTimedOut,
             _ => string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, "HEAD")
         };
-        Assert.Collection(interaction.DisplayedMessages,
+        Assert.Collection(interaction.DisplayedMessages.Where(message => !message.Emoji.Equals(KnownEmojis.InboxTray)),
+            message => Assert.Equal(NewCommandStrings.TemplateSourceExplanation, message.Message),
             warning =>
             {
                 Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
@@ -345,9 +355,10 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Single(GetGitResolutions(git));
         Assert.Equal(cancelResolution ? 0 : 1, GetGitFetches(git).Count);
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
-        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        var messages = interaction.DisplayedMessages.Where(message => !message.Emoji.Equals(KnownEmojis.InboxTray)).ToArray();
+        Assert.Equal([NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+            messages.Select(message => message.Message));
+        Assert.Equal(ConsoleOutput.Error, messages[1].ConsoleOverride);
         var cacheRoot = Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git");
         if (cancelResolution)
         {
@@ -551,7 +562,7 @@ public partial class NewCommandLocalTemplateTests
             var labels = choices.Cast<object>().Select(formatter).ToArray();
             Assert.False(noBuiltIns, "No choices should open a picker when there are no built-ins or discovered templates.");
             Assert.NotEmpty(labels);
-            Assert.Equal(3, interaction.DisplayedMessages.Count);
+            Assert.Equal(6, interaction.DisplayedMessages.Count);
             cancellation.Cancel();
             throw new OperationCanceledException(cancellation.Token);
         };
@@ -576,18 +587,21 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(noBuiltIns ? 0 : 1, selections);
         Assert.Equal(noBuiltIns ? ["No templates are available for the current environment."] : Array.Empty<string>(), interaction.DisplayedErrors);
         Assert.Equal(2, GetGitFetches(git).Count);
-        Assert.Equal(noBuiltIns ? 4 : 3, interaction.DisplayedMessages.Count);
-        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", interaction.DisplayedMessages[0].Message);
-        Assert.All(interaction.DisplayedMessages.Skip(1).Take(2), message => Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji));
+        var messages = interaction.DisplayedMessages.Where(message => !message.Emoji.Equals(KnownEmojis.InboxTray)).ToArray();
+        Assert.Equal(noBuiltIns ? 5 : 4, messages.Length);
+        Assert.Equal(2, interaction.DisplayedMessages.Count(message => message.Emoji.Equals(KnownEmojis.InboxTray)));
+        Assert.Equal(NewCommandStrings.TemplateSourceExplanation, messages[0].Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", messages[1].Message);
+        Assert.All(messages.Skip(2).Take(2), message => Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji));
         if (noBuiltIns)
         {
-            Assert.Equal(KnownEmojis.PageFacingUp, interaction.DisplayedMessages[^1].Emoji);
+            Assert.Equal(KnownEmojis.PageFacingUp, messages[^1].Emoji);
         }
         Assert.StartsWith(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, "empty", ""),
-            interaction.DisplayedMessages[1].Message);
+            messages[2].Message);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, "broken",
             string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryGitExited, 128, ErrorStrings.GitAuthenticationFailed)),
-            interaction.DisplayedMessages[2].Message);
+            messages[3].Message);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
     }
 
