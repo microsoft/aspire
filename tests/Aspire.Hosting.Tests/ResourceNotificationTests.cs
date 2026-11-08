@@ -1371,6 +1371,20 @@ public class ResourceNotificationTests
     }
 
     [Fact]
+    public async Task UpdateIcons_PublishesCustomImageData()
+    {
+        const string data = "data:image/png;base64,AQID";
+        var resource = new CustomResource("app");
+        resource.Annotations.Add(new ResourceIconAnnotation(string.Empty) { IconData = data });
+        var service = ResourceNotificationServiceTestHelpers.Create();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await service.PublishUpdateAsync(resource, snapshot => snapshot with { State = "Running" }).DefaultTimeout();
+        await using var events = service.WatchAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        Assert.True(await events.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Equal(data, events.Current.Snapshot.IconData);
+    }
+
+    [Fact]
     public async Task WithHidden_AlwaysHidden()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

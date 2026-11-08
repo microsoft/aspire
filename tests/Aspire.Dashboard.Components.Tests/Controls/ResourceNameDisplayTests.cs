@@ -15,6 +15,23 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 [UseCulture("en-US")]
 public class ResourceNameDisplayTests : DashboardTestContext
 {
+    [Fact]
+    public void Render_CustomIconIsAnImage()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        Services.AddSingleton<IconResolver>();
+        const string data = "data:image/svg+xml;base64,PHN2Zy8+";
+        var resource = ModelTestHelpers.CreateResource("app", iconData: data);
+        var cut = Render<ResourceNameDisplay>(p => p
+            .Add(p => p.Resource, resource)
+            .Add(p => p.FormatName, r => r.DisplayName)
+            .Add(p => p.FilterText, "")
+            .Add(p => p.ShowHiddenIndicator, false));
+
+        Assert.Equal(data, cut.Find("img").GetAttribute("src"));
+        Assert.Equal("app", cut.Find(".resource-name-text").TextContent);
+    }
+
     [Theory]
     [InlineData("/resources", "Persistent", true, false)]
     [InlineData("/resources", "Session", false, false)]

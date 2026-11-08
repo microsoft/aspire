@@ -5201,6 +5201,52 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Specifies a custom image to display for the resource in the dashboard.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="iconPath">A path to an SVG, PNG, JPEG, or ICO file, relative to the AppHost directory or absolute.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// The image is read during AppHost configuration and embedded in resource updates. Images retain their
+    /// original colors and are not recolored by the dashboard. The maximum file size is 256 KiB.
+    /// Calling this method or <see cref="WithIconName{T}(IResourceBuilder{T}, string, IconVariant)"/> replaces the previous icon configuration.
+    /// </remarks>
+    /// <example>
+    /// <code lang="C#">
+    /// builder.AddRedis("cache").WithResourceIcon("./icons/redis.svg");
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<T> WithResourceIcon<T>(this IResourceBuilder<T> builder, string iconPath) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(iconPath);
+
+        var path = Path.GetFullPath(iconPath, builder.ApplicationBuilder.AppHostDirectory);
+        var mediaType = Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".svg" => "image/svg+xml",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".ico" => "image/x-icon",
+            _ => throw new ArgumentException("Resource icons must be SVG, PNG, JPEG, or ICO files.", nameof(iconPath))
+        };
+
+        // Bound the allocation and transport payload: the same image is included in resource updates.
+        using var stream = File.OpenRead(path);
+        if (stream.Length is 0 or > 256 * 1024)
+        {
+            throw new ArgumentException("Resource icons must be non-empty and no larger than 256 KiB.", nameof(iconPath));
+        }
+        var bytes = new byte[stream.Length];
+        stream.ReadExactly(bytes);
+        var dataUri = $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
+
+        return builder.WithAnnotation(new ResourceIconAnnotation(string.Empty) { IconData = dataUri }, ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
     /// Configures the compute environment for the compute resource.
     /// </summary>
     /// <param name="builder">The compute resource builder.</param>

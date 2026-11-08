@@ -75,3 +75,12 @@ test("selection updates are safe before resources arrive and highlight them afte
     assert.equal(graph.nodeElements.attributes.get("class")(graph.nodes[0]), "resource-group");
     assert.equal(graph.linkElements.attributes.get("class")(graph.links[0]), "resource-link");
 });
+
+
+test("changing embedded icon data invalidates graph icons", () => {
+    const graph = createGraph();
+    const icon = { path: "", color: "red", tooltip: "app", imageData: "data:image/png;base64,AQID" };
+    assert.equal(graph.iconEqual(icon, { ...icon }), true);
+    assert.equal(graph.iconEqual(icon, { ...icon, imageData: "data:image/png;base64,BAUG" }), false);
+    assert.equal(graph.iconEqual(icon, { ...icon, imageData: undefined, path: "M0 0" }), false);
+});
