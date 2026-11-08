@@ -24,7 +24,12 @@ internal sealed class TrayPanel
     public const double EmptyStateHeight = 132;
     public const double ListTopPadding = 4;
     public const double ListBottomPadding = 8;
-    public const double ButtonSize = 28;
+    // Icon buttons hug their 16pt glyphs: a 28pt box left 14pt of empty space between neighbouring
+    // glyphs, which read as loose padding rather than a group of related actions.
+    public const double ButtonSize = 24;
+    private const double ButtonGlyphInset = (ButtonSize - 16) / 2;
+    // The inline confirmation's text buttons keep the taller height text needs.
+    private const double ConfirmButtonHeight = 28;
     public const double DefaultMaxHeight = 600;
     public const double ConfirmHeight = 92;
     public const double SettingsRowHeight = 62;
@@ -665,9 +670,12 @@ internal sealed class TrayPanel
         }
         switch (target.Kind)
         {
-            // Clicking the row itself does nothing, whatever the AppHost's state, so it behaves
-            // the same for running and stopped AppHosts; its buttons carry the actions. The row
-            // stays a target so hover and keyboard focus reveal those buttons.
+            // Clicking the row opens the dashboard, the same as its "Open dashboard" button, because
+            // that is what people reach for most. A row without a dashboard (stopped, starting or
+            // stopping) does nothing, and stays a target so hover and keyboard focus reveal its buttons.
+            case PanelTargetKind.Row when host is { CanOpenDashboard: true }:
+                CloseActions(returnFocus: false);
+                return new(PanelActionKind.OpenDashboard, host, target.Bounds) { Recent = recent };
             case PanelTargetKind.Row:
                 return null;
             case PanelTargetKind.Dashboard:
@@ -1034,7 +1042,7 @@ internal sealed class TrayPanel
                     // The question, the detail and the buttons, in the card that starts at top + 4.
                     Line(top + 4 + 18, "confirm question", span);
                     Line(top + 4 + 36, "confirm detail", span);
-                    Line(top + ConfirmHeight - 4 - 10 - ButtonSize / 2, "confirm buttons", span);
+                    Line(top + ConfirmHeight - 4 - 10 - ConfirmButtonHeight / 2, "confirm buttons", span);
                     break;
                 case ListItemKind.About:
                     Line(top + 14, "about", span);
@@ -1176,8 +1184,11 @@ internal sealed class TrayPanel
         // seen as the list's owner and clicked again to close it.
         var expanded = _actions == (section, host.Id);
         var active = expanded || IsWithinRow(_hover, rowKey) || IsWithinRow(_pressed, rowKey) || (_focusVisible && IsWithinRow(_focus, rowKey));
-        // No pressed shade for the row itself: clicking it does nothing.
-        if (active)
+        if (_pressed == rowKey && host.CanOpenDashboard)
+        {
+            commands.Add(new FillPathCommand(PanelPath.RoundedRect(row, 6), palette.Pressed));
+        }
+        else if (active)
         {
             commands.Add(new FillPathCommand(PanelPath.RoundedRect(row, 6), palette.Hover));
         }
@@ -1188,10 +1199,16 @@ internal sealed class TrayPanel
             ? new[] { PanelTargetKind.Dashboard, PanelTargetKind.Stop, PanelTargetKind.More }
             : [PanelTargetKind.Start, PanelTargetKind.More];
         var textRight = RowContentRight - buttons.Length * ButtonSize - (buttons.Length - 1) * ButtonGap - 8;
-        var (detail, isError) = GetRowDetail(host, live, showPid);
+        var (detail, isError) = GetRowDetail(host, live, showPid, maxCharacters: int.MaxValue);
+        var (shortDetail, _) = GetRowDetail(host, live, showPid, (int)((textRight - TextLeft) / AverageBodyCharacterWidth));
         commands.Add(new TextCommand(new(TextLeft, top + 8, textRight - TextLeft, 18), host.DisplayName, PanelFontRole.Name, palette.TextPrimary));
-        commands.Add(new TextCommand(new(TextLeft, top + 27, textRight - TextLeft, 16), detail, PanelFontRole.Body,
-            isError ? palette.Danger : palette.TextSecondary, Truncation: isError ? PanelTruncation.End : PanelTruncation.Middle));
+        // The status leads the line and must never be cut, so the path is shortened here instead of
+        // by the renderer's middle truncation, which would eat the status first ("Needs attent…/src").
+        // The estimate is deliberately generous per character: paths with capitals and wide letters
+        // ("T/aspire-tray-smoke-sYWeIG") overflow a tighter one, and the renderer's end truncation,
+        // which still guards against overflow, would then cut the path's tail, its most useful part.
+        commands.Add(new TextCommand(new(TextLeft, top + 27, textRight - TextLeft, 16), shortDetail, PanelFontRole.Body,
+            isError ? palette.Danger : palette.TextSecondary));
 
         AddTarget(targets, rowKey, row, GetRowAccessibleName(host, detail), true, host);
         var x = RowContentRight - buttons.Length * ButtonSize - (buttons.Length - 1) * ButtonGap;
@@ -1227,7 +1244,7 @@ internal sealed class TrayPanel
             var color = !enabled ? palette.TextTertiary.WithAlpha(0.45)
                 : _hover == key || _pressed == key ? palette.TextPrimary
                 : palette.TextSecondary;
-            TrayPanelGlyphs.AddIcon(commands, icon, bounds.Inset(6, 6), color);
+            TrayPanelGlyphs.AddIcon(commands, icon, bounds.Inset(ButtonGlyphInset, ButtonGlyphInset), color);
         }
     }
 
@@ -1379,12 +1396,12 @@ internal sealed class TrayPanel
         AddLabel("confirm.question", question, questionBounds, chrome: false);
         AddLabel("confirm.detail", detail, detailBounds, chrome: false);
 
-        var controlsY = card.Bottom - 10 - ButtonSize;
+        var controlsY = card.Bottom - 10 - ConfirmButtonHeight;
         var section = confirm.Section;
         var id = host?.Id;
         const double ButtonWidth = 64;
-        var acceptBounds = new PanelRect(card.Right - 10 - ButtonWidth, controlsY, ButtonWidth, ButtonSize);
-        var cancelBounds = new PanelRect(acceptBounds.X - 8 - ButtonWidth, controlsY, ButtonWidth, ButtonSize);
+        var acceptBounds = new PanelRect(card.Right - 10 - ButtonWidth, controlsY, ButtonWidth, ConfirmButtonHeight);
+        var cancelBounds = new PanelRect(acceptBounds.X - 8 - ButtonWidth, controlsY, ButtonWidth, ConfirmButtonHeight);
         var cancelKey = new PanelTargetKey(PanelTargetKind.ConfirmCancel, section, id);
         var acceptKey = new PanelTargetKey(PanelTargetKind.ConfirmAccept, section, id);
 
@@ -1417,7 +1434,7 @@ internal sealed class TrayPanel
         var back = new PanelRect(LeadingCenter - ButtonSize / 2, (HeaderHeight - ButtonSize) / 2, ButtonSize, ButtonSize);
         var backKey = new PanelTargetKey(PanelTargetKind.Back, PanelSection.None, null);
         AddInteractionFill(commands, backKey, back, palette, includeFocus: false);
-        TrayPanelGlyphs.AddIcon(commands, PanelIcon.ChevronLeft, back.Inset(6, 6), _hover == backKey ? palette.TextPrimary : palette.TextSecondary);
+        TrayPanelGlyphs.AddIcon(commands, PanelIcon.ChevronLeft, back.Inset(ButtonGlyphInset, ButtonGlyphInset), _hover == backKey ? palette.TextPrimary : palette.TextSecondary);
         AddTarget(targets, backKey, back, "Back to AppHosts", true, null, tooltip: "Back");
         var title = new PanelRect(TextLeft, (HeaderHeight - 20) / 2, Width - EdgeMargin - TextLeft, 20);
         commands.Add(new TextCommand(title, TraySettingsText.PanelTitle, PanelFontRole.Title, palette.TextPrimary));
@@ -1485,7 +1502,7 @@ internal sealed class TrayPanel
             (PanelTargetKind.Quit, PanelIcon.Power, _quitVerb, quitDescription, quitDescription, right - ButtonSize)
         })
         {
-            var bounds = new PanelRect(x, footer.Y + 8, ButtonSize, ButtonSize);
+            var bounds = new PanelRect(x, footer.Y + (FooterHeight - ButtonSize) / 2, ButtonSize, ButtonSize);
             var key = new PanelTargetKey(kind, PanelSection.None, null);
             if (kind == PanelTargetKind.Settings && _settings is not null && _hover != key && _pressed != key)
             {
@@ -1493,7 +1510,7 @@ internal sealed class TrayPanel
                 commands.Add(new FillPathCommand(PanelPath.RoundedRect(bounds, 6), palette.Pressed));
             }
             AddInteractionFill(commands, key, bounds, palette, includeFocus: false);
-            TrayPanelGlyphs.AddIcon(commands, icon, bounds.Inset(6, 6), _hover == key ? palette.TextPrimary : palette.TextSecondary);
+            TrayPanelGlyphs.AddIcon(commands, icon, bounds.Inset(ButtonGlyphInset, ButtonGlyphInset), _hover == key ? palette.TextPrimary : palette.TextSecondary);
             AddTarget(targets, key, bounds, name, true, null, description: description, tooltip: tooltip);
         }
     }
@@ -1554,9 +1571,11 @@ internal sealed class TrayPanel
 
     /// <summary>
     /// Returns the second line of a row: <c>{short status} · {parent/dir}</c>, with the PID only when
-    /// two running rows share a display name. Errors replace the whole line.
+    /// two running rows share a display name. Errors replace the whole line. When the line is longer
+    /// than <paramref name="maxCharacters"/>, only the path is shortened, in its middle, so the
+    /// status and PID stay readable.
     /// </summary>
-    internal static (string Text, bool IsError) GetRowDetail(AppHostMenuItem host, bool live, bool showPid)
+    internal static (string Text, bool IsError) GetRowDetail(AppHostMenuItem host, bool live, bool showPid, int maxCharacters)
     {
         if (host.Error is { } error)
         {
@@ -1575,8 +1594,31 @@ internal sealed class TrayPanel
             { Health: AppHostHealth.NoResources } => "No resources",
             _ => "Running"
         };
-        var detail = $"{status} · {AppHostPresentation.GetLocation(host.Id.AppHostPath)}";
-        return (showPid ? $"{detail} · PID {host.Id.AppHostPid}" : detail, false);
+        var prefix = $"{status} · ";
+        var suffix = showPid ? $" · PID {host.Id.AppHostPid}" : "";
+        var location = ShortenMiddle(AppHostPresentation.GetLocation(host.Id.AppHostPath), maxCharacters - prefix.Length - suffix.Length);
+        return ($"{prefix}{location}{suffix}", false);
+    }
+
+    /// <summary>
+    /// Shortens <paramref name="text"/> to <paramref name="maxCharacters"/> with an ellipsis in the middle,
+    /// keeping more of the end, which holds the AppHost's own folder name.
+    /// </summary>
+    private static string ShortenMiddle(string text, int maxCharacters)
+    {
+        // Below this there is too little left of the path to be worth showing.
+        const int MinimumCharacters = 6;
+        if (text.Length <= maxCharacters)
+        {
+            return text;
+        }
+        if (maxCharacters < MinimumCharacters)
+        {
+            return "…";
+        }
+        var head = (maxCharacters - 1) / 3;
+        var tail = maxCharacters - 1 - head;
+        return $"{text[..head]}…{text[^tail..]}";
     }
 
     private static string GetRowAccessibleName(AppHostMenuItem host, string detail) => $"{host.DisplayName}, {detail}";
@@ -1612,7 +1654,14 @@ internal sealed class TrayPanel
         {
             parts.Add($"{attention} need{(attention == 1 ? "s" : "")} attention");
         }
-        return (parts.Count == 0 ? "No AppHosts running" : string.Join(" · ", parts), palette.Success);
+        // The dot reflects the worst AppHost, matching the row glyphs: red for errors or unhealthy
+        // AppHosts, amber for ones that need attention, green otherwise.
+        var live = state.AppHosts.Concat(state.RecentAppHosts).Where(host => host.IsRunning && host.Id.AppHostPid != 0).ToList();
+        var dot = state.AppHosts.Concat(state.RecentAppHosts).Any(host => host.Error is not null)
+            || live.Any(host => host.Health is AppHostHealth.Unhealthy) ? palette.Danger
+            : live.Any(host => host.Health is AppHostHealth.Warning) ? palette.Warning
+            : palette.Success;
+        return (parts.Count == 0 ? "No AppHosts running" : string.Join(" · ", parts), dot);
     }
 
     private enum ListItemKind

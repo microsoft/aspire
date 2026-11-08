@@ -162,21 +162,37 @@ public class TrayPanelTests
     }
 
     [Fact]
-    public void ClickingARowDoesNothingWhateverItsState()
+    public void ClickingARowOpensItsDashboardWhenItHasOne()
     {
         var state = TrayPanelSamples.Typical();
         var panel = new TrayPanel(state, TrayPanelPalette.Light);
 
         foreach (var host in state.AppHosts)
         {
-            var response = Click(panel, Target(panel, PanelTargetKind.Row, host).HitBounds, offsetX: 10);
+            var row = Target(panel, PanelTargetKind.Row, host);
+            var response = Click(panel, row.HitBounds, offsetX: 10);
 
-            Assert.Null(response.Action);
+            Assert.Equal(host.CanOpenDashboard ? new PanelAction(PanelActionKind.OpenDashboard, host, row.Bounds) : null, response.Action);
             Assert.Null(panel.ActionsRow);
         }
-        var focused = Target(panel, PanelTargetKind.Row, state.AppHosts[0]).Key;
-        panel.Focus(focused);
-        Assert.Null(panel.Key(PanelKey.Enter).Action);
+        var focused = Target(panel, PanelTargetKind.Row, state.AppHosts[0]);
+        panel.Focus(focused.Key);
+        Assert.Equal(new PanelAction(PanelActionKind.OpenDashboard, state.AppHosts[0], focused.Bounds), panel.Key(PanelKey.Enter).Action);
+    }
+
+    [Fact]
+    public void ClickingARowClosesAnOpenActionList()
+    {
+        var state = TrayPanelSamples.Typical();
+        var panel = new TrayPanel(state, TrayPanelPalette.Light) { OpenInApplications = s_applications };
+        var host = state.AppHosts[0];
+        Click(panel, Target(panel, PanelTargetKind.More, host).HitBounds);
+        Assert.NotNull(panel.ActionsRow);
+
+        var action = Click(panel, Target(panel, PanelTargetKind.Row, host).HitBounds, offsetX: 10).Action;
+
+        Assert.Equal(PanelActionKind.OpenDashboard, action?.Kind);
+        Assert.Null(panel.ActionsRow);
     }
 
     [Fact]
@@ -820,15 +836,40 @@ public class TrayPanelTests
         // The location uses the platform's separator: "src/eShop.AppHost", or "src\eShop.AppHost" on Windows.
         var location = Path.Combine("src", "eShop.AppHost");
 
-        Assert.Equal(($"Needs attention · {location}", false), TrayPanel.GetRowDetail(host, live: true, showPid: false));
-        Assert.Equal(($"Needs attention · {location} · PID 48213", false), TrayPanel.GetRowDetail(host, live: true, showPid: true));
-        Assert.Equal(($"Status unavailable · {location}", false), TrayPanel.GetRowDetail(host, live: false, showPid: false));
-        Assert.Equal(("Boom.", true), TrayPanel.GetRowDetail(host with { Error = "Boom." }, live: true, showPid: false));
+        Assert.Equal(($"Needs attention · {location}", false), TrayPanel.GetRowDetail(host, live: true, showPid: false, maxCharacters: int.MaxValue));
+        Assert.Equal(($"Needs attention · {location} · PID 48213", false), TrayPanel.GetRowDetail(host, live: true, showPid: true, maxCharacters: int.MaxValue));
+        Assert.Equal(($"Status unavailable · {location}", false), TrayPanel.GetRowDetail(host, live: false, showPid: false, maxCharacters: int.MaxValue));
+        Assert.Equal(("Boom.", true), TrayPanel.GetRowDetail(host with { Error = "Boom." }, live: true, showPid: false, maxCharacters: int.MaxValue));
         Assert.Equal(($"No resources · {location}", false),
-            TrayPanel.GetRowDetail(host with { Health = AppHostHealth.NoResources }, live: true, showPid: false));
+            TrayPanel.GetRowDetail(host with { Health = AppHostHealth.NoResources }, live: true, showPid: false, maxCharacters: int.MaxValue));
 
         var scene = new TrayPanel(TrayPanelSamples.Errors(), TrayPanelPalette.Light).Scene;
-        Assert.Contains(scene.Commands.OfType<TextCommand>(), text => text.Text == $"Unhealthy · {location} · PID 48213");
+        Assert.Contains(scene.Commands.OfType<TextCommand>(), text => text.Text.StartsWith("Unhealthy · ", StringComparison.Ordinal)
+            && text.Text.EndsWith(" · PID 48213", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void RowDetailShortensOnlyThePathSoTheStatusStaysReadable()
+    {
+        var host = TrayPanelSamples.Running("/Users/dev/src/improved-spork/src/apphost.cs", 48213, AppHostHealth.Warning);
+        var location = Path.Combine("improved-spork", "src");
+
+        Assert.Equal(($"Needs attention · {location}", false), TrayPanel.GetRowDetail(host, live: true, showPid: false, maxCharacters: 40));
+        Assert.Equal(($"Needs attention · {location[..3]}…{location[^8..]}", false),
+            TrayPanel.GetRowDetail(host, live: true, showPid: false, maxCharacters: 30));
+        Assert.Equal(($"Needs attention · {location[..3]}…{location[^8..]} · PID 48213", false),
+            TrayPanel.GetRowDetail(host, live: true, showPid: true, maxCharacters: 42));
+        Assert.Equal(("Needs attention · …", false), TrayPanel.GetRowDetail(host, live: true, showPid: false, maxCharacters: 20));
+    }
+
+    [Fact]
+    public void HeaderDotShowsTheWorstAppHostState()
+    {
+        var palette = TrayPanelPalette.Light;
+
+        Assert.Equal(palette.Warning, TrayPanel.GetHeaderStatus(TrayPanelSamples.Typical(), palette).Dot);
+        Assert.Equal(palette.Danger, TrayPanel.GetHeaderStatus(TrayPanelSamples.Errors(), palette).Dot);
+        Assert.Equal(palette.Success, TrayPanel.GetHeaderStatus(TrayPanelSamples.Empty(), palette).Dot);
     }
 
     [Theory]
@@ -883,8 +924,8 @@ public class TrayPanelTests
     public void IconButtonsAndGlyphsSitOnTheLeadingAndTrailingColumns(string name)
     {
         var scene = CreatePanel(name, TrayPanelPalette.Dark).Scene;
-        // Trailing buttons are 28 DIPs wide with a 2-DIP gap: centers at 330, 300 and 270.
-        double[] trailing = [TrayPanel.TrailingCenter, TrayPanel.TrailingCenter - 30, TrayPanel.TrailingCenter - 60];
+        // Trailing buttons are 24 DIPs wide with a 2-DIP gap: centers at 330, 304 and 278.
+        double[] trailing = [TrayPanel.TrailingCenter, TrayPanel.TrailingCenter - 26, TrayPanel.TrailingCenter - 52];
         var centers = scene.Guides.Where(guide => guide.Kind == PanelGuideKind.Center).ToList();
         foreach (var button in scene.Targets.Where(target => target.Kind is PanelTargetKind.Dashboard or PanelTargetKind.Stop
             or PanelTargetKind.Start or PanelTargetKind.More or PanelTargetKind.Settings or PanelTargetKind.Documentation
