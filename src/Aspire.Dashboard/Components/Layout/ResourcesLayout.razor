@@ -306,7 +306,7 @@
                                    aria-description="@($"{Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]}{(unavailableReason is not null ? $"; {unavailableReason}" : null)}")"
                                    data-tooltip="@unavailableReason"
                                    data-resource-unavailable-reason="@unavailableReason"
-                                   @onclick="@(e => OnRowClickAsync(e, telemetryResourceName))"
+                                   @onclick="@GetRowHandlers(telemetryResourceName).Click"
                                    @onclick:preventDefault="true">
                                     <span class="resource-row-icon">
                                         <FluentIcon Width="16px"
@@ -492,6 +492,7 @@
     internal RenderFragment RenderResourceActions(ResourceViewModel resource, bool showLabels, ResourceGridViewModel? row, DisplayedUrl? primaryUrl = null) => __builder =>
     {
         var resourceName = GetResourceName(resource);
+        var handlers = GetRowHandlers(resourceName);
         var actionIndex = 0;
         var highlightedIndex = 0;
         // A compact sidebar row puts the expand toggle after its actions. Where rows can be hovered, the toggle is the
@@ -501,7 +502,7 @@
         <div class="@(showLabels ? "resource-actions" : "resource-row-actions")">
             @if (!showLabels && !toggleLast)
             {
-                RenderRowToggle(__builder, row);
+                RenderRowToggle(__builder, row, handlers);
             }
             @if (!showLabels && primaryUrl?.Url is { } primaryEndpointUrl)
             {
@@ -526,7 +527,7 @@
                     <FluentButton Appearance="ButtonAppearance.Default"
                                   data-tooltip="@commandTitle"
                                   IconStart="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor(Color.Primary)"
-                                  OnClick="@(() => ExecuteResourceCommandAsync(resource, command))"
+                                  OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)">
                         @command.GetDisplayName()
                     </FluentButton>
@@ -540,7 +541,7 @@
                                   data-tooltip="@commandTitle"
                                   data-tooltip-positioning="above"
                                   aria-label="@($"{command.GetDisplayName()} {resourceName}")"
-                                  OnClick="@(() => ExecuteResourceCommandAsync(resource, command))"
+                                  OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)" />
                 }
             }
@@ -549,18 +550,18 @@
                               Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
                               IconColor="Color.Custom"
                               IconCustomColor="currentColor"
-                              ItemsProvider="@(() => GetResourceMenuItems(resource))"
+                              ItemsProvider="@handlers.MenuItems"
                               data-tooltip-positioning="@(!showLabels ? "above" : null)"
                               Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
             @if (!showLabels && toggleLast)
             {
-                RenderRowToggle(__builder, row);
+                RenderRowToggle(__builder, row, handlers);
             }
         </div>
     };
 
     // The expand toggle of a parent row, or a spacer that keeps the other rows' actions aligned with it.
-    private void RenderRowToggle(RenderTreeBuilder __builder, ResourceGridViewModel? row)
+    private void RenderRowToggle(RenderTreeBuilder __builder, ResourceGridViewModel? row, RowHandlers handlers)
     {
         @if (row is { Children.Count: > 0 })
         {
@@ -569,7 +570,7 @@
                           IconOnly="true"
                           aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]"
                           aria-expanded="@((!row.IsCollapsed).ToString().ToLowerInvariant())"
-                          OnClick="@(() => OnToggleCollapseAsync(row))">
+                          OnClick="@handlers.ToggleCollapse">
                 <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
             </FluentButton>
         }
@@ -933,7 +934,7 @@
                draggable="@(canReorder ? "true" : null)"
                data-resource-drag-handle="@canReorder"
                aria-keyshortcuts="@($"{(canReorder ? "Alt+ArrowUp Alt+ArrowDown " : null)}{(row is not null ? "ArrowLeft ArrowRight" : null)}".Trim())"
-               @onclick="@(e => OnRowClickAsync(e, resourceName))"
+               @onclick="@GetRowHandlers(resourceName).Click"
                @onclick:preventDefault="true">
                 <span class="resource-row-icon">
                     <span class="resource-row-glyph">

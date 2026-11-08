@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -37,9 +38,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private const string FilterButtonId = "resourcePaneFilterButton";
     private const string GroupingButtonId = "resourcePaneGroupingButton";
     private const string ResourcePickerButtonId = "resourcePanePickerButton";
-    internal const int MinimumPaneWidthPx = 420;
+    // The list's container queries hide row actions by priority below 420px, so narrower panes stay usable
+    // (see ResourcesLayout.razor.css). The default keeps every action visible.
+    internal const int MinimumPaneWidthPx = 300;
     internal const int MaximumPaneWidthPx = 560;
-    internal const int DefaultPaneWidthPx = MinimumPaneWidthPx;
+    internal const int DefaultPaneWidthPx = 420;
     private const string ResourcesSectionKey = "section:resources";
     private const string ParametersSectionKey = "section:parameters";
     private const string TelemetrySectionKey = "section:telemetry";
@@ -52,6 +55,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly List<MenuButtonItem> _paneMenuItems = [];
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
+    // Blazor compares event handlers and delegates by reference when it diffs a render. A lambda created for each row
+    // on each render would make every row's handlers, buttons and menus look changed, so each resource's handlers
+    // are created once and reused across renders (see RowHandlers).
+    private readonly Dictionary<string, RowHandlers> _rowHandlers = new(StringComparers.ResourceName);
+    // Resources whose display name is shared by another resource, such as replicas, are shown by their unique name.
+    // The set is rebuilt lazily when the resources change, so resolving a name doesn't scan every resource.
+    private HashSet<string> _duplicateDisplayNames = new(StringComparers.ResourceName);
+    private int _resourceVersion;
+    private int _duplicateDisplayNamesVersion = -1;
 
     private Task? _resourceSubscriptionTask;
     private Task? _ageRefreshTask;
@@ -416,11 +428,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     else if (changeType == ResourceViewModelChangeType.Delete)
                     {
                         _resourceByName.TryRemove(resource.Name, out _);
+                        Interlocked.Increment(ref _resourceVersion);
                     }
                 }
 
                 await InvokeAsync(async () =>
                 {
+                    PruneRowHandlers();
                     UpdateResourceTagFilters();
                     EnsureGroupOrder();
                     UpdateTelemetryOnlyResources();
@@ -439,6 +453,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private void UpsertResource(ResourceViewModel resource)
     {
         _resourceByName[resource.Name] = resource;
+        Interlocked.Increment(ref _resourceVersion);
 
         // New types and states are visible unless the user has hidden them already.
         _filter.ResourceTypesToVisibility.TryAdd(resource.ResourceType, true);
@@ -1649,11 +1664,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return true;
     }
 
-    private async Task OnToggleCollapseAsync(ResourceGridViewModel viewModel)
+    private async Task OnToggleCollapseAsync(string resourceName)
     {
-        if (!_collapsedResourceNames.Remove(viewModel.Resource.PersistentKey))
+        if (!TryGetRowResource(resourceName, out var resource))
         {
-            _collapsedResourceNames.Add(viewModel.Resource.PersistentKey);
+            return;
+        }
+
+        if (!_collapsedResourceNames.Remove(resource.PersistentKey))
+        {
+            _collapsedResourceNames.Add(resource.PersistentKey);
         }
 
         await PersistCollapsedResourceNamesAsync();
@@ -1706,9 +1726,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         _paneMenuItems.Clear();
 
+        // Collect the parent names once rather than scanning every resource for each resource.
+        var parentNames = new HashSet<string>(StringComparers.ResourceName);
+        foreach (var resource in _resourceByName.Values)
+        {
+            if (resource.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { Length: > 0 } parentName)
+            {
+                parentNames.Add(parentName);
+            }
+        }
+
         var resourcesWithChildren = _resourceByName.Values
-            .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources))
-            .Where(r => _resourceByName.Values.Any(nested => string.Equals(nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName), r.Name, StringComparisons.ResourceName)))
+            .Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources) && parentNames.Contains(r.Name))
             .ToList();
 
         if (resourcesWithChildren.Count > 0)
@@ -1953,6 +1982,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         NavigationManager.NavigateTo(GetResourceTerminalUrl(resource));
     }
 
+    private Task ExecuteResourceCommandAsync(string resourceName, string commandName)
+    {
+        // The row's handler is shared across renders, so the resource and command are resolved when it runs: the
+        // resource may have been replaced by an update since the handler was created.
+        if (!TryGetRowResource(resourceName, out var resource) ||
+            resource.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName)) is not { } command)
+        {
+            return Task.CompletedTask;
+        }
+
+        return ExecuteResourceCommandAsync(resource, command);
+    }
+
     private Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
         if (resource.IsParameter &&
@@ -1965,7 +2007,71 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
     }
 
-    internal string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
+    internal string GetResourceName(ResourceViewModel resource) =>
+        GetDuplicateDisplayNames().Contains(resource.DisplayName) ? resource.Name : resource.DisplayName;
+
+    private HashSet<string> GetDuplicateDisplayNames()
+    {
+        // The resource subscription updates the resources and the version on another thread. A render that runs
+        // between the two rebuilds the set again on the next render, so it's never stale for longer than that.
+        var version = Volatile.Read(ref _resourceVersion);
+        if (version != _duplicateDisplayNamesVersion)
+        {
+            var seen = new HashSet<string>(StringComparers.ResourceName);
+            var duplicates = new HashSet<string>(StringComparers.ResourceName);
+            foreach (var resource in _resourceByName.Values)
+            {
+                if (!seen.Add(resource.DisplayName))
+                {
+                    duplicates.Add(resource.DisplayName);
+                }
+            }
+
+            _duplicateDisplayNames = duplicates;
+            _duplicateDisplayNamesVersion = version;
+        }
+
+        return _duplicateDisplayNames;
+    }
+
+    private RowHandlers GetRowHandlers(string resourceName)
+    {
+        if (!_rowHandlers.TryGetValue(resourceName, out var handlers))
+        {
+            handlers = new RowHandlers(this, resourceName);
+            _rowHandlers[resourceName] = handlers;
+        }
+
+        return handlers;
+    }
+
+    // Removes the handlers of resources that no longer exist. A row's name can also change, from its display name to its
+    // unique name when a replica appears, and the old entry is then removed too.
+    private void PruneRowHandlers()
+    {
+        if (_rowHandlers.Count == 0)
+        {
+            return;
+        }
+
+        var names = new HashSet<string>(StringComparers.ResourceName);
+        foreach (var resource in _resourceByName.Values)
+        {
+            names.Add(GetResourceName(resource));
+        }
+        foreach (var telemetryResource in _telemetryOnlyResources)
+        {
+            names.Add(telemetryResource.Name);
+        }
+
+        foreach (var name in _rowHandlers.Keys.Where(name => !names.Contains(name)).ToList())
+        {
+            _rowHandlers.Remove(name);
+        }
+    }
+
+    private bool TryGetRowResource(string resourceName, [NotNullWhen(true)] out ResourceViewModel? resource) =>
+        ResourceViewModel.TryGetResourceByName(resourceName, _resourceByName, out resource);
 
     private string GetResourceTypeLabel(ResourceViewModel resource) => resource.GetResourceTypeDisplayName(ResourcesLoc);
 
@@ -2004,8 +2110,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return string.Join("; ", descriptions);
     }
 
-    private bool HasMultipleReplicas(ResourceViewModel resource)
-        => _resourceByName.Values.Count(r => string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) > 1;
+    private bool HasMultipleReplicas(ResourceViewModel resource) => GetDuplicateDisplayNames().Contains(resource.DisplayName);
 
     private OtlpResource? GetTelemetryResource(ResourceViewModel resource) => _telemetryResourcesByName.GetValueOrDefault(resource.Name);
 
@@ -2435,11 +2540,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     // Closing a scoped detail can retain this selection and its filtered parent URL.
                     SetResourceListVisible(false);
                 }
-                else
-                {
-                    // Selecting the only selected row again deselects it, like toggling.
-                    await ClearSelectionAsync();
-                }
+
+                // Selecting the only selected row again keeps it selected. Clearing the selection here would silently
+                // widen the view to every resource on an accidental second click; "All resources" does that explicitly.
                 return;
             }
 
@@ -2490,7 +2593,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             if (IsResourceGroupSelected(groupResourceNames))
             {
-                await ClearSelectionAsync();
+                // Like a row, selecting the selected group again keeps the selection.
                 return;
             }
 
@@ -2545,16 +2648,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         return names;
-    }
-
-    /// <summary>
-    /// Deselects everything without leaving the current tab, e.g. clearing a selection on Metrics stays on Metrics.
-    /// </summary>
-    private async Task ClearSelectionAsync()
-    {
-        _selectionAnchor = null;
-        await SetStoredSelectionAsync([]);
-        NavigateToSelection([]);
     }
 
     private void NavigateToSelection(IReadOnlyList<string> resourceNames)
@@ -2863,6 +2956,44 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private sealed record ResourceGroup(string? Value, List<ResourceViewModel> Resources);
 
     private sealed record TabItem(ResourceTab Tab, string Text, Icon Icon, bool IsVisible, string Href, int ErrorCount, bool IsAvailable);
+
+    /// <summary>
+    /// The event handlers of a resource's row, and of its actions in the resource overview. They're created once per
+    /// resource name and reused by every render, so Blazor sees unchanged handlers and skips re-rendering the row's
+    /// buttons and menus. Each handler resolves the current resource when it runs.
+    /// </summary>
+    private sealed class RowHandlers
+    {
+        private readonly ResourcesLayout _layout;
+        private readonly string _resourceName;
+        private readonly Dictionary<string, EventCallback<MouseEventArgs>> _commands = new(StringComparers.CommandName);
+
+        public RowHandlers(ResourcesLayout layout, string resourceName)
+        {
+            _layout = layout;
+            _resourceName = resourceName;
+            Click = EventCallback.Factory.Create<MouseEventArgs>(layout, e => layout.OnRowClickAsync(e, resourceName));
+            ToggleCollapse = EventCallback.Factory.Create<MouseEventArgs>(layout, () => layout.OnToggleCollapseAsync(resourceName));
+            MenuItems = () => layout.TryGetRowResource(resourceName, out var resource) ? layout.GetResourceMenuItems(resource) : [];
+        }
+
+        public EventCallback<MouseEventArgs> Click { get; }
+
+        public EventCallback<MouseEventArgs> ToggleCollapse { get; }
+
+        public Func<IList<MenuButtonItem>> MenuItems { get; }
+
+        public EventCallback<MouseEventArgs> Command(string commandName)
+        {
+            if (!_commands.TryGetValue(commandName, out var callback))
+            {
+                callback = EventCallback.Factory.Create<MouseEventArgs>(_layout, () => _layout.ExecuteResourceCommandAsync(_resourceName, commandName));
+                _commands[commandName] = callback;
+            }
+
+            return callback;
+        }
+    }
 }
 
 // These enums are top-level rather than nested in ResourcesLayout because pages reference the layout through

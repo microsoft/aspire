@@ -310,9 +310,35 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("true", cut.Find("#resourcePanePickerButton").GetAttribute("aria-expanded"));
         await cut.FindAll(".resource-tag-link").Single(link => link.GetAttribute("href") == groupUrl).ClickAsync(click);
         cut.Render();
-        Assert.Empty(cut.Instance.SelectedResourceNames);
+        // A Ctrl or Cmd click on the selected group removes it from the selection. A shift-click selects the group
+        // again, and selecting what's already selected keeps it.
+        string[] expected = modifier == "Shift" ? ["api", "worker"] : [];
+        Assert.Equal(expected, cut.Instance.SelectedResourceNames);
         Assert.Equal("true", cut.Find("#resourcePanePickerButton").GetAttribute("aria-expanded"));
         Assert.Single(cut.FindAll(".resource-picker-popover .resource-pane"));
+    }
+
+    [Fact]
+    public async Task SelectedRow_ClickedAgain_KeepsSelection()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var url = navigation.Uri;
+
+        // A second click on the only selected resource doesn't clear the selection, which would widen the console
+        // logs to every resource. "All resources" is the explicit way to do that.
+        await cut.Find(".resource-row[data-resource-name='api'] .resource-row-link").ClickAsync();
+        cut.Render();
+
+        Assert.Equal(url, navigation.Uri);
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+        Assert.Single(cut.FindAll(".resource-row.selected"));
     }
 
     [Fact]

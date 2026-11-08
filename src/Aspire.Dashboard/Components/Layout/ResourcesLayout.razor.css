@@ -1140,6 +1140,13 @@
     justify-self: end;
 }
 
+/* A narrow pane's footer only has room for the counts and the menu. */
+@container resource-footer (max-width: 319px) {
+    .resource-selection-hint {
+        display: none;
+    }
+}
+
 @container resource-footer (min-width: 640px) {
     .resource-selection-hint {
         display: inline-flex;
@@ -2312,6 +2319,12 @@
 
 @container resource-pane (max-width: 359px) {
     .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-2 {
+        display: none;
+    }
+
+    /* A narrow pane keeps the name readable: the type column goes, the state dot stays. The type remains in the
+       row's tooltip and accessible description. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-meta .resource-row-type {
         display: none;
     }
 }

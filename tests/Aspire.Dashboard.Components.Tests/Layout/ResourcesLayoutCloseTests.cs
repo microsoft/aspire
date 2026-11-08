@@ -173,9 +173,10 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
 
+        // Selecting the selected resource again keeps it selected.
         await cut.Find(".resource-row[data-resource-name='api'] .resource-row-link").ClickAsync();
         cut.Render();
-        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
     }
 
     [Fact]

@@ -225,14 +225,21 @@ export function registerTabOverflow(registrationId, dotNetRef) {
 
     state.resizeObserver = new ResizeObserver(schedule);
     state.tabsObserver = new MutationObserver(schedule);
-    // Cheap check on any DOM change (the terminal updates constantly): only a replaced strip needs attaching again.
+    // Only a replaced strip needs attaching again. The strip is rendered into the header's section outlet on desktop
+    // and into the layout's own header on mobile, so only those containers are watched: observing the whole document
+    // would run this on every console log line, terminal frame and grid update.
     state.bodyObserver = new MutationObserver(() => {
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
         }
     });
-    state.bodyObserver.observe(document.body, { childList: true, subtree: true });
+    const stripContainers = [".header-context", ".resource-context-header"]
+        .map(selector => document.querySelector(selector))
+        .filter(Boolean);
+    for (const container of stripContainers.length > 0 ? stripContainers : [document.body]) {
+        state.bodyObserver.observe(container, { childList: true, subtree: true });
+    }
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
     // Recording switches can mount the new layout before the old layout finishes disposing.
@@ -641,8 +648,17 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             state.restoreAfterEscape = true;
         }
     };
+    let lastHoveredLink = null;
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
+        // mouseover bubbles from every element in the row. The tooltip is computed from the row's layout, so once
+        // a row is hovered, moving within it changes nothing; the check below forces layout, so skip it.
+        if (event.type === 'mouseover') {
+            if (link === lastHoveredLink) {
+                return;
+            }
+            lastHoveredLink = link;
+        }
         const name = link?.querySelector('.resource-row-name');
         // A compact sidebar row's type and state columns give way to its actions while the row is
         // hovered or focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's
