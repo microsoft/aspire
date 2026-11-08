@@ -377,6 +377,12 @@
                     }
                 </div>
             }
+            else if (_isPaneFullCanvas)
+            {
+                @* The full-page list hides the page header, but the page still needs a heading for screen readers and
+                   heading navigation. It's the dashboard's home, so it names what it lists. *@
+                <h1 class="visually-hidden">@Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)]</h1>
+            }
         </header>
         @if (showCollapsedPane)
         {

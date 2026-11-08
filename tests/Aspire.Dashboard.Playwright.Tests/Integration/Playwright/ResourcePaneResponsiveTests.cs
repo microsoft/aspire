@@ -596,11 +596,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await tracesTab.ClickAsync();
             }
             await Assertions.Expect(page.Locator("#tracesScrollContainer")).ToBeFocusedAsync();
+            // The data tabs select resources from the sidebar; the full-page list lives on the Overview tab.
             foreach (var name in new[] { "api", "frontend", "cache" })
             {
-                await ResourcePaneNavigation.ToggleResourceListAsync(page);
-                await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
-                await page.Locator($".resource-row[data-resource-name='{name}'] .resource-row-link").First.ClickAsync();
+                await page.Locator($".resource-pane .resource-row[data-resource-name='{name}'] .resource-row-link").First.ClickAsync();
                 await page.WaitForURLAsync($"**/traces/resource/{name}");
                 await Assertions.Expect(page.Locator(".pane-full-canvas,.pane-selection-reveal")).ToHaveCountAsync(0);
                 var separator = page.Locator(".resource-pane-resizer");
@@ -631,17 +630,17 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
         {
             await page.SetViewportSizeAsync(width, height);
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
-            // The expanded list is opened by closing a resource's console logs rather than its overview. The overview's
-            // data grids initialize in the browser after they render, and leaving the page in the middle of that, as
-            // this test would right after the page loads, makes FluentDataGrid use a disposed JS module and end the circuit.
-            await page.GotoAsync(fullCanvas ? "/consolelogs/resource/cache?pane=tags" : "/resources/cache?pane=tags");
+            // The expanded list is the dashboard's home, so it's opened directly rather than by closing a resource's
+            // overview. The overview's data grids initialize in the browser after they render, and leaving the page in the
+            // middle of that makes FluentDataGrid use a disposed JS module and end the circuit. The data tabs have no close
+            // button for it.
+            await page.GotoAsync(fullCanvas ? "/" : "/resources/cache?pane=tags");
             if (width <= 768)
             {
                 await page.Locator(".resource-picker").ClickAsync();
             }
             if (fullCanvas)
             {
-                await ResourcePaneNavigation.ToggleResourceListAsync(page);
                 await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             }
             foreach (var filter in new[] { true, false })
@@ -916,7 +915,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
 
             var selectAll = page.Locator(".resource-row-all .resource-row-link");
             await selectAll.FocusAsync();
-            await selectAll.PressAsync("Space");
+            await selectAll.PressAsync("Enter");
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.Locator(".resource-row-all.selected")).ToHaveCountAsync(1);
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
@@ -950,7 +949,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".resource-row-all.selected")).ToHaveCountAsync(1);
-            await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
             await page.Mouse.MoveAsync(1, 1);
             await AssertSurfaceAsync(rest, null);
             await AssertSurfaceAsync(selected, null);
@@ -1182,14 +1181,15 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             if (icon.width !== iconBox || icon.height !== iconBox) errors.push(`${row.dataset.resourceName}: icon box`);
                             const mainGlyph = row.querySelector('.resource-row-glyph svg').getBoundingClientRect();
                             if (mainGlyph.width !== glyphSize || mainGlyph.height !== glyphSize) errors.push(`${row.dataset.resourceName}: glyph`);
-                            const expectedFont = compact ? 12 : comfortable ? 14 : 16;
+                            // The type scale: secondary (12px), body (13px) and large (14px) for the three densities' names.
+                            const expectedFont = compact ? 12 : comfortable ? 13 : 14;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
                             for (const chip of row.querySelectorAll('.resource-row-insight')) {
                                 const chipBox = chip.getBoundingClientRect();
                                 if (!chipBox.width) continue;
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const font = compact ? 11 : comfortable ? 12 : 14;
+                                const font = compact ? 11 : comfortable ? 12 : 13; // caption, secondary and body on the type scale
                                 const line = compact ? 16 : comfortable ? 18 : 20;
                                 const target = compact ? 24 : comfortable ? 28 : 32;
                                 const iconSize = compact ? 12 : comfortable ? 14 : 16;
@@ -1518,7 +1518,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var selectAll = page.Locator(".resource-row-all .resource-row-link");
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-current", "page");
             await selectAll.FocusAsync();
-            await selectAll.PressAsync("Space");
+            await selectAll.PressAsync("Enter");
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
             foreach (var density in new[] { "Compact", "Comfortable", "Spacious" })
@@ -1623,17 +1623,18 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     """);
                 var source = page.Locator(".resource-row[data-resource-name='api'] .resource-row-source-value");
                 var before = page.Url;
-                await Assertions.Expect(source).ToHaveTextAsync("MyFrontend.csproj");
+                // The source column leads with the type.
+                await Assertions.Expect(source).ToHaveTextAsync("Project MyFrontend.csproj");
                 await source.FocusAsync();
                 await Assertions.Expect(source).ToBeFocusedAsync();
-                await Assertions.Expect(source).ToHaveAttributeAsync("data-tooltip", Path.Combine("workspace", "MyFrontend.csproj"));
-                await Assertions.Expect(source).ToHaveAttributeAsync("aria-label", $"Source: {Path.Combine("workspace", "MyFrontend.csproj")}");
+                await Assertions.Expect(source).ToHaveAttributeAsync("data-tooltip", $"Project: {Path.Combine("workspace", "MyFrontend.csproj")}");
+                await Assertions.Expect(source).ToHaveAttributeAsync("aria-label", $"Source: Project {Path.Combine("workspace", "MyFrontend.csproj")}");
                 await Assertions.Expect(page.Locator(".resource-relationship-summary, .resource-row-dependencies, .resource-row-references")).ToHaveCountAsync(0);
                 var columns = await page.Locator(".resource-row-source").EvaluateAllAsync<double[]>(
                     "sources => sources.map(source => source.getBoundingClientRect().x)");
                 Assert.InRange(columns.Max() - columns.Min(), 0, 1);
                 var image = page.Locator(".resource-row[data-resource-name='cache'] .resource-row-source-value");
-                await Assertions.Expect(image).ToHaveAttributeAsync("data-tooltip", MetadataResourcesFixture.LongImage);
+                await Assertions.Expect(image).ToHaveAttributeAsync("data-tooltip", $"Container (persistent): {MetadataResourcesFixture.LongImage}");
                 Assert.True(await image.EvaluateAsync<bool>("source => source.scrollWidth > source.clientWidth"));
                 Assert.Equal(before, page.Url);
                 await page.ScreenshotAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, $"resource-tree-{theme}-canvas-{width}.png") });
@@ -2072,9 +2073,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(row.Locator(":scope > .resource-row-error-link")).ToHaveTextAsync("1");
                 await page.Mouse.MoveAsync(1, 1);
 
-                // At the default pane width, "Running (Unhealthy)" and the age don't both fit before the badge. The line
-                // flows as text, so it's cut once, at its end, rather than each part getting an ellipsis or being cut
-                // off; the state comes first, so it stays whole.
+                // The line flows as text, so when it doesn't fit before the badge it's cut once, at its end, rather than
+                // each part getting an ellipsis or being cut off; the state comes first, so it stays whole. With the short
+                // age ("1m ago") the line may also fit, so only the cutting and the badge are checked.
                 await AssertSecondLineAsync(row, stateIsWhole: true);
 
                 // The full-page list's second line, the state and type, ends the same way before the badge. Its identity
@@ -2098,7 +2099,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             sub.scrollWidth > sub.clientWidth ? 1 : 0, box.right, badge.left, state.getBoundingClientRect().right];
                     }
                     """);
-                Assert.Equal([1d, 1d, 1d], line[..3]);
+                Assert.Equal([1d, 1d], line[..2]);
                 Assert.True(line[3] <= line[4] + 0.5, $"The second line ends at {line[3]}, under the badge at {line[4]}.");
                 if (stateIsWhole)
                 {
@@ -2249,7 +2250,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var expandedLink = pane.Locator("[data-resource-name='api'] .resource-row-link").First;
             await page.Mouse.MoveAsync(1, 1);
             await expandedLink.Locator(".resource-row-name").HoverAsync();
-            await Assertions.Expect(expandedLink.Locator(".resource-row-type")).ToBeVisibleAsync();
+            // The type leads the source column when it shows, rather than having its own column.
+            await Assertions.Expect(pane.Locator("[data-resource-name='api']").First.Locator(".resource-row-type:visible, .resource-row-source-type:visible").First).ToBeVisibleAsync();
             Assert.Null(await expandedLink.GetAttributeAsync("data-tooltip"));
         });
     }
@@ -2300,7 +2302,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             foreach (var name in new[] { "cache", "frontend", "service-key" })
             {
                 var row = pane.Locator($"[data-resource-name='{name}']").First;
-                var type = row.Locator(".resource-row-type");
+                // When the full-page list shows its source column, the type leads the source rather than having its
+                // own column.
+                var type = row.Locator(".resource-row-type:visible, .resource-row-source-type:visible").First;
                 var link = row.Locator(".resource-row-link");
                 await row.ScrollIntoViewIfNeededAsync();
                 await page.Mouse.MoveAsync(1, 1);
@@ -2325,7 +2329,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await page.Keyboard.PressAsync("Escape");
                 await Assertions.Expect(type).ToBeVisibleAsync();
             }
-            await Assertions.Expect(pane.Locator("[data-resource-name='cache'] .resource-row-type").First)
+            await Assertions.Expect(pane.Locator("[data-resource-name='cache']").First.Locator(".resource-row-type:visible, .resource-row-source-type:visible").First)
                 .ToHaveTextAsync("Container (persistent)");
             Assert.True(await pane.EvaluateAsync<bool>("el => el.scrollWidth <= el.clientWidth + 1"));
         });

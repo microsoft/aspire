@@ -1802,12 +1802,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? (Loc[nameof(Resources.Layout.ResourceHeaderStarted)], startTimeStamp)
                 : null;
 
-    private string GetAge(DateTime time) =>
-        Aspire.Dashboard.Components.Controls.DashboardRunSelect.FormatRunAge(new DateTimeOffset(time), TimeProvider.GetUtcNow(), Loc);
-
-    // For example "Stopped 1 minute ago (11/6/2026 2:30:12 PM)".
+    // For example "Stopped 1m ago (11/6/2026 2:30:12 PM)". It contains the short age the row shows, so the accessible
+    // name includes the visible text (WCAG 2.5.3, label in name: https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
-        $"{rowTime.Label} {GetAge(rowTime.Time)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
+        $"{rowTime.Label} {GetShortAge(rowTime.Time)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
 
     // Rows show a short age ("7m ago") because every row repeats it; the tooltip and accessible label keep the
     // full wording and the exact time (see GetRowTimeDescription).

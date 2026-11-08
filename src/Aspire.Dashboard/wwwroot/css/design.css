@@ -102,7 +102,9 @@
     --colorNeutralBackground3: #ebebeb;
     --colorNeutralBackground4: var(--aspire-shell-background);
     --colorNeutralForeground1: #1a1a1a;
-    --colorNeutralForeground3: #717171;
+    /* The one secondary grey. #666666 keeps 4.5:1 on every light surface it sits on, down to a hovered muted row
+       (#e5e5e5); #717171 fell to 4.1:1 on the grey (#ebebeb) behind rows that are unavailable on the current tab. */
+    --colorNeutralForeground3: #666666;
     --colorNeutralStroke1: #d2d2d2;
     --colorNeutralStroke2: #d2d2d2;
     --colorNeutralStroke3: #e5e5e5;

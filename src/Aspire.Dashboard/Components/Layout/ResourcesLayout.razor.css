@@ -1937,12 +1937,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground1);
     font-size: var(--resource-secondary-font-size);
 }
 
+/* The type reads as a label for the source after it. It uses the secondary grey: the dimmer one drops below 4.5:1 on a
+   hovered or selected row in the light theme. */
 .resource-row-source-type {
-    color: var(--colorNeutralForeground3);
+    color: var(--colorNeutralForeground2);
 }
 
 .resource-row-source-value:focus-visible {
@@ -2350,11 +2352,11 @@
         min-width: 0;
     }
 
-    /* The source column now leads with the type, so neither the name's second line nor a compact row's type column
-       repeats it. */
-    .resource-row-sub .resource-row-type,
-    .resource-row-sub .resource-row-type-sep,
-    .resource-row-meta .resource-row-type {
+    /* The source column leads with the type, so neither the name's second line nor a compact row's type column
+       repeats it. Rows without a source (parameters, telemetry sources) keep their type where it was. */
+    .resource-row:has(.resource-row-source-value) .resource-row-sub .resource-row-type,
+    .resource-row:has(.resource-row-source-value) .resource-row-sub .resource-row-type-sep,
+    .resource-row:has(.resource-row-source-value) .resource-row-meta .resource-row-type {
         display: none;
     }
 

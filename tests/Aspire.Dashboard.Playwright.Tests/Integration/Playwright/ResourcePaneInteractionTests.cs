@@ -93,7 +93,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             await Assertions.Expect(selectAll).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(pane.Locator(".resource-row-all.selected")).ToHaveCountAsync(1);
             await Assertions.Expect(pane.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
-            await Assertions.Expect(pane.Locator("a[aria-current]")).ToHaveCountAsync(0);
+            await Assertions.Expect(pane.Locator(".resource-row:not(.resource-row-all) a[aria-current]")).ToHaveCountAsync(0);
 
             var overviewHeadline = page.Locator(".home-hero-headline");
             await Assertions.Expect(overviewHeadline).ToHaveTextAsync("All 3 resources are running");
@@ -225,10 +225,15 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
                 await page.Locator(".resource-pane-open-button").ClickAsync();
             }
 
-            await selectAll.FocusAsync();
-            await page.Keyboard.PressAsync("Space");
+            // The row is part of the list, which re-renders as the reopened drawer settles, so press Enter through the
+            // locator: it finds the row's current element rather than one focused before the render.
+            if (viewportWidth < 769)
+            {
+                await Assertions.Expect(page.Locator(".resources-layout.drawer-open")).ToBeVisibleAsync();
+            }
+            await selectAll.PressAsync("Enter");
             await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
-            await Assertions.Expect(page.Locator(".resource-pane a[aria-current]")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".resource-pane .resource-row:not(.resource-row-all) a[aria-current]")).ToHaveCountAsync(0);
             if (viewportWidth < 769)
             {
                 await Assertions.Expect(page.Locator(".resource-pane")).ToBeHiddenAsync();
@@ -325,27 +330,6 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
             Assert.Equal(0, hintGeometry[1]);
             Assert.InRange(hintGeometry[2], 0, 18);
             Assert.Equal(1, hintGeometry[3]);
-            await ResourcePaneNavigation.ToggleResourceListAsync(page);
-            await Assertions.Expect(hint).ToBeVisibleAsync();
-            await page.WaitForFunctionAsync("""
-                () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
-                    document.querySelector('.resources-layout').getBoundingClientRect().width) < .5
-                """);
-            var footerBounds = await page.Locator(".resource-workspace-foot .resource-pane-foot").BoundingBoxAsync();
-            var hintBounds = await hint.BoundingBoxAsync();
-            Assert.NotNull(footerBounds);
-            Assert.NotNull(hintBounds);
-            Assert.InRange(Math.Abs(hintBounds.X + hintBounds.Width / 2 - footerBounds.X - footerBounds.Width / 2), 0, .5);
-            await Assertions.Expect(hint.Locator("kbd").First).ToHaveTextAsync(usesCommand ? "⌘ + click" : "Ctrl + click");
-            await Assertions.Expect(hint.Locator("kbd").Last).ToHaveTextAsync("Shift + click");
-            await Assertions.Expect(hint).ToContainTextAsync("Add/remove");
-            await Assertions.Expect(hint).ToContainTextAsync("Select range");
-            await Assertions.Expect(hint).ToHaveAttributeAsync("aria-label", usesCommand
-                ? Resources.Layout.ResourcePaneSelectionCommandDescription
-                : Resources.Layout.ResourcePaneSelectionControlDescription);
-            await ResourcePaneNavigation.ToggleResourceListAsync(page);
-            await Assertions.Expect(hint).ToBeVisibleAsync();
-
             await GetRowLink("multi-a").ClickAsync();
             await Assertions.Expect(GetRowLink("multi-a")).ToHaveAttributeAsync("aria-current", "page");
             await GetRowLink("multi-b").ClickAsync(new LocatorClickOptions { Modifiers = [selectionModifier] });
@@ -373,6 +357,28 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
                 "links => links.map(link => link.getAttribute('aria-label'))");
             Assert.Equal(allNames.Where(name => name != "multi-b").Order(), selectedNames.Order());
             await Assertions.Expect(GetRowLink("multi-b")).Not.ToHaveAttributeAsync("aria-current", "true");
+
+            // The full-page list, which lives on the Overview tab (the dashboard's home), shows the same hint centered in
+            // its footer.
+            await page.GotoAsync("/");
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
+            await Assertions.Expect(hint).ToBeVisibleAsync();
+            await page.WaitForFunctionAsync("""
+                () => Math.abs(document.querySelector('.resource-pane').getBoundingClientRect().width -
+                    document.querySelector('.resources-layout').getBoundingClientRect().width) < .5
+                """);
+            var footerBounds = await page.Locator(".resource-workspace-foot .resource-pane-foot").BoundingBoxAsync();
+            var hintBounds = await hint.BoundingBoxAsync();
+            Assert.NotNull(footerBounds);
+            Assert.NotNull(hintBounds);
+            Assert.InRange(Math.Abs(hintBounds.X + hintBounds.Width / 2 - footerBounds.X - footerBounds.Width / 2), 0, .5);
+            await Assertions.Expect(hint.Locator("kbd").First).ToHaveTextAsync(usesCommand ? "⌘ + click" : "Ctrl + click");
+            await Assertions.Expect(hint.Locator("kbd").Last).ToHaveTextAsync("Shift + click");
+            await Assertions.Expect(hint).ToContainTextAsync("Add/remove");
+            await Assertions.Expect(hint).ToContainTextAsync("Select range");
+            await Assertions.Expect(hint).ToHaveAttributeAsync("aria-label", usesCommand
+                ? Resources.Layout.ResourcePaneSelectionCommandDescription
+                : Resources.Layout.ResourcePaneSelectionControlDescription);
 
             ILocator GetRowLink(string resourceName) => pane.GetByText(resourceName, new() { Exact = true }).Last.Locator("xpath=ancestor::a");
         });

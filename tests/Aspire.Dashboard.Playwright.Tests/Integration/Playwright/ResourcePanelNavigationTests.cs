@@ -121,43 +121,25 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
         });
     }
 
+    // The full resource list lives on the Overview tab, so the data tabs have no page-level close button to open it.
+    // Their own back links and the tabs cover navigation there.
     [Theory]
     [InlineData("/traces?type=server")]
     [InlineData("/structuredlogs?logLevel=error")]
     [InlineData("/metrics?duration=30")]
-    [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task SelectAll_ReopensFilteredContentWithoutChangingUrl(string url)
-    {
-        await RunTestAsync(async page =>
-        {
-            await page.SetViewportSizeAsync(1440, 900);
-            await page.GotoAsync(url);
-            await ResourcePaneNavigation.ToggleResourceListAsync(page);
-            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
-            await ResourcePaneNavigation.ToggleResourceListAsync(page);
-            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(url) + "$"));
-            await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
-        });
-    }
-
-    [Theory]
     [InlineData("/traces/detail/missing?resource=tag-a&type=server")]
     [InlineData("/metrics/resource/tag-a/meter/Test")]
-    [InlineData("/metrics/resource/tag-a?meter=Test&instrument=Requests&duration=30")]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task RetainedResource_ReopensParentFromFullCanvas(string url)
+    public async Task DataTabs_HaveNoPageCloseButton(string url)
     {
         await RunTestAsync(async page =>
         {
             await page.SetViewportSizeAsync(1440, 900);
             await page.GotoAsync(url);
-            await ResourcePaneNavigation.ToggleResourceListAsync(page);
-            var parentUrl = page.Url;
-            await page.Locator(".resource-pane [data-resource-name='tag-a'] .resource-row-link").ClickAsync();
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
             await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".detail-page-close")).ToHaveCountAsync(0);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
-            await Assertions.Expect(page).ToHaveURLAsync(parentUrl);
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });
     }
@@ -237,7 +219,7 @@ public sealed class ResourcePanelNavigationTests(ResourcePanelNavigationTests.Na
                 await page.ReloadAsync();
                 await Assertions.Expect(page.GetByRole(AriaRole.Gridcell, new() { Name = message })).ToBeVisibleAsync();
                 await Assertions.Expect(page.Locator(".resource-row-all.selected")).ToHaveCountAsync(1);
-                await Assertions.Expect(page.Locator(".resource-row.selected")).ToHaveCountAsync(0);
+                await Assertions.Expect(page.Locator(".resource-row.selected[data-resource-name]")).ToHaveCountAsync(0);
                 await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
             });
         }

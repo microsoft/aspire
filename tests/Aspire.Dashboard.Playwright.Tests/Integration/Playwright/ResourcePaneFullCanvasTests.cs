@@ -255,11 +255,13 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
         await RunTestAsync(async page =>
         {
             await page.SetViewportSizeAsync(1440, 900);
-            await page.GotoAsync("/consolelogs/resource/tag-a");
+            // The close button, and so Escape, is on the Overview tab: the full-page list lives there, and the data tabs
+            // don't close into it.
+            await page.GotoAsync("/resources/tag-a");
             var fullCanvas = page.Locator(".resources-layout.pane-full-canvas");
             var close = page.Locator(".detail-page-close");
             var row = page.Locator(".resource-row[data-resource-name='tag-a'] .resource-row-link");
-            var console = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.NavMenuConsoleLogsTab, Exact = true });
+            var overview = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
             await Assertions.Expect(close).ToBeVisibleAsync();
 
             // A text field keeps Escape.
@@ -276,25 +278,25 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(close).ToBeVisibleAsync();
             await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
 
-            // Otherwise it does what the close button does: the console of all resources, behind the full-page list.
+            // Otherwise it does what the close button does: the overview of all resources, behind the full-page list.
             await row.FocusAsync();
             await page.Keyboard.PressAsync("Escape");
-            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
             await AssertNoTabSelectedAsync(page);
 
-            // The console is still the current tab, and choosing it opens it again.
-            await console.ClickAsync();
+            // The overview is still the current tab, and choosing it opens it again.
+            await overview.ClickAsync();
             await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
-            await Assertions.Expect(console).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
 
             // Closed again, selecting a resource opens the view last shown.
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
             await row.ClickAsync();
-            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs/resource/tag-a$"));
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources/tag-a$"));
             await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
-            await Assertions.Expect(console).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(overview).ToHaveAttributeAsync("aria-selected", "true");
         });
     }
 
