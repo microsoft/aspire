@@ -44,7 +44,7 @@
     min-width: 28px;
     min-height: 0;
     padding: 1px 14px;
-    border-radius: var(--borderRadiusLarge);
+    border-radius: var(--aspire-radius-small);
     font-size: var(--fontSizeBase200);
     line-height: var(--lineHeightBase200);
     font-weight: var(--fontWeightRegular);

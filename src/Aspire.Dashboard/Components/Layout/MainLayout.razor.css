@@ -4,7 +4,7 @@
     min-width: 0;
     height: 50px;
     padding: 0 12px;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     overflow: hidden;
     white-space: nowrap;
 }
@@ -57,7 +57,7 @@
     height: 32px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--aspire-button-background);
 }
 
@@ -66,7 +66,7 @@
     height: 32px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: transparent;
 }
 
@@ -108,7 +108,7 @@
     flex: 1 1 auto;
     min-width: 0;
     padding: 8px;
-    gap: 6px;
+    gap: var(--aspire-space-1);
 }
 
 ::deep.layout > .messagebar-container > .top-messagebar:empty {
@@ -218,7 +218,7 @@
         align-self: stretch;
         align-items: center;
         min-height: 50px;
-        gap: 6px;
+        gap: var(--aspire-space-1);
         padding: 0;
         border: 0;
         border-radius: 0;
@@ -230,7 +230,7 @@
         height: 32px;
         padding: 0 10px;
         border: 0;
-        border-radius: 8px;
+        border-radius: var(--aspire-radius-medium);
         background: transparent;
         font-weight: var(--fontWeightSemibold);
     }
@@ -247,7 +247,7 @@
         bottom: -9px;
         display: block;
         height: 3px;
-        border-radius: 2px 2px 0 0;
+        border-radius: var(--aspire-radius-small) var(--aspire-radius-small) 0 0;
         background: var(--colorBrandBackground);
     }
 

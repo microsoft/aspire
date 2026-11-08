@@ -2,13 +2,13 @@
     display: none;
     flex: 0 1 auto;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
     max-width: 240px;
     height: 28px;
     padding: 0 12px;
     border: 1px solid color-mix(in srgb, var(--aspire-status-warning) 45%, transparent);
-    border-radius: 14px;
+    border-radius: var(--aspire-radius-large);
     background: color-mix(in srgb, var(--aspire-status-warning) 16%, var(--aspire-page-background));
     color: var(--colorNeutralForeground1);
     font: inherit;

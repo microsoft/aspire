@@ -188,7 +188,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     flex: 0 0 auto;
     width: 100%;
     max-width: 650px;
@@ -237,7 +237,7 @@
    then the keyboard hint, then documentation, ahead of decoration. */
 @container terminal-dock-panel (max-height: 240px) or ((max-width: 500px) and (max-height: 360px)) {
     .terminal-dock-panel-card {
-        gap: 4px;
+        gap: var(--aspire-space-1);
         padding: 8px;
     }
 
@@ -277,7 +277,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: var(--aspire-space-3);
     height: 100%;
     color: var(--colorNeutralForeground2);
     font-size: 13px;
@@ -285,7 +285,7 @@
 
 .terminal-dock-detached-actions {
     display: flex;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .terminal-dock-popup-blocked {

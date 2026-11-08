@@ -5,7 +5,7 @@ span.aspire-menu-secondary-action-container {
     grid-column: 4;
     grid-row: 1;
     justify-content: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     /* FluentUI centers the 16px checkmark in a 32px track (8px from the edge). The 20px action
        button insets its 16px icon by 2px, so 6px here mirrors that 8px on the trailing edge. */
     padding-inline-end: 6px;
@@ -32,7 +32,7 @@ span.aspire-menu-secondary-action-container:has(.aspire-menu-item-count) {
 .aspire-menu-item-count {
     min-width: 20px;
     padding: 0 6px;
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
     font-size: 11px;
@@ -43,7 +43,7 @@ span.aspire-menu-secondary-action-container:has(.aspire-menu-item-count) {
 .aspire-menu-item-label {
     align-items: center;
     display: inline-flex;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 ::deep .aspire-menu-secondary-action {

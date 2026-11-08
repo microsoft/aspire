@@ -74,7 +74,7 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: flex-end;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     padding: 10px 12px;
     border-top: 1px solid var(--colorNeutralStroke2);
 }
@@ -107,12 +107,12 @@
 .resource-filter-group-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     width: 100%;
     min-height: 32px;
     padding: 0 8px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: transparent;
     color: var(--colorNeutralForeground1);
     font: inherit;
@@ -156,7 +156,7 @@
 .resource-filter-group-summary {
     flex: none;
     padding: 0 8px;
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--resource-brand-soft);
     color: var(--colorNeutralForeground1);
     font-size: var(--fontSizeBase200);
@@ -179,7 +179,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
 }
 
@@ -198,7 +198,7 @@
     flex: none;
     min-width: 20px;
     padding: 0 6px;
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
     font-size: var(--fontSizeBase200);

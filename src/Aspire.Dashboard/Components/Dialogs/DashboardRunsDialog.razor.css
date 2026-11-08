@@ -1,7 +1,7 @@
 .runs-container {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: var(--aspire-space-3);
     height: 100%;
 }
 
@@ -35,8 +35,8 @@
 .run-row {
     display: flex;
     align-items: center;
-    gap: 4px;
-    border-radius: 6px;
+    gap: var(--aspire-space-1);
+    border-radius: var(--aspire-radius-small);
 }
 
 .run-row:hover:not(.disabled),
@@ -48,11 +48,11 @@
     display: flex;
     flex: 1;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
     padding: 8px;
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background: transparent;
     color: var(--colorNeutralForeground1);
     font: inherit;
@@ -93,7 +93,7 @@
     height: 28px;
     margin-inline-end: 4px;
     border: 0;
-    border-radius: 4px;
+    border-radius: var(--aspire-radius-small);
     background: transparent;
     color: var(--colorNeutralForeground3);
     cursor: pointer;
@@ -117,7 +117,7 @@
 .runs-help-link {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     margin-top: auto;
     color: var(--colorBrandForegroundLink);
 }

@@ -23,7 +23,7 @@
 .help-links {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: var(--aspire-space-3);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -33,10 +33,10 @@
     display: flex;
     height: 100%;
     align-items: center;
-    gap: 12px;
+    gap: var(--aspire-space-3);
     padding: 14px 16px;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground2);
     color: var(--colorNeutralForeground1);
     text-decoration: none;
@@ -58,7 +58,7 @@
     justify-content: center;
     width: 40px;
     height: 40px;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
 }
 

@@ -147,7 +147,7 @@
     display: flex;
     align-items: center;
     min-height: 46px;
-    column-gap: 20px;
+    column-gap: var(--aspire-space-5);
 }
 
 .items-footer .result-count {
@@ -162,7 +162,7 @@
     flex: 1 1 auto;
     width: 100%;
     min-width: 0;
-    gap: 10px;
+    gap: var(--aspire-space-2);
 }
 
 .pane-details-subtext {
@@ -184,7 +184,7 @@ fluent-dialog-body {
 
 fluent-dialog::part(dialog) {
     border: 1px solid var(--dialog-border-color);
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     box-shadow: 0 0 2px rgba(0, 0, 0, 0.2), 0 64px 128px rgba(0, 0, 0, 0.24);
 }
 
@@ -202,7 +202,7 @@ fluent-drawer::part(dialog) {
         inset-inline-start: auto !important;
         inset-inline-end: 0 !important;
         border: 1px solid var(--dialog-border-color);
-        border-radius: 12px;
+        border-radius: var(--aspire-radius-large);
         box-shadow: 0 8px 32px rgba(0, 0, 0, .28);
         overflow: hidden;
         opacity: 1;
@@ -325,7 +325,7 @@ fluent-dialog-body > [slot="action"] fluent-button::part(control) {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: var(--aspire-space-2);
 }
 
 fluent-dialog:has(> .navigation-dialog-body)::part(dialog) {
@@ -421,7 +421,7 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
     align-items: center;
     justify-content: flex-end;
     min-width: 0;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     font-size: var(--fontSizeBase300);
     font-weight: var(--fontWeightRegular);
     line-height: var(--lineHeightBase300);
@@ -431,7 +431,7 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--aspire-space-2);
     min-width: 0;
 }
 
@@ -451,12 +451,12 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--aspire-space-2);
     width: 100%;
 }
 
 .mobile-filter-toolbar > .fluent-stack-horizontal {
-    gap: 10px;
+    gap: var(--aspire-space-2);
 }
 
 .mobile-filter-toolbar fluent-field.resource-list {
@@ -483,7 +483,7 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
 
 .mobile-filter-toolbar fluent-field.aspire-checkbox {
     grid-template-columns: 18px auto;
-    column-gap: 10px;
+    column-gap: var(--aspire-space-2);
     height: 20px;
     min-height: 20px;
 }
@@ -494,7 +494,7 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
 }
 
 .mobile-filter-toolbar .filter-group > .fluent-stack-vertical {
-    row-gap: 10px;
+    row-gap: var(--aspire-space-2);
 }
 
 .mobile-filter-toolbar fluent-field.aspire-checkbox > label {
@@ -645,12 +645,12 @@ fluent-dialog-body .fluent-message-box {
     align-items: center;
     flex-wrap: wrap;
     min-width: 0;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .main-toolbar.filter-toolbar {
     padding: var(--layout-top-padding) var(--layout-right-padding) 4px var(--layout-left-padding);
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .content-header {
@@ -934,7 +934,7 @@ fluent-dialog-body .fluent-message-box {
 .standalone-surface {
     background-color: var(--colorNeutralBackground1);
     padding: var(--standalone-padding);
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     display: grid;
     grid-column-gap: var(--spacingHorizontalXL);
     grid-template-columns: auto var(--standalone-content-width);

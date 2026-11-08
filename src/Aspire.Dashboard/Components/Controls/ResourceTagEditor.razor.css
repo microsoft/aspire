@@ -2,7 +2,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     min-width: 0;
 }
 
@@ -16,12 +16,12 @@
 .tag-chip {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--aspire-space-1);
     max-width: 100%;
     height: 24px;
     padding: 0 2px 0 8px;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: var(--colorNeutralBackground2);
     font-size: 12px;
 }
@@ -65,11 +65,11 @@
 .tag-add {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     height: 24px;
     padding: 0 10px;
     border: 1px dashed var(--colorNeutralStroke1);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: transparent;
     color: var(--colorNeutralForeground2);
     font: inherit;
@@ -86,11 +86,11 @@
     position: relative;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--aspire-space-1);
     height: 24px;
     padding: 0 8px;
     border: 1px solid var(--colorBrandStroke1);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: var(--colorNeutralBackground1);
 }
 
@@ -121,7 +121,7 @@
     padding: 4px;
     overflow-y: auto;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground1);
     box-shadow: var(--shadow16);
     list-style: none;
@@ -130,9 +130,9 @@
 .tag-suggestion {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     padding: 5px 8px;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     font-size: 13px;
     white-space: nowrap;
     cursor: pointer;

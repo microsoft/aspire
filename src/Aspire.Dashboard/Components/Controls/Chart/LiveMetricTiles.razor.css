@@ -13,7 +13,7 @@
 .live-metric-tile-value {
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     min-width: 0;
     white-space: nowrap;
 }

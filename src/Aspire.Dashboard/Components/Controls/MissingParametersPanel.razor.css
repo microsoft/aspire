@@ -10,20 +10,20 @@
     padding: 14px 16px;
     overflow: hidden;
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: var(--aspire-control-background);
 }
 
 .missing-parameters-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin-bottom: 4px;
 }
 
 .missing-parameters-header-icon {
     background: color-mix(in srgb, var(--warning) 16%, transparent);
-    color: var(--colorPaletteDarkOrangeForeground1);
+    color: var(--warning);
 }
 
 .missing-parameters-header h2 {
@@ -35,7 +35,7 @@
 
 .missing-parameters-count {
     padding: 0 6px;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
     color: var(--colorNeutralForeground2);
     font-size: 11px;
@@ -90,32 +90,32 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .missing-parameter-files {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--aspire-space-1);
 }
 
 .missing-parameter-file-name {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     color: var(--colorNeutralForeground2);
     font-size: 13px;
 }
 
 .missing-parameter-file-name.error {
-    color: var(--colorPaletteRedForeground1);
+    color: var(--error);
 }
 
 .missing-parameters-actions {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 16px;
+    gap: var(--aspire-space-4);
     margin-top: 10px;
     padding-top: 12px;
     border-top: 1px solid var(--colorNeutralStroke3);
@@ -124,7 +124,7 @@
 .missing-parameters-save {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin-right: auto;
     cursor: pointer;
 }
@@ -137,7 +137,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-height: 180px;
     color: var(--colorNeutralForeground2);
 }

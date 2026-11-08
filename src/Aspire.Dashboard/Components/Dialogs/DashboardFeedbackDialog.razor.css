@@ -4,7 +4,7 @@
 
 .dashboard-feedback-progress {
     display: grid;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     margin-bottom: 18px;
     color: var(--colorNeutralForeground3);
     font-size: 11px;
@@ -17,7 +17,7 @@
     display: block;
     height: 3px;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground3);
 }
 
@@ -39,7 +39,7 @@
 .dashboard-feedback-step-header {
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: var(--aspire-space-2);
     padding-bottom: 14px;
     border-bottom: 1px solid var(--colorNeutralStroke3);
 }
@@ -61,7 +61,7 @@
     flex-direction: column;
     margin: 0;
     padding: 0;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     border: 0;
 }
 
@@ -70,7 +70,7 @@
     box-sizing: border-box;
     width: 100%;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
     color: var(--colorNeutralForeground1);
     font: inherit;
@@ -95,7 +95,7 @@
 
 ::deep .dashboard-feedback-select fluent-dropdown::part(root) {
     min-height: 38px;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
 }
 
 .dashboard-feedback-textarea {
@@ -119,17 +119,17 @@
 .dashboard-feedback-reason-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .dashboard-feedback-reason {
     display: flex;
     align-items: center;
     min-height: 38px;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     padding: 7px 10px;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     color: var(--colorNeutralForeground2);
     cursor: pointer;
 }
@@ -160,13 +160,13 @@
 
 .dashboard-feedback-preview-disclosure {
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground2);
 }
 
 .dashboard-feedback-preview-disclosure > summary {
     padding: 10px 12px;
-    border-radius: 7px 7px 0 0;
+    border-radius: var(--aspire-radius-medium) var(--aspire-radius-medium) 0 0;
     color: var(--colorBrandForegroundLink);
     font-size: 13px;
     cursor: pointer;
@@ -200,7 +200,7 @@
 
 .dashboard-feedback-status {
     margin: 0;
-    color: var(--colorPaletteRedForeground1);
+    color: var(--error);
 }
 
 .dashboard-feedback-actions {

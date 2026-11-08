@@ -76,5 +76,5 @@
 }
 
 .filter-button-container ::deep .fluent-stack-horizontal {
-    column-gap: 10px;
+    column-gap: var(--aspire-space-2);
 }

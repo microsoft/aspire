@@ -20,14 +20,14 @@
 .overview-header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .missing-parameters-link {
     display: inline-flex;
     align-items: center;
     min-height: 32px;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     padding: 0 10px;
     border: 1px solid var(--colorPaletteMarigoldBorderActive);
     border-radius: var(--aspire-control-radius);
@@ -103,7 +103,7 @@
     right: 24px;
     bottom: 24px;
     display: flex;
-    column-gap: 10px;
+    column-gap: var(--aspire-space-2);
 }
 
 .resource-graph-controls.resource-graph-game-launch {
@@ -309,12 +309,12 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: var(--aspire-space-3);
     margin-bottom: 14px;
     padding: 18px 20px 16px;
     overflow: hidden;
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background:
         linear-gradient(100deg, color-mix(in srgb, var(--home-state-color) 12%, transparent) 0%, transparent 55%),
         var(--aspire-control-background);
@@ -323,7 +323,7 @@
 .home-hero-main {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: var(--aspire-space-3);
 }
 
 .home-hero-icon {
@@ -333,7 +333,7 @@
     justify-content: center;
     width: 44px;
     height: 44px;
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: color-mix(in srgb, var(--home-state-color) 16%, transparent);
 }
 
@@ -364,7 +364,7 @@
     gap: 2px;
     height: 8px;
     overflow: hidden;
-    border-radius: 4px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground3);
 }
 
@@ -377,7 +377,7 @@
 .home-legend {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px 20px;
+    gap: var(--aspire-space-1) var(--aspire-space-5);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -388,7 +388,7 @@
 .home-legend-item {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
 }
 
 .home-legend-swatch {
@@ -408,7 +408,7 @@
     margin-bottom: 14px;
     padding: 14px 16px 12px;
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: var(--aspire-control-background);
 }
 
@@ -417,14 +417,14 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 8px 16px;
+    gap: var(--aspire-space-2) var(--aspire-space-4);
     margin-bottom: 12px;
 }
 
 .home-activity-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .home-activity-title h2 {
@@ -487,7 +487,7 @@
 
 .home-activity-totals {
     display: flex;
-    gap: 16px;
+    gap: var(--aspire-space-4);
     font-size: 12px;
 }
 
@@ -510,7 +510,7 @@
 .home-activity-body {
     display: grid;
     grid-template-columns: 170px minmax(0, 1fr);
-    gap: 20px;
+    gap: var(--aspire-space-5);
     align-items: stretch;
 }
 
@@ -518,7 +518,7 @@
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--aspire-space-2);
 }
 
 .home-stat {
@@ -536,7 +536,7 @@
 .home-stat-label {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--aspire-space-1);
     color: var(--colorNeutralForeground2);
     font-size: 12px;
 }
@@ -621,7 +621,7 @@
 .home-insights {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    gap: var(--aspire-space-3);
     margin-bottom: 14px;
 }
 
@@ -629,14 +629,14 @@
     min-width: 0;
     padding: 14px 16px;
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: var(--aspire-control-background);
 }
 
 .home-insight-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin-bottom: 8px;
 }
 
@@ -677,7 +677,7 @@
 .home-insight-list a {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     padding: 7px 0;
     color: var(--colorNeutralForeground1);
     text-decoration: none;
@@ -691,14 +691,14 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 10px;
+    gap: var(--aspire-space-2);
     min-width: 0;
 }
 
 .home-insight-name {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     min-width: 0;
     overflow: hidden;
     font-size: 13px;
@@ -716,7 +716,7 @@
 .home-insight-meter {
     height: 4px;
     overflow: hidden;
-    border-radius: 2px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground3);
 }
 
@@ -724,7 +724,7 @@
     display: block;
     min-width: 3px;
     height: 100%;
-    border-radius: 2px;
+    border-radius: var(--aspire-radius-small);
 }
 
 .home-insight-meter .slow {
@@ -746,7 +746,7 @@
 
     .home-activity-stats {
         flex-direction: row;
-        gap: 24px;
+        gap: var(--aspire-space-6);
     }
 }
 
@@ -760,7 +760,7 @@
     min-width: 0;
     padding: 14px 16px;
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 12px;
+    border-radius: var(--aspire-radius-large);
     background: var(--aspire-control-background);
 }
 
@@ -768,7 +768,7 @@
     display: flex;
     min-height: 20px;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin-bottom: 10px;
 }
 
@@ -794,7 +794,7 @@
 .home-empty {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     min-height: 40px;
     color: var(--colorNeutralForeground2);
     font-size: 13px;
@@ -808,7 +808,7 @@
     min-width: 18px;
     height: 18px;
     padding: 0 5px;
-    border-radius: 9px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--error);
     color: #fff;
     font-size: 11px;
@@ -852,7 +852,7 @@
 .home-event-meta {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--aspire-space-1);
     min-width: 0;
     color: var(--colorNeutralForeground2);
     font-size: 12px;
@@ -875,7 +875,7 @@
 .home-problems {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
+    gap: var(--aspire-space-3);
     align-items: start;
 }
 

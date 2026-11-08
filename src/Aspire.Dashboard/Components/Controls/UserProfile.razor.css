@@ -86,7 +86,7 @@
 
 .profile-persona {
     align-items: flex-start;
-    gap: 16px;
+    gap: var(--aspire-space-4);
 }
 
 .profile-avatar {
@@ -139,5 +139,5 @@
     min-height: 28px;
     padding: 0 6px;
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
 }

@@ -22,7 +22,7 @@
     box-sizing: border-box;
     background: var(--terminal-background, var(--colorNeutralBackground1));
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     overflow: hidden;
 }
 
@@ -45,7 +45,7 @@
     align-items: center;
     justify-content: space-between;
     flex: 0 0 auto;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-height: 34px;
     padding: 4px 8px;
     border-top: 1px solid var(--colorNeutralStroke1);
@@ -64,7 +64,7 @@
     margin-inline-end: 2px;
     padding: 1px 4px;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 2px;
+    border-radius: var(--aspire-radius-small);
     background-color: color-mix(in srgb, var(--colorNeutralBackground3) 60%, var(--colorNeutralStroke2));
     color: var(--colorNeutralForeground1);
     font-size: 0.875em;
@@ -75,7 +75,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: flex-end;
-    gap: 12px;
+    gap: var(--aspire-space-3);
     min-width: 0;
     margin-inline-start: auto;
 }
@@ -89,7 +89,7 @@
 .terminal-palette-controls {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
 }
 
 .terminal-font-controls {
@@ -231,7 +231,7 @@
     z-index: 2;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     max-height: calc(100% - 24px);
     overflow: auto;
     /* Only the visible banner/icon intercepts input; retained output stays accessible around it. */
@@ -275,7 +275,7 @@
     min-width: 0;
     height: 100%;
     min-height: 0;
-    border-radius: var(--borderRadiusMedium);
+    border-radius: var(--aspire-radius-small);
     box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
 }
 
@@ -316,7 +316,7 @@
     flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--aspire-space-3);
     padding: 12px;
     border: 1px solid var(--colorNeutralStroke1);
     border-radius: var(--aspire-control-radius);

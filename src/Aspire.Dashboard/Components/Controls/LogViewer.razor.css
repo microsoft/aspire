@@ -31,7 +31,7 @@
 ::deep .resource-prefix {
     padding: 1px 3px;
     border: var(--strokeWidthThin) solid transparent;
-    border-radius: var(--borderRadiusLarge);
+    border-radius: var(--aspire-radius-small);
     font-family: var(--fontFamilyBase);
     font-size: var(--fontSizeBase200);
     line-height: var(--lineHeightBase200);
@@ -46,7 +46,7 @@
 }
 
 ::deep .console-empty-message {
-    gap: 8px;
+    gap: var(--aspire-space-2);
     color: #fff;
     user-select: none;
     font-family: var(--fontFamilyBase);

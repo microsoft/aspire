@@ -184,7 +184,7 @@ fluent-field.aspire-input > fluent-number-input::part(control),
 
 .aspire-field-row {
     display: flex;
-    column-gap: 12px;
+    column-gap: var(--aspire-space-3);
     align-items: center;
 }
 
@@ -609,7 +609,7 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-track {
 fluent-dialog-body::part(content)::-webkit-scrollbar-thumb,
 fluent-popover-b::part(dialog)::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb-color);
-    border-radius: 999px;
+    border-radius: var(--aspire-radius-round);
 }
 
 ::-webkit-scrollbar-thumb:hover,
@@ -634,9 +634,9 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
     width: fit-content;
     align-items: center;
     min-height: 36px;
-    border-radius: var(--borderRadiusMedium);
+    border-radius: var(--aspire-radius-small);
     padding: 0 12px;
-    column-gap: 8px;
+    column-gap: var(--aspire-space-2);
 }
 
 .block-warning-icon {
@@ -1000,7 +1000,7 @@ fluent-text-input[type="search"] [slot="start"] svg {
 .fluent-tabs.aspire-content-tabs > fluent-tablist,
 .aspire-tab-list {
     min-height: 40px;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     padding: 3px;
     border: 1px solid var(--colorNeutralStroke1);
     border-radius: var(--aspire-control-radius);
@@ -1029,7 +1029,7 @@ fluent-tab,
 .aspire-tab {
     height: 32px;
     padding: 0 12px;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     border: 1px solid transparent;
     border-radius: var(--aspire-control-radius);
 }
@@ -1052,7 +1052,7 @@ fluent-tab.tab-label fluent-badge {
     margin-inline-start: var(--spacingHorizontalXS);
     padding: 1px 3px;
     border: 1px solid transparent;
-    border-radius: 100px;
+    border-radius: var(--aspire-radius-round);
     background: var(--colorNeutralBackground3);
     color: currentColor;
     font-weight: var(--fontWeightRegular);
@@ -1179,7 +1179,7 @@ table.aspire-scroll-border-grid:not(:has(tr[row-state="empty-content"], tr[row-s
 fluent-accordion-item.property-details-accordion-item {
     margin-bottom: var(--spacingVerticalS);
     border: 1px solid var(--colorNeutralStroke3);
-    border-radius: 10px;
+    border-radius: var(--aspire-radius-medium);
     background-color: var(--property-grid-background-color);
     overflow: hidden;
 }
@@ -1215,7 +1215,7 @@ fluent-badge.property-details-accordion-badge {
     min-width: 20px;
     padding: 0;
     border: 0;
-    border-radius: var(--borderRadiusCircular);
+    border-radius: var(--aspire-radius-round);
     outline: none;
     box-shadow: none;
     background-color: var(--property-grid-badge-background-color);

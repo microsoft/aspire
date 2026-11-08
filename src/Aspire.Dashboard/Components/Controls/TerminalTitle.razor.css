@@ -1,7 +1,7 @@
 .terminal-metadata {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
     flex: 1;
     color: var(--colorNeutralForeground1);
@@ -53,7 +53,7 @@
 .terminal-directory-content {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     min-width: 0;
     /* Let the shared clipboard handler receive the button as the click target. */
     pointer-events: none;

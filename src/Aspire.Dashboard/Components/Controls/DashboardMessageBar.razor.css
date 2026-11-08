@@ -7,9 +7,9 @@
     min-height: 36px;
     padding: 0 12px;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background-color: var(--messagebar-info-background-color);
-    column-gap: 8px;
+    column-gap: var(--aspire-space-2);
     color: var(--messagebar-foreground-color);
     font-size: var(--fontSizeBase200);
     line-height: var(--lineHeightBase200);
@@ -78,7 +78,7 @@
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .dashboard-message-bar-link-action {
@@ -88,7 +88,7 @@
     min-height: 28px;
     padding: 0 12px;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
     color: var(--colorNeutralForeground1);
     font-weight: var(--fontWeightSemibold);
@@ -114,7 +114,7 @@
     min-height: 16px;
     padding: 0;
     border-color: transparent;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background-color: transparent;
 }
 
@@ -131,7 +131,7 @@
         grid-template-columns: auto minmax(0, 1fr);
         align-items: start;
         padding: 8px 40px 8px 8px;
-        gap: 6px;
+        gap: var(--aspire-space-1);
     }
 
     .dashboard-message-bar-icon {
@@ -151,7 +151,7 @@
     .dashboard-message-bar-actions {
         grid-column: 2;
         justify-content: flex-start;
-        gap: 6px;
+        gap: var(--aspire-space-1);
     }
 
     .dashboard-message-bar-actions:not(:has(.dashboard-message-bar-action, .dashboard-message-bar-link-action)) {

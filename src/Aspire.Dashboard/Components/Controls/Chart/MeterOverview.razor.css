@@ -13,7 +13,7 @@
     display: flex;
     min-width: 0;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background-color: var(--colorNeutralBackground1);
     transition: border-color 120ms ease, box-shadow 120ms ease;
 }
@@ -64,7 +64,7 @@
    the line wraps. */
 .meter-card-tags {
     display: flex;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     min-width: 0;
     max-width: calc(100% - 24px);
     margin-bottom: 4px;
@@ -77,7 +77,7 @@
     min-width: 0;
     padding: 0 6px;
     border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 4px;
+    border-radius: var(--aspire-radius-small);
     background: transparent;
     color: var(--colorNeutralForeground3);
     font-family: var(--aspire-font-mono);
@@ -88,7 +88,7 @@
 .meter-card-resource {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--aspire-space-1);
     border-color: var(--meter-card-resource-color, var(--colorNeutralStroke2));
 }
 
@@ -115,7 +115,7 @@
 .meter-card-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     min-width: 0;
     /* Leave room for the pin button in the top-right corner. */
     padding-right: 24px;
@@ -148,7 +148,7 @@
 .meter-card-body {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     margin-top: auto;
     padding-top: var(--spacingVerticalXS);
 }
@@ -156,7 +156,7 @@
 .meter-card-value {
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: var(--aspire-space-1);
     min-width: 0;
     white-space: nowrap;
 }

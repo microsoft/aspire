@@ -1,5 +1,5 @@
 .dimension-tag {
-    border-radius: var(--borderRadiusLarge);
+    border-radius: var(--aspire-radius-small);
     padding: 1px 3px;
     border: var(--strokeWidthThin) solid transparent;
     background: var(--colorNeutralBackground1Selected);
