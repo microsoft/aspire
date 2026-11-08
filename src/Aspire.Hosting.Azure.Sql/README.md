@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.Sql` integration with
 
 ```bash
 aspire add Aspire.Hosting.Azure.Sql
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -41,7 +42,7 @@ In the AppHost, register a SqlServer database and reference it from another reso
 var sql = builder.AddAzureSqlServer("sql")
                  .AddDatabase("sqldata");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(sql);
 ```
 

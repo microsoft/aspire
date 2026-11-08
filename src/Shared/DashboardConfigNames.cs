@@ -47,6 +47,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName ResourceServiceClientCertificateSubjectName = new("Dashboard:ResourceServiceClient:ClientCertificate:Subject", "DASHBOARD__RESOURCESERVICECLIENT__CLIENTCERTIFICATE__SUBJECT");
     public static readonly ConfigName ResourceServiceClientApiKeyName = new("Dashboard:ResourceServiceClient:ApiKey", "DASHBOARD__RESOURCESERVICECLIENT__APIKEY");
     public static readonly ConfigName UIDisableResourceGraphName = new("Dashboard:UI:DisableResourceGraph", "DASHBOARD__UI__DISABLERESOURCEGRAPH");
+    public static readonly ConfigName UIDisableModernDashboardName = new("Dashboard:UI:DisableModernDashboard", "DASHBOARD__UI__DISABLEMODERNDASHBOARD");
     public static readonly ConfigName UIDisableImportName = new("Dashboard:UI:DisableImport", "DASHBOARD__UI__DISABLEIMPORT");
     public static readonly ConfigName UIDisableAgentHelpName = new("Dashboard:UI:DisableAgentHelp", "DASHBOARD__UI__DISABLEAGENTHELP");
 

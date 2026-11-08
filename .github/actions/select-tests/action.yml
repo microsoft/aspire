@@ -8,7 +8,7 @@ inputs:
   checkout:
     required: false
     default: 'true'
-    description: 'Whether to check out the repo. Set false when the caller has already checked out and the same working tree must be reused by a later step (e.g. enumerate-tests with checkout=false).'
+    description: 'Whether to check out the repo. Set false when the caller has already checked out full history (fetch-depth: 0) and the same working tree must be reused by a later step (e.g. enumerate-tests with checkout=false).'
   setupDotNet:
     required: false
     default: 'true'
@@ -44,7 +44,7 @@ inputs:
   prBaseSha:
     required: false
     default: ''
-    description: 'The PR base SHA. When set, selection diffs base..head; the base commit is fetched first. Empty (non-PR events) selects everything.'
+    description: 'The event base SHA. On PRs, the verified checkout merge parent supplies the pinned comparison base instead. On other events, an explicit base is used as supplied. Empty selects everything.'
   headSha:
     required: false
     # The PR's REAL head, NOT github.sha (the synthetic refs/pull/N/merge commit, regenerated as the base
@@ -78,9 +78,9 @@ runs:
       if: ${{ inputs.checkout == 'true' }}
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       # This action runs PR-authored code (the SelectTests build); don't leave the checkout's
-      # GITHUB_TOKEN persisted in .git/config where that code could read it. The base-commit fetch
-      # below is unauthenticated (public repo) and nothing here pushes, so dropping it is safe.
+      # GITHUB_TOKEN persisted in .git/config where that code could read it.
       with:
+        fetch-depth: 0
         persist-credentials: false
 
     # Minimal toolchain bootstrap -- not a full ./restore.sh. The repo SDK is .NET 11 while
@@ -139,52 +139,18 @@ runs:
         if [ "$FORCE_ALL" = "true" ]; then
           args+=(--force-all)
         elif [ -n "$PR_BASE_SHA" ]; then
-          # Pull requests select on the PR's own commits: SelectTests diffs HEAD against the merge-base
-          # of base..head (the branch point), so commits that landed on the base branch after the PR
-          # branched don't get mis-attributed to it. This job's checkout is shallow, so we must make
-          # enough history of BOTH endpoints available locally for git to find their common ancestor.
-          #
-          # Start with the base commit itself. If it can't be fetched we FAIL rather than fall back to
-          # --force-all: base.sha is always reachable on origin, so a failure here is a real problem (a
-          # bad fetch or a rewritten base), and masking it with run-all would teach the audit nothing.
-          if ! git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"; then
-            echo "::error::Failed to fetch PR base commit $PR_BASE_SHA; cannot compute the changed-file diff." >&2
-            exit 1
-          fi
-          if ! git cat-file -e "${PR_BASE_SHA}^{commit}" 2>/dev/null; then
-            echo "::error::PR base commit $PR_BASE_SHA is unavailable after fetch; cannot compute the changed-file diff." >&2
-            exit 1
-          fi
-
-          # Deepen both endpoints until their merge-base is reachable. A shallow checkout truncates
-          # ancestry, so git can't see the branch point yet. Re-fetch both SHAs at a growing depth until
-          # `git merge-base` succeeds. If it never resolves within the bound, DON'T fail the PR: fall back
-          # to --force-all (run every test) -- the fail-SAFE outcome, matching SelectTests' own fallback --
-          # and warn loudly so a systemic regression is visible instead of blocking PRs while it's fixed.
-          # The bound also prevents an unbounded fetch on pathological histories.
-          merge_base_found=true
-          depth=1
-          until git merge-base "$PR_BASE_SHA" "$HEAD_SHA" >/dev/null 2>&1; do
-            if [ "$depth" -ge 4096 ]; then
-              echo "::warning::Could not find a merge-base of base $PR_BASE_SHA and head $HEAD_SHA within $depth commits of history; running ALL tests for this PR." >&2
-              merge_base_found=false
-              break
-            fi
-            depth=$((depth * 4))
-            echo "Merge-base of base..head not yet reachable; deepening history to depth $depth."
-            # Fetch both SHAs in one shot. '|| true' so a deepen that can't make progress (e.g. one side
-            # is already complete) doesn't abort the loop -- the merge-base check above is the real gate,
-            # and the depth bound guarantees termination.
-            git fetch --no-tags --depth="$depth" origin "$PR_BASE_SHA" "$HEAD_SHA" || true
-          done
-          if [ "$merge_base_found" = "true" ]; then
-            args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
+          # Verify the checkout identity and pinned history in the same helper as the
+          # top-level skip gate. Always diff to the real PR head, never the synthetic merge tree.
+          if comparison_base=$(bash eng/github-ci/resolve-comparison-base.sh "$PR_BASE_SHA" "$HEAD_SHA"); then
+            args+=(--from "$comparison_base" --to "$HEAD_SHA")
           else
-            # Unresolved merge-base -> fail-safe run-all rather than blocking the PR. Pass the reason so the
-            # run summary records WHY this is a full run -- distinct from a run-full-ci kill switch -- to
-            # match SelectTests' own tool-level fallback. Without it a systemic shallow-history regression
-            # hides behind a "(kill switch)" label in the audit's durable record (the summary, not the logs).
-            args+=(--force-all --force-all-reason "git merge-base of base $PR_BASE_SHA and head $HEAD_SHA was unreachable within $depth commits of CI checkout history")
+            resolution_status=$?
+            if [ "$resolution_status" -ne 1 ]; then
+              echo "::error::Comparison history is unavailable; cannot select tests." >&2
+              exit "$resolution_status"
+            fi
+            echo "::warning::PR comparison identity or merge-base could not be verified; running ALL tests." >&2
+            args+=(--force-all --force-all-reason "PR comparison identity or merge-base could not be verified; see comparison-base diagnostics")
           fi
         else
           # Non-PR events (e.g. push to main) have no reliable base -> run everything.

@@ -5,7 +5,7 @@ import { getCommandInvocationCount, getTerminalCommandCount, isSamePath, waitFor
 import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceFoldersForE2E, runE2eTeardown, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, writeInitTargetProofCliWrapper, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { VSBrowser } from './helpers/extester';
-import { answerActiveInput, cancelActiveInput, chooseActiveQuickPick, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForActiveInput, waitForNotificationMessage } from './helpers/vscode';
+import { answerActiveInput, answerActiveSimpleFileDialog, cancelActiveInput, chooseActiveQuickPick, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForActiveInput, waitForNotificationMessage } from './helpers/vscode';
 
 const createWithAspireActionLabels = [
     'Create a new Aspire app',
@@ -174,14 +174,14 @@ suite('Workspace target proof E2E', function () {
         await chooseActiveQuickPick('C# (.NET)');
         await answerActiveInput(projectName, '');
         await chooseActiveQuickPick(`In a subdirectory named '${projectName}' in the selected folder`);
-        await answerActiveInput(collidingParent, 'Folder path');
+        await answerActiveSimpleFileDialog(collidingParent);
 
         const expectedError = `The output directory '${collidingProject}' already exists and is not empty. Specify a different location.`;
         await waitForNotificationMessage(expectedError, 60000);
         await waitForActiveInput('Folder path', 'Enter the output path', 60000);
         await VSBrowser.instance.takeScreenshot('new-project-output-collision-retry.png');
 
-        await answerActiveInput(validParent, 'Folder path');
+        await answerActiveSimpleFileDialog(validParent);
         await chooseActiveQuickPick('No');
         await VSBrowser.instance.driver.wait(
             () => fs.existsSync(generatedAppHost),

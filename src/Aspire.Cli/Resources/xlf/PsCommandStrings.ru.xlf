@@ -4,17 +4,17 @@
     <body>
       <trans-unit id="Description">
         <source>List running AppHosts</source>
-        <target state="needs-review-translation">Перечислить запущенные apphosts Aspire.</target>
+        <target state="translated">Перечислить работающие узлы приложений</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</source>
-        <target state="new">Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot.</target>
+        <target state="translated">Продолжать работу и выдавать обновления при изменении запущенных AppHost. Вывод JSON по умолчанию содержит записи об измененных AppHost, разделенные символами новой строки, или полные моментальные снимки при использовании --output snapshot.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowRequiresJson">
         <source>The --follow option only supports JSON output. Use --format json.</source>
-        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
+        <target state="translated">Параметр --follow поддерживает только вывод JSON. Используйте --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">
@@ -39,27 +39,27 @@
       </trans-unit>
       <trans-unit id="HeaderSdk">
         <source>SDK</source>
-        <target state="new">SDK</target>
+        <target state="translated">Пакет SDK</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidOutputMode">
         <source>The --output option must be default or snapshot.</source>
-        <target state="new">The --output option must be default or snapshot.</target>
+        <target state="translated">Параметр --output должен принимать значение default или snapshot.</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Вывод в формате JSON.</target>
+        <target state="translated">Формат вывода (таблица или JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputOptionDescription">
         <source>Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</source>
-        <target state="new">Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json.</target>
+        <target state="translated">Режим вывода: default сохраняет стандартный вывод AppHost, snapshot выдает полные моментальные снимки AppHost со сведениями о работоспособности ресурсов, сигналах пульса и ошибках. Для Snapshot необходимо использовать --follow --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="SnapshotRequiresFollowJson">
         <source>The --output snapshot option requires --follow --format json.</source>
-        <target state="new">The --output snapshot option requires --follow --format json.</target>
+        <target state="translated">Для параметра --output snapshot необходимо использовать --follow --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnknownPath">

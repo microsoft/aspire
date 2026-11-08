@@ -3,12 +3,19 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREFOUNDRY001 // Preview tool types
+#pragma warning disable OPENAI001 // Responses API is experimental
 
+using System.ClientModel.Primitives;
+using System.Net;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Azure.AI.Extensions.OpenAI;
+using Azure.AI.Projects;
+using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -16,6 +23,42 @@ namespace Aspire.Hosting.Foundry.Tests;
 
 public class PromptAgentTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task ToolResources_SerializeInPromptAgentDefinition()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account").AddProject("my-project");
+        var search = builder.AddAzureSearch("search");
+        var searchTool = project.AddAISearchTool("search-tool").WithReference(search);
+        searchTool.Resource.IndexName = "docs";
+        searchTool.Resource.Connection!.Outputs["id"] = "/connections/search";
+        var bingConnection = project.AddBingGroundingConnection("bing-connection", "/bing/resource");
+        bingConnection.Resource.Outputs["id"] = "/connections/bing";
+        var bingTool = project.AddBingGroundingTool("bing").WithReference(bingConnection);
+        var sharePoint = project.AddSharePointTool("sharepoint", "/connections/sharepoint");
+        var fabric = project.AddFabricTool("fabric", "/connections/fabric");
+        var function = project.AddAzureFunctionTool(
+            "function", "get_weather", "Get the weather.",
+            BinaryData.FromString("""{"type":"object","properties":{"city":{"type":"string"}}}"""),
+            "https://storage.queue.core.windows.net", "input",
+            "https://storage.queue.core.windows.net", "output");
+        var definition = new DeclarativeAgentDefinition("gpt-4.1")
+        {
+            Tools =
+            {
+                await searchTool.Resource.ToAgentToolAsync(),
+                await bingTool.Resource.ToAgentToolAsync(),
+                await sharePoint.Resource.ToAgentToolAsync(),
+                await fabric.Resource.ToAgentToolAsync(),
+                await function.Resource.ToAgentToolAsync()
+            }
+        };
+        var options = new ProjectsAgentVersionCreationOptions(definition);
+
+        await Verify(ModelReaderWriter.Write(
+            options, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default).ToString(), "json");
+    }
+
     [Fact]
     public void AddPromptAgent_CreatesResource()
     {
@@ -77,6 +120,53 @@ public class PromptAgentTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task SendMessage_ResponsesClient_CreatesAgentResponse()
+    {
+        using var handler = new SequenceHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""
+                {
+                  "id": "resp_test",
+                  "object": "response",
+                  "created_at": 0,
+                  "status": "completed",
+                  "model": "gpt-4.1",
+                  "output": [
+                    {
+                      "type": "message",
+                      "id": "msg_test",
+                      "status": "completed",
+                      "role": "assistant",
+                      "content": [
+                        { "type": "output_text", "text": "Hello from the agent!", "annotations": [] }
+                      ]
+                    }
+                  ]
+                }
+                """, System.Text.Encoding.UTF8, "application/json")
+        });
+        using var httpClient = new HttpClient(handler);
+        var projectClient = new AIProjectClient(
+            new Uri("https://example.invalid/api/projects/my-project"),
+            new TestTokenCredential(),
+            new AIProjectClientOptions { Transport = new HttpClientPipelineTransport(httpClient) });
+
+        // Exercise the SDK calls used by Send Message: incompatible Azure/OpenAI versions
+        // can compile successfully but throw MissingMethodException when constructing this client.
+        var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(new AgentReference("my-agent"));
+        var response = await responseClient.CreateResponseAsync("Hello", cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("Hello from the agent!", response.Value.GetOutputText());
+        var request = Assert.Single(handler.Requests);
+        using var body = JsonDocument.Parse(request.Content);
+        Assert.Equal("my-agent", body.RootElement.GetProperty("agent_reference").GetProperty("name").GetString());
+        var input = Assert.Single(body.RootElement.GetProperty("input").EnumerateArray());
+        Assert.Equal("user", input.GetProperty("role").GetString());
+        var content = Assert.Single(input.GetProperty("content").EnumerateArray());
+        Assert.Equal("Hello", content.GetProperty("text").GetString());
     }
 
     [Fact]

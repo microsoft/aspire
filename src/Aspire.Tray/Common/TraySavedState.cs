@@ -15,19 +15,14 @@ internal sealed record TraySavedState(IReadOnlyList<SavedAppHost> AppHosts)
 
     public static TraySavedState Empty { get; } = new([]);
 
-    // The source generator otherwise supplies default(bool) for an absent init-only
-    // property, overriding its initializer. Make the legacy-file default explicit in
-    // the JSON constructor so old files never silently opt out of stop confirmation.
-    [JsonConstructor]
-    public TraySavedState(IReadOnlyList<SavedAppHost> appHosts, bool confirmStop = true) : this(appHosts)
-    {
-        ConfirmStop = confirmStop;
-    }
-
     /// <summary>
-    /// Requires confirmation before stopping an AppHost, including for files written before this preference existed.
+    /// The retired "confirm before stopping" preference. Stopping no longer asks, like the dashboard.
+    /// Files written by earlier builds still contain it, and the store rejects unknown properties,
+    /// so it is accepted on read and ignored; <see cref="FileTraySavedStateStore"/> never writes it.
     /// </summary>
-    public bool ConfirmStop { get; init; } = true;
+    [JsonPropertyName("confirmStop")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LegacyConfirmStop { get; init; }
 
     public TraySavedState Remember(string appHostPath) => Remember(appHostPath, DefaultRecentAppHostLimit);
 

@@ -3083,6 +3083,91 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
     }
 
+    [Theory]
+    [InlineData("Aspire.Hosting.AppHost", true)]
+    [InlineData("aspire.hosting.apphost", true)]
+    [InlineData("Aspire.Hosting.AppHost.Extra", false)]
+    public void IsLikelyAppHost_ExplicitPackageReference(string packageId, bool expected)
+    {
+        var projectFile = WriteIsLikelyAppHostProject("Orchestrator.csproj", $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <PackageReference Include="{{packageId}}" Version="17.0.0" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        Assert.Equal(expected, DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IsLikelyAppHost_PackageMetadataUpdateDoesNotPromoteProjects(bool sharedProps)
+    {
+        const string content = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <PackageReference Update="Aspire.Hosting.AppHost" Version="17.0.0" />
+              </ItemGroup>
+            </Project>
+            """;
+        if (sharedProps)
+        {
+            WriteIsLikelyAppHostProject("Directory.Build.props", content);
+        }
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", sharedProps ? "<Project Sdk=\"Microsoft.NET.Sdk\" />" : content);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Theory]
+    [InlineData("// #:package Aspire.Hosting.AppHost@17.0.0", false)]
+    [InlineData("var example = \"#:package Aspire.Hosting.AppHost@17.0.0\";", false)]
+    [InlineData("/*\n#:package Aspire.Hosting.AppHost@17.0.0\n*/", false)]
+    [InlineData("var example = \"\"\"\n#:package Aspire.Hosting.AppHost@17.0.0\n\"\"\";", false)]
+    [InlineData("var example = @\"\n#:package Aspire.Hosting.AppHost@17.0.0\n\";", false)]
+    [InlineData("/* comment */\n#:package Aspire.Hosting.AppHost@17.0.0", true)]
+    [InlineData("#:package Aspire.Hosting.AppHost@17.0.0 unexpected", false)]
+    [InlineData("  #:package Aspire.Hosting.AppHost@17.0.0  \r\n", true)]
+    public void CanHandle_OnlyActiveCompletePackageDirectiveLines(string content, bool expected)
+    {
+        var appHost = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        File.WriteAllText(appHost.FullName, content);
+        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
+
+        Assert.Equal(expected, project.CanHandle(appHost));
+    }
+
+    [Theory]
+    [InlineData("#:sdk Aspire.AppHost.Sdk.Extra@17.0.0", false)]
+    [InlineData("#:sdk Aspire.AppHost.Sdk@17.0.0 unexpected", false)]
+    [InlineData("/*\n#:sdk Aspire.AppHost.Sdk@17.0.0\n*/", false)]
+    [InlineData("var example = \"\"\"\n#:sdk Aspire.AppHost.Sdk@17.0.0\n\"\"\";", false)]
+    [InlineData("/* comment */\n#:sdk Aspire.AppHost.Sdk@17.0.0", true)]
+    [InlineData("#:sdk Aspire.AppHost.Sdk", true)]
+    public void CanHandle_OnlyActiveCompleteSdkDirectiveLines(string content, bool expected)
+    {
+        var appHost = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        File.WriteAllText(appHost.FullName, content);
+        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
+
+        Assert.Equal(expected, project.CanHandle(appHost));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Hosting.AppHost", true)]
+    [InlineData("aspire.hosting.apphost", true)]
+    [InlineData("Aspire.Hosting.AppHost.Extra", false)]
+    public void CanHandle_ExplicitPackageFileAppHost(string packageId, bool expected)
+    {
+        var appHost = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        File.WriteAllText(appHost.FullName, $"#:package {packageId}@17.0.0");
+        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
+
+        Assert.Equal(expected, project.CanHandle(appHost));
+    }
+
     [Fact]
     public void IsLikelyAppHost_SdkAttributeWithoutVersion_ReturnsTrue()
     {

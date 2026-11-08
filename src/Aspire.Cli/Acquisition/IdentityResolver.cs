@@ -24,7 +24,7 @@ namespace Aspire.Cli.Acquisition;
 /// than throwing during DI construction.
 /// </para>
 /// <para>
-/// Environment variables are read via <see cref="IEnvironment.GetEnvironmentVariable"/>
+/// Environment variables are read via <see cref="Aspire.Shared.Telemetry.ITelemetryEnvironment.GetEnvironmentVariable"/>
 /// so the resolver is decoupled from <see cref="CliExecutionContext"/> — both
 /// depend on <see cref="IEnvironment"/> independently, avoiding a circular
 /// dependency.

@@ -43,9 +43,13 @@ export class EndpointUrlItem extends vscode.TreeItem {
 }
 
 export class ResourcesGroupItem extends vscode.TreeItem {
-    constructor(public readonly resources: ResourceJson[], public readonly appHostPid: number) {
+    constructor(
+        public readonly resources: ResourceJson[],
+        public readonly appHostPid: number,
+        public readonly appHostPath: string,
+    ) {
         super(resourcesGroupLabel, vscode.TreeItemCollapsibleState.Expanded);
-        this.id = `resources:${appHostPid}`;
+        this.id = `resources:${getTreeItemOwnerId(appHostPath, appHostPid)}`;
         this.iconPath = new vscode.ThemeIcon('layers', new vscode.ThemeColor('aspire.brandPurple'));
         this.contextValue = 'resourcesGroup';
         this.description = `(${resources.length})`;
@@ -125,7 +129,8 @@ export class ResourceItem extends vscode.TreeItem {
         public readonly appHostPid: number | null,
         hasChildren: boolean,
         public readonly allResources?: readonly ResourceJson[],
-        public readonly appHostPath?: string
+        public readonly appHostPath?: string,
+        canAttachDebugger = false,
     ) {
         const label = resource.displayName ?? resource.name;
         const hasUrls = getVisibleResourceUrls(resource).length > 0;
@@ -136,13 +141,16 @@ export class ResourceItem extends vscode.TreeItem {
             ? vscode.TreeItemCollapsibleState.Expanded
             : hasExpandableContent ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
         super(label, collapsible);
-        const ownerId = appHostPid !== null
-            ? appHostPid.toString()
-            : appHostPath ? getComparisonKey(path.resolve(appHostPath)) : 'workspace';
-        this.id = `resource:${ownerId}:${resource.name}`;
+        this.id = `resource:${getTreeItemOwnerId(appHostPath, appHostPid)}:${resource.name}`;
         this.iconPath = getResourceIcon(resource);
         this.description = buildResourceDescription(resource);
         this.tooltip = buildResourceTooltip(resource);
-        this.contextValue = getResourceContextValue(resource);
+        this.contextValue = getResourceContextValue(resource, canAttachDebugger);
     }
+}
+
+function getTreeItemOwnerId(appHostPath: string | undefined, appHostPid: number | null): string {
+    const pathId = appHostPath ? getComparisonKey(path.resolve(appHostPath)) : 'workspace';
+    const processId = appHostPid ?? 'workspace';
+    return `${pathId}:pid:${processId}`;
 }

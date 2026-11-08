@@ -87,7 +87,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
             },
             CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
-        }, nonInteractive: false, environment: TestEnvironment.CreateLinux());
+        }, nonInteractive: false, environment: TestEnvironment.CreateLinux(
+            new Dictionary<string, string?> { ["SSL_CERT_DIR"] = "/system/certs" }));
 
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -114,7 +115,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
             },
             CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
-        }, nonInteractive: true, environment: TestEnvironment.CreateLinux());
+        }, nonInteractive: true, environment: TestEnvironment.CreateLinux(
+            new Dictionary<string, string?> { ["SSL_CERT_DIR"] = "/system/certs" }));
 
         var cs = sp.GetRequiredService<ICertificateService>();
 

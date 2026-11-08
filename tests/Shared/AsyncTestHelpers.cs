@@ -33,6 +33,26 @@ internal static class AsyncTestHelpers
 {
     private static readonly string s_assemblyName = typeof(TimeoutException).Assembly.GetName().Name!;
 
+    /// <summary>
+    /// Creates a resource whose asynchronous disposal is bounded by a timeout.
+    /// </summary>
+    /// <remarks>
+    /// The factory runs synchronously. Disposal runs on the thread pool, so the resource must
+    /// support disposal from a background thread. A timeout does not cancel the inner disposal.
+    /// </remarks>
+    public static AsyncDisposableWithTimeout<T> WithDisposeTimeout<T>(
+        Func<T> factory,
+        TimeSpan? timeout = null,
+        [CallerFilePath] string? filePath = null,
+        [CallerLineNumber] int lineNumber = default)
+        where T : IAsyncDisposable
+    {
+        var effectiveTimeout = timeout ?? TestConstants.DefaultTimeoutTimeSpan;
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(effectiveTimeout, TimeSpan.Zero, nameof(timeout));
+
+        return new(factory(), effectiveTimeout, filePath, lineNumber);
+    }
+
     public static CancellationTokenSource CreateDefaultTimeoutTokenSource(int milliseconds = -1)
     {
         if (milliseconds == -1)
@@ -64,6 +84,7 @@ internal static class AsyncTestHelpers
                 yield return enumerator.Current;
             }
         }
+
         finally
         {
             try
@@ -238,5 +259,26 @@ internal static class AsyncTestHelpers
         var registration = token.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), tcs);
         tcs.Task.ContinueWith(static (_, state) => ((CancellationTokenRegistration)state!).Dispose(), registration, TaskScheduler.Default);
         return tcs.Task;
+    }
+}
+
+internal sealed class AsyncDisposableWithTimeout<T>(
+    T instance,
+    TimeSpan timeout,
+    string? filePath,
+    int lineNumber) : IAsyncDisposable
+    where T : IAsyncDisposable
+{
+    public T Instance { get; } = instance;
+
+    public ValueTask DisposeAsync()
+    {
+        // Include synchronous work before DisposeAsync returns in the timeout.
+        var disposal = Task.Run(async () =>
+        {
+            await Instance.DisposeAsync().ConfigureAwait(false);
+        });
+
+        return new ValueTask(disposal.DefaultTimeout(timeout, filePath, lineNumber));
     }
 }

@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     # 'schedule' only ever runs on the default branch, so the owner guard is the
     # only condition needed here.
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     environment: deployment-testing
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

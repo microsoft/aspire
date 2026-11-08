@@ -19,6 +19,7 @@ public class AzureRunAsEmulatorModeTests(ITestOutputHelper testOutputHelper)
         { "Azure Service Bus", (builder, configure) => builder.AddAzureServiceBus("servicebus").RunAsEmulator(_ => configure()).Resource },
         { "Azure SignalR", (builder, configure) => builder.AddAzureSignalR("signalr").RunAsEmulator(_ => configure()).Resource },
         { "Azure Storage", (builder, configure) => builder.AddAzureStorage("storage").RunAsEmulator(_ => configure()).Resource },
+        { "Azure Web PubSub", (builder, configure) => builder.AddAzureWebPubSub("webpubsub").RunAsEmulator(_ => configure()).Resource },
     };
 
     [Theory]

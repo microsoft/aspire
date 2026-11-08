@@ -4,132 +4,132 @@
     <body>
       <trans-unit id="AllowAnonymousOptionDescription">
         <source>Allow anonymous access to the dashboard</source>
-        <target state="new">Allow anonymous access to the dashboard</target>
+        <target state="translated">Разрешить анонимный доступ к панели мониторинга</target>
         <note />
       </trans-unit>
       <trans-unit id="ApplicationNameOptionDescription">
         <source>The application name displayed in the dashboard and used to scope persisted dashboard data</source>
-        <target state="new">The application name displayed in the dashboard and used to scope persisted dashboard data</target>
+        <target state="translated">Имя приложения, отображаемое на панели мониторинга и используемое для области действия сохраненных данных панели мониторинга</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleLayoutNotFound">
         <source>The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The 'aspire dashboard' command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run 'aspire setup --force' to extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">Для команды "aspire dashboard" требуется пакет CLI, но структура пакета не найдена. Пакет содержит двоичный файл панели мониторинга и вспомогательные файлы. Выполните "aspire setup --force" для извлечения пакета или повторно установите Aspire CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="BundleNotAvailable">
         <source>The Aspire dashboard requires the CLI bundle. The bundle was not found.</source>
-        <target state="new">The Aspire dashboard requires the CLI bundle. The bundle was not found.</target>
+        <target state="translated">Для панели мониторинга Aspire требуется пакет CLI. Пакет не найден.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigFilePathOptionDescription">
         <source>The path for a JSON configuration file</source>
-        <target state="new">The path for a JSON configuration file</target>
+        <target state="translated">Путь к файлу конфигурации JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedAddressInUse">
         <source>Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</source>
-        <target state="new">Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process.</target>
+        <target state="translated">Не удалось запустить панель мониторинга, так как настроенный порт уже используется. Используйте другой порт или остановите конфликтующий процесс.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedUnexpectedError">
         <source>Dashboard exited unexpectedly due to an error. See logs for details.</source>
-        <target state="new">Dashboard exited unexpectedly due to an error. See logs for details.</target>
+        <target state="translated">Панель мониторинга неожиданно завершила работу из-за ошибки. Дополнительные сведения см. в журналах.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedValidationFailure">
         <source>Dashboard configuration is invalid. Check the provided options and try again.</source>
-        <target state="new">Dashboard configuration is invalid. Check the provided options and try again.</target>
+        <target state="translated">Недопустимая конфигурация панели мониторинга. Проверьте предоставленные параметры и повторите попытку.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardExitedWithError">
         <source>Dashboard exited with exit code {0}.</source>
-        <target state="new">Dashboard exited with exit code {0}.</target>
+        <target state="translated">Панель мониторинга завершила работу с кодом {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
         <source>Failed to start Aspire dashboard: {0}</source>
-        <target state="new">Failed to start Aspire dashboard: {0}</target>
+        <target state="translated">Не удалось запустить панель мониторинга Aspire: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardLabel">
         <source>Dashboard</source>
-        <target state="new">Dashboard</target>
+        <target state="translated">Панель мониторинга</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStartTimedOut">
         <source>Dashboard did not become ready within the expected time.</source>
-        <target state="new">Dashboard did not become ready within the expected time.</target>
+        <target state="translated">Панель мониторинга не подготовлена в течение ожидаемого времени.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardStarted">
         <source>Dashboard started (PID {0}).</source>
-        <target state="new">Dashboard started (PID {0}).</target>
+        <target state="translated">Панель мониторинга запущена (PID {0}).</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the Aspire dashboard (Preview)</source>
-        <target state="new">Manage the Aspire dashboard (Preview)</target>
+        <target state="translated">Управление панелью мониторинга Aspire (предварительная версия)</target>
         <note />
       </trans-unit>
       <trans-unit id="EnsuringDashboardBundle">
         <source>Preparing dashboard bits...</source>
-        <target state="new">Preparing dashboard bits...</target>
+        <target state="translated">Подготовка компонентов панели мониторинга...</target>
         <note />
       </trans-unit>
       <trans-unit id="FrontendUrlOptionDescription">
         <source>One or more HTTP endpoints through which the dashboard frontend is served</source>
-        <target state="new">One or more HTTP endpoints through which the dashboard frontend is served</target>
+        <target state="translated">Одна или несколько конечных точек HTTP, через которые предоставляется интерфейс панели мониторинга</target>
         <note />
       </trans-unit>
       <trans-unit id="LogsLabel">
         <source>Logs</source>
-        <target state="new">Logs</target>
+        <target state="translated">Журналы</target>
         <note />
       </trans-unit>
       <trans-unit id="ManagedBinaryNotFound">
         <source>The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</source>
-        <target state="new">The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run 'aspire setup --force' to re-extract the bundle, or reinstall the Aspire CLI.</target>
+        <target state="translated">Структура пакета CLI найдена, но исполняемый файл панели мониторинга отсутствует. Пакет, возможно, поврежден или неполон. Выполните "aspire setup --force" для повторного извлечения пакета или повторно установите Aspire CLI.</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcLabel">
         <source>OTLP/gRPC</source>
-        <target state="new">OTLP/gRPC</target>
+        <target state="translated">OTLP/gRPC</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpGrpcUrlOptionDescription">
         <source>The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</source>
-        <target state="new">The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC</target>
+        <target state="translated">Конечная точка OTLP/gRPC. Эта конечная точка размещает службу OTLP и получает данные телеметрии с помощью gRPC</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpLabel">
         <source>OTLP/HTTP</source>
-        <target state="new">OTLP/HTTP</target>
+        <target state="translated">OTLP/HTTP</target>
         <note />
       </trans-unit>
       <trans-unit id="OtlpHttpUrlOptionDescription">
         <source>The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</source>
-        <target state="new">The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP</target>
+        <target state="translated">Конечная точка OTLP/HTTP. Эта конечная точка размещает службу OTLP и получает данные телеметрии с помощью Protobuf через HTTP</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistenceModeOptionDescription">
         <source>The dashboard data persistence mode: None, Run, or Resume</source>
-        <target state="new">The dashboard data persistence mode: None, Run, or Resume</target>
+        <target state="translated">Режим сохранения данных панели мониторинга: None, Run или Resume</target>
         <note />
       </trans-unit>
       <trans-unit id="RunDescription">
         <source>Start the Aspire dashboard (Preview)</source>
-        <target state="new">Start the Aspire dashboard (Preview)</target>
+        <target state="translated">Запустить панель мониторинга Aspire (предварительная версия)</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
         <source>Starting dashboard...</source>
-        <target state="new">Starting dashboard...</target>
+        <target state="translated">Запускается панель мониторинга...</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingDashboard">
         <source>Stopping dashboard.</source>
-        <target state="new">Stopping dashboard.</target>
+        <target state="translated">Остановка панели мониторинга.</target>
         <note />
       </trans-unit>
     </body>

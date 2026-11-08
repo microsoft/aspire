@@ -27,6 +27,12 @@ namespace Aspire.Cli.Tests.Telemetry;
 
 public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 {
+    // Recovery must outlast the exporter's real three-minute lease and allow retries; shared test timeouts can expire too soon.
+    private const int LeaseRecoveryTimeoutMilliseconds = 5 * 60 * 1000;
+
+    // Allow an extra minute for provider disposal after the drain deadline.
+    private const int LeaseRecoveryProcessTimeoutMilliseconds = 6 * 60 * 1000;
+
     [Fact]
     public void SharedExporter_DisablesStandardMetricsAndPerformanceCounters()
     {
@@ -56,10 +62,13 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
                     var data = envelope.RootElement.GetProperty("data");
                     var baseType = data.GetProperty("baseType").GetString()!;
                     var baseData = data.GetProperty("baseData");
-                    var name = baseType == "MetricData"
-                        ? baseData.GetProperty("metrics")[0].GetProperty("name").GetString()!
-                        : baseData.GetProperty("name").GetString()!;
-                    if (baseType == "RemoteDependencyData")
+                    var name = baseType switch
+                    {
+                        "MetricData" => baseData.GetProperty("metrics")[0].GetProperty("name").GetString()!,
+                        "MessageData" => baseData.GetProperty("message").GetString()!,
+                        _ => baseData.GetProperty("name").GetString()!
+                    };
+                    if (baseType is "RemoteDependencyData" or "MessageData")
                     {
                         var properties = baseData.GetProperty("properties");
                         Assert.Equal("1.0.0-test", properties.GetProperty(TelemetryConstants.Tags.CliVersion).GetString());
@@ -80,13 +89,15 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
                 $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/", storageDirectory,
                 builder =>
                 {
-                    builder.AddProcessor(new CliTagEnrichmentProcessor(fixture.TagsSource, fixture.Telemetry));
+                    builder.AddProcessor(new ActivityTagEnrichmentProcessor(fixture.Telemetry));
                     builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(options =>
                     {
                         exporterOptions = options;
                         options.Transport = new HttpClientTransport(client);
                     }));
-                });
+                },
+                logging => logging.AddProcessor(new LogRecordTagEnrichmentProcessor(fixture.Telemetry)),
+                options => options.Transport = new HttpClientTransport(client));
 
             Assert.NotNull(exporterOptions);
             Assert.False(exporterOptions.EnableLiveMetrics);
@@ -108,11 +119,14 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
                 Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.CliVersion));
             }
 
-            Assert.True(await provider.ForceFlushAsync(10_000));
+            // Bypass the recorder so only the log processor can supply default metadata.
+            provider.EventLogger.LogInformation("reported-event");
+
+            Assert.True(await provider.ForceFlushAsync(TestConstants.DefaultTimeoutDuration).DefaultTimeout());
             Assert.Equal(
-                [("MetricData", "_OTELRESOURCE_"), ("RemoteDependencyData", "reported-operation")],
-                exportedItems.ToArray());
-        }, workspace.WorkspaceRoot.FullName);
+                [("MessageData", "reported-event"), ("MetricData", "_OTELRESOURCE_"), ("RemoteDependencyData", "reported-operation")],
+                exportedItems.OrderBy(item => item.BaseType, StringComparer.Ordinal).ToArray());
+        }, workspace.WorkspaceRoot.FullName, new RemoteInvokeOptions { TimeOut = TestConstants.LongTimeoutDuration });
     }
 
     [Theory]
@@ -258,7 +272,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             using var fixture = new TelemetryFixture(telemetryConfiguration: configuration, initialize: false);
             Resource? azureTraceResource = null;
             Resource? azureLogResource = null;
-            using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance,
+            using var manager = new TelemetryManager(configuration, fixture.Telemetry, NullLogger<TelemetryManager>.Instance,
                 (resource, _) =>
                 {
                     var provider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, AspireCliTelemetry.EventLogCategoryName,
@@ -370,7 +384,6 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     private static TelemetryManager CreateDisabledManager(TelemetryFixture fixture)
         => new(
             new TelemetryConfiguration { ReportedTelemetryEnabled = false },
-            fixture.TagsSource,
             fixture.Telemetry,
             NullLogger<TelemetryManager>.Instance);
 
@@ -430,10 +443,10 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             });
             using var client = new HttpClient(handler);
             using var provider = CreateRecoveryProvider(directory, client);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            using var timeout = new CancellationTokenSource(LeaseRecoveryTimeoutMilliseconds);
             await AgentTelemetryUploader.DrainAsync(directory, lockPath, timeout.Token);
             Assert.True(delivered.Task.IsCompletedSuccessfully);
-        }, storage, lockPath, new RemoteInvokeOptions { TimeOut = 360_000 }).Dispose();
+        }, storage, lockPath, new RemoteInvokeOptions { TimeOut = LeaseRecoveryProcessTimeoutMilliseconds }).Dispose();
     }
 
     private static TracerProvider CreateRecoveryProvider(string storage, HttpClient client)

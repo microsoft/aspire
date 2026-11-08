@@ -5,48 +5,96 @@ namespace Aspire.Tray;
 
 internal sealed partial class MacTrayApplication
 {
-    private const int TrayMarkSize = 20;
-    private const double StatusIconSize = 14;
+    private const double TrayCanvasSize = 22;
 
-    private static TrayIconState GetTrayIconState(TrayViewState state) => state.Discovery switch
-    {
-        DiscoveryState.Connecting => TrayIconState.Connecting,
-        DiscoveryState.Live => state.HasActiveAppHosts ? TrayIconState.Active : TrayIconState.Idle,
-        _ => TrayIconState.Disconnected
-    };
+    // The logo is drawn 17 points wide, centered horizontally, so the visible triangle is about
+    // 14 points tall like the system's menu bar glyphs (Wi-Fi, battery). The source triangle ends
+    // about 13% above the bottom of its square artwork, so the square sits 1.5 points above the
+    // canvas bottom to center the visible triangle vertically.
+    private static readonly AppKit.NativeRect s_trayLogoRect = new(new(2.5, 1.5), new(17, 17));
 
-    private static string TrayIconDescription(TrayIconState state) => state switch
-    {
-        TrayIconState.Active => "AppHosts running",
-        TrayIconState.Idle => "No AppHosts running",
-        TrayIconState.Connecting => "Connecting to discovery",
-        _ => "Discovery unavailable"
-    };
+    // The status dot sits in the lower-right corner (non-flipped image coordinates). The
+    // logo is cut out 1.5 points around it, so the dot reads on any menu-bar background.
+    private static readonly AppKit.NativeRect s_trayBadgeRect = new(new(13.5, 1), new(7, 7));
+    private const double TrayBadgeGap = 1.5;
 
-    private nint GetTrayImage(TrayIconState state)
+    private nint _trayBadge;
+
+    /// <summary>
+    /// Shows the status on the status item: the monochrome logo as a template image, a
+    /// colored dot as a separate view (a template image cannot carry color), and the
+    /// standard dimmed appearance while discovery is connecting or unavailable.
+    /// </summary>
+    private void ApplyTrayIcon(TrayIconStatus status)
     {
-        if (_trayImages.TryGetValue(state, out var existing))
+        var button = AppKit.Get(_statusItem, "button");
+        var badge = TrayIconStatusRules.HasBadge(status);
+        AppKit.Set(button, "setImage:", GetTrayImage(badge));
+        // appearsDisabled is AppKit's own dimmed status-item rendering.
+        // https://developer.apple.com/documentation/appkit/nsstatusbarbutton/appearsdisabled
+        AppKit.SendBool(button, AppKit.Selector("setAppearsDisabled:"), TrayIconStatusRules.IsDimmed(status) ? (byte)1 : (byte)0);
+        if (_trayBadge == 0)
+        {
+            // A custom NSBox is a filled rounded rectangle whose fill color is resolved at draw
+            // time, so the system colors follow the menu bar's light or dark appearance.
+            _trayBadge = AppKit.SendRect(AppKit.Get(AppKit.Class("NSBox"), "alloc"), AppKit.Selector("initWithFrame:"), s_trayBadgeRect);
+            AppKit.SendInt64(_trayBadge, AppKit.Selector("setBoxType:"), 4); // NSBoxCustom
+            AppKit.SendInt64(_trayBadge, AppKit.Selector("setTitlePosition:"), 0); // NSNoTitle
+            AppKit.SetDouble(_trayBadge, AppKit.Selector("setBorderWidth:"), 0);
+            AppKit.SetDouble(_trayBadge, AppKit.Selector("setCornerRadius:"), s_trayBadgeRect.Size.Width / 2);
+            // The status item's accessibility label already states the status.
+            AppKit.SendBool(_trayBadge, AppKit.Selector("setAccessibilityElement:"), 0);
+            AppKit.Set(button, "addSubview:", _trayBadge);
+        }
+        AppKit.SendBool(_trayBadge, AppKit.Selector("setHidden:"), badge ? (byte)0 : (byte)1);
+        if (!badge)
+        {
+            return;
+        }
+        AppKit.Set(_trayBadge, "setFillColor:", AppKit.Get(AppKit.Class("NSColor"),
+            status == TrayIconStatus.Running ? "systemGreenColor" : "systemOrangeColor"));
+        // NSButton centers an image-only cell; place the dot over the image's badge cut-out.
+        var bounds = AppKit.GetRect(button, "bounds");
+        var x = (bounds.Size.Width - TrayCanvasSize) / 2 + s_trayBadgeRect.Origin.X;
+        var imageY = (bounds.Size.Height - TrayCanvasSize) / 2;
+        var y = AppKit.GetBool(button, AppKit.Selector("isFlipped")) != 0
+            ? imageY + TrayCanvasSize - s_trayBadgeRect.Origin.Y - s_trayBadgeRect.Size.Height
+            : imageY + s_trayBadgeRect.Origin.Y;
+        AppKit.SetRect(_trayBadge, AppKit.Selector("setFrame:"), new(new(Math.Round(x * 2) / 2, Math.Round(y * 2) / 2), s_trayBadgeRect.Size));
+    }
+
+    private void RemoveTrayBadge()
+    {
+        if (_trayBadge != 0)
+        {
+            AppKit.SendVoid(_trayBadge, AppKit.Selector("removeFromSuperview"));
+            AppKit.Release(_trayBadge);
+            _trayBadge = 0;
+        }
+    }
+
+    private nint GetTrayImage(bool badge)
+    {
+        if (_trayImages.TryGetValue(badge, out var existing))
         {
             return existing;
         }
-        var image = DrawIcon(22, () =>
+        var image = DrawIcon(TrayCanvasSize, () =>
         {
-            var mark = new AppKit.NativeRect(new(0, 1), new(TrayMarkSize, TrayMarkSize));
             AppKit.DrawImage(_trayMarkImage, AppKit.Selector("drawInRect:fromRect:operation:fraction:"),
-                mark, new(new(0, 0), new(0, 0)), 2, 1);
-            // Preserve the supplied brand silhouette. The entire composite is a template:
-            // AppKit chooses its contrast for the menu-bar material and selected appearance.
-            // https://developer.apple.com/documentation/appkit/nsimage/istemplate
-            if (state == TrayIconState.Idle)
+                s_trayLogoRect, new(new(0, 0), new(0, 0)), 2, 1);
+            if (!badge)
             {
                 return;
             }
-            // Erase the mark under the badge rather than painting a background-colored
-            // outline. The transparent ring follows any menu-bar material or wallpaper.
+            // Erase the logo under and around the dot rather than painting an outline, so
+            // the gap shows whatever the menu bar is (material, wallpaper tint, highlight).
             AppKit.SendVoid(AppKit.Class("NSGraphicsContext"), AppKit.Selector("saveGraphicsState"));
             try
             {
-                var cutout = new AppKit.NativeRect(new(12, -1), new(11, 11));
+                var cutout = new AppKit.NativeRect(
+                    new(s_trayBadgeRect.Origin.X - TrayBadgeGap, s_trayBadgeRect.Origin.Y - TrayBadgeGap),
+                    new(s_trayBadgeRect.Size.Width + 2 * TrayBadgeGap, s_trayBadgeRect.Size.Height + 2 * TrayBadgeGap));
                 var clip = AppKit.SendRect(AppKit.Class("NSBezierPath"), AppKit.Selector("bezierPathWithOvalInRect:"), cutout);
                 AppKit.SendVoid(clip, AppKit.Selector("addClip"));
                 AppKit.FillRectUsingOperation(cutout, 0);
@@ -55,63 +103,96 @@ internal sealed partial class MacTrayApplication
             {
                 AppKit.SendVoid(AppKit.Class("NSGraphicsContext"), AppKit.Selector("restoreGraphicsState"));
             }
-            var badge = new AppKit.NativeRect(new(13, 0), new(9, 9));
-            switch (state)
-            {
-                case TrayIconState.Active:
-                    FillCircle(0, badge);
-                    break;
-                case TrayIconState.Disconnected:
-                    DrawCross(badge, 0);
-                    break;
-                case TrayIconState.Connecting:
-                    foreach (var x in new[] { 13.0, 16.5, 20.0 })
-                    {
-                        FillCircle(0, new(new(x, 3.5), new(2, 2)));
-                    }
-                    break;
-            }
         });
-        _trayImages.Add(state, image);
+        _trayImages.Add(badge, image);
         return image;
     }
 
-    private static nint LoadTrayMark()
+    /// <summary>
+    /// Builds the menu-bar logo from the same colored Aspire artwork Windows uses, as a
+    /// one-color template image (Apple's guidance for menu bar extras). Darker parts of the
+    /// artwork (the outline) become opaque and lighter facets become partly transparent, so
+    /// the logo keeps its inner structure in a single color. The conversion maps sRGB
+    /// luminance L to alpha as clamp(4/3 * (1 - L)): the #512BD4 outline (L about 0.25)
+    /// stays opaque and the lightest facet (L about 0.85) keeps about 20% coverage.
+    /// https://developer.apple.com/design/human-interface-guidelines/the-menu-bar#Menu-bar-extras
+    /// </summary>
+    private unsafe nint LoadTrayMark()
     {
-        var image = AppKit.SendSizeReturningPointer(AppKit.Get(AppKit.Class("NSImage"), "alloc"),
-            AppKit.Selector("initWithSize:"), new(TrayMarkSize, TrayMarkSize));
-        if (image == 0)
+        const int Pixels = 256;
+        var allocated = AppKit.CreateBitmap(AppKit.Get(AppKit.Class("NSBitmapImageRep"), "alloc"),
+            AppKit.Selector("initWithBitmapDataPlanes:pixelsWide:pixelsHigh:bitsPerSample:samplesPerPixel:hasAlpha:isPlanar:colorSpaceName:bytesPerRow:bitsPerPixel:"),
+            0, Pixels, Pixels, 8, 4, 1, 0, AppKit.Constant("NSDeviceRGBColorSpace"), 0, 0);
+        if (allocated == 0)
         {
-            throw new InvalidOperationException("Could not create the tray template image.");
+            throw new InvalidOperationException("Could not allocate the tray logo.");
         }
+        nint bitmap;
         try
         {
-            // Resource streams have no filename-based @2x discovery. Register both
-            // supplied rasters at the same logical size so AppKit selects the native scale.
-            foreach (var scale in new[] { 2, 1 })
+            bitmap = AppKit.Get(allocated, "bitmapImageRepByRetaggingWithColorSpace:", AppKit.Get(AppKit.Class("NSColorSpace"), "sRGBColorSpace"));
+            if (bitmap == 0)
             {
-                var resourceName = scale == 2 ? "AspireTrayTemplate@2x.png" : "AspireTrayTemplate.png";
-                var source = LoadEmbeddedImage(resourceName);
-                try
+                throw new InvalidOperationException("Could not select the tray logo color space.");
+            }
+            AppKit.Get(bitmap, "retain");
+        }
+        finally
+        {
+            AppKit.Release(allocated);
+        }
+        nint image = 0;
+        try
+        {
+            var context = AppKit.Get(AppKit.Class("NSGraphicsContext"), "graphicsContextWithBitmapImageRep:", bitmap);
+            if (context == 0)
+            {
+                throw new InvalidOperationException("Could not draw the tray logo.");
+            }
+            AppKit.SendVoid(AppKit.Class("NSGraphicsContext"), AppKit.Selector("saveGraphicsState"));
+            try
+            {
+                AppKit.Set(AppKit.Class("NSGraphicsContext"), "setCurrentContext:", context);
+                AppKit.FillRectUsingOperation(new(new(0, 0), new(Pixels, Pixels)), 0);
+                AppKit.DrawImage(_brandImage, AppKit.Selector("drawInRect:fromRect:operation:fraction:"),
+                    new(new(0, 0), new(Pixels, Pixels)), new(new(0, 0), new(0, 0)), 2, 1);
+                AppKit.SendVoid(context, AppKit.Selector("flushGraphics"));
+            }
+            finally
+            {
+                AppKit.SendVoid(AppKit.Class("NSGraphicsContext"), AppKit.Selector("restoreGraphicsState"));
+            }
+
+            // The default NSBitmapImageRep layout is 8-bit RGBA with premultiplied alpha.
+            var data = (byte*)AppKit.Get(bitmap, "bitmapData");
+            var stride = (int)AppKit.Get(bitmap, "bytesPerRow");
+            for (var y = 0; y < Pixels; y++)
+            {
+                var row = data + y * stride;
+                for (var x = 0; x < Pixels; x++)
                 {
-                    var representations = AppKit.Get(source, "representations");
-                    if (AppKit.Get(representations, "count") != 1)
+                    var pixel = row + x * 4;
+                    var alpha = pixel[3];
+                    if (alpha == 0)
                     {
-                        throw new InvalidOperationException($"Expected one bitmap in '{resourceName}'.");
+                        continue;
                     }
-                    var bitmap = AppKit.Get(representations, "objectAtIndex:", 0);
-                    if (AppKit.Get(bitmap, "pixelsWide") != TrayMarkSize * scale || AppKit.Get(bitmap, "pixelsHigh") != TrayMarkSize * scale)
-                    {
-                        throw new InvalidOperationException($"Unexpected dimensions for '{resourceName}'.");
-                    }
-                    AppKit.SendSize(bitmap, AppKit.Selector("setSize:"), new(TrayMarkSize, TrayMarkSize));
-                    AppKit.Set(image, "addRepresentation:", bitmap);
-                }
-                finally
-                {
-                    AppKit.Release(source);
+                    var luminance = (0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2]) / alpha;
+                    var coverage = Math.Clamp(4.0 / 3.0 * (1 - luminance), 0, 1);
+                    // Premultiplied black: only the alpha channel carries the template shape.
+                    pixel[0] = pixel[1] = pixel[2] = 0;
+                    pixel[3] = (byte)Math.Round(alpha * coverage);
                 }
             }
+
+            image = AppKit.SendSizeReturningPointer(AppKit.Get(AppKit.Class("NSImage"), "alloc"),
+                AppKit.Selector("initWithSize:"), s_trayLogoRect.Size);
+            if (image == 0)
+            {
+                throw new InvalidOperationException("Could not create the tray logo.");
+            }
+            AppKit.SendSize(bitmap, AppKit.Selector("setSize:"), s_trayLogoRect.Size);
+            AppKit.Set(image, "addRepresentation:", bitmap);
             AppKit.SendBool(image, AppKit.Selector("setTemplate:"), 1);
             return image;
         }
@@ -119,6 +200,10 @@ internal sealed partial class MacTrayApplication
         {
             AppKit.Release(image);
             throw;
+        }
+        finally
+        {
+            AppKit.Release(bitmap);
         }
     }
 
@@ -170,6 +255,7 @@ internal sealed partial class MacTrayApplication
                     {
                         AppKit.Set(AppKit.Class("NSGraphicsContext"), "setCurrentContext:", context);
                         AppKit.SendBool(context, AppKit.Selector("setShouldAntialias:"), 1);
+                        AppKit.SendInt64(context, AppKit.Selector("setImageInterpolation:"), 3); // NSImageInterpolationHigh
                         AppKit.FillRectUsingOperation(new(new(0, 0), new(pixels, pixels)), 0);
                         var transform = AppKit.Get(AppKit.Class("NSAffineTransform"), "transform");
                         AppKit.SetDouble(transform, AppKit.Selector("scaleBy:"), scale);
@@ -229,52 +315,5 @@ internal sealed partial class MacTrayApplication
         }
         AppKit.SendVoid(GetColor(color), AppKit.Selector("setStroke"));
         AppKit.SendVoid(path, AppKit.Selector("stroke"));
-    }
-
-    private nint GetHealthImage(AppHostHealth health, bool running)
-    {
-        var key = (running ? health : AppHostHealth.Unknown, running);
-        if (_healthImages.TryGetValue(key, out var existing))
-        {
-            return existing;
-        }
-        // Native symbols remain legible in light/dark/selected menus and carry meaning
-        // without relying on color perception. An inactive host is neutral, not an error.
-        var symbol = AppKit.SendTwoPointers(AppKit.Class("NSImage"),
-            AppKit.Selector("imageWithSystemSymbolName:accessibilityDescription:"),
-            AppKit.String(HealthSymbol(health, running)), AppKit.String(HealthDescription(health, running)));
-        if (symbol == 0)
-        {
-            throw new InvalidOperationException("A required AppHost health symbol is unavailable.");
-        }
-        var image = AppKit.Get(symbol, "copy");
-        AppKit.SendSize(image, AppKit.Selector("setSize:"), new(StatusIconSize, StatusIconSize));
-        AppKit.SendBool(image, AppKit.Selector("setTemplate:"), 1);
-        _healthImages.Add(key, image);
-        return image;
-    }
-
-    private static string HealthSymbol(AppHostHealth health, bool running) => !running ? "stop.circle" : health switch
-    {
-        AppHostHealth.Healthy => "checkmark.circle",
-        AppHostHealth.Warning => "exclamationmark.triangle",
-        AppHostHealth.Unhealthy => "xmark.octagon",
-        _ => "questionmark.circle"
-    };
-
-    private static string HealthDescription(AppHostHealth health, bool running) => !running ? "AppHost stopped" : health switch
-    {
-        AppHostHealth.Healthy => "All resources healthy",
-        AppHostHealth.Warning => "Resources waiting or degraded",
-        AppHostHealth.Unhealthy => "Resources failed or unhealthy",
-        _ => "Resource health unavailable"
-    };
-
-    private enum TrayIconState
-    {
-        Idle,
-        Active,
-        Connecting,
-        Disconnected
     }
 }

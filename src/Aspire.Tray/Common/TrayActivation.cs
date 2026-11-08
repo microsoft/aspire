@@ -95,7 +95,7 @@ internal sealed class TrayActivation : IAsyncDisposable
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("The running tray did not respond. Close any open tray menu or dialog and try again.");
+            throw new TimeoutException("The running tray did not respond. Close any open tray dialog and try again.");
         }
     }
 

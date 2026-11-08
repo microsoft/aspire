@@ -1,0 +1,14 @@
+﻿{
+  custom.0: numeric property,
+  emptyArray: [],
+  emptyObject: {},
+  matrix[0][0].name: first,
+  matrix[0][1]: null,
+  matrix[1]: null,
+  nullOnly[0]: null,
+  plugins[0]: null,
+  plugins[1]: aspire,
+  plugins[2]: null,
+  plugins[3]: other,
+  plugins[4]: null
+}

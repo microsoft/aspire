@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Microsoft.Extensions.Configuration;
@@ -14,6 +15,11 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class OtlpConfigurationExtensions
 {
+    private const string ServiceInstanceIdAttributeName = "service.instance.id";
+
+    // DCP replaces this template with the instance id of each replica when it starts the process or container.
+    private const string ServiceInstanceIdTemplate = "{{- index .Annotations \"" + CustomResource.OtelServiceInstanceIdAnnotation + "\" -}}";
+
     /// <summary>
     /// Configures OpenTelemetry in projects using environment variables.
     /// </summary>
@@ -132,7 +138,16 @@ public static class OtlpConfigurationExtensions
             ApplyActivationEnvironmentVariables(resource, context.EnvironmentVariables);
 
             // Set the service name and instance id to the resource name and UID. Values are injected by DCP.
-            context.EnvironmentVariables[KnownOtelConfigNames.ResourceAttributes] = "service.instance.id={{- index .Annotations \"" + CustomResource.OtelServiceInstanceIdAnnotation + "\" -}}";
+            // OTEL_RESOURCE_ATTRIBUTES can already hold attributes from a callback that ran earlier, for example
+            // WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev") before WithOtlpExporter() on a
+            // container, so add the instance id to that value instead of replacing it. An explicit service.instance.id
+            // is kept. A value that is not a plain string (for example a ReferenceExpression) cannot be inspected
+            // before it resolves, so it is replaced as before.
+            context.EnvironmentVariables.TryGetValue(KnownOtelConfigNames.ResourceAttributes, out var resourceAttributes);
+            context.EnvironmentVariables[KnownOtelConfigNames.ResourceAttributes] = AddResourceAttributeIfMissing(
+                resourceAttributes as string,
+                ServiceInstanceIdAttributeName,
+                ServiceInstanceIdTemplate);
             context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = "{{- index .Annotations \"" + CustomResource.OtelServiceNameAnnotation + "\" -}}";
 
             if (configuration["AppHost:OtlpApiKey"] is { } otlpApiKey)
@@ -304,5 +319,86 @@ public static class OtlpConfigurationExtensions
             (_, _, true) => (httpEndpoint, "http/protobuf"),
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Gets the <c>service.instance.id</c> value in the <c>OTEL_RESOURCE_ATTRIBUTES</c> environment variable.
+    /// </summary>
+    /// <param name="environmentVariables">The environment variables of a resource.</param>
+    /// <returns>The value, or <see langword="null"/> when the variable is missing, is not a string, or has no such attribute.</returns>
+    internal static string? GetServiceInstanceId(Dictionary<string, object> environmentVariables)
+    {
+        return environmentVariables.TryGetValue(KnownOtelConfigNames.ResourceAttributes, out var value) &&
+            value is string resourceAttributes &&
+            TryGetResourceAttribute(resourceAttributes, ServiceInstanceIdAttributeName, out var serviceInstanceId)
+            ? serviceInstanceId
+            : null;
+    }
+
+    /// <summary>
+    /// Adds <c>service.instance.id</c> back to the <c>OTEL_RESOURCE_ATTRIBUTES</c> environment variable when its value no longer has one.
+    /// </summary>
+    /// <param name="environmentVariables">The environment variables of a resource.</param>
+    /// <param name="serviceInstanceId">The <c>service.instance.id</c> value to add.</param>
+    /// <returns>
+    /// <paramref name="environmentVariables"/> when nothing changes; otherwise a copy with the attribute added. The input is
+    /// not modified because it can be the cached result of an environment callback.
+    /// </returns>
+    internal static Dictionary<string, object> RestoreServiceInstanceId(Dictionary<string, object> environmentVariables, string serviceInstanceId)
+    {
+        // A removed variable stays removed, since removing it is a deliberate choice. A value that is not a plain string
+        // (for example a ReferenceExpression) is left alone because it cannot be inspected before it resolves.
+        if (!environmentVariables.TryGetValue(KnownOtelConfigNames.ResourceAttributes, out var value) ||
+            value is not string resourceAttributes ||
+            TryGetResourceAttribute(resourceAttributes, ServiceInstanceIdAttributeName, out _))
+        {
+            return environmentVariables;
+        }
+
+        return new Dictionary<string, object>(environmentVariables)
+        {
+            [KnownOtelConfigNames.ResourceAttributes] = AddResourceAttributeIfMissing(resourceAttributes, ServiceInstanceIdAttributeName, serviceInstanceId)
+        };
+    }
+
+    /// <summary>
+    /// Adds an attribute to an <c>OTEL_RESOURCE_ATTRIBUTES</c> value unless the value already has an attribute with that key.
+    /// </summary>
+    internal static string AddResourceAttributeIfMissing(string? resourceAttributes, string key, string value)
+    {
+        if (string.IsNullOrWhiteSpace(resourceAttributes))
+        {
+            return $"{key}={value}";
+        }
+
+        return TryGetResourceAttribute(resourceAttributes, key, out _)
+            ? resourceAttributes
+            : $"{resourceAttributes},{key}={value}";
+    }
+
+    /// <summary>
+    /// Gets the value of an attribute in an <c>OTEL_RESOURCE_ATTRIBUTES</c> value.
+    /// </summary>
+    internal static bool TryGetResourceAttribute(string resourceAttributes, string key, [NotNullWhen(true)] out string? value)
+    {
+        // OTEL_RESOURCE_ATTRIBUTES is a comma-separated list of key=value pairs, for example:
+        //   deployment.environment=dev,service.instance.id=api-x7k2
+        // ',' and '=' inside keys and values must be percent-encoded, so splitting on every ',' and then on the first
+        // '=' finds each pair. Whitespace around a key is ignored and an entry without '=' is skipped, as the
+        // OpenTelemetry .NET SDK does. The value is returned as written, still percent-encoded.
+        // https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
+        // https://opentelemetry.io/docs/specs/otel/resource/sdk/#specifying-resource-information-via-an-environment-variable
+        foreach (var pair in resourceAttributes.Split(','))
+        {
+            var separatorIndex = pair.IndexOf('=');
+            if (separatorIndex >= 0 && pair.AsSpan(0, separatorIndex).Trim().Equals(key, StringComparison.Ordinal))
+            {
+                value = pair[(separatorIndex + 1)..];
+                return true;
+            }
+        }
+
+        value = null;
+        return false;
     }
 }

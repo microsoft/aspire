@@ -2,6 +2,20 @@
     margin-bottom: 1rem;
 }
 
+.interaction-input-dialog ::deep form .fluent-stack-vertical {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch !important;
+    gap: 12px;
+}
+
+.interaction-input-dialog .interaction-input {
+    padding: 14px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 10px;
+    background: var(--colorNeutralBackground2);
+}
+
 .interaction-input-dialog .interaction-input ::deep {
     width: 100%;
 }
@@ -11,9 +25,15 @@
 .interaction-input-dialog .interaction-input ::deep fluent-field,
 .interaction-input-dialog .interaction-input ::deep .file-input-container,
 .interaction-input-dialog .interaction-input ::deep .interaction-input-label {
-    width: 75%;
+    width: 100%;
     /* Prevent long select/combox controls from extending outside the dialog. This can happen when there is very long placeholder text */
     max-width: 500px;
+}
+
+@media (max-width: 700px) {
+    .interaction-input-dialog ::deep form .fluent-stack-vertical {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* Size the Fluent field wrapper, not just its input, so loading rings sit beside the visible control. */

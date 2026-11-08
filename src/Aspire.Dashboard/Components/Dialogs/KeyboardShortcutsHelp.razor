@@ -1,0 +1,46 @@
+@using Aspire.Dashboard.Resources
+
+<div class="help-content">
+    @{
+        // The hint names the F6 key mid-sentence; split around the placeholder so the key renders like the
+        // shortcuts below while translators keep control of the word order.
+        var hintParts = Loc[nameof(Dialogs.HelpDialogShortcutsHint)].Value.Split("{0}", 2);
+    }
+    <p class="help-shortcuts-hint">@hintParts[0]@if (hintParts.Length > 1) {<kbd>F6</kbd>@hintParts[1]}</p>
+
+    @{
+        var shortcutCategories = GetShortcutsByCategory();
+    }
+
+    @* Description lists pair each action with its keys for assistive technology. *@
+    <div class="help-shortcut-categories">
+        @for (var categoryIndex = 0; categoryIndex < shortcutCategories.Count; categoryIndex++)
+        {
+            var shortcutCategory = shortcutCategories[categoryIndex];
+            var categoryHeadingId = $"help-dialog-shortcut-category-{categoryIndex}";
+
+            <section class="help-shortcut-category" aria-labelledby="@categoryHeadingId">
+                <h6 id="@categoryHeadingId">@shortcutCategory.Category</h6>
+                <dl aria-labelledby="@categoryHeadingId">
+                    @foreach (var shortcut in shortcutCategory.Shortcuts)
+                    {
+                        <div class="help-shortcut">
+                            <dt>@shortcut.Description</dt>
+                            <dd>
+                                @for (var i = 0; i < shortcut.Keys.Length; i++)
+                                {
+                                    <kbd>@shortcut.Keys[i]</kbd>
+
+                                    if (i < shortcut.Keys.Length - 1)
+                                    {
+                                        <span aria-hidden="true">+</span>
+                                    }
+                                }
+                            </dd>
+                        </div>
+                    }
+                </dl>
+            </section>
+        }
+    </div>
+</div>

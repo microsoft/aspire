@@ -35,23 +35,23 @@ public class Aspire {
         if (options != null) {
             resolvedOptions.putAll(options.toMap());
         }
-        if (resolvedOptions.get("Args") == null) {
+        if (resolvedOptions.get("args") == null) {
             String forwardedArgs = System.getenv("ASPIRE_APPHOST_ARGS");
-            resolvedOptions.put("Args", forwardedArgs == null || forwardedArgs.isEmpty()
+            resolvedOptions.put("args", forwardedArgs == null || forwardedArgs.isEmpty()
                 ? new String[0]
                 : forwardedArgs.split("\n", -1));
         }
-        if (resolvedOptions.get("ProjectDirectory") == null) {
+        if (resolvedOptions.get("projectDirectory") == null) {
             String projectDirectory = System.getenv("ASPIRE_PROJECT_DIRECTORY");
             if (projectDirectory == null || projectDirectory.isEmpty()) {
                 projectDirectory = System.getProperty("user.dir");
             }
-            resolvedOptions.put("ProjectDirectory", projectDirectory);
+            resolvedOptions.put("projectDirectory", projectDirectory);
         }
-        if (resolvedOptions.get("AppHostFilePath") == null) {
+        if (resolvedOptions.get("appHostFilePath") == null) {
             String appHostFilePath = System.getenv("ASPIRE_APPHOST_FILEPATH");
             if (appHostFilePath != null && !appHostFilePath.isEmpty()) {
-                resolvedOptions.put("AppHostFilePath", appHostFilePath);
+                resolvedOptions.put("appHostFilePath", appHostFilePath);
             }
         }
         Map<String, Object> args = new HashMap<>();
@@ -1119,7 +1119,10 @@ public class AspireClient {
         if (value instanceof String) {
             return "\"" + escapeJson((String) value) + "\"";
         }
-        if (value instanceof Number || value instanceof Boolean) {
+        if (value instanceof Number number) {
+            return toJsonNumber(number);
+        }
+        if (value instanceof Boolean) {
             return value.toString();
         }
         if (value instanceof Map) {
@@ -1162,6 +1165,32 @@ public class AspireClient {
             return sb.toString();
         }
         return "\"" + escapeJson(value.toString()) + "\"";
+    }
+
+    // 2^53 (JavaScript's Number.MAX_SAFE_INTEGER + 1). Every integer with magnitude up to this bound is exactly
+    // representable as a double; above it, doubles are spaced more than 1 apart, so a parsed value may already have
+    // been rounded to a different integer. Only normalize integral doubles within this range.
+    private static final double MAX_EXACT_DOUBLE_INTEGER = 9007199254740992d;
+
+    // ATS maps every numeric type to Java double, so integral values must be written without a fractional
+    // part ("32" rather than "32.0"); otherwise the AppHost can't deserialize them into int or long members.
+    private static String toJsonNumber(Number number) {
+        if (number instanceof BigDecimal decimal) {
+            // Compare exactly: BigDecimal values parsed from JSON may not be representable as a double.
+            try {
+                return Long.toString(decimal.longValueExact());
+            } catch (ArithmeticException ignored) {
+                // Fractional or out of long range; keep the original text.
+                return decimal.toString();
+            }
+        }
+        String text = number.toString();
+        boolean hasFractionOrExponent = text.indexOf('.') >= 0 || text.indexOf('e') >= 0 || text.indexOf('E') >= 0;
+        double value = number.doubleValue();
+        if (hasFractionOrExponent && value == Math.rint(value) && Math.abs(value) <= MAX_EXACT_DOUBLE_INTEGER) {
+            return Long.toString((long) value);
+        }
+        return text;
     }
 
     private String escapeJson(String s) {
@@ -2452,23 +2481,23 @@ public class TestConfigDto implements JsonSerializable {
     @SuppressWarnings("unchecked")
     public static TestConfigDto fromMap(Map<String, Object> map) {
         var value = new TestConfigDto();
-        var nameValue = map.get("Name");
+        var nameValue = map.get("name");
         value.setName((String) nameValue);
-        var portValue = map.get("Port");
+        var portValue = map.get("port");
         value.setPort(((Number) portValue).doubleValue());
-        var enabledValue = map.get("Enabled");
+        var enabledValue = map.get("enabled");
         value.setEnabled((Boolean) enabledValue);
-        var optionalFieldValue = map.get("OptionalField");
+        var optionalFieldValue = map.get("optionalField");
         value.setOptionalField(optionalFieldValue == null ? null : (String) optionalFieldValue);
         return value;
     }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
-        map.put("Name", AspireClient.serializeValue(name));
-        map.put("Port", AspireClient.serializeValue(port));
-        map.put("Enabled", AspireClient.serializeValue(enabled));
-        map.put("OptionalField", AspireClient.serializeValue(optionalField));
+        map.put("name", AspireClient.serializeValue(name));
+        map.put("port", AspireClient.serializeValue(port));
+        map.put("enabled", AspireClient.serializeValue(enabled));
+        map.put("optionalField", AspireClient.serializeValue(optionalField));
         return map;
     }
 }
@@ -2893,17 +2922,17 @@ public class TestDeeplyNestedDto implements JsonSerializable {
     @SuppressWarnings("unchecked")
     public static TestDeeplyNestedDto fromMap(Map<String, Object> map) {
         var value = new TestDeeplyNestedDto();
-        var nestedDataValue = map.get("NestedData");
+        var nestedDataValue = map.get("nestedData");
         value.setNestedData((Map<String, List<TestConfigDto>>) nestedDataValue);
-        var metadataArrayValue = map.get("MetadataArray");
+        var metadataArrayValue = map.get("metadataArray");
         value.setMetadataArray((Map<String, String>[]) AspireClient.convertArray(metadataArrayValue, Map[].class.getComponentType(), item0 -> (Map<String, String>) item0));
         return value;
     }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
-        map.put("NestedData", AspireClient.serializeValue(nestedData));
-        map.put("MetadataArray", AspireClient.serializeValue(metadataArray));
+        map.put("nestedData", AspireClient.serializeValue(nestedData));
+        map.put("metadataArray", AspireClient.serializeValue(metadataArray));
         return map;
     }
 }
@@ -3058,23 +3087,23 @@ public class TestNestedDto implements JsonSerializable {
     @SuppressWarnings("unchecked")
     public static TestNestedDto fromMap(Map<String, Object> map) {
         var value = new TestNestedDto();
-        var idValue = map.get("Id");
+        var idValue = map.get("id");
         value.setId((String) idValue);
-        var configValue = map.get("Config");
+        var configValue = map.get("config");
         value.setConfig(configValue == null ? null : TestConfigDto.fromMap((Map<String, Object>) configValue));
-        var tagsValue = map.get("Tags");
+        var tagsValue = map.get("tags");
         value.setTags(((List<Object>) tagsValue).stream().map(item0 -> (String) item0).toList());
-        var countsValue = map.get("Counts");
+        var countsValue = map.get("counts");
         value.setCounts((Map<String, Number>) countsValue);
         return value;
     }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
-        map.put("Id", AspireClient.serializeValue(id));
-        map.put("Config", AspireClient.serializeValue(config));
-        map.put("Tags", AspireClient.serializeValue(tags));
-        map.put("Counts", AspireClient.serializeValue(counts));
+        map.put("id", AspireClient.serializeValue(id));
+        map.put("config", AspireClient.serializeValue(config));
+        map.put("tags", AspireClient.serializeValue(tags));
+        map.put("counts", AspireClient.serializeValue(counts));
         return map;
     }
 }

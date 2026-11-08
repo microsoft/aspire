@@ -1,0 +1,11 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "VALUES": "prefix/{opaque}/{opaque}"
+      }
+    }
+  }
+}

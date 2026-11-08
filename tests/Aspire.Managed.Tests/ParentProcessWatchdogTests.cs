@@ -3,7 +3,6 @@
 
 using Aspire.Hosting;
 using Aspire.Shared;
-using Xunit;
 
 namespace Aspire.Managed.Tests;
 

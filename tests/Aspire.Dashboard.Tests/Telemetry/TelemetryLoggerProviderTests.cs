@@ -33,7 +33,7 @@ public class TelemetryLoggerProviderTests
 
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
-        TelemetryErrorRecorderTests.AssertError(log, exception);
+        TelemetryErrorRecorderTests.AssertError(fixture, log, exception);
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 

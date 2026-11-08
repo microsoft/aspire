@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — Azure Functions validation
 // Exercises every exported member of Aspire.Hosting.Azure.Functions
 
-import { createBuilder } from './.aspire/modules/aspire.mjs';
+import { AzureFunctionsLanguage, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -25,5 +25,15 @@ await builder
 // ── 4. withReference from base builder — standard resource references ───────
 const anotherStorage = await builder.addAzureStorage("appstorage");
 await funcApp.withReference(anotherStorage);
+
+// ── 5. addAzureFunctionsApp — directory-based TypeScript Functions app ───────
+const nodeFuncApp = await builder.addAzureFunctionsApp(
+    "nodefunc",
+    "../NodeFunctions",
+    AzureFunctionsLanguage.TypeScript,
+);
+await nodeFuncApp
+    .withHostStorage(storage)
+    .withReference(anotherStorage);
 
 await builder.build().run();

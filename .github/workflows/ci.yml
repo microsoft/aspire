@@ -23,7 +23,7 @@ jobs:
   actionlint:
     name: Lint handwritten workflows
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,7 +54,7 @@ jobs:
   prepare_for_ci:
     runs-on: ubuntu-latest
     name: Prepare for CI
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     outputs:
       skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
@@ -114,7 +114,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
-    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
       extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
@@ -132,8 +132,8 @@ jobs:
   #   2. Runs the subset of Aspire.Cli.Tests classes that exercise version/channel/template
   #      version pinning logic against the stably-built CLI assemblies. These are the code
   #      paths most likely to behave differently when the CLI's own version label is stable.
-  #   3. Runs a small `aspire new aspire-empty` + `aspire restore` smoke script that
-  #      exercises the user-visible CLI flow against the locally-built stable feed,
+  #   3. Runs C#, Go, and Java template scaffolding + `aspire restore` smoke checks that
+  #      exercise the user-visible CLI flow against the locally-built stable feed,
   #      which is the scenario that has historically broken on stabilization branches.
   #
   # The job is gated to enabled PRs only. Push CI (including push to release branches with
@@ -143,15 +143,15 @@ jobs:
     name: Stabilization Check
     runs-on: 8-core-ubuntu-latest
     needs: [prepare_for_ci]
-    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && github.event_name == 'pull_request' && needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && github.event_name == 'pull_request' && needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build + pack with StabilizePackageVersion=true
         # SkipNativeBuild=true keeps this job fast (~5min): pack-time NU5104 detection
-        # doesn't need NativeAOT CLI binaries, and the moderate smoke below invokes the
-        # CLI via `dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj`.
+        # doesn't need NativeAOT CLI binaries. The consumer smoke separately publishes
+        # a Release bundled driver so guest restores cannot substitute source projects.
         run: |
           ./build.sh -restore -build -ci -pack \
             -p:StabilizePackageVersion=true \
@@ -205,7 +205,7 @@ jobs:
 
   # This job is used for branch protection. It fails if any of the dependent jobs failed
   results:
-    if: ${{ always() && github.repository_owner == 'microsoft' }}
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Final Results
     needs: [actionlint, prepare_for_ci, tests, stabilization_check]
@@ -244,7 +244,7 @@ jobs:
   ci_failure_tracker:
     name: Track CI Failure
     needs: [actionlint, prepare_for_ci, tests, stabilization_check]
-    if: ${{ always() && github.event_name == 'push' && github.repository_owner == 'microsoft' }}
+    if: ${{ always() && github.event_name == 'push' && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read   # checkout to require the local .js modules

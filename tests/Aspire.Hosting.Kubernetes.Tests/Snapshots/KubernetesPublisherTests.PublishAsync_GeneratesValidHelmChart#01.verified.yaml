@@ -7,6 +7,8 @@ secrets:
     param3: ""
     ConnectionStrings__cs: ""
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   myapp:
     ASPNETCORE_ENVIRONMENT: "Development"
     param0: ""

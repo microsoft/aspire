@@ -1,7 +1,10 @@
 ﻿@if (IsNavMenuOpen)
 {
     var firstItem = true;
-<FluentMenuList Id="@MobileNavMenuId" Class="aspire-menu-container mobile-nav-menu" Style="grid-area: nav-menu; max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset)); margin-top: var(--mobile-nav-menu-offset); overflow-y: auto; padding-block: var(--mobile-nav-menu-focus-padding); scroll-padding-block: var(--mobile-nav-menu-focus-padding);">
+@* The menu overlays the page instead of taking a layout row, so opening it doesn't push the content down. The scrim
+   covers the page below it and closes the menu when tapped. *@
+<div class="mobile-nav-scrim" aria-hidden="true" @onclick="CloseNavMenu"></div>
+<FluentMenuList Id="@MobileNavMenuId" Class="aspire-menu-container mobile-nav-menu" Style="max-height: calc(100dvh - var(--mobile-header-height)); overflow-y: auto; padding-block: var(--mobile-nav-menu-focus-padding); scroll-padding-block: var(--mobile-nav-menu-focus-padding);">
     @foreach (var item in GetMobileNavMenuEntries())
     {
         if (!firstItem)
@@ -11,9 +14,10 @@
         firstItem = false;
 
         var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
+        var isDisabled = item.DisabledText is not null && !isActive;
         var menuItemAttributes = new Dictionary<string, object>
         {
-            ["title"] = item.Text
+            ["data-tooltip"] = isDisabled ? item.DisabledText! : item.Text
         };
         if (isActive)
         {
@@ -23,7 +27,7 @@
         @* mobile-nav-menu-item-active drives the accent color bar applied via
            ::before, mirroring the desktop selected
            treatment without needing a separate sibling element. *@
-        <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" AdditionalAttributes="@menuItemAttributes">
+        <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Disabled="@isDisabled" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" AdditionalAttributes="@menuItemAttributes">
             <span>@item.Text</span>
 
             @{

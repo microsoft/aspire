@@ -71,12 +71,13 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
             },
             logging =>
             {
+                // Enrichment must run before exporters capture the pooled log record.
+                configureLogging(logging);
                 // The Azure SDK shares a transmitter by connection string, so both signals use the same storage.
                 logging.AddAspireAzureMonitorExporter(
                     connectionString,
                     storageDirectory,
                     configureLogExporter);
-                configureLogging(logging);
             },
             static _ => { });
 

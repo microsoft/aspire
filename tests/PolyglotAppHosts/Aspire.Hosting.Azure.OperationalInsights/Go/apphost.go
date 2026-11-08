@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	logAnalytics := builder.AddAzureLogAnalyticsWorkspace("logs")
@@ -19,14 +19,14 @@ func main() {
 	})
 	logAnalytics.WithUrl("https://example.local/logs")
 	if logAnalytics.Err() != nil {
-		log.Fatalf(aspire.FormatError(logAnalytics.Err()))
+		log.Fatal(aspire.FormatError(logAnalytics.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

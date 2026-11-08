@@ -1,0 +1,15 @@
+﻿{
+  .gitattributes: * text=auto,
+  .github/content.txt: Keep GitHub content,
+  .gitignore: bin/,
+  Demo.cs:
+namespace Demo;
+// Hello
+// Mode: api
+// Features: web
+// Id: Guid_1
+// Message included
+,
+  identity.txt: template,
+  worktree/content.txt: Keep worktree content
+}

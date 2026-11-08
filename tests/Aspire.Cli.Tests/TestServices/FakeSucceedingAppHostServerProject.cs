@@ -16,6 +16,14 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
 {
     public string AppDirectoryPath { get; } = appDirectoryPath;
 
+    public string? RequestedChannel { get; private set; }
+
+    public string? PackageSourceOverride { get; private set; }
+
+    public string? PackageSourceOverridePattern { get; private set; }
+
+    public IReadOnlyList<IntegrationReference> Integrations { get; private set; } = [];
+
     public Func<Task<AppHostServerRunResult>>? RunAsyncCallback { get; init; }
 
     public string GetInstanceIdentifier() => AppDirectoryPath;
@@ -25,8 +33,15 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
         IEnumerable<IntegrationReference> integrations,
         string? requestedChannel = null,
         string? packageSourceOverride = null,
-        CancellationToken cancellationToken = default) =>
-        Task.FromResult(new AppHostServerPrepareResult(Success: true, Output: null));
+        string? packageSourceOverridePattern = null,
+        CancellationToken cancellationToken = default)
+    {
+        Integrations = integrations.ToList();
+        RequestedChannel = requestedChannel;
+        PackageSourceOverride = packageSourceOverride;
+        PackageSourceOverridePattern = packageSourceOverridePattern;
+        return Task.FromResult(new AppHostServerPrepareResult(Success: true, Output: null));
+    }
 
     public Task<AppHostServerRunResult> RunAsync(
         int hostPid,

@@ -166,8 +166,102 @@
   <data name="MetricsViewAttributesToolbar" xml:space="preserve">
     <value>View attributes</value>
   </data>
+  <data name="MetricsInstrumentNoDataTooltip" xml:space="preserve">
+    <value>No data has been recorded for this instrument yet</value>
+  </data>
   <data name="PauseInProgressText" xml:space="preserve">
     <value>Metrics capture paused at {0}</value>
     <comment>{0} is a time</comment>
+  </data>
+  <data name="MetricsNoMatchingInstruments" xml:space="preserve">
+    <value>No metrics match the filter</value>
+  </data>
+  <data name="MetricsInstrumentLimitReached" xml:space="preserve">
+    <value>Showing the first {0} of {1} instruments. Filter to narrow the list.</value>
+    <comment>{0} is the number of instruments shown, {1} is the number of instruments in the list.</comment>
+  </data>
+  <data name="MetricsInstrumentTypeCounter" xml:space="preserve">
+    <value>Counter</value>
+  </data>
+  <data name="MetricsInstrumentTypeGauge" xml:space="preserve">
+    <value>Gauge</value>
+  </data>
+  <data name="MetricsInstrumentTypeHistogram" xml:space="preserve">
+    <value>Histogram</value>
+  </data>
+  <data name="MetricsGroupByLabel" xml:space="preserve">
+    <value>Group by</value>
+  </data>
+  <data name="MetricsSortByLabel" xml:space="preserve">
+    <value>Sort by</value>
+  </data>
+  <data name="MetricsGroupNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="MetricsOrganizeResource" xml:space="preserve">
+    <value>Resource</value>
+  </data>
+  <data name="MetricsOrganizeMeter" xml:space="preserve">
+    <value>Meter</value>
+  </data>
+  <data name="MetricsOrganizeInstrument" xml:space="preserve">
+    <value>Instrument</value>
+  </data>
+  <data name="MetricsOrganizeLandmark" xml:space="preserve">
+    <value>Organize metrics</value>
+  </data>
+  <data name="MetricsGroupByTooltip" xml:space="preserve">
+    <value>Group instruments</value>
+  </data>
+  <data name="MetricsSortByTooltip" xml:space="preserve">
+    <value>Sort instruments</value>
+  </data>
+  <data name="MetricsGroupMenuTitle" xml:space="preserve">
+    <value>Group metrics</value>
+  </data>
+  <data name="MetricsSortMenuTitle" xml:space="preserve">
+    <value>Sort metrics</value>
+  </data>
+  <data name="MetricsSortValueDescending" xml:space="preserve">
+    <value>Value (high to low)</value>
+  </data>
+  <data name="MetricsSortValueAscending" xml:space="preserve">
+    <value>Value (low to high)</value>
+  </data>
+  <data name="MetricsSortName" xml:space="preserve">
+    <value>Name</value>
+    <comment>Sorts instruments by their name.</comment>
+  </data>
+  <data name="MetricsOverviewNoData" xml:space="preserve">
+    <value>No data</value>
+  </data>
+  <data name="MetricsPinInstrument" xml:space="preserve">
+    <value>Pin metric</value>
+  </data>
+  <data name="MetricsUnpinInstrument" xml:space="preserve">
+    <value>Unpin metric</value>
+  </data>
+  <data name="MetricsPinnedHeader" xml:space="preserve">
+    <value>Pinned</value>
+  </data>
+  <data name="MetricsGroupsLabel" xml:space="preserve">
+    <value>Metric groups</value>
+  </data>
+  <data name="MetricsPinnedEmpty" xml:space="preserve">
+    <value>No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</value>
+  </data>
+  <data name="MetricsFilterResultsTitle" xml:space="preserve">
+    <value>Metrics matching "{0}"</value>
+    <comment>{0} is the filter text</comment>
+  </data>
+  <data name="MetricsAllInstrumentsTitle" xml:space="preserve">
+    <value>All instruments</value>
+  </data>
+  <data name="MetricsShowAllInstruments" xml:space="preserve">
+    <value>Show all instruments</value>
+  </data>
+  <data name="MetricsBackTo" xml:space="preserve">
+    <value>Back to {0}</value>
+    <comment>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</comment>
   </data>
 </root>

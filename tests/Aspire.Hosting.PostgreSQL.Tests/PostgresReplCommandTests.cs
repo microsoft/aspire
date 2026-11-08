@@ -6,6 +6,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Time.Testing;
 
 #pragma warning disable ASPIRETERMINAL001
 
@@ -70,6 +72,28 @@ public class PostgresReplCommandTests(ITestOutputHelper outputHelper) : Containe
             PostgresBuilderExtensions.CreateReplOptionsAsync(postgres.Resource, TestContext.Current.CancellationToken));
 
         Assert.Equal("The PostgreSQL REPL port is not available.", exception.Message);
+    }
+
+    [Fact]
+    public async Task ReplReadinessWaitCoversColdImagePull()
+    {
+        // A cold postgres image pull took ~55s in CI before the container could even start, so the
+        // readiness wait must still be alive well past that point.
+        var coldImagePullAndStartup = TimeSpan.FromMinutes(2);
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var postgres = builder.AddPostgres("postgres");
+        await using var app = builder.Build();
+        var timeProvider = new FakeTimeProvider();
+
+        var waitTask = WaitForReplResourceHealthyAsync(app, postgres.Resource.Name, timeProvider);
+        timeProvider.Advance(coldImagePullAndStartup);
+        Assert.False(waitTask.IsCompleted);
+
+        // The wait only observes the resource once it reaches a terminal state, so the wait failing for
+        // that reason (rather than being cancelled) shows the budget had not run out.
+        await app.ResourceNotifications.PublishUpdateAsync(postgres.Resource, s => s with { State = KnownResourceStates.FailedToStart });
+        await Assert.ThrowsAsync<DistributedApplicationException>(() => waitTask).DefaultTimeout();
     }
 
     [Theory]

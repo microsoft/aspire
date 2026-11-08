@@ -58,7 +58,6 @@ internal sealed class TelemetryManager : IDisposable
     private const int ReportedForceFlushTimeoutMilliseconds = 3000;
 
     private readonly TelemetryConfiguration _telemetryConfiguration;
-    private readonly TelemetryTagsSource _tagsSource;
     private readonly AspireCliTelemetry _telemetry;
     private readonly Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> _createReportedProvider;
     private readonly ILogger<TelemetryManager> _logger;
@@ -94,20 +93,18 @@ internal sealed class TelemetryManager : IDisposable
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="telemetryConfiguration">The telemetry configuration.</param>
-    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="telemetry">The telemetry service applying the CLI property policy.</param>
     /// <param name="logger">The logger for exporter lifecycle failures.</param>
-    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger)
+    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger)
     {
         _telemetryConfiguration = telemetryConfiguration;
-        _tagsSource = tagsSource;
         _telemetry = telemetry;
         _logger = logger;
         _createReportedProvider = (resource, storageDirectory) => AzureMonitorTelemetryProvider.Create(
             new ServiceCollection(), resource, AspireCliTelemetry.ReportedActivitySourceName,
             AspireCliTelemetry.EventLogCategoryName, ApplicationInsightsConnectionString, storageDirectory, builder =>
             {
-                builder.AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
+                builder.AddProcessor(new ActivityTagEnrichmentProcessor(telemetry));
 #if DEBUG
                 if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
                 {
@@ -117,6 +114,7 @@ internal sealed class TelemetryManager : IDisposable
             },
             logging =>
             {
+                logging.AddProcessor(new LogRecordTagEnrichmentProcessor(telemetry));
 #if DEBUG
                 if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
                 {
@@ -127,8 +125,8 @@ internal sealed class TelemetryManager : IDisposable
             static _ => { });
     }
 
-    internal TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> createReportedProvider)
-        : this(telemetryConfiguration, tagsSource, telemetry, logger)
+    internal TelemetryManager(TelemetryConfiguration telemetryConfiguration, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> createReportedProvider)
+        : this(telemetryConfiguration, telemetry, logger)
     {
         _createReportedProvider = createReportedProvider;
     }
@@ -196,7 +194,6 @@ internal sealed class TelemetryManager : IDisposable
         profilingProvider = null;
         debugDiagnosticProvider = null;
         var telemetryConfiguration = _telemetryConfiguration;
-        var tagsSource = _tagsSource;
 #if DEBUG
         // Preserve the DEBUG-only diagnostic OTLP path for non-profiling diagnostics. When
         // profiling is enabled, the same OTLP endpoint is reserved for the profiling provider
@@ -226,14 +223,14 @@ internal sealed class TelemetryManager : IDisposable
         var diagnosticResource = AddCliService(ResourceBuilder.CreateDefault());
         if (telemetryConfiguration.UseProfilingProvider)
         {
-            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, diagnosticResource, tagsSource, _telemetry)
+            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, diagnosticResource, _telemetry)
                 .AddOtlpExporter()
                 .Build();
         }
 
         if (useDebugDiagnosticProvider)
         {
-            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, diagnosticResource, tagsSource, _telemetry);
+            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, diagnosticResource, _telemetry);
 
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {
@@ -249,12 +246,12 @@ internal sealed class TelemetryManager : IDisposable
         }
     }
 
-    private static TracerProviderBuilder CreateTracerProviderBuilder(string sourceName, ResourceBuilder resource, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry)
+    private static TracerProviderBuilder CreateTracerProviderBuilder(string sourceName, ResourceBuilder resource, AspireCliTelemetry telemetry)
     {
         return Sdk.CreateTracerProviderBuilder()
             .AddSource(sourceName)
             .SetResourceBuilder(resource)
-            .AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
+            .AddProcessor(new ActivityTagEnrichmentProcessor(telemetry));
     }
 
     // Environment-derived attributes belong only to diagnostics/profiling, not product export.
@@ -270,12 +267,11 @@ internal sealed class TelemetryManager : IDisposable
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="configuration">The configuration to read telemetry settings from.</param>
-    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="telemetry">The telemetry service applying the CLI property policy.</param>
     /// <param name="logger">The logger for exporter lifecycle failures.</param>
     /// <param name="args">The command-line arguments.</param>
-    internal TelemetryManager(IConfiguration configuration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, string[]? args = null)
-        : this(TelemetryConfiguration.Create(configuration, args), tagsSource, telemetry, logger)
+    internal TelemetryManager(IConfiguration configuration, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, string[]? args = null)
+        : this(TelemetryConfiguration.Create(configuration, args), telemetry, logger)
     {
     }
 

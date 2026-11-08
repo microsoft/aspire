@@ -54,7 +54,7 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
             var logProcessor = new TestTelemetryProcessor<LogRecord> { ShutdownCallback = timeout => Shutdown("log", timeout) };
             using var fixture = new TelemetryFixture(initialize: false);
             using var manager = new TelemetryManager(
-                new TelemetryConfiguration { ReportedTelemetryEnabled = true }, fixture.TagsSource, fixture.Telemetry,
+                new TelemetryConfiguration { ReportedTelemetryEnabled = true }, fixture.Telemetry,
                 NullLogger<TelemetryManager>.Instance,
                 (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, AspireCliTelemetry.EventLogCategoryName,
                     () => Sdk.CreateTracerProviderBuilder().AddProcessor(traceProcessor).Build(),
@@ -76,29 +76,51 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void Shutdown_FailedDrainLogsWarningAndRestoresFailureBudget()
+    public async Task Shutdown_FailedDrainLogsWarningAndRestoresFailureBudget()
     {
-        using var process = RemoteExecutor.Invoke(static async () =>
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting remote telemetry shutdown test.");
+        using (var process = RemoteExecutor.Invoke(static async () =>
         {
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry test child PID={Environment.ProcessId} entered.");
             var mode = TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: false);
             var sink = new TestSink();
             using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
             using var fixture = new TelemetryFixture(initialize: false);
             var logProcessor = new TestTelemetryProcessor<LogRecord> { ShutdownCallback = static _ => false };
             using var manager = new TelemetryManager(
-                new TelemetryConfiguration { ReportedTelemetryEnabled = true }, fixture.TagsSource, fixture.Telemetry,
+                new TelemetryConfiguration { ReportedTelemetryEnabled = true }, fixture.Telemetry,
                 loggerFactory.CreateLogger<TelemetryManager>(),
                 (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, AspireCliTelemetry.EventLogCategoryName,
                     () => Sdk.CreateTracerProviderBuilder().Build(), provider => provider.AddProcessor(logProcessor)));
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Initializing telemetry manager.");
             manager.Initialize();
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry initialized; requesting failure-budget shutdown.");
 
             Assert.True(await manager.TryShutdownAsync(CliExitCodes.InvalidCommand, mode));
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry shutdown returned; validating warning and restored budget.");
 
             var warning = Assert.Single(sink.Writes);
             Assert.Equal(LogLevel.Warning, warning.LogLevel);
             Assert.Equal("Timed out shutting down CLI reported telemetry.", warning.Message);
             Assert.Equal(0, AppContext.GetData("Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds"));
-        });
+            Console.WriteLine($"[{DateTimeOffset.UtcNow:O}] Telemetry assertions passed; disposing child services.");
+        }, new RemoteInvokeOptions { StartInfo = { RedirectStandardOutput = true } }))
+        {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Remote telemetry child PID={process.Process.Id}; waiting for completion and disposal.");
+            // Forward while the remote handle waits, so the last child phase is retained in
+            // this test's TRX output even if remote execution hangs.
+            var output = ForwardOutputAsync(process.Process.StandardOutput);
+            await output.DefaultTimeout();
+        }
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Remote telemetry test completed and disposed.");
+
+        async Task ForwardOutputAsync(StreamReader reader)
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                outputHelper.WriteLine(line);
+            }
+        }
     }
 
     [Theory]
@@ -117,6 +139,7 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
             Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
             var dashboard = scenario == "Dashboard";
             var isCI = scenario is "CI" or "RetryableCI" or "TimedOutCI";
+            var persistsBeforeDelivery = scenario is "Local" or "Agent" or "Dashboard";
             var mode = TelemetryManager.ConfigureExporterForProcess(scenario == "Agent", isCI);
             if (dashboard)
             {
@@ -131,15 +154,16 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
             }
             var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var releaseResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var delivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var exported = new ConcurrentQueue<(string Type, string Name)>();
-            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            (string Type, string Name)[] expectedRecords =
+                [("MessageData", "event-0"), ("MessageData", "event-1"), ("MessageData", "event-2"),
+                 ("RemoteDependencyData", "operation-0"), ("RemoteDependencyData", "operation-1"), ("RemoteDependencyData", "operation-2")];
+
+            static List<(string Type, string Name)> ReadRecords(IEnumerable<string> lines)
             {
-                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
-                // Azure sends newline-delimited envelopes:
+                // Azure sends and persists newline-delimited envelopes:
                 // {"data":{"baseType":"MessageData","baseData":{"message":"event-0",...}},...}
                 // Trace envelopes use RemoteDependencyData/name; resource metrics share this transport.
-                var lines = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries);
                 var records = new List<(string Type, string Name)>();
                 foreach (var line in lines)
                 {
@@ -152,6 +176,14 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
                         records.Add((type, baseData.GetProperty(type == "MessageData" ? "message" : "name").GetString()!));
                     }
                 }
+                return records;
+            }
+
+            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            {
+                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+                var lines = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                var records = ReadRecords(lines);
                 if (records.Count > 0)
                 {
                     requestStarted.TrySetResult();
@@ -163,10 +195,6 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
                     foreach (var record in records)
                     {
                         exported.Enqueue(record);
-                    }
-                    if (exported.Count == 6)
-                    {
-                        delivered.TrySetResult();
                     }
                 }
                 return new HttpResponseMessage(HttpStatusCode.OK)
@@ -186,16 +214,32 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
             AzureMonitorTelemetryProvider? reportedProvider = null;
             AzureMonitorExporterOptions? traceOptions = null;
             using var manager = new TelemetryManager(
-                new TelemetryConfiguration { ReportedTelemetryEnabled = true }, fixture.TagsSource, fixture.Telemetry,
+                new TelemetryConfiguration { ReportedTelemetryEnabled = true }, fixture.Telemetry,
                 NullLogger<TelemetryManager>.Instance,
                 (resource, _) => reportedProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource,
                     AspireCliTelemetry.ReportedActivitySourceName, AspireCliTelemetry.EventLogCategoryName,
                     $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/", storage,
-                    builder => builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(options =>
+                    builder =>
                     {
-                        traceOptions = options;
-                        ConfigureTransport(options);
-                    })),
+                        if (persistsBeforeDelivery)
+                        {
+                            // Start the log drain before traces are persisted, reproducing a drain
+                            // whose storage snapshot contains only one of the two signals.
+                            builder.AddProcessor(new TestTelemetryProcessor<Activity>
+                            {
+                                ShutdownCallback = _ =>
+                                {
+                                    requestStarted.Task.DefaultTimeout().GetAwaiter().GetResult();
+                                    return true;
+                                }
+                            });
+                        }
+                        builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(options =>
+                        {
+                            traceOptions = options;
+                            ConfigureTransport(options);
+                        }));
+                    },
                     options =>
                     {
                         Assert.Equal(TimeSpan.FromSeconds(5), options.Retry.NetworkTimeout);
@@ -218,11 +262,16 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
                 var shutdown = dashboard ? reportedProvider.ShutdownAsync(5000)
                     : manager.TryShutdownAsync(CliExitCodes.Success, mode);
                 await requestStarted.Task.DefaultTimeout();
-                if (scenario is "Local" or "Agent" or "Dashboard")
+                if (persistsBeforeDelivery)
                 {
                     Assert.True(await shutdown.DefaultTimeout());
-                    Assert.False(delivered.Task.IsCompleted);
-                    Assert.NotEmpty(Directory.EnumerateFiles(storage, "*", SearchOption.AllDirectories));
+                    Assert.Empty(exported);
+                    // The shared drain snapshots storage before both signals necessarily persist.
+                    // Late batches remain durable for a later pass, so immediate delivery of all
+                    // records is not guaranteed. Check every persisted record while uploads block.
+                    var storedRecords = ReadRecords(Directory.EnumerateFiles(storage, "*", SearchOption.AllDirectories).SelectMany(File.ReadLines));
+                    Assert.Equal(expectedRecords, storedRecords.OrderBy(record => record.Type).ThenBy(record => record.Name).ToArray());
+                    return;
                 }
                 else if (scenario == "TimedOutCI")
                 {
@@ -246,11 +295,7 @@ public class TelemetryShutdownTests(ITestOutputHelper outputHelper)
                 }
                 else
                 {
-                    await delivered.Task.DefaultTimeout();
-                    Assert.Equal(
-                        [("MessageData", "event-0"), ("MessageData", "event-1"), ("MessageData", "event-2"),
-                         ("RemoteDependencyData", "operation-0"), ("RemoteDependencyData", "operation-1"), ("RemoteDependencyData", "operation-2")],
-                        exported.OrderBy(record => record.Type).ThenBy(record => record.Name).ToArray());
+                    Assert.Equal(expectedRecords, exported.OrderBy(record => record.Type).ThenBy(record => record.Name).ToArray());
                 }
             }
             finally

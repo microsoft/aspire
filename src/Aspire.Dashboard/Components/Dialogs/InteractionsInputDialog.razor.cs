@@ -87,18 +87,13 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         if (firstRender)
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"./{Assets["Components/Dialogs/InteractionsInputDialog.razor.js"]}");
-
-            // Focus the first input when the dialog loads.
-            if (_inputDialogInputViewModels.Count > 0 && _elementRefs.TryGetValue(_inputDialogInputViewModels[0], out var firstInputElement))
-            {
-                if (firstInputElement is IFluentComponentElementBase elementInput)
-                {
-                    await elementInput.Element.FocusAsync();
-                }
-            }
         }
-
     }
+
+    // The dialog focuses its first [autofocus] element when it opens. Fluent inputs only get their
+    // inner control in a queued update, so focusing them from .NET on first render can run too early.
+    private bool IsFirstInput(InputViewModel inputViewModel) =>
+        _inputDialogInputViewModels.Count > 0 && _inputDialogInputViewModels[0] == inputViewModel;
 
     private void AddValidationErrorsFromModel()
     {

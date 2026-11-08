@@ -4,6 +4,7 @@
 using Aspire.Shared;
 using Aspire.Shared.Telemetry;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Dashboard.Telemetry;
 
@@ -35,7 +36,10 @@ internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposab
         _telemetry = telemetry;
         _createProvider = (resource, storageDirectory) => AzureMonitorTelemetryProvider.Create(
             new ServiceCollection(), resource, DashboardTelemetryService.ReportedActivitySourceName,
-            DashboardTelemetryService.EventLogCategoryName, ApplicationInsightsConnectionString, storageDirectory);
+            DashboardTelemetryService.EventLogCategoryName, ApplicationInsightsConnectionString, storageDirectory,
+            builder => builder.AddProcessor(new ActivityTagEnrichmentProcessor(telemetry)),
+            logging => logging.AddProcessor(new LogRecordTagEnrichmentProcessor(telemetry)),
+            static _ => { });
     }
 
     internal DashboardTelemetryManager(

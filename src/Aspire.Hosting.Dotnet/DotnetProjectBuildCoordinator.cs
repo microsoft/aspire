@@ -5,9 +5,11 @@
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,8 +20,13 @@ namespace Aspire.Hosting.Dotnet;
 /// <summary>
 /// Configures coordinated initial builds for path-based .NET resources.
 /// </summary>
-internal static class DotnetProjectBuildCoordinator
+internal static partial class DotnetProjectBuildCoordinator
 {
+    private const int MaxReportedBuildOutputLines = 20;
+    private const int MaxReportedBuildOutputLineLength = 1000;
+    private static readonly TimeSpan s_buildOutputReadTimeout = TimeSpan.FromSeconds(10);
+    private static readonly ConditionalWeakTable<IResource, BuildFailureState> s_buildFailures = new();
+
     private static readonly ConditionalWeakTable<IDistributedApplicationBuilder, CoordinatorState> s_states = new();
 
     internal const string BuildResourceName = "__dotnet-project-build";
@@ -47,6 +54,10 @@ internal static class DotnetProjectBuildCoordinator
             }
             else
             {
+                // The SDK folds case, but not Unicode normalization, in file-app cache keys:
+                // https://github.com/dotnet/dotnet/blob/820230c386/src/sdk/src/Cli/Microsoft.DotNet.FileBasedPrograms/Sha256Hasher.cs#L27-L28
+                // Keep the direct build, launch, and rebuilder on the same path spelling.
+                projectMetadata.SetProjectPath(DotnetProjectBuildResource.ResolveBuildPathCasing(projectMetadata.ProjectPath));
                 state.EnsureBuildResource(projectMetadata.BuildConfiguration);
             }
         }
@@ -116,6 +127,9 @@ internal static class DotnetProjectBuildCoordinator
             .ExcludeFromManifest()
             .WithHiddenOnCompletion(0);
 
+        BeginBuildAttemptOnResourceStart(builder, buildResource);
+        ReportBuildFailureOnResourceStopped(builder, buildResource);
+
         return buildResource;
     }
 
@@ -184,27 +198,190 @@ internal static class DotnetProjectBuildCoordinator
         CancellationToken cancellationToken)
     {
         var notificationService = services.GetRequiredService<ResourceNotificationService>();
-        var buildEvent = await notificationService.WaitForResourceAsync(
-            buildResource.Name,
-            resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
-            cancellationToken).ConfigureAwait(false);
-
-        if (buildEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-            buildEvent.Snapshot.ExitCode is not 0)
+        var failureState = s_buildFailures.GetValue(buildResource, static _ => new BuildFailureState());
+        while (true)
         {
-            var exitCode = buildEvent.Snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
-            throw new DistributedApplicationException(
-                $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.");
+            var attempt = failureState.Attempt;
+            var buildEvent = await notificationService.WaitForResourceAsync(
+                buildResource.Name,
+                resourceEvent => IsSettledBuildSnapshot(resourceEvent.Snapshot),
+                cancellationToken).ConfigureAwait(false);
+
+            if (buildEvent.Snapshot.State?.Text != KnownResourceStates.FailedToStart &&
+                buildEvent.Snapshot.ExitCode is 0)
+            {
+                if (failureState.IsCurrentAttempt(attempt))
+                {
+                    return;
+                }
+
+                continue;
+            }
+
+            var messageTask = failureState.GetFailureMessage(attempt, services, buildResource, buildEvent.Snapshot);
+            if (messageTask is null)
+            {
+                // A start raced with the terminal-state wait. Do not cache an old snapshot as the new attempt's failure.
+                continue;
+            }
+
+            var message = await messageTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            throw new DistributedApplicationException(message);
         }
     }
+
+    private static Action BeginBuildAttemptOnResourceStart(IDistributedApplicationBuilder builder, IResource resource)
+    {
+        var subscription = builder.Eventing.Subscribe<BeforeResourceStartedEvent>(
+            resource,
+            static (@event, _) =>
+            {
+                s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState()).BeginAttempt();
+                return Task.CompletedTask;
+            });
+        return () => builder.Eventing.Unsubscribe(subscription);
+    }
+
+    // Dependents report the failure when their wait observes it, but an explicit-start resource with no dependents never
+    // waits. Start the shared per-attempt report when the build itself settles so the AppHost log still gets the summary.
+    private static void ReportBuildFailureOnResourceStopped(IDistributedApplicationBuilder builder, IResource resource)
+    {
+        builder.Eventing.Subscribe<ResourceStoppedEvent>(
+            resource,
+            static (@event, _) =>
+            {
+                var failureState = s_buildFailures.GetValue(@event.Resource, static _ => new BuildFailureState());
+                // An earlier stopped handler can restart the build. The orchestrator publishes Starting before
+                // BeforeResourceStartedEvent advances the attempt, so read the attempt first and then the current
+                // snapshot: a restart is then either visible as a non-terminal state or the snapshot is already the
+                // new attempt's result. Never attribute this event's (possibly stale) snapshot to a later attempt.
+                var attempt = failureState.Attempt;
+                if (@event.Services.GetRequiredService<ResourceNotificationService>()
+                        .TryGetCurrentState(@event.ResourceEvent.ResourceId, out var current) &&
+                    IsFailedBuildSnapshot(current.Snapshot))
+                {
+                    // Do not block event dispatch on reading the build output; waiters share the same cached task.
+                    failureState.GetFailureMessage(attempt, @event.Services, @event.Resource, current.Snapshot);
+                }
+
+                return Task.CompletedTask;
+            });
+    }
+
+    private static async Task<string> ReportBuildFailureAsync(
+        IServiceProvider services,
+        IResource buildResource,
+        CustomResourceSnapshot snapshot)
+    {
+        var exitCode = snapshot.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
+        var message = $"The coordinated .NET build failed with exit code {exitCode}. See resource '{buildResource.Name}' for build output.";
+        var buildOutput = await GetBuildFailureOutputAsync(services, buildResource).ConfigureAwait(false);
+        if (buildOutput.Count > 0)
+        {
+            message += Environment.NewLine + string.Join(Environment.NewLine, buildOutput);
+        }
+
+        services.GetService<ILoggerFactory>()?
+            .CreateLogger(typeof(DotnetProjectBuildCoordinator))
+            .LogError("{Message}", message);
+        return message;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetBuildFailureOutputAsync(
+        IServiceProvider services,
+        IResource buildResource)
+    {
+        var resourceLoggerService = services.GetService<ResourceLoggerService>();
+        if (resourceLoggerService is null)
+        {
+            return [];
+        }
+
+        var errors = new List<string>();
+        // Stdout, stderr, startup and system streams are read concurrently, so delivery order is not chronological.
+        // Keep the newest lines by their DCP timestamp, using delivery order for equal or missing timestamps.
+        var tail = new SortedSet<BuildOutputLine>();
+        long sequence = 0;
+        var applicationStopping = services.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
+        using var readCancellation = CancellationTokenSource.CreateLinkedTokenSource(applicationStopping);
+        readCancellation.CancelAfter(s_buildOutputReadTimeout);
+        try
+        {
+            // Completed DCP process output is stored independently of live log forwarding; no subscriber is needed.
+            // https://github.com/microsoft/dcp/blob/v0.27.2/internal/exerunners/process_executable_runner.go#L207-L220
+            await foreach (var batch in resourceLoggerService.GetAllAsync(buildResource)
+                .WithCancellation(readCancellation.Token)
+                .ConfigureAwait(false))
+            {
+                foreach (var logLine in batch)
+                {
+                    // Stored DCP lines are prefixed with their timestamp, for example:
+                    //   2026-11-02T22:12:48.9230608Z Program.cs(3,1): error CS0103: ...
+                    // Lines without a parsable timestamp are treated as newer than every timestamped line.
+                    DateTimeOffset? timestamp = null;
+                    var content = logLine.Content;
+                    if (TimestampParser.TryParseConsoleTimestamp(content, out var timestampResult))
+                    {
+                        content = timestampResult.Value.ModifiedText;
+                        timestamp = timestampResult.Value.Timestamp;
+                    }
+
+                    content = content.TrimEnd();
+                    if (content.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    if (content.Length > MaxReportedBuildOutputLineLength)
+                    {
+                        content = content[..MaxReportedBuildOutputLineLength];
+                    }
+
+                    if (errors.Count < MaxReportedBuildOutputLines &&
+                        MsBuildErrorRegex().IsMatch(content) &&
+                        !errors.Contains(content, StringComparer.Ordinal))
+                    {
+                        errors.Add(content);
+                    }
+
+                    tail.Add(new BuildOutputLine(timestamp?.UtcDateTime ?? DateTime.MaxValue, sequence++, content));
+                    if (tail.Count > MaxReportedBuildOutputLines)
+                    {
+                        tail.Remove(tail.Min);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The build output is best-effort diagnostics; report whatever was read before the timeout or shutdown.
+        }
+        catch (Exception ex)
+        {
+            // Reading the build output must never replace the build failure itself.
+            services.GetService<ILoggerFactory>()?
+                .CreateLogger(typeof(DotnetProjectBuildCoordinator))
+                .LogDebug(ex, "Failed to read the output of .NET build resource '{ResourceName}'.", buildResource.Name);
+        }
+
+        return errors.Count > 0 ? errors : [.. tail.Select(static line => line.Content)];
+    }
+
+    // Matches MSBuild canonical error lines such as "File.cs(1,2): error CS1002: ..." or "MSBUILD : error MSB1009: ...".
+    [GeneratedRegex(@"(^|\s|:)error(\s+[A-Za-z]+\d+)?\s*:", RegexOptions.CultureInvariant)]
+    private static partial Regex MsBuildErrorRegex();
 
     internal static bool IsSettledBuildSnapshot(CustomResourceSnapshot snapshot) =>
         snapshot.State?.Text == KnownResourceStates.FailedToStart ||
         (KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text) &&
          snapshot.ExitCode is not null);
 
+    private static bool IsFailedBuildSnapshot(CustomResourceSnapshot snapshot) =>
+        IsSettledBuildSnapshot(snapshot) &&
+        (snapshot.State?.Text == KnownResourceStates.FailedToStart || snapshot.ExitCode is not 0);
+
     private static bool IsProjectFile(string path) =>
-        path.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase);
+        ProjectPathResolver.IsSupportedDotnetProjectFile(path);
 
     private static bool IsSupportedPath(string path) =>
         IsProjectFile(path) || path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
@@ -216,11 +393,28 @@ internal static class DotnetProjectBuildCoordinator
             return true;
         }
 
-        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
+        // Visual Studio does not send DEBUG_SESSION_INFO. It builds and launches loaded projects itself.
+        if (!DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
                 builder.Configuration[DebugSessionInfoConfigurationKey],
                 out var supportedLaunchConfigurations)
-            && supportedLaunchConfigurations?.Contains(
-                KnownLaunchConfigurationTypes.ProjectWithExternalBuild) is true;
+            || supportedLaunchConfigurations is null)
+        {
+            return false;
+        }
+
+        // The IDE honors coordinated-build values and build suppression.
+        if (supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.ProjectWithExternalBuild))
+        {
+            return true;
+        }
+
+        // An IDE that advertises an explicit capability list without "project" (for example VS Code without the
+        // C# extension) cannot launch project resources, so DCP runs them as processes exactly as it does outside
+        // an IDE. Without the coordinated build each process runs its own implicit `dotnet run` restore and build,
+        // and resources that share a project build it concurrently: one build can fail on files the other holds
+        // open in obj/ (for example rjsmrazor.dswa.cache.json), and that resource exits right after starting.
+        // Only an IDE that advertises "project" without the external-build capability owns the build itself.
+        return !supportedLaunchConfigurations.Contains(KnownLaunchConfigurationTypes.Project);
     }
 
     internal sealed class CoordinatorState : IDisposable
@@ -477,7 +671,6 @@ internal static class DotnetProjectBuildCoordinator
                 return;
             }
 
-            var buildSteps = CreateBuildSteps(buildEntries);
             var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var primaryBuildResource = PrimaryBuildResource!;
@@ -489,6 +682,12 @@ internal static class DotnetProjectBuildCoordinator
 
             try
             {
+                foreach (var entry in buildEntries)
+                {
+                    ReconcileFileAppPath(model, entry, rollbackActions);
+                }
+
+                var buildSteps = CreateBuildSteps(buildEntries);
                 rollbackActions.Push(() =>
                     primaryBuildResource.ConfigureTraversalBuild(
                         originalPrimaryProjectPaths,
@@ -567,6 +766,11 @@ internal static class DotnetProjectBuildCoordinator
 
                     foreach (var entry in step.Projects)
                     {
+                        if (FindRebuilder(model, entry.Registration.Resource) is { } rebuilder)
+                        {
+                            rollbackActions.Push(BeginBuildAttemptOnResourceStart(_builder, rebuilder));
+                        }
+
                         var originalBuildWorkingDirectory = entry.Metadata.BuildWorkingDirectory;
                         entry.Metadata.SetBuildWorkingDirectory(step.WorkingDirectory);
                         rollbackActions.Push(() =>
@@ -639,6 +843,45 @@ internal static class DotnetProjectBuildCoordinator
                 }
 
                 throw;
+            }
+        }
+
+        // Prepare resolves a file app's spelling at registration, but the file may not exist yet; then only its existing
+        // ancestors are resolved. Resolve again now that it exists so the direct build, `run --file --no-build`, the
+        // rebuilder, and their default working directories use one spelling and therefore one SDK cache entry.
+        private static void ReconcileFileAppPath(
+            DistributedApplicationModel model,
+            ProjectEntry entry,
+            Stack<Action> rollbackActions)
+        {
+            var originalPath = entry.Metadata.ProjectPath;
+            if (IsProjectFile(originalPath))
+            {
+                return;
+            }
+
+            var resolvedPath = DotnetProjectBuildResource.ResolveBuildPathCasing(originalPath);
+            if (resolvedPath.Equals(originalPath, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            entry.Metadata.SetProjectPath(resolvedPath);
+            rollbackActions.Push(() => entry.Metadata.SetProjectPath(originalPath));
+
+            var originalDirectory = Path.GetDirectoryName(originalPath);
+            var resolvedDirectory = Path.GetDirectoryName(resolvedPath)!;
+            IResource?[] launchResources = [entry.Registration.Resource, FindRebuilder(model, entry.Registration.Resource)];
+            foreach (var resource in launchResources)
+            {
+                // Explicit or SDK-selected working directories belong to the caller; only move the registration default.
+                if (resource?.Annotations.OfType<ExecutableAnnotation>().LastOrDefault() is { } executable &&
+                    !executable.WorkingDirectoryExplicitlySet &&
+                    string.Equals(executable.WorkingDirectory, originalDirectory, StringComparison.Ordinal))
+                {
+                    executable.WorkingDirectory = resolvedDirectory;
+                    rollbackActions.Push(() => executable.WorkingDirectory = originalDirectory!);
+                }
             }
         }
 
@@ -1397,6 +1640,66 @@ internal static class DotnetProjectBuildCoordinator
             public bool IsAbandoned { get; set; }
 
             public bool CleanupScheduled { get; set; }
+        }
+    }
+
+    private readonly record struct BuildOutputLine(DateTime Timestamp, long Sequence, string Content) : IComparable<BuildOutputLine>
+    {
+        public int CompareTo(BuildOutputLine other) =>
+            Timestamp.CompareTo(other.Timestamp) is var result and not 0 ? result : Sequence.CompareTo(other.Sequence);
+    }
+
+    private sealed class BuildFailureState
+    {
+        private readonly object _lock = new();
+        private long _attempt;
+        private Lazy<Task<string>>? _message;
+
+        public long Attempt
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return _attempt;
+                }
+            }
+        }
+
+        public void BeginAttempt()
+        {
+            lock (_lock)
+            {
+                _attempt++;
+                _message = null;
+            }
+        }
+
+        public bool IsCurrentAttempt(long attempt)
+        {
+            lock (_lock)
+            {
+                return attempt == _attempt;
+            }
+        }
+
+        public Task<string>? GetFailureMessage(
+            long attempt,
+            IServiceProvider services,
+            IResource resource,
+            CustomResourceSnapshot snapshot)
+        {
+            lock (_lock)
+            {
+                if (attempt != _attempt)
+                {
+                    return null;
+                }
+
+                // Metadata updates replace snapshots without starting a new build.
+                _message ??= new(() => ReportBuildFailureAsync(services, resource, snapshot));
+                return _message.Value;
+            }
         }
     }
 }

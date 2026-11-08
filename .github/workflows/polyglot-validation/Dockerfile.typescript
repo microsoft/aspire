@@ -32,11 +32,17 @@ RUN case "$NODE_VERSION" in 22|24) ;; *) echo "Unsupported NODE_VERSION: $NODE_V
 # package-manager markers, so make all selected tools available in the image.
 # Install each tool directly because Corepack's package-manager downloads bypass
 # NPM_REGISTRY and would acquire pnpm and Yarn outside dotnet-public-npm.
+# Node 22's npm 10 crashes resolving the Nuxt fixture's peers; npm 11 includes:
+# https://github.com/npm/cli/commit/208c06e91a187b03d6bdd75bff4e4285b365750c
+# Clear the shell's cached npm path after installation to verify the new binary.
 RUN npm install --global --force --registry "${NPM_REGISTRY}" \
+    npm@11.19.0 \
     pnpm@10.0.0 \
     @yarnpkg/cli-dist@4.14.1 \
     bun@1.2.0 \
     "@typescript/native-preview@${TSGO_VERSION}" && \
+    hash -r && \
+    test "$(npm --version)" = "11.19.0" && \
     test "$(pnpm --version)" = "10.0.0" && \
     test "$(yarn --version)" = "4.14.1" && \
     test "$(bun --version)" = "1.2.0" && \

@@ -1,0 +1,18 @@
+﻿apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: eab
+spec:
+  acme:
+    server: "https://acme.example.com/directory"
+    email: "ops@contoso.com"
+    privateKeySecretRef:
+      name: eab-account-key
+    externalAccountBinding:
+      keyID: "fixture: \u0022account\u0022\n#key"
+      keySecretRef:
+        name: eab-eab
+        key: hmac-key
+    solvers:
+    - http01:
+        gatewayHTTPRoute: {}

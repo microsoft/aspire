@@ -1,50 +1,50 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
         <source>The connection to the AppHost was lost: {0}</source>
-        <target state="needs-review-translation">与应用主机的连接已断开: {0}。</target>
+        <target state="translated">与 AppHost的连接丢失: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostConnectionLostGeneric">
         <source>The connection to the application was lost.</source>
-        <target state="new">The connection to the application was lost.</target>
+        <target state="translated">与应用程序的连接已丢失。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
         <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
-        <target state="needs-review-translation">AppHost 版本不兼容。请升级应用主机或 Aspire CLI。</target>
+        <target state="translated">AppHost 版本不兼容。请升级 AppHost或 Aspire CLI。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleUpdateAppHost">
         <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
-        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <target state="translated">AppHost 使用的 Aspire 版本低于 Aspire CLI。更新 AppHost 的 Aspire 包以继续操作。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleUpdateCli">
         <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
-        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <target state="translated">Aspire CLI 早于 AppHost 使用的 Aspire 版本。更新 Aspire CLI 以继续操作。</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
-        <target state="new">The application shut down.</target>
+        <target state="translated">应用程序已关闭。</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
         <source>Aspire CLI version</source>
-        <target state="needs-review-translation">Aspire CLI 版本</target>
+        <target state="translated">Aspire CLI 版本</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
         <source>Aspire.Hosting version</source>
-        <target state="needs-review-translation">Aspire.Hosting 版本</target>
+        <target state="translated">Aspire.Hosting 版本</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
         <source>Building AppHost...</source>
-        <target state="needs-review-translation">正在生成应用主机...</target>
+        <target state="translated">正在生成 AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -84,32 +84,32 @@
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
         <source>An error occurred while connecting to the AppHost: {0}</source>
-        <target state="needs-review-translation">连接到应用主机时出错。应用主机可能在可用之前发生故障: {0}。</target>
+        <target state="translated">连接到 AppHost时出错: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
         <source>Finding AppHosts...</source>
-        <target state="needs-review-translation">正在查找应用主机...</target>
+        <target state="translated">正在查找 AppHost...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
         <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
-        <target state="needs-review-translation">此环境中不支持交互式输入。使用 --non-interactive 标志或确保 CLI 在交互式终端中运行。</target>
+        <target state="translated">此提示需要交互式输入，但 CLI 正在非交互模式下运行。此操作尚不支持非交互式执行。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidSelection">
         <source>Invalid selection.</source>
-        <target state="new">Invalid selection.</target>
+        <target state="translated">选择无效。</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
         <source>[dim]For more information, see: {0}[/]</source>
-        <target state="needs-review-translation">[dim]有关详细信息，请参阅: [link]{0}[/][/]</target>
+        <target state="translated">[dim]有关详细信息，请参阅: {0}[/]</target>
         <note>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
         <source>[yellow]A new version of Aspire is available: {0}[/]</source>
-        <target state="new">[yellow]A new version of Aspire is available: {0}[/]</target>
+        <target state="translated">[yellow]有新版本的 Aspire 可用: {0}[/]</target>
         <note>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</note>
       </trans-unit>
       <trans-unit id="NoItemsAvailableForSelection">
@@ -119,32 +119,32 @@
       </trans-unit>
       <trans-unit id="NoSupportedAppHostsFound">
         <source>No supported app hosts were found.</source>
-        <target state="new">No supported app hosts were found.</target>
+        <target state="translated">找不到支持的 AppHost。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveAvailableValues">
         <source>Available values: {0}</source>
-        <target state="new">Available values: {0}</target>
+        <target state="translated">可用值: {0}</target>
         <note>{0} is a comma-separated list of valid values</note>
       </trans-unit>
       <trans-unit id="NonInteractiveInvalidValue">
         <source>The value '{0}' is not valid for {1}.</source>
-        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <target state="translated">值“{0}”对于 {1} 无效。</target>
         <note>{0} is the provided value. {1} is the option/argument display name.</note>
       </trans-unit>
       <trans-unit id="NonInteractiveOptionRequired">
         <source>The {0} option must be specified when running in non-interactive mode.</source>
-        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <target state="translated">在非交互模式下运行时，必须指定 {0} 选项。</target>
         <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
       <trans-unit id="OpenAppHostLog">
         <source>Open AppHost Log</source>
-        <target state="new">Open AppHost Log</target>
+        <target state="translated">打开 AppHost 日志</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenCliLog">
         <source>Open CLI Log</source>
-        <target state="new">Open CLI Log</target>
+        <target state="translated">打开 CLI 日志</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCancelled">
@@ -154,12 +154,12 @@
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
         <source>The project could not be built.</source>
-        <target state="new">The project could not be built.</target>
+        <target state="translated">无法生成项目。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeCreated">
         <source>The app could not be created.</source>
-        <target state="new">The app could not be created.</target>
+        <target state="translated">无法创建应用。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
@@ -169,27 +169,27 @@
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
         <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
-        <target state="needs-review-translation">未指定 --apphost 选项，并且检测到多个应用主机项目文件。</target>
+        <target state="translated">未指定 --apphost 选项，并且检测到多个 AppHost 项目文件。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoAppHostsFound">
         <source>The --apphost option was not specified and no AppHost project files were detected.</source>
-        <target state="new">The --apphost option was not specified and no AppHost project files were detected.</target>
+        <target state="translated">未指定 --apphost 选项，并且未检测到 AppHost项目文件。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
         <source>The --apphost option specified a directory that contains multiple AppHost project files.</source>
-        <target state="new">The --apphost option specified a directory that contains multiple AppHost project files.</target>
+        <target state="translated">--apphost 选项指定了包含多个 AppHost 项目文件的目录。</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionSpecifiedDirectoryContainsNoAppHosts">
         <source>The --apphost option specified a directory that does not contain any AppHost project files.</source>
-        <target state="new">The --apphost option specified a directory that does not contain any AppHost project files.</target>
+        <target state="translated">--apphost 选项指定了不包含任何 AppHost 项目文件的目录。</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
         <source>Required capability</source>
-        <target state="needs-review-translation">所需功能</target>
+        <target state="translated">所需功能</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">
@@ -199,7 +199,7 @@
       </trans-unit>
       <trans-unit id="SeeAppHostLogsAt">
         <source>See AppHost logs at {0}</source>
-        <target state="new">See AppHost logs at {0}</target>
+        <target state="translated">请参阅 {0} 处的 AppHost 日志</target>
         <note>{0} is the log file path of the CLI process managing the AppHost</note>
       </trans-unit>
       <trans-unit id="SeeLogsAt">
@@ -209,12 +209,12 @@
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
         <source>Select an AppHost to use:</source>
-        <target state="needs-review-translation">选择要使用的应用主机:</target>
+        <target state="translated">选择要使用的 AppHost:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
         <source>The specified project file is not an Aspire AppHost project.</source>
-        <target state="needs-review-translation">指定的项目文件不是 Aspire AppHost 项目。</target>
+        <target state="translated">指定的项目文件不是 Aspire AppHost 项目。</target>
         <note />
       </trans-unit>
       <trans-unit id="StoppingAspire">
@@ -234,7 +234,7 @@
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
         <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
-        <target state="needs-review-translation">找不到应用主机(可能存在具有语法错误/SDK 版本无效的应用主机项目文件)。</target>
+        <target state="translated">找不到 AppHost (可能存在具有语法错误/SDK 版本无效的 AppHost项目文件)。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -244,12 +244,12 @@
       </trans-unit>
       <trans-unit id="UpdatedSettingsFile">
         <source>Updated settings file at {0}.</source>
-        <target state="new">Updated settings file at {0}.</target>
+        <target state="translated">已在 {0} 更新设置文件。</target>
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
         <source>Waiting for debugger to attach to AppHost process</source>
-        <target state="needs-review-translation">正在等待调试程序附加到应用主机进程</target>
+        <target state="translated">正在等待调试程序附加到 AppHost进程</target>
         <note />
       </trans-unit>
     </body>

@@ -2,13 +2,4 @@
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
 
-  <!-- NOTE: These lines are only required because we are using P2P references, not NuGet. They will not exist in real apps. -->
-  <Import Project="..\..\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets" />
-  <Import Project="..\..\src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets" />
-
-  <PropertyGroup>
-    <!-- This is for in-repo testing and required for Aspire.Hosting.AppHost targets loading correctly. On real projects, this comes from SDK.props in Aspire.AppHost.SDK. -->
-    <AspireHostingSDKVersion>$(MajorVersion).$(MinorVersion).$(PatchVersion)</AspireHostingSDKVersion>
-  </PropertyGroup>
-
 </Project>

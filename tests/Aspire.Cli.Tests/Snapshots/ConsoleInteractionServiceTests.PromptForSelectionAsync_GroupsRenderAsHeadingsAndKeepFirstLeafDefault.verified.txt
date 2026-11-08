@@ -1,0 +1,11 @@
+﻿[?25lSelect a template:
+
+[1m  Built-in templates[0m
+  > Starter
+[1m  Company [first][0m
+    Same
+[1m  Company [second][0m
+    Same (Observable services)
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect a template: Starter

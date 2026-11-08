@@ -237,6 +237,13 @@ internal sealed class AzureAppServiceWebsiteContext(
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
+#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+        if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
+        {
+            return ProcessValue(providedOutput, secretType, parent, isSlot);
+        }
+#pragma warning restore ASPIREAZURE003
+
         if (value is IAzureKeyVaultSecretReference vaultSecretReference)
         {
             if (parent is null)
@@ -434,6 +441,12 @@ internal sealed class AzureAppServiceWebsiteContext(
                 },
             };
 
+            // The slot has no private endpoint, so without this it would stay reachable over the public Internet.
+            if (environmentContext.Environment.IsPublicNetworkAccessDisabled)
+            {
+                slot.PublicNetworkAccess = "Disabled";
+            }
+
             var slotContainer = new SiteSlotSiteContainer("mainContainerSlot")
             {
                 Parent = slot,
@@ -476,6 +489,11 @@ internal sealed class AzureAppServiceWebsiteContext(
                     UserAssignedIdentities = []
                 },
             };
+
+            if (environmentContext.Environment.IsPublicNetworkAccessDisabled)
+            {
+                site.PublicNetworkAccess = "Disabled";
+            }
 
             // Defining the main container for the app service
             var siteContainer = new SiteContainer("mainContainer", addOnlyIfNotExistsDecorator)
@@ -791,6 +809,28 @@ internal sealed class AzureAppServiceWebsiteContext(
         }
 
         AddStickySlotSettings(deploymentSlot is null ? (WebSite)webSite : parentWebSite, stickyConfigNames);
+
+        AddWebSiteOutputs(infra, (WebSite)webSite);
+    }
+
+    // Front Door Private Link can only target a production site, never a slot, so these outputs always describe the
+    // production site, even when the app is deployed to a slot.
+    private static void AddWebSiteOutputs(AzureResourceInfrastructure infra, WebSite websiteResource)
+    {
+        infra.Add(new ProvisioningOutput("resourceId", typeof(string))
+        {
+            Value = websiteResource.Id
+        });
+        infra.Add(new ProvisioningOutput("resourceLocation", typeof(string))
+        {
+            Value = new FunctionCallExpression(
+                new IdentifierExpression("toLower"),
+                new FunctionCallExpression(
+                    new IdentifierExpression("replace"),
+                    websiteResource.Location.ToBicepExpression(),
+                    new StringLiteralExpression(" "),
+                    new StringLiteralExpression("")))
+        });
     }
 
     /// <summary>
@@ -859,6 +899,7 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         AddWebSiteNetworkConfig(infra, webSite);
         AddStickySlotSettings(webSite, stickyConfigNames);
+        AddWebSiteOutputs(infra, webSite);
     }
 
     private static void AddWebSiteNetworkConfig(AzureResourceInfrastructure infra, WebSite webSite)
@@ -896,6 +937,12 @@ internal sealed class AzureAppServiceWebsiteContext(
     {
         return property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin when mapping.IsHttpIngress && mapping.External =>
+                BicepFunction.Interpolate($"{mapping.Scheme}://{mapping.Host}.azurewebsites.net"),
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                throw new NotSupportedException(
+                    "Azure App Service cannot provide browser origins because the endpoint is not an external HTTP(S) endpoint. " +
+                    "Reference an external HTTP(S) endpoint or supply an explicit origin parameter."),
             EndpointProperty.Url => BicepFunction.Interpolate($"{mapping.Scheme}://{mapping.Host}.azurewebsites.net"),
             EndpointProperty.Host => BicepFunction.Interpolate($"{mapping.Host}.azurewebsites.net"),
             EndpointProperty.Port => mapping.Port.ToString(CultureInfo.InvariantCulture),

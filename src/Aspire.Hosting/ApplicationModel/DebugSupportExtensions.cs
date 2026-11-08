@@ -32,6 +32,7 @@ public static class DebugSupportExtensions
     /// A resource is only considered debuggable when it carries a <see cref="SupportsDebuggingAnnotation"/>,
     /// a debug session is active, the resource is not forced to process execution, it does not have a
     /// persistent lifetime, and the IDE advertised support for the annotation's launch configuration type.
+    /// A producer that requires explicit Debug mode uses plain process execution for non-debug launches.
     /// </para>
     /// <para>
     /// Exception: when the active debug session did not provide a usable launch configuration capability list
@@ -51,7 +52,9 @@ public static class DebugSupportExtensions
         if (!resource.TryGetLastAnnotation(out supportsDebuggingAnnotation)
             || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
             || resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
-            || resource.HasPersistentLifetime())
+            || resource.HasPersistentLifetime()
+            || (supportsDebuggingAnnotation.RequiresDebugMode &&
+                configuration[KnownConfigNames.DebugSessionRunMode] != ExecutableLaunchMode.Debug))
         {
             return false;
         }

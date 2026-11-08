@@ -178,13 +178,15 @@ public class TemporaryWorkspaceTests(ITestOutputHelper outputHelper)
         await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
         var recordingOutput = new RecordingTestOutputHelper(outputHelper);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var timeoutDuration = TimeSpan.FromSeconds(3);
         var stopwatch = Stopwatch.StartNew();
 
         var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
-            TemporaryWorkspaceGitExtensions.RunGitAsync(workspace.Path, recordingOutput, ["-c", "alias.wait=!echo ready; sleep 60", "wait"], TestContext.Current.CancellationToken));
+            TemporaryWorkspaceGitExtensions.RunGitAsync(workspace.Path, recordingOutput,
+                ["-c", "alias.wait=!echo ready; sleep 60", "wait"], TestContext.Current.CancellationToken, timeoutDuration));
 
-        Assert.True(stopwatch.Elapsed >= TimeSpan.FromSeconds(30));
-        Assert.Matches(@"^'git -c alias.wait=!echo ready; sleep 60 wait' in '.*' \(PID \d+\) timed out after 30 seconds\.$", exception.Message);
+        Assert.True(stopwatch.Elapsed >= timeoutDuration);
+        Assert.Matches(@"^'git -c alias.wait=!echo ready; sleep 60 wait' in '.*' \(PID \d+\) timed out after 3 seconds\.$", exception.Message);
         Assert.Contains(recordingOutput.Messages, message => message.EndsWith("stdout: ready", StringComparison.Ordinal));
         Assert.Contains(recordingOutput.Messages, message => message.Contains("timed out after ", StringComparison.Ordinal));
         Assert.Contains(recordingOutput.Messages, message => message.Contains("finished after ", StringComparison.Ordinal) && System.Text.RegularExpressions.Regex.IsMatch(message, @"exit code: -?\d+$"));

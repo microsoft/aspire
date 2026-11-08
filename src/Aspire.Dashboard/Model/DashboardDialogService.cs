@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -29,6 +30,15 @@ public sealed class DashboardDialogService(
     /// Gets a value indicating whether the viewport is in desktop mode.
     /// </summary>
     public bool IsDesktop => dimensionManager.ViewportInformation.IsDesktop;
+
+    public Task<DashboardDialogReference> ShowManageDataAsync() =>
+        ShowDialogAsync<ManageDataDialog>(new DialogParameters
+        {
+            Title = dialogsLoc[nameof(Dialogs.ManageDataDialogTitle)],
+            PrimaryAction = CloseButtonText,
+            SecondaryAction = string.Empty,
+            Width = "800px"
+        });
 
     /// <summary>
     /// Shows a dialog with the specified content and parameters.

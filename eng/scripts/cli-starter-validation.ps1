@@ -251,6 +251,13 @@ $templates = @(
         TemplateId = 'aspire-starter'
         ProjectName = 'AspireCliCsStarterSmoke'
         ExpectedResources = @('apiservice')
+    },
+    @{
+        TemplateId = 'aspire-go-starter'
+        ProjectName = 'AspireCliGoStarterSmoke'
+        # Hosted macOS/Windows runners have no Linux container runtime. Keep full Redis
+        # readiness on Linux; the other runners exercise the supported cache-free starter.
+        ExpectedResources = $(if ($IsLinux) { @('api', 'cache') } else { @('api') })
     }
 )
 
@@ -279,7 +286,12 @@ foreach ($template in $templates)
         {
             $newStartedAt = Get-Date
             Write-DiagnosticMessage "${templateId}: invoking aspire new."
-            aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo --suppress-agent-init
+            $templateArguments = @()
+            if ($templateId -eq 'aspire-go-starter' -and -not $IsLinux)
+            {
+                $templateArguments = @('--use-redis-cache', 'false')
+            }
+            aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo --suppress-agent-init @templateArguments
             Write-DiagnosticMessage "${templateId}: aspire new returned after $([math]::Round(((Get-Date) - $newStartedAt).TotalSeconds, 1)) seconds."
 
             Push-Location $projectRoot

@@ -4,27 +4,27 @@
     <body>
       <trans-unit id="Description">
         <source>Display logs from resources in a running AppHost</source>
-        <target state="needs-review-translation">실행 중인 Aspire AppHost에서 리소스의 로그를 표시합니다.</target>
+        <target state="translated">실행 중인 AppHost의 리소스에서 로그 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Stream logs in real-time as they are written</source>
-        <target state="needs-review-translation">로그가 기록되는 대로 실시간으로 스트리밍합니다.</target>
+        <target state="translated">로그가 작성되면 실시간으로 로그 스트리밍</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">출력에 숨겨진 리소스 포함</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">JSON 형식(NDJSON)으로 로그를 출력합니다.</target>
+        <target state="translated">출력 형식(테이블 또는 Json)</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogsFound">
         <source>No logs found.</source>
-        <target state="new">No logs found.</target>
+        <target state="translated">로그를 찾을 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="needs-review-translation">로그를 가져올 리소스의 이름입니다. 지정하지 않으면 모든 리소스의 로그가 표시됩니다.</target>
+        <target state="translated">로그를 가져올 리소스의 이름입니다. 지정하지 않으면 모든 리소스의 로그가 표시됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
         <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
-        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
+        <target state="translated">로그 내용을 필터링하기 위한 전체 텍스트 검색입니다. 자세한 정보는 https://aka.ms/aspire/cli-search에서 확인하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="TailOptionDescription">
         <source>Number of lines to show from the end of logs (default: all)</source>
-        <target state="needs-review-translation">로그 끝에서 표시할 줄 수입니다(기본값: 모두).</target>
+        <target state="translated">로그 끝에서 표시할 줄 수(기본값: 모두)</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -74,7 +74,7 @@
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
         <source>Show timestamps for each log line</source>
-        <target state="new">Show timestamps for each log line</target>
+        <target state="translated">각 로그 줄에 대한 타임스탬프 표시</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

@@ -27,7 +27,7 @@ public class DashboardTelemetryConfigurationTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [DashboardTelemetryService.TelemetryOptOutConfigKey] = directOptOut,
+            [KnownConfigNames.DashboardTelemetryOptOut] = directOptOut,
             [DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.ConfigKey] = forwardedOptOut?.ToString()
         }).Build();
 
@@ -43,7 +43,7 @@ public class DashboardTelemetryConfigurationTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [DashboardTelemetryService.TelemetryOptOutConfigKey] = directOptOut,
+            [KnownConfigNames.DashboardTelemetryOptOut] = directOptOut,
             [DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.ConfigKey] = "invalid"
         }).Build();
 

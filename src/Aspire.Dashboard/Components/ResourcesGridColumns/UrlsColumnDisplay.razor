@@ -56,13 +56,18 @@ else if (DisplayedUrls.Count > 1)
 @code {
     RenderFragment WriteUrl(DisplayedUrl displayedUrl)
     {
+        var text = GetDisplayText(displayedUrl);
+        var tooltip = GetTooltipText(displayedUrl);
         if (displayedUrl.Url != null)
         {
-            return @<a href="@displayedUrl.Url" target="_blank" title="@GetTooltipText(displayedUrl)" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@displayedUrl.Text</a>;
+            // The text and tooltip are masked, but the link opens the full address.
+            return @<a href="@displayedUrl.Url" target="_blank" data-tooltip="@tooltip" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@text</a>;
         }
         else
         {
-            return @<span title="@GetTooltipText(displayedUrl)">@displayedUrl.Text</span>;
+            // An address that can't be opened, such as tcp://, takes keyboard focus like a link would, so its full
+            // value can be read in the tooltip when the column cuts it short.
+            return @<span tabindex="0" data-tooltip="@tooltip" aria-label="@(text == tooltip ? tooltip : $"{text}: {tooltip}")">@text</span>;
         }
     }
 }

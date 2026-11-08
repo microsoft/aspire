@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.RemoteHost.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Go.Tests" />
   </ItemGroup>
 
   <ItemGroup>

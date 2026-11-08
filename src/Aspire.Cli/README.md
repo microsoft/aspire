@@ -34,6 +34,8 @@ aspire <command> [options]
 | `stop` | Stop a running apphost or the specified resource. |
 | `ps` | List running apphosts. |
 
+C# AppHosts created with Aspire 17 or later use package directives instead of the obsolete AppHost SDK. When targeting an earlier Aspire release, the empty template retains its SDK directive so it does not require the newer `Aspire.Hosting.Dotnet` package.
+
 ### Resource Management
 
 | Command | Description |
@@ -66,11 +68,189 @@ aspire <command> [options]
 | Command | Description |
 |---------|-------------|
 | `config` | Manage CLI configuration including feature flags. |
+| `secret` | Manage AppHost secrets. |
 | `cache` | Manage disk cache for CLI operations. |
 | `completions script [<shell>]` | Generate a completion script for Bash, Zsh, Fish, or PowerShell 7+. |
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
+
+### Setting secrets
+
+Set a secret using a masked interactive prompt, a positional value, or an
+environment variable already supplied to the CLI process:
+
+```bash
+aspire secret set Parameters:api_key
+aspire secret set Parameters:api_key example-value
+aspire secret set Parameters:api_key --envvar API_KEY
+aspire secret set Parameters:api_key --envvar API_KEY --apphost ./AppHost.csproj
+aspire secret set Parameters:api_key --envvar API_KEY --environment Production
+```
+
+When neither a positional value nor `--envvar` is supplied, the CLI prompts
+for the value without displaying it. Empty values are accepted, including at the
+prompt. `--non-interactive` requires a positional value or `--envvar` and
+never prompts. Canceling the prompt does not initialize or modify the secrets store.
+
+Do not combine a positional value with `--envvar`. An unset source
+variable fails without prompting, initializing, or modifying the secrets store.
+Environment values are stored verbatim, without trimming or shell expansion.
+AppHost discovery works the same for all value sources.
+All value sources support `--environment` to select the AppHost environment's
+Aspire secrets file; the default environment is `Development`.
+
+`--envvar` keeps the secret value out of the command line, shell history,
+and CLI diagnostics. Expanding a shell variable into the positional value does
+not provide that protection. The process environment may still be inspectable;
+environment-variable input is not a guarantee that the secret cannot be read.
+
+### Updating .NET AppHosts
+
+`aspire update` preserves package-only AppHosts: it updates their
+`Aspire.Hosting.AppHost` reference without adding `Aspire.AppHost.Sdk`.
+SDK-based AppHosts remain supported, including C#, F#, and Visual Basic project
+files and C# file-based AppHosts with an SDK directive.
+
+For non-central package references declared in imported build files, the updater
+changes the original declaration rather than adding a duplicate to the AppHost.
+Imported SDK versions are updated in place when evaluation identifies one
+declaring file, including older SDKs without the SDK-use marker. Inactive SDK
+imports in shared build files do not turn package-only AppHosts into SDK projects.
+Ambiguous imported declarations require an explicit SDK version
+update instead of guessing which shared file to change.
+Automatic SDK rewrites are limited to unconditional declarations. Conditional
+SDK declarations that cannot be safely classified require an explicit version
+edit; source fallback does not guess whether their MSBuild conditions are active.
+
+## Configured template sources
+
+Register named local directories or Git repositories in the
+CLI's global configuration. Source management is always global; no `--global` flag is needed.
+
+Interactive `aspire new` offers **Search for more templates** only when at least
+one valid global template source is configured. Checking availability reads source
+definitions only; it does not discover templates or contact remote sources.
+
+```bash
+aspire template source add company --path /absolute/path/to/company-templates
+aspire template source add examples --repository https://github.com/microsoft/aspire-templates
+aspire template source add release --repository https://github.com/microsoft/aspire-templates --ref release/17.0 --path templates
+aspire template source remove examples
+aspire template source list
+aspire template source list --format json
+```
+
+This writes the following shape to the global `~/.aspire/aspire.config.json` file:
+
+```json
+{
+  "templateSources": {
+    "company": {
+      "path": "/absolute/path/to/company-templates"
+    },
+    "release": {
+      "repository": "https://github.com/microsoft/aspire-templates",
+      "ref": "release/17.0",
+      "path": "templates"
+    }
+  }
+}
+```
+
+Use an absolute path on your platform (for example, `C:\Templates` on Windows).
+Local directories and Git repositories can contain one or more .NET template-engine
+templates using `.template.config/template.json`, including templates in subdirectories.
+Project-level `templateSources` settings are not used.
+
+All sources must use objects; path and URL string shorthands are not accepted.
+Source names cannot contain dots, colons, or control characters. Adding a name
+that already exists (case-insensitively) fails without overwriting it.
+The `templateSources` section and source names are matched case-insensitively, preserving
+their existing spelling. Source add/remove fail rather than write without the
+global configuration lock.
+Source-management commands defer normalization until a validated update under the
+target file's lock. Rejected source-management operations leave configuration bytes
+unchanged and do not normalize project settings or migrate legacy files at startup.
+Existing `config` commands retain their normal startup migration and normalization.
+
+`source list` displays source names and their configured fields in a table.
+`--format json` writes only a JSON object keyed by source name to stdout, matching
+the global `templateSources` object (without the surrounding `templateSources` property):
+
+```json
+{
+  "company": {
+    "path": "/absolute/path/to/company-templates"
+  },
+  "release": {
+    "repository": "https://github.com/microsoft/aspire-templates",
+    "ref": "release/17.0",
+    "path": "templates"
+  }
+}
+```
+
+Source-management commands require the modern global `aspire.config.json`.
+If only legacy `globalsettings.json` exists, they fail without modifying it.
+Run `aspire config info` to perform the existing startup migration, then retry.
+
+Listing sorts sources by name, preserves configured fields without adding defaults,
+and includes incomplete source objects so they can be inspected while editing.
+No configured sources produces `{}` in JSON mode. Invalid/unreadable global
+configuration fails with a nonzero exit code and diagnostics on stderr, not an
+empty success result. Startup normalization and legacy-config migration also leave
+configuration files untouched when listing. Listing does not scan directories, resolve
+Git refs, or clone repositories.
+
+The `repository` value must be an HTTPS or SSH URL, for example
+`https://github.com/microsoft/aspire-templates` or
+`ssh://git@github.com/microsoft/aspire-templates.git`.
+SCP-style addresses such as `git@github.com:owner/repo.git`, other URL schemes,
+query strings, and fragments are not accepted. HTTPS URLs must not contain user
+information; SSH URLs may contain a username but no password.
+Use Git's existing credential helper or SSH authentication rather than storing credentials
+in a template source. The CLI must be able to access the repository without an
+interactive Git credential prompt.
+
+Use a repository object to select a branch, tag, or full commit SHA with `ref`, or
+limit discovery to a repository-relative `path`. Omit `ref` to use the default `HEAD`
+and omit `path` to search the repository root (`.`). Paths must stay inside the
+repository and must not traverse symbolic links. Git sources use
+`repository`, `ref`, and `path`; supplied values must
+be nonempty strings.
+Unknown source fields are ignored when reading configuration for compatibility
+with newer CLI versions. Invalid combinations and edits to unknown fields are
+rejected before saving. For stepwise
+editing with `aspire config set templateSources.<name>.<field> <value> --global`, incomplete
+Git objects are allowed until discovery, but supplied paths are still validated;
+`source add` always requires a complete source.
+
+Each search resolves the selected ref to a commit and reuses a cached checkout of
+that commit, cloning only when it is not already cached. Multiple paths and refs
+resolving to the same repository commit share its checkout. Generation uses the
+selected checkout even if the remote subsequently changes. The existing explicit `--template-repository`,
+`--template-repository-ref`, and `--template-path` options are unchanged.
+
+Run `aspire new` interactively and select **Search for more templates** beneath the
+default templates. Enter text to search template names and descriptions, or leave
+it empty to list everything. Matching is case-insensitive, and results show the
+source name to distinguish templates with identical names. Duplicate labels within
+one source receive numeric suffixes. Select a result to
+create a project with the normal local-template parameter prompts.
+Search input remains visible while typing but is excluded from prompt diagnostic logs.
+Configured templates cannot be combined with `--source`, `--version`, `--channel`,
+or `--language`; package/version choices are owned by the template. Supplying any
+of these options therefore keeps the picker restricted to built-in templates.
+
+Directories are scanned and repositories are acquired only when searching, not when
+displaying help or the default picker. Repository resolution and cloning show progress.
+Malformed source configuration fails the command rather than skipping entries.
+A source that cannot be read, resolved, authenticated, or cloned produces a warning
+without blocking other sources. Cancellation stops the search. You can search again
+or return to the default templates without creating project files.
+Repeated queries reuse template-engine sessions for local directories and unchanged
+Git checkouts, keeping selected template callbacks alive through generation.
 
 ## Examples
 
@@ -144,9 +324,9 @@ An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
 cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
 stop behavior is unchanged.
 
-### Experimental macOS and Windows tray companion
+### Experimental desktop tray companion
 
-The native macOS and Windows CLI bundles include the experimental Aspire menu
+The native macOS, Windows, and glibc Linux CLI bundles include the experimental Aspire menu
 bar or system tray companion:
 
 ```bash
@@ -164,7 +344,8 @@ it prematurely. The command then reports the helper's result.
 
 The companion comes from the leased CLI bundle at
 `tray/Aspire Tray.app/Contents/MacOS/aspire-tray` on macOS, or
-`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows. Starting it passes the absolute
+`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows, or
+`tray/aspire-tray` alongside `tray/Aspire.png` on Linux. Starting it passes the absolute
 invoking CLI executable and the leased version directory; it never copies a
 private CLI, searches `PATH`, or falls back to a checkout-relative executable.
 The CLI holds its bundle lease until the helper exits, and the native GUI holds
@@ -172,14 +353,19 @@ its own lease for its lifetime. If readiness fails, the helper terminates and
 waits for its newly launched GUI process before releasing the launcher lease;
 an already-running companion is not terminated by a failed start.
 
-These commands are experimental and available on macOS and Windows (x64/ARM64).
+These commands are experimental and available on macOS, Windows, and glibc Linux (x64/ARM64).
 Starting the companion requires an interactive desktop and
 a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
 bundle or tray payload fails explicitly; install a platform-matching bundle containing the
 companion rather than using a standalone CLI binary.
 
+Linux additionally requires GTK 3, an Ayatana/compatible AppIndicator library,
+and a StatusNotifierItem-capable panel. GNOME needs an AppIndicator extension;
+Waybar needs its `tray` module enabled. Missing desktop support is reported rather
+than installed automatically. See [Linux desktop requirements](../Aspire.Tray/README.md#linux-desktop-support).
+
 Before upgrading from an older preview, quit its running companion using its
-**Quit** menu action. Preview single-instance identifiers have changed, so
+**Quit** action. Preview single-instance identifiers have changed, so
 `aspire tray stop` in this version does not manage an older preview's instance.
 
 ### AppHost snapshot output
@@ -403,6 +589,12 @@ aspire config set --global certificates.nssDbPaths "firefox=/path/to/firefox/pro
 Prefix a path with `firefox=` or `chromium=` to apply the trust settings expected by that browser family.
 
 The `certificates.nssDbPaths` setting takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable. When the Aspire setting has no value, the CLI preserves the upstream behavior.
+
+## Diagnostic log privacy
+
+On Unix, CLI diagnostic log files use owner-only read/write permissions (`0600`), including when an existing log file is reused. The dedicated Aspire logs directory uses owner-only access (`0700`), repairing permissions if it already exists. Newly created custom log directories also use `0700`; existing custom parent directories and Windows file permission behavior are unchanged.
+
+Diagnostic logs can contain sensitive data, including dashboard login URLs captured from AppHost output. Review logs before sharing them.
 
 ## Additional documentation
 

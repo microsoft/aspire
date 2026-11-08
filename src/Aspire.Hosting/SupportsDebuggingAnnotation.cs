@@ -42,6 +42,11 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
     /// </remarks>
     public string LaunchConfigurationType { get; }
 
+    /// <summary>
+    /// Gets or sets whether IDE execution requires an explicit Debug session run mode.
+    /// </summary>
+    internal bool RequiresDebugMode { get; set; }
+
     // The producer callback supplied to WithDebugSupport, with the launch configuration boxed as object.
     // Internal because only Aspire constructs LaunchConfigurationCallbackContext values and because the
     // untyped object is consumed by internal launch-configuration plumbing.

@@ -49,6 +49,9 @@ runs:
     - name: Check changed files against patterns
       id: check_files
       shell: bash
+      env:
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: |
         set -ex
 
@@ -128,8 +131,10 @@ runs:
         # Disable rename detection so both the deleted source and added destination are checked.
         # Unlike the PR Files tab's rename entry, this deliberately reports both paths: otherwise,
         # moving a non-skippable file into a skippable path can hide the source side.
-        BASE_REF="${{ github.event.pull_request.base.sha }}"
-        HEAD_REF="${{ github.event.pull_request.head.sha }}"
+        # Share the selector's pinned merge-parent resolution: event base.sha can be stale.
+        # An unverifiable comparison must fail this gate, never silently skip all CI.
+        BASE_REF=$(bash eng/github-ci/resolve-comparison-base.sh "$PR_BASE_SHA" "$PR_HEAD_SHA")
+        HEAD_REF="$PR_HEAD_SHA"
         if ! CHANGED_FILES=$(git diff --name-only --no-renames "$BASE_REF"..."$HEAD_REF" 2>/dev/null); then
           echo "Error: Failed to get changed files. Base ref: $BASE_REF HEAD ref: $HEAD_REF"
           exit 1

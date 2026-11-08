@@ -66,6 +66,7 @@ permissions:
 jobs:
   update-nix-flake:
     name: Update Nix flake manifest
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Authorize

@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Xunit;
@@ -188,11 +189,9 @@ public class DashboardTelemetryServiceTests
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(TelemetryEventKeys.ComponentInitialize, log.Message);
-        Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize), tag));
+        fixture.AssertAttributes(log.Attributes,
+            new("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize),
+            new("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
         Assert.Collection(fixture.LocalLogSink.Writes,
@@ -218,13 +217,11 @@ public class DashboardTelemetryServiceTests
             Assert.Equal(activity.TraceId, errorLog.TraceId);
             Assert.Equal(activity.SpanId, errorLog.SpanId);
             Assert.Empty(activity.Events);
-            Assert.Collection(errorLog.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-                tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
-                tag => Assert.Equal(TelemetryPropertyKeys.ExceptionRuntimeVersion, tag.Key),
-                tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName), tag),
-                tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-                tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.Error), tag),
-                tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.Error), tag));
+            fixture.AssertAttributes(errorLog.Attributes,
+                new(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName),
+                new("microsoft.operation_name", TelemetryEventKeys.Error),
+                new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
+                new("{OriginalFormat}", TelemetryEventKeys.Error));
 
             service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
 
@@ -259,12 +256,10 @@ public class DashboardTelemetryServiceTests
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(new string('x', 1024), log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.CommandName).Value);
         Assert.Empty(activity.Events);
-        Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, new string('x', 1024)), tag),
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), tag));
+        fixture.AssertAttributes(log.Attributes,
+            new(TelemetryPropertyKeys.CommandName, new string('x', 1024)),
+            new("microsoft.operation_name", TelemetryEventKeys.ParametersSet),
+            new("{OriginalFormat}", TelemetryEventKeys.ParametersSet));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
     }
@@ -294,13 +289,11 @@ public class DashboardTelemetryServiceTests
             Assert.Equal(LogLevel.Information, errorLog.Level);
             Assert.Equal(default, errorLog.TraceId);
             Assert.Equal(default, errorLog.SpanId);
-            Assert.Collection(errorLog.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-                tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
-                tag => Assert.Equal(TelemetryPropertyKeys.ExceptionRuntimeVersion, tag.Key),
-                tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName), tag),
-                tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-                tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.Error), tag),
-                tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.Error), tag));
+            fixture.AssertAttributes(errorLog.Attributes,
+                new(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName),
+                new("microsoft.operation_name", TelemetryEventKeys.Error),
+                new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
+                new("{OriginalFormat}", TelemetryEventKeys.Error));
             Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         }
         finally
@@ -318,13 +311,11 @@ public class DashboardTelemetryServiceTests
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(TelemetryEventKeys.Error, log.Message);
-        Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
-            tag => Assert.Equal(TelemetryPropertyKeys.ExceptionRuntimeVersion, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName), tag),
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.Error), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.Error), tag));
+        fixture.AssertAttributes(log.Attributes,
+            new(TelemetryPropertyKeys.ExceptionType, typeof(InvalidOperationException).FullName),
+            new("microsoft.operation_name", TelemetryEventKeys.Error),
+            new(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
+            new("{OriginalFormat}", TelemetryEventKeys.Error));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
         Assert.Empty(fixture.LocalLogSink.Writes);
@@ -385,21 +376,11 @@ public class DashboardTelemetryServiceTests
         Assert.Equal(activity.TagObjects.Where(t => t.Key != "aspire.dashboard.result").Append(new("microsoft.operation_name", TelemetryEventKeys.ParametersSet)).OrderBy(t => t.Key),
             log.Attributes.Where(t => t.Key != "{OriginalFormat}").OrderBy(t => t.Key));
         Assert.Empty(activity.Events);
-        Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardBuildId, defaultBuildId), tag),
-            tag =>
-            {
-                Assert.Equal(TelemetryPropertyKeys.DashboardComponentId, tag.Key);
-                Assert.Equal("Metrics", tag.Value);
-            },
-            tag =>
-            {
-                Assert.Equal(TelemetryPropertyKeys.MetricsInstrumentsCount, tag.Key);
-                Assert.Equal(12d, tag.Value);
-            },
-            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardVersion, defaultVersion), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), tag));
+        fixture.AssertAttributes(log.Attributes,
+            new(TelemetryPropertyKeys.DashboardComponentId, "Metrics"),
+            new(TelemetryPropertyKeys.MetricsInstrumentsCount, 12d),
+            new("microsoft.operation_name", TelemetryEventKeys.ParametersSet),
+            new("{OriginalFormat}", TelemetryEventKeys.ParametersSet));
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
     }
 }

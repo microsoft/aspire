@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsFound">
         <source>No logs found</source>
-        <target state="new">No logs found</target>
+        <target state="translated">로그를 찾을 수 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsMatchFilter">
         <source>No logs match the filter</source>
-        <target state="new">No logs match the filter</target>
+        <target state="translated">필터와 일치하는 로그가 없음</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNotCapturedForRun">
         <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
-        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
+        <target state="translated">이 실행에 대한 콘솔 로그가 캡처되지 않았습니다. 콘솔 로그는 AppHost가 실행되는 동안 이 페이지를 방문한 경우에만 캡처됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsTextFilter">
         <source>Console logs filter</source>
-        <target state="new">Console logs filter</target>
+        <target state="translated">콘솔 로그 필터</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="PauseInProgressText">
         <source>Console logs capture paused at {0}</source>
-        <target state="new">Console logs capture paused at {0}</target>
+        <target state="translated">{0}에 콘솔 로그 캡처가 일시 중지됨</target>
         <note>{0} is a time</note>
       </trans-unit>
     </body>

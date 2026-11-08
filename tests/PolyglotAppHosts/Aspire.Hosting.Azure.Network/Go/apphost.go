@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	vnetPrefix := builder.AddParameter("vnet-prefix", nil)
@@ -19,41 +19,41 @@ func main() {
 	defaultVnet.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		network := infrastructure.GetVirtualNetwork()
 		if err := network.SetFlowTimeoutInMinutes(float64(10)).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := network.FlowTimeoutInMinutes(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		serviceEndpoint := infrastructure.CreateServiceEndpointProperties()
 		if err := serviceEndpoint.SetService("Microsoft.Storage").Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if err := serviceEndpoint.Locations().Add(infrastructure.CreateNetworkAzureLocation("westus2")); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		location := serviceEndpoint.Locations().Get(0)
 		if _, err := location.Name(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	nsg := builder.AddNetworkSecurityGroup("web-nsg")
 	nsg.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		group := infrastructure.GetNetworkSecurityGroup()
 		if err := group.Tags().Set("provisioning-proxy", "go"); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if err := group.Tags().Get("provisioning-proxy").Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	publicIp := builder.AddPublicIPAddress("nat-ip")
 	publicIp.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		address := infrastructure.GetPublicIPAddress()
 		if err := address.SetIdleTimeoutInMinutes(float64(10)).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := address.IdleTimeoutInMinutes(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	nat := builder.AddNatGateway("nat")
@@ -61,10 +61,10 @@ func main() {
 	nat.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		gateway := infrastructure.GetNatGateway()
 		if err := gateway.SetIdleTimeoutInMinutes(float64(10)).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := gateway.IdleTimeoutInMinutes(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	privateSubnet := defaultVnet.AddSubnet("private-subnet", "10.0.2.0/24")
@@ -74,31 +74,31 @@ func main() {
 	privateEndpoint.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		endpoint := infrastructure.GetPrivateEndpoint()
 		if err := endpoint.SetCustomNetworkInterfaceName("private-blobs-nic").Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := endpoint.CustomNetworkInterfaceName(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	// Hosting creates Private DNS zones internally, without an exported factory.
 	dns := builder.AddAzureInfrastructure("privateDns", func(infrastructure aspire.AzureResourceInfrastructure) {
 		zone := infrastructure.AddPrivateDnsZone("privateDns")
 		if err := zone.SetLocation(infrastructure.Bicep().Location("global")).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	dns.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		zone := infrastructure.GetPrivateDnsZone()
 		if err := zone.SetName("polyglot.internal").Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := zone.Name(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	for _, err := range []error{defaultVnet.Err(), nsg.Err(), publicIp.Err(), nat.Err(), privateEndpoint.Err(), dns.Err()} {
 		if err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	}
 	stringVnet := builder.AddAzureVirtualNetwork("vnet-string", &aspire.AddAzureVirtualNetworkOptions{
@@ -135,14 +135,14 @@ func main() {
 	perimeter.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
 		boundary := infrastructure.GetNetworkSecurityPerimeter()
 		if err := boundary.Tags().Set("provisioning-proxy", "go"); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if err := boundary.Tags().Get("provisioning-proxy").Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	if perimeter.Err() != nil {
-		log.Fatalf(aspire.FormatError(perimeter.Err()))
+		log.Fatal(aspire.FormatError(perimeter.Err()))
 	}
 	perimeter.WithAccessRule(&aspire.AzureNspAccessRule{
 		Name:            "allow-corp-network",
@@ -152,9 +152,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

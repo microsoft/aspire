@@ -17,6 +17,7 @@ import {
     FakeDiscoveryService,
 } from './helpers/editorAssistanceTestSupport';
 import { ScriptedRealpath } from './helpers/scriptedRealpath';
+import { removeDirectorySafely } from './testHelpers';
 
 function createUnsafeModelTriggeredError(workspaceRoot: string): {
     readonly error: Error;
@@ -69,14 +70,14 @@ suite('Editor assistance AppHost services', () => {
         resetLaunchFailureStore();
         __resetAppHostIdentityRegistryForTests();
         workspaceFoldersStub.restore();
-        fs.rmSync(workspaceRoot, { recursive: true, force: true });
-        fs.rmSync(outsideRoot, { recursive: true, force: true });
+        removeDirectorySafely(workspaceRoot);
+        removeDirectorySafely(outsideRoot);
     });
 
     suite('SafeAppHostTargetResolver', () => {
-        test('rejects non-string, blank, and overly long selectors without consulting discovery', async () => {
+        test('rejects non-string, blank, multiline, and overly long selectors without consulting discovery', async () => {
             const token = new vscode.CancellationTokenSource().token;
-            const inputs = [undefined, '   ', 'a'.repeat(4097)] as const;
+            const inputs = [undefined, '   ', 'a'.repeat(4097), 'AppHost\u2028/AppHost.csproj', 'AppHost\u2029/AppHost.csproj'] as const;
 
             for (const input of inputs) {
                 const resolution = await resolver.resolveTarget(input, token);
@@ -381,6 +382,39 @@ suite('Editor assistance AppHost services', () => {
             });
         });
 
+        test('does not case-fold distinct filesystem targets before checking selector ambiguity', async () => {
+            const first = path.join(workspaceRoot, 'First', 'AppHost.csproj');
+            const second = path.join(workspaceRoot, 'Second', 'AppHost.csproj');
+            fs.mkdirSync(path.dirname(first));
+            fs.mkdirSync(path.dirname(second));
+            fs.writeFileSync(first, appHostProjectContents);
+            fs.writeFileSync(second, appHostProjectContents);
+            const lowerSelector = path.join(workspaceRoot, 'api.csproj');
+            const upperSelector = path.join(workspaceRoot, 'API.csproj');
+            const script = new ScriptedRealpath();
+            script.script(lowerSelector, { results: [], thereafter: first });
+            script.script(upperSelector, { results: [], thereafter: second });
+            addCandidate(discoveryService, workspaceRoot, lowerSelector);
+            addCandidate(discoveryService, workspaceRoot, upperSelector);
+            const caseInsensitiveResolver = new SafeAppHostTargetResolver(
+                discoveryService, value => value.replace(/\\/g, '/').toLowerCase());
+            try {
+                const token = new vscode.CancellationTokenSource().token;
+                const targets = await caseInsensitiveResolver.enumerateKnownAppHosts(token);
+                const caseTargets = targets.filter(target => /api\.csproj$/i.test(target.relativePath));
+                assert.strictEqual(caseTargets.length, 2);
+                assert.notStrictEqual(caseTargets[0].identity, caseTargets[1].identity);
+                assert.deepStrictEqual(await caseInsensitiveResolver.resolveTarget('api.csproj', token), {
+                    resolved: false,
+                    outcome: 'ambiguousAppHost',
+                    knownAppHosts: ['api.csproj', 'API.csproj'],
+                });
+            }
+            finally {
+                script.restore();
+            }
+        });
+
         test('keeps lexical symlink aliases independently selectable', async function () {
             const linkedTarget = path.join(workspaceRoot, 'Linked', 'AppHost.csproj');
             fs.mkdirSync(path.dirname(linkedTarget), { recursive: true });
@@ -401,6 +435,8 @@ suite('Editor assistance AppHost services', () => {
             assertResolved(linkedResolution);
             assert.strictEqual(realResolution.target.absolutePath, appHostProjectPath);
             assert.strictEqual(linkedResolution.target.absolutePath, linkedTarget);
+            assert.strictEqual(realResolution.target.identity, linkedResolution.target.identity);
+            assert.strictEqual(realResolution.target.canonicalPath, linkedResolution.target.canonicalPath);
         });
 
         test('changes target identity when a symlink retargets', async function () {

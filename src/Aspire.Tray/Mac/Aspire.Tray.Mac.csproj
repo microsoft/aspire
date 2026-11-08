@@ -9,8 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(SharedDir)Aspire_icon_256.png" LogicalName="aspire.png" />
-    <EmbeddedResource Include="Assets/AspireTrayTemplate.png" LogicalName="AspireTrayTemplate.png" />
-    <EmbeddedResource Include="Assets/AspireTrayTemplate@2x.png" LogicalName="AspireTrayTemplate@2x.png" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared/BundleVersionLease.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared/BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />
@@ -56,14 +54,17 @@
        ZipMacFiles would wrap a ZIP named .app again, hiding its executable from
        the signing service. Preserve the bundle directory in the ZIP.
        https://github.com/dotnet/arcade/blob/main/src/Microsoft.DotNet.SignTool/src/SignTool.cs -->
-  <Target Name="PrepareTraySigning">
+  <Target Name="CreateTrayAppSigningArchive">
     <Error Condition="!Exists('$(TrayAppPath)/Contents/MacOS/aspire-tray')" Text="Publish the tray app before preparing signing input." />
     <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(TraySigningArchive)'))" />
     <Delete Files="$(TraySigningArchive)" />
     <Exec Command="ditto -c -k --sequesterRsrc --keepParent &quot;$(TrayAppPath)&quot; &quot;$(TraySigningArchive)&quot;" />
   </Target>
 
-  <Target Name="RestoreSignedTray">
+  <!-- Replace the prepared app with the returned signed archive, restore executable
+       permissions, staple Apple's notarization ticket, and validate the final app.
+       Do not republish afterward: that would overwrite the signed contents. -->
+  <Target Name="ExtractAndValidateSignedTrayApp">
     <Error Condition="!Exists('$(TraySigningArchive)')" Text="Signed tray app archive is missing: $(TraySigningArchive)" />
     <RemoveDir Directories="$(TrayAppPath)" />
     <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(TrayAppPath)'))" />
@@ -72,8 +73,8 @@
     <!-- Stapling attaches Apple's notarization ticket without invalidating the
          bundle signature, allowing offline Gatekeeper verification.
          https://developer.apple.com/documentation/security/customizing-the-notarization-workflow -->
-    <Exec Command="xcrun stapler staple &quot;$(TrayAppPath)&quot;" />
-    <Exec Command="xcrun stapler validate &quot;$(TrayAppPath)&quot;" />
+    <Exec Command="bash &quot;$(RepoRoot)tools/CreateLayout/macos-stapler-with-retry.sh&quot; staple &quot;$(TrayAppPath)&quot;" />
+    <Exec Command="bash &quot;$(RepoRoot)tools/CreateLayout/macos-stapler-with-retry.sh&quot; validate &quot;$(TrayAppPath)&quot;" />
     <!-- Reject ad-hoc input as well as broken resource seals. Never publish again
          between restoring this signed app and embedding its payload in the CLI. -->
     <Exec Command="codesign --verify --strict -R=&quot;anchor apple generic&quot; &quot;$(TrayAppPath)&quot;" />

@@ -257,6 +257,11 @@ If you don't see it, treat the step as having run live. (A malformed `-DryRun` a
 
 **2. Extract the step's script and run it locally** with test inputs and `-DryRun`. Best when you're changing script logic (version compute, manifest/cask generation, notifications) rather than YAML wiring — no pipeline, no side effects, fastest loop.
 
+A locally extracted snippet is a diagnostic aid, not a durable regression test.
+It does not validate YAML expressions, wrapper semantics, or real pipeline
+integration. For regression coverage, invoke a real production script or module
+where practical.
+
 **3. Test gating, not effect.** If the change only affects *when* a stage runs, trigger builds on representative branches and inspect which stages were scheduled vs skipped in the build timeline. The publish never needs to fire.
 
 Do **not** validate by repointing publish targets at a personal fork / test feed / test repo — a misconfiguration hits the real target, which is the side effect you're trying to avoid.

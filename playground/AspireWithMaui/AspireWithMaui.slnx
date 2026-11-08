@@ -5,8 +5,8 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/Components/">
-    <Project Path="../../src/Components/Aspire.Azure.AI.Inference/Aspire.Azure.AI.Inference.csproj" />
-    <Project Path="../../src/Components/Aspire.Azure.AI.OpenAI/Aspire.Azure.AI.OpenAI.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.AI.Extensions.OpenAI/Aspire.Azure.AI.Extensions.OpenAI.csproj" />
+    <Project Path="../../src/Components/Aspire.Azure.AI.Projects/Aspire.Azure.AI.Projects.csproj" />
     <Project Path="../../src/Components/Aspire.Azure.Data.Tables/Aspire.Azure.Data.Tables.csproj" />
     <Project Path="../../src/Components/Aspire.Azure.Messaging.EventHubs/Aspire.Azure.Messaging.EventHubs.csproj" />
     <Project Path="../../src/Components/Aspire.Azure.Messaging.ServiceBus/Aspire.Azure.Messaging.ServiceBus.csproj" />
@@ -365,8 +365,8 @@
     <Project Path="../../tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Components/">
-    <Project Path="../../tests/Aspire.Azure.AI.Inference.Tests/Aspire.Azure.AI.Inference.Tests.csproj" />
-    <Project Path="../../tests/Aspire.Azure.AI.OpenAI.Tests/Aspire.Azure.AI.OpenAI.Tests.csproj" />
+    <Project Path="../../tests/Aspire.Azure.AI.Extensions.OpenAI.Tests/Aspire.Azure.AI.Extensions.OpenAI.Tests.csproj" />
+    <Project Path="../../tests/Aspire.Azure.AI.Projects.Tests/Aspire.Azure.AI.Projects.Tests.csproj" />
     <Project Path="../../tests/Aspire.Azure.Data.Tables.Tests/Aspire.Azure.Data.Tables.Tests.csproj" />
     <Project Path="../../tests/Aspire.Azure.Messaging.EventHubs.Tests/Aspire.Azure.Messaging.EventHubs.Tests.csproj" />
     <Project Path="../../tests/Aspire.Azure.Messaging.ServiceBus.Tests/Aspire.Azure.Messaging.ServiceBus.Tests.csproj" />

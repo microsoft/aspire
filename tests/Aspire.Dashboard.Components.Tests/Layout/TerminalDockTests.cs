@@ -94,9 +94,7 @@ public partial class TerminalDockTests : DashboardTestContext
     [Fact]
     public async Task EmptyDock_ShowsHeadingDocumentationAndKeyboardHint()
     {
-        var client = new TestDashboardClient(
-            isEnabled: true,
-            initialResources: [TerminalSetupHelpers.CreateTerminalResource("database")]);
+        var client = new TestDashboardClient(isEnabled: true);
         TerminalSetupHelpers.SetupTerminalComponents(this, client);
         var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
@@ -426,6 +424,39 @@ public partial class TerminalDockTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task DisconnectedBanner_ClosesOwningTabAndWaitsForWatchRemoval()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(
+            terminalChannelProvider: () => updates, closeTerminal: (_, _) => completion.Task);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var views = cut.FindComponents<TerminalView>();
+        await cut.InvokeAsync(() => views[0].Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Disconnected = true
+        }));
+        var click = cut.InvokeAsync(() => cut.Find(".terminal-close-tab").ClickAsync(new()));
+        cut.WaitForAssertion(() => Assert.Equal(["first"], client.ClosedTerminals.ToArray()));
+        Assert.Equal(2, cut.FindAll("[role=tab]").Count);
+        Assert.Empty(cut.FindAll(".terminal-restart-resource"));
+
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Removed, "first"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll("[role=tab]"));
+            Assert.Equal("second", cut.Find("[aria-selected=true]").TextContent.Trim());
+            Assert.Same(views[1].Instance, cut.FindComponent<TerminalView>().Instance);
+        });
+        completion.SetResult();
+        await click;
+    }
+
+    [Fact]
     public async Task LastTabRemoved_EmptyDockCanReceiveAnotherAppHostTerminal()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
@@ -692,6 +723,32 @@ public partial class TerminalDockTests : DashboardTestContext
             Assert.Equal([false, true, false], returned.Select(view => view.AutoFit));
             Assert.Equal($"dock:{terminalId}", returned[1].SizeMemoryKey);
         });
+    }
+
+    [Fact]
+    public async Task Detach_UsesConfiguredRoutePrefix()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var client = new TestDashboardClient(
+            isEnabled: true,
+            terminalChannelProvider: () => updates);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>(builder =>
+            builder.Add(p => p.TerminalWindowPathPrefix, "legacy/terminal-window"));
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        await cut.InvokeAsync(() => cut.FindComponent<TerminalView>().Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 1,
+            Connected = true,
+            FontPx = 13
+        }));
+
+        Assert.Equal(
+            "http://localhost/legacy/terminal-window/apphost/first?fontSize=13",
+            cut.Find(".terminal-dock-detach").GetAttribute("data-terminal-window-url"));
     }
 
     [Fact]

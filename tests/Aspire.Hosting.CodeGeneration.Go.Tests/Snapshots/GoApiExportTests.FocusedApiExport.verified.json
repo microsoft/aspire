@@ -1,0 +1,165 @@
+﻿{
+  "schemaVersion": 1,
+  "language": "go",
+  "generator": {
+    "name": "Aspire.Hosting.CodeGeneration.Go",
+    "version": "13.5.0"
+  },
+  "package": {
+    "name": "Aspire.Hosting.Redis",
+    "version": "13.5.0",
+    "importPath": "apphost/modules/aspire"
+  },
+  "modules": [
+    {
+      "name": "Aspire.Hosting.Redis",
+      "summary": "Redis hosting integration.",
+      "items": [
+        {
+          "id": "interface:RedisResource",
+          "kind": "interface",
+          "name": "RedisResource",
+          "typeId": "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisResource",
+          "owningAssembly": "Aspire.Hosting.Redis",
+          "declaration": "type RedisResource interface",
+          "summary": "A Redis resource.",
+          "remarks": "Add one with AddRedis.",
+          "implements": [
+            "Resource"
+          ],
+          "members": [
+            {
+              "id": "RedisResource.WithPersistence",
+              "kind": "method",
+              "name": "WithPersistence",
+              "declaration": "WithPersistence(interval float64, options ...*WithPersistenceOptions) RedisResource",
+              "capabilityId": "Aspire.Hosting.Redis/withPersistence",
+              "targetTypeId": "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisResource",
+              "capabilityKind": "method",
+              "owningAssembly": "Aspire.Hosting.Redis",
+              "returnType": "RedisResource",
+              "errorModel": "deferred",
+              "summary": "Configures persistence.",
+              "returns": "The same builder.",
+              "returnsReceiver": true,
+              "returnsBuilder": true,
+              "experimental": true,
+              "deprecated": "Use WithDataVolume.",
+              "parameters": [
+                {
+                  "name": "interval",
+                  "type": "float64",
+                  "optional": false,
+                  "summary": "The snapshot interval."
+                }
+              ],
+              "options": {
+                "typeName": "WithPersistenceOptions",
+                "fields": [
+                  {
+                    "name": "KeysChangedThreshold",
+                    "type": "*float64",
+                    "optional": true,
+                    "jsonName": "keysChangedThreshold"
+                  }
+                ]
+              }
+            },
+            {
+              "id": "RedisResource.WithCallback",
+              "kind": "method",
+              "name": "WithCallback",
+              "declaration": "WithCallback(callback func(arg RedisContext), input any) (string, error)",
+              "capabilityId": "Aspire.Hosting.Redis/withCallback",
+              "targetTypeId": "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisResource",
+              "capabilityKind": "instanceMethod",
+              "owningAssembly": "Aspire.Hosting.Redis",
+              "returnType": "(string, error)",
+              "errorModel": "returned",
+              "parameters": [
+                {
+                  "name": "callback",
+                  "type": "func(arg RedisContext)",
+                  "optional": false,
+                  "callback": true
+                },
+                {
+                  "name": "input",
+                  "type": "any",
+                  "optional": false,
+                  "jsonName": "in",
+                  "allowedTypes": [
+                    "string",
+                    "*ReferenceExpression"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "RedisResource.Err",
+              "kind": "method",
+              "name": "Err",
+              "declaration": "Err() error",
+              "returnType": "error",
+              "errorModel": "none",
+              "summary": "Err returns the first error recorded on this wrapper.",
+              "synthesized": true
+            }
+          ]
+        },
+        {
+          "id": "options:WithPersistenceOptions",
+          "kind": "options",
+          "name": "WithPersistenceOptions",
+          "typeId": "Aspire.Hosting.Redis/WithPersistenceOptions",
+          "owningAssembly": "Aspire.Hosting.Redis",
+          "declaration": "type WithPersistenceOptions struct",
+          "usedBy": [
+            "Aspire.Hosting.Redis/withPersistence"
+          ],
+          "members": [
+            {
+              "id": "WithPersistenceOptions.KeysChangedThreshold",
+              "kind": "field",
+              "name": "KeysChangedThreshold",
+              "declaration": "KeysChangedThreshold *float64 \u0060json:\u0022keysChangedThreshold,omitempty\u0022\u0060",
+              "jsonName": "keysChangedThreshold"
+            }
+          ]
+        },
+        {
+          "id": "enum:RedisKind",
+          "kind": "enum",
+          "name": "RedisKind",
+          "typeId": "Aspire.Hosting.Redis/RedisKind",
+          "owningAssembly": "Aspire.Hosting.Redis",
+          "declaration": "type RedisKind string",
+          "members": [
+            {
+              "id": "RedisKind.RedisKindValkey",
+              "kind": "constant",
+              "name": "RedisKindValkey",
+              "declaration": "RedisKindValkey RedisKind = \u0022valkey\u0022",
+              "value": "valkey"
+            }
+          ]
+        },
+        {
+          "id": "augmentation:Aspire.Hosting.Redis:Resource",
+          "kind": "augmentation",
+          "name": "Resource",
+          "typeId": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource",
+          "owningAssembly": "Aspire.Hosting",
+          "declaration": "type Resource interface"
+        }
+      ]
+    }
+  ],
+  "declarations": [
+    {
+      "id": "Aspire.Hosting.Redis:interface:RedisResource",
+      "owningAssembly": "Aspire.Hosting.Redis",
+      "content": "type RedisResource interface {\n\thandleReference\n}"
+    }
+  ]
+}

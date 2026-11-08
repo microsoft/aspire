@@ -34,6 +34,10 @@ eng/github-ci/ci-skip-entirely-patterns.txt
 # Documentation
 **.md
 
+# License text is packed as-is, like README files; it does not change compiled or runtime behavior.
+# Filter it before Layer 1, which otherwise attributes the packed None item to every packable project.
+THIRD-PARTY-NOTICES.TXT
+
 # Generated API and ATS baselines
 # These files are generated release/API-surface artifacts and do not require PR CI.
 src/*/api/Aspire.*.cs
@@ -55,7 +59,6 @@ Aspire-Core.slnf
 .github/extensions/**
 
 # Dev/AzDO/scheduled-only infrastructure with no regular GitHub PR CI consumer.
-.config/dotnet-tools.json
 eng/Version.Details.xml
 .github/actions/preload-azure-cli-requests/**
 
@@ -81,9 +84,7 @@ eng/Version.Details.xml
 .github/workflows/update-azure-vm-sizes.yml
 .github/workflows/update-ai-foundry-models.yml
 .github/workflows/update-nix-cli-flake.yml
-.github/workflows/update-aspire-skills-bundle.yml
 .github/workflows/update-dependencies.yml
-.github/workflows/auto-rerun-transient-ci-failures.*
 
 # GitHub Agentic Workflows (gh-aw): shared action locks (.github/aw/**), compiled
 # *.lock.yml workflows, and the agentics-maintenance workflows. The .md source files

@@ -12,6 +12,7 @@ export const appHostSourceFilePatterns = [
     '**/apphost.mjs',
     '**/apphost.cjs',
     '**/apphost.rs',
+    '**/apphost.go',
     // Java file names must match the public class, including on case-sensitive file systems.
     '**/AppHost.java',
 ] as const;

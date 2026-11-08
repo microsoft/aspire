@@ -22,6 +22,8 @@ internal class CallbackTemplate(
 
     public string Description => description;
 
+    public string? SearchDescription { get; init; }
+
     public bool IsEmpty => isEmpty;
 
     public bool ShowInPrompt => showInPrompt;

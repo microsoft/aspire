@@ -4,37 +4,37 @@
     <body>
       <trans-unit id="Description">
         <source>Destroy a previously deployed AppHost environment</source>
-        <target state="new">Destroy a previously deployed AppHost environment</target>
+        <target state="translated">以前にデプロイした AppHost 環境を破棄する</target>
         <note />
       </trans-unit>
       <trans-unit id="DestroyCanceled">
         <source>The destroy operation was canceled.</source>
-        <target state="new">The destroy operation was canceled.</target>
+        <target state="translated">破棄操作がキャンセルされました。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveRequiresYes">
         <source>The destroy command requires --yes when the --non-interactive option is specified.</source>
-        <target state="new">The destroy command requires --yes when the --non-interactive option is specified.</target>
+        <target state="translated">--non-interactive オプションを指定した場合、destroy コマンドには --yes が必要です。</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
         <source>Destroy completed</source>
-        <target state="new">Destroy completed</target>
+        <target state="translated">破棄が完了しました</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailedPrefix">
         <source>Destroy failed</source>
-        <target state="new">Destroy failed</target>
+        <target state="translated">破棄に失敗しました</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path containing the deployment artifacts to destroy</source>
-        <target state="new">The output path containing the deployment artifacts to destroy</target>
+        <target state="translated">破棄するデプロイ成果物を含む出力パス</target>
         <note />
       </trans-unit>
       <trans-unit id="YesOptionDescription">
         <source>Do not prompt for confirmation before destroying resources</source>
-        <target state="new">Do not prompt for confirmation before destroying resources</target>
+        <target state="translated">リソースを破棄する前に確認を求めない</target>
         <note />
       </trans-unit>
     </body>

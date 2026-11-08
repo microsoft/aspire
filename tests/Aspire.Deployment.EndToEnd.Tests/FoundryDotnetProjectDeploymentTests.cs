@@ -8,7 +8,6 @@ using System.ClientModel;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
-using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Azure.Core;
@@ -55,8 +54,10 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
 
                 var builder = DistributedApplication.CreateBuilder(args);
                 var project = builder.AddFoundry("foundry").AddProject("project");
-                builder.AddDotnetProject("echo", Path.Combine("EchoAgent", "EchoAgent.csproj"))
+                var echo = builder.AddDotnetProject("echo", Path.Combine("EchoAgent", "EchoAgent.csproj"))
                     .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+                echo.WithEnvironment("BROWSER_ORIGINS", echo.GetEndpoint("http").BrowserOrigins)
+                    .WithEnvironment("PRIMARY_BROWSER_ORIGIN", echo.GetEndpoint("http").PrimaryBrowserOrigin);
                 builder.Build().Run();
                 """);
             FoundryEchoTestApp.Write(Path.Combine(projectDir, "EchoAgent"), marker);
@@ -87,14 +88,14 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
             var container = Assert.IsType<ContainerConfiguration>(definition.ContainerConfiguration);
             var image = container.Image;
             Assert.Contains(".azurecr.io/", image, StringComparison.Ordinal);
-            Assert.Collection(definition.ProtocolVersions, protocol =>
+            Assert.Collection(definition.Versions, protocol =>
             {
                 Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
                 Assert.Equal("2.0.0", protocol.Version);
             });
             var agent = await client.AgentAdministrationClient.GetAgentAsync(agentName, cancellationToken: cts.Token);
             Assert.NotNull(agent.Value.AgentEndpoint);
-            Assert.Contains(AgentEndpointProtocol.Responses, agent.Value.AgentEndpoint.Protocols);
+            Assert.NotNull(agent.Value.AgentEndpoint.ProtocolConfiguration.Responses);
             output.WriteLine($"Hosted agent {agentName}, version {deployedVersion.Version}, image {image}");
 
             await DotnetProjectDeploymentHelpers.RunScriptAsync(auto, counter, $$"""
@@ -114,8 +115,7 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
             // Invoke that hosted agent, not a prompt agent or a dashboard health URL.
             // Hosting can cold-start after version creation. The bounded retry is not a fallback
             // to another route: incorrect protocol/auth/routing must fail the deployment scenario.
-            var responses = client.ProjectOpenAIClient.GetProjectResponsesClientForAgent(
-                new AgentReference(name: agentName));
+            var responses = client.ProjectOpenAIClient.GetProjectResponsesClientForAgentEndpoint(agentName);
             string? lastFailure = null;
             var succeeded = false;
             for (var attempt = 0; attempt < 18; attempt++)
@@ -125,7 +125,12 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
                 try
                 {
                     var response = await responses.CreateResponseAsync(nonce, cancellationToken: requestCts.Token);
-                    Assert.Equal($"Echo: {nonce}", response.Value.GetOutputText());
+                    using var received = JsonDocument.Parse(response.Value.GetOutputText());
+                    Assert.Equal($"Echo: {nonce}", received.RootElement.GetProperty("echo").GetString());
+                    // Read the expected authority from ARM, independently of Aspire's output.
+                    var expectedOrigin = endpoint.GetLeftPart(UriPartial.Authority);
+                    Assert.Equal(expectedOrigin, received.RootElement.GetProperty("origins").GetString());
+                    Assert.Equal(expectedOrigin, received.RootElement.GetProperty("primaryOrigin").GetString());
                     succeeded = true;
                     break;
                 }

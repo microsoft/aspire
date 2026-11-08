@@ -27,6 +27,67 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
     private static readonly DateTime s_start = new(2025, 6, 15, 12, 0, 0, DateTimeKind.Utc);
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Cumulative_Repeats_CrossTimeBucketAfterReopening(bool rollup, bool sameRequest)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var first = CreatePoint(s_start, s_start.AddSeconds(59), [3, 0], [100]);
+        var addContext = new AddContext();
+        await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, first)]);
+        var second = first.Clone();
+        second.TimeUnixNano = DateTimeToUnixNanoseconds(s_start.AddSeconds(60));
+        var last = second.Clone();
+        last.TimeUnixNano = DateTimeToUnixNanoseconds(s_start.AddMilliseconds(60_500));
+        var exemplar = CreateExemplar(s_start.AddMilliseconds(60_100), 1);
+        last.Exemplars.Add(exemplar);
+        using (var writer = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath))
+        {
+            if (sameRequest)
+            {
+                await writer.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, second, last)]);
+            }
+            else
+            {
+                await writer.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, second)]);
+                await writer.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, last)]);
+            }
+        }
+        Assert.Equal(3, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath, readOnly: true);
+        var instrument = await readOnly.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey("TestService", "TestId"),
+            MeterName = "test-meter",
+            InstrumentName = "histogram",
+            StartTime = s_start.AddSeconds(60),
+            EndTime = s_start.AddSeconds(61),
+            DataPointInterval = rollup ? TimeSpan.FromSeconds(1) : null
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        var value = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(3UL, value.Count);
+        Assert.Equal(s_start.AddMilliseconds(60_500), value.End);
+        Assert.Equal(exemplar.TimeUnixNano, Assert.Single(value.Exemplars).TimeUnixNano);
+        Assert.Equal(value.End, readOnly.Repository.GetInstrumentLatestEndTime(new ResourceKey("TestService", "TestId"), "test-meter", "histogram"));
+
+        using var connection = readOnly.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT end_time_unix_nano, end_time_bucket, repeat_count FROM telemetry_metric_points;";
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        var endTimeUnixNano = checked((long)last.TimeUnixNano);
+        Assert.Equal(endTimeUnixNano, reader.GetInt64(0));
+        Assert.Equal(endTimeUnixNano / SqliteTelemetryRepository.MetricTimeBucketWidthUnixNano, reader.GetInt64(1));
+        Assert.Equal(1, reader.GetInt64(2));
+        Assert.False(reader.Read());
+    }
+
+    [Theory]
     [InlineData(AggregationTemporality.Cumulative, false)]
     [InlineData(AggregationTemporality.Cumulative, true)]
     [InlineData(AggregationTemporality.Delta, false)]

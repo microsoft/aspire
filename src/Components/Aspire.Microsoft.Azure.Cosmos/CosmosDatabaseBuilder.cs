@@ -11,25 +11,55 @@ namespace Aspire.Microsoft.Azure.Cosmos;
 /// Represents a builder that can be used to register multiple container
 /// instances against the same Cosmos database connection.
 /// </summary>
-public sealed class CosmosDatabaseBuilder(
-    IHostApplicationBuilder hostBuilder,
-    string connectionName,
-    MicrosoftAzureCosmosSettings settings,
-    CosmosClientOptions clientOptions)
+public sealed class CosmosDatabaseBuilder
 {
-    private CosmosClient? _client;
+    private readonly IHostApplicationBuilder _hostBuilder;
+    private readonly string _connectionName;
+    private readonly MicrosoftAzureCosmosSettings _settings;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CosmosDatabaseBuilder"/> class.
+    /// </summary>
+    /// <param name="hostBuilder">The application builder used to register Cosmos services.</param>
+    /// <param name="connectionName">The connection name used to configure the Cosmos client.</param>
+    /// <param name="settings">The settings used to configure the Cosmos client.</param>
+    /// <param name="clientOptions">The options used to configure the Cosmos client.</param>
+    public CosmosDatabaseBuilder(
+        IHostApplicationBuilder hostBuilder,
+        string connectionName,
+        MicrosoftAzureCosmosSettings settings,
+        CosmosClientOptions clientOptions)
+        : this(
+            hostBuilder,
+            connectionName,
+            settings,
+            _ => AspireMicrosoftAzureCosmosExtensions.GetCosmosClient(connectionName, settings, clientOptions))
+    {
+    }
+
+    internal CosmosDatabaseBuilder(
+        IHostApplicationBuilder hostBuilder,
+        string connectionName,
+        MicrosoftAzureCosmosSettings settings,
+        Func<IServiceProvider, CosmosClient> clientFactory)
+    {
+        _hostBuilder = hostBuilder;
+        _connectionName = connectionName;
+        _settings = settings;
+        _hostBuilder.Services.AddKeyedSingleton<CosmosClient>(this, (serviceProvider, _) => clientFactory(serviceProvider));
+    }
 
     internal CosmosDatabaseBuilder AddDatabase()
     {
-        hostBuilder.Services.AddSingleton(sp =>
+        _hostBuilder.Services.AddSingleton(sp =>
         {
-            if (string.IsNullOrEmpty(settings.DatabaseName))
+            if (string.IsNullOrEmpty(_settings.DatabaseName))
             {
                 throw new InvalidOperationException(
-                    $"A Database could not be configured. Ensure valid connection information was provided in 'ConnectionStrings:{connectionName}'.");
+                    $"A Database could not be configured. Ensure valid connection information was provided in 'ConnectionStrings:{_connectionName}'.");
             }
-            _client ??= AspireMicrosoftAzureCosmosExtensions.GetCosmosClient(connectionName, settings, clientOptions);
-            return _client.GetDatabase(settings.DatabaseName);
+
+            return GetClient(sp).GetDatabase(_settings.DatabaseName);
         });
 
         return this;
@@ -37,15 +67,15 @@ public sealed class CosmosDatabaseBuilder(
 
     internal CosmosDatabaseBuilder AddKeyedDatabase()
     {
-        hostBuilder.Services.AddKeyedSingleton(connectionName, (sp, _) =>
+        _hostBuilder.Services.AddKeyedSingleton(_connectionName, (sp, _) =>
         {
-            if (string.IsNullOrEmpty(settings.DatabaseName))
+            if (string.IsNullOrEmpty(_settings.DatabaseName))
             {
                 throw new InvalidOperationException(
-                    $"A Database could not be configured. Ensure valid connection information was provided in 'ConnectionStrings:{connectionName}'.");
+                    $"A Database could not be configured. Ensure valid connection information was provided in 'ConnectionStrings:{_connectionName}'.");
             }
-            _client ??= AspireMicrosoftAzureCosmosExtensions.GetCosmosClient(connectionName, settings, clientOptions);
-            return _client.GetDatabase(settings.DatabaseName);
+
+            return GetClient(sp).GetDatabase(_settings.DatabaseName);
         });
 
         return this;
@@ -59,11 +89,9 @@ public sealed class CosmosDatabaseBuilder(
     /// <returns>A <see cref="CosmosDatabaseBuilder"/> that can be used for further chaining.</returns>
     public CosmosDatabaseBuilder AddKeyedContainer(string name)
     {
-        _client ??= AspireMicrosoftAzureCosmosExtensions.GetCosmosClient(connectionName, settings, clientOptions);
+        var connectionInfo = _hostBuilder.GetCosmosConnectionInfo(name);
 
-        var connectionInfo = hostBuilder.GetCosmosConnectionInfo(name);
-
-        hostBuilder.Services.AddKeyedSingleton(name, (sp, _) =>
+        _hostBuilder.Services.AddKeyedSingleton(name, (sp, _) =>
         {
             // If a connection string was provided, check that it contains a valid container name.
             if (connectionInfo is not null && string.IsNullOrEmpty(connectionInfo?.ContainerName))
@@ -73,9 +101,12 @@ public sealed class CosmosDatabaseBuilder(
             }
 
             // Use the container name from the connection string if provided, otherwise use the name
-            return _client.GetContainer(settings.DatabaseName, connectionInfo?.ContainerName ?? name);
+            return GetClient(sp).GetContainer(_settings.DatabaseName, connectionInfo?.ContainerName ?? name);
         });
 
         return this;
     }
+
+    private CosmosClient GetClient(IServiceProvider serviceProvider)
+        => serviceProvider.GetRequiredKeyedService<CosmosClient>(this);
 }

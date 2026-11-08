@@ -11,7 +11,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { createWithAspireCommand } from '../commands/createWithAspire';
 import * as cliModule from '../utils/process/cliProcess';
-import { AppHostDiscoveryCliUnavailableError, AppHostDiscoveryService, CandidateAppHostDisplayInfo, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, getWorkspaceAppHostProjectSearchResult, isSameFileSystemEntry, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryCliUnavailableError, AppHostDiscoveryService, type AppHostDiscoveryStateChange, CandidateAppHostDisplayInfo, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, getWorkspaceAppHostProjectSearchResult, isSameFileSystemEntry, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { lsJsonStreamCapability } from '../types/configInfo';
@@ -139,6 +139,19 @@ suite('AppHost discovery', () => {
         const candidate = findCandidateForEditorFile(appHostPath, [{
             path: appHostPath,
             language: 'rust',
+            status: 'buildable',
+        }]);
+
+        assert.strictEqual(candidate?.path, appHostPath);
+        assert.strictEqual(candidate ? getDebugTargetForCandidate(candidate) : undefined, appHostPath);
+    });
+
+    test('keeps Go AppHost candidate as source file', () => {
+        const appHostPath = buildPath('workspace', 'AppHost', 'apphost.go');
+
+        const candidate = findCandidateForEditorFile(appHostPath, [{
+            path: appHostPath,
+            language: 'go',
             status: 'buildable',
         }]);
 
@@ -389,6 +402,8 @@ suite('AppHost discovery', () => {
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
             const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const states: AppHostDiscoveryStateChange[] = [];
+            const stateSubscription = service.onDidChangeDiscoveryState(state => states.push(state));
 
             try {
                 const firstDiscovery = service.discover(workspaceFolder);
@@ -410,8 +425,10 @@ suite('AppHost discovery', () => {
                 assert.strictEqual(watcherDisposals.length, initialWatcherCount * 2);
                 emitLsOutput(spawnOptions[1], []);
                 await secondDiscovery;
+                assert.deepStrictEqual(states.map(state => state.status), ['pending', 'pending', 'success']);
             }
             finally {
+                stateSubscription.dispose();
                 service.dispose();
             }
         });
@@ -477,6 +494,7 @@ suite('AppHost discovery', () => {
                 assert.ok(watchedPatterns.includes('**/apphost.mjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.cjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.rs'));
+                assert.ok(watchedPatterns.includes('**/apphost.go'));
                 // Case matters: watcher globs are case-sensitive on Linux and the file is AppHost.java.
                 assert.ok(watchedPatterns.includes('**/AppHost.java'));
             }
@@ -755,6 +773,8 @@ suite('AppHost discovery', () => {
             });
             const service = new AppHostDiscoveryService(makeTerminalProvider());
             const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const states: AppHostDiscoveryStateChange[] = [];
+            const stateSubscription = service.onDidChangeDiscoveryState(state => states.push(state));
             const originalCandidate = {
                 path: buildPath('workspace', 'Original', 'AppHost.csproj'),
                 language: 'csharp',
@@ -784,8 +804,14 @@ suite('AppHost discovery', () => {
                 emitLsOutput(spawnOptions[0], [originalCandidate]);
                 assert.deepStrictEqual(await originalDiscovery, [originalCandidate]);
                 assert.strictEqual(childProcesses[0].kill.callCount, 0);
+                assert.deepStrictEqual(states.map(state => ({ status: state.status, candidates: state.candidates })), [
+                    { status: 'pending', candidates: [] },
+                    { status: 'pending', candidates: [] },
+                    { status: 'success', candidates: [refreshedCandidate] },
+                ]);
             }
             finally {
+                stateSubscription.dispose();
                 service.dispose();
             }
         });

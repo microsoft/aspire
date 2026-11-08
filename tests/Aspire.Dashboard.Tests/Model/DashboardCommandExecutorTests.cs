@@ -26,6 +26,130 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class DashboardCommandExecutorTests
 {
     [Theory]
+    [InlineData(ResourceCommandResponseKind.Succeeded, true)]
+    [InlineData(ResourceCommandResponseKind.Failed, false)]
+    [InlineData(ResourceCommandResponseKind.Cancelled, false)]
+    public async Task ExecuteAsync_ReportsWhetherTheCommandSucceeded(ResourceCommandResponseKind kind, bool expected)
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromResult(new ResourceCommandResponseViewModel { Kind = kind }));
+        var executor = CreateExecutor(client, out _, out _);
+        var command = CreateCommand();
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+
+        Assert.Equal(expected, await executor.ExecuteAsync(resource, command, r => r.DisplayName));
+        Assert.False(executor.IsExecuting(resource.Name, command.Name));
+    }
+
+    [Theory]
+    [InlineData(CommandViewModel.StopCommand, true)]
+    [InlineData(CommandViewModel.StartCommand, true)]
+    [InlineData(CommandViewModel.RestartCommand, false)]
+    [InlineData("custom", false)]
+    public async Task ExecuteGraphGameCommandAsync_OnlyRunsStopAndStart(string commandName, bool runs)
+    {
+        var executed = new List<string>();
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, command, _, _) =>
+            {
+                executed.Add(command.Name);
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            });
+        var executor = CreateExecutor(client, out _, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(commandName)]);
+
+        Assert.Equal(runs ? true : null, await executor.ExecuteGraphGameCommandAsync(resource, commandName, r => r.DisplayName));
+        Assert.Equal(runs ? [commandName] : [], executed);
+    }
+
+    [Theory]
+    [InlineData(ResourceCommandResponseKind.Failed)]
+    [InlineData(ResourceCommandResponseKind.Cancelled)]
+    public async Task ExecuteGraphGameCommandAsync_ReportsUnsuccessfulCommand(ResourceCommandResponseKind kind)
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromResult(new ResourceCommandResponseViewModel { Kind = kind }));
+        var executor = CreateExecutor(client, out _, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand)]);
+
+        Assert.False(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+    }
+
+    [Fact]
+    public async Task ExecuteGraphGameCommandAsync_ReportsCommandThatThrows()
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromException<ResourceCommandResponseViewModel>(new InvalidOperationException("Command failed")));
+        var executor = CreateExecutor(client, out _, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand)]);
+
+        Assert.False(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+    }
+
+    [Theory]
+    [InlineData(CommandViewModelState.Disabled, "")]
+    [InlineData(CommandViewModelState.Hidden, "")]
+    [InlineData(CommandViewModelState.Enabled, "Are you sure?")]
+    public async Task ExecuteGraphGameCommandAsync_ReportsUnavailableCommandWithoutRunningIt(CommandViewModelState state, string confirmationMessage)
+    {
+        var executed = 0;
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) =>
+            {
+                executed++;
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            });
+        var executor = CreateExecutor(client, out _, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand, state, confirmationMessage)]);
+
+        Assert.Null(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+        Assert.Equal(0, executed);
+    }
+
+    [Fact]
+    public async Task ExecuteGraphGameCommandAsync_ReportsCommandAsUnavailableOnReadOnlyClient()
+    {
+        var executed = 0;
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) =>
+            {
+                executed++;
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            })
+        {
+            IsReadOnly = true
+        };
+        var executor = CreateExecutor(client, out var notificationService, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [CreateCommand(CommandViewModel.StopCommand)]);
+
+        Assert.Null(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+        Assert.Equal(0, executed);
+        Assert.Empty(notificationService.GetNotifications());
+    }
+
+    [Fact]
+    public async Task ExecuteGraphGameCommandAsync_ReportsCommandWithoutOneAsUnavailable()
+    {
+        var executor = CreateExecutor(new TestDashboardClient(isEnabled: true), out _, out _);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: []);
+
+        Assert.Null(await executor.ExecuteGraphGameCommandAsync(resource, CommandViewModel.StopCommand, r => r.DisplayName));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DoesNotReportSuccessWhenExecutionThrows()
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) => Task.FromException<ResourceCommandResponseViewModel>(new InvalidOperationException("Command failed")));
+        var executor = CreateExecutor(client, out _, out _);
+        var command = CreateCommand();
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+
+        Assert.False(await executor.ExecuteAsync(resource, command, r => r.DisplayName));
+        Assert.False(executor.IsExecuting(resource.Name, command.Name));
+    }
+
+    [Theory]
     [InlineData(true, false)]
     [InlineData(true, true)]
     [InlineData(false, false)]
@@ -248,7 +372,7 @@ public sealed class DashboardCommandExecutorTests
     private static DashboardCommandExecutor CreateExecutor(TestDashboardClient dashboardClient, out Aspire.Dashboard.Model.INotificationService notificationService, out TestNotificationService toastService)
     {
         var telemetryService = new DashboardTelemetryService(NullLogger<DashboardTelemetryService>.Instance,
-            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
+            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false }, NullLoggerFactory.Instance);
 
         return CreateExecutor(dashboardClient, telemetryService, out notificationService, out toastService);
     }
@@ -302,14 +426,14 @@ public sealed class DashboardCommandExecutorTests
         }
     }
 
-    private static CommandViewModel CreateCommand()
+    private static CommandViewModel CreateCommand(string name = "test-command", CommandViewModelState state = CommandViewModelState.Enabled, string confirmationMessage = "")
     {
         return new CommandViewModel(
-            "test-command",
-            CommandViewModelState.Enabled,
+            name,
+            state,
             "Test command",
             "Test command description",
-            confirmationMessage: "",
+            confirmationMessage,
             ImmutableArray<ProtoInteractionInput>.Empty,
             isHighlighted: false,
             iconName: string.Empty,

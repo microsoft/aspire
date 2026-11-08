@@ -42,7 +42,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             var exported = new ConcurrentQueue<JsonElement>();
             using var handler = CreateHandler(exported);
             using var client = new HttpClient(handler);
-            using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance,
+            using var manager = new TelemetryManager(configuration, fixture.Telemetry, NullLogger<TelemetryManager>.Instance,
                 (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource,
                     AspireCliTelemetry.ReportedActivitySourceName, AspireCliTelemetry.EventLogCategoryName,
                     $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/", directory,
@@ -133,7 +133,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             using var handler = CreateHandler(exported);
             using var client = new HttpClient(handler);
             var configured = 0;
-            using var manager = new TelemetryManager(configuration, tagsSource, telemetry, factory.CreateLogger<TelemetryManager>(),
+            using var manager = new TelemetryManager(configuration, telemetry, factory.CreateLogger<TelemetryManager>(),
                 (resource, storage) =>
                 {
                     configured++;

@@ -39,6 +39,7 @@ public static class DockerComposeAspireDashboardResourceBuilderExtensions
         // makes the published compose file non-reproducible.
         return builder.CreateResourceBuilder(resource)
                       .WithImage(DashboardImage.Name, DashboardImage.ResolveTag())
+                      .WithEnvironment(KnownConfigNames.DashboardTelemetryOptOut, "true")
                       .WithHttpEndpoint(targetPort: 18888)
                       // Expose the HTTP endpoint externally for the dashboard, it is password protected
                       // and disabled by default so an explicit call is required to turn it on.

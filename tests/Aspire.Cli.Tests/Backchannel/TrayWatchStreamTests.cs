@@ -313,6 +313,64 @@ public class TrayWatchStreamTests
         }
     }
 
+    [Fact]
+    public async Task CancellationSucceedsWhenProducerCompletesBeforePendingReadIsCanceled()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var time = new FakeTimeProvider();
+        var discoveryWaiting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Inline continuations let the cancellation callback finish the producer before
+        // cancellation reaches the pending channel read.
+        var releaseDiscovery = new TaskCompletionSource();
+        var heartbeatWriting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseHeartbeat = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var messages = new List<string>();
+        CancellationToken discoveryToken = default;
+        var monitor = new TestAuxiliaryBackchannelMonitor { WatchConnectionsHandler = Watch };
+        var run = CreateStream(monitor, time).RunAsync(async (json, _) =>
+        {
+            var type = Deserialize(json).Type;
+            messages.Add(type);
+            if (type == "heartbeat")
+            {
+                heartbeatWriting.SetResult();
+                await releaseHeartbeat.Task;
+            }
+        }, cancellation.Token);
+
+        try
+        {
+            await discoveryWaiting.Task.DefaultTimeout();
+            time.Advance(TrayCliProtocol.HeartbeatInterval);
+            await heartbeatWriting.Task.DefaultTimeout();
+
+            // Callbacks run newest-first. Keep the consumer in its heartbeat write while
+            // this callback completes the update channel ahead of the read's cancellation.
+            using var registration = discoveryToken.Register(releaseDiscovery.SetResult);
+            cancellation.Cancel();
+            releaseHeartbeat.SetResult();
+
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+            Assert.Equal(["snapshot", "heartbeat"], messages);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            releaseDiscovery.TrySetResult();
+            releaseHeartbeat.TrySetResult();
+            await run.DefaultTimeout();
+        }
+
+        async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> Watch([EnumeratorCancellation] CancellationToken token)
+        {
+            discoveryToken = token;
+            yield return [];
+            discoveryWaiting.SetResult();
+            await releaseDiscovery.Task.ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -751,6 +809,56 @@ public class TrayWatchStreamTests
             {
                 watchStopped.TrySetResult();
             }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EmptyResourceSnapshotIsDistinctFromUnavailableHealth(bool hiddenOnly)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var resourceUpdates = Channel.CreateUnbounded<ResourceSnapshot>();
+        var messages = Channel.CreateUnbounded<TrayWatchMessage>();
+        var connection = Connection("/project/a.cs", 10);
+        connection.ResourceSnapshots = hiddenOnly
+            ? [new() { Name = "api", State = "Running", IsHidden = true }]
+            : [];
+        connection.WatchResourceSnapshotsHandler = (_, token) => resourceUpdates.Reader.ReadAllAsync(token);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection(connection.SocketPath, connection);
+        var run = CreateStream(monitor, new FakeTimeProvider())
+            .RunAsync((json, _) =>
+            {
+                messages.Writer.TryWrite(Deserialize(json));
+                return Task.CompletedTask;
+            }, cancellation.Token);
+
+        try
+        {
+            var initial = await ReadHostAsync();
+            Assert.Equal("no_resources", initial.Health);
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "api", State = "Running" });
+            Assert.Equal(initial with { Health = "healthy" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryWrite(new() { Name = "api", State = "Running", IsHidden = true });
+            Assert.Equal(initial with { Health = "no_resources" }, await ReadHostAsync());
+
+            resourceUpdates.Writer.TryComplete();
+            Assert.Equal(initial with { Health = null }, await ReadHostAsync());
+        }
+        finally
+        {
+            cancellation.Cancel();
+            Assert.Equal(CliExitCodes.Success, await run.DefaultTimeout());
+        }
+
+        async Task<TrayAppHost> ReadHostAsync()
+        {
+            var message = await messages.Reader.ReadAsync().AsTask().DefaultTimeout();
+            Assert.Equal("snapshot", message.Type);
+            return Assert.Single(message.AppHosts!);
         }
     }
 

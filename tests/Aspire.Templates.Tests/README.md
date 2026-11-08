@@ -21,12 +21,28 @@ The individual tests need to create projects from templates just like a user wou
 - The .NET 10 SDK comes from `DotNetSdkNet10VersionForTesting` in `eng/Versions.props`; the .NET 11 SDK comes from `global.json`.
 - Templates support only `net10.0` and `net11.0`, defaulting to `net10.0`. Tests provision isolated SDKs in `artifacts/bin/dotnet-10` and `dotnet-11`, plus a .NET 11 SDK with the .NET 10 runtime in `dotnet-tests`.
 - The necessary Aspire components are installed using NuGet packages from `artifacts/packages/*/Shipping`
+- C# AppHosts use explicit `Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet` packages. The harness extracts the current-RID Dashboard and orchestration packages and rejects missing native executables. It supplies those real runtime paths and suppresses only the CLI run hook so tests control process lifetime; it does not disable the required bundle. CLI bundle discovery and delegation are covered separately by SDK, CLI, and starter-validation tests.
 - Then, with a custom `nuget.config` which points to the built NuGet packages in `artifacts`, the SDK is configured to use local packages
     - which installs the components using the NuGet packages from the `artifacts` into `artifacts/bin/dotnet-tests`
 - This simulates the SDK being installed on a user's machine, and being independent of the aspire repo.
-- The test command helper removes inherited `MSBuildSDKsPath` and `MSBuildExtensionsPath` before launching tools. Otherwise, tests started by the repository's MSBuild can load its SDK targets into an older test SDK; solution restore can then fail to load NuGet tasks or their runtime dependencies.
+- The test command helper and AppHost launcher remove inherited `MSBuildSDKsPath`
+  and `MSBuildExtensionsPath` before applying explicit test-environment overrides.
+  The AppHost builds its child projects (for example, the API and frontend) before
+  starting those services. Removing the inherited repository MSBuild paths keeps
+  those child-project builds on the isolated test SDK.
+
+  Otherwise, tests started by the repository's MSBuild can load its SDK targets
+  into an older test SDK; solution restore can then fail to load NuGet tasks or
+  their runtime dependencies.
 - At this point the SDK is usable from outside the repo by using `source /path-to-aspire-repo/dogfood.sh`
 - The nuget versions for the locally built packages are like `8.0.0-dev` or `8.0.0-ci`.
+
+The dashboard checks use the shared `DashboardResourceAssertions` helper. It
+checks resource names and states in the sidebar and sources in each resource's
+details panel, independently of the overview layout and sidebar density.
+`TemplateResourceAssertionsTests` in `Aspire.Dashboard.Playwright.Tests` exercises
+the helper against the real dashboard, including incorrect project and container
+sources.
 
 ### Helix
 

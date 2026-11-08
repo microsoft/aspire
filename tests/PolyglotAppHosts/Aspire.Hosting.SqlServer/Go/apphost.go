@@ -9,14 +9,14 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	sqlServer := builder.AddSqlServer("sql")
 
 	sqlServer.AddDatabase("mydb")
 	if err = sqlServer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	builder.AddSqlServer("sql-volume").WithDataVolume()
@@ -34,7 +34,7 @@ func main() {
 	sqlChained.AddDatabase("db1")
 	sqlChained.AddDatabase("db2", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("customdb2")})
 	if err = sqlChained.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = sqlServer.PrimaryEndpoint()
@@ -48,9 +48,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

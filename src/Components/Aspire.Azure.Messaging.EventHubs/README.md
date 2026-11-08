@@ -134,22 +134,27 @@ In your AppHost project, install the Aspire Azure Event Hubs Hosting library wit
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.EventHubs
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add an Event Hubs connection and an Event Hub resource and consume the connection using the following methods:
 
 ```csharp
-var eventHubs = builder.ExecutionContext.IsPublishMode
-    ? builder.AddAzureEventHubs("eventHubsConnectionName").WithHub("MyHub")
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> eventHubs = builder.ExecutionContext.IsPublishMode
+    ? builder.AddAzureEventHubs("eventhubs").AddHub("eventHubsConnectionName", "MyHub")
     : builder.AddConnectionString("eventHubsConnectionName");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(eventHubs);
 ```
 
 The `AddAzureEventHubs` method adds an Azure Event Hubs Namespace resource to the builder. Or `AddConnectionString` can be used to read connection information from the AppHost's configuration (for example, from "user secrets") under the `ConnectionStrings:eventHubsConnectionName` config key. The `WithReference` method passes that connection information into a connection string named `eventHubsConnectionName` in the `MyService` project.
 
-NOTE: Even though we are creating an Event Hub using the `WithHub` at the same time as the namespace, for this release of Aspire, the connection string will not include the `EntityPath` property, so the `EventHubName` property must be set in the settings callback for the preferred client. Future versions of Aspire will include the `EntityPath` property in the connection string and will not require the `EventHubName` property to be set in this scenario.
+Referencing the `AddHub` resource includes its hub name in the generated connection string's
+`EntityPath`. A namespace-level connection string supplied through configuration may omit
+`EntityPath`; the client settings below explicitly select `MyHub` for that case.
 
 In the _Program.cs_ file of `MyService`, the connection can be consumed using by calling of the supported Event Hubs client extension methods:
 

@@ -9,14 +9,14 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	nats := builder.AddNats("messaging")
 	nats.WithJetStream()
 	nats.WithDataVolume()
 	if err = nats.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	nats2 := builder.AddNats("messaging2", &aspire.AddNatsOptions{Port: aspire.Float64Ptr(4223)})
@@ -27,13 +27,13 @@ func main() {
 	})
 	nats2.WithPersistentLifetime()
 	if err = nats2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	nats3 := builder.AddNats("messaging3")
 	nats3.WithDataBindMount("/tmp/nats-data")
 	if err = nats3.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	customUser := builder.AddParameter("nats-user")
@@ -43,7 +43,7 @@ func main() {
 		Password: &customPass,
 	})
 	if err = nats4.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	consumer := builder.AddContainer("consumer", "myimage")
@@ -52,7 +52,7 @@ func main() {
 		ConnectionName: aspire.StringPtr("messaging4-connection"),
 	})
 	if err = consumer.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = nats.PrimaryEndpoint()
@@ -64,9 +64,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

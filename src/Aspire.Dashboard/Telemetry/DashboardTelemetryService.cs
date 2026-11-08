@@ -17,29 +17,26 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     internal const string ReportedActivitySourceName = "Aspire.Dashboard.Reported";
     internal const string DiagnosticsActivitySourceName = ReportedActivitySourceName + ".Diagnostics";
     internal const string EventLogCategoryName = "Aspire.Dashboard.Reported.Events";
-    internal const string TelemetryOptOutConfigKey = "ASPIRE_DASHBOARD_TELEMETRY_OPTOUT";
     private readonly DashboardTelemetryConfiguration _configuration;
-    private readonly IReadOnlyList<KeyValuePair<string, object?>> _defaultTags;
+    private readonly TelemetryTagsSource _tagsSource;
 
     /// <summary>
     /// Initializes dashboard product instrumentation with resolved telemetry settings.
     /// </summary>
     /// <param name="logger">The logger for local dashboard errors.</param>
     /// <param name="configuration">The resolved product telemetry settings.</param>
-    public DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration)
-        : this(logger, configuration, ReportedActivitySourceName, DiagnosticsActivitySourceName)
+    /// <param name="loggerFactory">The logger factory for metadata detection diagnostics.</param>
+    public DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration, ILoggerFactory loggerFactory)
+        : this(logger, configuration, CreateTagsSource(configuration, loggerFactory), ReportedActivitySourceName, DiagnosticsActivitySourceName)
     {
     }
 
-    internal DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration, string reportedSourceName, string diagnosticsSourceName)
+    internal DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration,
+        TelemetryTagsSource tagsSource, string reportedSourceName, string diagnosticsSourceName)
         : base(logger, reportedSourceName, diagnosticsSourceName, TelemetryEventKeys.Error)
     {
         _configuration = configuration;
-        _defaultTags =
-        [
-            new(TelemetryPropertyKeys.DashboardVersion, AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly)),
-            new(TelemetryPropertyKeys.DashboardBuildId, AssemblyVersionHelper.GetFileVersion(typeof(DashboardWebApplication).Assembly))
-        ];
+        _tagsSource = tagsSource;
     }
 
     /// <summary>
@@ -135,7 +132,7 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     /// <inheritdoc />
     public override void RecordError(string message, Exception exception) => RecordError(message, exception, writeToLogging: true);
 
-    protected override IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags() => _defaultTags;
+    protected override IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags() => _tagsSource.GetResolvedTags();
 
     protected override bool IsReportedTelemetryEnabled => IsTelemetryEnabled;
 
@@ -174,6 +171,9 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
             value = property.Value;
         }
         else if (key is not (TelemetryPropertyKeys.DashboardVersion or TelemetryPropertyKeys.DashboardBuildId or
+            TelemetryPropertyKeys.DeploymentEnvironmentName or TelemetryPropertyKeys.OsName or TelemetryPropertyKeys.OsType or TelemetryPropertyKeys.OsVersion or
+            TelemetryPropertyKeys.MacAddressHash or TelemetryPropertyKeys.DeviceId or TelemetryPropertyKeys.InternalMicrosoft or
+            TelemetryPropertyKeys.InternalMicrosoftSource or TelemetryPropertyKeys.InternalMicrosoftAlias or TelemetryPropertyKeys.InternalMicrosoftDomain or
             TelemetryPropertyKeys.ExceptionType or TelemetryPropertyKeys.ExceptionRuntimeVersion or "aspire.dashboard.result"))
         {
             return false;
@@ -202,7 +202,7 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
 
     private static bool IsAllowedProperty(string key) => key is
         TelemetryPropertyKeys.StartupSuccess or TelemetryPropertyKeys.StartupLaunchContext or
-        TelemetryPropertyKeys.StartupDurationMilliseconds or TelemetryPropertyKeys.ErrorType or
+        TelemetryPropertyKeys.StartupPersistenceMode or TelemetryPropertyKeys.StartupDurationMilliseconds or TelemetryPropertyKeys.ErrorType or
         TelemetryPropertyKeys.DashboardComponentId or TelemetryPropertyKeys.DashboardComponentType or
         TelemetryPropertyKeys.ConsoleLogsShowTimestamp or TelemetryPropertyKeys.MetricsResourceIsReplica or
         TelemetryPropertyKeys.MetricsInstrumentsCount or TelemetryPropertyKeys.MetricsSelectedDuration or
@@ -211,4 +211,50 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         TelemetryPropertyKeys.StructuredLogsFilterCount or TelemetryPropertyKeys.CommandName or
         TelemetryPropertyKeys.TerminalDockTrigger;
 
+    private static TelemetryTagsSource CreateTagsSource(DashboardTelemetryConfiguration configuration, ILoggerFactory loggerFactory)
+    {
+        if (!configuration.ReportedTelemetryEnabled)
+        {
+            return new TelemetryTagsSource(loggerFactory.CreateLogger<TelemetryTagsSource>());
+        }
+
+        var isCIEnvironment = CIEnvironmentDetector.IsCIEnvironment(Environment.GetEnvironmentVariable);
+        return CreateTagsSource(configuration, loggerFactory,
+            TelemetryMetadata.CreateMachineInformationProvider(loggerFactory, new TelemetryEnvironment()),
+            TelemetryMetadata.CreateInternalMicrosoftDetector(loggerFactory, isCIEnvironment),
+            isCIEnvironment);
+    }
+
+    internal static TelemetryTagsSource CreateTagsSource(DashboardTelemetryConfiguration configuration, ILoggerFactory loggerFactory,
+        IMachineInformationProvider machineProvider, IInternalMicrosoftDetector internalMicrosoftDetector, bool isCIEnvironment)
+    {
+        var tagsSource = new TelemetryTagsSource(loggerFactory.CreateLogger<TelemetryTagsSource>());
+        if (configuration.ReportedTelemetryEnabled)
+        {
+            var logger = loggerFactory.CreateLogger<DashboardTelemetryService>();
+            tagsSource.StartCalculation(async () =>
+            {
+                try
+                {
+                    var machineTagsTask = TelemetryMetadata.GetMachineTagsAsync(machineProvider);
+                    var internalMicrosoftTask = internalMicrosoftDetector.IsInternalMicrosoftMachineAsync();
+                    await Task.WhenAll(machineTagsTask, internalMicrosoftTask).ConfigureAwait(false);
+                    var machineTags = await machineTagsTask.ConfigureAwait(false);
+                    var internalMicrosoftResult = await internalMicrosoftTask.ConfigureAwait(false);
+                    var tags = TelemetryMetadata.CreateDefaultTags(machineTags, isCIEnvironment, internalMicrosoftResult, "aspire.dashboard");
+                    tags.Add(new(TelemetryPropertyKeys.DashboardVersion, AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly)));
+                    tags.Add(new(TelemetryPropertyKeys.DashboardBuildId, AssemblyVersionHelper.GetFileVersion(typeof(DashboardWebApplication).Assembly)));
+                    return tags;
+                }
+                catch (Exception ex)
+                {
+                    // Optional product metadata must not turn a dashboard event into a startup failure.
+                    logger.LogError(ex, "Error occurred initializing dashboard telemetry metadata.");
+                    return Array.Empty<KeyValuePair<string, object?>>();
+                }
+            });
+        }
+
+        return tagsSource;
+    }
 }
