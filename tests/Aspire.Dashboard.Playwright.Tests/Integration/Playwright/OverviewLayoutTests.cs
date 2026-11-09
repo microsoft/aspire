@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.Resize;
 using System.Collections.Concurrent;
+using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Utils;
@@ -110,6 +110,41 @@ public class OverviewLayoutTests(ResourcesTests.ResourcesDashboardServerFixture 
             await AssertFitsAsync(options);
             await page.GetByRole(AriaRole.Button, new() { Name = Dialogs.DialogCloseButtonText, Exact = true }).Last.ClickAsync();
             Assert.Empty(errors);
+        });
+    }
+
+    [Theory]
+    [InlineData("/resources")]
+    [InlineData("/resources?resource=apigateway&resource=TestResource")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ListLayout_ShowsTheFullPageListFromTheOverviewToggle(string url)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync(url);
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
+            await Assertions.Expect(page.Locator(".home-hero")).ToBeVisibleAsync();
+            var fullCanvas = page.Locator(".resources-layout.pane-full-canvas");
+            var layout = page.GetByRole(AriaRole.Group, new() { Name = ResourceStrings.LayoutLabel, Exact = true });
+            var list = layout.GetByRole(AriaRole.Button, new() { Name = ResourceStrings.ResourceOverviewLayoutList, Exact = true });
+            var summary = layout.GetByRole(AriaRole.Button, new() { Name = Dialogs.SettingsDialogGroupOverviewSummary, Exact = true });
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
+            await Assertions.Expect(list).ToHaveAttributeAsync("aria-pressed", "false");
+
+            // The overview's List option does what its close button does: the list of all resources fills the page,
+            // with the same toggle and List pressed.
+            await list.ClickAsync();
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex("/resources$"));
+            await Assertions.Expect(page.Locator(".resource-pane-scope-layout")).ToBeVisibleAsync();
+            await Assertions.Expect(list).ToHaveAttributeAsync("aria-pressed", "true");
+
+            // Choosing Summary from the list opens the overview of all resources again.
+            await summary.ClickAsync();
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".home-hero-headline")).ToHaveTextAsync("All 3 resources are running");
+            await Assertions.Expect(summary).ToHaveAttributeAsync("aria-pressed", "true");
         });
     }
 
