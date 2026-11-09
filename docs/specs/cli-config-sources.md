@@ -113,8 +113,11 @@ Before Git acquisition begins, the CLI writes an informational notice to stderr:
 Non-interactive acquisitions show **Fetching configuration source using Git...**
 instead, because authentication prompts are disabled. Reusing an in-memory
 snapshot does not repeat the notice, and background version checks remain quiet.
-Repository templates reuse these notices with **templates** as the content being
-fetched, keeping the download and authentication guidance consistent.
+Repository templates identify the repository in these notices, for example
+**Fetching templates from https://example.test/team/templates.git using Git. Git may prompt you to authenticate.**
+Non-default paths and refs are included to distinguish sources within the same
+repository. Show this identity before Git can ask for credentials so users can
+check the destination before entering a basic-authentication password.
 
 - **Accept:** acquire and validate the remote file, then materialize allowlisted values and a `configSource` binding in the created or initialized project's `aspire.config.json`.
 - **Decline:** continue normally without Git acquisition or template-source inheritance from that source for the rest of the command, and save `"configSource": { "optOut": true }` after successful project creation or initialization. Independently configured global template sources remain available.

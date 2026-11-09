@@ -129,10 +129,38 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
             ("third", new TemplateSource(".\\", "https://example.test/third.git", null)),
             ("local", new TemplateSource("C:\\Templates\\Company [local]", null, null))
         ], executionContext);
-        interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchTemplates, mayPromptForAuthentication: false);
+        interaction.DisplayTemplateGitFetchNotice("https://example.test/templates.git",
+            nonDefaultGitValues ? "templates/[team]" : ".",
+            nonDefaultGitValues ? "release/[team]" : null, mayPromptForAuthentication: false);
 
         Assert.False(executionContext.TryMarkSourceTrustWarningDisplayed());
         await Verify(output.ToString(), "txt").UseParameters(nonDefaultGitValues, width).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData(".", null, "https://example.test/templates.git")]
+    [InlineData("./", "HEAD", "https://example.test/templates.git")]
+    [InlineData(".\\", null, "https://example.test/templates.git")]
+    [InlineData("templates/[team]", "release/[team]", "https://example.test/templates.git")]
+    [InlineData(".", null, "https://user:password@example.test/templates.git?token=secret#fragment")]
+    public void TemplateGitFetchNotice_IdentifiesSourceWithoutExposingUrlCredentials(string path, string? reference, string repository)
+    {
+        var interaction = new TestInteractionService();
+        const string displayedRepository = "https://example.test/templates.git";
+        var source = repository == displayedRepository ? displayedRepository : "https://***@example.test/templates.git";
+        if (path == "templates/[team]")
+        {
+            source += $" ({SharedCommandStrings.SourceGitPath}: {path}, {SharedCommandStrings.SourceRef}: {reference})";
+        }
+
+        interaction.DisplayTemplateGitFetchNotice(repository, path, reference, mayPromptForAuthentication: true);
+
+        var message = Assert.Single(interaction.DisplayedMessages);
+        var content = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source);
+        var expected = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication, content);
+        Assert.Equal($"[blue]{expected.EscapeMarkup()}[/]", message.Message);
+        Assert.Equal(KnownEmojis.InboxTray, message.Emoji);
+        Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
     }
 
     [Fact]
