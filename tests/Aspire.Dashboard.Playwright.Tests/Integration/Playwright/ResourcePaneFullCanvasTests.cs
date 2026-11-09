@@ -323,6 +323,9 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(noGrouping).ToBeVisibleAsync();
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(noGrouping).ToBeHiddenAsync();
+            // The menu closes in the browser, and its button reports it closed once the server renders it. Until then,
+            // Escape still counts as used by the menu.
+            await Assertions.Expect(page.Locator("#resourcePaneGroupingButton")).Not.ToHaveAttributeAsync("aria-expanded", "true");
             await Assertions.Expect(close).ToBeVisibleAsync();
             await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
 

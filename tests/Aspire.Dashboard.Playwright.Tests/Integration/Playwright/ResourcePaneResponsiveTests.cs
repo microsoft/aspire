@@ -455,6 +455,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     await page.SetViewportSizeAsync(width <= 560 ? 2000 : width, 1000);
                     if (width <= 560)
                     {
+                        // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                        await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("tabindex", "0");
                         await page.Locator(".resource-pane-resizer").PressAsync(width == 300 ? "Home" : "End");
                         await Assertions.Expect(page.Locator(".resource-pane-resizer"))
                             .ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
@@ -1039,6 +1041,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     if (width <= 560)
                     {
                         var separator = page.Locator(".resource-pane-resizer");
+                        // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                        await Assertions.Expect(separator).ToHaveAttributeAsync("tabindex", "0");
                         await separator.FocusAsync();
                         await separator.PressAsync(width == 300 ? "Home" : "End");
                         await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
@@ -1715,6 +1719,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 else
                 {
                     var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                    // The closing dialog's overlay would take the drag, and the handle only responds once its handlers
+                    // are attached.
+                    await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToHaveCountAsync(0);
+                    await Assertions.Expect(separator).ToHaveAttributeAsync("tabindex", "0");
                     var handle = await separator.BoundingBoxAsync();
                     var initial = await pane.BoundingBoxAsync();
                     Assert.NotNull(handle);
@@ -2231,7 +2239,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task CompactSidebar_RowTooltipNamesTypeAndStateWhileActionsShow()
+    public async Task CompactSidebar_RowTooltipNamesTypeWhileActionsShow()
     {
         await RunTestAsync(async page =>
         {
@@ -2241,9 +2249,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var pane = page.Locator(".resource-pane");
             var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
 
-            // While the actions show in place of the type and state columns, the row's tooltip names them, for the
-            // pointer and for the keyboard.
-            foreach (var (name, expected) in new[] { ("api", "Project · Running (Unhealthy)"), ("cache", "Container (persistent) · Running") })
+            // While the actions show in place of the type column, the row's tooltip names the type, for the pointer and
+            // for the keyboard. The state dot stays after the name, with the state in its own tooltip.
+            foreach (var (name, expected) in new[] { ("api", "Project"), ("cache", "Container (persistent)") })
             {
                 var link = pane.Locator($"[data-resource-name='{name}'] .resource-row-link").First;
                 await page.Mouse.MoveAsync(1, 1);

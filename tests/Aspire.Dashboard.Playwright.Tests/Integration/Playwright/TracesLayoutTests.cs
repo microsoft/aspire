@@ -29,11 +29,21 @@ public sealed class TracesLayoutTests : PlaywrightTestsBase<DashboardServerFixtu
     {
         var repository = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ITelemetryRepositoryWriter>();
         var startTime = DateTime.UtcNow.AddSeconds(-2);
+
+        // The dashboard attaches telemetry to an app resource when the telemetry's composite name,
+        // "{service.name}-{service.instance.id}" or just service.name when there is no instance ID,
+        // equals the resource's name (see ResourceKey.GetCompositeName). TestResource1 is named
+        // "TestResource" with no replica suffix, so its telemetry must not have an instance ID.
+        // With one, it becomes a separate telemetry source that only shares TestResource1's name,
+        // and selecting "TestResource" resolves to the app resource, which then has no traces.
+        var resource = CreateResource(name: MockDashboardClient.TestResource1.Name);
+        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+
         await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
-                Resource = CreateResource(name: MockDashboardClient.TestResource1.Name, instanceId: MockDashboardClient.TestResource1.Uid),
+                Resource = resource,
                 ScopeSpans =
                 {
                     new ScopeSpans
@@ -51,7 +61,7 @@ public sealed class TracesLayoutTests : PlaywrightTestsBase<DashboardServerFixtu
 
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync($"/traces/resource/{MockDashboardClient.TestResource1.Name}?pane=telemetry");
+            await page.GotoAsync($"/traces/resource/{MockDashboardClient.TestResource1.Name}");
 
             var progressRings = page.Locator(".aspire-progress-ring.determinate.duration-ring");
             await Assertions.Expect(progressRings).ToHaveCountAsync(2);
