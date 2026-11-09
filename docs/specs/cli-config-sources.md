@@ -108,6 +108,11 @@ AppHost and dashboard summaries. When a README URL is available,
 Terminals without hyperlink support show the label and URL as plain text.
 The standard yes/no confirmation defaults to **Yes** when Enter is pressed.
 
+The source trust warning appears at most once per CLI command, shared across
+configuration, template, integration, and skill sources. Source explanations,
+inventories, and consent prompts still appear where applicable. A separate
+command can show the warning again.
+
 Before Git acquisition begins, the CLI writes an informational notice to stderr:
 **Fetching configuration source from https://example.test/team/configuration.git using Git. Git may prompt you to authenticate.**
 Non-interactive acquisitions show

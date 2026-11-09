@@ -74,9 +74,7 @@ internal static class ConsoleHelpers
 
         interactionService.DisplayMessage(KnownEmojis.Information, NewCommandStrings.TemplateSourceExplanation);
         interactionService.DisplaySourceDetails(details);
-        // The inventory includes its warning; avoid repeating it during Git acquisition.
-        executionContext.TryMarkSourceTrustWarningDisplayed();
-        interactionService.DisplaySourceTrustWarning();
+        interactionService.DisplaySourceTrustWarning(executionContext);
     }
 
     public static void DisplayTemplateGitFetchNotice(this IInteractionService interactionService,
@@ -130,18 +128,11 @@ internal static class ConsoleHelpers
 
     public static void DisplaySourceTrustWarning(this IInteractionService interactionService, CliExecutionContext executionContext)
     {
-        // An init source can lead straight into Git template discovery in "aspire new".
-        // Share the warning across both paths for this invocation, without skipping either consent prompt.
         if (!executionContext.TryMarkSourceTrustWarningDisplayed())
         {
             return;
         }
 
-        interactionService.DisplaySourceTrustWarning();
-    }
-
-    public static void DisplaySourceTrustWarning(this IInteractionService interactionService)
-    {
         interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{SharedCommandStrings.SourceTrustWarning.EscapeMarkup()}[/]", allowMarkup: true, consoleOverride: ConsoleOutput.Error);
     }
 

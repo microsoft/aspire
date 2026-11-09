@@ -437,7 +437,7 @@ internal sealed class AgentInitCommand : BaseCommand
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
                     InteractionService.DisplaySourceDetails(sourceDetails);
-                    InteractionService.DisplaySourceTrustWarning();
+                    InteractionService.DisplaySourceTrustWarning(ExecutionContext);
                     InteractionService.DisplayEmptyLine();
                 }
 
