@@ -18,8 +18,8 @@
     <XunitRunnerVisualStudioVersion>4.0.0</XunitRunnerVisualStudioVersion>
     <MicrosoftTestingPlatformVersion>2.4.0</MicrosoftTestingPlatformVersion>
     <MicrosoftNETTestSdkVersion>18.10.0</MicrosoftNETTestSdkVersion>
-    <!-- Enable to remove prerelease label. -->
-    <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">true</StabilizePackageVersion>
+    <!-- Keep prerelease output while net11.0 dependencies are prerelease; stable packages fail NU5104. -->
+    <StabilizePackageVersion Condition="'$(StabilizePackageVersion)' == ''">false</StabilizePackageVersion>
     <DotNetFinalVersionKind Condition="'$(StabilizePackageVersion)' == 'true'">release</DotNetFinalVersionKind>
   </PropertyGroup>
   <PropertyGroup>
