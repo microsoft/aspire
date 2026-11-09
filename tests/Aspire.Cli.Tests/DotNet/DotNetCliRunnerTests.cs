@@ -2740,6 +2740,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         // data over the network. A transient feed failure then surfaces as warning NU1900 on stderr
         // even though restore and ComputeRunArguments succeed, so keep this test off the network.
         processStartInfo.ArgumentList.Add("-p:NuGetAudit=false");
+        // When a newly launched MSBuild server misses the client's connect window (common on loaded CI
+        // runners), MSBuild writes "MSBuild server unavailable: ..." to stderr and falls back to an
+        // in-process build. Build in-process so the stderr assertion only sees diagnostics from this project.
+        processStartInfo.Environment["DOTNET_CLI_USE_MSBUILD_SERVER"] = "0";
 
         using var process = Process.Start(processStartInfo) ?? throw new InvalidOperationException("Failed to start dotnet msbuild.");
         var stdout = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
