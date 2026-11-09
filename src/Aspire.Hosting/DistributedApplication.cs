@@ -41,11 +41,11 @@ namespace Aspire.Hosting;
 /// </para>
 /// <example>
 /// The following example shows creating a PostgreSQL server resource with a database and referencing that
-/// database in a .NET project.
+/// database in a .NET project using the <c>Aspire.Hosting.Dotnet</c> package.
 /// <code lang="csharp">
 /// var builder = DistributedApplication.CreateBuilder(args);
 /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-/// builder.AddProject&lt;Projects.InventoryService&gt;()
+/// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
 ///        .WithReference(inventoryDatabase);
 ///
 /// builder.Build().Run();
@@ -87,6 +87,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
         // > Evaluation of native methods in this context is not supported.
         _model = host.Services.GetRequiredService<DistributedApplicationModel>();
         ResourceNotifications = host.Services.GetRequiredService<ResourceNotificationService>();
+
     }
 
     /// <summary>
@@ -101,11 +102,11 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// when more control is needed over the behavior of the distributed application at runtime.
     /// <example>
     /// The following example is creating a Postgres server resource with a database and referencing that
-    /// database in a .NET project.
+    /// database in a .NET project using the <c>Aspire.Hosting.Dotnet</c> package.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder();
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();
@@ -134,11 +135,11 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </para>
     /// <example>
     /// The following example shows creating a Postgres server resource with a database and referencing that
-    /// database in a .NET project.
+    /// database in a .NET project using the <c>Aspire.Hosting.Dotnet</c> package.
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();
@@ -153,7 +154,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     ///     {
     ///         var builder = DistributedApplication.CreateBuilder(args);
     ///         var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    ///         builder.AddProject&lt;Projects.InventoryService&gt;()
+    ///         builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///                .WithReference(inventoryDatabase);
     ///
     ///         builder.Build().Run();
@@ -195,16 +196,17 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// correctly when used with deployment tools that need to enable publish mode.
     /// </para>
     /// <example>
-    /// Override the container registry used by the distributed application.
+    /// Override the container registry used by the distributed application. The .NET project example
+    /// requires the <c>Aspire.Hosting.Dotnet</c> package.
     /// <code lang="csharp">
     /// var options = new DistributedApplicationOptions
     /// {
-    ///     Args = args; // Important for deployment tools
+    ///     Args = args, // Important for deployment tools
     ///     ContainerRegistryOverride = "registry.example.com"
     /// };
     /// var builder = DistributedApplication.CreateBuilder(options);
     /// var inventoryDatabase = builder.AddPostgres("mypostgres").AddDatabase("inventory");
-    /// builder.AddProject&lt;Projects.InventoryService&gt;()
+    /// builder.AddDotnetProject("inventoryservice", "../InventoryService/InventoryService.csproj")
     ///        .WithReference(inventoryDatabase);
     ///
     /// builder.Build().Run();
@@ -244,6 +246,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
             EnableResourceLogging = options.EnableResourceLogging,
             ContainerRegistryOverride = options.ContainerRegistryOverride,
             DashboardApplicationName = options.DashboardApplicationName,
+            IsGuestAppHost = true,
             // These values came from the managed server's appsettings.json before polyglot AppHosts
             // used their own content root. Keep them as fallbacks so every user configuration source
             // can override them while existing AppHosts retain the same logging behavior.
@@ -275,8 +278,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
     {
         return argsOrOptions switch
         {
-            null => CreateBuilder(),
-            string[] args => CreateBuilder(args),
+            // Every dispatcher form is a guest AppHost, so route all of them through CreateBuilderOptions.
+            null => CreateBuilder(new CreateBuilderOptions()),
+            string[] args => CreateBuilder(new CreateBuilderOptions { Args = args }),
             CreateBuilderOptions options => CreateBuilder(options),
             _ => throw new ArgumentException("Options must be omitted, a string array, or a CreateBuilderOptions instance.", nameof(argsOrOptions))
         };
@@ -472,6 +476,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
         try
         {
             ApplyLocaleOverride(configuration, _localeOverrideContext);
+            LogStartupInformation();
 
             // We only run the start lifecycle hook if we are in run mode or
             // publish mode. In inspect mode we try to avoid lifecycle hooks
@@ -544,6 +549,8 @@ public class DistributedApplication : IHost, IAsyncDisposable
             {
                 try
                 {
+                    LogStartupInformation();
+
                     // We only run the start lifecycle hook if we are in run mode or
                     // publish mode. In inspect mode we try to avoid lifecycle hooks
                     // kickings. Eventing will still work generally since they are more
@@ -571,6 +578,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // Do nothing
         }
     }
+
+    // Log startup information before BeforeStartEvent so it is visible even if a subscriber blocks.
+    private void LogStartupInformation()
+        => _host.Services.GetService<DistributedApplicationLifecycle>()?.LogStartupInformation();
 
     private static bool IsInspectMode(IConfiguration configuration)
         => string.Equals(configuration["AppHost:Operation"], "inspect", StringComparison.OrdinalIgnoreCase);
@@ -726,6 +737,13 @@ public class DistributedApplication : IHost, IAsyncDisposable
         {
             beforeStartActivity.SetError(ex);
             throw;
+        }
+        finally
+        {
+            if (_host.Services.GetService<InteractionServiceConsumerState>() is { } consumerState)
+            {
+                consumerState.Ready = true;
+            }
         }
     }
 

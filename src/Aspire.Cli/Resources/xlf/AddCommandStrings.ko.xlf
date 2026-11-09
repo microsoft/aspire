@@ -92,6 +92,11 @@
         <target state="translated">통합 검색 쿼리입니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="new">One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">통합 패키지를 찾을 수 없습니다. 인터넷 연결 또는 NuGet 원본 구성을 확인하세요.</target>
@@ -121,6 +126,11 @@
         <source>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</source>
         <target state="translated">'{0}'에 대한 정확한 일치 항목이 없습니다. 비대화형 모드에서는 통합 이름이 패키지 ID 또는 식별 이름과 정확히 일치해야 합니다. 잘못된 패키지가 자동으로 선택되지 않도록 유사 일치 대체 기능이 비활성화되어 있습니다.</target>
         <note>{0} is the integration name provided by the user.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiresIntegrationName">
+        <source>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</source>
+        <target state="new">An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</target>
+        <note />
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>

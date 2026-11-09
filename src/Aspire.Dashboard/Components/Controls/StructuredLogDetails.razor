@@ -9,7 +9,7 @@
         <div>
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceLabel)] <strong>@ViewModel.LogEntry.ResourceView.Resource.ResourceName</strong>
         </div>
-        <div title="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
+        <div data-tooltip="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsTimestampLabel)] <strong>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</strong>
         </div>
         <div class="toolbar-end">

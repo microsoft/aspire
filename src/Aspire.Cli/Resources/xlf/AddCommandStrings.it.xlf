@@ -92,6 +92,11 @@
         <target state="translated">La query di ricerca per le integrazioni.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="new">One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Non sono stati trovati pacchetti di integrazione. Controlla la connessione Internet o la configurazione dell'origine NuGet.</target>
@@ -121,6 +126,11 @@
         <source>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</source>
         <target state="translated">Non è stata trovata alcuna corrispondenza esatta per '{0}'. In modalità non interattiva il nome dell'integrazione deve corrispondere esattamente a un ID pacchetto o a un nome descrittivo; Il fallback fuzzy è disabilitato per impedire la selezione automatica del pacchetto errato.</target>
         <note>{0} is the integration name provided by the user.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiresIntegrationName">
+        <source>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</source>
+        <target state="new">An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</target>
+        <note />
       </trans-unit>
       <trans-unit id="PackageAddedSuccessfully">
         <source>The package {0}::{1} was added successfully.</source>

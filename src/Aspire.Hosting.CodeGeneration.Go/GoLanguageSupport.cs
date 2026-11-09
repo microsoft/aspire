@@ -151,6 +151,11 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
             InstallDependencies = null,
+            // Debugging the AppHost itself goes through the extension's Go debug adapter. The capability is
+            // versioned instead of the plain "go" because extension builds that can only debug Go resources
+            // already advertise "go"; routing apphost.go to them would hand it to the .NET debugger. The CLI
+            // only takes this path when the extension reports the capability, so a CLI-only run is unaffected.
+            ExtensionLaunchCapability = "go-apphost.v1",
             Execute = new CommandSpec
             {
                 Command = "go",

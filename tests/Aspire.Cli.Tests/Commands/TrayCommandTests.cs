@@ -22,6 +22,70 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
     public static bool SupportsSymlinks => !OperatingSystem.IsWindows();
 
     [Theory]
+    [InlineData("start")]
+    [InlineData("stop")]
+    public async Task LinuxHelpersUseValidatedNativePayload(string action)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, _, cli) = CreateServices(workspace);
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
+        bundle.Layout!.Components.Tray = LinuxTrayPayload.ExecutablePath;
+        var directory = Path.GetDirectoryName(bundle.Layout.GetTrayPath()!)!;
+        LinuxTrayTestPayload.Create(directory,
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64");
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse($"tray {action} --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+        Assert.Equal(bundle.Layout.GetTrayPath(), factory.LastFileName);
+        Assert.Equal(action == "start"
+            ? ["start", "--cli", cli, "--bundle-root", bundle.Layout.LayoutPath!, "--startup-cli", cli]
+            : ["stop"], factory.LastArguments);
+    }
+
+    [Theory]
+    [InlineData(LinuxTrayPayload.NoTrayHostMarker, true)]
+    [InlineData("helper diagnostic", false)]
+    public async Task LinuxStartWarnsOnlyWhenTheHelperReportsNoTrayHost(string helperOutput, bool expectedWarning)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, interaction, _) = CreateServices(workspace);
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
+        bundle.Layout!.Components.Tray = LinuxTrayPayload.ExecutablePath;
+        LinuxTrayTestPayload.Create(Path.GetDirectoryName(bundle.Layout.GetTrayPath()!)!,
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64");
+        factory.AttemptCallback = (_, options) =>
+        {
+            options.StandardOutputCallback!(helperOutput);
+            return (CliExitCodes.Success, null);
+        };
+        using var provider = services.BuildServiceProvider();
+
+        Assert.Equal(CliExitCodes.Success, await provider.GetRequiredService<RootCommand>()
+            .Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+
+        string[] expected = expectedWarning ? [TrayCommandStrings.NoTrayHost] : [];
+        Assert.Equal(expected, interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Equal(TrayCommandStrings.Started, Assert.Single(interaction.DisplayedSuccess));
+    }
+
+    [Fact]
+    public async Task LinuxRejectsWrongArchitectureBeforeLaunching()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (services, bundle, factory, interaction, _) = CreateServices(workspace);
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
+        bundle.Layout!.Components.Tray = LinuxTrayPayload.ExecutablePath;
+        LinuxTrayTestPayload.Create(Path.GetDirectoryName(bundle.Layout.GetTrayPath()!)!,
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-x64" : "linux-arm64");
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(CliExitCodes.InvalidCommand, await provider.GetRequiredService<RootCommand>()
+            .Parse("tray start --non-interactive --nologo").InvokeAsync().DefaultTimeout());
+        Assert.Single(interaction.DisplayedErrors);
+        Assert.Empty(factory.CreatedExecutions);
+        Assert.False(BundleVersionLease.HasActiveLease(bundle.Layout.LayoutPath!));
+    }
+
+    [Theory]
     [InlineData("script", true)]
     [InlineData("pr", true)]
     [InlineData("localhive", true)]
@@ -196,7 +260,8 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("linux", true)]
+    [InlineData("linux", false)]
+    [InlineData("linux-musl", true)]
     [InlineData("macos", false)]
     [InlineData("windows", false)]
     public void TrayCommandIsHiddenOnUnsupportedPlatforms(string platform, bool expectedHidden)
@@ -206,6 +271,7 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IEnvironment>(platform switch
         {
             "linux" => TestEnvironment.CreateLinux(),
+            "linux-musl" => TestEnvironment.CreateLinuxMusl(),
             "macos" => TestEnvironment.CreateMacOS(),
             _ => TestEnvironment.CreateWindows()
         });
@@ -221,7 +287,7 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (services, bundle, factory, interaction, _) = CreateServices(workspace);
-        services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinuxMusl());
         using var provider = services.BuildServiceProvider();
 
         Assert.Equal(CliExitCodes.InvalidCommand, await provider.GetRequiredService<RootCommand>()
@@ -267,17 +333,26 @@ public class TrayCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("start", false)]
-    [InlineData("stop", false)]
-    [InlineData("start", true)]
-    [InlineData("stop", true)]
-    public async Task PackageOwnedLayoutUsesPayloadRootWithoutLeaseHandoff(string action, bool windows)
+    [InlineData("start", false, false)]
+    [InlineData("stop", false, false)]
+    [InlineData("start", true, false)]
+    [InlineData("stop", true, false)]
+    [InlineData("start", false, true)]
+    [InlineData("stop", false, true)]
+    public async Task PackageOwnedLayoutUsesPayloadRootWithoutLeaseHandoff(string action, bool windows, bool linux)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (services, bundle, factory, _, cliPath) = CreateServices(workspace);
         if (windows)
         {
             ConfigureWindows(services, bundle);
+        }
+        else if (linux)
+        {
+            services.AddSingleton<IEnvironment>(TestEnvironment.CreateLinux());
+            bundle.Layout!.Components.Tray = LinuxTrayPayload.ExecutablePath;
+            LinuxTrayTestPayload.Create(Path.GetDirectoryName(bundle.Layout.GetTrayPath()!)!,
+                RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64");
         }
         File.WriteAllText(Path.Combine(Path.GetDirectoryName(cliPath)!, InstallSidecarReader.SidecarFileName),
             """{"source":"nix"}""");

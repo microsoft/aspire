@@ -142,6 +142,11 @@
         <target state="translated">Terminaux</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalExpand">
+        <source>Expand terminal</source>
+        <target state="new">Expand terminal</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalFocusControlsDescription">
         <source>Focus terminal controls</source>
         <target state="translated">Placer le focus sur les contrôles du terminal</target>
@@ -157,10 +162,20 @@
         <target state="translated">Entrée interactive du terminal</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalMinimize">
+        <source>Minimize terminal</source>
+        <target state="new">Minimize terminal</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
         <target state="translated">Le terminal n’a pas pu se connecter ou initialiser son renderer. Vérifiez que la ressource est en cours d’exécution et que votre navigateur prend en charge WebGPU ou WebGL2, puis reconnectez-vous pour réessayer. Vous pouvez toujours afficher les journaux de console de cette ressource.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="TerminalOpenForResource">
+        <source>Open terminal for {0}</source>
+        <target state="new">Open terminal for {0}</target>
+        <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="TerminalPalette">
         <source>Terminal palette</source>

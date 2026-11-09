@@ -1,0 +1,22 @@
+﻿{
+  Sources:
+          Name:  pluginsOnly
+    Git source:  https://github.com/example/plugins
+       Plugins:  aspire@pluginsOnly
+
+          Name:  team
+    Git source:  https://github.com/example/team
+       Plugins:  aspire@TEAM
+
+          Name:  teamAlias
+    Git source:  https://github.com/example/team
+       Git ref:  source-demo
+   Marketplace:  team-marketplace
+       Plugins:  aspire@team-marketplace
+
+,
+  Warnings: [
+    One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.,
+    [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+  ]
+}

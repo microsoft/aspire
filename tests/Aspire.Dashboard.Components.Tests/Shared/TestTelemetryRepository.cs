@@ -10,6 +10,9 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITelemetryRepository
 {
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
+    public Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? GetRequestSpansAsyncHandler { get; init; }
+    public Action<Func<Task>>? OnNewLogsRegistered { get; init; }
+    public Action<Subscription>? OnNewResourcesSubscribed { get; init; }
 
     public bool IsReadOnly => inner.IsReadOnly;
     public bool HasReceivedTelemetry => inner.HasReceivedTelemetry;
@@ -23,11 +26,21 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public OtlpResource? GetResourceByCompositeName(string compositeName) => inner.GetResourceByCompositeName(compositeName);
     public OtlpResource? GetResource(ResourceKey key) => inner.GetResource(key);
     public List<OtlpResource> GetResources(ResourceKey key, bool includeUninstrumentedPeers = false) => inner.GetResources(key, includeUninstrumentedPeers);
+    public Dictionary<ResourceKey, ResourceSignalAvailability> GetResourceSignalAvailability() => inner.GetResourceSignalAvailability();
     public Dictionary<ResourceKey, int> GetResourceUnviewedErrorLogsCount() => inner.GetResourceUnviewedErrorLogsCount();
     public void MarkViewedErrorLogs(ResourceKey? key) => inner.MarkViewedErrorLogs(key);
 
-    public Subscription OnNewResources(Func<Task> callback) => inner.OnNewResources(callback);
-    public Subscription OnNewLogs(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewLogs(resourceKey, subscriptionType, callback);
+    public Subscription OnNewResources(Func<Task> callback)
+    {
+        var subscription = inner.OnNewResources(callback);
+        OnNewResourcesSubscribed?.Invoke(subscription);
+        return subscription;
+    }
+    public Subscription OnNewLogs(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback)
+    {
+        OnNewLogsRegistered?.Invoke(callback);
+        return inner.OnNewLogs(resourceKey, subscriptionType, callback);
+    }
     public Subscription OnNewMetrics(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewMetrics(resourceKey, subscriptionType, callback);
     public Subscription OnNewTraces(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewTraces(resourceKey, subscriptionType, callback);
 
@@ -42,6 +55,8 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Task<GetTracesResponse> GetTracesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTracesAsync(context, cancellationToken);
     public Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTraceSummariesAsync(context, cancellationToken);
     public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) => inner.GetSpansAsync(context, cancellationToken);
+    public Task<GetRequestSpansResponse> GetRequestSpansAsync(GetRequestSpansRequest request, CancellationToken cancellationToken) =>
+        GetRequestSpansAsyncHandler?.Invoke(request, cancellationToken) ?? inner.GetRequestSpansAsync(request, cancellationToken);
     public Task<Dictionary<string, int>> GetTraceFieldValuesAsync(string attributeName, CancellationToken cancellationToken) => inner.GetTraceFieldValuesAsync(attributeName, cancellationToken);
     public Task<Dictionary<string, int>> GetLogsFieldValuesAsync(string attributeName, CancellationToken cancellationToken) => inner.GetLogsFieldValuesAsync(attributeName, cancellationToken);
     public bool HasUpdatedTrace(OtlpTrace trace) => inner.HasUpdatedTrace(trace);

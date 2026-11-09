@@ -160,6 +160,141 @@ public class ResourceSnapshotBuilderTests
         Assert.True(GetProperty(snapshot, KnownProperties.Executable.Args).IsSensitive);
     }
 
+    [Fact]
+    public void CoordinatedProjectIdeSnapshotDoesNotReportDirectLaunchMetadata()
+    {
+        var resource = new TestDotnetProjectResource("project");
+        resource.Annotations.Add(new TestProjectMetadata
+        {
+            SuppressBuild = true,
+            BuildWorkingDirectory = "/app",
+            BuildTarget = new("/app/bin/Release/net10.0/project.dll", useAppHost: false)
+        });
+        resource.Annotations.Add(SupportsDebuggingAnnotation.Create<object>(
+            resource.Name,
+            KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+            _ => Task.FromResult(new object())));
+
+        var executable = Executable.Create(resource.Name, "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, resource.Name);
+        executable.Spec.ExecutionType = ExecutionType.IDE;
+        executable.SetAnnotationAsObjectList(Executable.LaunchConfigurationsAnnotation, new[]
+        {
+            new ProjectLaunchConfiguration
+            {
+                Type = KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+                ProjectPath = "/app/project.csproj",
+                Mode = ExecutableLaunchMode.NoDebug,
+                BuildConfiguration = "Release"
+            }
+        });
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["private-application-argument"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [resource.Name] = resource
+        }).ToSnapshot(executable, CreatePreviousSnapshot(KnownResourceTypes.Project));
+
+        Assert.Equal("ide", GetProperty(snapshot, KnownProperties.Project.LaunchCommand).Value);
+        Assert.Equal("Release", GetProperty(snapshot, KnownProperties.Project.Configuration).Value);
+        Assert.Empty(snapshot.Properties.Where(property => property.Name is KnownProperties.Project.TargetPath
+            or KnownProperties.Project.UseAppHost));
+    }
+
+    [Theory]
+    [InlineData("/app/bin/Release/net10.0/project", "Release", "/app/bin/Release/net10.0/project.dll", true)]
+    [InlineData("C:\\app\\bin\\Debug\\net10.0\\project.exe", "Debug", "C:\\app\\bin\\Debug\\net10.0\\project.dll", true)]
+    [InlineData("dotnet", "Release", "/app/bin/Release/net10.0/project.dll", false)]
+    [InlineData("dotnet", null, "/app/bin/Debug/net10.0/project.dll", false)]
+    public void CoordinatedProjectSnapshotIncludesDirectLaunchMetadata(
+        string executablePath,
+        string? configuration,
+        string targetPath,
+        bool useAppHost)
+    {
+        var resource = new TestDotnetProjectResource("project");
+        resource.Annotations.Add(new TestProjectMetadata
+        {
+            SuppressBuild = true,
+            BuildWorkingDirectory = "/app",
+            BuildTarget = new(targetPath, useAppHost)
+        });
+        resource.Annotations.Add(new ProjectLaunchDefaultsAnnotation { BuildConfiguration = configuration });
+        resource.Annotations.Add(SupportsDebuggingAnnotation.Create<object>(
+            resource.Name,
+            KnownLaunchConfigurationTypes.ProjectWithExternalBuild,
+            _ => throw new InvalidOperationException("Process launches do not use the IDE configuration factory.")));
+
+        var executable = Executable.Create(resource.Name, executablePath);
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, resource.Name);
+        executable.Spec.ExecutionType = ExecutionType.Process;
+        executable.Status = new ExecutableStatus
+        {
+            State = ExecutableState.Running,
+            EffectiveArgs = ["--configuration", "private-application-argument"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [resource.Name] = resource
+        }).ToSnapshot(executable, CreatePreviousSnapshot(KnownResourceTypes.Project));
+
+        Assert.Equal(KnownResourceTypes.Project, snapshot.ResourceType);
+        Assert.Equal("/app/project.csproj", GetProperty(snapshot, KnownProperties.Project.Path).Value);
+        Assert.Equal(executablePath, GetProperty(snapshot, KnownProperties.Executable.Path).Value);
+        Assert.Equal(1234, GetProperty(snapshot, KnownProperties.Executable.Pid).Value);
+        Assert.Equal("direct", GetProperty(snapshot, KnownProperties.Project.LaunchCommand).Value);
+        Assert.Equal(
+            configuration is null ? [] : [configuration],
+            snapshot.Properties.Where(property => property.Name == KnownProperties.Project.Configuration).Select(property => property.Value));
+        Assert.Equal(targetPath, GetProperty(snapshot, KnownProperties.Project.TargetPath).Value);
+        Assert.Equal(useAppHost, GetProperty(snapshot, KnownProperties.Project.UseAppHost).Value);
+        Assert.False(GetProperty(snapshot, KnownProperties.Project.LaunchCommand).IsSensitive);
+        Assert.True(GetProperty(snapshot, KnownProperties.Executable.Args).IsSensitive);
+    }
+
+    [Theory]
+    [InlineData(KnownLaunchConfigurationTypes.Project, true, "/app", "/app/project.csproj")]
+    [InlineData("maui", true, "/app", "/app/project.csproj")]
+    [InlineData(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, false, "/app", "/app/project.csproj")]
+    [InlineData(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, true, null, "/app/project.csproj")]
+    [InlineData(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, true, "/app", "/app/project.cs")]
+    public void ProjectSnapshotDoesNotInferDirectLaunchFromAnArbitraryExecutable(
+        string launchConfigurationType,
+        bool suppressBuild,
+        string? buildWorkingDirectory,
+        string projectPath)
+    {
+        var resource = new TestDotnetProjectResource("project");
+        resource.Annotations.Add(new TestProjectMetadata
+        {
+            ProjectPath = projectPath,
+            SuppressBuild = suppressBuild,
+            BuildWorkingDirectory = buildWorkingDirectory
+        });
+        resource.Annotations.Add(SupportsDebuggingAnnotation.Create<object>(
+            resource.Name,
+            launchConfigurationType,
+            _ => Task.FromResult(new object())));
+        var executable = Executable.Create(resource.Name, "/app/unknown");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, resource.Name);
+        executable.Spec.ExecutionType = ExecutionType.Process;
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [resource.Name] = resource
+        }).ToSnapshot(executable, CreatePreviousSnapshot(KnownResourceTypes.Project));
+
+        Assert.Empty(snapshot.Properties.Where(property => property.Name is KnownProperties.Project.LaunchCommand
+            or KnownProperties.Project.Configuration or KnownProperties.Project.TargetFramework
+            or KnownProperties.Project.TargetPath or KnownProperties.Project.UseAppHost));
+    }
+
     [Theory]
     [InlineData("Run", "run", "--configuration", "--framework=net10.0")]
     [InlineData("run", "run", "-c", "-f")]
@@ -697,7 +832,13 @@ public class ResourceSnapshotBuilderTests
 
     private sealed class TestProjectMetadata : IProjectMetadata
     {
-        public string ProjectPath => "/app/project.csproj";
+        public string ProjectPath { get; init; } = "/app/project.csproj";
+
+        public bool SuppressBuild { get; init; }
+
+        public string? BuildWorkingDirectory { get; init; }
+
+        public ProjectBuildTarget? BuildTarget { get; init; }
 
         public LaunchSettings LaunchSettings { get; } = new()
         {

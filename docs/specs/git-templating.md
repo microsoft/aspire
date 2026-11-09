@@ -67,6 +67,97 @@ Existing non-empty output directories are rejected. Project name and output
 selection use the existing new-command prompting and validation helpers.
 Optional agent initialization still applies; `--suppress-agent-init` skips it.
 
+## Source trust
+
+Only use sources you trust. Review downloaded templates and their package feeds
+before generating or running an application: source content can run code on your
+machine. Pinning a Git commit provides a stable source tree, not proof that its
+contents are trustworthy.
+
+Configured template sources, including those inherited from a machine-configured
+configuration source, provide optional discovery defaults, not an administrative
+allowlist. Developers may choose other sources or not use the configured sources;
+doing so is supported, not a security bypass. See
+[configuration-source defaults](cli-config-sources.md) for the non-enforcement contract.
+Declining a configuration source during `aspire new`, interactively or through
+`--use-config-source false`, also disables template sources inherited from it for
+that command. Independently configured global template sources remain available.
+
+Interactive `aspire new` without an explicit template discovers configured sources
+before showing the template picker. Their templates appear alongside built-ins,
+after the existing built-in choices. Selecting a configured template uses that exact
+discovered source snapshot, even when display names or short names collide.
+There is no separate search action: type in the picker to move to a matching name
+or description, case-insensitively. Descriptions, when provided, are shown as
+`Template Name (Template Description)` so Spectre's existing search can match them.
+Grouped terminal labels normalize whitespace and use an ellipsis when the combined
+name and description exceed the available terminal-cell width. Search matches only
+the visible prefix of a truncated label; full template metadata is retained.
+Empty or unavailable sources report their
+existing warnings without preventing selection from other sources or built-ins.
+Before selection, source details use the same aligned, bold-green labels as
+configuration sources, with a blank line between sources. Repository, path, and
+explicit ref appear in these details rather than in the picker headings.
+The terminal picker shows nonselectable source-name headings only when choices come
+from multiple sources. Group order follows first appearance in the discovered choices,
+with built-ins first; templates retain their existing ordering within each group.
+Source objects can specify an optional `displayName` for their heading:
+
+```json
+{
+  "templateSources": {
+    "company": {
+      "repository": "https://github.com/example/templates",
+      "displayName": "Company templates"
+    }
+  }
+}
+```
+
+This works in global configuration and accepted init-source definitions. Omitted,
+null, empty, or space-only names fall back to the source alias. Non-string values
+and control characters are rejected. Set an existing source's heading with
+`aspire config set templateSources.company.displayName "Company templates" --global`.
+The alias remains the lookup key and group identity, so identical display names do
+not merge sources or alter explicit invocations, warnings, or flat-client labels.
+Source headings show only the display name or alias, for example `Company templates`.
+Before fetching templates, the CLI displays **One or more template sources are
+configured. A template source lets an organization share Aspire templates to
+customize your development experience.**
+It then displays each configured source with aligned **Name**, **Git source**,
+**Git path**, and **Git ref** labels, with blank lines between sources. Local
+directory sources use **Path** instead of the Git labels. Built-in templates
+are not listed as a source. Repository-root paths (`.`, `./`, or `.\`) and
+default refs (omitted or `HEAD`) are hidden. Other refs show configured values,
+not resolved commits or guessed branch names. Discovery does not display
+per-source "Searching template source" messages; Git acquisition retains its
+fetch notice and progress indicators. Configured source headings are green;
+built-in headings keep their default styling. Headings are escaped as literal text and
+cropped to the available terminal-cell width, just like template labels.
+Global overrides replace the entire inherited definition, including `displayName`;
+inherited values are never saved to global or generated-project configuration.
+
+Terminal choices do not repeat the source alias or short name under these headings.
+Grouping and terminal labels are optional
+interaction-service presentation metadata: clients such as the VS Code extension
+continue receiving the existing flat string choices with unique source-qualified
+labels. Description search in those flat clients is deferred. No extension
+protocol or capability change is required.
+Discovery does not authorize template post-actions or execution of generated code.
+Help, explicit templates, noninteractive invocations, and built-in-only options
+(`--source`, `--version`, `--channel`, or `--language`) do not trigger this discovery.
+
+Template discovery displays the CLI's shared localized source-trust warning
+after the source details and before fetching, including configured sources,
+explicit directory/repository sources, and cached checkouts. Git acquisition
+does not repeat the inventory's warning. `aspire template source add` displays the same warning before its
+existing trust confirmation; `--yes` skips the confirmation, not the warning.
+Explicit package feeds other than nuget.org accepted by `aspire new --source` and
+`aspire add --source` use the same warning. A template picker using a non-default package
+feed also displays it before selection. Built-in-only pickers do not add a warning. Configuration-source creation, initialization, and refresh
+also use it, as described in [configuration sources](cli-config-sources.md#source-trust).
+Warnings go to stderr and do not add confirmation requirements.
+
 ## Component responsibilities
 
 | Component | Responsibility |
@@ -151,6 +242,13 @@ cached file. Generated files and NuGet configuration are written to the output
 directory, not into the source tree or retained cache.
 
 ### Authentication, environment, and failures
+
+Before Git acquisition, the CLI writes **Fetching templates using Git...** to
+stderr. On interactive hosts, it uses **Fetching templates using Git. Git may
+prompt you to authenticate.** instead, reusing the configuration-source notice
+with a different content name. The notice precedes remote ref resolution because
+credential helpers may authenticate there even when the checkout is already
+cached. Reusing a cached, fully specified commit SHA does not repeat the notice.
 
 Normal Git credential helpers and SSH authentication configuration remain
 available. Git's terminal credential prompts are always disabled with
@@ -268,6 +366,78 @@ that are normally substituted while packaging. Host metadata does not resolve
 those tokens. To use a raw source directory or a copied Git template, first
 materialize those values or replace them with template symbols, such as the
 `AspireVersion` parameter described below.
+
+### Project-derived prompt defaults
+
+The engine's `defaultValue` is a literal, not an expression. A template can keep
+an override parameter visible while displaying its project-derived fallback by
+opting into `defaultValueSource` in the selected host file:
+
+```json
+{
+  "symbolInfo": {
+    "displayName": { "defaultValueSource": "displayNameValue" },
+    "shortName": { "defaultValueSource": "shortNameValue" }
+  }
+}
+```
+
+Each source names the native `coalesce` symbol that consumes that parameter.
+For example, the corresponding `template.json` symbols can be:
+
+```json
+{
+  "displayName": { "type": "parameter", "datatype": "string", "defaultValue": "" },
+  "shortName": { "type": "parameter", "datatype": "string", "defaultValue": "" },
+  "displayNameValue": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": { "sourceVariableName": "displayName", "fallbackVariableName": "name" },
+    "replaces": "DISPLAY_NAME"
+  },
+  "normalizedName": {
+    "type": "generated",
+    "generator": "regex",
+    "parameters": {
+      "source": "name",
+      "steps": [
+        { "regex": "[^A-Za-z0-9]+", "replacement": "-" },
+        { "regex": "^-+|-+$", "replacement": "" },
+        { "regex": "^$", "replacement": "service" }
+      ]
+    }
+  },
+  "shortNameValue": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": { "sourceVariableName": "shortName", "fallbackVariableName": "normalizedName" },
+    "replaces": "SHORT_NAME"
+  }
+}
+```
+
+For project name `Demo.App`, the prompts display `Demo.App` and `Demo-App`.
+Pressing Enter accepts those fallbacks without submitting the override
+parameters to the engine. A different answer remains explicit input. An answer
+equal to the displayed fallback is also treated as omission. Noninteractive
+generation retains native fallback behavior.
+
+This is a display-only host opt-in, not a new template expression language.
+Targets must be optional string parameters with an empty default, without a
+NuGet `valueSource` or reserved CLI projection. Source graphs may depend only on
+the engine's project-name parameter `name`, the omitted override parameter, and
+native `regex`/`coalesce` symbols. Templates must not redefine the `name` leaf.
+The omitted override may appear only as a coalesce source; `name` may appear as
+a regex source or coalesce fallback, but not as a coalesce source. These
+restrictions avoid previews that disagree with the engine's parameter-default
+and suppliedness semantics. The CLI uses the engine's own macro implementations.
+Every reachable reference, including unused coalesce branches, is validated
+before prompting for the project name or output path. Invalid references,
+cycles, and unsupported dependencies fail before prompting or writing project
+files. Bound values, other parameters (which could contain secrets), and
+nondeterministic generators such as random ports are not previewed.
+Existing literal defaults, choices, conditional prompts, and hidden parameters
+are unchanged when no `defaultValueSource` is specified.
 
 ### NuGet-computed parameter values
 

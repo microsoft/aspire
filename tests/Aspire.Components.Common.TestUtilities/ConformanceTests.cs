@@ -67,6 +67,8 @@ public abstract class ConformanceTests<TService, TOptions>
 
     protected virtual bool CanConnectToServer => false;
 
+    private const string CanConnectToServerEnvironmentVariable = "ASPIRE_CONFORMANCE_TESTS_CAN_CONNECT_TO_SERVER";
+
     protected virtual bool SupportsNamedConfig => true;
     protected virtual string? ConfigurationSectionName => null;
 
@@ -523,7 +525,11 @@ public abstract class ConformanceTests<TService, TOptions>
     {
         HostApplicationBuilder builder = CreateHostBuilder(key: key);
         builder.Logging.AddConsole();
-        RegisterComponent(builder, options => SetTracing(options, true), key);
+        RegisterComponent(builder, options =>
+        {
+            SetTracing(options, true);
+            ConfigureActivitySourceTestOptions(options);
+        }, key);
 
         List<Activity> exportedActivities = new();
         builder.Services.AddOpenTelemetry().WithTracing(builder => builder.AddInMemoryExporter(exportedActivities));
@@ -631,23 +637,82 @@ public abstract class ConformanceTests<TService, TOptions>
         }
     }
 
-    protected static void RemoteInvokeWithLogging(Action action, ITestOutputHelper? testOutput, RemoteInvokeOptions? options = null)
+    protected void RemoteInvokeWithLogging(Action action, ITestOutputHelper? testOutput, RemoteInvokeOptions? options = null)
     {
         using var handle = RemoteExecutor.Invoke(action, GetRemoteInvokeOptionsForLogging(options));
         ConfigureLoggingAndStart(handle, testOutput);
     }
 
-    protected static void RemoteInvokeWithLogging(Action<string> action, string arg, ITestOutputHelper? testOutput, RemoteInvokeOptions? options = null)
+    protected void RemoteInvokeWithLogging(Action<string> action, string arg, ITestOutputHelper? testOutput, RemoteInvokeOptions? options = null)
     {
         using var handle = RemoteExecutor.Invoke(action, arg, GetRemoteInvokeOptionsForLogging(options));
         ConfigureLoggingAndStart(handle, testOutput);
     }
 
-    private static RemoteInvokeOptions GetRemoteInvokeOptionsForLogging(RemoteInvokeOptions? options = null)
+    /// <summary>
+    /// Returns the <see cref="CanConnectToServer"/> value computed by the test process when running inside a
+    /// <see cref="RemoteExecutor"/> child process, and only runs <paramref name="probe"/> otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Probing can be expensive (for example, walking the whole <c>DefaultAzureCredential</c> chain), and the
+    /// child process must finish within the <see cref="RemoteExecutor"/> timeout.
+    /// </remarks>
+    protected static bool GetCanConnectToServer(Func<bool> probe)
+        => bool.TryParse(Environment.GetEnvironmentVariable(CanConnectToServerEnvironmentVariable), out var canConnect)
+            ? canConnect
+            : probe();
+
+    /// <summary>
+    /// Runs <paramref name="activitySourceTest"/> in a <see cref="RemoteExecutor"/> child process with fake Azure developer
+    /// tools (<c>az</c>, <c>azd</c>, <c>pwsh</c>, <c>powershell</c>) first on the <c>PATH</c>, and verifies none of them were launched.
+    /// </summary>
+    /// <remarks>
+    /// When the server isn't reachable, the child process must not fall back to the <c>DefaultAzureCredential</c> chain:
+    /// each developer tool credential has its own process timeout and, together with the managed identity probe, they can
+    /// exceed the <see cref="RemoteExecutor"/> timeout on CI machines. See https://github.com/microsoft/aspire/issues/20241.
+    /// </remarks>
+    protected void RemoteActivitySourceTestDoesNotLaunchDeveloperCredentialTools(Action activitySourceTest)
+    {
+        Assert.SkipWhen(CanConnectToServer, "Developer credentials are expected to be used when the server is reachable.");
+
+        var toolsDirectory = Directory.CreateTempSubdirectory("aspire-conformance-credential-tools");
+        try
+        {
+            var launchedToolsFile = Path.Combine(toolsDirectory.FullName, "launched-tools.txt");
+            foreach (var tool in new[] { "az", "azd", "pwsh", "powershell" })
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    File.WriteAllText(Path.Combine(toolsDirectory.FullName, $"{tool}.cmd"), $"@echo {tool}>>\"{launchedToolsFile}\"\r\n@exit /b 1\r\n");
+                }
+                else
+                {
+                    var toolPath = Path.Combine(toolsDirectory.FullName, tool);
+                    File.WriteAllText(toolPath, $"#!/bin/sh\necho {tool} >> '{launchedToolsFile}'\nexit 1\n");
+                    File.SetUnixFileMode(toolPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+                }
+            }
+
+            var options = new RemoteInvokeOptions();
+            options.StartInfo.Environment["PATH"] = toolsDirectory.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
+
+            RemoteInvokeWithLogging(activitySourceTest, Output, options);
+
+            Assert.False(File.Exists(launchedToolsFile),
+                $"The remote process launched developer credential tools: {(File.Exists(launchedToolsFile) ? File.ReadAllText(launchedToolsFile) : string.Empty)}");
+        }
+        finally
+        {
+            toolsDirectory.Delete(recursive: true);
+        }
+    }
+
+    private RemoteInvokeOptions GetRemoteInvokeOptionsForLogging(RemoteInvokeOptions? options = null)
     {
         options ??= new RemoteInvokeOptions();
         options.StartInfo.RedirectStandardError = true;
         options.StartInfo.RedirectStandardOutput = true;
+        options.StartInfo.Environment[CanConnectToServerEnvironmentVariable] = CanConnectToServer ? bool.TrueString : bool.FalseString;
         options.Start = false;
         return options;
     }
@@ -690,6 +755,14 @@ public abstract class ConformanceTests<TService, TOptions>
         {
             Assert.Skip("Component is built before host.");
         }
+    }
+
+    /// <summary>
+    /// Allows derived classes to adjust the component options used by <see cref="ActivitySourceTest"/>,
+    /// which runs in a <see cref="RemoteExecutor"/> child process that must finish within its timeout.
+    /// </summary>
+    protected virtual void ConfigureActivitySourceTestOptions(TOptions options)
+    {
     }
 
     protected HostApplicationBuilder CreateHostBuilder(HostApplicationBuilderSettings? hostSettings = null, string? key = null)

@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
@@ -57,7 +58,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         private void Validate()
         {
             TemplateSourceConfiguration.ValidateName(Name);
-            TemplateSourceConfiguration.Parse(Path, Repository, Ref, $"templateSources.{Name}", requireComplete: true);
+            TemplateSourceConfiguration.Parse(Path, Repository, Ref, displayName: null, $"{AspireConfigFile.TemplateSourcesSectionName}.{Name}", requireComplete: true);
         }
     }
 
@@ -82,6 +83,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
         {
             _store = store;
             Options.Add(_format);
+            Options.Add(ConfigSourceService.s_useSourceOption);
         }
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -89,7 +91,13 @@ internal sealed class TemplateManagementCommand : ParentCommand
             JsonObject sources;
             try
             {
-                sources = await _store.ListAsync(cancellationToken);
+                var json = parseResult.GetValue(_format) == OutputFormat.Json;
+                // Machine-readable listing is local-only unless explicitly opted in. Do not
+                // even select a candidate by default: that can validate settings or run detection.
+                var source = !json || parseResult.GetValue(ConfigSourceService.s_useSourceOption) is true
+                    ? await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, allowInteractiveInput: !json, cancellationToken)
+                    : null;
+                sources = await _store.ListAsync(source, cancellationToken);
             }
             catch (TemplateSourceConfigurationException ex)
             {
@@ -119,7 +127,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
             else
             {
                 var table = new Table()
-                    .AddBoldColumn(NewCommandStrings.TemplateSourceNameHeader)
+                    .AddBoldColumn(SharedCommandStrings.SourceName)
                     .AddBoldColumn(NewCommandStrings.TemplateSourceConfigurationHeader);
                 foreach (var (name, source) in orderedSources)
                 {
@@ -138,6 +146,10 @@ internal sealed class TemplateManagementCommand : ParentCommand
 
     private sealed class AddSourceCommand : BaseCommand
     {
+        private readonly Option<bool> _yesOption = new("--yes", "-y")
+        {
+            Description = NewCommandStrings.TemplateSourceYesOptionDescription
+        };
         private readonly TemplateSourceStore _store;
 
         public AddSourceCommand(TemplateSourceStore store, CommonCommandServices services)
@@ -148,6 +160,9 @@ internal sealed class TemplateManagementCommand : ParentCommand
             Options.Add(AddSourceOptions.PathOption);
             Options.Add(AddSourceOptions.RepositoryOption);
             Options.Add(AddSourceOptions.RefOption);
+            Options.Add(_yesOption);
+
+            AddNonInteractiveRequiresYesValidator(this, _yesOption);
         }
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -155,6 +170,17 @@ internal sealed class TemplateManagementCommand : ParentCommand
             try
             {
                 var options = AddSourceOptions.FromParseResult(parseResult);
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
+                var confirmed = await InteractionService.PromptConfirmAsync(
+                    string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceTrustPrompt,
+                        options.Name.EscapeMarkup(), (options.Repository ?? options.Path!).EscapeMarkup()),
+                    binding: PromptBinding.Create(parseResult, _yesOption),
+                    cancellationToken: cancellationToken);
+                if (!confirmed)
+                {
+                    return CommandResult.Cancelled();
+                }
+
                 await _store.AddAsync(options.Name, options.ToJsonObject(), cancellationToken);
                 InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceAdded, options.Name));
                 return CommandResult.Success();

@@ -703,7 +703,7 @@ suite('E2E launch profile', () => {
         const uploadStepIndex = workflow.indexOf('- name: Upload E2E diagnostics');
         const debuggerPrerequisiteStep = workflow.slice(debuggerPrerequisitesIndex, azureFunctionsPrerequisitesIndex);
         const azureFunctionsPrerequisiteStep = workflow.slice(azureFunctionsPrerequisitesIndex, workflow.indexOf('\n      - name:', azureFunctionsPrerequisitesIndex));
-        const runStep = workflow.slice(runStepIndex, uploadStepIndex);
+        const runStep = workflow.slice(runStepIndex, workflow.indexOf('\n      - name:', runStepIndex + 1));
         const uploadStep = workflow.slice(uploadStepIndex, workflow.indexOf('\n      - name:', uploadStepIndex + 1));
         const csharpVersion = /csharp\/([^/]+)\/vspackage\?targetPlatform=linux-x64/.exec(debuggerPrerequisiteStep)?.[1];
         const minimumCsharpVersion = '2.145.15-prerelease';
@@ -722,7 +722,7 @@ suite('E2E launch profile', () => {
         assert.ok(debuggerPrerequisitesIndex < azureFunctionsPrerequisitesIndex);
         assert.ok(azureFunctionsPrerequisitesIndex < runStepIndex);
         assert.ok(workflow.includes('global-json-file: global.json'));
-        assert.deepStrictEqual(runnerTargetFrameworks, ['net11.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net11.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0', 'net10.0']);
         assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(debuggerPrerequisiteStep.includes('if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions || matrix.installResourceDebug }}'));
         assert.ok(debuggerPrerequisiteStep.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
@@ -789,7 +789,7 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes(`const browserDebuggerTargetFramework = '${repositoryTargetFramework}';`));
         assert.ok(runner.includes("const e2eBrowser = process.platform === 'win32' ? 'msedge' : 'chrome';"));
         assert.ok(runner.includes("const enableNodeFunctionsE2E = shardName === 'azure-functions-node';"));
-        assert.ok(runner.includes('const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E || enableResourceDebugE2E;'));
+        assert.ok(runner.includes('const enableDebuggerExtensions = installAzureFunctionsVsix || enableBrowserDebuggerE2E || enableNodeFunctionsE2E || enableWinUiE2E || enableCoordinatedBuildE2E || enableResourceDebugE2E;'));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazorwasm', '--name', 'StandaloneClient', '--output', standaloneDirectory, '--framework', browserDebuggerTargetFramework, '--no-https', '--no-restore']);"));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedGlobal', '--output', hostedGlobalDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--all-interactive', '--no-https', '--no-restore']);"));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedPerPage', '--output', hostedPerPageDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--no-https', '--no-restore']);"));
@@ -807,11 +807,105 @@ suite('E2E launch profile', () => {
         assert.ok(runner.includes('<ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />'));
         assert.ok(runner.includes('<ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />'));
         assert.ok(runner.includes('builder.AddBlazorWasmProject<Projects.StandaloneClient>("standalone")'));
-        assert.ok(runner.includes('builder.AddProject<Projects.HostedGlobal>("hosted-global")'));
-        assert.ok(runner.includes('builder.AddProject<Projects.HostedPerPage>("hosted-per-page")'));
+        assert.ok(runner.includes('builder.AddDotnetProject("hosted-global", "../HostedGlobal/HostedGlobal/HostedGlobal.csproj")'));
+        assert.ok(runner.includes('builder.AddDotnetProject("hosted-per-page", "../HostedPerPage/HostedPerPage/HostedPerPage.csproj")'));
         assert.ok(runner.includes('ASPIRE_EXTENSION_E2E_BROWSER: e2eBrowser'));
         assert.ok(compactRunner.includes("...(enableBrowserDebuggerE2E && isWindows ? { __COMPAT_LAYER: 'DetectorsAppHealth' } : {}),"));
     });
+
+    for (const scenario of [
+        { shard: 'coordinated-build', specs: [], expected: ['runtime', 'csharp'] },
+        { shard: 'focused', specs: ['out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js'], expected: ['runtime', 'csharp'] },
+        { shard: 'launch-profiles', specs: ['out/test-e2e/test-e2e/launchProfiles.e2e.test.js'], expected: [] },
+        { shard: 'browser-debugger', specs: [], expected: ['runtime', 'csharp'] },
+        { shard: 'azure-functions', specs: [], expected: ['runtime', 'csharp', 'resources', 'functions'] },
+        { shard: 'azure-functions-node', specs: [], expected: ['runtime', 'csharp'] },
+        { shard: 'winui', specs: [], expected: ['runtime', 'csharp'] },
+        { shard: 'resource-debug', specs: [], expected: ['runtime', 'csharp', 'go'] },
+    ]) {
+        test(`provisions only the required debugger VSIXes for ${scenario.shard}`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const declarationNames = new Set(['enableCoordinatedBuildE2E', 'enableDebuggerExtensions']);
+            const declarations = source.statements.filter(statement =>
+                ts.isVariableStatement(statement) && statement.declarationList.declarations.some(declaration =>
+                    ts.isIdentifier(declaration.name) && declarationNames.has(declaration.name.text)));
+            assert.strictEqual(declarations.length, declarationNames.size);
+            const resolver = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'resolveDebuggerVsixPaths');
+            assert.ok(resolver);
+            const environmentVariables = new Map([
+                ['ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX', 'runtime'],
+                ['ASPIRE_EXTENSION_E2E_CSHARP_VSIX', 'csharp'],
+                ['ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX', 'resources'],
+                ['ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX', 'functions'],
+                ['ASPIRE_EXTENSION_E2E_GO_VSIX', 'go'],
+            ]);
+            const sandbox = {
+                path,
+                shardName: scenario.shard,
+                matchedTestSpecs: scenario.specs,
+                installAzureFunctionsVsix: scenario.shard === 'azure-functions',
+                enableAzureFunctionsE2E: scenario.shard === 'azure-functions',
+                enableResourceDebugE2E: scenario.shard === 'resource-debug',
+                enableBrowserDebuggerE2E: scenario.shard === 'browser-debugger',
+                enableNodeFunctionsE2E: scenario.shard === 'azure-functions-node',
+                enableWinUiE2E: scenario.shard === 'winui',
+                resolveRequiredVsixPath: (name: string) => {
+                    assert.ok(environmentVariables.has(name));
+                    return environmentVariables.get(name);
+                },
+                result: [] as Array<{ path: string }>,
+            };
+            vm.runInNewContext(`${declarations.map(declaration => declaration.getText(source)).join('\n')}
+${resolver.getText(source)}
+result = resolveDebuggerVsixPaths();`, sandbox);
+
+            assert.deepStrictEqual(Array.from(sandbox.result, entry => entry.path), scenario.expected);
+        });
+    }
+
+    for (const [includeAzureFunctions, includeWinUi, includeResourceDebug] of [
+        [false, false, false],
+        [true, false, false],
+        [false, true, false],
+        [false, false, true],
+    ]) {
+        test(`generates V2 path resources with Dotnet references (Functions=${includeAzureFunctions}, WinUI=${includeWinUi}, ResourceDebug=${includeResourceDebug})`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const writer = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'writeAppHostProject');
+            assert.ok(writer);
+            const files = new Map<string, string>();
+            vm.runInNewContext(`${writer.getText(source)}
+writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includeWinUi}, ${includeResourceDebug});`, {
+                path,
+                workspaceRoot: 'workspace',
+                csharpFileHeader: '',
+                fs: {
+                    mkdirSync: () => undefined,
+                    writeFileSync: (file: string, content: string) => files.set(file, content),
+                },
+            });
+            const project = files.get(path.join('workspace', 'AppHost', 'AppHost.csproj'));
+            const appHost = files.get(path.join('workspace', 'AppHost', 'AppHost.cs'));
+            assert.ok(project);
+            assert.ok(appHost);
+            assert.strictEqual(project.match(/<Project Sdk="([^"]+)">/)?.[1], includeAzureFunctions ? 'Aspire.AppHost.Sdk/13.6.0-test' : 'Microsoft.NET.Sdk');
+            assert.deepStrictEqual([...project.matchAll(/<PackageReference Include="Aspire.Hosting.AppHost" Version="([^"]+)"/g)].map(match => match[1]), includeAzureFunctions ? [] : ['13.6.0-test']);
+            assert.match(project, /<PackageReference Include="Aspire.Hosting.Dotnet" Version="13.6.0-test"/);
+            assert.deepStrictEqual([...project.matchAll(/<PackageReference Include="Aspire.Hosting.Go" Version="([^"]+)"/g)].map(match => match[1]), includeResourceDebug ? ['13.6.0-test'] : []);
+            assert.deepStrictEqual([...project.matchAll(/<ProjectReference Include="([^"]+)"/g)].map(match => match[1]), []);
+            assert.deepStrictEqual([...appHost.matchAll(/builder\.AddDotnetProject\("([^"]+)", "([^"]+)"/g)].map(match => [match[1], match[2]]), [
+                ['e2e-worker', '../AspireE2E.Worker/AspireE2E.Worker.csproj'],
+                ['e2e-terminal', '../AspireE2E.Worker/AspireE2E.Worker.csproj'],
+                ...(includeWinUi ? [['e2e-winui', '../AspireE2E.WinUI/AspireE2E.WinUI.csproj']] : []),
+                ...(includeResourceDebug ? [['e2e-custom-output-worker', '../AspireE2E.CustomOutputWorker/AspireE2E.CustomOutputWorker.csproj']] : []),
+            ]);
+            assert.strictEqual(appHost.includes('options => options.LaunchProfileName = "E2E"'), includeWinUi);
+            assert.strictEqual(appHost.includes('builder.AddAzureFunctionsProject("e2e-functions", "../AspireE2E.Functions/AspireE2E.Functions.csproj")'), includeAzureFunctions);
+            assert.strictEqual(appHost.includes('builder.AddGoApp("e2e-go", "../AspireE2E.Go", gcFlags: "all=-N -l")'), includeResourceDebug);
+        });
+    }
 
     for (const enableBrowserDebuggerE2E of [false, true]) {
         test(`prewarms the fixture with ${enableBrowserDebuggerE2E ? 'restore and build before browser debugging' : 'restore only for other shards'}`, () => {
@@ -1060,17 +1154,17 @@ var builder = DistributedApplication.CreateBuilder(args);
 var browser = Environment.GetEnvironmentVariable("ASPIRE_EXTENSION_E2E_BROWSER") ?? "chrome";
 var standalone = builder.AddBlazorWasmProject<Projects.StandaloneClient>("standalone")
     .WithBlazorDebuggerBrowser(browser);
-var gateway = builder.AddBlazorGateway("standalone-gateway");
+var gateway = builder.AddDotnetProjectBlazorGateway("standalone-gateway");
 // Match the HTTP-only client fixtures without depending on machine-wide browser certificate trust.
 gateway.Resource.Annotations.Remove(gateway.Resource.Annotations.OfType<EndpointAnnotation>().Single(endpoint => endpoint.UriScheme == "https"));
 gateway.WithExternalHttpEndpoints()
     .WithBlazorClientApp(standalone);
 // Launch one server per scenario rather than competing for C# run-api startup timeouts.
-builder.AddProject<Projects.HostedGlobal>("hosted-global")
+builder.AddDotnetProject("hosted-global", "../HostedGlobal/HostedGlobal/HostedGlobal.csproj")
     .WithExplicitStart()
     .WithBlazorDebuggerBrowser(browser)
     .ProxyBlazorTelemetry();
-builder.AddProject<Projects.HostedPerPage>("hosted-per-page")
+builder.AddDotnetProject("hosted-per-page", "../HostedPerPage/HostedPerPage/HostedPerPage.csproj")
     .WithExplicitStart()
     .WithBlazorDebuggerBrowser(browser)
     .ProxyBlazorTelemetry();
@@ -1162,6 +1256,7 @@ builder.Build().Run();
         assert.ok(runner.includes('if (enableBrowserDebuggerE2E) {'));
         assert.ok(runner.includes("writeBrowserDebuggerAppHostProject('AspireE2E.Blazor.AppHost', resolvedAppHostSdkVersion);"));
         assert.ok(runner.includes("writeWorkerProject('AspireE2E.Worker');"));
+        assert.ok(runner.includes("writeCustomOutputWorkerProject('AspireE2E.CustomOutputWorker');"));
         assert.ok(runner.includes("writeAppHostProject('AspireE2E.AppHost', resolvedAppHostSdkVersion, enableAzureFunctionsE2E, enableWinUiE2E, enableResourceDebugE2E);"));
         assert.ok(nodeFunctionsSpec.includes('const appHostVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;'));
         assert.ok(nodeFunctionsSpec.includes('<Project Sdk="Microsoft.NET.Sdk">'));
@@ -1566,7 +1661,7 @@ builder.Build().Run();
         assert.ok(writeConfig.includes('fs.writeFileSync(workspaceNuGetConfigPath, nugetConfig);'));
     });
 
-    test('uses only local and approved package feeds in both fixture restore scopes', () => {
+    test('uses only local and approved package feeds without enabling source mapping in both fixture restore scopes', () => {
         const configurations = getFixtureNuGetConfigurations(['/packages/local', '/packages/<preview> & "daily"']);
         const expectedConfig = `<?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -1583,30 +1678,6 @@ builder.Build().Run();
   </packageSources>
   <packageSourceMapping>
     <clear />
-    <packageSource key="e2e-source-0">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="e2e-source-1">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet-public">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet-eng">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet9">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet10">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet11">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet-libraries">
-      <package pattern="*" />
-    </packageSource>
   </packageSourceMapping>
 </configuration>
 `;
@@ -2116,6 +2187,43 @@ builder.Build().Run();
         assert.ok(workspaceCollision.includes('await waitForRepositoryIdle();'));
     });
 
+    test('keeps the debugger install hint fixture under the run root and defers its deletion to the runner', () => {
+        // The fixture AppHost starts DCP with --detach in its directory, and DCP can outlive a
+        // successful `aspire stop`. Deleting that directory inside the VS Code session failed with
+        // EBUSY on Windows, so run-e2e.js owns the deletion after the session's processes exit.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const hintTest = getTestBlock(edgeCasesSource, 'shows debugger install guidance while the Aspire panel and AppHost source are closed');
+
+        assert.ok(fixtures.includes('export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string>'));
+        assert.ok(hintTest.includes("const projectRoot = path.join(runRoot, `.e2e-debugger-install-hint-${++debuggerInstallHintFixtureIndex}`, 'DebuggerInstallHintApp');"));
+        assert.ok(hintTest.includes("await createEmptyAppHostProject('DebuggerInstallHintApp', projectRoot);"));
+        assert.ok(!hintTest.includes('getGeneratedAppHostPath('));
+        assert.ok(!hintTest.includes('getGeneratedProjectRoot('));
+        assert.ok(edgeCasesSource.includes('() => debuggerInstallHintAppHostPath ? stopAppHostIfRunning(debuggerInstallHintAppHostPath) : undefined,'));
+        assert.ok(!edgeCasesSource.includes('removeGeneratedProject('));
+        assert.ok(!/removePath\([^)]*debuggerInstallHint/.test(edgeCasesSource));
+        assert.ok(!/fs\.rm(Sync)?\([^)]*(debuggerInstallHint|projectRoot)/.test(edgeCasesSource));
+    });
+
+    test('waits for CLI-independent settings command outcomes instead of the control apply timeout', () => {
+        // The first Settings editor open can exceed the 10s control apply wait on Windows CI; the
+        // command outcome wait has the budget for completion.
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const edgeCasesSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'edgeCases.e2e.test.ts'), 'utf8');
+        const settingsTest = getTestBlock(edgeCasesSource, 'keeps CLI-independent settings commands available when the CLI is unavailable');
+
+        for (const commandId of ['aspire-vscode.settings', 'aspire-vscode.configureLaunchJson']) {
+            assert.ok(
+                settingsTest.includes(`await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: '${commandId}' }, { waitFor: 'started' });`),
+                `${commandId} must be dispatched with waitFor 'started'.`);
+            assert.ok(
+                new RegExp(`await waitForCommandOutcome\\('${commandId.replace(/\./g, '\\.')}', 'success', 60000, \\w+\\);`).test(settingsTest),
+                `${commandId} must assert a successful command outcome.`);
+        }
+    });
+
     test('uses integrated-browser webview text instead of editor title waits', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');
@@ -2166,6 +2274,7 @@ builder.Build().Run();
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const coordinatedBuild = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'coordinatedBuild.e2e.test.ts'), 'utf8');
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
         const extensionRenameRetryStart = e2eStateFileBridge.indexOf('function isRetryableRenameError');
         const extensionRenameRetryEnd = e2eStateFileBridge.indexOf('function sleepSynchronously');
@@ -2196,6 +2305,9 @@ builder.Build().Run();
         assert.ok(fixtures.includes("code === 'EBUSY'"));
         assert.ok(fixtures.includes("code === 'EPERM'"));
         assert.ok(fixtures.includes("code === 'EACCES'"));
+        assert.ok(coordinatedBuild.includes("removePath(fixture.directory, { recursive: true, force: true });"));
+        assert.ok(coordinatedBuild.includes("writeFileWithRetry(path.join(fixture.directory, 'cleanup-probe.txt'), 'recreated');"));
+        assert.ok(!coordinatedBuild.includes('fs.rmSync(fixture.directory'));
     });
 
     test('uses lightweight secondary AppHost candidates for discovery-only E2E coverage', () => {

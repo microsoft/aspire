@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.MongoDB` integration with t
 
 ```bash
 aspire add Aspire.Hosting.MongoDB
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -26,7 +27,7 @@ var mongodb = builder.AddMongoDB("mongodb").WithReplicaSet();
 #pragma warning restore ASPIREMONGODB001
 var db = mongodb.AddDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>("myservice")
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db)
                        .WaitFor(db);
 ```
@@ -139,7 +140,7 @@ var replicaSet = builder.AddMongoDBReplicaSet("rs0")
                         .WithMember(mongo2)
                         .WithMember(mongo3);
 
-var myService = builder.AddProject<Projects.MyService>("myservice")
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(replicaSet)
                        .WaitFor(replicaSet);
 #pragma warning restore ASPIREMONGODB001

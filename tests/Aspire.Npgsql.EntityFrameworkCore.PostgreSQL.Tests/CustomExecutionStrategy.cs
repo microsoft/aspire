@@ -2,15 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.EntityFrameworkCore.Storage;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal;
 
 namespace Aspire.Npgsql.EntityFrameworkCore.PostgreSQL.Tests;
 
-#pragma warning disable EF1001 // Internal EF Core API usage.
-public class CustomExecutionStrategy : NpgsqlExecutionStrategy
+public class CustomExecutionStrategy : ExecutionStrategy
 {
-    public CustomExecutionStrategy(ExecutionStrategyDependencies dependencies) : base(dependencies)
+    public CustomExecutionStrategy(ExecutionStrategyDependencies dependencies)
+        : base(dependencies, DefaultMaxRetryCount, DefaultMaxDelay)
     {
     }
+
+    protected override bool ShouldRetryOn(Exception exception) => false;
 }
-#pragma warning restore EF1001 // Internal EF Core API usage.

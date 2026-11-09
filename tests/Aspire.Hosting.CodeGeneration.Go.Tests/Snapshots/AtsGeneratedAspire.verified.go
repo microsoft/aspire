@@ -26,7 +26,7 @@ var _ = time.Second
 // Enums
 // ============================================================================
 
-// TestPersistenceMode represents TestPersistenceMode.
+// TestPersistenceMode - Test persistence mode enum.
 type TestPersistenceMode string
 
 const (
@@ -35,13 +35,17 @@ const (
 	TestPersistenceModeBind TestPersistenceMode = "Bind"
 )
 
-// TestResourceStatus represents TestResourceStatus.
+// TestResourceStatus - Test enum for type generation verification.
 type TestResourceStatus string
 
 const (
+	// TestResourceStatusPending - The resource is pending.
 	TestResourceStatusPending TestResourceStatus = "Pending"
+	// TestResourceStatusRunning - The resource is running.
 	TestResourceStatusRunning TestResourceStatus = "Running"
+	// TestResourceStatusStopped - The resource is stopped.
 	TestResourceStatusStopped TestResourceStatus = "Stopped"
+	// TestResourceStatusFailed is the resource failed.
 	TestResourceStatusFailed TestResourceStatus = "Failed"
 )
 
@@ -49,11 +53,16 @@ const (
 // DTOs
 // ============================================================================
 
-// TestConfigDto represents TestConfigDto.
+// TestConfigDto - Test DTO to verify [AspireDto] generates TypeScript
+// interfaces.
 type TestConfigDto struct {
+	// Name is the name of the test config.
 	Name string `json:"name,omitempty"`
+	// Port is the port used by the test config.
 	Port float64 `json:"port,omitempty"`
+	// Enabled is a value indicating whether the test config is enabled.
 	Enabled bool `json:"enabled,omitempty"`
+	// OptionalField is an optional test config field.
 	OptionalField *string `json:"optionalField,omitempty"`
 }
 
@@ -67,7 +76,7 @@ func (d *TestConfigDto) ToMap() map[string]any {
 	return m
 }
 
-// TestNestedDto represents TestNestedDto.
+// TestNestedDto - Test DTO with complex nested types.
 type TestNestedDto struct {
 	Id string `json:"id,omitempty"`
 	Config *TestConfigDto `json:"config,omitempty"`
@@ -85,9 +94,11 @@ func (d *TestNestedDto) ToMap() map[string]any {
 	return m
 }
 
-// TestDeeplyNestedDto represents TestDeeplyNestedDto.
+// TestDeeplyNestedDto - Test DTO with deeply nested generic types.
 type TestDeeplyNestedDto struct {
+	// NestedData - Deeply nested generic: Dictionary containing List of DTOs.
 	NestedData map[string][]*TestConfigDto `json:"nestedData,omitempty"`
+	// MetadataArray - Array of dictionaries.
 	MetadataArray []map[string]string `json:"metadataArray,omitempty"`
 }
 
@@ -103,7 +114,9 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 // Exported Values
 // ============================================================================
 
+// TestConfigs groups related exported values.
 var TestConfigs = struct {
+	// Default is the default test configuration.
 	Default *TestConfigDto
 	Profiles struct {
 		Development *TestConfigDto
@@ -126,37 +139,44 @@ var TestConfigs = struct {
 // ============================================================================
 
 // Resource marks types implementing IResource.
-// Methods are emitted on concrete impls; this interface is a marker for type assertions.
+//
+// Methods are emitted on concrete impls; this interface is a marker for type
+// assertions.
 type Resource interface {
 	handleReference
 }
 
-// ResourceWithConnectionString marks types implementing IResourceWithConnectionString.
-// Methods are emitted on concrete impls; this interface is a marker for type assertions.
+// ResourceWithConnectionString marks types implementing
+// IResourceWithConnectionString.
+//
+// Methods are emitted on concrete impls; this interface is a marker for type
+// assertions.
 type ResourceWithConnectionString interface {
 	handleReference
 }
 
-// TestMutablePromiseCollisionResourcePromise marks types implementing ITestMutablePromiseCollisionResourcePromise.
-// Marker interface.
+// TestMutablePromiseCollisionResourcePromise marks types implementing
+// ITestMutablePromiseCollisionResourcePromise.
 type TestMutablePromiseCollisionResourcePromise interface {
 	handleReference
 }
 
-// TestPromiseCollisionResource marks types implementing ITestPromiseCollisionResource.
-// Marker interface.
+// TestPromiseCollisionResource marks types implementing
+// ITestPromiseCollisionResource.
 type TestPromiseCollisionResource interface {
 	handleReference
 }
 
-// TestPromiseCollisionResourcePromise marks types implementing ITestPromiseCollisionResourcePromise.
-// Marker interface.
+// TestPromiseCollisionResourcePromise marks types implementing
+// ITestPromiseCollisionResourcePromise.
 type TestPromiseCollisionResourcePromise interface {
 	handleReference
 }
 
 // TestVaultResource marks types implementing ITestVaultResource.
-// Methods are emitted on concrete impls; this interface is a marker for type assertions.
+//
+// Methods are emitted on concrete impls; this interface is a marker for type
+// assertions.
 type TestVaultResource interface {
 	handleReference
 }
@@ -165,34 +185,104 @@ type TestVaultResource interface {
 // Handle wrappers
 // ============================================================================
 
-// Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public interface for handle type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
+// Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public
+// interface for handle type
+// Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	handleReference
+
+	// TestWaitFor waits for another resource (test version)
 	TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// TestWithEnvironmentCallback configures environment with callback (test
+	// version)
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithCancellableOperation performs a cancellable operation
 	WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithCorrelationId sets the correlation ID
 	WithCorrelationId(correlationId string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithEndpoints sets the endpoints
 	WithEndpoints(endpoints []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithEnvironmentVariables sets environment variables
 	WithEnvironmentVariables(variables map[string]string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeEndpoint configures a named endpoint
 	WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeEndpointScheme configures a named endpoint with scheme
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLabel adds a label to the resource
 	WithMergeLabel(label string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLabelCategorized adds a categorized label to the resource
 	WithMergeLabelCategorized(label string, category string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLogging configures resource logging
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingOptions].
 	WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeLoggingPath configures resource logging with file path
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingPathOptions].
 	WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeRoute configures a route
 	WithMergeRoute(path string, method string, handler string, priority float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithMergeRouteMiddleware configures a route with middleware
 	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithModifiedAt sets the modified timestamp
 	WithModifiedAt(modifiedAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithOptionalCallback configures with optional callback
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalCallbackOptions].
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithOptionalString adds an optional string parameter
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalStringOptions].
 	WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithStatus sets the resource status
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithUnionDependency adds a dependency from a string or another resource
+	//
+	// Allowed types for parameter dependency: string, ResourceWithConnectionString.
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithValidator adds validation callback
 	WithValidator(validator func(arg TestResourceContext) bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithVaultDirect configures vault using direct interface target
 	WithVaultDirect(option string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -208,7 +298,7 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 
 // TestWaitFor waits for another resource (test version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -219,9 +309,10 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(de
 	return s
 }
 
-// TestWithEnvironmentCallback configures environment with callback (test version)
+// TestWithEnvironmentCallback configures environment with callback (test
+// version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -240,7 +331,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnviro
 
 // WithCancellableOperation performs a cancellable operation
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -248,7 +339,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -259,7 +350,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 
 // WithConfig configures the resource with a DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -271,7 +362,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(con
 
 // WithCorrelationId sets the correlation ID
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCorrelationId(correlationId string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -283,7 +374,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCorrelatio
 
 // WithCreatedAt sets the created timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -295,7 +386,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(
 
 // WithDependency adds a dependency on another resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -308,7 +399,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency
 
 // WithEndpoints sets the endpoints
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(endpoints []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -320,7 +411,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(
 
 // WithEnvironmentVariables sets environment variables
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentVariables(variables map[string]string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -332,7 +423,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 
 // WithMergeEndpoint configures a named endpoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -345,7 +436,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpo
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -359,7 +450,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpo
 
 // WithMergeLabel adds a label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel(label string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -371,7 +462,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabelCategorized(label string, category string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -384,7 +475,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel
 
 // WithMergeLogging configures resource logging
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -403,7 +494,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -423,7 +514,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 
 // WithMergeRoute configures a route
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute(path string, method string, handler string, priority float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -438,7 +529,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -454,7 +545,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 
 // WithModifiedAt sets the modified timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithModifiedAt(modifiedAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -466,7 +557,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithModifiedAt
 
 // WithNestedConfig configures with nested DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithNestedConfig(config *TestNestedDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -478,7 +569,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithNestedConf
 
 // WithOptionalCallback configures with optional callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -504,7 +595,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 
 // WithOptionalString adds an optional string parameter
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -522,7 +613,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalSt
 
 // WithStatus sets the resource status
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -535,7 +626,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(sta
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -553,7 +644,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDepen
 
 // WithValidator adds validation callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(validator func(arg TestResourceContext) bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -571,7 +662,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(
 
 // WithVaultDirect configures vault using direct interface target
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirect(option string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -581,12 +672,33 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirec
 	return s
 }
 
-// IDistributedApplicationBuilder is the public interface for handle type IDistributedApplicationBuilder.
+// IDistributedApplicationBuilder is the public interface for handle type
+// IDistributedApplicationBuilder.
 type IDistributedApplicationBuilder interface {
 	handleReference
+
+	// AddTestRedis adds a test Redis resource from ATS documentation.
+	//
+	// Parameters:
+	//   - name: The ATS resource name.
+	//   - options: Optional parameters; see [AddTestRedisOptions].
+	//
+	// Returns: The ATS test Redis resource builder.
 	AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource
+
+	// AddTestVault adds a test vault resource
+	//
+	// Parameters:
+	//   - name: The resource name.
+	//
+	// Returns: The interface vault resource builder.
 	AddTestVault(name string) TestVaultResource
+
+	// Build invokes the build capability and returns the running application.
 	Build() (DistributedApplication, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -602,7 +714,7 @@ func newIDistributedApplicationBuilderFromHandle(h *handle, c *client) IDistribu
 
 // AddTestRedis adds a test Redis resource from ATS documentation.
 func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource {
-	if s.err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -629,7 +741,7 @@ func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*A
 
 // AddTestVault adds a test vault resource
 func (s *iDistributedApplicationBuilder) AddTestVault(name string) TestVaultResource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -645,9 +757,13 @@ func (s *iDistributedApplicationBuilder) AddTestVault(name string) TestVaultReso
 	return typed
 }
 
-// IResourceWithEnvironment is the public interface for handle type IResourceWithEnvironment.
+// IResourceWithEnvironment is the public interface for handle type
+// IResourceWithEnvironment.
 type IResourceWithEnvironment interface {
 	handleReference
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -661,15 +777,36 @@ func newIResourceWithEnvironmentFromHandle(h *handle, c *client) IResourceWithEn
 	return &iResourceWithEnvironment{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// TestCallbackContext is the public interface for handle type TestCallbackContext.
+// TestCallbackContext - Test callback context for WithCustomCallback. Also used
+// to verify [AspireExport(ExposeProperties = true)] scanning.
 type TestCallbackContext interface {
 	handleReference
+
+	// CancellationToken is supported by ATS.
 	CancellationToken() (*CancellationToken, error)
+
+	// Name gets the Name property
 	Name() (*string, error)
+
+	// SetCancellationToken sets the CancellationToken property
+	//
+	// CancellationToken is supported by ATS.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [SetCancellationTokenOptions].
 	SetCancellationToken(options ...*SetCancellationTokenOptions) TestCallbackContext
+
+	// SetName sets the Name property
 	SetName(value *string) TestCallbackContext
+
+	// SetValue sets the Value property
 	SetValue(value float64) TestCallbackContext
+
+	// Value gets the Value property
 	Value() (float64, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -683,9 +820,9 @@ func newTestCallbackContextFromHandle(h *handle, c *client) TestCallbackContext 
 	return &testCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken cancellationToken is supported by ATS.
+// CancellationToken is supported by ATS.
 func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -700,7 +837,7 @@ func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
 
 // Name gets the Name property
 func (s *testCallbackContext) Name() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -714,8 +851,10 @@ func (s *testCallbackContext) Name() (*string, error) {
 }
 
 // SetCancellationToken sets the CancellationToken property
+//
+// CancellationToken is supported by ATS.
 func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTokenOptions) TestCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -739,7 +878,7 @@ func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTo
 
 // SetName sets the Name property
 func (s *testCallbackContext) SetName(value *string) TestCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -751,7 +890,7 @@ func (s *testCallbackContext) SetName(value *string) TestCallbackContext {
 
 // SetValue sets the Value property
 func (s *testCallbackContext) SetValue(value float64) TestCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -763,7 +902,7 @@ func (s *testCallbackContext) SetValue(value float64) TestCallbackContext {
 
 // Value gets the Value property
 func (s *testCallbackContext) Value() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -776,11 +915,21 @@ func (s *testCallbackContext) Value() (float64, error) {
 	return decodeAs[float64](result)
 }
 
-// TestCollectionContext is the public interface for handle type TestCollectionContext.
+// TestCollectionContext - Test context with collection properties to verify
+// consistent code generation. Verifies both List and Dictionary properties
+// generate proper getter patterns.
 type TestCollectionContext interface {
 	handleReference
+
+	// Items - List property - should generate AspireList getter like Dictionary
+	// properties.
 	Items() *List[string]
+
+	// Metadata - Dictionary property - already works with AspireDict getter.
 	Metadata() *Dict[string, string]
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -796,50 +945,128 @@ func newTestCollectionContextFromHandle(h *handle, c *client) TestCollectionCont
 	return &testCollectionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Items list property - should generate AspireList getter like Dictionary properties.
+// Items - List property - should generate AspireList getter like Dictionary
+// properties.
 func (s *testCollectionContext) Items() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.items == nil {
 		s.items = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
 	}
 	return s.items
 }
 
-// Metadata dictionary property - already works with AspireDict getter.
+// Metadata - Dictionary property - already works with AspireDict getter.
 func (s *testCollectionContext) Metadata() *Dict[string, string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.metadata == nil {
 		s.metadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
 	}
 	return s.metadata
 }
 
-// TestDatabaseResource is the public interface for handle type TestDatabaseResource.
+// TestDatabaseResource is the public interface for handle type
+// TestDatabaseResource.
 type TestDatabaseResource interface {
 	handleReference
+
+	// TestWaitFor waits for another resource (test version)
 	TestWaitFor(dependency Resource) TestDatabaseResource
+
+	// TestWithEnvironmentCallback configures environment with callback (test
+	// version)
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource
+
+	// WithCancellableOperation performs a cancellable operation
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource
+
+	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) TestDatabaseResource
+
+	// WithCorrelationId sets the correlation ID
 	WithCorrelationId(correlationId string) TestDatabaseResource
+
+	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestDatabaseResource
+
+	// WithDataVolume adds a data volume
+	//
+	// Parameters:
+	//   - options: Optional parameters; see
+	//     [TestDatabaseResourceWithDataVolumeOptions].
 	WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestDatabaseResource
+
+	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource
+
+	// WithEndpoints sets the endpoints
 	WithEndpoints(endpoints []string) TestDatabaseResource
+
+	// WithEnvironmentVariables sets environment variables
 	WithEnvironmentVariables(variables map[string]string) TestDatabaseResource
+
+	// WithMergeEndpoint configures a named endpoint
 	WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource
+
+	// WithMergeEndpointScheme configures a named endpoint with scheme
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource
+
+	// WithMergeLabel adds a label to the resource
 	WithMergeLabel(label string) TestDatabaseResource
+
+	// WithMergeLabelCategorized adds a categorized label to the resource
 	WithMergeLabelCategorized(label string, category string) TestDatabaseResource
+
+	// WithMergeLogging configures resource logging
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingOptions].
 	WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestDatabaseResource
+
+	// WithMergeLoggingPath configures resource logging with file path
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingPathOptions].
 	WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestDatabaseResource
+
+	// WithMergeRoute configures a route
 	WithMergeRoute(path string, method string, handler string, priority float64) TestDatabaseResource
+
+	// WithMergeRouteMiddleware configures a route with middleware
 	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestDatabaseResource
+
+	// WithModifiedAt sets the modified timestamp
 	WithModifiedAt(modifiedAt string) TestDatabaseResource
+
+	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) TestDatabaseResource
+
+	// WithOptionalCallback configures with optional callback
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalCallbackOptions].
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource
+
+	// WithOptionalString adds an optional string parameter
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalStringOptions].
 	WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource
+
+	// WithStatus sets the resource status
 	WithStatus(status TestResourceStatus) TestDatabaseResource
+
+	// WithUnionDependency adds a dependency from a string or another resource
+	//
+	// Allowed types for parameter dependency: string, ResourceWithConnectionString.
 	WithUnionDependency(dependency any) TestDatabaseResource
+
+	// WithValidator adds validation callback
 	WithValidator(validator func(arg TestResourceContext) bool) TestDatabaseResource
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -855,7 +1082,7 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 
 // TestWaitFor waits for another resource (test version)
 func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -866,9 +1093,10 @@ func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseReso
 	return s
 }
 
-// TestWithEnvironmentCallback configures environment with callback (test version)
+// TestWithEnvironmentCallback configures environment with callback (test
+// version)
 func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -887,7 +1115,7 @@ func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg Tes
 
 // WithCancellableOperation performs a cancellable operation
 func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -895,7 +1123,7 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -906,7 +1134,7 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 
 // WithConfig configures the resource with a DTO
 func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -918,7 +1146,7 @@ func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseRes
 
 // WithCorrelationId sets the correlation ID
 func (s *testDatabaseResource) WithCorrelationId(correlationId string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -930,7 +1158,7 @@ func (s *testDatabaseResource) WithCorrelationId(correlationId string) TestDatab
 
 // WithCreatedAt sets the created timestamp
 func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -942,7 +1170,7 @@ func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResou
 
 // WithDataVolume adds a data volume
 func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -960,7 +1188,7 @@ func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWi
 
 // WithDependency adds a dependency on another resource
 func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -973,7 +1201,7 @@ func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionS
 
 // WithEndpoints sets the endpoints
 func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -985,7 +1213,7 @@ func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseRes
 
 // WithEnvironmentVariables sets environment variables
 func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -997,7 +1225,7 @@ func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]str
 
 // WithMergeEndpoint configures a named endpoint
 func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1010,7 +1238,7 @@ func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1024,7 +1252,7 @@ func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port
 
 // WithMergeLabel adds a label to the resource
 func (s *testDatabaseResource) WithMergeLabel(label string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1036,7 +1264,7 @@ func (s *testDatabaseResource) WithMergeLabel(label string) TestDatabaseResource
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testDatabaseResource) WithMergeLabelCategorized(label string, category string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1049,7 +1277,7 @@ func (s *testDatabaseResource) WithMergeLabelCategorized(label string, category 
 
 // WithMergeLogging configures resource logging
 func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1068,7 +1296,7 @@ func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*Wit
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1088,7 +1316,7 @@ func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath str
 
 // WithMergeRoute configures a route
 func (s *testDatabaseResource) WithMergeRoute(path string, method string, handler string, priority float64) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1103,7 +1331,7 @@ func (s *testDatabaseResource) WithMergeRoute(path string, method string, handle
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1119,7 +1347,7 @@ func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method stri
 
 // WithModifiedAt sets the modified timestamp
 func (s *testDatabaseResource) WithModifiedAt(modifiedAt string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1131,7 +1359,7 @@ func (s *testDatabaseResource) WithModifiedAt(modifiedAt string) TestDatabaseRes
 
 // WithNestedConfig configures with nested DTO
 func (s *testDatabaseResource) WithNestedConfig(config *TestNestedDto) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1143,7 +1371,7 @@ func (s *testDatabaseResource) WithNestedConfig(config *TestNestedDto) TestDatab
 
 // WithOptionalCallback configures with optional callback
 func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1169,7 +1397,7 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCall
 
 // WithOptionalString adds an optional string parameter
 func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1187,7 +1415,7 @@ func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalString
 
 // WithStatus sets the resource status
 func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1200,7 +1428,7 @@ func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabas
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -1218,7 +1446,7 @@ func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseR
 
 // WithValidator adds validation callback
 func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceContext) bool) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1234,15 +1462,31 @@ func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceCont
 	return s
 }
 
-// TestEnvironmentContext is the public interface for handle type TestEnvironmentContext.
+// TestEnvironmentContext - Test environment context used in callbacks. Verifies
+// property-like object pattern (ctx.name.get(), ctx.name.set()).
 type TestEnvironmentContext interface {
 	handleReference
+
+	// Description gets the Description property
 	Description() (*string, error)
+
+	// Name gets the Name property
 	Name() (string, error)
+
+	// Priority gets the Priority property
 	Priority() (float64, error)
+
+	// SetDescription sets the Description property
 	SetDescription(value *string) TestEnvironmentContext
+
+	// SetName sets the Name property
 	SetName(value string) TestEnvironmentContext
+
+	// SetPriority sets the Priority property
 	SetPriority(value float64) TestEnvironmentContext
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -1258,7 +1502,7 @@ func newTestEnvironmentContextFromHandle(h *handle, c *client) TestEnvironmentCo
 
 // Description gets the Description property
 func (s *testEnvironmentContext) Description() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1273,7 +1517,7 @@ func (s *testEnvironmentContext) Description() (*string, error) {
 
 // Name gets the Name property
 func (s *testEnvironmentContext) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1288,7 +1532,7 @@ func (s *testEnvironmentContext) Name() (string, error) {
 
 // Priority gets the Priority property
 func (s *testEnvironmentContext) Priority() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1303,7 +1547,7 @@ func (s *testEnvironmentContext) Priority() (float64, error) {
 
 // SetDescription sets the Description property
 func (s *testEnvironmentContext) SetDescription(value *string) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1315,7 +1559,7 @@ func (s *testEnvironmentContext) SetDescription(value *string) TestEnvironmentCo
 
 // SetName sets the Name property
 func (s *testEnvironmentContext) SetName(value string) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1327,7 +1571,7 @@ func (s *testEnvironmentContext) SetName(value string) TestEnvironmentContext {
 
 // SetPriority sets the Priority property
 func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1337,13 +1581,25 @@ func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentConte
 	return s
 }
 
-// TestMutableCollectionContext is the public interface for handle type TestMutableCollectionContext.
+// TestMutableCollectionContext is the public interface for handle type
+// TestMutableCollectionContext.
 type TestMutableCollectionContext interface {
 	handleReference
+
+	// SetCounts sets the Counts property
 	SetCounts(value *Dict[string, float64]) TestMutableCollectionContext
+
+	// SetTags sets the Tags property
 	SetTags(value *List[string]) TestMutableCollectionContext
+
+	// Counts gets the Counts property
 	Counts() *Dict[string, float64]
+
+	// Tags gets the Tags property
 	Tags() *List[string]
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -1361,6 +1617,8 @@ func newTestMutableCollectionContextFromHandle(h *handle, c *client) TestMutable
 
 // Counts gets the Counts property
 func (s *testMutableCollectionContext) Counts() *Dict[string, float64] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.counts == nil {
 		s.counts = newDictWithGetter[string, float64](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
 	}
@@ -1369,7 +1627,7 @@ func (s *testMutableCollectionContext) Counts() *Dict[string, float64] {
 
 // SetCounts sets the Counts property
 func (s *testMutableCollectionContext) SetCounts(value *Dict[string, float64]) TestMutableCollectionContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1381,7 +1639,7 @@ func (s *testMutableCollectionContext) SetCounts(value *Dict[string, float64]) T
 
 // SetTags sets the Tags property
 func (s *testMutableCollectionContext) SetTags(value *List[string]) TestMutableCollectionContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1393,17 +1651,27 @@ func (s *testMutableCollectionContext) SetTags(value *List[string]) TestMutableC
 
 // Tags gets the Tags property
 func (s *testMutableCollectionContext) Tags() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.tags == nil {
 		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags")
 	}
 	return s.tags
 }
 
-// TestMutablePromiseCollisionResource is the public interface for handle type TestMutablePromiseCollisionResource.
+// TestMutablePromiseCollisionResource is a mutable-property-only resource used
+// to verify that property setters do not require Promise wrappers.
 type TestMutablePromiseCollisionResource interface {
 	handleReference
+
+	// SetValue sets the test value.
 	SetValue(value string) TestMutablePromiseCollisionResource
+
+	// Value gets the test value.
 	Value() (string, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -1417,9 +1685,9 @@ func newTestMutablePromiseCollisionResourceFromHandle(h *handle, c *client) Test
 	return &testMutablePromiseCollisionResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// SetValue sets the Value property
+// SetValue sets the test value.
 func (s *testMutablePromiseCollisionResource) SetValue(value string) TestMutablePromiseCollisionResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1429,9 +1697,9 @@ func (s *testMutablePromiseCollisionResource) SetValue(value string) TestMutable
 	return s
 }
 
-// Value gets or sets the test value.
+// Value gets the test value.
 func (s *testMutablePromiseCollisionResource) Value() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1447,46 +1715,191 @@ func (s *testMutablePromiseCollisionResource) Value() (string, error) {
 // TestRedisResource is the public interface for handle type TestRedisResource.
 type TestRedisResource interface {
 	handleReference
+
+	// AddTestChildDatabase adds a child database to a test Redis resource
+	//
+	// This method tests the factory method codegen pattern where a method on
+	// builder type A returns builder type B (e.g.,
+	// SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [AddTestChildDatabaseOptions].
 	AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource
+
+	// GetEndpoints gets the endpoints
 	GetEndpoints() ([]string, error)
+
+	// GetStatusAsync gets the status of the resource asynchronously
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [GetStatusAsyncOptions].
 	GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error)
+
+	// TestWaitFor waits for another resource (test version)
 	TestWaitFor(dependency Resource) TestRedisResource
+
+	// TestWithEnvironmentCallback configures environment with callback (test
+	// version)
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource
+
+	// WaitForReadyAsync waits for the resource to be ready
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WaitForReadyAsyncOptions].
 	WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error)
+
+	// WithCancellableOperation performs a cancellable operation
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource
+
+	// WithConcreteVaultResource configures a Redis resource with the concrete vault
+	// resource as a parameter.
+	//
+	// Parameters:
+	//   - resource: The parameter-only concrete vault resource.
+	//
+	// Returns: The Redis resource builder.
 	WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource
+
+	// WithConfig configures the resource with a DTO
 	WithConfig(config *TestConfigDto) TestRedisResource
+
+	// WithConnectionString sets the connection string using a reference expression
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
+
+	// WithConnectionStringDirect sets connection string using direct interface
+	// target
 	WithConnectionStringDirect(connectionString string) TestRedisResource
+
+	// WithCorrelationId sets the correlation ID
 	WithCorrelationId(correlationId string) TestRedisResource
+
+	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestRedisResource
+
+	// WithDataVolume adds a data volume with persistence
+	//
+	// Parameters:
+	//   - options: Optional parameters; see
+	//     [TestDatabaseResourceWithDataVolumeOptions].
 	WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestRedisResource
+
+	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) TestRedisResource
+
+	// WithEndpoints sets the endpoints
 	WithEndpoints(endpoints []string) TestRedisResource
+
+	// WithEnvironmentVariables sets environment variables
 	WithEnvironmentVariables(variables map[string]string) TestRedisResource
+
+	// WithMergeEndpoint configures a named endpoint
 	WithMergeEndpoint(endpointName string, port float64) TestRedisResource
+
+	// WithMergeEndpointScheme configures a named endpoint with scheme
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource
+
+	// WithMergeLabel adds a label to the resource
 	WithMergeLabel(label string) TestRedisResource
+
+	// WithMergeLabelCategorized adds a categorized label to the resource
 	WithMergeLabelCategorized(label string, category string) TestRedisResource
+
+	// WithMergeLogging configures resource logging
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingOptions].
 	WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestRedisResource
+
+	// WithMergeLoggingPath configures resource logging with file path
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithMergeLoggingPathOptions].
 	WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestRedisResource
+
+	// WithMergeRoute configures a route
 	WithMergeRoute(path string, method string, handler string, priority float64) TestRedisResource
+
+	// WithMergeRouteMiddleware configures a route with middleware
 	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestRedisResource
+
+	// WithModifiedAt sets the modified timestamp
 	WithModifiedAt(modifiedAt string) TestRedisResource
+
+	// WithMultiParamHandleCallback - Tests multi-param callback destructuring
 	WithMultiParamHandleCallback(callback func(arg1 TestCallbackContext, arg2 TestEnvironmentContext)) TestRedisResource
+
+	// WithMutablePromiseCollisionResources configures a Redis resource with
+	// mutable-property and parameter-only resources whose generated names collide.
+	//
+	// Parameters:
+	//   - resource: The mutable-property-only resource whose unused Promise wrapper
+	//     would collide.
+	//   - resourcePromise: The parameter-only resource whose generated name matches
+	//     that Promise wrapper.
+	//
+	// Returns: The Redis resource builder.
 	WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource
+
+	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) TestRedisResource
+
+	// WithOptionalCallback configures with optional callback
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalCallbackOptions].
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource
+
+	// WithOptionalString adds an optional string parameter
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOptionalStringOptions].
 	WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource
+
+	// WithPersistence configures the Redis resource with persistence
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithPersistenceOptions].
 	WithPersistence(options ...*WithPersistenceOptions) TestRedisResource
+
+	// WithPromiseCollisionResources configures a Redis resource with parameter-only
+	// resources whose generated names collide.
+	//
+	// Parameters:
+	//   - resource: The resource whose unused Promise wrapper would collide.
+	//   - resourcePromise: The resource whose generated name matches that Promise
+	//     wrapper.
+	//
+	// Returns: The Redis resource builder.
 	WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource
+
+	// WithRedisSpecific - Redis-specific configuration
 	WithRedisSpecific(option string) TestRedisResource
+
+	// WithScalarField sets a scalar field value
+	//
+	// Allowed types for parameter value: string, float64, bool (float64 accepts any
+	// built-in Go numeric type).
 	WithScalarField(path string, value any) TestRedisResource
+
+	// WithStatus sets the resource status
 	WithStatus(status TestResourceStatus) TestRedisResource
+
+	// WithUnionDependency adds a dependency from a string or another resource
+	//
+	// Allowed types for parameter dependency: string, ResourceWithConnectionString.
 	WithUnionDependency(dependency any) TestRedisResource
+
+	// WithValidator adds validation callback
 	WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource
+
+	// GetMetadata gets the metadata for the resource
 	GetMetadata() *Dict[string, string]
+
+	// GetTags gets the tags for the resource
 	GetTags() *List[string]
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -1504,7 +1917,7 @@ func newTestRedisResourceFromHandle(h *handle, c *client) TestRedisResource {
 
 // AddTestChildDatabase adds a child database to a test Redis resource
 func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource {
-	if s.err != nil { return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1531,7 +1944,7 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 
 // GetEndpoints gets the endpoints
 func (s *testRedisResource) GetEndpoints() ([]string, error) {
-	if s.err != nil { var zero []string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1546,6 +1959,8 @@ func (s *testRedisResource) GetEndpoints() ([]string, error) {
 
 // GetMetadata gets the metadata for the resource
 func (s *testRedisResource) GetMetadata() *Dict[string, string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.getMetadata == nil {
 		s.getMetadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getMetadata")
 	}
@@ -1554,7 +1969,7 @@ func (s *testRedisResource) GetMetadata() *Dict[string, string] {
 
 // GetStatusAsync gets the status of the resource asynchronously
 func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1582,6 +1997,8 @@ func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (s
 
 // GetTags gets the tags for the resource
 func (s *testRedisResource) GetTags() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.getTags == nil {
 		s.getTags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getTags")
 	}
@@ -1590,7 +2007,7 @@ func (s *testRedisResource) GetTags() *List[string] {
 
 // TestWaitFor waits for another resource (test version)
 func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -1601,9 +2018,10 @@ func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
 	return s
 }
 
-// TestWithEnvironmentCallback configures environment with callback (test version)
+// TestWithEnvironmentCallback configures environment with callback (test
+// version)
 func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1622,7 +2040,7 @@ func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEn
 
 // WaitForReadyAsync waits for the resource to be ready
 func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1651,7 +2069,7 @@ func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitF
 
 // WithCancellableOperation performs a cancellable operation
 func (s *testRedisResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1659,7 +2077,7 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -1668,9 +2086,10 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 	return s
 }
 
-// WithConcreteVaultResource configures a Redis resource with the concrete vault resource as a parameter.
+// WithConcreteVaultResource configures a Redis resource with the concrete vault
+// resource as a parameter.
 func (s *testRedisResource) WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -1683,7 +2102,7 @@ func (s *testRedisResource) WithConcreteVaultResource(resource Aspire_Hosting_Co
 
 // WithConfig configures the resource with a DTO
 func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1695,7 +2114,7 @@ func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource 
 
 // WithConnectionString sets the connection string using a reference expression
 func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpression) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if connectionString != nil { if err := connectionString.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -1706,9 +2125,10 @@ func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpr
 	return s
 }
 
-// WithConnectionStringDirect sets connection string using direct interface target
+// WithConnectionStringDirect sets connection string using direct interface
+// target
 func (s *testRedisResource) WithConnectionStringDirect(connectionString string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1720,7 +2140,7 @@ func (s *testRedisResource) WithConnectionStringDirect(connectionString string) 
 
 // WithCorrelationId sets the correlation ID
 func (s *testRedisResource) WithCorrelationId(correlationId string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1732,7 +2152,7 @@ func (s *testRedisResource) WithCorrelationId(correlationId string) TestRedisRes
 
 // WithCreatedAt sets the created timestamp
 func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1744,7 +2164,7 @@ func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 
 // WithDataVolume adds a data volume with persistence
 func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1762,7 +2182,7 @@ func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithD
 
 // WithDependency adds a dependency on another resource
 func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionString) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -1775,7 +2195,7 @@ func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionStri
 
 // WithEndpoints sets the endpoints
 func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1787,7 +2207,7 @@ func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource 
 
 // WithEnvironmentVariables sets environment variables
 func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1799,7 +2219,7 @@ func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string
 
 // WithMergeEndpoint configures a named endpoint
 func (s *testRedisResource) WithMergeEndpoint(endpointName string, port float64) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1812,7 +2232,7 @@ func (s *testRedisResource) WithMergeEndpoint(endpointName string, port float64)
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1826,7 +2246,7 @@ func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port fl
 
 // WithMergeLabel adds a label to the resource
 func (s *testRedisResource) WithMergeLabel(label string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1838,7 +2258,7 @@ func (s *testRedisResource) WithMergeLabel(label string) TestRedisResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testRedisResource) WithMergeLabelCategorized(label string, category string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1851,7 +2271,7 @@ func (s *testRedisResource) WithMergeLabelCategorized(label string, category str
 
 // WithMergeLogging configures resource logging
 func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1870,7 +2290,7 @@ func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMe
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1890,7 +2310,7 @@ func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string
 
 // WithMergeRoute configures a route
 func (s *testRedisResource) WithMergeRoute(path string, method string, handler string, priority float64) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1905,7 +2325,7 @@ func (s *testRedisResource) WithMergeRoute(path string, method string, handler s
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1921,7 +2341,7 @@ func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string,
 
 // WithModifiedAt sets the modified timestamp
 func (s *testRedisResource) WithModifiedAt(modifiedAt string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1931,9 +2351,9 @@ func (s *testRedisResource) WithModifiedAt(modifiedAt string) TestRedisResource 
 	return s
 }
 
-// WithMultiParamHandleCallback tests multi-param callback destructuring
+// WithMultiParamHandleCallback - Tests multi-param callback destructuring
 func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 TestCallbackContext, arg2 TestEnvironmentContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1950,9 +2370,10 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 	return s
 }
 
-// WithMutablePromiseCollisionResources configures a Redis resource with mutable-property and parameter-only resources whose generated names collide.
+// WithMutablePromiseCollisionResources configures a Redis resource with
+// mutable-property and parameter-only resources whose generated names collide.
 func (s *testRedisResource) WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -1967,7 +2388,7 @@ func (s *testRedisResource) WithMutablePromiseCollisionResources(resource TestMu
 
 // WithNestedConfig configures with nested DTO
 func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1979,7 +2400,7 @@ func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisRes
 
 // WithOptionalCallback configures with optional callback
 func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2005,7 +2426,7 @@ func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbac
 
 // WithOptionalString adds an optional string parameter
 func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2023,7 +2444,7 @@ func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOpt
 
 // WithPersistence configures the Redis resource with persistence
 func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2039,9 +2460,10 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 	return s
 }
 
-// WithPromiseCollisionResources configures a Redis resource with parameter-only resources whose generated names collide.
+// WithPromiseCollisionResources configures a Redis resource with parameter-only
+// resources whose generated names collide.
 func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -2054,9 +2476,9 @@ func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCo
 	return s
 }
 
-// WithRedisSpecific redis-specific configuration
+// WithRedisSpecific - Redis-specific configuration
 func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2069,7 +2491,7 @@ func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
 // WithScalarField sets a scalar field value
 // Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type).
 func (s *testRedisResource) WithScalarField(path string, value any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, float64, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
 	default:
@@ -2088,7 +2510,7 @@ func (s *testRedisResource) WithScalarField(path string, value any) TestRedisRes
 
 // WithStatus sets the resource status
 func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2101,7 +2523,7 @@ func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResou
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -2119,7 +2541,7 @@ func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResourc
 
 // WithValidator adds validation callback
 func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2135,16 +2557,34 @@ func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext
 	return s
 }
 
-// TestResourceContext is the public interface for handle type TestResourceContext.
+// TestResourceContext - Test context type with exposed instance methods.
+// Verifies [AspireExport(ExposeMethods=true)] generates async methods.
 type TestResourceContext interface {
 	handleReference
+
+	// GetValueAsync - Instance method that should be exposed as async method.
 	GetValueAsync() (string, error)
+
+	// Name gets the Name property
 	Name() (string, error)
+
+	// SetName sets the Name property
 	SetName(value string) TestResourceContext
+
+	// SetValue sets the Value property
 	SetValue(value float64) TestResourceContext
+
+	// SetValueAsync - Instance method with parameter.
 	SetValueAsync(value string) error
+
+	// ValidateAsync - Instance method with return type.
 	ValidateAsync() (bool, error)
+
+	// Value gets the Value property
 	Value() (float64, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -2158,9 +2598,9 @@ func newTestResourceContextFromHandle(h *handle, c *client) TestResourceContext 
 	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetValueAsync instance method that should be exposed as async method.
+// GetValueAsync - Instance method that should be exposed as async method.
 func (s *testResourceContext) GetValueAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2175,7 +2615,7 @@ func (s *testResourceContext) GetValueAsync() (string, error) {
 
 // Name gets the Name property
 func (s *testResourceContext) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2190,7 +2630,7 @@ func (s *testResourceContext) Name() (string, error) {
 
 // SetName sets the Name property
 func (s *testResourceContext) SetName(value string) TestResourceContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2202,7 +2642,7 @@ func (s *testResourceContext) SetName(value string) TestResourceContext {
 
 // SetValue sets the Value property
 func (s *testResourceContext) SetValue(value float64) TestResourceContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2212,9 +2652,9 @@ func (s *testResourceContext) SetValue(value float64) TestResourceContext {
 	return s
 }
 
-// SetValueAsync instance method with parameter.
+// SetValueAsync - Instance method with parameter.
 func (s *testResourceContext) SetValueAsync(value string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2224,9 +2664,9 @@ func (s *testResourceContext) SetValueAsync(value string) error {
 	return err
 }
 
-// ValidateAsync instance method with return type.
+// ValidateAsync - Instance method with return type.
 func (s *testResourceContext) ValidateAsync() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2241,7 +2681,7 @@ func (s *testResourceContext) ValidateAsync() (bool, error) {
 
 // Value gets the Value property
 func (s *testResourceContext) Value() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2254,21 +2694,50 @@ func (s *testResourceContext) Value() (float64, error) {
 	return decodeAs[float64](result)
 }
 
-// TestReturnValueContext is the public interface for handle type TestReturnValueContext.
+// TestReturnValueContext is the public interface for handle type
+// TestReturnValueContext.
 type TestReturnValueContext interface {
 	handleReference
+
+	// GetInt invokes the GetInt method
 	GetInt() (float64, error)
+
+	// GetIntTaskAsync invokes the GetIntTaskAsync method
 	GetIntTaskAsync() (float64, error)
+
+	// GetIntValueTaskAsync invokes the GetIntValueTaskAsync method
 	GetIntValueTaskAsync() (float64, error)
+
+	// GetNullableInt invokes the GetNullableInt method
 	GetNullableInt() (*float64, error)
+
+	// GetNullableIntTaskAsync invokes the GetNullableIntTaskAsync method
 	GetNullableIntTaskAsync() (*float64, error)
+
+	// GetNullableIntValueTaskAsync invokes the GetNullableIntValueTaskAsync method
 	GetNullableIntValueTaskAsync() (*float64, error)
+
+	// GetNullableString invokes the GetNullableString method
 	GetNullableString() (*string, error)
+
+	// GetNullableStringTaskAsync invokes the GetNullableStringTaskAsync method
 	GetNullableStringTaskAsync() (*string, error)
+
+	// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync
+	// method
 	GetNullableStringValueTaskAsync() (*string, error)
+
+	// GetString invokes the GetString method
 	GetString() (string, error)
+
+	// GetStringTaskAsync invokes the GetStringTaskAsync method
 	GetStringTaskAsync() (string, error)
+
+	// GetStringValueTaskAsync invokes the GetStringValueTaskAsync method
 	GetStringValueTaskAsync() (string, error)
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
 	Err() error
 }
 
@@ -2284,7 +2753,7 @@ func newTestReturnValueContextFromHandle(h *handle, c *client) TestReturnValueCo
 
 // GetInt invokes the GetInt method
 func (s *testReturnValueContext) GetInt() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2299,7 +2768,7 @@ func (s *testReturnValueContext) GetInt() (float64, error) {
 
 // GetIntTaskAsync invokes the GetIntTaskAsync method
 func (s *testReturnValueContext) GetIntTaskAsync() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2314,7 +2783,7 @@ func (s *testReturnValueContext) GetIntTaskAsync() (float64, error) {
 
 // GetIntValueTaskAsync invokes the GetIntValueTaskAsync method
 func (s *testReturnValueContext) GetIntValueTaskAsync() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2329,7 +2798,7 @@ func (s *testReturnValueContext) GetIntValueTaskAsync() (float64, error) {
 
 // GetNullableInt invokes the GetNullableInt method
 func (s *testReturnValueContext) GetNullableInt() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2344,7 +2813,7 @@ func (s *testReturnValueContext) GetNullableInt() (*float64, error) {
 
 // GetNullableIntTaskAsync invokes the GetNullableIntTaskAsync method
 func (s *testReturnValueContext) GetNullableIntTaskAsync() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2359,7 +2828,7 @@ func (s *testReturnValueContext) GetNullableIntTaskAsync() (*float64, error) {
 
 // GetNullableIntValueTaskAsync invokes the GetNullableIntValueTaskAsync method
 func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2374,7 +2843,7 @@ func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*float64, error
 
 // GetNullableString invokes the GetNullableString method
 func (s *testReturnValueContext) GetNullableString() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2389,7 +2858,7 @@ func (s *testReturnValueContext) GetNullableString() (*string, error) {
 
 // GetNullableStringTaskAsync invokes the GetNullableStringTaskAsync method
 func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2402,9 +2871,10 @@ func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
 	return decodeAs[*string](result)
 }
 
-// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync method
+// GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync
+// method
 func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2419,7 +2889,7 @@ func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, err
 
 // GetString invokes the GetString method
 func (s *testReturnValueContext) GetString() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2434,7 +2904,7 @@ func (s *testReturnValueContext) GetString() (string, error) {
 
 // GetStringTaskAsync invokes the GetStringTaskAsync method
 func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2449,7 +2919,7 @@ func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
 
 // GetStringValueTaskAsync invokes the GetStringValueTaskAsync method
 func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2677,7 +3147,7 @@ type distributedApplication struct { *resourceBuilderBase }
 
 // Build invokes the build capability and returns the running application.
 func (b *iDistributedApplicationBuilder) Build() (DistributedApplication, error) {
-	if b.err != nil { return nil, b.err }
+	if err := b.Err(); err != nil { return nil, err }
 	result, err := b.client.invokeCapability(context.Background(), "Aspire.Hosting/build", map[string]any{
 		"context": b.handle.ToJSON(),
 	})
@@ -2753,15 +3223,16 @@ import (
 // (typically once at the end of a builder chain or before using the result of
 // a value-returning method).
 //
-// Wrappers are not synchronized: err is read and written without a lock. The
-// AppHost runs each callback on its own goroutine, so a callback should use the
-// wrappers it receives as arguments, not a wrapper that the goroutine running
-// the builder chain (or another callback) uses at the same time.
+// Callbacks run on separate goroutines and can capture a wrapper also used by
+// the builder chain. The sticky error and lazy collection accessors are
+// synchronized; concurrent capability calls still run independently.
 
 type handleWrapperBase struct {
-	handle *handle
-	err    error
-	client *client
+	handle       *handle
+	errMu        sync.RWMutex
+	err          error
+	client       *client
+	collectionMu sync.Mutex
 }
 
 func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
@@ -2782,11 +3253,17 @@ func (h *handleWrapperBase) getClient() *client { return h.client }
 
 // Err returns the first error recorded on this wrapper. Returns nil if the
 // wrapper resolved successfully and no chained operation has failed.
-func (h *handleWrapperBase) Err() error { return h.err }
+func (h *handleWrapperBase) Err() error {
+	h.errMu.RLock()
+	defer h.errMu.RUnlock()
+	return h.err
+}
 
 // setErr records an error on this wrapper. The first non-nil error wins;
 // later errors are dropped to keep failure causality clear in chains.
 func (h *handleWrapperBase) setErr(err error) {
+	h.errMu.Lock()
+	defer h.errMu.Unlock()
 	if h.err == nil {
 		h.err = err
 	}
@@ -2980,8 +3457,8 @@ func newListWithGetter[T any](parent *handleWrapperBase, getterCapabilityID stri
 }
 
 func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
-	if l.parent.err != nil {
-		return nil, l.parent.err
+	if err := l.parent.Err(); err != nil {
+		return nil, err
 	}
 	l.handleMu.Lock()
 	cached := l.resolvedHandle
@@ -3009,10 +3486,20 @@ func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
 	return listHandle, nil
 }
 
-// ToJSON returns the list handle as a JSON-serializable map.
+// Err returns the first error on the list's parent, including handle resolution
+// failures recorded by ToJSON.
+func (l *List[T]) Err() error { return l.parent.Err() }
+
+// ToJSON returns the list handle as a JSON-serializable map, or nil on failure.
+// Consult Err before using the result.
 func (l *List[T]) ToJSON() map[string]any {
 	h, err := l.resolveListHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		l.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		l.parent.setErr(errors.New("aspire: list getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -3141,8 +3628,8 @@ func newDictWithGetter[K comparable, V any](parent *handleWrapperBase, getterCap
 }
 
 func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
-	if d.parent.err != nil {
-		return nil, d.parent.err
+	if err := d.parent.Err(); err != nil {
+		return nil, err
 	}
 	d.handleMu.Lock()
 	cached := d.resolvedHandle
@@ -3170,9 +3657,20 @@ func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
 	return dictHandle, nil
 }
 
+// Err returns the first error on the dictionary's parent, including handle
+// resolution failures recorded by ToJSON.
+func (d *Dict[K, V]) Err() error { return d.parent.Err() }
+
+// ToJSON returns the dictionary handle as a JSON-serializable map, or nil on
+// failure. Consult Err before using the result.
 func (d *Dict[K, V]) ToJSON() map[string]any {
 	h, err := d.resolveDictHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		d.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		d.parent.setErr(errors.New("aspire: dictionary getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -3464,21 +3962,38 @@ func serializeReflectedCollection(value any) (any, bool) {
 }
 
 // callbackArg fetches a positional argument from the slice and decodes it
-// to T. Returns the zero value if the index is out of range or the value
-// cannot be decoded. Used by generated callback shim wrappers that adapt
-// the transport's positional `[]any` invocation back to the user's typed
-// callback signature.
+// to T. Invalid arguments panic with a private error that the callback
+// dispatcher translates into a JSON-RPC invalid-params response, before the
+// user's typed callback can run with a silently substituted zero value.
 func callbackArg[T any](args []any, idx int) T {
-	var zero T
-	if idx >= len(args) {
-		return zero
+	if idx < 0 || idx >= len(args) {
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d is missing", idx)})
 	}
 	v, err := decodeAs[T](args[idx])
 	if err != nil {
-		return zero
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: %w", idx, err)})
 	}
+
 	return v
 }
+
+// callbackCancellationTokenArg handles the callback wire representation for
+// CancellationToken. The host sends a token ID for cancellable tokens and omits
+// the positional argument for CancellationToken.None.
+func callbackCancellationTokenArg(c *client, args []any, idx int) *CancellationToken {
+	if idx < 0 || idx >= len(args) || args[idx] == nil {
+		return nil
+	}
+	if token, ok := args[idx].(*CancellationToken); ok {
+		return token
+	}
+	if id, ok := args[idx].(string); ok && id != "" {
+		return newRemoteCancellationToken(c, id)
+	}
+	panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: expected a cancellation token ID", idx)})
+}
+
+type callbackArgumentError struct{ error }
 
 // decodeAs converts an arbitrary RPC result into a typed value via JSON
 // round-trip. Used by typed read methods on List/Dict and by value-returning
@@ -3599,13 +4114,13 @@ func decodeStructFields[T any](raw any) (T, bool) {
 		if !ok {
 			continue
 		}
-
-		bytes, err := json.Marshal(rawFieldValue)
-		if err != nil {
+		// Callback IDs cannot become Go func values. Other fields must decode
+		// successfully; a malformed DTO must not reach user code as zero values.
+		if fieldValue.Kind() == reflect.Func {
 			continue
 		}
-		if err := json.Unmarshal(bytes, fieldValue.Addr().Interface()); err != nil {
-			continue
+		if err := decodeInto(fieldValue, rawFieldValue); err != nil {
+			return zero, false
 		}
 	}
 
@@ -3883,8 +4398,10 @@ func FormatError(err error) string {
 // Use NewCancellationToken to create one; call Cancel() to cancel it.
 // Pass token.Context() to any standard Go library that accepts a context.
 type CancellationToken struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx        context.Context
+	cancel     context.CancelFunc
+	cancelOnce sync.Once
+	notify     func()
 }
 
 // NewCancellationToken creates a new cancellation token backed by a cancellable
@@ -3900,12 +4417,25 @@ func newCancellationTokenFrom(parent context.Context) *CancellationToken {
 	return &CancellationToken{ctx: ctx, cancel: cancel}
 }
 
+func newRemoteCancellationToken(c *client, id string) *CancellationToken {
+	token := newCancellationTokenFrom(context.Background())
+	token.notify = func() {
+		go c.cancelToken(id)
+	}
+	return token
+}
+
 // Cancel cancels the token and propagates cancellation to the underlying context.
 func (ct *CancellationToken) Cancel() {
 	if ct == nil {
 		return
 	}
-	ct.cancel()
+	ct.cancelOnce.Do(func() {
+		ct.cancel()
+		if ct.notify != nil {
+			ct.notify()
+		}
+	})
 }
 
 // IsCancelled returns true if the token has been canceled.
@@ -4028,7 +4558,7 @@ type connection struct {
 	reader  *bufio.Reader
 	client  *client
 
-	writeQueue chan map[string]any
+	writeQueue chan []byte
 	done       chan struct{}
 
 	mu      sync.Mutex
@@ -4044,7 +4574,7 @@ func newConnection(rawConn io.ReadWriteCloser, c *client, onClose func(error)) *
 		rawConn:    rawConn,
 		reader:     bufio.NewReader(rawConn),
 		client:     c,
-		writeQueue: make(chan map[string]any, 64),
+		writeQueue: make(chan []byte, 64),
 		done:       make(chan struct{}),
 		pending:    make(map[int64]chan map[string]any),
 		onClose:    onClose,
@@ -4093,7 +4623,7 @@ func (c *connection) writeLoop() {
 	for {
 		select {
 		case msg := <-c.writeQueue:
-			if err := writeMessage(c.rawConn, msg); err != nil {
+			if err := writeMessageBody(c.rawConn, msg); err != nil {
 				c.close(err)
 				return
 			}
@@ -4133,8 +4663,22 @@ func (c *connection) dispatch(msg map[string]any) {
 }
 
 func (c *connection) enqueue(msg map[string]any) {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		// A user callback can return an unencodable value. Fail that callback,
+		// not every unrelated pending call on the connection.
+		body, err = json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      msg["id"],
+			"error":   map[string]any{"code": -32603, "message": fmt.Sprintf("Callback result encoding failed: %v", err)},
+		})
+		if err != nil {
+			c.close(err)
+			return
+		}
+	}
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
 	case <-c.done:
 	}
 }
@@ -4159,12 +4703,26 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 	// the other runtimes send for a throwing callback (-32603, "Callback
 	// execution failed: <message>"). Only the panic value is reported; the stack
 	// stays inside the process.
+	completed := false
 	defer func() {
 		if r := recover(); r != nil {
+			code := -32603
+			message := fmt.Sprintf("Callback execution failed: %v", r)
+			if err, ok := r.(*callbackArgumentError); ok {
+				code = -32602
+				message = err.Error()
+			}
 			c.enqueue(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      requestID,
-				"error":   map[string]any{"code": -32603, "message": fmt.Sprintf("Callback execution failed: %v", r)},
+				"error":   map[string]any{"code": code, "message": message},
+			})
+		} else if !completed {
+			// runtime.Goexit runs defers without a recoverable panic value.
+			c.enqueue(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestID,
+				"error":   map[string]any{"code": -32603, "message": "Callback execution failed: goroutine exited without returning"},
 			})
 		}
 	}()
@@ -4193,6 +4751,7 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 			"result":  result,
 		})
 	}
+	completed = true
 }
 
 // sendRequest sends a JSON-RPC request over the write queue and blocks until
@@ -4203,6 +4762,10 @@ func (c *connection) handleCallbackRequest(message map[string]any) {
 // also notifies the AppHost, but this method does not need to wait for that
 // round-trip — it returns ctx.Err() as soon as ctx is done.
 func (c *connection) sendRequest(ctx context.Context, method string, params []any) (any, error) {
+	return c.sendRequestQueued(ctx, method, params, nil)
+}
+
+func (c *connection) sendRequestQueued(ctx context.Context, method string, params []any, onQueued func()) (any, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -4218,6 +4781,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 		"method":  method,
 		"params":  params,
 	}
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return nil, fmt.Errorf("aspire: encode %s request: %w", method, err)
+	}
 
 	c.mu.Lock()
 	if c.closed {
@@ -4228,7 +4795,10 @@ func (c *connection) sendRequest(ctx context.Context, method string, params []an
 	c.mu.Unlock()
 
 	select {
-	case c.writeQueue <- msg:
+	case c.writeQueue <- body:
+		if onQueued != nil {
+			onQueued()
+		}
 	case <-ctx.Done():
 		c.mu.Lock()
 		delete(c.pending, id)
@@ -4289,8 +4859,13 @@ type client struct {
 	// each cancellation ID handed to the AppHost to the function that detaches
 	// its watcher from the token's context.
 	cancellationsMu     sync.Mutex
-	cancellations       map[string]func() bool
+	cancellations       map[string]*cancellationRegistration
 	cancellationCounter atomic.Int64
+}
+
+type cancellationRegistration struct {
+	token *CancellationToken
+	stop  func() bool
 }
 
 // newClient constructs a client; callers must invoke connect before using it.
@@ -4299,7 +4874,7 @@ func newClient(socketPath string) *client {
 		socketPath:    socketPath,
 		wrappers:      make(map[string]handleWrapperFactory),
 		callbacks:     make(map[string]func(...any) any),
-		cancellations: make(map[string]func() bool),
+		cancellations: make(map[string]*cancellationRegistration),
 	}
 }
 
@@ -4398,17 +4973,25 @@ func (c *client) registerCancellation(token *CancellationToken) string {
 		return ""
 	}
 	id := fmt.Sprintf("ct_%d_%d", c.cancellationCounter.Add(1), time.Now().UnixMilli())
-	// AfterFunc starts a goroutine only once the context is done, so a token
-	// that is never canceled does not park one goroutine per registration.
-	stop := context.AfterFunc(token.ctx, func() { c.cancelToken(id) })
 	c.cancellationsMu.Lock()
-	// Canceling a context closes its Done channel before it starts the AfterFunc
-	// goroutine, so a call that returns because of this very cancel can get here
-	// first. Stopping the watcher then would drop the cancelToken request, so
-	// only a token that is still live is stopped.
-	c.cancellations[id] = func() bool { return token.ctx.Err() == nil && stop() }
+	c.cancellations[id] = &cancellationRegistration{token: token}
 	c.cancellationsMu.Unlock()
 	return id
+}
+
+// Arm watchers only after the request carrying their IDs is on the FIFO write
+// queue. Otherwise an already canceled token can reach the host before the
+// invocation that registers it, and the host ignores unknown cancellation IDs.
+func (c *client) startCancellations(args map[string]any) {
+	c.cancellationsMu.Lock()
+	defer c.cancellationsMu.Unlock()
+	for _, v := range args {
+		if id, ok := v.(string); ok {
+			if registration := c.cancellations[id]; registration != nil && registration.stop == nil {
+				registration.stop = context.AfterFunc(registration.token.ctx, func() { c.cancelToken(id) })
+			}
+		}
+	}
 }
 
 // releaseCancellations detaches the watchers of the cancellation IDs carried
@@ -4423,8 +5006,12 @@ func (c *client) releaseCancellations(args map[string]any) {
 		if !ok {
 			continue
 		}
-		if stop, found := c.cancellations[id]; found {
-			stop()
+		if registration, found := c.cancellations[id]; found {
+			// Cancellation closes Done before running AfterFunc. Do not stop a
+			// canceled token's notification when its local call returns first.
+			if registration.stop != nil && registration.token.ctx.Err() == nil {
+				registration.stop()
+			}
 			delete(c.cancellations, id)
 		}
 	}
@@ -4492,7 +5079,15 @@ func (c *client) invokeCapability(ctx context.Context, capabilityID string, args
 		return nil, err
 	}
 
-	result, err := c.sendRequest(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)})
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return nil, errors.New("not connected to AppHost")
+	}
+	result, err := conn.sendRequestQueued(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)}, func() {
+		c.startCancellations(args)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -4541,7 +5136,9 @@ func (c *client) authenticate(ctx context.Context, token string) error {
 }
 
 func (c *client) cancelToken(tokenID string) bool {
-	result, err := c.sendRequest(context.Background(), "cancelToken", []any{tokenID})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result, err := c.sendRequest(ctx, "cancelToken", []any{tokenID})
 	if err != nil {
 		return false
 	}
@@ -4634,11 +5231,15 @@ func writeMessage(w io.Writer, msg map[string]any) error {
 	if err != nil {
 		return err
 	}
+	return writeMessageBody(w, body)
+}
+
+func writeMessageBody(w io.Writer, body []byte) error {
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	if _, err = w.Write([]byte(header)); err != nil {
+	if _, err := w.Write([]byte(header)); err != nil {
 		return err
 	}
-	_, err = w.Write(body)
+	_, err := w.Write(body)
 	return err
 }
 
@@ -4646,17 +5247,39 @@ func writeMessage(w io.Writer, msg map[string]any) error {
 // or hostile stream cannot make readMessage allocate an arbitrarily large body.
 // It matches the cap in the Python runtime.
 const maxMessageSize = 64 * 1024 * 1024
+const maxHeaderSize = 8 * 1024
+const maxHeaderCount = 16
 
 func readMessage(reader *bufio.Reader) (map[string]any, error) {
 	headers := make(map[string]string)
+	headerSize := 0
+	headerCount := 0
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return nil, err
+		// Accumulate fragments only within the total budget, including a line
+		// with no newline. Example: "Content-Length: 42\r\n\r\n{...}".
+		var lineBytes []byte
+		for {
+			fragment, err := reader.ReadSlice('\n')
+			headerSize += len(fragment)
+			if headerSize > maxHeaderSize {
+				return nil, errors.New("AppHost message headers exceed 8192 bytes")
+			}
+			lineBytes = append(lineBytes, fragment...)
+			if err == bufio.ErrBufferFull {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			break
 		}
-		line = strings.TrimSpace(line)
+		line := strings.TrimSpace(string(lineBytes))
 		if line == "" {
 			break
+		}
+		headerCount++
+		if headerCount > maxHeaderCount {
+			return nil, errors.New("AppHost message has more than 16 headers")
 		}
 		parts := strings.SplitN(line, ":", 2)
 		if len(parts) == 2 {

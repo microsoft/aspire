@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <EnableAspireIntegrationAnalyzers>true</EnableAspireIntegrationAnalyzers>
+    <PackageTags>aspire integration hosting azure provisioning entra identity polyglot</PackageTags>
+    <Description>Opt-in Microsoft Graph provisioning APIs for polyglot Aspire AppHosts.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Aspire.Hosting.Azure.Provisioning\ExperimentalAssemblyInfo.cs" Link="ExperimentalAssemblyInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure.EntraId\Aspire.Hosting.Azure.EntraId.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Provisioning\Aspire.Hosting.Azure.Provisioning.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Provisioning.Generators\Aspire.Hosting.Azure.Provisioning.Generators.csproj" PrivateAssets="all" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+    <PackageReference Include="Azure.Provisioning" />
+  </ItemGroup>
+
+</Project>

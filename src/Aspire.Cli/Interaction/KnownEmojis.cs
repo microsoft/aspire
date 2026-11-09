@@ -27,6 +27,15 @@ internal readonly struct KnownEmoji(string name, string? textColor = null)
 /// Defines all emoji values used by the Aspire CLI. Prefer using existing known emojis when possible, but add new ones here as needed.
 /// This allows the CLI to have consistent UI for common operations while adding new emojis relevant to new tasks when required.
 /// </summary>
+/// <remarks>
+/// Prefer characters with default emoji presentation, such as <c>inbox_tray</c>, for new icons.
+/// Do not use <c>down_arrow</c>: Spectre.Console emits U+2B07, whose default presentation is text.
+/// Adding U+FE0F (VS16) requests an emoji glyph, but Windows Terminal can use the selector for
+/// character width without changing glyph presentation. Other text-default symbols can have
+/// the same problem even if they look correct in another terminal.
+/// See <see href="https://www.unicode.org/reports/tr51/#def_emoji_presentation_selector">Unicode emoji presentation selectors</see>
+/// and <see href="https://github.com/microsoft/terminal/issues/19100">microsoft/terminal#19100</see>.
+/// </remarks>
 internal static class KnownEmojis
 {
     public static readonly KnownEmoji Bug = new("bug", "red");
@@ -39,6 +48,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji Hammer = new("hammer");
     public static readonly KnownEmoji Ice = new("ice", "cyan");
     public static readonly KnownEmoji HammerAndWrench = new("hammer_and_wrench");
+    public static readonly KnownEmoji InboxTray = new("inbox_tray", "blue");
     public static readonly KnownEmoji Information = new("information", "blue");
     public static readonly KnownEmoji Key = new("key", "yellow");
     public static readonly KnownEmoji LinkedPaperclips = new("linked_paperclips");
@@ -53,6 +63,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji Dizzy = new("dizzy");
     public static readonly KnownEmoji StopSign = new("stop_sign", "red");
     public static readonly KnownEmoji UpButton = new("up_button", "blue");
-    public static readonly KnownEmoji Warning = new("warning", "yellow");
+    // The warning emoji renders inconsistently across terminals, so use a police car light for warnings instead.
+    public static readonly KnownEmoji PoliceCarLight = new("police_car_light", "red");
     public static readonly KnownEmoji Wrench = new("wrench");
 }

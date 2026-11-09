@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The experimental Aspire tray requires a CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion..
+        ///   Looks up a localized string similar to The experimental Aspire tray requires a CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop..
         /// </summary>
         internal static string BundleRequired {
             get {
@@ -129,6 +129,15 @@ namespace Aspire.Cli.Resources {
         internal static string StartDescription {
             get {
                 return ResourceManager.GetString("StartDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The desktop has no tray host, so the tray icon won&apos;t appear yet. Enable an AppIndicator extension on GNOME or your desktop&apos;s tray module. The icon appears as soon as tray support is available..
+        /// </summary>
+        internal static string NoTrayHost {
+            get {
+                return ResourceManager.GetString("NoTrayHost", resourceCulture);
             }
         }
 

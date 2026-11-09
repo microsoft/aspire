@@ -38,8 +38,9 @@ resource standard_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource standard 'Microsoft.App/managedEnvironments@2025-07-01' = {
+resource standard 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('standard${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
     appLogsConfiguration: {
@@ -56,7 +57,6 @@ resource standard 'Microsoft.App/managedEnvironments@2025-07-01' = {
       }
     ]
   }
-  tags: tags
 }
 
 resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {

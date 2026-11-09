@@ -143,6 +143,19 @@ suite('AppHost discovery', () => {
         assert.strictEqual(candidate ? getDebugTargetForCandidate(candidate) : undefined, appHostPath);
     });
 
+    test('keeps Go AppHost candidate as source file', () => {
+        const appHostPath = buildPath('workspace', 'AppHost', 'apphost.go');
+
+        const candidate = findCandidateForEditorFile(appHostPath, [{
+            path: appHostPath,
+            language: 'go',
+            status: 'buildable',
+        }]);
+
+        assert.strictEqual(candidate?.path, appHostPath);
+        assert.strictEqual(candidate ? getDebugTargetForCandidate(candidate) : undefined, appHostPath);
+    });
+
     test('returns undefined when no discovered candidate contains C# source file', () => {
         const programPath = buildPath('workspace', 'Web', 'Program.cs');
 
@@ -478,6 +491,7 @@ suite('AppHost discovery', () => {
                 assert.ok(watchedPatterns.includes('**/apphost.mjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.cjs'));
                 assert.ok(watchedPatterns.includes('**/apphost.rs'));
+                assert.ok(watchedPatterns.includes('**/apphost.go'));
                 // Case matters: watcher globs are case-sensitive on Linux and the file is AppHost.java.
                 assert.ok(watchedPatterns.includes('**/AppHost.java'));
             }

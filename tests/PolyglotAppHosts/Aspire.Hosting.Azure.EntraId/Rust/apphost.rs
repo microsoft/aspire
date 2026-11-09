@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let executable = builder.add_executable("worker", "dotnet", ".", vec!["--info".into()])?;
     let endpoint = container.get_endpoint("http")?;
     let identity = builder.add_azure_user_assigned_identity("identity")?;
+    let vault = builder.add_azure_key_vault("vault")?;
 
     // Existing registrations: configuration only, with literal or parameter IDs in any combination.
     let existing_entra = builder.add_existing_entra_application("existing-entra", serialize_handle(&tenant_id), json!(example_client))?;
@@ -38,7 +39,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 token_exchange_authority: Some("https://login.microsoftonline.com/".into()),
             }),
         )?
-        .with_certificate_from_key_vault("https://vault.vault.azure.net", "certificate")?
+        .with_certificate_from_key_vault(json!("https://vault.vault.azure.net"), "certificate")?
+        .with_certificate_from_key_vault(serialize_handle(&vault), "vault-certificate")?
         .with_certificate_thumbprint("CurrentUser/My", "thumbprint")?
         .with_certificate_distinguished_name("CurrentUser/My", "CN=certificate")?
         .with_certificate_from_file("/certs/client.pfx", Some(&certificate_password))?
@@ -89,6 +91,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_redirect_uris(serialize_handle(&endpoint), Some(vec!["/signin".into()]))?;
     container.with_reference(serialize_handle(&created_entra), None, None, None)?;
     created_entra
+        .run_with_local_developer_certificate_credential()?
         .publish_with_federated_managed_identity_credential(None)?
         .publish_with_federated_managed_identity_credential(Some(serialize_handle(&container)))?
         .publish_with_federated_managed_identity_credential(Some(serialize_handle(&identity)))?;

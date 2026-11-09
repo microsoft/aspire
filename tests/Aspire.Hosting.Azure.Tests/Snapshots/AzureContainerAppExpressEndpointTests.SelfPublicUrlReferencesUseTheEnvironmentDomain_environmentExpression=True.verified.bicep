@@ -5,10 +5,11 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
+resource api 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'api'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -17,7 +18,6 @@ resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
         transport: 'http'
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

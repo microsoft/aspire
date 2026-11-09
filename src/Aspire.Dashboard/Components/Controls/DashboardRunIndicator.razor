@@ -1,0 +1,8 @@
+@* A small status dot: green while the live view is shown, orange while a recording is shown. Decorative: the
+   controls that show it state what is being viewed in their accessible names. *@
+<span class="dashboard-run-indicator @(IsLive ? "live" : "recording")" aria-hidden="true"></span>
+
+@code {
+    [Parameter]
+    public bool IsLive { get; set; }
+}

@@ -77,6 +77,11 @@
         <target state="translated">Se ha detectado un límite de cardinalidad</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChartContainerShowChangePerIntervalLabel">
+        <source>Show change per interval</source>
+        <target state="new">Show change per interval</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
         <source>Show count</source>
         <target state="translated">Mostrar recuento</target>
@@ -91,6 +96,11 @@
         <source>Unable to display chart</source>
         <target state="translated">No se puede mostrar el gráfico</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ChartContainerUnitPerInterval">
+        <source>{0} per interval</source>
+        <target state="new">{0} per interval</target>
+        <note>{0} is the instrument's unit, e.g. "Requests"</note>
       </trans-unit>
       <trans-unit id="ClearAllResources">
         <source>Remove all telemetry</source>
@@ -157,6 +167,11 @@
         <target state="translated">Exportar .env</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterDeleteValueAction">
+        <source>Delete value</source>
+        <target state="new">Delete value</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
         <target state="translated">Graph. Para obtener una vista accesible, vaya a la pestaña Recursos</target>
@@ -181,6 +196,11 @@
         <source>Scroll to bottom</source>
         <target state="translated">Desplazarse hacia abajo</target>
         <note>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</note>
+      </trans-unit>
+      <trans-unit id="SummaryDetailsViewCloseViewWithShortcut">
+        <source>Close (Esc)</source>
+        <target state="new">Close (Esc)</target>
+        <note>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
         <source>Text content</source>
@@ -702,9 +722,24 @@
         <target state="translated">Tipo de montaje</target>
         <note />
       </trans-unit>
+      <trans-unit id="VolumeMountTypeReadOnlyTitle">
+        <source>Read-only</source>
+        <target state="new">Read-only</target>
+        <note />
+      </trans-unit>
       <trans-unit id="VolumePathColumnHeader">
         <source>Path</source>
         <target state="translated">Ruta de acceso</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VolumeRevealFailed">
+        <source>Couldn't open '{0}'. It may not exist on this machine.</source>
+        <target state="new">Couldn't open '{0}'. It may not exist on this machine.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VolumeRevealInFileExplorer">
+        <source>Reveal in file explorer</source>
+        <target state="new">Reveal in file explorer</target>
         <note />
       </trans-unit>
     </body>

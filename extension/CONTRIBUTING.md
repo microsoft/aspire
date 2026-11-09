@@ -61,6 +61,8 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 - Open the extension folder in Visual Studio Code.
 - Launch either the `Run Extension` or `Run Extension (cli stop on entry)` launch configuration. The latter will set an environment variable that causes the CLI to wait until a debugger is attached to execute its logic.
 
+See [AppHost launch profiles in the README](./README.md#apphost-launch-profiles) for `launch.json` configuration and C# extension requirements.
+
 ### Optional: set the CLI path
 
 To debug the Aspire CLI together with the extension, set `Aspire Cli Executable Path` to the CLI output path. You can use an absolute path or a workspace token. If you opened the `extension` folder, the local build is:

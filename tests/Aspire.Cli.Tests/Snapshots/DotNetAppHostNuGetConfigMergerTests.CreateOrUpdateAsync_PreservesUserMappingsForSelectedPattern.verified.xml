@@ -1,0 +1,14 @@
+﻿<configuration>
+  <packageSources>
+    <add key="https://old.example" value="https://old.example" />
+    <add key="aspire-test" value="https://new.example" />
+  </packageSources>
+  <packageSourceMapping>
+    <packageSource key="https://old.example">
+      <package pattern="Lib.*" />
+    </packageSource>
+    <packageSource key="aspire-test">
+      <package pattern="Lib.*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

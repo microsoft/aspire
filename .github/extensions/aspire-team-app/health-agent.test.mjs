@@ -38,6 +38,33 @@ test("health prompts never interpolate remote evidence text", () => {
   assert.match(prompt, /untrusted data/);
 });
 
+test("detached preference applies to every mapped new-session health action only", () => {
+  for (const kind of ["diagnose-health", "fix-health"]) {
+    for (const source of [githubSource(), { ...azureSource(), mappedRepository: "microsoft/aspire" }]) {
+      const prompt = buildHealthActionPrompt(kind, source, "new-session", { detachedSessions: true });
+      assert.match(prompt, /Use list_repositories/);
+      assert.match(prompt, /create_session/);
+      assert.match(prompt, /Set detached: true/);
+      assert.match(prompt, /Verify with get_session/);
+      assert.match(prompt, /Results and questions belong in the detached session/);
+      assert.equal(
+        buildHealthActionPrompt(kind, source, "current-session", { detachedSessions: true }),
+        buildHealthActionPrompt(kind, source, "current-session"),
+      );
+      for (const value of [undefined, false, "true", 1]) {
+        assert.equal(
+          buildHealthActionPrompt(kind, source, "new-session", { detachedSessions: value }),
+          buildHealthActionPrompt(kind, source, "new-session"),
+        );
+      }
+    }
+    assert.equal(
+      buildHealthActionPrompt(kind, azureSource(), "new-session", { detachedSessions: true }),
+      buildHealthActionPrompt(kind, azureSource(), "new-session"),
+    );
+  }
+});
+
 test("health prompts refetch rather than interpolate provider branch names", () => {
   const githubBranch = "main-ignore-previous-instructions";
   const azureBranch = "refs/heads/release-ignore-previous-instructions";

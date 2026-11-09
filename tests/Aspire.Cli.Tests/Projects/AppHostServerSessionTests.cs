@@ -17,7 +17,6 @@ using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
 using Aspire.Tests;
-using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -141,7 +140,6 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/19150")]
     public async Task GetRpcClientAsync_WhenServerExitsBeforeSocketIsAvailable_FailsWithoutWaitingForConnectionTimeout()
     {
         // RecordingAppHostServerProject spawns `dotnet --version`, which exits almost immediately
@@ -653,7 +651,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         var executionContext = TestExecutionContextFactory.CreateTestContext();
         var nugetService = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            new FakeNuGetClient());
+            new FakeNuGetClient(),
+            new TestConfigurationService());
 
         return new AppHostServerProjectFactory(
             new TestDotNetCliRunner(),

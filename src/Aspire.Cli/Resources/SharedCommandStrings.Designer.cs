@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class SharedCommandStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal SharedCommandStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Suppress AI agent environment configuration after project creation.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AgentInitOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No running AppHost found. Use &apos;aspire run&apos; to start one first..
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostNotRunning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No AppHost is currently running for &apos;{0}&apos;. Use &apos;aspire run&apos; to start it first..
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostNotRunningAtPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No running AppHost found in the current worktree. Use &apos;--apphost &lt;path&gt;&apos; to target one directly, or &apos;--all&apos; to include AppHosts from other worktrees..
         /// </summary>
@@ -95,13 +95,31 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostNotRunningInCurrentWorktree", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The path to the Aspire AppHost project file or a directory to search.
         /// </summary>
         internal static string AppHostOptionDescription {
             get {
                 return ResourceManager.GetString("AppHostOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Fetching {0} using Git....
+        /// </summary>
+        internal static string FetchingSource {
+            get {
+                return ResourceManager.GetString("FetchingSource", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Fetching {0} using Git. Git may prompt you to authenticate..
+        /// </summary>
+        internal static string FetchingSourceWithAuthentication {
+            get {
+                return ResourceManager.GetString("FetchingSourceWithAuthentication", resourceCulture);
             }
         }
 
@@ -113,6 +131,24 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to configuration source.
+        /// </summary>
+        internal static string GitFetchConfigurationSource {
+            get {
+                return ResourceManager.GetString("GitFetchConfigurationSource", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to templates.
+        /// </summary>
+        internal static string GitFetchTemplates {
+            get {
+                return ResourceManager.GetString("GitFetchTemplates", resourceCulture);
+            }
+        }
 
         /// <summary>
         ///   Looks up a localized string similar to Language.
@@ -122,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("HeaderLanguage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Path.
         /// </summary>
@@ -131,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("HeaderPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Status.
         /// </summary>
@@ -140,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("HeaderStatus", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Include hidden resources in the output.
         /// </summary>
@@ -149,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.
         /// </summary>
@@ -158,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("IsolatedOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The --launch-profile option is not supported for {0} AppHosts..
         /// </summary>
@@ -167,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LaunchProfileNotSupported", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The .NET launch profile to use when starting the AppHost.
         /// </summary>
@@ -176,7 +212,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LaunchProfileOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Include all candidate AppHosts, ignoring .gitignore and built-in directory filters.
         /// </summary>
@@ -185,7 +221,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LsAllOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to List candidate AppHost project files in the workspace (use `aspire ps` for running resources).
         /// </summary>
@@ -194,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LsCommandDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output format (Table or Json).
         /// </summary>
@@ -203,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LsFormatOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No candidate AppHosts found..
         /// </summary>
@@ -212,7 +248,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LsNoCandidateAppHostsFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found....
         /// </summary>
@@ -221,7 +257,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LsSearchingForAppHostsStatus", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output discovered AppHosts as newline-delimited JSON. Requires --format json.
         /// </summary>
@@ -230,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LsStreamOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The --stream option requires --format json..
         /// </summary>
@@ -239,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LsStreamRequiresJson", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use..
         /// </summary>
@@ -248,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Multiple running AppHosts found in the current directory. Select from running AppHosts..
         /// </summary>
@@ -257,7 +293,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MultipleInScopeAppHosts", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No running AppHosts found in the current directory. Select from all running AppHosts..
         /// </summary>
@@ -266,13 +302,31 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoInScopeAppHostsShowingAll", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The {0} command requires --yes when the --non-interactive option is specified..
         /// </summary>
         internal static string NonInteractiveRequiresYesFormat {
             get {
                 return ResourceManager.GetString("NonInteractiveRequiresYesFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns..
+        /// </summary>
+        internal static string NuGetSearchLimitWarning {
+            get {
+                return ResourceManager.GetString("NuGetSearchLimitWarning", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to search NuGet source &apos;{0}&apos;. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details..
+        /// </summary>
+        internal static string NuGetSearchSourceFailedWarning {
+            get {
+                return ResourceManager.GetString("NuGetSearchSourceFailedWarning", resourceCulture);
             }
         }
 
@@ -284,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineEnvironmentOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set the output format..
         /// </summary>
@@ -293,7 +347,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineFormatOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The --format option can only be used together with --list-steps..
         /// </summary>
@@ -302,7 +356,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineFormatRequiresListSteps", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Include exception details (stack traces) in pipeline logs.
         /// </summary>
@@ -311,7 +365,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineIncludeExceptionDetailsOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to List registered pipeline steps without running lifecycle callbacks or pipeline steps..
         /// </summary>
@@ -320,7 +374,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineListStepsOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set the minimum log level for pipeline logging (trace, debug, information, warning, error, critical). The default is &apos;information&apos;..
         /// </summary>
@@ -329,7 +383,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineLogLevelOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Steps Summary:.
         /// </summary>
@@ -338,7 +392,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineStepsSummaryTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Step timeline:.
         /// </summary>
@@ -347,7 +401,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineStepTimelineLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Would you like to configure AI agent environments for this project?.
         /// </summary>
@@ -356,7 +410,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PromptRunAgentInit", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Scanning for running AppHosts....
         /// </summary>
@@ -365,7 +419,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ScanningForRunningAppHosts", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Select an AppHost to {0}:.
         /// </summary>
@@ -374,7 +428,115 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SelectAppHost", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package feed.
+        /// </summary>
+        internal static string SourceFeed {
+            get {
+                return ResourceManager.GetString("SourceFeed", resourceCulture);
+            }
+        }
 
+        /// <summary>
+        ///   Looks up a localized string similar to Git path.
+        /// </summary>
+        internal static string SourceGitPath {
+            get {
+                return ResourceManager.GetString("SourceGitPath", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git source.
+        /// </summary>
+        internal static string SourceGitRepository {
+            get {
+                return ResourceManager.GetString("SourceGitRepository", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Marketplace.
+        /// </summary>
+        internal static string SourceMarketplace {
+            get {
+                return ResourceManager.GetString("SourceMarketplace", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Name.
+        /// </summary>
+        internal static string SourceName {
+            get {
+                return ResourceManager.GetString("SourceName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenCode V1 catalog.
+        /// </summary>
+        internal static string SourceOpenCodeV1Catalog {
+            get {
+                return ResourceManager.GetString("SourceOpenCodeV1Catalog", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenCode V2 catalog.
+        /// </summary>
+        internal static string SourceOpenCodeV2Catalog {
+            get {
+                return ResourceManager.GetString("SourceOpenCodeV2Catalog", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Path.
+        /// </summary>
+        internal static string SourcePath {
+            get {
+                return ResourceManager.GetString("SourcePath", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Package patterns.
+        /// </summary>
+        internal static string SourcePatterns {
+            get {
+                return ResourceManager.GetString("SourcePatterns", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Plugins.
+        /// </summary>
+        internal static string SourcePlugins {
+            get {
+                return ResourceManager.GetString("SourcePlugins", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Git ref.
+        /// </summary>
+        internal static string SourceRef {
+            get {
+                return ResourceManager.GetString("SourceRef", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Only use sources you trust. Content from these sources can run code on your machine..
+        /// </summary>
+        internal static string SourceTrustWarning {
+            get {
+                return ResourceManager.GetString("SourceTrustWarning", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Unrecognized option &apos;{0}&apos;. Did you mean &apos;{1}&apos;?.
         /// </summary>
@@ -383,7 +545,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UnrecognizedOptionDidYouMeanFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Using AppHost: {0}.
         /// </summary>

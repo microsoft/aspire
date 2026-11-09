@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class ConfigSourceStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal ConfigSourceStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,16 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Yes.
-        /// </summary>
-        internal static string Accept {
-            get {
-                return ResourceManager.GetString("Accept", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version..
         /// </summary>
@@ -77,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppliedVersionMissing", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git could not authenticate to the configuration source. Configure your Git credential helper or SSH authentication and retry..
         /// </summary>
@@ -86,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AuthenticationFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding..
         /// </summary>
@@ -95,19 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("BindingChanged", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Configuration source: {0}
-        ///Configuration file: {1}
-        ///Configuration ref: {2}
-        ///Source origin: {3}.
-        /// </summary>
-        internal static string Candidate {
-            get {
-                return ResourceManager.GetString("Candidate", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration source update check failed: {0} Continuing with the saved configuration..
         /// </summary>
@@ -116,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CheckFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration source update check failed. Continuing with the saved configuration..
         /// </summary>
@@ -125,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CheckFailedWithoutDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The settings file could not be locked. No source settings were applied. Retry when other configuration writers have finished..
         /// </summary>
@@ -134,25 +113,25 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigLockFailed", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration file.
+        /// </summary>
+        internal static string ConfigurationFile {
+            get {
+                return ResourceManager.GetString("ConfigurationFile", resourceCulture);
+            }
+        }
 
         /// <summary>
-        ///   Looks up a localized string similar to A configuration source is available. Specify --use-config-source true to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode..
+        ///   Looks up a localized string similar to A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode..
         /// </summary>
         internal static string ConsentRequired {
             get {
                 return ResourceManager.GetString("ConsentRequired", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No, use standard Aspire configuration.
-        /// </summary>
-        internal static string Decline {
-            get {
-                return ResourceManager.GetString("Decline", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to default branch.
         /// </summary>
@@ -170,6 +149,15 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EmployeeOrigin", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience..
+        /// </summary>
+        internal static string Explanation {
+            get {
+                return ResourceManager.GetString("Explanation", resourceCulture);
+            }
+        }
 
         /// <summary>
         ///   Looks up a localized string similar to Git could not be started. Ensure Git is installed and available on PATH to use this configuration source..
@@ -179,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GitNotFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration source Git operation timed out. Check repository access and Git credentials, then retry..
         /// </summary>
@@ -188,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GitTimeout", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to --config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir..
         /// </summary>
@@ -197,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("IncompatibleOptions", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configSource binding must contain a Git repository address and a repository-relative configuration file path..
         /// </summary>
@@ -206,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidBinding", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration source cache is invalid. Restore or remove its cache entry and retry..
         /// </summary>
@@ -215,22 +203,31 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidCache", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The source configuration must be a valid Aspire JSON object no larger than 4 MiB..
+        ///   Looks up a localized string similar to The source configuration must be a valid Aspire JSON object..
         /// </summary>
         internal static string InvalidConfiguration {
             get {
                 return ResourceManager.GetString("InvalidConfiguration", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration file must be a nonempty repository-relative path using &apos;/&apos; separators, without &apos;.&apos;, &apos;..&apos;, or empty path segments..
         /// </summary>
         internal static string InvalidPath {
             get {
                 return ResourceManager.GetString("InvalidPath", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} must be a nonempty absolute HTTP or HTTPS URL without control characters..
+        /// </summary>
+        internal static string InvalidReadmeUrl {
+            get {
+                return ResourceManager.GetString("InvalidReadmeUrl", resourceCulture);
             }
         }
 
@@ -242,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidRef", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration source must be an absolute local repository path or an HTTPS or SSH Git repository address without passwords, tokens, queries, or fragments..
         /// </summary>
@@ -251,16 +248,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidRepository", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The configuration file is missing or is not a regular file at the selected Git branch or commit..
+        ///   Looks up a localized string similar to The configuration file is missing or is not a Git blob at the selected Git branch or commit..
         /// </summary>
         internal static string MissingFile {
             get {
                 return ResourceManager.GetString("MissingFile", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to A source configuration file cannot declare another configSource..
         /// </summary>
@@ -269,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NestedSource", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No configuration source to update..
         /// </summary>
@@ -278,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoBinding", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No configuration source is available. Set {0} to a Git repository address..
         /// </summary>
@@ -287,40 +284,40 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoCandidate", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to configuration updated.
+        ///   Looks up a localized string similar to Read more about this configuration source.
         /// </summary>
-        internal static string Refreshed {
+        internal static string ReadmeLink {
             get {
-                return ResourceManager.GetString("Refreshed", resourceCulture);
+                return ResourceManager.GetString("ReadmeLink", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to configuration already up to date.
-        /// </summary>
-        internal static string RefreshedUnchanged {
-            get {
-                return ResourceManager.GetString("RefreshedUnchanged", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Apply allowed settings from the nearest local and global saved Git configuration sources, replacing local edits to supplied settings, without updating packages or the CLI..
+        ///   Looks up a localized string similar to Apply allowed settings from the nearest local saved Git configuration source, replacing local edits to supplied settings, without updating packages or the CLI..
         /// </summary>
         internal static string RefreshOptionDescription {
             get {
                 return ResourceManager.GetString("RefreshOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Git could not read the configuration source repository. Check repository access, network connectivity, and Git authentication, then retry..
         /// </summary>
         internal static string RepositoryUnavailable {
             get {
                 return ResourceManager.GetString("RepositoryUnavailable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Source origin.
+        /// </summary>
+        internal static string SourceOrigin {
+            get {
+                return ResourceManager.GetString("SourceOrigin", resourceCulture);
             }
         }
 
@@ -332,26 +329,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UpdateAvailable", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Configuration source {0} ({1}) at commit {2}: {3}.
-        ///Settings file: {4}.
-        /// </summary>
-        internal static string UseNotice {
-            get {
-                return ResourceManager.GetString("UseNotice", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Accept or decline the proposed Git configuration source for this project..
+        ///   Looks up a localized string similar to Use the proposed Git configuration source. Specify false to decline it..
         /// </summary>
         internal static string UseSourceOptionDescription {
             get {
                 return ResourceManager.GetString("UseSourceOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Use configuration from this source?.
         /// </summary>

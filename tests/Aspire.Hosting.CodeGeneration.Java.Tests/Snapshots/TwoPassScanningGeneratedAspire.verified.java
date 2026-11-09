@@ -1329,7 +1329,10 @@ public class AspireClient {
         if (value instanceof String) {
             return "\"" + escapeJson((String) value) + "\"";
         }
-        if (value instanceof Number || value instanceof Boolean) {
+        if (value instanceof Number number) {
+            return toJsonNumber(number);
+        }
+        if (value instanceof Boolean) {
             return value.toString();
         }
         if (value instanceof Map) {
@@ -1372,6 +1375,32 @@ public class AspireClient {
             return sb.toString();
         }
         return "\"" + escapeJson(value.toString()) + "\"";
+    }
+
+    // 2^53 (JavaScript's Number.MAX_SAFE_INTEGER + 1). Every integer with magnitude up to this bound is exactly
+    // representable as a double; above it, doubles are spaced more than 1 apart, so a parsed value may already have
+    // been rounded to a different integer. Only normalize integral doubles within this range.
+    private static final double MAX_EXACT_DOUBLE_INTEGER = 9007199254740992d;
+
+    // ATS maps every numeric type to Java double, so integral values must be written without a fractional
+    // part ("32" rather than "32.0"); otherwise the AppHost can't deserialize them into int or long members.
+    private static String toJsonNumber(Number number) {
+        if (number instanceof BigDecimal decimal) {
+            // Compare exactly: BigDecimal values parsed from JSON may not be representable as a double.
+            try {
+                return Long.toString(decimal.longValueExact());
+            } catch (ArithmeticException ignored) {
+                // Fractional or out of long range; keep the original text.
+                return decimal.toString();
+            }
+        }
+        String text = number.toString();
+        boolean hasFractionOrExponent = text.indexOf('.') >= 0 || text.indexOf('e') >= 0 || text.indexOf('E') >= 0;
+        double value = number.doubleValue();
+        if (hasFractionOrExponent && value == Math.rint(value) && Math.abs(value) <= MAX_EXACT_DOUBLE_INTEGER) {
+            return Long.toString((long) value);
+        }
+        return text;
     }
 
     private String escapeJson(String s) {
@@ -3313,6 +3342,15 @@ public class CSharpAppResource extends ProjectResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public CSharpAppResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public CSharpAppResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -3462,6 +3500,34 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public CSharpAppResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public CSharpAppResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public CSharpAppResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -5817,6 +5883,15 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public ContainerRegistryResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ContainerRegistryResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -5871,6 +5946,34 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ContainerRegistryResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ContainerRegistryResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ContainerRegistryResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -7696,6 +7799,15 @@ public class ContainerResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public ContainerResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ContainerResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -7845,6 +7957,34 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ContainerResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ContainerResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ContainerResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -10472,6 +10612,15 @@ public class DotnetToolResource extends ExecutableResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public DotnetToolResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public DotnetToolResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -10648,6 +10797,34 @@ public class DotnetToolResource extends ExecutableResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public DotnetToolResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public DotnetToolResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public DotnetToolResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -11266,7 +11443,9 @@ public enum EndpointProperty implements WireValueEnum {
     SCHEME("Scheme"),
     TARGET_PORT("TargetPort"),
     HOST_AND_PORT("HostAndPort"),
-    TLS_ENABLED("TlsEnabled");
+    TLS_ENABLED("TlsEnabled"),
+    BROWSER_ORIGINS("BrowserOrigins"),
+    PRIMARY_BROWSER_ORIGIN("PrimaryBrowserOrigin");
 
     private final String value;
 
@@ -11313,6 +11492,22 @@ public class EndpointReference extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.endpointName", reqArgs);
         return (String) result;
+    }
+
+    /** Gets a deferred comma-separated list of browser-facing origins associated with this endpoint. */
+    public EndpointReferenceExpression browserOrigins() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", reqArgs);
+        return (EndpointReferenceExpression) result;
+    }
+
+    /** Gets the deferred primary browser-facing origin associated with this endpoint. */
+    public EndpointReferenceExpression primaryBrowserOrigin() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", reqArgs);
+        return (EndpointReferenceExpression) result;
     }
 
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
@@ -12958,6 +13153,15 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public ExecutableResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ExecutableResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -13134,6 +13338,34 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ExecutableResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ExecutableResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ExecutableResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -14229,6 +14461,15 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public ExternalServiceResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ExternalServiceResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -14283,6 +14524,34 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ExternalServiceResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ExternalServiceResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ExternalServiceResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -16089,6 +16358,35 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         }
         var result = getClient().invokeCapability("Aspire.Hosting/addCSharpApp", reqArgs);
         return (CSharpAppResource) result;
+    }
+
+    /** Adds an opt-in target that checks for stale generated pipeline output. */
+    public IDistributedApplicationBuilder withOutputDiffing(WithOutputDiffingOptions optionsBag) {
+        var targetStep = optionsBag == null ? null : optionsBag.getTargetStep();
+        var diffStepName = optionsBag == null ? null : optionsBag.getDiffStepName();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
+        return withOutputDiffingImpl(targetStep, diffStepName, description);
+    }
+
+    public IDistributedApplicationBuilder withOutputDiffing() {
+        return withOutputDiffing(null);
+    }
+
+    /** Adds an opt-in target that checks for stale generated pipeline output. */
+    private IDistributedApplicationBuilder withOutputDiffingImpl(String targetStep, String diffStepName, String description) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (targetStep != null) {
+            reqArgs.put("targetStep", AspireClient.serializeValue(targetStep));
+        }
+        if (diffStepName != null) {
+            reqArgs.put("diffStepName", AspireClient.serializeValue(diffStepName));
+        }
+        if (description != null) {
+            reqArgs.put("description", AspireClient.serializeValue(description));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/withOutputDiffing", reqArgs);
+        return (IDistributedApplicationBuilder) result;
     }
 
     /** Gets the application configuration. */
@@ -19102,6 +19400,15 @@ public class ParameterResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public ParameterResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ParameterResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -19156,6 +19463,34 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ParameterResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ParameterResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ParameterResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -21416,6 +21751,15 @@ public class ProjectResource extends ResourceBuilderBase {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public ProjectResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public ProjectResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -21565,6 +21909,34 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public ProjectResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public ProjectResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public ProjectResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -24994,6 +25366,15 @@ public class TestDatabaseResource extends ContainerResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public TestDatabaseResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -25143,6 +25524,34 @@ public class TestDatabaseResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public TestDatabaseResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public TestDatabaseResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public TestDatabaseResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -27303,6 +27712,15 @@ public class TestRedisResource extends ContainerResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public TestRedisResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public TestRedisResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -27452,6 +27870,34 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public TestRedisResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public TestRedisResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public TestRedisResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -29796,6 +30242,15 @@ public class TestVaultResource extends ContainerResource {
         return withChildRelationship(new IResource(child.getHandle(), child.getClient()));
     }
 
+    /** Overrides the human-readable resource type label. */
+    public TestVaultResource withResourceTypeDisplayName(String resourceTypeDisplayName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceTypeDisplayName", AspireClient.serializeValue(resourceTypeDisplayName));
+        getClient().invokeCapability("Aspire.Hosting/withResourceTypeDisplayName", reqArgs);
+        return this;
+    }
+
     public TestVaultResource withIconName(String iconName) {
         return withIconName(iconName, null);
     }
@@ -29945,6 +30400,34 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values. */
+    public TestVaultResource withTrait(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/withTrait", reqArgs);
+        return this;
+    }
+
+    /** Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags. */
+    public TestVaultResource withTags(String[] tags) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("tags", AspireClient.serializeValue(tags));
+        getClient().invokeCapability("Aspire.Hosting/withTags", reqArgs);
+        return this;
+    }
+
+    /** Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence. */
+    public TestVaultResource withDashboardPosition(double position) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("position", AspireClient.serializeValue(position));
+        getClient().invokeCapability("Aspire.Hosting/withDashboardPosition", reqArgs);
         return this;
     }
 
@@ -31320,6 +31803,38 @@ public final class WithOptionalStringOptions {
 
 }
 
+// ===== aspire/WithOutputDiffingOptions.java =====
+// WithOutputDiffingOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for WithOutputDiffing. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class WithOutputDiffingOptions {
+    private String targetStep;
+    private String diffStepName;
+    private String description;
+
+    public String getTargetStep() { return targetStep; }
+    public WithOutputDiffingOptions targetStep(String value) {
+        this.targetStep = value;
+        return this;
+    }
+
+    public String getDiffStepName() { return diffStepName; }
+    public WithOutputDiffingOptions diffStepName(String value) {
+        this.diffStepName = value;
+        return this;
+    }
+
+    public String getDescription() { return description; }
+    public WithOutputDiffingOptions description(String value) {
+        this.description = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/WithPipelineStepFactoryOptions.java =====
 // WithPipelineStepFactoryOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -31665,6 +32180,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/WithMergeLoggingOptions.java
 .aspire/modules/aspire/WithMergeLoggingPathOptions.java
 .aspire/modules/aspire/WithOptionalStringOptions.java
+.aspire/modules/aspire/WithOutputDiffingOptions.java
 .aspire/modules/aspire/WithPipelineStepFactoryOptions.java
 .aspire/modules/aspire/WithReferenceOptions.java
 .aspire/modules/aspire/WithVolumeOptions.java

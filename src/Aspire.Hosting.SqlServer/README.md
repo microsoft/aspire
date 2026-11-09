@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.SqlServer` integration with
 
 ```bash
 aspire add Aspire.Hosting.SqlServer
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a SQL Server resource and reference it from another resource
 ```csharp
 var db = builder.AddSqlServer("sql").AddDatabase("db");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
    .WithReference(db);
 ```
 

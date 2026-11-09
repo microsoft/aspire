@@ -1,0 +1,18 @@
+﻿
+         [1;32mGit source[0m:  https://example.test/config
+            [1;32mGit ref[0m:  release/[team]
+
+               [1;32mName[0m:  Company [templates]
+         [1;32mGit source[0m:  https://example.test/templates
+           [1;32mGit path[0m:  templates
+            [1;32mGit ref[0m:  release/[team]
+
+               [1;32mName[0m:  company
+       [1;32mPackage feed[0m:  https://example.test/nuget
+   [1;32mPackage patterns[0m:  Acme.Hosting.*
+
+               [1;32mName[0m:  company
+         [1;32mGit source[0m:  https://example.test/skills
+        [1;32mMarketplace[0m:  company-skills
+            [1;32mPlugins[0m:  aspire@company-skills
+

@@ -17,6 +17,8 @@ internal sealed class TestEfTool
 
     public ExecuteCommandResult Result { get; set; } = CommandResults.Success();
 
+    public Func<string[], Task>? EmitArtifactAsync { get; set; }
+
     public TestEfTool()
     {
         Resource.Annotations.Add(new ResourceCommandAnnotation(
@@ -30,7 +32,12 @@ internal sealed class TestEfTool
                     context.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
                     context.Logger,
                     context.CancellationToken);
-                Invocations.Enqueue(arguments.Select(argument => argument.ToString()!).ToArray());
+                var invocation = arguments.Select(argument => argument.ToString()!).ToArray();
+                Invocations.Enqueue(invocation);
+                if (EmitArtifactAsync is not null)
+                {
+                    await EmitArtifactAsync(invocation);
+                }
                 await context.Services.GetRequiredService<ResourceNotificationService>().PublishUpdateAsync(
                     Resource,
                     snapshot => snapshot with

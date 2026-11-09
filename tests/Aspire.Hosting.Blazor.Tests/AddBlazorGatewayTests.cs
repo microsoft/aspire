@@ -211,7 +211,9 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
         using var publishBuilder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = directory.Path, testOutputHelper, "AppHost:Operation=publish");
         var backendAlias = $"weatherapi-{Guid.NewGuid():N}";
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
         var backend = publishBuilder.AddProject<TestProjectMetadata>("weatherapi")
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 80);
         var backendEndpoint = backend.Resource.Annotations.OfType<EndpointAnnotation>().Single();
         backendEndpoint.AllocatedEndpoint = new AllocatedEndpoint(backendEndpoint, backendAlias, 80);
@@ -485,7 +487,9 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
+#pragma warning disable CS0618 // Retain synthetic-metadata legacy ProjectResource proxy, gateway, and fluent contracts.
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+#pragma warning restore CS0618
             .WithHttpEndpoint();
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
             .WithReference(weatherApi);

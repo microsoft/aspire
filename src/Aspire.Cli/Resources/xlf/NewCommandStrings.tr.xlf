@@ -2,9 +2,9 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../NewCommandStrings.resx">
     <body>
-      <trans-unit id="BackToDefaultTemplates">
-        <source>Back to default templates</source>
-        <target state="new">Back to default templates</target>
+      <trans-unit id="BuiltInTemplates">
+        <source>Built-in templates</source>
+        <target state="new">Built-in templates</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
@@ -102,11 +102,6 @@
         <target state="new">No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoMatchingConfiguredTemplates">
-        <source>No matching templates were found in the configured sources.</source>
-        <target state="new">No matching templates were found in the configured sources.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
         <target state="translated">Eşleşen yerel yok AspireAspire. Aspire CLI sürüm '{0}' için ProjectTemplates paketi bulundu. localhive.sh (macOS/Linux) veya localhive.ps1 (Windows) ile eşleşen paketler oluşturun ve hazırlayın, ASPIRE_CLI_PACKAGES paketi içeren bir dizine ayarlayın veya --channel, --source veya --version ile akış destekli şablonları açıkça seçin.</target>
@@ -155,21 +150,6 @@
       <trans-unit id="ResolvingTemplateVersion">
         <source>Resolving template version...</source>
         <target state="translated">Şablon sürümü çözümleniyor...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchForMoreTemplates">
-        <source>Search for more templates</source>
-        <target state="new">Search for more templates</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchTemplatesAgain">
-        <source>Search again</source>
-        <target state="new">Search again</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchingTemplateSource">
-        <source>Searching template source '{0}'...</source>
-        <target state="new">Searching template source '{0}'...</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAProjectTemplate">
@@ -262,14 +242,9 @@
         <target state="new">--template-repository-ref requires --template-repository and a non-empty ref value.</target>
         <note />
       </trans-unit>
-      <trans-unit id="TemplateSearchPrompt">
-        <source>Search templates (leave empty to list all)</source>
-        <target state="new">Search templates (leave empty to list all)</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TemplateSourceAddDescription">
-        <source>Add a named template source to global configuration.</source>
-        <target state="new">Add a named template source to global configuration.</target>
+        <source>Add a named template source to global configuration after confirming you trust it.</source>
+        <target state="new">Add a named template source to global configuration after confirming you trust it.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceAdded">
@@ -297,6 +272,16 @@
         <target state="new">Configuration</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceDisplayNameInvalid">
+        <source>Expected a display name string without control characters, or null to use the source alias.</source>
+        <target state="new">Expected a display name string without control characters, or null to use the source alias.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="new">One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceInvalidRepository">
         <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
         <target state="new">Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</target>
@@ -308,8 +293,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListDescription">
-        <source>List named template sources from global configuration without discovering templates.</source>
-        <target state="new">List named template sources from global configuration without discovering templates.</target>
+        <source>List named template sources without discovering templates.</source>
+        <target state="new">List named template sources without discovering templates.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceListEmpty">
@@ -327,14 +312,9 @@
         <target state="new">The name of the template source.</target>
         <note />
       </trans-unit>
-      <trans-unit id="TemplateSourceNameHeader">
-        <source>Name</source>
-        <target state="new">Name</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TemplateSourceNameRequired">
-        <source>Template source names must be nonempty and must not contain dots, colons, or control characters.</source>
-        <target state="new">Template source names must be nonempty and must not contain dots, colons, or control characters.</target>
+        <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="new">Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceNotFound">
@@ -387,14 +367,24 @@
         <target state="new">Expected a nonempty string without control characters.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplateSourceTrustPrompt">
+        <source>Do you trust template source '{0}' ({1})?</source>
+        <target state="new">Do you trust template source '{0}' ({1})?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TemplateSourceUnknownField">
-        <source>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</source>
-        <target state="new">Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</target>
+        <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
+        <target state="new">Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourceWriteFailed">
         <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
         <target state="new">Could not update global template sources. Check the configuration file's JSON format and file permissions.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceYesOptionDescription">
+        <source>Trust the template source and skip confirmation.</source>
+        <target state="new">Trust the template source and skip confirmation.</target>
         <note />
       </trans-unit>
       <trans-unit id="TemplateSourcesMustBeObject">

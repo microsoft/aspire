@@ -1,0 +1,208 @@
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Model.Interaction
+@using Aspire.Dashboard.Resources
+@using Aspire.DashboardService.Proto.V1
+
+<div class="missing-parameters-panel">
+    <section class="missing-parameters-card" aria-labelledby="missing-parameters-title">
+        <header class="missing-parameters-header">
+            <span class="card-header-icon missing-parameters-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Filled.Size16.Warning())"
+                            Width="16px"
+                            Color="Color.Custom"
+                            CustomColor="currentColor" />
+            </span>
+            <h2 id="missing-parameters-title">@Loc[nameof(Dashboard.Resources.Resources.MissingParametersCardTitle)]</h2>
+            <span class="missing-parameters-count">@Editors.Count</span>
+        </header>
+        <p class="missing-parameters-description">@Loc[nameof(Dashboard.Resources.Resources.MissingParametersPanelDescription)]</p>
+
+        @if (Editors.Count == 0)
+        {
+            <div class="missing-parameters-complete">
+                <FluentIcon Value="@(new Icons.Filled.Size20.CheckmarkCircle())" Color="Color.Success" />
+                <span>@Loc[nameof(Dashboard.Resources.Resources.ParametersAllValuesSet)]</span>
+            </div>
+        }
+        else
+        {
+            <div class="missing-parameters-fields">
+                @foreach (var editor in Editors)
+                {
+                    var input = editor.ValueInput;
+                    <section class="missing-parameter-field" @key="editor.Resource.Name">
+                        <InteractionInputField ForId="@input.ElementId"
+                                               InputViewModel="@input"
+                                               MarkdownProcessor="@MarkdownProcessor"
+                                               Context="field">
+                            @switch (field.ViewModel.Input.InputType)
+                            {
+                                case InputType.Text:
+                                case InputType.SecretText:
+                                    var isSecret = field.ViewModel.Input.InputType == InputType.SecretText;
+                                    <FluentTextInput Id="@field.ViewModel.ElementId"
+                                                     Class="aspire-input missing-parameter-control"
+                                                     @bind-Value="field.ViewModel.Value"
+                                                     Placeholder="@field.ViewModel.Input.Placeholder"
+                                                     Required="@field.ViewModel.Input.Required"
+                                                     Immediate="true"
+                                                     AutoComplete="@(isSecret ? "one-time-code" : "off")"
+                                                     TextInputType="@(isSecret && !field.ViewModel.IsSecretTextVisible ? TextInputType.Password : TextInputType.Text)"
+                                                     Disabled="@IsEditorDisabled(editor)"
+                                                     aria-describedby="@field.DescriptionId">
+                                        <EndTemplate>
+                                            @if (isSecret)
+                                            {
+                                                <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                              IconOnly="true"
+                                                              Class="aspire-icon-button"
+                                                              Disabled="@IsEditorDisabled(editor)"
+                                                              OnClick="@(() => field.ViewModel.IsSecretTextVisible = !field.ViewModel.IsSecretTextVisible)"
+                                                              data-tooltip="@ControlsStringsLoc[field.ViewModel.IsSecretTextVisible ? nameof(ControlsStrings.GridValueMaskHideValue) : nameof(ControlsStrings.GridValueMaskShowValue)]"
+                                                              aria-label="@ControlsStringsLoc[field.ViewModel.IsSecretTextVisible ? nameof(ControlsStrings.GridValueMaskHideValue) : nameof(ControlsStrings.GridValueMaskShowValue)]">
+                                                    @if (field.ViewModel.IsSecretTextVisible)
+                                                    {
+                                                        <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())" Color="Color.Primary" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <FluentIcon Value="@(new Icons.Regular.Size16.Eye())" Color="Color.Primary" />
+                                                    }
+                                                </FluentButton>
+                                            }
+                                        </EndTemplate>
+                                    </FluentTextInput>
+                                    break;
+                                case InputType.Choice:
+                                    @if (!field.ViewModel.Input.AllowCustomChoice)
+                                    {
+                                        <FluentSelect @key="field.ViewModel.InputKey"
+                                                      Id="@field.ViewModel.ElementId"
+                                                      TOption="SelectViewModel<string>" TValue="string"
+                                                      Class="aspire-input missing-parameter-control"
+                                                      @bind-Value="field.ViewModel.Value"
+                                                      Placeholder="@field.ViewModel.Input.Placeholder"
+                                                      Required="@field.ViewModel.Input.Required"
+                                                      Items="@field.ViewModel.SelectOptions"
+                                                      OptionValue="@((SelectViewModel<string>? option) => option?.Id)"
+                                                      OptionText="@((SelectViewModel<string>? option) => option?.Name)"
+                                                      Height="250px"
+                                                      Position="SelectPosition.Below"
+                                                      Disabled="@IsEditorDisabled(editor)"
+                                                      aria-describedby="@field.DescriptionId" />
+                                    }
+                                    else
+                                    {
+                                        <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
+                                            <FluentCombobox @key="field.ViewModel.InputKey"
+                                                            Id="@field.ViewModel.ElementId"
+                                                            TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
+                                                            Class="aspire-input missing-parameter-control"
+                                                            @bind-Value="field.ViewModel.SelectedOption"
+                                                            @bind-Value:after="@(() => UpdateChoiceValueState(field.ViewModel))"
+                                                            @bind-ImmediateText:get="field.ViewModel.SelectedOption?.Name ?? field.ViewModel.Value"
+                                                            @bind-ImmediateText:set="@(text => OnChoiceTextChanged(field.ViewModel, text))"
+                                                            Immediate="true"
+                                                            ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                                            Placeholder="@field.ViewModel.Input.Placeholder"
+                                                            Required="@field.ViewModel.Input.Required"
+                                                            Items="@field.ViewModel.FilteredOptions()"
+                                                            OptionText="@((SelectViewModel<string>? option) => option?.Name)"
+                                                            Height="250px"
+                                                            Position="SelectPosition.Below"
+                                                            Disabled="@IsEditorDisabled(editor)"
+                                                            aria-describedby="@field.DescriptionId">
+                                                <FreeOption>
+                                                    <FreeOptionOutput />
+                                                </FreeOption>
+                                            </FluentCombobox>
+                                        </CascadingValue>
+                                    }
+                                    break;
+                                case InputType.Boolean:
+                                    <FluentCheckbox Id="@field.ViewModel.ElementId"
+                                                    Class="aspire-checkbox"
+                                                    @bind-Value="field.ViewModel.IsChecked"
+                                                    Label="@field.ViewModel.Input.Label"
+                                                    AriaLabel="@field.ViewModel.Input.Label"
+                                                    Disabled="@IsEditorDisabled(editor)"
+                                                    aria-describedby="@field.DescriptionId" />
+                                    break;
+                                case InputType.Number:
+                                    <FluentNumberInput TValue="int?"
+                                                       Id="@field.ViewModel.ElementId"
+                                                       Class="aspire-input missing-parameter-control"
+                                                       @bind-Value="field.ViewModel.NumberValue"
+                                                       Placeholder="@field.ViewModel.Input.Placeholder"
+                                                       Required="@field.ViewModel.Input.Required"
+                                                       Immediate="true"
+                                                       Disabled="@IsEditorDisabled(editor)"
+                                                       aria-describedby="@field.DescriptionId" />
+                                    break;
+                                case InputType.File:
+                                    var fileButtonId = $"{field.ViewModel.ElementId}-file-upload";
+                                    <div class="missing-parameter-file">
+                                        <FluentInputFile Id="@field.ViewModel.ElementId"
+                                                         DragDropZoneVisible="false"
+                                                         Mode="InputFileMode.Stream"
+                                                         AnchorId="@fileButtonId"
+                                                         Accept="@field.ViewModel.Input.FileFilter"
+                                                         Multiple="@field.ViewModel.Input.AllowMultipleFiles"
+                                                         MaximumFileSize="@GetMaxFileSize(field.ViewModel)"
+                                                         Disabled="@IsEditorDisabled(editor)"
+                                                         OnInputFileChange="@(args => OnInputFileChangeAsync(editor, args))" />
+                                        @if (field.ViewModel.FileReferences.Count > 0)
+                                        {
+                                            <div class="missing-parameter-files">
+                                                @foreach (var file in field.ViewModel.FileReferences)
+                                                {
+                                                    <span class="missing-parameter-file-name @(file.ErrorMessage is not null ? "error" : null)">
+                                                        @if (file.ErrorMessage is null)
+                                                        {
+                                                            <FluentIcon Value="@(new Icons.Regular.Size16.Document())" Color="Color.Primary" />
+                                                        }
+                                                        else
+                                                        {
+                                                            <FluentIcon Value="@(new Icons.Regular.Size16.Warning())" Color="Color.Error" />
+                                                        }
+                                                        @(file.ErrorMessage is null ? file.Name : $"{file.Name}: {file.ErrorMessage}")
+                                                    </span>
+                                                }
+                                            </div>
+                                        }
+                                        <FluentButton Id="@fileButtonId"
+                                                      Appearance="ButtonAppearance.Primary"
+                                                      Class="aspire-button"
+                                                      IconStart="@(new Icons.Regular.Size16.FolderOpen())"
+                                                      Disabled="@IsEditorDisabled(editor)">
+                                            @GetFileButtonText(editor)
+                                        </FluentButton>
+                                    </div>
+                                    break;
+                            }
+                        </InteractionInputField>
+                    </section>
+                }
+            </div>
+
+            <footer class="missing-parameters-actions">
+                @if (_saveInput is not null || Editors.Any(editor => editor.SaveInput is not null))
+                {
+                    <label class="missing-parameters-save">
+                        <FluentCheckbox Class="aspire-checkbox"
+                                        @bind-Value="SaveToUserSecrets"
+                                        AriaLabel="@Loc[nameof(Dashboard.Resources.Resources.MissingParametersSaveToUserSecrets)]" />
+                        <span>@Loc[nameof(Dashboard.Resources.Resources.MissingParametersSaveToUserSecrets)]</span>
+                    </label>
+                }
+                <FluentButton Appearance="ButtonAppearance.Primary"
+                              Class="aspire-button"
+                              IconStart="@(new Icons.Regular.Size16.Save())"
+                              Disabled="@IsSubmitDisabled"
+                              OnClick="SubmitAsync">
+                    @Loc[nameof(Dashboard.Resources.Resources.MissingParametersSetValues)]
+                </FluentButton>
+            </footer>
+        }
+    </section>
+</div>

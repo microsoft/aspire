@@ -16,7 +16,8 @@
         <FluentIcon Icon="Icons.Regular.Size20.ArrowTurnDownRight"
                     Color="Color.Primary"
                     Style="vertical-align: text-bottom;" />
-        <span aria-label="@string.Format(@Loc[nameof(ControlsStrings.ResourceDropdownReplicaAccessibleTitle)], ViewModel.Name, ViewModel.Id.ReplicaSetName)">@ViewModel.Name</span>
+        <span aria-hidden="true">@ViewModel.Name</span>
+        <span class="visually-hidden">@string.Format(@Loc[nameof(ControlsStrings.ResourceDropdownReplicaAccessibleTitle)], ViewModel.Name, ViewModel.Id.ReplicaSetName)</span>
     }
     else
     {

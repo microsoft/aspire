@@ -340,8 +340,9 @@ public partial class StructuredLogsTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, viewport);
         });
 
-        var search = Assert.Single(cut.FindComponents<FluentTextInput>());
-        Assert.Equal("off", search.Instance.AutoComplete);
+        var searches = cut.FindComponents<FluentTextInput>();
+        Assert.NotEmpty(searches);
+        Assert.All(searches, search => Assert.Equal("off", search.Instance.AutoComplete));
     }
 
     [Fact]

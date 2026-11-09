@@ -10,14 +10,18 @@ namespace Aspire.Tray.Tests;
 public class TrayLaunchCommandTests
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public void DetachedLaunchPreservesOptionalBundleLeaseHandoff(bool windows, bool leased)
+    [InlineData("mac", false)]
+    [InlineData("mac", true)]
+    [InlineData("windows", false)]
+    [InlineData("windows", true)]
+    [InlineData("linux", false)]
+    [InlineData("linux", true)]
+    public void DetachedLaunchPreservesOptionalBundleLeaseHandoff(string platform, bool leased)
     {
+        Assert.SkipWhen(platform == "linux" && !OperatingSystem.IsLinux(), "Requires Linux.");
         using var bundle = new TestTrayBundle();
         File.WriteAllText(Path.Combine(bundle.Root, "tray", "aspire-tray.exe"), "");
+        File.WriteAllText(Path.Combine(bundle.Root, "tray", "aspire-tray"), "");
         var remoteOptions = new RemoteInvokeOptions();
         if (leased)
         {
@@ -28,12 +32,17 @@ public class TrayLaunchCommandTests
             remoteOptions.StartInfo.Environment.Remove(BundleDiscovery.BundleVersionDirectoryEnvVar);
         }
 
-        using (var remote = RemoteExecutor.Invoke(static (cliPath, root, windowsValue, leasedValue) =>
+        using (var remote = RemoteExecutor.Invoke(static (cliPath, root, platform, leasedValue) =>
         {
-            var windows = bool.Parse(windowsValue);
             var leased = bool.Parse(leasedValue);
             var options = TrayOptions.Parse(["--cli", cliPath, "--bundle-root", root]);
-            var start = windows ? TrayLaunchCommand.CreateWindowsStartInfo(options) : TrayLaunchCommand.CreateStartInfo(options);
+            var start = platform switch
+            {
+                "windows" => TrayLaunchCommand.CreateWindowsStartInfo(options),
+                "linux" when OperatingSystem.IsLinux() => LinuxTrayRuntime.CreateStartInfo(options),
+                "mac" => TrayLaunchCommand.CreateStartInfo(options),
+                _ => throw new PlatformNotSupportedException()
+            };
 
             start.Environment.TryGetValue(BundleDiscovery.BundleVersionDirectoryEnvVar, out var inheritedVersionDirectory);
             Assert.Equal(leased ? root : null, inheritedVersionDirectory);
@@ -45,7 +54,7 @@ public class TrayLaunchCommandTests
                 Assert.Equal(leased, BundleVersionLease.HasActiveLease(root));
             }
             Assert.Equal(leased, BundleVersionLease.HasActiveLease(root));
-        }, bundle.CliPath, bundle.Root, windows.ToString(), leased.ToString(), remoteOptions))
+        }, bundle.CliPath, bundle.Root, platform, leased.ToString(), remoteOptions))
         {
         }
 
