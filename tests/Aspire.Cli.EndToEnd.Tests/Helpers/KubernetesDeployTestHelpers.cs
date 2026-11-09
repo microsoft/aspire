@@ -26,7 +26,6 @@ internal static class KubernetesDeployTestHelpers
     /// <summary>
     /// Installs KinD, Helm, and kubectl binaries to ~/.local/bin and adds to PATH.
     /// Skips downloads for tools already on PATH.
-    /// Retries downloads up to 3 times to handle transient GitHub CDN failures.
     /// </summary>
     internal static async Task InstallKindAndHelmAsync(
         this Hex1bTerminalAutomator auto,
@@ -40,20 +39,32 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Download KinD if not already installed — GitHub CDN can transiently return HTML instead of a binary.
-        await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-$K8S_TOOL_ARCH\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
+        await auto.TypeAsync(GetToolDownloadCommand(
+            toolName: "KinD",
+            url: $"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-$K8S_TOOL_ARCH",
+            downloadPath: "~/.local/bin/kind",
+            installCommand: "chmod +x ~/.local/bin/kind",
+            verifyCommand: "~/.local/bin/kind version"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, s_toolDownloadTimeout);
 
-        // Download Helm if not already installed
-        await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-$K8S_TOOL_ARCH.tar.gz | tar xz -C /tmp && test -f /tmp/linux-$K8S_TOOL_ARCH/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-$K8S_TOOL_ARCH/helm ~/.local/bin/helm && rm -rf /tmp/linux-$K8S_TOOL_ARCH; }}");
+        await auto.TypeAsync(GetToolDownloadCommand(
+            toolName: "Helm",
+            url: $"https://get.helm.sh/helm-{HelmVersion}-linux-$K8S_TOOL_ARCH.tar.gz",
+            downloadPath: "/tmp/helm.tar.gz",
+            installCommand: "tar xzf /tmp/helm.tar.gz -C /tmp && mv -f /tmp/linux-$K8S_TOOL_ARCH/helm ~/.local/bin/helm && rm -rf /tmp/linux-$K8S_TOOL_ARCH /tmp/helm.tar.gz",
+            verifyCommand: "~/.local/bin/helm version --short"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, s_toolDownloadTimeout);
 
-        // Download kubectl if not already installed
-        await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/$K8S_TOOL_ARCH/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
+        await auto.TypeAsync(GetToolDownloadCommand(
+            toolName: "kubectl",
+            url: $"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/$K8S_TOOL_ARCH/kubectl",
+            downloadPath: "~/.local/bin/kubectl",
+            installCommand: "chmod +x ~/.local/bin/kubectl",
+            verifyCommand: "~/.local/bin/kubectl version --client"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, s_toolDownloadTimeout);
 
         await auto.TypeAsync("export PATH=\"$HOME/.local/bin:$PATH\"");
         await auto.EnterAsync();
@@ -529,6 +540,32 @@ internal static class KubernetesDeployTestHelpers
     {
         await auto.RunCommandAsync(GetDeletePodCommand(@namespace, podName), counter, TimeSpan.FromSeconds(60));
         await auto.RunCommandAsync(GetWaitForRecreatedPodReadyCommand(@namespace, podName), counter, TimeSpan.FromMinutes(7));
+    }
+
+    private const int ToolDownloadAttempts = 6;
+
+    // Worst case: every attempt hits the curl --max-time (60s) plus the linear backoff between attempts (10+20+30+40+50s).
+    private static readonly TimeSpan s_toolDownloadTimeout = TimeSpan.FromMinutes(9);
+
+    /// <summary>
+    /// Builds a shell command that downloads a Kubernetes tool unless the tool is already on PATH.
+    /// GitHub release assets and other tool CDNs intermittently answer with HTTP error pages for
+    /// tens of seconds at a time, so the download fails on HTTP errors, logs the status code, and
+    /// retries with a linearly increasing backoff instead of a short fixed delay.
+    /// </summary>
+    internal static string GetToolDownloadCommand(string toolName, string url, string downloadPath, string installCommand, string verifyCommand)
+    {
+        var binaryName = verifyCommand.Split(' ')[0].Split('/')[^1];
+        return
+            $"command -v {binaryName} >/dev/null 2>&1 || {{ " +
+            $"for i in $(seq 1 {ToolDownloadAttempts}); do " +
+            $"http_code=$(curl -sSL --connect-timeout 15 --max-time 60 -o {downloadPath} -w '%{{http_code}}' \"{url}\"); " +
+            $"if [ \"$http_code\" = 200 ] && {installCommand} && {verifyCommand} >/dev/null 2>&1; then break; fi; " +
+            $"echo \"Retry $i/{ToolDownloadAttempts}: {toolName} download failed (HTTP ${{http_code:-none}})\"; " +
+            $"rm -f {downloadPath}; " +
+            $"if [ $i -lt {ToolDownloadAttempts} ]; then sleep $((i * 10)); fi; " +
+            $"done; " +
+            $"{verifyCommand} >/dev/null 2>&1; }}";
     }
 
     // `kubectl delete` waits for the old pod to be removed, so any pod with this name afterwards is
