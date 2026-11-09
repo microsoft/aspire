@@ -107,17 +107,10 @@
         <target state="translated">Voulez-vous configurer le serveur Aspire MCP pour les environnements d’agents détectés ?</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_ConfiguredSourceList">
-        <source>Sources: {0}</source>
-        <target state="new">Sources: {0}</target>
-        <note>{0} lists the configured repository and catalog URLs separated by commas.</note>
-      </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
-        <source>Configured sources:
-  {0}</source>
-        <target state="new">Configured sources:
-  {0}</target>
-        <note>{0} contains the source URLs and configuration locations, each on its own labeled line.</note>
+        <source>Configured sources in {0}</source>
+        <target state="new">Configured sources in {0}</target>
+        <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
@@ -269,6 +262,11 @@
         <target state="new">Skill sources:
 {0}</target>
         <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillSourcesExplanation">
+        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
+        <target state="new">One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>

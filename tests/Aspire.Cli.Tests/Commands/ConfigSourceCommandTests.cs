@@ -608,11 +608,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var prompts = 0;
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (prompt, _, _, _) =>
+            ConfirmCallback = (prompt, _) =>
             {
                 Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
                 prompts++;
-                return accepted ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
+                return accepted;
             }
         };
         for (var attempt = 0; attempt < 2; attempt++)
@@ -698,7 +698,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(configPath, configuration);
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected source prompt.")
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("Unexpected source prompt.")
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {

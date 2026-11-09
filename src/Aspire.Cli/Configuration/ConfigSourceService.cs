@@ -33,6 +33,7 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
+    internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
     private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
@@ -175,9 +176,35 @@ internal sealed class ConfigSourceService(
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
-        interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.Candidate,
-            source.Repository, source.Path, source.Ref ?? ConfigSourceStrings.DefaultBranch,
-            explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+        var readmeUrl = environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
+            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
+        if (readmeUrl is not null && (!UrlHelper.IsHttpUrl(readmeUrl) || readmeUrl.Any(char.IsControl)))
+        {
+            throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
+                ConfigSourceStrings.InvalidReadmeUrl, CliConfigNames.InitSourceReadmeUrl));
+        }
+
+        interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.Explanation);
+        List<(string Label, string Value)> details =
+        [
+            (SharedCommandStrings.SourceGitRepository, source.Repository)
+        ];
+        if (source.Path != AspireConfigFile.FileName)
+        {
+            details.Add((ConfigSourceStrings.ConfigurationFile, source.Path));
+        }
+        if (source.Ref is not null)
+        {
+            details.Add((SharedCommandStrings.SourceRef, source.Ref));
+        }
+        details.Add((ConfigSourceStrings.SourceOrigin, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
+
+        interaction.DisplaySourceDetails([details]);
+        if (readmeUrl is not null)
+        {
+            interaction.DisplayMessage(KnownEmojis.Information,
+                MarkupHelpers.SafeLink(interaction, readmeUrl, ConfigSourceStrings.ReadmeLink), allowMarkup: true);
+        }
         interaction.DisplaySourceTrustWarning(executionContext);
 
         // Machine-configured or detected sources suggest useful defaults for new apps;
@@ -190,12 +217,9 @@ internal sealed class ConfigSourceService(
             {
                 throw new ConfigSourceException(ConfigSourceStrings.ConsentRequired);
             }
-            // Boolean choices let the prompt select default(bool), highlighting decline
-            // even when accept is first. String choices preserve the first-item default.
-            var selection = await interaction.PromptForSelectionAsync(ConfigSourceStrings.UseSourcePrompt,
-                new[] { ConfigSourceStrings.Accept, ConfigSourceStrings.Decline }, choice => choice,
+            accepted = await interaction.PromptConfirmAsync(ConfigSourceStrings.UseSourcePrompt,
+                binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
-            accepted = selection == ConfigSourceStrings.Accept;
         }
         _sourceDeclined = !accepted.Value;
         if (_sourceDeclined)
@@ -364,7 +388,7 @@ internal sealed class ConfigSourceService(
             // Replace all case-equivalent local sections, preserving every source section
             // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
             // Keep the original position so an unchanged section does not reorder the file
-            // and make an otherwise identical refresh report changes.
+            // and make an otherwise identical refresh rewrite the file.
             var insertionIndex = configuration.Count;
             foreach (var key in configuration.Select(property => property.Key)
                 .Where(key => key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray())
@@ -404,9 +428,6 @@ internal sealed class ConfigSourceService(
         {
             _projectChecked = true;
         }
-        interaction.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.UseNotice,
-            source.Repository, source.Path, snapshot.Metadata.Commit,
-            changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, path), consoleOverride: ConsoleOutput.Error);
     }
 
     public async Task CheckProjectAsync(DirectoryInfo directory, bool force, CancellationToken cancellationToken)
@@ -574,6 +595,8 @@ internal sealed class ConfigSourceService(
                 Path = source.Path,
                 Ref = source.Ref
             };
+            interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchConfigurationSource,
+                allowInteractiveInput && hostEnvironment.SupportsInteractiveInput);
             var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken);
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();

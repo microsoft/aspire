@@ -95,8 +95,11 @@ name and description exceed the available terminal-cell width. Search matches on
 the visible prefix of a truncated label; full template metadata is retained.
 Empty or unavailable sources report their
 existing warnings without preventing selection from other sources or built-ins.
-The terminal picker shows nonselectable headings for built-in templates and each
-configured source. Group order follows first appearance in the discovered choices,
+Before selection, source details use the same aligned, bold-green labels as
+configuration sources, with a blank line between sources. Repository, path, and
+explicit ref appear in these details rather than in the picker headings.
+The terminal picker shows nonselectable source-name headings only when choices come
+from multiple sources. Group order follows first appearance in the discovered choices,
 with built-ins first; templates retain their existing ordering within each group.
 Source objects can specify an optional `displayName` for their heading:
 
@@ -117,11 +120,18 @@ and control characters are rejected. Set an existing source's heading with
 `aspire config set templateSources.company.displayName "Company templates" --global`.
 The alias remains the lookup key and group identity, so identical display names do
 not merge sources or alter explicit invocations, warnings, or flat-client labels.
-Git source headings append the configured repository and ref, for example
-`Company templates (https://github.com/example/templates @ release/templates)`.
-An omitted ref is shown as `default branch`, not a guessed branch name or the
-resolved commit. Directory sources append their local path instead, for example
-`Company templates (/work/templates)`. Configured source headings are green;
+Source headings show only the display name or alias, for example `Company templates`.
+Before fetching templates, the CLI displays **One or more template sources are
+configured. A template source lets an organization share Aspire templates to
+customize your development experience.**
+It then displays each configured source with aligned **Name**, **Git source**,
+**Git path**, and **Git ref** labels, with blank lines between sources. Local
+directory sources use **Path** instead of the Git labels. Built-in templates
+are not listed as a source. Repository-root paths (`.`, `./`, or `.\`) and
+default refs (omitted or `HEAD`) are hidden. Other refs show configured values,
+not resolved commits or guessed branch names. Discovery does not display
+per-source "Searching template source" messages; Git acquisition retains its
+fetch notice and progress indicators. Configured source headings are green;
 built-in headings keep their default styling. Headings are escaped as literal text and
 cropped to the available terminal-cell width, just like template labels.
 Global overrides replace the entire inherited definition, including `displayName`;
@@ -137,12 +147,14 @@ Discovery does not authorize template post-actions or execution of generated cod
 Help, explicit templates, noninteractive invocations, and built-in-only options
 (`--source`, `--version`, `--channel`, or `--language`) do not trigger this discovery.
 
-Git-backed template discovery displays the CLI's shared localized source-trust
-warning once per command before contacting repositories, including configured
-sources and cached checkouts. `aspire template source add` displays the same warning before its
+Template discovery displays the CLI's shared localized source-trust warning
+after the source details and before fetching, including configured sources,
+explicit directory/repository sources, and cached checkouts. Git acquisition
+does not repeat the inventory's warning. `aspire template source add` displays the same warning before its
 existing trust confirmation; `--yes` skips the confirmation, not the warning.
-Explicit package feeds accepted by `aspire new --source` and `aspire add --source`
-use the same warning. Configuration-source creation, initialization, and refresh
+Explicit package feeds other than nuget.org accepted by `aspire new --source` and
+`aspire add --source` use the same warning. A template picker using a non-default package
+feed also displays it before selection. Built-in-only pickers do not add a warning. Configuration-source creation, initialization, and refresh
 also use it, as described in [configuration sources](cli-config-sources.md#source-trust).
 Warnings go to stderr and do not add confirmation requirements.
 
@@ -230,6 +242,13 @@ cached file. Generated files and NuGet configuration are written to the output
 directory, not into the source tree or retained cache.
 
 ### Authentication, environment, and failures
+
+Before Git acquisition, the CLI writes **Fetching templates using Git...** to
+stderr. On interactive hosts, it uses **Fetching templates using Git. Git may
+prompt you to authenticate.** instead, reusing the configuration-source notice
+with a different content name. The notice precedes remote ref resolution because
+credential helpers may authenticate there even when the checkout is already
+cached. Reusing a cached, fully specified commit SHA does not repeat the notice.
 
 Normal Git credential helpers and SSH authentication configuration remain
 available. Git's terminal credential prompts are always disabled with

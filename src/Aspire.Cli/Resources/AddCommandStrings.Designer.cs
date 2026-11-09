@@ -223,6 +223,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience..
+        /// </summary>
+        internal static string IntegrationSourceExplanation {
+            get {
+                return ResourceManager.GetString("IntegrationSourceExplanation", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No integration packages were found. Please check your internet connection or NuGet source configuration..
         /// </summary>
         internal static string NoIntegrationPackagesFound {
