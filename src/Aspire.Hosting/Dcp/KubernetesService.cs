@@ -88,7 +88,6 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     private const string DcpExecutionResourceType = "DcpExecution";
 
     private static readonly TimeSpan s_initialRetryDelay = TimeSpan.FromMilliseconds(100);
-    private static GroupVersion GroupVersion => Model.Dcp.GroupVersion;
     private readonly SemaphoreSlim _kubeconfigReadSemaphore = new(1);
 
     private DcpKubernetesClient? _kubernetes;
@@ -101,7 +100,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
     {
-        var resourceType = GetResourceFor<T>();
+        var metadata = GetMetadataFor<T>();
+        var resourceType = metadata.Resource;
+        var groupVersion = metadata.GroupVersion;
+        namespaceParameter = metadata.GetNamespace(namespaceParameter);
 
         return ExecuteWithRetry(
             DcpApiOperationType.Get,
@@ -110,14 +112,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             {
                 var response = string.IsNullOrEmpty(namespaceParameter)
                 ? await kubernetes.CustomObjects.GetClusterCustomObjectWithHttpMessagesAsync(
-                    GroupVersion.Group,
-                    GroupVersion.Version,
+                    groupVersion.Group,
+                    groupVersion.Version,
                     resourceType,
                     name,
                     cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.GetNamespacedCustomObjectWithHttpMessagesAsync(
-                    GroupVersion.Group,
-                    GroupVersion.Version,
+                    groupVersion.Group,
+                    groupVersion.Version,
                     namespaceParameter,
                     resourceType,
                     name,
@@ -133,8 +135,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var resourceType = GetResourceFor<T>();
-        var namespaceParameter = obj.Namespace();
+        var metadata = GetMetadataFor<T>();
+        var namespaceParameter = metadata.GetNamespace(obj.Namespace());
         var name = obj.Metadata.Name;
         var recoveryTimeout = dcpOptions.Value.KubernetesCreateRecoveryTimeout;
 
@@ -157,7 +159,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     DateTimeOffset? retryAfter = null;
                     try
                     {
-                        return await CreateOnceAsync(obj, resourceType, namespaceParameter, recoveryCancellationToken).ConfigureAwait(false);
+                        return await CreateOnceAsync(obj, metadata, namespaceParameter, recoveryCancellationToken).ConfigureAwait(false);
                     }
                     catch (KubernetesClientInitializationException)
                     {
@@ -204,8 +206,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var resourceType = GetResourceFor<T>();
-        var namespaceParameter = obj.Namespace();
+        var metadata = GetMetadataFor<T>();
+        var resourceType = metadata.Resource;
+        var groupVersion = metadata.GroupVersion;
+        var namespaceParameter = metadata.GetNamespace(obj.Namespace());
 
         return ExecuteWithRetry(
            DcpApiOperationType.Patch,
@@ -215,15 +219,15 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                var response = string.IsNullOrEmpty(namespaceParameter)
                 ? await kubernetes.CustomObjects.PatchClusterCustomObjectWithHttpMessagesAsync(
                     patch,
-                    GroupVersion.Group,
-                    GroupVersion.Version,
+                    groupVersion.Group,
+                    groupVersion.Version,
                     resourceType,
                     obj.Metadata.Name,
                     cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.PatchNamespacedCustomObjectWithHttpMessagesAsync(
                     patch,
-                    GroupVersion.Group,
-                    GroupVersion.Version,
+                    groupVersion.Group,
+                    groupVersion.Version,
                     namespaceParameter,
                     resourceType,
                     obj.Metadata.Name,
@@ -239,7 +243,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var resourceType = GetResourceFor<T>();
+        var metadata = GetMetadataFor<T>();
+        var resourceType = metadata.Resource;
+        var groupVersion = metadata.GroupVersion;
+        namespaceParameter = metadata.GetNamespace(namespaceParameter);
 
         return ExecuteWithRetry(
             DcpApiOperationType.List,
@@ -248,13 +255,13 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             {
                 var response = string.IsNullOrEmpty(namespaceParameter)
                     ? await kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
-                        GroupVersion.Group,
-                        GroupVersion.Version,
+                        groupVersion.Group,
+                        groupVersion.Version,
                         resourceType,
                         cancellationToken: operationCancellationToken).ConfigureAwait(false)
                     : await kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
-                        GroupVersion.Group,
-                        GroupVersion.Version,
+                        groupVersion.Group,
+                        groupVersion.Version,
                         namespaceParameter,
                         resourceType,
                         cancellationToken: operationCancellationToken).ConfigureAwait(false);
@@ -269,7 +276,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var resourceType = GetResourceFor<T>();
+        var metadata = GetMetadataFor<T>();
+        var resourceType = metadata.Resource;
+        var groupVersion = metadata.GroupVersion;
+        namespaceParameter = metadata.GetNamespace(namespaceParameter);
 
         return ExecuteWithRetry(
             DcpApiOperationType.Delete,
@@ -278,14 +288,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             {
                 var response = string.IsNullOrEmpty(namespaceParameter)
                 ? await kubernetes.CustomObjects.DeleteClusterCustomObjectWithHttpMessagesAsync(
-                    GroupVersion.Group,
-                    GroupVersion.Version,
+                    groupVersion.Group,
+                    groupVersion.Version,
                     resourceType,
                     name,
                     cancellationToken: operationCancellationToken).ConfigureAwait(false)
                 : await kubernetes.CustomObjects.DeleteNamespacedCustomObjectWithHttpMessagesAsync(
-                    GroupVersion.Group,
-                    GroupVersion.Version,
+                    groupVersion.Group,
+                    groupVersion.Version,
                     namespaceParameter,
                     resourceType,
                     name,
@@ -303,7 +313,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var resourceType = GetResourceFor<T>();
+        var metadata = GetMetadataFor<T>();
+        var resourceType = metadata.Resource;
+        var groupVersion = metadata.GroupVersion;
+        namespaceParameter = metadata.GetNamespace(namespaceParameter);
 
         using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var channel = Channel.CreateUnbounded<(WatchEventType, T)>(new UnboundedChannelOptions
@@ -323,7 +336,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     // The per-attempt budget covers response headers, not the lifetime of the
                     // stream. Its owner uses the restart token after the attempt has completed.
                     return await kubernetes.CreateWatchAsync<T>(
-                        GroupVersion.Group, GroupVersion.Version, resourceType,
+                        groupVersion.Group, groupVersion.Version, resourceType,
                         namespaceParameter, restartCancellationToken,
                         operationCancellationToken).ConfigureAwait(false);
                 },
@@ -387,7 +400,10 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         long? skip = null) where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var resourceType = GetResourceFor<T>();
+        var metadata = GetMetadataFor<T>();
+        var resourceType = metadata.Resource;
+        var groupVersion = metadata.GroupVersion;
+        var namespaceParameter = metadata.GetNamespace(obj.Namespace());
 
         List<(string name, string value)> queryParams = [
             (name: "follow", value: follow == true ? "true": "false"),
@@ -417,12 +433,12 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             async (kubernetes, operationCancellationToken) =>
             {
                 var response = await kubernetes.ReadSubResourceAsStreamAsync(
-                    GroupVersion.Group,
-                    GroupVersion.Version,
+                    groupVersion.Group,
+                    groupVersion.Version,
                     resourceType,
                     obj.Metadata.Name,
                     Logs.SubResourceName,
-                    obj.Metadata.Namespace(),
+                    namespaceParameter,
                     queryParams,
                     operationCancellationToken
                 ).ConfigureAwait(false);
@@ -543,23 +559,25 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         _kubernetes?.Dispose();
     }
 
-    private static string GetResourceFor<T>() where T : CustomResource
+    internal static ResourceMetadata GetMetadataFor<T>() where T : CustomResource
     {
-        if (!Model.Dcp.Schema.TryGet<T>(out var kindWithResource))
+        if (!Model.Dcp.Schema.TryGet<T>(out var metadata))
         {
             throw new InvalidOperationException($"Unknown custom resource type: {typeof(T).Name}");
         }
 
-        return kindWithResource.Resource;
+        return metadata;
     }
 
     private async Task<T> CreateOnceAsync<T>(
         T obj,
-        string resourceType,
+        ResourceMetadata metadata,
         string? namespaceParameter,
         CancellationToken cancellationToken)
         where T : CustomResource, IKubernetesStaticMetadata
     {
+        var groupVersion = metadata.GroupVersion;
+        var resourceType = metadata.Resource;
         var requestStarted = false;
         try
         {
@@ -572,14 +590,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                     var response = string.IsNullOrEmpty(namespaceParameter)
                         ? await kubernetes.CustomObjects.CreateClusterCustomObjectWithHttpMessagesAsync(
                             obj,
-                            GroupVersion.Group,
-                            GroupVersion.Version,
+                            groupVersion.Group,
+                            groupVersion.Version,
                             resourceType,
                             cancellationToken: operationCancellationToken).ConfigureAwait(false)
                         : await kubernetes.CustomObjects.CreateNamespacedCustomObjectWithHttpMessagesAsync(
                             obj,
-                            GroupVersion.Group,
-                            GroupVersion.Version,
+                            groupVersion.Group,
+                            groupVersion.Version,
                             namespaceParameter,
                             resourceType,
                             cancellationToken: operationCancellationToken).ConfigureAwait(false);

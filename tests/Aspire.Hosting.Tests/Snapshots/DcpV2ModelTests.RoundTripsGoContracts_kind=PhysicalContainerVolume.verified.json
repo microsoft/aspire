@@ -1,0 +1,36 @@
+﻿{
+  "spec": {
+    "volumeName": "data",
+    "removeRuntimeVolumeOnDelete": true,
+    "labels": [
+      {
+        "key": "app",
+        "value": "demo"
+      }
+    ]
+  },
+  "status": {
+    "phase": "Ready",
+    "volumeID": "volume-id",
+    "driver": "local",
+    "mountPoint": "/volumes/data",
+    "scope": "local",
+    "createdAt": "2026-11-09T12:00:00.123456Z",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-09T12:00:00Z",
+        "message": "Ready",
+        "observedGeneration": 1,
+        "reason": "VolumeAvailable",
+        "status": "True",
+        "type": "Ready"
+      }
+    ]
+  },
+  "metadata": {
+    "name": "resource",
+    "namespace": "app"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "PhysicalContainerVolume"
+}

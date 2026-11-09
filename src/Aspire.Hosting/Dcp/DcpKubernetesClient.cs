@@ -122,11 +122,11 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
         string url;
         if (string.IsNullOrEmpty(namespaceParameter))
         {
-            url = $"apis/{group}/{version}/{plural}/{name}/{subResource}";
+            url = $"apis/{group}/{version}/{plural}/{Uri.EscapeDataString(name)}/{subResource}";
         }
         else
         {
-            url = $"apis/{group}/{version}/namespaces/{namespaceParameter}/{plural}/{name}/{subResource}";
+            url = $"apis/{group}/{version}/namespaces/{Uri.EscapeDataString(namespaceParameter)}/{plural}/{Uri.EscapeDataString(name)}/{subResource}";
         }
 
         var q = new QueryBuilder();

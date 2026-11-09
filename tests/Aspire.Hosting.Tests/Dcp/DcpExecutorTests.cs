@@ -162,7 +162,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         if (deleteReturnsNotFound)
         {
-            kubernetesService.DeletedResources.Enqueue(previous.Metadata.Name);
+            kubernetesService.MarkResourceDeleted(previous);
         }
 
         var reference = executor.GetResource(previous.Metadata.Name);

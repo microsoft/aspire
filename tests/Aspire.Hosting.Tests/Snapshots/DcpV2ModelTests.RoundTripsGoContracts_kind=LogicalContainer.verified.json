@@ -1,0 +1,213 @@
+﻿{
+  "spec": {
+    "containerName": "backend",
+    "mode": "persistent",
+    "lifecycleKey": "container-key",
+    "container": {
+      "image": {
+        "image": "demo:latest",
+        "build": {
+          "contextArchive": {
+            "source": "/src/context.tar",
+            "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          },
+          "digest": "build-key",
+          "dockerfile": "Dockerfile",
+          "tags": [
+            "demo:latest"
+          ],
+          "args": [
+            {
+              "name": "CONFIG",
+              "value": "Release"
+            }
+          ],
+          "secrets": [
+            {
+              "type": "env",
+              "id": "token",
+              "source": "BUILD_TOKEN",
+              "value": "test-value"
+            },
+            {
+              "type": "file",
+              "id": "config",
+              "source": "/src/config"
+            }
+          ],
+          "stage": "final",
+          "labels": [
+            {
+              "key": "build",
+              "value": "demo"
+            }
+          ],
+          "platform": "linux/arm64",
+          "baseImages": [
+            "base:latest"
+          ]
+        },
+        "pullPolicy": "bestEffort",
+        "buildPolicy": "ifNeeded",
+        "pullRetryLimit": 0
+      },
+      "entrypoint": "/app/start",
+      "command": [
+        "--port",
+        "{{ portForServing \u0022http\u0022 }}"
+      ],
+      "env": [
+        {
+          "name": "EMPTY",
+          "value": ""
+        }
+      ],
+      "volumeMounts": [
+        {
+          "type": "bind",
+          "source": "/src",
+          "target": "/workspace",
+          "readOnly": true
+        },
+        {
+          "type": "volume",
+          "volumeRef": "app/data",
+          "target": "/data"
+        }
+      ],
+      "networks": [
+        {
+          "networkRef": "app/network",
+          "aliases": [
+            "backend"
+          ]
+        }
+      ],
+      "createFiles": [
+        {
+          "destination": "/config",
+          "defaultOwner": 1000,
+          "defaultGroup": 1000,
+          "umask": 0,
+          "entries": [
+            {
+              "type": "directory",
+              "name": "nested",
+              "owner": 0,
+              "group": 0,
+              "mode": 493,
+              "entries": [
+                {
+                  "type": "file",
+                  "name": "app.txt",
+                  "contents": "hello"
+                }
+              ]
+            },
+            {
+              "type": "file",
+              "name": "copy.txt",
+              "source": "/src/copy.txt",
+              "continueOnError": true
+            },
+            {
+              "type": "openssl",
+              "name": "cert.pem",
+              "rawContents": "Y2VydA=="
+            }
+          ]
+        }
+      ],
+      "labels": [
+        {
+          "key": "app",
+          "value": "demo"
+        }
+      ]
+    },
+    "ports": [
+      {
+        "containerPort": 80,
+        "hostPort": 8081,
+        "hostIP": "127.0.0.1",
+        "address": "localhost",
+        "name": "http",
+        "serviceRef": "app/service"
+      },
+      {
+        "containerPort": 81,
+        "name": "admin",
+        "service": {
+          "name": "admin",
+          "protocol": "TCP",
+          "address": "127.0.0.1",
+          "port": 8082,
+          "addressAllocationMode": "IPv4ZeroOne"
+        }
+      }
+    ],
+    "monitorPID": 4294967295,
+    "monitorTimestamp": "2026-11-09T12:00:00.000000Z",
+    "stop": true
+  },
+  "status": {
+    "ports": [
+      {
+        "name": "http",
+        "serviceRef": "app/service",
+        "address": "localhost",
+        "port": 80
+      }
+    ],
+    "startupLogs": {
+      "name": "image",
+      "uid": "image-uid",
+      "stdoutFile": "/logs/build.out",
+      "stderrFile": "/logs/build.err",
+      "raw": true,
+      "available": true,
+      "complete": true
+    },
+    "runtimeLogs": {
+      "name": "container",
+      "uid": "container-uid",
+      "containerID": "container-id",
+      "available": true
+    },
+    "phase": "Exited",
+    "physicalContainerRef": "app/container-physical",
+    "imageRef": "app/image",
+    "containerID": "container-id",
+    "containerName": "backend",
+    "image": "demo:latest",
+    "lifecycleKey": "container-key",
+    "createdAt": "2026-11-09T12:00:00.123456Z",
+    "startedAt": "2026-11-09T12:00:01.000000Z",
+    "finishedAt": "2026-11-09T12:00:02.000000Z",
+    "exitCode": 0,
+    "portMappings": [
+      {
+        "containerPort": 80,
+        "protocol": "TCP",
+        "hostIP": "127.0.0.1",
+        "hostPort": 8081
+      }
+    ],
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-09T12:00:02Z",
+        "message": "Exited",
+        "observedGeneration": 1,
+        "reason": "ContainerExited",
+        "status": "False",
+        "type": "Ready"
+      }
+    ]
+  },
+  "metadata": {
+    "name": "resource",
+    "namespace": "app"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "LogicalContainer"
+}

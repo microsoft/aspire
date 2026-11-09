@@ -1,0 +1,53 @@
+﻿{
+  "spec": {
+    "networkName": "backend",
+    "mode": "persistent",
+    "lifecycleKey": "network-key",
+    "network": {
+      "ipv6": true,
+      "labels": [
+        {
+          "key": "app",
+          "value": "demo"
+        }
+      ]
+    }
+  },
+  "status": {
+    "phase": "Ready",
+    "physicalNetworkRef": "app/network-physical",
+    "lifecycleKey": "network-key",
+    "networkID": "network-id",
+    "networkName": "backend",
+    "driver": "bridge",
+    "ipv6": true,
+    "subnets": [
+      "172.20.0.0/16",
+      "fd00::/64"
+    ],
+    "gateways": [
+      "172.20.0.1",
+      "fd00::1"
+    ],
+    "containerIDs": [
+      "container-id"
+    ],
+    "createdAt": "2026-11-09T12:00:00.123456Z",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-09T12:00:00Z",
+        "message": "Ready",
+        "observedGeneration": 1,
+        "reason": "NetworkAvailable",
+        "status": "True",
+        "type": "Ready"
+      }
+    ]
+  },
+  "metadata": {
+    "name": "resource",
+    "namespace": "app"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "LogicalContainerNetwork"
+}
