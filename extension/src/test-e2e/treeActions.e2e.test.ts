@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForSelectedWorkspaceAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
+import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForRunningResourceWithUrl, waitForSelectedWorkspaceAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
 import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeBaselineActionCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
@@ -341,7 +341,9 @@ suite('Aspire tree action command E2E', function () {
         await waitForAppHostLaunching(appHostPath);
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 120000, before);
         await waitForRunningAppHost();
-        const runningResources = await waitForResourceState('e2e-worker', ['Running'], 180000);
+        // The first Running snapshot can precede DCP activating the worker's endpoint, and the backchannel omits
+        // inactive URLs, so wait for the URL-bearing snapshot this test later reads the endpoint from.
+        const runningResources = await waitForRunningResourceWithUrl('e2e-worker', 'http:', 180000);
         const workerResource = findResource(runningResources.state, 'e2e-worker');
         assert.ok(workerResource, 'Expected e2e-worker to be present after AppHost startup.');
         const workerResourceName = workerResource.name;
