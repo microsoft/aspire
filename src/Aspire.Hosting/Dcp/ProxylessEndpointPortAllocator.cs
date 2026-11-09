@@ -255,15 +255,24 @@ internal sealed class ProxylessEndpointPortAllocator : IDisposable
 
     private static bool TryProbePort(int port, SocketType socketType, ProtocolType protocolType)
     {
+        // On macOS a wildcard bind can succeed while a loopback listener already owns the port.
+        // Probe loopback first, releasing those sockets before probing the wildcard addresses so
+        // that the probe does not conflict with itself.
+        return TryProbeAddresses(port, socketType, protocolType, IPAddress.Loopback, IPAddress.IPv6Loopback)
+            && TryProbeAddresses(port, socketType, protocolType, IPAddress.Any, IPAddress.IPv6Any);
+    }
+
+    private static bool TryProbeAddresses(int port, SocketType socketType, ProtocolType protocolType, IPAddress ipv4Address, IPAddress ipv6Address)
+    {
         var sockets = new List<Socket>();
 
         try
         {
-            sockets.Add(CreateBoundSocket(AddressFamily.InterNetwork, socketType, protocolType, new IPEndPoint(IPAddress.Any, port)));
+            sockets.Add(CreateBoundSocket(AddressFamily.InterNetwork, socketType, protocolType, new IPEndPoint(ipv4Address, port)));
 
             if (Socket.OSSupportsIPv6)
             {
-                sockets.Add(CreateBoundSocket(AddressFamily.InterNetworkV6, socketType, protocolType, new IPEndPoint(IPAddress.IPv6Any, port)));
+                sockets.Add(CreateBoundSocket(AddressFamily.InterNetworkV6, socketType, protocolType, new IPEndPoint(ipv6Address, port)));
             }
 
             DisposeSockets(sockets);
