@@ -274,6 +274,9 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(noGrouping).ToBeVisibleAsync();
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(noGrouping).ToBeHiddenAsync();
+            // The menu closes in the browser, and its button reports it closed once the server renders it. Until then,
+            // Escape still counts as used by the menu.
+            await Assertions.Expect(page.Locator("#resourcePaneGroupingButton")).Not.ToHaveAttributeAsync("aria-expanded", "true");
             await Assertions.Expect(close).ToBeVisibleAsync();
             await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
 
@@ -321,6 +324,24 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(visibleFocus).ToHaveCountAsync(0);
 
             // Escape is a key press, which would show that focus in the full-page list as an outline around the row.
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await Assertions.Expect(visibleFocus).ToHaveCountAsync(0);
+            Assert.True(await page.EvaluateAsync<bool>("() => document.activeElement === document.body"));
+
+            // An Escape that only dismisses a tooltip doesn't count as keyboard navigation either, so the Escape that
+            // then closes the content still drops the focus the click left.
+            await page.GotoAsync("/resources/tag-a");
+            await Assertions.Expect(title).ToHaveTextAsync("tag-a");
+            await link.ClickAsync();
+            await Assertions.Expect(title).ToHaveTextAsync("tag-b");
+            await Assertions.Expect(link).ToBeFocusedAsync();
+            await page.Locator(".detail-page-close").HoverAsync();
+            var tooltip = page.Locator("aspire-tooltip-provider .dashboard-tooltip");
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
             await Assertions.Expect(visibleFocus).ToHaveCountAsync(0);

@@ -93,7 +93,7 @@
                             <span>@Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)]</span>
                         </button>
                     </div>
-                    @if (_isPaneFullCanvas)
+                    @if (_isPaneFullCanvas && SelectionHasGroupOverview)
                     {
                         @* The full-page list is one layout of the overview, next to its summary and graph. The same
                            toggle in the overview's header leads here, so the way back is where the user came from. *@

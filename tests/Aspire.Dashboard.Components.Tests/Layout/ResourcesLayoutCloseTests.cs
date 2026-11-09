@@ -179,6 +179,28 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
     }
 
+    [Theory]
+    [InlineData("/traces/detail/missing?resource=api", false)]
+    [InlineData("/traces/detail/missing?resource=api&resource=cache", true)]
+    public async Task FullCanvasList_OffersOverviewLayoutsOnlyForScopesWithAGroupOverview(string url, bool offersLayouts)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(url);
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        // Closing the detail keeps its scope behind the full-page list. One resource has its own details rather than
+        // the group overview's Summary and Graph, so the list doesn't offer them.
+        await cut.Find(".detail-page-close").ClickAsync();
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(offersLayouts ? 1 : 0, cut.FindAll(".resource-pane-scope-layout").Count);
+    }
+
     [Fact]
     public async Task SelectedGroup_ReopensParentFromFullCanvasWithoutClearingSelection()
     {

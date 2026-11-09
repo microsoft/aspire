@@ -690,6 +690,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private bool IsContentClosed => _isPaneFullCanvas && CurrentTab != ResourceTab.Overview;
 
+    /// <summary>
+    /// Whether the overview of the selection is the group overview, which has the Summary, Graph and List layouts. A
+    /// single selected resource has its own details instead. Closing a detail scoped to one resource, such as a trace
+    /// of it, keeps that selection behind the full-page list, and choosing Summary or Graph there would open the
+    /// resource's details.
+    /// </summary>
+    private bool SelectionHasGroupOverview => _selectedResourceNames.Count != 1;
+
     private IReadOnlyList<IconToggleOption<OverviewLayout>> GetOverviewLayoutOptions() =>
         OverviewLayoutOptions.Create(DialogsLoc, ResourcesLoc, ViewPreferences.IsGraphEnabled);
 

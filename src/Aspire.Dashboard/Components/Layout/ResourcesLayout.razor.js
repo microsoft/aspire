@@ -670,16 +670,14 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
             state.restoreAfterEscape = true;
         }
     };
-    let lastHoveredLink = null;
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
-        // mouseover bubbles from every element in the row. The tooltip is computed from the row's layout, so once
-        // a row is hovered, moving within it changes nothing; the check below forces layout, so skip it.
-        if (event.type === 'mouseover') {
-            if (link === lastHoveredLink) {
-                return;
-            }
-            lastHoveredLink = link;
+        // mouseover bubbles from every element in the row. The tooltip is computed from the row's layout, so moving
+        // between elements of the same link changes nothing, and the check below forces layout, so skip that.
+        // Entering the link from outside recomputes it, even if it's the link hovered last: the resource's state may
+        // have changed while the pointer was elsewhere.
+        if (event.type === 'mouseover' && link && event.relatedTarget instanceof Node && link.contains(event.relatedTarget)) {
+            return;
         }
         const name = link?.querySelector('.resource-row-name');
         // A compact sidebar row's type and state columns give way to its actions while the row is
@@ -831,8 +829,10 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     };
     const onEscapeCapture = event => {
         escapeFollowsPointer = lastInteractionWasPointer;
-        // Modifier keys alone, for example while a shortcut is being typed, don't mean keyboard navigation.
-        if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) {
+        // Modifier keys alone, for example while a shortcut is being typed, don't mean keyboard navigation. Neither
+        // does Escape: it dismisses things, such as a tooltip, and the Escape that then closes the content must still
+        // know that focus came from a pointer.
+        if (!['Shift', 'Control', 'Alt', 'Meta', 'Escape'].includes(event.key)) {
             lastInteractionWasPointer = false;
         }
         escapeIsFree = event.key === 'Escape' && !event.isComposing && !event.repeat &&
