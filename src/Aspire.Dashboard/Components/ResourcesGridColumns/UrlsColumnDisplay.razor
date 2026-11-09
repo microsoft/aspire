@@ -13,7 +13,7 @@ else if (DisplayedUrls.Count == 1)
 }
 else if (ShowFirstUrlOnly)
 {
-    var moreButtonId = $"urls-more-{Resource.Name}";
+    var moreButtonId = _moreButtonId;
     <div class="url-container first-url-only" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
         <div class="first-url">
             @WriteUrl(DisplayedUrls[0])

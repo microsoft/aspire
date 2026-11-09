@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -42,7 +42,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
     private readonly KeyedInteractionCollection _pendingInteractions = new();
-    private readonly ConcurrentDictionary<int, byte> _releasedInteractionIds = new();
+    internal readonly ConcurrentDictionary<int, byte> _releasedInteractionIds = new();
     private readonly KeyedMessageCollection _openMessageBars = new();
     private MarkdownProcessor _markdownProcessor = default!;
     private Task? _dialogDisplayTask;
@@ -385,8 +385,16 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 await _semaphore.WaitAsync(_cts.Token).ConfigureAwait(false);
                 try
                 {
+                    // The prompt can be back on screen by now: a replacement form mounted and an AppHost update or a
+                    // reconnection replayed the prompt into it before this task got the semaphore. The display loop
+                    // sets ParameterInteractionState.Current while it holds the semaphore, so reading it here, on the
+                    // renderer, sees that. Cancelling would close the form the user is now filling in.
+                    var shownInline = false;
+                    await InvokeAsync(() => shownInline = ParameterInteractionState.Current?.Interaction.InteractionId == interactionId).ConfigureAwait(false);
+
                     // A newer version of the prompt is already queued or shown when the AppHost updated it meanwhile.
                     cancel = _releasedInteractionIds.TryRemove(interactionId, out _) &&
+                        !shownInline &&
                         !_pendingInteractions.Contains(interactionId) &&
                         _interactionDialogReference?.InteractionId != interactionId;
                 }

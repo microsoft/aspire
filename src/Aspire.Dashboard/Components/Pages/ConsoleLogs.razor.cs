@@ -170,6 +170,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private Task? _logEntryChannelReaderTask;
     private readonly ConcurrentDictionary<string, ConsoleLogsSubscription> _consoleLogsSubscriptions = new(StringComparers.ResourceName);
     private bool _isSubscribedToAll;
+    // The single resource whose logs are shown, or null for every resource. It's set for a missing resource's
+    // placeholder too, so its page knows the logs it shows belong to it. See OnParametersSetAsync.
+    private string? _subscribedResourceName;
     private IReadOnlyList<string>? _allResourcesSelection;
     internal LogEntries _logEntries = null!;
     private readonly object _updateLogsLock = new object();
@@ -502,6 +505,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             Logger.LogDebug("Switching to different single resource: {ResourceName}", selectedResourceName);
             needsNewSubscription = true;
         }
+        else if (IsMissingResourceSelected() && !string.Equals(_subscribedResourceName, ResourceName, StringComparisons.ResourceName))
+        {
+            // Navigated to a resource that doesn't exist, from another resource's logs. Those logs must not keep
+            // streaming under the missing resource's header. When the shown resource is deleted instead, the
+            // placeholder replaces it without a navigation and the subscribed name matches, so its logs are kept.
+            Logger.LogDebug("Switching to missing resource: {ResourceName}", ResourceName);
+            needsNewSubscription = true;
+        }
 
         _allResourcesSelection = allResourcesSelection;
 
@@ -540,17 +551,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             // Subscribe to all available resources
             _isSubscribedToAll = true;
+            _subscribedResourceName = null;
             await SubscribeToAllResourcesAsync();
         }
         else if (selectedResource is not null)
         {
             // Subscribe to single resource
             _isSubscribedToAll = false;
+            _subscribedResourceName = selectedResource.Name;
             await SubscribeToSingleResourceAsync(selectedResource);
         }
         else
         {
-            Logger.LogDebug("Unexpected state. Unknown resource '{ResourceName}' selected.", selectedResourceName);
+            // A missing resource's placeholder, or a resource that isn't known yet: no logs until the resource appears.
+            _isSubscribedToAll = false;
+            _subscribedResourceName = IsMissingResourceSelected() ? ResourceName : selectedResourceName;
+            Logger.LogDebug("No resource to subscribe to for '{ResourceName}'.", _subscribedResourceName);
         }
 
         if (!_consoleLogsSubscriptions.IsEmpty)
@@ -1055,11 +1071,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         await JS.DownloadFileAsync(GetFileName(), stream);
     }
 
-    private string GetFileName()
+    internal string GetFileName()
     {
+        // A missing resource's placeholder has no ID, only the requested name. Its logs can still be downloaded, for
+        // example the logs kept from a replica that was removed.
         var fileNamePrefix = _isSubscribedToAll
             ? "AllResources"
-            : string.Join("_", PageViewModel.SelectedResource.Id!.InstanceId!.Split(Path.GetInvalidFileNameChars()));
+            : string.Join("_", (PageViewModel.SelectedResource.Id?.InstanceId ?? PageViewModel.SelectedResource.Name).Split(Path.GetInvalidFileNameChars()));
 
         return $"{fileNamePrefix}-{TimeProvider.GetLocalNow().ToString("yyyyMMddhhmmss", CultureInfo.InvariantCulture)}.txt";
     }

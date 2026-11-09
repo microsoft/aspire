@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
@@ -220,6 +220,54 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
                     await page.Locator($"#tab-{view}-menu-item").ClickAsync();
                 }
             }
+        });
+    }
+
+    [Theory]
+    [InlineData(769, false)]
+    [InlineData(769, true)]
+    [InlineData(1000, false)]
+    [InlineData(1000, true)]
+    [InlineData(1440, false)]
+    [InlineData(1440, true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task CloseThenTab_OpensTheChosenTabForAllResourcesWithoutBouncingBack(int width, bool useKeyboard)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, 900);
+            await page.GotoAsync("/resources/tag-a");
+            var navigation = page.Locator(".resource-tabs-nav");
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync("tag-a");
+            var console = navigation.Locator("#tab-Console");
+            await Assertions.Expect(console).ToBeVisibleAsync();
+
+            // Choose the tab right after closing, while the close may still be navigating (a click doesn't wait for
+            // navigation). The tab must open for all resources, not for the resource being closed, whether the choice
+            // waits for the close or lands on the outgoing tab strip. In the latter case only a real pointer or
+            // keyboard activation is honored, never the change events the strip raises as it's torn down. Which case
+            // a run hits depends on timing; FullCanvas_KeepsResponsiveNavigationUsableAndNewResourceScope reaches the
+            // outgoing strip at 769px in about half of its runs without the activation tracking.
+            await page.Locator(".detail-page-close").ClickAsync();
+            if (useKeyboard)
+            {
+                await console.FocusAsync();
+                await page.Keyboard.PressAsync("Enter");
+            }
+            else
+            {
+                await console.ClickAsync();
+            }
+
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
+            await Assertions.Expect(navigation.Locator("#tab-Console")).ToHaveAttributeAsync("aria-selected", "true");
+
+            // A stale event that slipped through would navigate again shortly after, back to the closed resource or to
+            // the full table. Give it time to show up, then check the page stayed put.
+            await page.WaitForTimeoutAsync(1500);
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/consolelogs$"));
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("h1.resource-title")).ToHaveTextAsync(Resources.Layout.ResourceHeaderAllResources);
         });
     }
 

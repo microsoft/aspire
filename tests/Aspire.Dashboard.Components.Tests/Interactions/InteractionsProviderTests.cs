@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
@@ -414,6 +414,64 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Assert.Equal(WatchInteractionsRequestUpdate.KindOneofCase.Complete, update.KindCase);
         Assert.Null(instance._interactionDialogReference);
         Assert.Null(state.Current);
+
+        await instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ReceiveData_ParameterFormReplacedAndPromptShownAgain_DoesNotSendCompletion()
+    {
+        var interactionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var sendInteractionUpdatesChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true,
+            interactionChannelProvider: () => interactionsChannel,
+            sendInteractionUpdateChannel: sendInteractionUpdatesChannel);
+        var dialogService = new TestDialogService(onShowDialog: (data, parameters) => Task.CompletedTask);
+
+        SetupInteractionProviderServices(dashboardClient: dashboardClient, dialogService: dialogService);
+
+        var cut = Render<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var instance = cut.Instance;
+        var state = Services.GetRequiredService<ParameterInteractionState>();
+
+        ParameterInteractionState.PanelRegistration? panel = null;
+        await cut.InvokeAsync(() =>
+        {
+            panel = state.RegisterPanel();
+            panel.SetParameterNames(["first"]);
+        });
+
+        var inputsDialog = new InteractionInputsDialog();
+        inputsDialog.InputItems.Add(new InteractionInput { Name = "first", InputType = InputType.Text });
+        await interactionsChannel.Writer.WriteAsync(new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 1,
+            InputsDialog = inputsDialog
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => state.Current?.Interaction.InteractionId == 1,
+            "Wait for the prompt to be shown in the parameter form.");
+        var prompt = state.Current!;
+
+        // The form is replaced, and the prompt is shown in the new one before the released form's cancellation runs,
+        // as when an AppHost update or a reconnection replays it. The cancellation runs after this renderer turn.
+        await cut.InvokeAsync(() =>
+        {
+            panel!.Dispose();
+            var replacement = state.RegisterPanel();
+            replacement.SetParameterNames(["first"]);
+            Assert.True(state.TrySetCurrent(prompt));
+        });
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () => instance._releasedInteractionIds.IsEmpty,
+            "Wait for the released form's cancellation to run.");
+        Assert.False(sendInteractionUpdatesChannel.Reader.TryRead(out _));
+        Assert.Equal(1, state.Current?.Interaction.InteractionId);
 
         await instance.DisposeAsync().DefaultTimeout();
     }

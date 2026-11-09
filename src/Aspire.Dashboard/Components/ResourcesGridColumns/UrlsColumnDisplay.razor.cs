@@ -48,4 +48,11 @@ public partial class UrlsColumnDisplay
     public required IStringLocalizer<Columns> Loc { get; init; }
 
     private bool _popoverVisible;
+
+    // The "+N" button's ID, which is also the popover's anchor name. It's unique per instance rather than per resource:
+    // a resource with several tags is listed once in each tag group, so an ID built from its name would repeat, and the
+    // popover could anchor to another group's copy of the button instead of the one that was clicked.
+    private readonly string _moreButtonId = $"urls-more-{Interlocked.Increment(ref s_nextMoreButtonId)}";
+
+    private static int s_nextMoreButtonId;
 }

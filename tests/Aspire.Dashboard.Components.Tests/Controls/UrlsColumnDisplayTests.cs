@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -95,6 +95,35 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         Assert.Equal([displayedUrls[0].Text], cut.FindAll(".first-url > *").Select(item => item.TextContent.Trim()));
         Assert.Equal("+4", cut.Find(".url-button-neutral").TextContent.Trim());
         Assert.Equal(displayedUrls.Skip(1).Select(url => url.Text), cut.FindAll(".url-overflow-popover .url-link").Select(item => item.TextContent.Trim()));
+    }
+
+    [Fact]
+    public void Render_ShowFirstUrlOnly_GivesEachCopyOfAResourceItsOwnAnchor()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        FluentUISetupHelpers.SetupFluentOverflow(this);
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+
+        var displayedUrls = CreateDisplayedUrls(3);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
+
+        // A resource with several tags is listed once per tag group, so the list renders its URLs more than once.
+        var first = RenderCopy();
+        var second = RenderCopy();
+
+        var firstId = first.Find(".url-button-neutral").GetAttribute("id");
+        var secondId = second.Find(".url-button-neutral").GetAttribute("id");
+        Assert.NotEqual(firstId, secondId);
+        Assert.Equal($"anchor-name: --{firstId};", first.Find(".url-button-neutral").GetAttribute("style"));
+        Assert.Equal($"anchor-name: --{secondId};", second.Find(".url-button-neutral").GetAttribute("style"));
+
+        IRenderedComponent<UrlsColumnDisplay> RenderCopy() => Render<UrlsColumnDisplay>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.HasMultipleReplicas, false);
+            builder.Add(p => p.DisplayedUrls, displayedUrls);
+            builder.Add(p => p.ShowFirstUrlOnly, true);
+        });
     }
 
     [Fact]
