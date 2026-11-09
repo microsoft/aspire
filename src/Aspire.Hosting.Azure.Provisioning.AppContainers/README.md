@@ -42,6 +42,8 @@ await environment.configureInfrastructure(async infrastructure => {
 
 `OutboundIPAddressList` is exposed as an IP address collection proxy. IP address lists accept IPv4/IPv6 strings or Bicep value handles; element getters preserve literals, expressions, and references as Bicep value handles. Invalid address strings fail validation rather than being silently dropped. Azure SDK read-only output restrictions still apply.
 
+`ContainerAppDiagnosticDataTableResult.Rows` and `LogicApp.Scope` are not projected because raw JSON collections and arbitrary provisioning-resource wrappers are not supported. Existing exported SDK aliases remain available when the SDK deprecates the underlying member.
+
 To customize supporting SDK resources, opt into the corresponding `Aspire.Hosting.Azure.Provisioning.ContainerRegistry`, `.OperationalInsights`, `.Storage`, or `.KeyVault` integration. Add `.Network` and, when needed, `.PrivateDns` for separately modeled networking. Referencing their hosting dependencies alone does not enable those SDK proxies.
 
 ## Additional documentation

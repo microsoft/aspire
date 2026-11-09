@@ -15,6 +15,7 @@ resource job 'Microsoft.App/jobs@2025-07-01' = {
   name: 'job'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       triggerType: 'Manual'
       replicaTimeout: 1800
@@ -25,7 +26,6 @@ resource job 'Microsoft.App/jobs@2025-07-01' = {
         }
       ]
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
