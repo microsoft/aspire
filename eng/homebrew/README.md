@@ -127,6 +127,12 @@ download `homebrew-cask-stable` from that run: it is a container artifact, so
 the source pipeline-artifact shortcut is not appropriate. There is no latest
 fallback or cask regeneration.
 
+The pipeline passes the release input through `HOMEBREW_RELEASE_VERSION`,
+not `VERSION`: MSBuild imports environment variables as case-insensitive
+properties, so `VERSION=auto` would set generated projects' `Version` and
+fail restore with NU1105. The full hosted scaffold/restore smoke test is the
+regression gate for this pipeline environment.
+
 The source run/commit, official definition, artifact/container identity and
 unique release-version tag are checked before passing the unchanged cask to
 macOS. The full validator additionally requires the public release tag to match

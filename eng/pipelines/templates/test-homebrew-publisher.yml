@@ -132,13 +132,15 @@ extends:
                   set -euo pipefail
                   python3 -u eng/homebrew/publish-cask.py \
                     --candidate "$OUTPUT/download/homebrew-cask-stable/aspire.rb" \
-                    --version "$VERSION" --artifact-check-only \
+                    --version "$HOMEBREW_RELEASE_VERSION" --artifact-check-only \
                     --source-build-metadata "$OUTPUT/source-build.json" \
                     --source-build-id "$SOURCE_BUILD_ID" --source-build-commit "$SOURCE_COMMIT" \
                     --output-dir "$OUTPUT" 2>&1 | tee "$OUTPUT/identity.log"
                 displayName: Verify downloaded cask identity and selected-run provenance
                 env:
-                  VERSION: ${{ parameters.version }}
+                  # MSBuild imports VERSION as Version; "auto" must not reach
+                  # generated projects as their package version during restore.
+                  HOMEBREW_RELEASE_VERSION: ${{ parameters.version }}
                   SOURCE_BUILD_ID: $(resources.pipeline.aspire-build.runID)
                   SOURCE_COMMIT: $(resources.pipeline.aspire-build.sourceCommit)
                   OUTPUT: $(Build.ArtifactStagingDirectory)/homebrew-source
@@ -175,14 +177,14 @@ extends:
                   git --no-pager -C "$TAP" checkout --quiet f17f51b14acbf17f6a29db1cae91a8f92fe63369
                   python3 -u eng/homebrew/publish-cask.py \
                     --candidate "$SOURCE/download/homebrew-cask-stable/aspire.rb" \
-                    --version "$VERSION" --tap-checkout "$TAP" \
+                    --version "$HOMEBREW_RELEASE_VERSION" --tap-checkout "$TAP" \
                     --source-build-metadata "$SOURCE/source-build.json" \
                     --source-build-id "$SOURCE_BUILD_ID" --source-build-commit "$SOURCE_COMMIT" \
                     --validate-only --output-dir "$OUTPUT" 2>&1 | tee "$OUTPUT/console.log"
                 displayName: Fully validate downloaded source cask without release or tap publication
                 env:
                   DRY_RUN: ${{ parameters.dryRun }}
-                  VERSION: ${{ parameters.version }}
+                  HOMEBREW_RELEASE_VERSION: ${{ parameters.version }}
                   SOURCE: $(Pipeline.Workspace)/homebrew-source-artifact
                   SOURCE_BUILD_ID: $(resources.pipeline.aspire-build.runID)
                   SOURCE_COMMIT: $(resources.pipeline.aspire-build.sourceCommit)
