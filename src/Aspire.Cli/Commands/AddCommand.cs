@@ -702,7 +702,11 @@ internal sealed class AddCommand : BaseCommand
         CancellationToken cancellationToken,
         bool promptForSinglePackage = false)
     {
-        var candidates = possiblePackages.ToArray();
+        // Choosing a source group constrains later version selection, so honor the pinned
+        // channel before the package prompt as well as before the version prompt.
+        var candidates = possiblePackages
+            .OrderByDescending(package => MatchesConfiguredChannel(package.Channel, configuredChannel))
+            .ToArray();
         var distinctPackages = candidates.DistinctBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase).ToArray();
         var promptForPackage = _hostEnvironment.SupportsInteractiveInput &&
             (distinctPackages.Length > 1 || promptForSinglePackage);

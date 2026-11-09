@@ -205,9 +205,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
         string[] expectedWarnings =
         [
-            "Skill sources:",
-            "https://github.com/microsoft/aspire-skills",
-            "Only use sources you trust.",
             "Local Aspire skill files may override plugin skills",
             ".agents/skills/aspire/SKILL.md"
         ];

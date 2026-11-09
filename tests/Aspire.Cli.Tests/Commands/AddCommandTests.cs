@@ -3974,6 +3974,75 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedPackageVersion, addedPackageVersion);
     }
 
+    [Theory]
+    [InlineData("add")]
+    [InlineData("add valkey")]
+    [InlineData("add Aspire.Hosting.Valkey")]
+    public async Task AddCommand_InteractiveTypeScriptAppHostPrefersPinnedSourceBeforePackageSelection(string commandLine)
+    {
+        const string stagingSource = "https://example.test/staging";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """{"channel":"staging"}""");
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+            [
+                new() { Id = "Aspire.Hosting.Redis", Version = "13.6.4", Source = PackageSources.NuGetOrg },
+                new() { Id = "Aspire.Hosting.Valkey", Version = "13.6.4", Source = PackageSources.NuGetOrg }
+            ])
+        };
+        var stagingCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+            [
+                new() { Id = "Aspire.Hosting.Redis", Version = "13.6.5", Source = stagingSource },
+                new() { Id = "Aspire.Hosting.Valkey", Version = "13.6.5", Source = stagingSource }
+            ])
+        };
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) =>
+                choices.Cast<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>()
+                    .First(package => package.Package.Id == "Aspire.Hosting.Valkey")
+        };
+        AddPackageContext? added = null;
+        var factory = new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true));
+        factory.Project.AddPackageAsyncCallback = (context, _) =>
+        {
+            added = context;
+            return Task.FromResult(true);
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+            options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>());
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                [
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both,
+                        [new PackageMapping("Aspire*", stagingSource)], stagingCache, new TestFeatures(), NullLogger.Instance)
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(factory);
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse($"{commandLine} --apphost \"{appHostFile.FullName}\"")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(added);
+        Assert.Equal("Aspire.Hosting.Valkey", added.PackageId);
+        Assert.Equal("13.6.5", added.PackageVersion);
+        Assert.Equal(stagingSource, added.Source);
+    }
+
     [Fact]
     public async Task AddCommandNonInteractiveTypeScriptAppHostPinnedToDailyPrefersDailyChannelOverImplicitStable()
     {
