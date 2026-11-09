@@ -379,6 +379,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             await InvokeAsync(() =>
             {
                 UpdateTelemetryOnlyResources();
+                // Standalone, this is the only callback: removed telemetry sources must drop their row handlers here.
+                PruneRowHandlers();
                 UpdateSelection();
                 QueuePaneActivityRefresh();
                 StateHasChanged();
@@ -440,10 +442,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
                 await InvokeAsync(async () =>
                 {
-                    PruneRowHandlers();
                     UpdateResourceTagFilters();
                     EnsureGroupOrder();
                     UpdateTelemetryOnlyResources();
+                    // After the telemetry sources are refreshed, so both kinds of row handlers are pruned against
+                    // the current rows.
+                    PruneRowHandlers();
                     UpdateSelection();
                     UpdatePaneMenuItems();
                     await TryRedirectLandingAsync();
@@ -2123,6 +2127,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         return click;
     }
+
+    // The telemetry sources that have a row click handler, for tests.
+    internal IReadOnlyCollection<string> TelemetryRowClickNames => _telemetryRowClicks.Keys;
 
     // Removes the handlers of resources and telemetry sources that no longer exist.
     private void PruneRowHandlers()

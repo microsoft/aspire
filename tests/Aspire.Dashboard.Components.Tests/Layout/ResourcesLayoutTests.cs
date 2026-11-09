@@ -2729,6 +2729,28 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Standalone_RemovedTelemetrySource_DropsItsRowHandler()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        await AddTelemetryAsync("api");
+        await AddTelemetryAsync("worker");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "worker"], cut.Instance.TelemetryRowClickNames.Order()));
+
+        // Without an AppHost, the telemetry subscription is the only one, so it removes the handlers of the sources
+        // that are gone. Otherwise every source ever shown would keep its handler for the layout's lifetime.
+        await Services.GetRequiredService<SqliteTelemetryRepository>().ClearSelectedSignalsAsync(new() { ["worker"] = [AspireDataType.Resource] });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".resource-row-kind-telemetry"));
+            Assert.Equal(["api"], cut.Instance.TelemetryRowClickNames);
+        });
+    }
+
+    [Fact]
     public async Task Standalone_ModifierClickAfterSelectAll_DeselectsOnlyThatResource()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
