@@ -299,7 +299,7 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 // TestWaitFor waits for another resource (test version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if dependency != nil { if err := dependency.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -387,7 +387,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(
 // WithDependency adds a dependency on another resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if dependency != nil { if err := dependency.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -697,8 +697,8 @@ type IDistributedApplicationBuilder interface {
 	// Build invokes the build capability and returns the running application.
 	Build() (DistributedApplication, error)
 
-	// Err returns the first error recorded on this wrapper, or nil if the wrapper
-	// resolved successfully and no chained operation has failed.
+	// Err returns an error combining every failure recorded by this builder or by
+	// any handle created from it.
 	Err() error
 }
 
@@ -714,7 +714,7 @@ func newIDistributedApplicationBuilderFromHandle(h *handle, c *client) IDistribu
 
 // AddTestRedis adds a test Redis resource from ATS documentation.
 func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource {
-	if err := s.Err(); err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
+	if err := s.resourceBuilderBase.Err(); err != nil { return &testRedisResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -741,7 +741,7 @@ func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*A
 
 // AddTestVault adds a test vault resource
 func (s *iDistributedApplicationBuilder) AddTestVault(name string) TestVaultResource {
-	if s.Err() != nil { return nil }
+	if s.resourceBuilderBase.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1083,7 +1083,7 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 // TestWaitFor waits for another resource (test version)
 func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseResource {
 	if s.Err() != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if dependency != nil { if err := dependency.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1189,7 +1189,7 @@ func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWi
 // WithDependency adds a dependency on another resource
 func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource {
 	if s.Err() != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if dependency != nil { if err := dependency.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -1917,7 +1917,7 @@ func newTestRedisResourceFromHandle(h *handle, c *client) TestRedisResource {
 
 // AddTestChildDatabase adds a child database to a test Redis resource
 func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource {
-	if err := s.Err(); err != nil { return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
+	if err := s.Err(); err != nil { return &testDatabaseResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2008,7 +2008,7 @@ func (s *testRedisResource) GetTags() *List[string] {
 // TestWaitFor waits for another resource (test version)
 func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
 	if s.Err() != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if dependency != nil { if err := dependency.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2090,7 +2090,7 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 // resource as a parameter.
 func (s *testRedisResource) WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource {
 	if s.Err() != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
+	if resource != nil { if err := resource.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2115,7 +2115,7 @@ func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource 
 // WithConnectionString sets the connection string using a reference expression
 func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpression) TestRedisResource {
 	if s.Err() != nil { return s }
-	if connectionString != nil { if err := connectionString.Err(); err != nil { s.setErr(err); return s } }
+	if connectionString != nil { if err := connectionString.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2183,7 +2183,7 @@ func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithD
 // WithDependency adds a dependency on another resource
 func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionString) TestRedisResource {
 	if s.Err() != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
+	if dependency != nil { if err := dependency.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2374,8 +2374,8 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 // mutable-property and parameter-only resources whose generated names collide.
 func (s *testRedisResource) WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource {
 	if s.Err() != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	if resource != nil { if err := resource.Err(); err != nil { s.setPropagatedErr(err); return s } }
+	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -2464,8 +2464,8 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 // resources whose generated names collide.
 func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
 	if s.Err() != nil { return s }
-	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
-	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
+	if resource != nil { if err := resource.Err(); err != nil { s.setPropagatedErr(err); return s } }
+	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setPropagatedErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3145,10 +3145,10 @@ type DistributedApplication interface { handleReference }
 
 type distributedApplication struct { *resourceBuilderBase }
 
-// Err returns the first error recorded by this builder or by any handle created
-// from it.
+// Err returns an error combining every failure recorded by this builder or by
+// any handle created from it.
 func (b *iDistributedApplicationBuilder) Err() error {
-	if err := b.client.firstError(); err != nil { return err }
+	if err := b.client.combinedError(); err != nil { return err }
 	return b.resourceBuilderBase.Err()
 }
 
@@ -3228,9 +3228,9 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method). Every wrapper also reports its error to the
-// client, and the builder's Err() and Build() return the first error any
-// handle reported, so a failed child that was never checked still stops Build().
+// a value-returning method). Every wrapper also reports the error it owns to
+// the client, and the builder's Err() and Build() combine the errors from all
+// failed handles, so failed children that were never checked still stop Build().
 //
 // Callbacks run on separate goroutines and can capture a wrapper also used by
 // the builder chain. The sticky error and lazy collection accessors are
@@ -3253,6 +3253,10 @@ func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
 	return &handleWrapperBase{err: err, client: c}
 }
 
+func newPropagatedErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	return &handleWrapperBase{err: err, client: c}
+}
+
 // getHandle implements handleReference. Returns nil if the wrapper failed
 // to construct; callers should consult Err() before serializing a wrapper
 // with this handle.
@@ -3269,16 +3273,34 @@ func (h *handleWrapperBase) Err() error {
 	return h.err
 }
 
-// setErr records an error on this wrapper and on the client. The first non-nil
-// error wins on each; later errors are dropped to keep failure causality clear
-// in chains.
+// setErr records an error owned by this wrapper and reports it to the client.
+// The first non-nil error wins; later errors are dropped to keep failure
+// causality clear in chains.
 func (h *handleWrapperBase) setErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
+	if h.err != nil {
+		h.errMu.Unlock()
+		return
+	}
+	h.err = err
+	h.errMu.Unlock()
+	h.client.recordErr(err)
+}
+
+// setPropagatedErr short-circuits this wrapper with an error already owned by
+// another handle without reporting the same failure to the client again.
+func (h *handleWrapperBase) setPropagatedErr(err error) {
+	if err == nil {
+		return
+	}
 	h.errMu.Lock()
 	if h.err == nil {
 		h.err = err
 	}
 	h.errMu.Unlock()
-	h.client.recordErr(err)
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────
@@ -3293,6 +3315,10 @@ func newResourceBuilderBase(h *handle, c *client) *resourceBuilderBase {
 
 func newErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
 	return &resourceBuilderBase{handleWrapperBase: newErroredHandleWrapperBase(err, c)}
+}
+
+func newPropagatedErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
+	return &resourceBuilderBase{handleWrapperBase: newPropagatedErroredHandleWrapperBase(err, c)}
 }
 
 // ── ReferenceExpression ───────────────────────────────────────────────────────
@@ -4874,9 +4900,9 @@ type client struct {
 	cancellations       map[string]*cancellationRegistration
 	cancellationCounter atomic.Int64
 
-	// errMu guards firstErr.
-	errMu    sync.Mutex
-	firstErr error
+	// errMu guards errs.
+	errMu sync.Mutex
+	errs  []error
 }
 
 type cancellationRegistration struct {
@@ -4894,8 +4920,8 @@ func newClient(socketPath string) *client {
 	}
 }
 
-// recordErr remembers the first error reported by any handle of this client,
-// so the builder can surface a failure that only ever reached a child handle.
+// recordErr remembers an error owned by a handle of this client, so the builder
+// can surface failures that only ever reached child handles.
 // It is safe to call concurrently and on a nil client.
 func (c *client) recordErr(err error) {
 	if c == nil || err == nil {
@@ -4903,19 +4929,25 @@ func (c *client) recordErr(err error) {
 	}
 	c.errMu.Lock()
 	defer c.errMu.Unlock()
-	if c.firstErr == nil {
-		c.firstErr = err
-	}
+	c.errs = append(c.errs, err)
 }
 
-// firstError returns the first error passed to recordErr, or nil.
-func (c *client) firstError() error {
+// combinedError returns every error passed to recordErr. Preserve the original
+// error when there is only one so callers can continue to compare it directly.
+func (c *client) combinedError() error {
 	if c == nil {
 		return nil
 	}
 	c.errMu.Lock()
 	defer c.errMu.Unlock()
-	return c.firstErr
+	switch len(c.errs) {
+	case 0:
+		return nil
+	case 1:
+		return c.errs[0]
+	default:
+		return errors.Join(c.errs...)
+	}
 }
 
 // registerHandleWrapper registers a factory for wrapping handles of a specific

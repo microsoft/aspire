@@ -151,7 +151,7 @@ func newEscapedResourceFromHandle(h *handle, c *client) EscapedResource {
 
 // Add_Child_X adds a child.
 func (s *escapedResource) Add_Child_X() Child_Quote {
-	if err := s.Err(); err != nil { return &child_Quote{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
+	if err := s.Err(); err != nil { return &child_Quote{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),

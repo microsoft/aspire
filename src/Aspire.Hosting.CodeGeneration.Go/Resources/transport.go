@@ -599,9 +599,9 @@ type client struct {
 	cancellations       map[string]*cancellationRegistration
 	cancellationCounter atomic.Int64
 
-	// errMu guards firstErr.
-	errMu    sync.Mutex
-	firstErr error
+	// errMu guards errs.
+	errMu sync.Mutex
+	errs  []error
 }
 
 type cancellationRegistration struct {
@@ -619,8 +619,8 @@ func newClient(socketPath string) *client {
 	}
 }
 
-// recordErr remembers the first error reported by any handle of this client,
-// so the builder can surface a failure that only ever reached a child handle.
+// recordErr remembers an error owned by a handle of this client, so the builder
+// can surface failures that only ever reached child handles.
 // It is safe to call concurrently and on a nil client.
 func (c *client) recordErr(err error) {
 	if c == nil || err == nil {
@@ -628,19 +628,25 @@ func (c *client) recordErr(err error) {
 	}
 	c.errMu.Lock()
 	defer c.errMu.Unlock()
-	if c.firstErr == nil {
-		c.firstErr = err
-	}
+	c.errs = append(c.errs, err)
 }
 
-// firstError returns the first error passed to recordErr, or nil.
-func (c *client) firstError() error {
+// combinedError returns every error passed to recordErr. Preserve the original
+// error when there is only one so callers can continue to compare it directly.
+func (c *client) combinedError() error {
 	if c == nil {
 		return nil
 	}
 	c.errMu.Lock()
 	defer c.errMu.Unlock()
-	return c.firstErr
+	switch len(c.errs) {
+	case 0:
+		return nil
+	case 1:
+		return c.errs[0]
+	default:
+		return errors.Join(c.errs...)
+	}
 }
 
 // registerHandleWrapper registers a factory for wrapping handles of a specific

@@ -1329,7 +1329,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         }
 
         // Lifecycle escape hatches.
-        WriteInterfaceMemberDoc(RenderGoDoc("Err", ErrSummary));
+        var errSummary = string.Equals(typeId, AtsConstants.BuilderTypeId, StringComparison.Ordinal)
+            ? BuilderErrSummary
+            : ErrSummary;
+        WriteInterfaceMemberDoc(RenderGoDoc("Err", errSummary));
         WriteLine("\tErr() error");
 
         WriteLine("}");
@@ -1400,7 +1403,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     // Hand-authored members are documented on both the public interface and the implementation.
     private const string BuildSummary = "Build invokes the build capability and returns the running application.";
-    private const string BuilderErrSummary = "Err returns the first error recorded by this builder or by any handle created from it.";
+    private const string BuilderErrSummary = "Err returns an error combining every failure recorded by this builder or by any handle created from it.";
     private const string ErrSummary = "Err returns the first error recorded on this wrapper, or nil if the wrapper resolved successfully and no chained operation has failed.";
     private const string InputGetSummary = "Get returns the input with the specified name, or nil if no input matches.";
     private const string InputRequiredSummary = "Required returns the input with the specified name, or an error if no input matches.";
@@ -1701,11 +1704,14 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         var returnType = capability.ReturnType!;
         var isFluent = IsSameType(returnType.TypeId, capability, currentTypeId);
         var methodName = ToPascalCase(capability.MethodName);
+        var receiverErr = string.Equals(currentTypeId, AtsConstants.BuilderTypeId, StringComparison.Ordinal)
+            ? "s.resourceBuilderBase.Err()"
+            : "s.Err()";
 
         if (isFluent)
         {
-            WriteLine("\tif s.Err() != nil { return s }");
-            EmitHandleParamErrorChecks("\t", capability, "s.setErr(err); return s");
+            WriteLine($"\tif {receiverErr} != nil {{ return s }}");
+            EmitHandleParamErrorChecks("\t", capability, "s.setPropagatedErr(err); return s");
             EmitUnionTypeChecks("\t", capability, methodName, new[] { "s.setErr(err); return s" });
             EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
                 WriteLine($"\tif _, err := s.client.invokeCapability(ctx, {GoStringLiteral(capability.CapabilityId)}, reqArgs); err != nil {{ s.setErr(err) }}");
@@ -1724,8 +1730,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             // directly to the declared return type. Errors land on s; we
             // return nil and the caller must consult s.Err().
             var returnGoType = MapTypeRefToGo(returnType, false);
-            WriteLine("\tif s.Err() != nil { return nil }");
-            EmitHandleParamErrorChecks("\t", capability, "s.setErr(err); return nil");
+            WriteLine($"\tif {receiverErr} != nil {{ return nil }}");
+            EmitHandleParamErrorChecks("\t", capability, "s.setPropagatedErr(err); return nil");
             EmitUnionTypeChecks("\t", capability, methodName, new[] { "s.setErr(err); return nil" });
             EmitArgsConstruction("\t", capability, requiredParams, optionalParams, targetParamName, "s.handle");
                 WriteLine($"\tresult, err := s.client.invokeCapability(ctx, {GoStringLiteral(capability.CapabilityId)}, reqArgs)");
@@ -1740,9 +1746,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         }
 
         // Pre-errored child path: parent failure short-circuits this call.
-        WriteLine($"\tif err := s.Err(); err != nil {{ return &{childImplName}{{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}} }}");
+        WriteLine($"\tif err := {receiverErr}; err != nil {{ return &{childImplName}{{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}} }}");
         EmitHandleParamErrorChecks("\t", capability,
-            $"return &{childImplName}{{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}}");
+            $"return &{childImplName}{{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}}");
         EmitUnionTypeChecks("\t", capability, methodName, new[]
         {
             $"return &{childImplName}{{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}}",
@@ -2500,10 +2506,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
         // Err overrides the promoted handle Err(): a failed AddX records its error on
         // the child it returns, which a caller may never check, so the builder
-        // reports the first error any handle of its client recorded.
+        // reports every error owned by a handle of its client.
         WriteDocLines(RenderGoDoc("Err", BuilderErrSummary));
         WriteLine($"func (b *{builderImpl}) Err() error {{");
-        WriteLine("\tif err := b.client.firstError(); err != nil { return err }");
+        WriteLine("\tif err := b.client.combinedError(); err != nil { return err }");
         WriteLine("\treturn b.resourceBuilderBase.Err()");
         WriteLine("}");
         WriteLine();

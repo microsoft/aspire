@@ -1257,6 +1257,7 @@ public class AtsGoCodeGeneratorTests
 
                 import (
                     "bufio"
+                    "errors"
                     "fmt"
                     "net"
                     "reflect"
@@ -1495,20 +1496,39 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
-                func TestFirstRecordedChildErrorWins(t *testing.T) {
+                func TestAllRecordedChildErrorsReachBuilder(t *testing.T) {
+                    c, received := connectChildErrorHost(t, "addTestRedis")
+                    builder := newBuilderOn(c)
+
+                    first := builder.AddTestRedis("first")
+                    second := builder.AddTestRedis("second")
+
+                    got := builder.Err()
+                    if !errors.Is(got, first.Err()) || !errors.Is(got, second.Err()) {
+                        t.Errorf("builder.Err() = %v, want both %v and %v", got, first.Err(), second.Err())
+                    }
+                    if want := first.Err().Error() + "\n" + second.Err().Error(); got.Error() != want {
+                        t.Errorf("builder.Err() = %q, want %q", got, want)
+                    }
+                    if _, err := builder.Build(); !errors.Is(err, first.Err()) || !errors.Is(err, second.Err()) {
+                        t.Errorf("Build() error = %v, want both %v and %v", err, first.Err(), second.Err())
+                    }
+                    if got, want := received(), []string{"addTestRedis", "addTestRedis"}; !slices.Equal(got, want) {
+                        t.Errorf("the AppHost received %v, want %v (Build must not be sent)", got, want)
+                    }
+                }
+
+                func TestPropagatedChildErrorIsNotRecordedAgain(t *testing.T) {
                     c := newClient("")
                     builder := newBuilderOn(c)
 
-                    first := fmt.Errorf("first child failed")
-                    second := fmt.Errorf("second child failed")
-                    newErroredHandleWrapperBase(first, c)
-                    newErroredHandleWrapperBase(second, c)
+                    failure := fmt.Errorf("child failed")
+                    newErroredHandleWrapperBase(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
+                    newPropagatedErroredResourceBuilder(failure, c)
 
-                    if builder.Err() != first {
-                        t.Errorf("builder.Err() = %v, want the first recorded error %v", builder.Err(), first)
-                    }
-                    if _, err := builder.Build(); err != first {
-                        t.Errorf("Build() error = %v, want the first recorded error %v", err, first)
+                    if got := builder.Err(); got != failure {
+                        t.Errorf("builder.Err() = %v, want the original error %v", got, failure)
                     }
                 }
 
@@ -1543,15 +1563,21 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
-                // Concurrent writers have no defined first error, so this asserts that the builder
-                // reports one of the recorded errors and keeps reporting that same one.
-                func TestConcurrentChildErrorsReportOneRecordedError(t *testing.T) {
+                func TestConcurrentChildErrorsAreAggregated(t *testing.T) {
                     c := newClient("")
                     builder := newBuilderOn(c)
 
                     errs := make([]error, 64)
                     var ready, done sync.WaitGroup
                     ready.Add(1)
+                    done.Add(1)
+                    go func() {
+                        defer done.Done()
+                        ready.Wait()
+                        for range errs {
+                            _ = builder.Err()
+                        }
+                    }()
                     for i := range errs {
                         errs[i] = fmt.Errorf("error %d", i)
                         done.Add(1)
@@ -1569,11 +1595,13 @@ public class AtsGoCodeGeneratorTests
                     done.Wait()
 
                     got := builder.Err()
-                    if !slices.Contains(errs, got) {
-                        t.Fatalf("builder.Err() = %v, want one of the recorded errors", got)
+                    for _, err := range errs {
+                        if !errors.Is(got, err) {
+                            t.Errorf("builder.Err() = %v, want it to include %v", got, err)
+                        }
                     }
-                    if again := builder.Err(); again != got {
-                        t.Errorf("builder.Err() changed from %v to %v", got, again)
+                    if gotLines := strings.Count(got.Error(), "\n") + 1; gotLines != len(errs) {
+                        t.Errorf("builder.Err() contains %d errors, want %d", gotLines, len(errs))
                     }
                 }
                 """, timeout.Token);

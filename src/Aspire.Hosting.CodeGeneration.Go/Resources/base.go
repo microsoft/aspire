@@ -26,9 +26,9 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method). Every wrapper also reports its error to the
-// client, and the builder's Err() and Build() return the first error any
-// handle reported, so a failed child that was never checked still stops Build().
+// a value-returning method). Every wrapper also reports the error it owns to
+// the client, and the builder's Err() and Build() combine the errors from all
+// failed handles, so failed children that were never checked still stop Build().
 //
 // Callbacks run on separate goroutines and can capture a wrapper also used by
 // the builder chain. The sticky error and lazy collection accessors are
@@ -51,6 +51,10 @@ func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
 	return &handleWrapperBase{err: err, client: c}
 }
 
+func newPropagatedErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	return &handleWrapperBase{err: err, client: c}
+}
+
 // getHandle implements handleReference. Returns nil if the wrapper failed
 // to construct; callers should consult Err() before serializing a wrapper
 // with this handle.
@@ -67,16 +71,34 @@ func (h *handleWrapperBase) Err() error {
 	return h.err
 }
 
-// setErr records an error on this wrapper and on the client. The first non-nil
-// error wins on each; later errors are dropped to keep failure causality clear
-// in chains.
+// setErr records an error owned by this wrapper and reports it to the client.
+// The first non-nil error wins; later errors are dropped to keep failure
+// causality clear in chains.
 func (h *handleWrapperBase) setErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
+	if h.err != nil {
+		h.errMu.Unlock()
+		return
+	}
+	h.err = err
+	h.errMu.Unlock()
+	h.client.recordErr(err)
+}
+
+// setPropagatedErr short-circuits this wrapper with an error already owned by
+// another handle without reporting the same failure to the client again.
+func (h *handleWrapperBase) setPropagatedErr(err error) {
+	if err == nil {
+		return
+	}
 	h.errMu.Lock()
 	if h.err == nil {
 		h.err = err
 	}
 	h.errMu.Unlock()
-	h.client.recordErr(err)
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────
@@ -91,6 +113,10 @@ func newResourceBuilderBase(h *handle, c *client) *resourceBuilderBase {
 
 func newErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
 	return &resourceBuilderBase{handleWrapperBase: newErroredHandleWrapperBase(err, c)}
+}
+
+func newPropagatedErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
+	return &resourceBuilderBase{handleWrapperBase: newPropagatedErroredHandleWrapperBase(err, c)}
 }
 
 // ── ReferenceExpression ───────────────────────────────────────────────────────
