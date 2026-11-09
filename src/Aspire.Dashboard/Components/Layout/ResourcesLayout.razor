@@ -76,7 +76,7 @@
                 }
             </div>
 
-            <nav class="resource-pane-list @(IsCompact ? "density-compact" : IsSpacious ? "density-spacious" : null)"
+            <nav class="resource-pane-list @(IsCompact ? "density-compact" : null)"
                  data-reorder-enabled="@CanReorderResources.ToString().ToLowerInvariant()"
                  data-group-reorder-enabled="@CanReorderGroups.ToString().ToLowerInvariant()"
                  aria-label="@Loc[DashboardClient.IsEnabled ? nameof(Dashboard.Resources.Layout.ResourcePaneLandmark) : nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]">
@@ -756,7 +756,13 @@
                 <div class="resource-header-title">
                     @{ RenderTitle(__builder, SelectedResourceName, isDesktop); }
                 </div>
-                <div class="resource-header-meta">@Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderNotFound)]</div>
+                <div class="resource-header-meta">
+                    @Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderNotFound)]
+                    @if (GetReplacementReplicas(SelectedResourceName) is { Count: > 0 } replicas)
+                    {
+                        <a href="@GetTabUrl(CurrentTab, replicas.Select(replica => replica.Name).ToList())">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderShowReplacement)], replicas[0].DisplayName)</a>
+                    }
+                </div>
             </div>
         }
         else
@@ -922,10 +928,10 @@
                @onclick:preventDefault="true">
                 <span class="resource-row-icon">
                     <span class="resource-row-glyph">
-                        <FluentIcon Width="@(IsSpacious ? "20px" : "16px")"
+                        <FluentIcon Width="16px"
                                     Color="Color.Custom"
                                     CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
-                                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IsSpacious ? IconSize.Size20 : IconSize.Size16)" />
+                                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
                     </span>
                     <PersistentContainerBadge Resource="@resource" />
                 </span>
@@ -1009,46 +1015,6 @@
                                 <span class="resource-row-sep resource-row-type-sep" aria-hidden="true">·</span><span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" tabindex="0" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                             }
                         </span>
-                        @if (IsSpacious && !_isPaneFullCanvas && !resource.IsParameter)
-                        {
-                            @* The third line of a spacious row: whatever needs attention first, an unhealthy status, then
-                               where to reach the resource, then where it comes from. The full canvas has columns for these.
-                               The endpoint and source can be cut short, so like the start time above and the full canvas's
-                               columns, they take keyboard focus to show their complete value in a tooltip. The health status
-                               is short and is already in the link's accessible description. *@
-                            @if (resource.HealthStatus is { } healthStatus &&
-                                 healthStatus != Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy)
-                            {
-                                <span class="resource-row-detail">
-                                    <span>@healthStatus.Humanize()</span>
-                                </span>
-                            }
-                            else if ((primaryUrl ?? urls.FirstOrDefault()) is { } detailUrl)
-                            {
-                                @* Like the full canvas's endpoint column, this falls back to endpoints that can't be opened
-                                   as links, such as tcp:// ones: the line shows the address as text, not as a link. Like the
-                                   resource overview, it drops credentials (redis://:password@host) and fragments
-                                   (#access_token=...) and masks query values, because the text, tooltip and label all show it. *@
-                                var maskedDetailAddress = DashboardUIHelpers.MaskUrlForDisplay(detailUrl.OriginalUrlString);
-                                <span class="resource-row-detail"
-                                      tabindex="0"
-                                      data-tooltip="@maskedDetailAddress"
-                                      data-tooltip-positioning="above"
-                                      aria-label="@($"{detailUrl.DisplayName ?? detailUrl.Name}: {maskedDetailAddress}")">
-                                    <span>@(detailUrl.DisplayName is { Length: > 0 } detailUrlName ? detailUrlName : maskedDetailAddress)</span>
-                                </span>
-                            }
-                            else if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } detailSource)
-                            {
-                                <span class="resource-row-detail"
-                                      tabindex="0"
-                                      data-tooltip="@detailSource.Tooltip"
-                                      data-tooltip-positioning="above"
-                                      aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {detailSource.Tooltip}")">
-                                    <span>@detailSource.Value</span>
-                                </span>
-                            }
-                        }
                     </span>
                     @if (errorCount > 0)
                     {

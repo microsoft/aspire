@@ -7,8 +7,9 @@
     --resource-row-line-height: var(--lineHeightBase300);
     --resource-secondary-font-size: var(--aspire-font-size-secondary);
     --resource-secondary-line-height: 18px;
-    /* The full canvas's action rail from 960px: the 20px toggle, four 28px buttons and the four 4px gaps between. */
-    --resource-row-actions-width: 148px;
+    /* The full canvas's action rail from 960px: two lifecycle commands and the menu, 3 x 28px + 2 x 4px gaps. The
+       expand toggle leads the row instead, and the URLs column replaces an open-URL button. */
+    --resource-row-actions-width: 92px;
     --resource-insight-height: 28px;
     --resource-insight-icon-size: 14px;
     --resource-insight-padding: 6px;
@@ -74,22 +75,6 @@
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
         --resource-row-meta-type-width: clamp(48px, calc(100cqw - 180px), 128px);
     }
-}
-
-.resource-pane-list.density-spacious {
-    --resource-row-height: var(--aspire-density-resource-row-height, 60px);
-    --resource-row-icon-size: 40px;
-    --resource-row-font-size: var(--aspire-font-size-large);
-    --resource-row-line-height: var(--lineHeightBase400);
-    --resource-secondary-font-size: var(--aspire-font-size-body);
-    --resource-secondary-line-height: 20px;
-    --resource-insight-height: 32px;
-    --resource-insight-icon-size: 16px;
-    --resource-insight-padding: var(--spacingHorizontalS);
-    --resource-insight-gap: 6px;
-    --resource-insight-request-width: 156px;
-    --resource-insight-latency-width: 136px;
-    --resource-insight-failure-width: 40px;
 }
 
 /* The collapsed sidebar track is hidden; the popup overrides this for its own pane. */
@@ -772,12 +757,6 @@
     --resource-row-icon-offset: 30px;
 }
 
-.resources-layout.pane-full-canvas {
-    /* Two lifecycle commands and the menu: 3 x 28px + 2 x 4px. The toggle leads the row instead, and the URLs column
-       replaces the open-URL button. */
-    --resource-row-actions-width: 92px;
-}
-
 .resource-row ::deep .resource-row-toggle-leading,
 .resource-row ::deep .resource-row-toggle-leading::part(control) {
     width: 20px;
@@ -947,21 +926,6 @@
     font-size: var(--resource-secondary-font-size);
     line-height: var(--resource-row-line-height);
     white-space: nowrap;
-}
-
-.resource-row-detail {
-    display: flex;
-    align-items: center;
-    gap: var(--aspire-space-1);
-    overflow: hidden;
-    color: var(--colorNeutralForeground3);
-    font-size: var(--aspire-font-size-secondary);
-    white-space: nowrap;
-}
-
-.resource-row-detail > span {
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .resource-row-type {
@@ -1908,18 +1872,6 @@
     border-radius: 6px;
 }
 
-.density-spacious .resource-row-link {
-    gap: var(--aspire-space-2);
-    padding-top: 9px;
-    padding-bottom: 9px;
-}
-
-.density-spacious .resource-row-icon {
-    flex-basis: var(--resource-row-icon-size);
-    width: var(--resource-row-icon-size);
-    height: var(--resource-row-icon-size);
-}
-
 .density-compact .resource-row-text ::deep .resource-row-hidden-icon {
     flex-shrink: 0;
 }
@@ -2533,33 +2485,6 @@
 
 .resources-layout:not(.pane-full-canvas) .resource-row-health-status {
     flex-shrink: 0;
-}
-
-/* A spacious sidebar row adds a third, smaller band for its health, endpoint or source. The row grows to fit it,
-   and rows without one (parameters) keep two bands centered in the same height. */
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-spacious {
-    --resource-row-height: var(--aspire-density-resource-row-height, calc(2 * var(--resource-row-line-height) + var(--resource-secondary-line-height) + 12px));
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-row-link:has(.resource-row-detail) {
-    padding-block: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height) - var(--resource-secondary-line-height)) / 2);
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-row-text:has(> .resource-row-detail) {
-    grid-template-rows: repeat(2, var(--resource-row-line-height)) var(--resource-secondary-line-height);
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-row-detail {
-    min-width: 0;
-    height: var(--resource-secondary-line-height);
-    font-size: var(--resource-secondary-font-size);
-    line-height: var(--resource-secondary-line-height);
-}
-
-/* The endpoint and source details take keyboard focus to show their full value, like .resource-row-source-value. */
-.resource-row-detail:focus-visible {
-    outline: 2px solid var(--colorStrokeFocus2);
-    outline-offset: 1px;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions {

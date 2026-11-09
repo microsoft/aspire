@@ -1812,7 +1812,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsDataTab => CurrentTab is ResourceTab.Console or ResourceTab.StructuredLogs or ResourceTab.Traces or ResourceTab.Metrics;
 
     private bool IsCompact => ViewPreferences.Density == ResourceListDensity.Compact;
-    private bool IsSpacious => ViewPreferences.Density == ResourceListDensity.Spacious;
 
     // The time a row shows, in the sidebar and in the full canvas's health column: when the resource stopped, once it
     // has, rather than when it started, since "Started 3 h ago" says little about a resource that exited a minute ago.
@@ -2299,6 +2298,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             counts[0],
             (combined, count) => string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneMixedCount)], combined, count));
     }
+
+    /// <summary>
+    /// Gets the replicas that run now of the resource a missing replica belonged to. A replica's name is its resource's
+    /// display name and a suffix ("catalogservice-wfpmezqc"), and restarting the app replaces it with a replica under
+    /// a new suffix, so a page left open on the old name finds nothing. Resources whose name is their display name
+    /// aren't replicas, and "catalog-shell" isn't a replica of "catalog": the suffix has no hyphen.
+    /// </summary>
+    internal List<ResourceViewModel> GetReplacementReplicas(string missingName) =>
+        _resourceByName.Values
+            .Where(resource => !string.Equals(resource.Name, resource.DisplayName, StringComparisons.ResourceName) &&
+                missingName.Length > resource.DisplayName.Length + 1 &&
+                missingName.StartsWith(resource.DisplayName + "-", StringComparisons.ResourceName) &&
+                !missingName.AsSpan(resource.DisplayName.Length + 1).Contains('-'))
+            .OrderBy(resource => resource.Name, StringComparers.ResourceName)
+            .ToList();
 
     /// <summary>
     /// Gets a value indicating whether an app model resource is one of the named resources. Names are either the

@@ -618,9 +618,11 @@
     font-size: var(--aspire-font-size-caption);
 }
 
+/* One column per panel shown: a panel appears only once it has something to rank, so the row has one to three. */
 .home-insights {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
     gap: var(--aspire-space-3);
     margin-bottom: 14px;
 }
@@ -752,7 +754,7 @@
 
 @container (max-width: 900px) {
     .home-insights {
-        grid-template-columns: minmax(0, 1fr);
+        grid-auto-flow: row;
     }
 }
 

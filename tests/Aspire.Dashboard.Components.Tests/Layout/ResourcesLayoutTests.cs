@@ -431,7 +431,6 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(ResourceListDensity.Compact)]
     [InlineData(ResourceListDensity.Comfortable)]
-    [InlineData(ResourceListDensity.Spacious)]
     public async Task WideRowMetadata_PreservesRuntimeStateAndAccessibleHealthWithRelativeStart(ResourceListDensity density)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -1245,75 +1244,6 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task SpaciousSidebarDetail_PrefersUnhealthyStatusThenEndpointThenSource()
-    {
-        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
-        const string address = "https://example.test/api?token=synthetic-secret&mode=preview";
-        const string tcpAddress = "tcp://example.test:5432?password=synthetic-secret";
-        const string credentialsAddress = "redis://:synthetic-secret@example.test:6379/?token=synthetic-secret#access_token=synthetic-secret";
-        var projectPath = Path.Combine("workspace", "MyFrontend.csproj");
-        UrlViewModel Url(string name, string url, string? displayName = null) =>
-            new(name, new Uri(url), false, false, displayName is null ? UrlDisplayPropertiesViewModel.Empty : new(displayName, 0));
-        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources:
-            [
-                ModelTestHelpers.CreateResource("unhealthy", state: KnownResourceState.Running, reportHealthStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
-                    urls: [Url("https", address, "Friendly API")]),
-                ModelTestHelpers.CreateResource("named", state: KnownResourceState.Running, urls: [Url("https", address, "Friendly API")]),
-                ModelTestHelpers.CreateResource("unnamed", state: KnownResourceState.Running, urls: [Url("https", address)]),
-                // tcp:// can't be opened as a link, so it isn't the row's primary URL, but it's still the endpoint to show.
-                ModelTestHelpers.CreateResource("tcp", state: KnownResourceState.Running, urls: [Url("tcp", tcpAddress)]),
-                ModelTestHelpers.CreateResource("credentials", state: KnownResourceState.Running, urls: [Url("redis", credentialsAddress)]),
-                ModelTestHelpers.CreateResource("project", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, properties: new()
-                {
-                    [KnownProperties.Project.Path] = new(KnownProperties.Project.Path, Value.ForString(projectPath), false, null, 0, null, false)
-                }),
-                ModelTestHelpers.CreateResource("key", resourceType: KnownResourceTypes.Parameter)
-            ], resourceChannelProvider: () => channel));
-        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        Assert.Empty(cut.FindAll(".resource-row-detail"));
-
-        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Spacious));
-
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-pane-list.density-spacious")));
-        // Query values, credentials and fragments can carry secrets. The detail masks query values and drops the
-        // others, as the resource overview does.
-        const string maskedAddress = "https://example.test/api?token=●●●●●●●●&mode=●●●●●●●●";
-        const string maskedTcpAddress = "tcp://example.test:5432?password=●●●●●●●●";
-        const string maskedCredentialsAddress = "redis://example.test:6379/?token=●●●●●●●●";
-
-        // An unhealthy status needs attention first, so it wins over the endpoint. It's short and already in the link's
-        // accessible description, so it doesn't take focus.
-        var unhealthy = GetDetail("unhealthy");
-        Assert.Equal("Unhealthy", unhealthy.TextContent.Trim());
-        Assert.Null(unhealthy.GetAttribute("tabindex"));
-
-        AssertFocusableDetail(GetDetail("named"), "Friendly API", maskedAddress, $"Friendly API: {maskedAddress}");
-        AssertFocusableDetail(GetDetail("unnamed"), maskedAddress, maskedAddress, $"https: {maskedAddress}");
-        AssertFocusableDetail(GetDetail("tcp"), maskedTcpAddress, maskedTcpAddress, $"tcp: {maskedTcpAddress}");
-        AssertFocusableDetail(GetDetail("credentials"), maskedCredentialsAddress, maskedCredentialsAddress, $"redis: {maskedCredentialsAddress}");
-        AssertFocusableDetail(GetDetail("project"), "MyFrontend.csproj", projectPath, $"Source: {projectPath}");
-        Assert.Empty(cut.FindAll("[data-resource-name='key'] .resource-row-detail"));
-
-        // The expanded list has endpoint and source columns instead.
-        ResourceSetupHelpers.ToggleResourceList(cut);
-        Assert.Empty(cut.FindAll(".resource-row-detail"));
-
-        AngleSharp.Dom.IElement GetDetail(string resourceName) =>
-            Assert.Single(cut.FindAll($"[data-resource-name='{resourceName}'] .resource-row-detail"));
-
-        static void AssertFocusableDetail(AngleSharp.Dom.IElement detail, string text, string tooltip, string label)
-        {
-            Assert.Equal(text, detail.TextContent.Trim());
-            Assert.Equal(tooltip, detail.GetAttribute("data-tooltip"));
-            Assert.Equal(label, detail.GetAttribute("aria-label"));
-            Assert.Equal("0", detail.GetAttribute("tabindex"));
-        }
-    }
-
-    [Fact]
     public async Task TerminalTab_NavigatesWithinTheSelectionAndFallsBackForNonTerminalResources()
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -1392,6 +1322,33 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(
             ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
             cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible && t.Instance.Id != "resource-tab-none").Select(t => t.Instance.Id)));
+    }
+
+    [Fact]
+    public void Header_MissingReplica_LinksToTheReplicasThatReplacedIt()
+    {
+        // Restarting the app replaces a replica ("api-old") with ones under new suffixes. The page left open on the old
+        // name says it wasn't found and links to the replicas of the same resource that run now, on the same tab.
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource(resourceName: "api-new1", displayName: "api"),
+                ModelTestHelpers.CreateResource(resourceName: "api-new2", displayName: "api"),
+                // Not a replica of "api": its name is its display name.
+                ModelTestHelpers.CreateResource(resourceName: "api-gateway", displayName: "api-gateway")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api-old"));
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            var link = cut.Find(".resource-header-meta a");
+            Assert.Equal("Show api", link.TextContent);
+            Assert.Equal(ResourcesLayout.GetTabUrl(ResourceTab.Console, ["api-new1", "api-new2"]), link.GetAttribute("href"));
+        });
     }
 
     [Fact]
@@ -1648,7 +1605,6 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true, ResourceListDensity.Comfortable)]
     [InlineData(true, ResourceListDensity.Compact)]
-    [InlineData(true, ResourceListDensity.Spacious)]
     [InlineData(false, ResourceListDensity.Comfortable)]
     public async Task RowMenuTerminal_SelectsOnlyItsResourceAndPreservesViewState(bool desktop, ResourceListDensity density)
     {
@@ -2344,13 +2300,10 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Theory]
     [InlineData("Persistent", ResourceListDensity.Comfortable, "Container (persistent)")]
     [InlineData("Persistent", ResourceListDensity.Compact, "Container (persistent)")]
-    [InlineData("Persistent", ResourceListDensity.Spacious, "Container (persistent)")]
     [InlineData("Session", ResourceListDensity.Comfortable, "Container")]
     [InlineData("Session", ResourceListDensity.Compact, "Container")]
-    [InlineData("Session", ResourceListDensity.Spacious, "Container")]
     [InlineData(null, ResourceListDensity.Comfortable, "Container")]
     [InlineData(null, ResourceListDensity.Compact, "Container")]
-    [InlineData(null, ResourceListDensity.Spacious, "Container")]
     public async Task AppHost_ContainerLifetimeQualifiesTypeAndBadgesResourceGlyph(string? lifetime, ResourceListDensity density, string expectedType)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

@@ -144,7 +144,11 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             }
             else
             {
-                await page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize }).PressAsync("Home");
+                // The handle takes keyboard focus only once its handlers are attached, so a key pressed earlier is lost.
+                var separator = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
+                await Assertions.Expect(separator).ToHaveAttributeAsync("tabindex", "0");
+                await separator.PressAsync("Home");
+                await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", "300");
             }
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await page.WaitForFunctionAsync("""
@@ -204,7 +208,8 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             await Assertions.Expect(page.Locator(".resource-content")).Not.ToHaveAttributeAsync("inert", "");
             var layoutBox = await page.Locator(".resources-layout").BoundingBoxAsync();
             Assert.NotNull(layoutBox);
-            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? 420 : 0);
+            // Home shrank the pane to its minimum width, 300px.
+            var expectedDetailsWidth = layoutBox.Width - (width > 768 ? 300 : 0);
             Assert.NotEmpty(frames);
             Assert.All(await page.EvaluateAsync<string[]>("() => window.selectionRevealTitles"),
                 title => Assert.Equal("api", title));
@@ -227,7 +232,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
             });
             if (width > 768)
             {
-                var intermediate = frames.Where(frame => frame[0] > 420.1 && frame[0] < layoutBox.Width - .1).ToList();
+                var intermediate = frames.Where(frame => frame[0] > 300.1 && frame[0] < layoutBox.Width - .1).ToList();
                 Assert.Equal(!reducedMotion, intermediate.Count > 0);
                 Assert.All(intermediate, frame =>
                 {

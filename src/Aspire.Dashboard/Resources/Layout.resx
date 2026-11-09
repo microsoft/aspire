@@ -359,6 +359,10 @@
   <data name="ResourceHeaderNotFound" xml:space="preserve">
     <value>Resource not found</value>
   </data>
+  <data name="ResourceHeaderShowReplacement" xml:space="preserve">
+    <value>Show {0}</value>
+    <comment>{0} is a resource's name. Links from a replica that was replaced, such as after a restart, to the replicas of the same resource that run now.</comment>
+  </data>
   <data name="ResourceHeaderAllResources" xml:space="preserve">
     <value>All resources</value>
   </data>

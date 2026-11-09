@@ -179,6 +179,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
+    private SelectViewModel<ResourceTypeDetails>? _missingResource;
     private AspirePageContentLayout? _contentLayout;
     private readonly List<CommandViewModel> _highlightedCommands = new();
     private readonly List<MenuButtonItem> _logsMenuItems = new();
@@ -204,7 +205,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _resourceSubscriptionToken = _resourceSubscriptionCts.Token;
         _logEntries = new(DashboardUIHelpers.GetVirtualizedItemCount(Options.Value.Frontend.MaxConsoleLogCount));
         _allResource = new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] };
-        PageViewModel = new ConsoleLogsViewModel { SelectedResource = _allResource, Status = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLoadingResources)] };
+        PageViewModel = new ConsoleLogsViewModel { SelectedResource = GetFallbackOption(), Status = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLoadingResources)] };
         _logEntryChannelReaderTask = StartLogEntryChannelReaderTask();
 
         _consoleLogsFiltersChangedSubscription = ConsoleLogsManager.OnFiltersChanged(async () =>
@@ -322,7 +323,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         // so if there is no selected resource when we
                         // receive an added resource, and that added resource name == ResourceName,
                         // we should mark it as selected
-                        if (ResourceName is not null && PageViewModel.SelectedResource is null && changeType == ResourceViewModelChangeType.Upsert && string.Equals(ResourceName, resource.Name, StringComparisons.ResourceName))
+                        if (ResourceName is not null && IsMissingResourceSelected() && changeType == ResourceViewModelChangeType.Upsert && string.Equals(ResourceName, resource.Name, StringComparisons.ResourceName))
                         {
                             SetSelectedResourceOption(resource);
                             needsRender = true;
@@ -428,8 +429,28 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private SelectViewModel<ResourceTypeDetails> GetSelectedOption()
     {
         Debug.Assert(_resources is not null);
-        return _resources.GetResource(Logger, ResourceName, canSelectGrouping: true, fallbackViewModel: _allResource);
+        return _resources.GetResource(Logger, ResourceName, canSelectGrouping: true, fallbackViewModel: GetFallbackOption());
     }
+
+    // A page about one resource never falls back to every resource's logs: when the resource isn't known, for example
+    // a replica that was replaced, the page selects a placeholder for it and shows no logs. The layout's header says
+    // the resource wasn't found. If the resource appears later, the resource subscription selects it.
+    private SelectViewModel<ResourceTypeDetails> GetFallbackOption()
+    {
+        if (ResourceName is null)
+        {
+            return _allResource;
+        }
+
+        if (_missingResource is null || !string.Equals(_missingResource.Name, ResourceName, StringComparisons.ResourceName))
+        {
+            _missingResource = new() { Id = null, Name = ResourceName };
+        }
+
+        return _missingResource;
+    }
+
+    private bool IsMissingResourceSelected() => _missingResource is not null && PageViewModel.SelectedResource == _missingResource;
 
     private void SetStatus(ConsoleLogsViewModel viewModel, string statusName)
     {
@@ -1004,9 +1025,17 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
             if (string.Equals(PageViewModel.SelectedResource.Id?.InstanceId, resource.Name, StringComparisons.ResourceName))
             {
-                // The selected resource was deleted
-                PageViewModel.SelectedResource = _allResource;
-                await HandleSelectedOptionChangedAsync();
+                // The selected resource was deleted. A page about that resource keeps the logs it has and selects the
+                // placeholder for the missing resource, rather than switching to every resource's logs.
+                if (ResourceName is not null)
+                {
+                    PageViewModel.SelectedResource = GetFallbackOption();
+                }
+                else
+                {
+                    PageViewModel.SelectedResource = _allResource;
+                    await HandleSelectedOptionChangedAsync();
+                }
             }
 
             UpdateResourcesList();

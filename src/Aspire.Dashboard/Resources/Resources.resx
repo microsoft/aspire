@@ -673,9 +673,6 @@
     <value>p95</value>
     <comment>Abbreviation for the 95th percentile.</comment>
   </data>
-  <data name="HomeNoRecentRequests" xml:space="preserve">
-    <value>No requests in the last 15 minutes</value>
-  </data>
   <data name="HomeEndpointTooltip" xml:space="preserve">
     <value>{0}: {1} ({2} requests)</value>
     <comment>{0} is the resource name, {1} is the endpoint label, and {2} is the request count.</comment>
@@ -700,9 +697,6 @@
   </data>
   <data name="HomeErrorHotspotsHint" xml:space="preserve">
     <value>failed requests + error logs</value>
-  </data>
-  <data name="HomeNoRecentActivityErrors" xml:space="preserve">
-    <value>No errors in the last 15 minutes</value>
   </data>
   <data name="HomeFailedRequestCount" xml:space="preserve">
     <value>{0} failed requests</value>

@@ -343,28 +343,24 @@
     {
         var activity = _telemetry?.Activity;
 
-        // Three "No recent requests" placeholders under an empty activity chart read as noise rather than
-        // reassurance. Keep the panels out of the page until there is request or error telemetry to rank;
-        // the activity chart above already says the dashboard is waiting for requests.
+        // "No recent requests" placeholders under an empty activity chart read as noise rather than reassurance.
+        // Each panel shows only once it has something to rank, and the row leaves out the others; the activity chart
+        // above already says the dashboard is waiting for requests.
         if (activity is null || activity is { SlowestEndpoints.Count: 0, BusiestResources.Count: 0, ErrorHotspots.Count: 0 })
         {
             return;
         }
 
         <section class="home-insights" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeInsightsLabel)]">
-            <div class="home-insight">
-                <div class="home-insight-header">
-                    <span class="card-header-icon slow"><FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeSlowestEndpoints)]</h2>
-                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeP95Label)]</span>
-                </div>
-                @if (activity is null || activity.SlowestEndpoints.Count == 0)
-                {
-                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentRequests)]</div>
-                }
-                else
-                {
-                    var slowest = activity.SlowestEndpoints[0].P95;
+            @if (activity.SlowestEndpoints.Count > 0)
+            {
+                <div class="home-insight">
+                    <div class="home-insight-header">
+                        <span class="card-header-icon slow"><FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                        <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeSlowestEndpoints)]</h2>
+                        <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeP95Label)]</span>
+                    </div>
+                    @{ var slowest = activity.SlowestEndpoints[0].P95; }
                     <ul class="home-insight-list">
                         @foreach (var endpoint in activity.SlowestEndpoints)
                         {
@@ -385,23 +381,21 @@
                             </li>
                         }
                     </ul>
-                }
-            </div>
-
-            <div class="home-insight">
-                <div class="home-insight-header">
-                    <span class="card-header-icon"><FluentIcon Value="@(new Icons.Regular.Size16.DataTrending())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeBusiestResources)]</h2>
-                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeRequestsPerMinute)]</span>
                 </div>
-                @if (activity is null || activity.BusiestResources.Count == 0)
-                {
-                    <div class="home-empty">@Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentRequests)]</div>
-                }
-                else
-                {
-                    var busiest = activity.BusiestResources[0].Requests;
-                    var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
+            }
+
+            @if (activity.BusiestResources.Count > 0)
+            {
+                <div class="home-insight">
+                    <div class="home-insight-header">
+                        <span class="card-header-icon"><FluentIcon Value="@(new Icons.Regular.Size16.DataTrending())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                        <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeBusiestResources)]</h2>
+                        <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeRequestsPerMinute)]</span>
+                    </div>
+                    @{
+                        var busiest = activity.BusiestResources[0].Requests;
+                        var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
+                    }
                     <ul class="home-insight-list">
                         @foreach (var busy in activity.BusiestResources)
                         {
@@ -427,25 +421,18 @@
                             </li>
                         }
                     </ul>
-                }
-            </div>
-
-            <div class="home-insight">
-                <div class="home-insight-header">
-                    <span class="card-header-icon hot"><FluentIcon Value="@(new Icons.Regular.Size16.Fire())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspots)]</h2>
-                    <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspotsHint)]</span>
                 </div>
-                @if (activity is null || activity.ErrorHotspots.Count == 0)
-                {
-                    <div class="home-empty">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Success" />
-                        @Loc[nameof(Dashboard.Resources.Resources.HomeNoRecentActivityErrors)]
+            }
+
+            @if (activity.ErrorHotspots.Count > 0)
+            {
+                <div class="home-insight">
+                    <div class="home-insight-header">
+                        <span class="card-header-icon hot"><FluentIcon Value="@(new Icons.Regular.Size16.Fire())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                        <h2>@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspots)]</h2>
+                        <span class="home-insight-hint">@Loc[nameof(Dashboard.Resources.Resources.HomeErrorHotspotsHint)]</span>
                     </div>
-                }
-                else
-                {
-                    var totalErrors = activity.ErrorHotspots.Sum(r => r.TotalErrors);
+                    @{ var totalErrors = activity.ErrorHotspots.Sum(r => r.TotalErrors); }
                     <ul class="home-insight-list">
                         @foreach (var hotspot in activity.ErrorHotspots)
                         {
@@ -468,8 +455,8 @@
                             </li>
                         }
                     </ul>
-                }
-            </div>
+                </div>
+            }
         </section>
     };
 

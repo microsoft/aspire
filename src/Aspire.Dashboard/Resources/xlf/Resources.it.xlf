@@ -167,19 +167,9 @@
         <target state="new">No failed traces</target>
         <note />
       </trans-unit>
-      <trans-unit id="HomeNoRecentActivityErrors">
-        <source>No errors in the last 15 minutes</source>
-        <target state="new">No errors in the last 15 minutes</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HomeNoRecentErrors">
         <source>No errors logged</source>
         <target state="new">No errors logged</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="HomeNoRecentRequests">
-        <source>No requests in the last 15 minutes</source>
-        <target state="new">No requests in the last 15 minutes</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeNotStartedLabel">

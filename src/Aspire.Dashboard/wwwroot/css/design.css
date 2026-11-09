@@ -77,7 +77,7 @@
     --aspire-space-5: 20px;
     --aspire-space-6: 24px;
     /* Type: six sizes and two weights. Caption for counts and badges; secondary for row details, columns and
-       timestamps; body for text and controls; large for spacious rows and standalone names; heading for section and
+       timestamps; body for text and controls; large for standalone names and summary values; heading for section and
        dialog titles; title for the page title and big numbers. Use these instead of pixel values. */
     --aspire-font-size-caption: 11px;
     --aspire-font-size-secondary: 12px;

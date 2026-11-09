@@ -673,6 +673,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Show {0}.
+        /// </summary>
+        public static string ResourceHeaderShowReplacement {
+            get {
+                return ResourceManager.GetString("ResourceHeaderShowReplacement", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to {0} selected resources.
         /// </summary>
         public static string ResourceHeaderSelectedResources {

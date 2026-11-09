@@ -317,6 +317,11 @@
         <target state="new">{0} selected resources</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceHeaderShowReplacement">
+        <source>Show {0}</source>
+        <target state="new">Show {0}</target>
+        <note>{0} is a resource's name. Links from a replica that was replaced, such as after a restart, to the replicas of the same resource that run now.</note>
+      </trans-unit>
       <trans-unit id="ResourceHeaderStarted">
         <source>Started</source>
         <target state="new">Started</target>

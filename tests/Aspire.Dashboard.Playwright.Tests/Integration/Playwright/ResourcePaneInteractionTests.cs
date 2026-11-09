@@ -192,7 +192,7 @@ public sealed class ResourcePaneInteractionTests : PlaywrightTestsBase<Resources
                 var resizer = page.GetByRole(AriaRole.Separator, new() { Name = Resources.Layout.ResourcePaneResize });
                 await resizer.FocusAsync();
                 await page.Keyboard.PressAsync("Home");
-                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "420");
+                await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "300");
             }
 
             var selectAll = page.Locator(".resource-row-all .resource-row-link");

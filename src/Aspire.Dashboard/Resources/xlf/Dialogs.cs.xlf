@@ -1083,11 +1083,6 @@ Další informace o používání agentů AI s řídicím panelem včetně nasta
         <target state="new">Compact</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensitySpacious">
-        <source>Spacious</source>
-        <target state="new">Spacious</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
         <source>System</source>
         <target state="translated">Systém</target>
