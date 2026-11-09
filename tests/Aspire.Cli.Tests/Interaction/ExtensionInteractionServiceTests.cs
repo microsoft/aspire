@@ -125,6 +125,8 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unwinding = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var output = new StringBuilder();
         var console = new TestAnsiConsoleWithInput(
             AnsiConsole.Create(new AnsiConsoleSettings
@@ -136,7 +138,15 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             }), async (_, token) =>
             {
                 started.TrySetResult();
-                await Task.Delay(Timeout.Infinite, token);
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, token);
+                }
+                finally
+                {
+                    unwinding.TrySetResult();
+                    await release.Task;
+                }
                 return null;
             });
         var consoleInteraction = new ConsoleInteractionService(
@@ -157,7 +167,17 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         {
             await caller.CancelAsync();
         }
+        await unwinding.Task.DefaultTimeout();
+        try
+        {
+            Assert.False(result.IsCompleted);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => result.DefaultTimeout());
+        Assert.Equal(42, await consoleInteraction.ShowStatusAsync("Next operation", () => Task.FromResult(42)).DefaultTimeout());
         if (dispose)
         {
             await interaction.PumpTask.DefaultTimeout();
@@ -192,19 +212,17 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         interaction.Dispose();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first.DefaultTimeout());
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => queued.DefaultTimeout());
-        release.SetException(new InvalidOperationException("Late operation failure."));
         await interaction.PumpTask.DefaultTimeout();
+        release.SetException(new InvalidOperationException("Late operation failure."));
         Assert.Equal(1, prompts);
     }
 
     [Theory]
-    [InlineData("none", false)]
-    [InlineData("none", true)]
-    [InlineData("v1", false)]
-    [InlineData("v1", true)]
-    [InlineData("v2", false)]
-    [InlineData("v2", true)]
-    public async Task PromptForStringAsync_Secret_UsesMaskedPrompt(string capabilityVersion, bool required)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PromptForStringAsync_Secret_UsesMaskedPrompt(bool hasSecretPromptsCapability, bool required)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringBuilder();
@@ -230,9 +248,8 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         {
             HasCapabilityAsyncCallback = (capability, _) =>
             {
-                Assert.Equal(KnownCapabilities.CancellableSecretPrompts, capability);
-                return Task.FromResult(capabilityVersion == "v2" ||
-                    capabilityVersion == "v1" && capability == KnownCapabilities.SecretPrompts);
+                Assert.Equal(KnownCapabilities.SecretPrompts, capability);
+                return Task.FromResult(hasSecretPromptsCapability);
             },
             PromptForSecretStringAsyncCallback = (_, _, promptRequired, _) =>
             {
@@ -254,8 +271,8 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("y", result);
         Assert.Equal(0, regularPromptCalls);
-        Assert.Equal(capabilityVersion == "v2" ? 1 : 0, secretPromptCalls);
-        Assert.Equal(capabilityVersion == "v2" ? "" : $"Secret: *{Environment.NewLine}", output.ToString());
+        Assert.Equal(hasSecretPromptsCapability ? 1 : 0, secretPromptCalls);
+        Assert.Equal(hasSecretPromptsCapability ? "" : $"Secret: *{Environment.NewLine}", output.ToString());
     }
 
     [Fact]
@@ -266,7 +283,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var backchannel = new TestExtensionBackchannel
         {
-            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == KnownCapabilities.CancellableSecretPrompts),
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == KnownCapabilities.SecretPrompts),
             PromptForSecretStringAsyncCallback = async (prompt, _, required, token) =>
             {
                 Assert.Equal(string.Format(InteractionServiceStrings.GitPasswordPrompt, "https://example.test"), prompt);
@@ -284,7 +301,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             }
         };
         using var interaction = CreateExtensionInteractionService(workspace, backchannel);
-        await using var session = new GitAskPassSession(new Uri("https://example.test"),
+        await using var session = new GitAskPassSession(TimeProvider.System, new Uri("https://example.test"),
             (prompt, token) => GitCommandRunner.PromptForCredentialAsync(interaction, prompt, token),
             TestContext.Current.CancellationToken);
         var info = new ProcessStartInfo("git");

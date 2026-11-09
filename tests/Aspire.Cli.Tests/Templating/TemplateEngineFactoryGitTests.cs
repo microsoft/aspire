@@ -8,14 +8,51 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Templating;
 
 public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
 {
     private const string CommitSha = TestGitCommandRunner.DefaultCommitSha;
+
+    [Fact]
+    public async Task RepositoryTemplate_AllowsMaskedConsolePromptsDuringResolutionAndFetch()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var console = new TestAnsiConsoleWithInput(AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Interactive = InteractionSupport.Yes,
+            Out = new AnsiConsoleOutput(TextWriter.Null)
+        }), new StringReader("y\ny\n"));
+        var interaction = new ConsoleInteractionService(new ConsoleEnvironment(console, console, TextReader.Null),
+            workspace.CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var commands = TestGitCommandRunner.CreateForTemplateCheckout(CreateTemplateCheckoutAsync);
+        var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(commands.RunCallback);
+        var prompts = 0;
+        commands.RunCallback = async (command, token) =>
+        {
+            if (command.Arguments[0] is "ls-remote" or "fetch")
+            {
+                Assert.Equal("y", await interaction.PromptForStringAsync("Bound origin",
+                    isSecret: true, required: true, logResponse: false, cancellationToken: token));
+                prompts++;
+            }
+            return await run(command, token);
+        };
+        var services = CreateServices(workspace, commands);
+        services.AddSingleton<IInteractionService>(interaction);
+        using var provider = services.BuildServiceProvider();
+        var templates = await GetFactory(provider).GetTemplatesAsync(
+            new TemplateSource(".", "repository", null), TestContext.Current.CancellationToken);
+        Assert.Equal("git-template", Assert.Single(templates).Name);
+        Assert.Equal(2, prompts);
+    }
 
     [Theory]
     [InlineData(false)]
@@ -167,6 +204,11 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         {
             RunCallback = (_, token) =>
             {
+                using (GitOperationTimeout.PauseCurrent())
+                {
+                    time.Advance(TimeSpan.FromMinutes(10));
+                    token.ThrowIfCancellationRequested();
+                }
                 time.Advance(TimeSpan.FromSeconds(40));
                 token.ThrowIfCancellationRequested();
                 return Task.FromResult(CommitSha);

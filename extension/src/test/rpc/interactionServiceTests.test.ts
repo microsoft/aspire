@@ -95,10 +95,10 @@ suite('InteractionService endpoints', () => {
 	});
 
 	// promptForSecretString
-	test('secret prompt capabilities retain v1 and advertise cancellable v2 on all desktop platforms', () => {
+	test('secret prompt capabilities use v1 on all desktop platforms', () => {
 		for (const platform of ['darwin', 'linux', 'win32'] as const) {
 			assert.deepStrictEqual(getSupportedCapabilities(platform).filter(capability => capability.startsWith('secret-prompts.')),
-				['secret-prompts.v1', 'secret-prompts.v2']);
+				['secret-prompts.v1']);
 		}
 	});
 

@@ -11,7 +11,7 @@ internal static class GitAskPassInvocation
 {
     public static bool Matches(string[] args) => args is ["git", "askpass", ..];
 
-    public static async Task<int> InvokeAsync(string[] args, Func<string, string?> environment,
+    public static async Task<int> InvokeAsync(TimeProvider timeProvider, string[] args, Func<string, string?> environment,
         TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         try
@@ -24,12 +24,14 @@ internal static class GitAskPassInvocation
             var path = environment(GitAskPassProtocol.SocketVariable)
                 ?? throw new AuthenticationException("Missing Git credential callback endpoint.");
             GitAskPassDirectory.ValidateEndpoint(path);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            using var setupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10), timeProvider);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, setupTimeout.Token);
             using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             await socket.ConnectAsync(new UnixDomainSocketEndPoint(path), timeout.Token);
-            timeout.CancelAfter(GitAskPassProtocol.RequestTimeout + TimeSpan.FromSeconds(10));
+            setupTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
             await using var stream = new NetworkStream(socket, ownsSocket: false);
+            // Connecting is bounded; waiting for a human is not. EOF from
+            // the parent or caller cancellation still terminates the helper.
             await GitAskPassProtocol.WriteAsync(stream, prompt, GitAskPassProtocol.MaxPromptBytes, timeout.Token);
             var response = await GitAskPassProtocol.ReadAsync(stream, GitAskPassProtocol.MaxResponseBytes, timeout.Token);
             GitAskPassProtocol.ValidateResponse(response);

@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Text;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
@@ -18,7 +17,7 @@ internal interface IGitCommandRunner
     Task<string> RunAsync(DirectoryInfo workingDirectory, string[] arguments, GitCommandMode mode, CancellationToken cancellationToken);
 }
 
-internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ILogger<GitCommandRunner> logger, IFeatures features) : IGitCommandRunner
+internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ILogger<GitCommandRunner> logger) : IGitCommandRunner
 {
     private Action<string> StandardErrorHandler { get; init; } =
         output => interaction.DisplayRawText(output, ConsoleOutput.Error);
@@ -50,7 +49,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             await ConfigureUnattendedSshAsync(startInfo, arguments, cancellationToken);
         }
         if (mode != GitCommandMode.Unattended && hostEnvironment.SupportsInteractiveInput &&
-            command is "fetch" or "ls-remote" && features.IsFeatureEnabled(KnownFeatures.ExperimentalGitAskPass, defaultValue: false))
+            command is "fetch" or "ls-remote")
         {
             var separator = Array.IndexOf(arguments, "--");
             if (separator >= 0 && separator + 1 < arguments.Length)
@@ -62,7 +61,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                 if (Uri.TryCreate(repository, UriKind.Absolute, out var destination) && destination.Scheme == Uri.UriSchemeHttps)
                 {
                     var helper = GitAskPassInvocation.CreateCurrentHelperCommand();
-                    await using var session = new GitAskPassSession(destination,
+                    await using var session = new GitAskPassSession(TimeProvider.System, destination,
                         (prompt, token) => PromptForCredentialAsync(interaction, prompt, token), cancellationToken);
                     session.Configure(startInfo, helper);
                     try

@@ -160,7 +160,14 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
             var token = cancellation.Token;
             var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var registration = token.Register(() => tcs.TrySetCanceled(token));
+            var consolePrompt = 0;
+            var registration = token.Register(() =>
+            {
+                if (Volatile.Read(ref consolePrompt) == 0)
+                {
+                    tcs.TrySetCanceled(token);
+                }
+            });
             var queued = false;
             try
             {
@@ -174,22 +181,25 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
                         string result;
                         if (isSecret)
                         {
-                            var hasSecretPromptsCapability = await Backchannel.HasCapabilityAsync(KnownCapabilities.CancellableSecretPrompts, token).ConfigureAwait(false);
+                            var hasSecretPromptsCapability = await WaitForInteractionAsync(Backchannel.HasCapabilityAsync(KnownCapabilities.SecretPrompts, token), token).ConfigureAwait(false);
                             token.ThrowIfCancellationRequested();
                             if (hasSecretPromptsCapability)
                             {
-                                result = await Backchannel.PromptForSecretStringAsync(StringUtils.RemoveMarkup(promptText), validator, required, token).ConfigureAwait(false);
+                                result = await WaitForInteractionAsync(Backchannel.PromptForSecretStringAsync(StringUtils.RemoveMarkup(promptText), validator, required, token), token).ConfigureAwait(false);
                             }
                             else
                             {
-                                // v1 masks input but cannot dismiss it on cancellation. Keep
-                                // secrets in the masked terminal unless the extension supports both.
+                                // Older extensions cannot mask regular input boxes.
+                                // Let local input unwind its exclusive console before
+                                // returning cancellation to a subsequent interactive call.
+                                Volatile.Write(ref consolePrompt, 1);
+                                token.ThrowIfCancellationRequested();
                                 result = await _consoleInteractionService.PromptForStringAsync(promptText, validator, isSecret, required, binding, logResponse, token).ConfigureAwait(false);
                             }
                         }
                         else
                         {
-                            result = await Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, token).ConfigureAwait(false);
+                            result = await WaitForInteractionAsync(Backchannel.PromptForStringAsync(StringUtils.RemoveMarkup(promptText), binding?.DefaultValue, validator, required, token), token).ConfigureAwait(false);
                         }
 
                         tcs.TrySetResult(result);
@@ -238,6 +248,15 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         await Task.WhenAny(completed, pump).ConfigureAwait(false);
         registration.Dispose();
         cancellation.Dispose();
+    }
+
+    private static Task<T> WaitForInteractionAsync<T>(Task<T> task, CancellationToken cancellationToken)
+    {
+        // A legacy extension can leave its input open after RPC cancellation. Do
+        // not block the queue/teardown; observe failures if that request ends later.
+        _ = task.ContinueWith(static completed => _ = completed.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return task.WaitAsync(cancellationToken);
     }
 
     public async Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)

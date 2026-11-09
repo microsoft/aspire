@@ -21,9 +21,9 @@ namespace Aspire.Cli.Tests.Commands;
 public class ConfigCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void ConfigInfo_AdvertisesCompatibleCancellableSecretPrompts()
+    public void ConfigInfo_AdvertisesSecretPrompts()
     {
-        Assert.Equal([KnownCapabilities.SecretPrompts, KnownCapabilities.CancellableSecretPrompts],
+        Assert.Equal([KnownCapabilities.SecretPrompts],
             KnownCapabilities.GetAdvertisedCapabilities().Where(capability =>
                 capability.StartsWith("secret-prompts.", StringComparison.Ordinal)));
     }

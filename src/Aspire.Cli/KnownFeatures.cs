@@ -42,16 +42,9 @@ internal static class KnownFeatures
         => config?.Features is { } features && features.TryGetValue(AppHostServerV2, out var enabled) && enabled;
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
-    public static string ExperimentalGitAskPass => "experimentalGitAskPass";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
-        [ExperimentalGitAskPass] = new(
-            ExperimentalGitAskPass,
-            "Use masked Aspire prompts for HTTPS Git credentials",
-            DefaultValue: false,
-            Hidden: true),
-
         [UpdateNotificationsEnabled] = new(
             UpdateNotificationsEnabled,
             "Check if update notifications are disabled and set version check environment variable",

@@ -24,7 +24,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     public void Dispose() => _loggerFactory.Dispose();
 
     private GitCommandRunner CreateRunner(ICliHostEnvironment hostEnvironment) =>
-        new(hostEnvironment, new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>(), new TestFeatures());
+        new(hostEnvironment, new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
 
     private IGitClient CreateClient(ICliHostEnvironment hostEnvironment) =>
         new GitClient(CreateRunner(hostEnvironment));
@@ -80,6 +80,11 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         {
             RunCallback = (command, token) =>
             {
+                using (GitOperationTimeout.PauseCurrent())
+                {
+                    time.Advance(TimeSpan.FromMinutes(10));
+                    token.ThrowIfCancellationRequested();
+                }
                 time.Advance(TimeSpan.FromSeconds(10));
                 token.ThrowIfCancellationRequested();
                 return Task.FromResult(command.Arguments[0] == "ls-remote"

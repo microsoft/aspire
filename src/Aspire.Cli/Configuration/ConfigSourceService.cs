@@ -706,8 +706,7 @@ internal sealed class ConfigSourceService(
     private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(
         ConfigSource source, string directory, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var timeout = new GitOperationTimeout(s_gitTimeout, timeProvider, cancellationToken);
         try
         {
             var (repositoryDirectory, commit, version) = await FetchVersionAsync(git, source, directory, allowInteractiveInput, timeout.Token);
@@ -755,8 +754,7 @@ internal sealed class ConfigSourceService(
 
     private async Task<(string Commit, string Version)> CheckRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var timeout = new GitOperationTimeout(s_gitTimeout, timeProvider, cancellationToken);
         try
         {
             // Every subprocess in an advisory check, including local queries and SSH

@@ -8,12 +8,16 @@ using System.Security.Authentication;
 using System.Security.Principal;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Git;
 
@@ -118,7 +122,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
         var error = new StringWriter();
         Assert.True(GitAskPassInvocation.Matches(["git", "askpass", "private-prompt"]));
         Assert.False(GitAskPassInvocation.Matches(["git", "askpass-server"]));
-        var result = await GitAskPassInvocation.InvokeAsync(["git", "askpass", "private-prompt", "extra"],
+        var result = await GitAskPassInvocation.InvokeAsync(TimeProvider.System, ["git", "askpass", "private-prompt", "extra"],
             _ => throw new InvalidOperationException("Must not read environment."), output, error, TestContext.Current.CancellationToken);
         Assert.Equal(1, result);
         Assert.Equal("", output.ToString());
@@ -134,7 +138,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
     {
         var prompts = 0;
         var info = new ProcessStartInfo("git");
-        var session = new GitAskPassSession(new Uri("https://example.test/repository"), (_, token) =>
+        var session = new GitAskPassSession(TimeProvider.System, new Uri("https://example.test/repository"), (_, token) =>
         {
             Interlocked.Increment(ref prompts);
             token.ThrowIfCancellationRequested();
@@ -186,7 +190,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
             var error = new StringWriter();
             var raw = scenario == "wrong-destination"
                 ? "Password for 'https://other.test': " : "Password for 'https://private-user@example.test': ";
-            var result = await GitAskPassInvocation.InvokeAsync(["git", "askpass", raw],
+            var result = await GitAskPassInvocation.InvokeAsync(TimeProvider.System, ["git", "askpass", raw],
                 name => info.Environment.TryGetValue(name, out var value) ? value : null,
                 output, error, TestContext.Current.CancellationToken).DefaultTimeout();
             Assert.Equal(scenario == "success" ? 0 : 1, result);
@@ -204,7 +208,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
         var prompted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var otherPrompts = 0;
-        await using var session = new GitAskPassSession(new Uri("https://example.test"), async (_, token) =>
+        await using var session = new GitAskPassSession(TimeProvider.System, new Uri("https://example.test"), async (_, token) =>
         {
             prompted.SetResult();
             try
@@ -217,7 +221,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
                 cancelled.SetResult();
             }
         }, TestContext.Current.CancellationToken);
-        await using var other = new GitAskPassSession(new Uri("https://other.test"), (_, _) =>
+        await using var other = new GitAskPassSession(TimeProvider.System, new Uri("https://other.test"), (_, _) =>
         {
             otherPrompts++;
             return Task.FromResult("other");
@@ -236,7 +240,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
         await cancelled.Task.DefaultTimeout();
         Assert.Equal(0, otherPrompts);
         var output = new StringWriter();
-        Assert.Equal(0, await GitAskPassInvocation.InvokeAsync(["git", "askpass", "Password for 'https://other.test': "],
+        Assert.Equal(0, await GitAskPassInvocation.InvokeAsync(TimeProvider.System, ["git", "askpass", "Password for 'https://other.test': "],
             name => otherInfo.Environment.TryGetValue(name, out var value) ? value : null,
             output, new StringWriter(), TestContext.Current.CancellationToken).DefaultTimeout());
         Assert.Equal($"other{Environment.NewLine}", output.ToString());
@@ -251,7 +255,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
     public async Task Session_RejectsInvalidFramesBeforeOpeningPrompt(string scenario)
     {
         var prompts = 0;
-        await using var session = new GitAskPassSession(new Uri("https://example.test"), (_, _) =>
+        await using var session = new GitAskPassSession(TimeProvider.System, new Uri("https://example.test"), (_, _) =>
         {
             prompts++;
             return Task.FromResult("synthetic");
@@ -277,27 +281,67 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [RequiresTools(["dotnet"])]
     public async Task Session_CallerCancellationClosesHelperAndCancelsInput()
     {
         using var caller = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var prompted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var session = new GitAskPassSession(new Uri("https://example.test"), async (_, token) =>
+        var lateResponse = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(TextWriter.Null) });
+        var terminal = new ConsoleInteractionService(new ConsoleEnvironment(console, console, TextReader.Null),
+            workspace.CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var backchannel = new TestExtensionBackchannel
         {
-            prompted.SetResult();
-            await Task.Delay(Timeout.Infinite, token);
-            return "unreachable";
-        }, caller.Token);
-        var info = new ProcessStartInfo("git");
+            HasCapabilityAsyncCallback = (_, _) => Task.FromResult(true),
+            PromptForSecretStringAsyncCallback = (_, _, _, _) =>
+            {
+                prompted.SetResult();
+                return lateResponse.Task;
+            }
+        };
+        using var interaction = new ExtensionInteractionService(terminal, backchannel, true, NullLogger<ExtensionInteractionService>.Instance);
+        await using var session = new GitAskPassSession(TimeProvider.System, new Uri("https://example.test"),
+            (prompt, token) => GitCommandRunner.PromptForCredentialAsync(interaction, prompt, token), caller.Token);
+        var info = new ProcessStartInfo(PathLookupHelper.ResolveExecutablePath("dotnet"))
+        {
+            CreateNoWindow = true
+        };
+        foreach (var argument in new[]
+        {
+            "exec", "--runtimeconfig", Path.Combine(AppContext.BaseDirectory, "Aspire.Cli.Tests.runtimeconfig.json"),
+            typeof(Program).Assembly.Location, "git", "askpass", "Password for 'https://example.test': "
+        })
+        {
+            info.ArgumentList.Add(argument);
+        }
         session.Configure(info, "helper");
-        var output = new StringWriter();
-        var request = GitAskPassInvocation.InvokeAsync(["git", "askpass", "Password for 'https://example.test': "],
-            name => info.Environment.TryGetValue(name, out var value) ? value : null,
-            output, new StringWriter(), TestContext.Current.CancellationToken);
-        await prompted.Task.DefaultTimeout();
-        await caller.CancelAsync();
-        Assert.Equal(1, await request.DefaultTimeout());
-        Assert.Equal("", output.ToString());
+        using var helper = Process.Start(info)!;
+        var output = helper.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var error = helper.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+        try
+        {
+            await prompted.Task.DefaultTimeout();
+            await caller.CancelAsync();
+            await helper.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+            Assert.Equal(1, helper.ExitCode);
+            Assert.Equal("", await output);
+            Assert.Equal($"Git credential callback failed or was cancelled.{Environment.NewLine}", await error);
+        }
+        finally
+        {
+            if (!helper.HasExited)
+            {
+                helper.Kill(entireProcessTree: true);
+                await helper.WaitForExitAsync(TestContext.Current.CancellationToken);
+            }
+        }
         Assert.False(session.Failed);
+        await session.DisposeAsync().AsTask().DefaultTimeout();
+        Assert.False(File.Exists(info.Environment[GitAskPassProtocol.SocketVariable]!));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(info.Environment[GitAskPassProtocol.SocketVariable]!)));
+        lateResponse.SetException(new InvalidOperationException("Legacy UI ended after teardown."));
     }
 
     [Fact]
@@ -308,7 +352,7 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
         {
             return;
         }
-        await using var session = new GitAskPassSession(new Uri("https://example.test"),
+        await using var session = new GitAskPassSession(TimeProvider.System, new Uri("https://example.test"),
             (_, _) => Task.FromResult("synthetic"), TestContext.Current.CancellationToken);
         var info = new ProcessStartInfo("git");
         session.Configure(info, "helper");
@@ -337,13 +381,13 @@ public class GitAskPassTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await using var server = new GitAuthenticationServer(acceptCredentials: true);
         var prompts = new List<string>();
-        await using var session = new GitAskPassSession(new Uri(server.Repository), (prompt, _) =>
+        await using var session = new GitAskPassSession(TimeProvider.System, new Uri(server.Repository), (prompt, _) =>
         {
             prompts.Add(prompt);
             return Task.FromResult(prompts.Count == 1 ? "probe" : "probe-only");
         }, TestContext.Current.CancellationToken);
         var runner = new GitCommandRunner(TestHelpers.CreateInteractiveHostEnvironment(), new TestInteractionService(),
-            NullLogger<GitCommandRunner>.Instance, new TestFeatures());
+            NullLogger<GitCommandRunner>.Instance);
         var info = runner.CreateStartInfo(workspace.Path, ["ls-remote", "--", server.Repository], GitCommandMode.Captured);
         info.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
         info.Environment["GIT_CONFIG_COUNT"] = "0";

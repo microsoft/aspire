@@ -20,13 +20,17 @@ internal sealed class GitAskPassSession : IAsyncDisposable
     private readonly Uri _destination;
     private readonly Func<string, CancellationToken, Task<string>> _prompt;
     private readonly Task _pump;
+    private readonly CancellationTokenRegistration _listenerCancellation;
+    private readonly TimeProvider _timeProvider;
     private bool _failed;
+    private int _disposed;
 
     public CancellationToken CancellationToken => _shutdown.Token;
     public bool Failed => Volatile.Read(ref _failed);
 
-    public GitAskPassSession(Uri destination, Func<string, CancellationToken, Task<string>> prompt, CancellationToken cancellationToken)
+    public GitAskPassSession(TimeProvider timeProvider, Uri destination, Func<string, CancellationToken, Task<string>> prompt, CancellationToken cancellationToken)
     {
+        _timeProvider = timeProvider;
         _destination = destination;
         _prompt = prompt;
         _shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -40,6 +44,7 @@ internal sealed class GitAskPassSession : IAsyncDisposable
             listener.Listen(4);
             _directory = directory;
             _listener = listener;
+            _listenerCancellation = _shutdown.Token.Register(listener.Dispose);
             _pump = RunAsync();
         }
         catch
@@ -92,26 +97,32 @@ internal sealed class GitAskPassSession : IAsyncDisposable
             for (var attempts = 0; attempts < 8; attempts++)
             {
                 using var socket = await _listener.AcceptAsync(_shutdown.Token);
-                using var request = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-                request.CancelAfter(TimeSpan.FromSeconds(10));
+                using var connectionCancellation = _shutdown.Token.Register(socket.Dispose);
+                using var readTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10), _timeProvider);
+                using var request = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, readTimeout.Token);
                 await using var stream = new NetworkStream(socket, ownsSocket: false);
                 var raw = await GitAskPassProtocol.ReadAsync(stream, GitAskPassProtocol.MaxPromptBytes, request.Token);
                 var label = GetPrompt(raw, _destination);
-                request.CancelAfter(GitAskPassProtocol.RequestTimeout);
+                readTimeout.CancelAfter(Timeout.InfiniteTimeSpan);
                 using var monitorCancellation = CancellationTokenSource.CreateLinkedTokenSource(request.Token);
                 var monitor = MonitorDisconnectAsync(stream, request, monitorCancellation.Token);
                 try
                 {
-                    await s_promptLock.WaitAsync(request.Token);
                     string response;
-                    try
+                    using (GitOperationTimeout.PauseCurrent())
                     {
-                        response = await _prompt(label, request.Token);
-                        GitAskPassProtocol.ValidateResponse(response);
-                    }
-                    finally
-                    {
-                        s_promptLock.Release();
+                        await s_promptLock.WaitAsync(request.Token);
+                        try
+                        {
+                            // The interaction service detaches legacy RPC waits on
+                            // cancellation, but lets local console input unwind first.
+                            response = await _prompt(label, request.Token);
+                            GitAskPassProtocol.ValidateResponse(response);
+                        }
+                        finally
+                        {
+                            s_promptLock.Release();
+                        }
                     }
                     // Stop the read monitor before sending a successful response:
                     // the helper exits immediately after consuming that frame.
@@ -145,7 +156,7 @@ internal sealed class GitAskPassSession : IAsyncDisposable
     {
         try
         {
-            // A helper that exits must dismiss its UI; no second frame is valid.
+            // A helper that exits cancels its request; no second frame is valid.
             await stream.ReadExactlyAsync(new byte[1], cancellationToken);
             await request.CancelAsync();
         }
@@ -160,6 +171,10 @@ internal sealed class GitAskPassSession : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
         await _shutdown.CancelAsync();
         try
         {
@@ -168,6 +183,7 @@ internal sealed class GitAskPassSession : IAsyncDisposable
         finally
         {
             _listener.Dispose();
+            _listenerCancellation.Dispose();
             _shutdown.Dispose();
             _directory.Dispose();
         }

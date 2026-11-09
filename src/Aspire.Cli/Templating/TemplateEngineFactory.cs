@@ -153,9 +153,11 @@ internal sealed partial class TemplateEngineFactory(
             {
                 interactionService.DisplayTemplateGitFetchNotice(repository, templatePath, reference, hostEnvironment.SupportsInteractiveInput);
             }
-            var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,
-                () => WithGitTimeoutAsync(
-                    token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken));
+            // A live Spectre status owns the console exclusively and prevents
+            // askpass from displaying masked terminal input during acquisition.
+            interactionService.DisplaySubtleMessage(NewCommandStrings.ResolvingTemplateRepository);
+            var sha = await WithGitTimeoutAsync(
+                token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             // Different paths and refs at the same commit share the complete repository snapshot.
             // NUL separates the repository address and SHA without ambiguous delimiters.
@@ -174,11 +176,8 @@ internal sealed partial class TemplateEngineFactory(
             }
             using var checkout = TemporaryCacheDirectory.Create(cacheRoot, "repo", DeleteCheckout, DeleteLease);
             var repositoryRoot = new DirectoryInfo(Path.Combine(checkout.FullName, "repository"));
-            await interactionService.ShowStatusAsync(NewCommandStrings.CloningTemplateRepository, async () =>
-            {
-                await CheckoutRepositoryAsync(repository, repositoryRoot, sha, cancellationToken);
-                return true;
-            });
+            interactionService.DisplaySubtleMessage(NewCommandStrings.CloningTemplateRepository);
+            await CheckoutRepositoryAsync(repository, repositoryRoot, sha, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             // Root templates must not copy Git history/configuration into generated projects.
@@ -248,11 +247,10 @@ internal sealed partial class TemplateEngineFactory(
     private async Task<T> WithGitTimeoutAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var deadline = new CancellationTokenSource(s_gitOperationTimeout, timeProvider);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        using var deadline = new GitOperationTimeout(s_gitOperationTimeout, timeProvider, cancellationToken);
         try
         {
-            return await operation(linked.Token);
+            return await operation(deadline.Token);
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {

@@ -12,7 +12,6 @@ internal static class GitAskPassProtocol
     internal const string SocketVariable = "ASPIRE_GIT_ASKPASS_SOCKET";
     internal const int MaxPromptBytes = 4096;
     internal const int MaxResponseBytes = 8192;
-    internal static TimeSpan RequestTimeout => TimeSpan.FromSeconds(90);
     private static readonly UTF8Encoding s_encoding = new(false, true);
 
     // One request per connection: a big-endian uint32 length, then UTF-8
