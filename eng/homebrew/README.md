@@ -90,6 +90,15 @@ output directory, surviving the pinned validator's temporary-HOME cleanup.
 Known credential environment values and credential-bearing feed URLs are
 redacted in these retained files. Diagnostic-write failures are reported without
 replacing the original SDK failure; successful commands create no failure log.
+Failed `restore` commands also retain a JSON summary of NuGet's
+`project.assets.json` log entries and effective HTTP feed endpoints for the
+current project and immediate sibling projects, before cleanup removes them.
+These summaries omit package contents, configuration files, URL credentials,
+queries, fragments and non-HTTP source paths. Collection is limited to 16
+projects, 8 MiB per assets input, 16 sources and 32 log entries per project,
+2,048 characters per log field and 1 MiB per summary; truncated or unreadable
+inputs are identified explicitly. This does not retry restore, add SDK
+arguments, or replace its failure status.
 
 `--publish` explicitly opts into writes after validation and requires
 `HOMEBREW_TAP_WRITE_TOKEN`; the independent `HOMEBREW_READ_TOKEN` is only for

@@ -647,6 +647,133 @@ class PublisherTests(unittest.TestCase):
         )
         self.assertIn("SDK failure diagnostics:", result.stdout)
 
+    @unittest.skipIf(os.name == "nt", "The macOS validator's PATH wrapper requires a POSIX shell")
+    def test_failed_restore_assets_summary_survives_home_cleanup_without_credentials(self):
+        output = Path(self.temp.name)
+        with tempfile.TemporaryDirectory() as work:
+            work = Path(work)
+            home = work / "home"
+            project = home / "smoke" / "AppHost"
+            project.mkdir(parents=True)
+            for name in ("AppHost", "ApiService"):
+                assets = home / "smoke" / name / "obj" / "project.assets.json"
+                assets.parent.mkdir(parents=True)
+                assets.write_text(json.dumps({
+                    "version": 3,
+                    "project": {"restore": {"sources": {
+                        "https://user:password@feed.test/v3/index.json?custom=private#secret": {},
+                        "https://api.nuget.org/v3/index.json": {},
+                        "/private/package/cache": {},
+                    }}},
+                    "logs": [{
+                        "code": "NU1301", "level": "Error",
+                        "message": "Source https://user:password@feed.test/v3/index.json?custom=private "
+                                   "failed: fixture-credential",
+                    }],
+                    "libraries": {"must-not-be-retained": {}},
+                }))
+            sdk = work / "sdk"
+            invocations = work / "invocations"
+            sdk.write_text(
+                f"#!{sys.executable}\n"
+                "import sys\n"
+                "from pathlib import Path\n"
+                f"with Path({str(invocations)!r}).open('a') as log: log.write(repr(sys.argv[1:]) + '\\n')\n"
+                "print('MSB4181: RestoreTask returned false')\n"
+                "sys.exit(17)\n"
+            )
+            sdk.chmod(0o700)
+            with patch.object(self.module.shutil, "which", return_value=str(sdk)):
+                env = self.module.dotnet_diagnostic_environment(work, output)
+            env.update(HOME=str(home), TEST_SECRET_TOKEN="fixture-credential")
+            result = subprocess.run(
+                [sys.executable, "-c",
+                 "import shutil, subprocess, sys; "
+                 "status = subprocess.run(['dotnet', 'restore', 'AppHost.csproj']).returncode; "
+                 f"shutil.rmtree({str(home)!r}); sys.exit(status)"],
+                cwd=project, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=15,
+            )
+            self.assertEqual(17, result.returncode)
+            self.assertFalse(home.exists())
+            self.assertEqual("['restore', 'AppHost.csproj']\n", invocations.read_text())
+        summaries = list((output / "dotnet-failures").glob("*.json"))
+        self.assertEqual(1, len(summaries))
+        self.assertEqual({
+            "projects": [{
+                "project": name,
+                "sources": [
+                    "[non-HTTP source omitted]",
+                    "https://api.nuget.org/v3/index.json",
+                    "https://feed.test/v3/index.json",
+                ],
+                "logs": [{
+                    "code": "NU1301", "level": "Error",
+                    "message": "Source https://[REDACTED]@feed.test/v3/index.json "
+                               "failed: [REDACTED]",
+                }],
+            } for name in ("ApiService", "AppHost")],
+        }, json.loads(summaries[0].read_text()))
+        self.assertIn("NuGet failure details:", result.stdout)
+
+    def test_failed_restore_assets_invalid_or_oversized_input_preserves_sdk_status(self):
+        output = Path(self.temp.name)
+        with tempfile.TemporaryDirectory() as work:
+            project = Path(work) / "AppHost"
+            assets = project / "obj" / "project.assets.json"
+            assets.parent.mkdir(parents=True)
+            for label, content in (("malformed", "{"), ("oversized", "x" * (8 * 1024 * 1024 + 1))):
+                with self.subTest(label=label):
+                    assets.write_text(content)
+                    result = subprocess.run(
+                        [sys.executable, str(SCRIPT.with_name("capture-dotnet.py")),
+                         sys.executable, str(output / label),
+                         "restore"],
+                        cwd=project, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        text=True, timeout=15,
+                    )
+                    self.assertEqual(2, result.returncode)
+                    summaries = list((output / label).glob("*.json"))
+                    self.assertEqual(1, len(summaries))
+                    summary = summaries[0]
+                    details = json.loads(summary.read_text())
+                    self.assertEqual("AppHost", details["projects"][0]["project"])
+                    self.assertTrue(details["projects"][0]["diagnostic_error"])
+                    self.assertLess(summary.stat().st_size, 4096)
+
+    @unittest.skipIf(os.name == "nt", "Assets collection runs in the POSIX macOS validator")
+    def test_failed_restore_assets_summary_bounds_projects_sources_and_messages(self):
+        output = Path(self.temp.name)
+        with tempfile.TemporaryDirectory() as work:
+            for index in range(20):
+                assets = Path(work) / f"Project{index:02}" / "obj" / "project.assets.json"
+                assets.parent.mkdir(parents=True)
+                assets.write_text(json.dumps({
+                    "project": {"restore": {"sources": {
+                        f"https://feed{source}.test/index.json?custom=credential": {}
+                        for source in range(20)
+                    }}},
+                    "logs": [{"code": "NU1301", "level": "Error", "message": "x" * 10000}] * 40,
+                }))
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT.with_name("capture-dotnet.py")),
+                 sys.executable, str(output / "bounded"), "restore"],
+                cwd=Path(work) / "Project00", stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, timeout=15,
+            )
+        self.assertEqual(2, result.returncode)
+        summary = next((output / "bounded").glob("*.json"))
+        self.assertLessEqual(summary.stat().st_size, 1024 * 1024)
+        details = json.loads(summary.read_text())
+        self.assertTrue(details["truncated"])
+        self.assertTrue(0 < len(details["projects"]) <= 16)
+        for project in details["projects"]:
+            self.assertTrue(project["truncated"])
+            self.assertEqual(16, len(project["sources"]))
+            self.assertTrue(all(source.endswith("/index.json") for source in project["sources"]))
+            self.assertEqual(32, len(project["logs"]))
+            self.assertTrue(all(len(item["message"]) == 2048 for item in project["logs"]))
+
     def test_sdk_diagnostics_bound_output_and_do_not_mask_failure_when_log_write_fails(self):
         output = Path(self.temp.name)
         capture = SCRIPT.with_name("capture-dotnet.py")
