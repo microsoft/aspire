@@ -916,6 +916,71 @@ public class PlaywrightCliInstallerTests(ITestOutputHelper output) : IDisposable
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void SyncDirectory_DoesNotFollowTargetSymlinks(bool isDirectory, bool hasSourceCounterpart)
+    {
+        var root = Directory.CreateTempSubdirectory("aspire-sync-symlink-");
+        try
+        {
+            var sourceDir = root.CreateSubdirectory("source").FullName;
+            var targetDir = root.CreateSubdirectory("target").FullName;
+            var victimDir = root.CreateSubdirectory("victim").FullName;
+            var victimFile = Path.Combine(victimDir, "secret.txt");
+            File.WriteAllText(victimFile, "outside content");
+            var link = Path.Combine(targetDir, "extra");
+            TestSymlinkHelper.TryCreateSymlink(link, isDirectory ? victimDir : victimFile, isDirectory);
+            if (hasSourceCounterpart)
+            {
+                var sourceFile = Path.Combine(sourceDir, "extra");
+                if (isDirectory)
+                {
+                    Directory.CreateDirectory(sourceFile);
+                    sourceFile = Path.Combine(sourceFile, "secret.txt");
+                }
+                File.WriteAllText(sourceFile, "replacement content");
+            }
+            File.WriteAllText(Path.Combine(sourceDir, "keep.md"), "keep");
+            File.WriteAllText(Path.Combine(targetDir, "stale.md"), "stale");
+
+            PlaywrightCliInstaller.SyncDirectory(sourceDir, targetDir);
+
+            Assert.Equal("outside content", File.ReadAllText(victimFile));
+            Assert.Equal("keep", File.ReadAllText(Path.Combine(targetDir, "keep.md")));
+            Assert.False(File.Exists(Path.Combine(targetDir, "stale.md")));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SyncDirectory_RejectsLinkedTargetRoot()
+    {
+        var root = Directory.CreateTempSubdirectory("aspire-sync-root-link-");
+        try
+        {
+            var sourceDir = root.CreateSubdirectory("source").FullName;
+            var victimDir = root.CreateSubdirectory("victim").FullName;
+            var victimFile = Path.Combine(victimDir, "secret.txt");
+            File.WriteAllText(victimFile, "outside content");
+            var targetDir = Path.Combine(root.FullName, "target");
+            TestSymlinkHelper.TryCreateSymlink(targetDir, victimDir);
+
+            Assert.Throws<IOException>(() => PlaywrightCliInstaller.SyncDirectory(sourceDir, targetDir));
+
+            Assert.Equal("outside content", File.ReadAllText(victimFile));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void SyncDirectory_RemovesExtraFilesInTarget()
     {
