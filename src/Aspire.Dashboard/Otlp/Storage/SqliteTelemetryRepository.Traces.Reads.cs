@@ -388,6 +388,11 @@ public sealed partial class SqliteTelemetryRepository
 
         var attributePredicate = BuildStringPredicate("a.attribute_value", condition, parameterName);
         parameters.Add($"TraceField{filterIndex}", filter.Field);
+        // Unary + prevents SQLite from using attribute_key to choose an index, so this
+        // correlated subquery looks up attributes by (trace_id, span_id) instead.
+        // Otherwise, LIKE '%...%' can scan all attributes with the same key for every
+        // span, making filtering quadratic in the span count.
+        // See https://www.sqlite.org/optoverview.html#disqualifying_where_clause_terms_using_unary_
         return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND +a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
     }
 
