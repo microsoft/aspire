@@ -280,6 +280,34 @@ public class ProxylessEndpointPortAllocatorTests
         Assert.False(reservations.TryReserve(10000));
     }
 
+    [Theory]
+    [InlineData(ProtocolType.Tcp)]
+    [InlineData(ProtocolType.Udp)]
+    public void ProbeRejectsOccupiedLoopbackPorts(ProtocolType protocol)
+    {
+        foreach (var address in Socket.OSSupportsIPv6
+            ? new[] { IPAddress.Loopback, IPAddress.IPv6Loopback }
+            : new[] { IPAddress.Loopback })
+        {
+            var socketType = protocol == ProtocolType.Tcp ? SocketType.Stream : SocketType.Dgram;
+            using var listener = new Socket(address.AddressFamily, socketType, protocol);
+            listener.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            if (address.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                listener.DualMode = false;
+            }
+
+            listener.Bind(new IPEndPoint(address, 0));
+            if (protocol == ProtocolType.Tcp)
+            {
+                listener.Listen(1);
+            }
+
+            var port = ((IPEndPoint)listener.LocalEndPoint!).Port;
+            Assert.False(ProxylessEndpointPortAllocator.TryProbePort(port, protocol));
+        }
+    }
+
     private static ProxylessEndpointPortAllocator CreateAllocator(ProxylessEndpointPortReservations reservations, Func<int, ProtocolType, bool>? tryProbe = null)
     {
         return new ProxylessEndpointPortAllocator(
