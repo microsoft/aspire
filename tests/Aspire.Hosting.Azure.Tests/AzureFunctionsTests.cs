@@ -6,7 +6,6 @@
 
 using System.Reflection;
 using System.Text.Json.Nodes;
-using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -156,7 +155,6 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddAzureFunctionsProject_RemoveDefaultHostStorageWhenUseHostStorageIsUsed()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -164,11 +162,11 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         var funcApp = builder.AddAzureFunctionsProject<TestProjectWithMalformedPort>("funcapp")
             .WithHostStorage(storage);
 
-        using var host = builder.Build();
-        await host.StartAsync();
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
 
         // Assert that the default storage resource is not present
-        var model = host.Services.GetRequiredService<DistributedApplicationModel>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         Assert.DoesNotContain(model.Resources.OfType<AzureStorageResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
         var storageResource = Assert.Single(model.Resources.OfType<AzureStorageResource>());
@@ -178,27 +176,22 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         var rel = Assert.Single(relAnnotations);
         Assert.Equal("Reference", rel.Type);
         Assert.Equal(storage.Resource, rel.Resource);
-
-        await host.StopAsync();
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddAzureFunctionsProject_WorksWithMultipleProjects()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         builder.AddAzureFunctionsProject<TestProject>("funcapp");
         builder.AddAzureFunctionsProject<TestProject>("funcapp2");
 
-        using var host = builder.Build();
-        await host.StartAsync();
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
 
         // Assert that the default storage resource is not present
-        var model = host.Services.GetRequiredService<DistributedApplicationModel>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         Assert.Single(model.Resources.OfType<AzureStorageResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
-
-        await host.StopAsync();
     }
 
     [Fact]
@@ -1063,7 +1056,6 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task AddAzureFunctionsProject_WithProjectPath_CanUseCustomHostStorage()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1077,11 +1069,11 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         var funcApp = builder.AddAzureFunctionsProject("funcapp", projectPath)
             .WithHostStorage(customStorage);
 
-        using var host = builder.Build();
-        await host.StartAsync();
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
 
         // Assert that the custom storage is used and default storage is not present
-        var model = host.Services.GetRequiredService<DistributedApplicationModel>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         Assert.DoesNotContain(model.Resources.OfType<AzureStorageResource>(),
             r => r.Name.StartsWith(AzureFunctionsProjectResourceExtensions.DefaultAzureFunctionsHostStorageName));
         var storageResource = Assert.Single(model.Resources.OfType<AzureStorageResource>());
@@ -1091,8 +1083,6 @@ public class AzureFunctionsTests(ITestOutputHelper outputHelper)
         var rel = Assert.Single(relAnnotations);
         Assert.Equal("Reference", rel.Type);
         Assert.Equal(customStorage.Resource, rel.Resource);
-
-        await host.StopAsync();
     }
 
     [Fact]

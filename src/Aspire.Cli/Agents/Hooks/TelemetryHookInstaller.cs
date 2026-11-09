@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text;
+using Aspire.Cli.Resources;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Agents.Hooks;
@@ -37,7 +40,7 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
     public async Task<TelemetryHookScripts> EnsureInstalledAsync(CancellationToken cancellationToken)
     {
         var hooksDirectory = Path.Combine(_executionContext.AspireHomeDirectory.FullName, HooksDirectoryName);
-        Directory.CreateDirectory(hooksDirectory);
+        DirectoryHelper.CreateWithOwnerOnlyPermissions(hooksDirectory);
 
         var shellPath = Path.Combine(hooksDirectory, ShellResourceName);
         var powerShellPath = Path.Combine(hooksDirectory, PowerShellResourceName);
@@ -91,8 +94,35 @@ internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
         // Write to a sibling temp file then atomically move into place so a concurrently executing
         // hook never observes a partially written script.
         var tempPath = path + ".tmp-" + Guid.NewGuid().ToString("N");
-        await File.WriteAllTextAsync(tempPath, content, s_utf8NoBom, cancellationToken);
-        File.Move(tempPath, path, overwrite: true);
+        try
+        {
+            await File.WriteAllTextAsync(tempPath, content, s_utf8NoBom, cancellationToken);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
+        {
+            // On Windows a running hook can hold the script open without delete sharing.
+            // Don't strand the temp file, and name the script so the failure is actionable.
+            TryDeleteTempFile(tempPath);
+            if (ex is OperationCanceledException)
+            {
+                throw;
+            }
+
+            throw new IOException(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.TelemetryHookScriptUpdateFailed, path, ex.Message), ex);
+        }
+    }
+
+    private void TryDeleteTempFile(string tempPath)
+    {
+        try
+        {
+            File.Delete(tempPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(ex, "Could not delete temporary telemetry hook script at {Path}.", tempPath);
+        }
     }
 
     private void TrySetExecutable(string path)

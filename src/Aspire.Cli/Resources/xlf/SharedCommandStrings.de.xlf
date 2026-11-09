@@ -122,6 +122,16 @@
         <target state="translated">Der Befehl „{0}“ erfordert „--yes“, wenn die Option „--non-interactive“ angegeben ist.</target>
         <note>{0} is the command name.</note>
       </trans-unit>
+      <trans-unit id="NuGetSearchLimitWarning">
+        <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
+        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <note>{0} is the maximum number of packages searched per feed.</note>
+      </trans-unit>
+      <trans-unit id="NuGetSearchSourceFailedWarning">
+        <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
+        <target state="new">Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</target>
+        <note>{0} is the redacted NuGet source name or URL.</note>
+      </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>
         <target state="translated">Die für den Vorgang zu verwendende Umgebung. Standardmäßig ist „Produktion“ eingestellt.</target>
@@ -170,6 +180,11 @@
       <trans-unit id="SelectAppHost">
         <source>Select an AppHost to {0}:</source>
         <target state="translated">AppHost auswählen, um {0}:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceTrustWarning">
+        <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
+        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

@@ -75,7 +75,7 @@ internal sealed class DeployCommand : PipelineCommandBase
         return Task.FromResult<string[]>([.. baseArgs]);
     }
 
-    protected override string GetCanceledMessage() => DeployCommandStrings.DeploymentCanceled;
+    protected override string CancellationMessage => DeployCommandStrings.DeploymentCanceled;
 
     protected override string? GetTargetStepName(ParseResult parseResult) => "deploy";
 

@@ -179,6 +179,10 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         PageViewModel = new TracesPageViewModel { SelectedResource = _allResource, SelectedSpanType = _spanTypes[0] };
 
         UpdateResources();
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged += OnLayoutResourcesChanged;
+        }
         _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: () =>
         {
             UpdateResources();
@@ -270,8 +274,26 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
         : null;
 
+    private void OnLayoutResourcesChanged()
+    {
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } resourceKeys ||
+            TracesViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
+        {
+            return;
+        }
+
+        // The layout can finish loading its resource snapshot after the grid's first query.
+        TracesViewModel.ResourceKeys = resourceKeys;
+        TracesViewModel.ClearData();
+        _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
     public void Dispose()
     {
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged -= OnLayoutResourcesChanged;
+        }
         _cts.Cancel();
         _cts.Dispose();
         _resourcesSubscription?.Dispose();

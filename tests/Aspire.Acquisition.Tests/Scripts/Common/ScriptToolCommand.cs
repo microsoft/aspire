@@ -73,7 +73,7 @@ public class ScriptToolCommand : ToolCommand
             throw new FileNotFoundException($"Script not found: {fullScriptPath}");
         }
 
-        // For bash: bash script.sh args...
+        // For bash: bash -c 'exec bash "$0" "$@" 2>&1' script.sh args...
         // For PowerShell: pwsh -File script.ps1 args...
         if (_scriptPath.EndsWith(".sh", StringComparison.OrdinalIgnoreCase))
         {
@@ -86,7 +86,10 @@ public class ScriptToolCommand : ToolCommand
                 }
                 return arg;
             });
-            return $"\"{fullScriptPath}\" {string.Join(" ", escapedArgs)}";
+            // Redirect stderr into stdout inside the child so both streams share one pipe.
+            // ToolCommand reads separate pipes on independent callbacks, so lines written to
+            // stdout and stderr could otherwise be appended to the output out of order.
+            return $"-c \"exec bash \\\"$0\\\" \\\"$@\\\" 2>&1\" \"{fullScriptPath}\" {string.Join(" ", escapedArgs)}";
         }
         else
         {

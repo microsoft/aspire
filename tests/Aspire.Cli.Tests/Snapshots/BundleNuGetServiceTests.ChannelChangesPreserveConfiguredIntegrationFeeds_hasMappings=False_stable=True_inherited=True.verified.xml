@@ -1,0 +1,16 @@
+﻿<configurations>
+  <preview>
+    <configuration>
+      <disabledPackageSources>
+        <clear />
+        <add key="aspire-staging" value="true" />
+      </disabledPackageSources>
+      <packageSourceMapping>
+        <clear />
+      </packageSourceMapping>
+    </configuration>
+  </preview>
+  <persisted>
+    <configuration />
+  </persisted>
+</configurations>

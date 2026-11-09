@@ -1,0 +1,3 @@
+[*.cs]
+# This is a console application, not a library.
+dotnet_diagnostic.CA2007.severity = none

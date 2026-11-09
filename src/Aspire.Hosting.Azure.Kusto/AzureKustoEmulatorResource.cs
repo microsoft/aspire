@@ -10,6 +10,9 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 public class AzureKustoEmulatorResource : ContainerResource
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Data Explorer Emulator";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureKustoEmulatorResource"/> class.
     /// </summary>

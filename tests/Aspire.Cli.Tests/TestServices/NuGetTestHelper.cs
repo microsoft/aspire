@@ -39,7 +39,8 @@ internal static class NuGetTestHelper
     }
 
     public static BundleNuGetService CreateService(IMachineWideSettings? machineWideSettings = null)
-        => new(NullLogger<BundleNuGetService>.Instance, CreateClient(machineWideSettings));
+        => new(NullLogger<BundleNuGetService>.Instance, CreateClient(machineWideSettings),
+            new TestConfigurationService());
 
     public static NuGetClient CreateClient(IMachineWideSettings? machineWideSettings = null)
         => new(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
@@ -71,8 +72,10 @@ internal static class NuGetTestHelper
     }
 
     public static string[] GetEligiblePackageSources(string workingDirectory, string packageId, IMachineWideSettings? machineWideSettings = null)
+        => GetEligiblePackageSources(LoadSettings(workingDirectory, machineWideSettings), packageId);
+
+    public static string[] GetEligiblePackageSources(ISettings settings, string packageId)
     {
-        var settings = LoadSettings(workingDirectory, machineWideSettings);
         var mapping = PackageSourceMapping.GetPackageSourceMapping(settings);
         var keys = mapping.GetConfiguredPackageSources(packageId);
         return new PackageSourceProvider(settings).LoadPackageSources()

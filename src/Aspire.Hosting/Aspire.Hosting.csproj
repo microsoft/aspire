@@ -52,6 +52,8 @@
     <Compile Include="$(SharedDir)ProjectPathResolver.cs" Link="Utils\ProjectPathResolver.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" Link="Utils\ResourceNameComparer.cs" />
+    <Compile Include="$(SharedDir)ResourceNameHelpers.cs" Link="Utils\ResourceNameHelpers.cs" />
+    <Compile Include="$(SharedDir)BrowserOriginHelpers.cs" Link="Utils\BrowserOriginHelpers.cs" />
     <Compile Include="$(SharedDir)TaskHelpers.cs" Link="Utils\TaskHelpers.cs" />
     <Compile Include="$(SharedDir)TimeSpanMillisecondsJsonConverter.cs" Link="Utils\TimeSpanMillisecondsJsonConverter.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
@@ -95,6 +97,7 @@
     <!-- Central transitive pins do not flow to out-of-tree ProjectReference consumers.
          Keep this explicit security pin until https://github.com/microsoft/aspire/issues/21050 is resolved. -->
     <PackageReference Include="MessagePack" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
@@ -126,6 +129,7 @@
     <InternalsVisibleTo Include="Aspire.Hosting.Testing.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore" />
+    <InternalsVisibleTo Include="Aspire.Hosting.EntityFrameworkCore.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Qdrant" />
     <InternalsVisibleTo Include="Aspire.Hosting.Qdrant.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />

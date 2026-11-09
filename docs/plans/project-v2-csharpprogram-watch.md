@@ -70,9 +70,12 @@ remaining work are recorded once, under their coding sessions.
 | D10 | **Aspire owns a hidden service proxy command in the CLI**, using private-pipe environment delivery rather than sensitive `-e` arguments. Session 6a defines its runtime and wire-contract responsibilities. |
 
 **API maturity is not uniform.** `DotnetProjectResource`, `AddDotnetProject`, and the package's ordinary
-consumer APIs no longer carry the original `ASPIREDOTNETPROJECT001` experimental diagnostic. The package
-still uses `SuppressFinalPackageVersion`; integration-authoring seams such as `IDotnetProgramResource`,
-`WithProjectDefaults`, and .NET publishing/build-completion APIs retain `ASPIREPROJECTS001`.
+consumer APIs no longer carry the original `ASPIREDOTNETPROJECT001` experimental diagnostic. Starting
+with Aspire 17.0, the package follows normal repository versioning, including stable versions for
+stabilized builds. Package stabilization does not graduate integration-authoring seams such as
+`IDotnetProgramResource`, `WithProjectDefaults`, and .NET publishing/build-completion APIs, which retain
+`ASPIREPROJECTS001`. Package validation remains enabled; baseline comparisons skip releases before
+17.0.0 because the package had no stable version in those releases.
 Run configuration retains `ASPIREWATCH001`; other features such as Blazor have their own maturity.
 Do not impose a blanket "all new APIs experimental" requirement or hand-edit generated release
 `api/*.cs`, ATS, or capability baselines. Update codegen test snapshots when behavior requires it.
@@ -267,11 +270,18 @@ arguments have distinct roles; replacing a tool prefix must not discard program 
 required IDE launch configuration is reported, not silently retried as a DCP process.
 
 Coordinated V2 builds negotiate **`project-with-external-build.v1`**
-(`KnownLaunchConfigurationTypes.ProjectWithExternalBuild`). In an external debug session, the coordinator
-runs only when that capability is advertised. Older/capability-less launchers
-retain the legacy project-build path; unsupported project launch or persistent lifetime can retain normal
-process execution. Build configuration, build-only environment, build working directory, and build
-suppression flow through project launch metadata.
+(`KnownLaunchConfigurationTypes.ProjectWithExternalBuild`). In an external debug session:
+
+- The coordinator runs when that capability is advertised.
+- The coordinator also runs when the launcher advertises an explicit capability list without `project`;
+  the IDE cannot launch those resources, so they run as DCP processes and use the coordinated build as
+  they do outside an IDE.
+- Older/capability-less launchers, and launchers that advertise `project` without the external-build
+  capability, retain the legacy project-build path.
+- Unsupported project launch or persistent lifetime can retain normal process execution.
+
+Build configuration, build-only environment, build working directory, and build suppression flow through
+project launch metadata.
 
 The VS Code debugger understands externally built projects and file apps, resolves SDK-selected
 commands/arguments, and preserves selected/disabled launch-profile behavior and required host variables.
