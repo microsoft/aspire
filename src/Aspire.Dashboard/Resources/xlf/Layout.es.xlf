@@ -467,6 +467,11 @@
         <target state="new">{0} moved before {1}.</target>
         <note>{0} is the moved resource name; {1} is the target resource name.</note>
       </trans-unit>
+      <trans-unit id="ResourcePaneNestedCount">
+        <source>Nested resources: {0}</source>
+        <target state="new">Nested resources: {0}</target>
+        <note>{0} is the number of resources nested under a collapsed resource in the resource list.</note>
+      </trans-unit>
       <trans-unit id="ResourcePaneNoMetrics">
         <source>No metrics are currently available for this resource. Select to open its metrics view.</source>
         <target state="new">No metrics are currently available for this resource. Select to open its metrics view.</target>

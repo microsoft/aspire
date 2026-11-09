@@ -1181,6 +1181,13 @@
     private void RenderRowName(RenderTreeBuilder __builder, ResourceRowContext item)
     {
         <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@item.Name" /></span>
+        @if (item.Row is { Children.Count: > 0, IsCollapsed: true } collapsedRow)
+        {
+            @* A collapsed parent says how many rows it hides. The toggle's aria-expanded tells assistive technologies
+               it's collapsed, so the count is only shown. *@
+            var nestedCount = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNestedCount)], collapsedRow.Children.Count);
+            <span class="resource-row-child-count" data-tooltip="@nestedCount" aria-hidden="true">@collapsedRow.Children.Count</span>
+        }
     }
 
     private void RenderRowStateDot(RenderTreeBuilder __builder, ResourceRowContext item)

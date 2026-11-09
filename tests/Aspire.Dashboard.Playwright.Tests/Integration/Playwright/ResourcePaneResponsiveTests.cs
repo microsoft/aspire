@@ -2148,7 +2148,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     [InlineData(420)]
     [InlineData(560)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task CompactSidebar_ExpandToggleLeadsTheRowAndKeepsItsPlaceWhileActionsShow(int paneWidth)
+    public async Task CompactSidebar_ExpandToggleTakesTheIconsPlaceAndKeepsItWhileActionsShow(int paneWidth)
     {
         await RunTestAsync(async page =>
         {
@@ -2165,25 +2165,26 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var pane = page.Locator(".resource-pane");
             await Assertions.Expect(pane.Locator("[data-resource-name='rebuilder-0']")).ToBeVisibleAsync();
 
-            // Per row: the toggle's position; whether it is the topmost element at its center; whether it ends before
-            // the icon and comes before the row link in tab order, like a file tree; whether the shown actions, in DOM
+            // Per row: whether the toggle shows; whether it covers the icon tile exactly; whether it is the topmost
+            // element at its center; whether the icon's glyph is hidden under it; whether the shown actions, in DOM
             // (tab) order, run left to right without overlapping; how many are shown; and whether the name ends before
             // the first of them.
             const string measure = """
                 row => {
                     const box = el => el.getBoundingClientRect();
                     const toggle = row.querySelector(':scope > .resource-row-toggle-leading');
-                    const link = row.querySelector(':scope > .resource-row-link');
-                    const t = box(toggle);
+                    const t = box(toggle), icon = box(row.querySelector('.resource-row-icon'));
+                    const shown = getComputedStyle(toggle).visibility === 'visible';
+                    const covers = Math.abs(t.left - icon.left) < 0.5 && Math.abs(t.top - icon.top) < 0.5 &&
+                        Math.abs(t.width - icon.width) < 0.5 && Math.abs(t.height - icon.height) < 0.5;
                     const top = document.elementFromPoint(t.left + t.width / 2, t.top + t.height / 2);
-                    const leads = t.right <= box(row.querySelector('.resource-row-icon')).left + 0.5 &&
-                        (toggle.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+                    const glyphHidden = getComputedStyle(row.querySelector('.resource-row-glyph')).visibility === 'hidden';
                     const controls = [...row.querySelectorAll('.resource-row-actions .resource-row-action')]
                         .filter(el => box(el).width > 0 && box(el).height > 0);
                     const ordered = controls.every((el, i) => i === 0 || box(controls[i - 1]).right <= box(el).left + 0.5);
                     const clear = controls.length === 0 || box(row.querySelector('.resource-row-text')).right <= box(controls[0]).left + 0.5;
-                    return [t.left, t.top, top?.closest('.resource-row-toggle') === toggle ? 1 : 0, leads ? 1 : 0,
-                        ordered ? 1 : 0, controls.length, clear ? 1 : 0];
+                    return [shown ? 1 : 0, covers ? 1 : 0, top?.closest('.resource-row-toggle') === toggle ? 1 : 0,
+                        glyphHidden ? 1 : 0, ordered ? 1 : 0, controls.length, clear ? 1 : 0];
                 }
                 """;
 
@@ -2192,32 +2193,34 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 var row = pane.Locator($"[data-resource-name='{name}']").First;
                 await row.ScrollIntoViewIfNeededAsync();
                 await page.Mouse.MoveAsync(1, 1);
-                await Assertions.Expect(row.Locator(":scope > .resource-row-toggle-leading")).ToBeVisibleAsync();
+                // An expanded parent shows its icon at rest; the tree guides show its children.
                 var rest = await row.EvaluateAsync<double[]>(measure);
-                AssertToggle(rest, rest, name, "rest", 0, checkTopmost: true);
+                Assert.True(rest[0] == 0, $"{name}, rest: the toggle shows over the icon.");
+                Assert.True(rest[3] == 0, $"{name}, rest: the icon's glyph is hidden.");
+                Assert.Equal(0d, rest[5]);
 
                 await row.Locator(".resource-row-name").HoverAsync();
-                AssertToggle(rest, await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls, checkTopmost: true);
 
                 await page.Mouse.MoveAsync(1, 1);
                 await row.Locator(".resource-row-link").FocusAsync();
-                AssertToggle(rest, await row.EvaluateAsync<double[]>(measure), name, "focus", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "focus", shownControls, checkTopmost: true);
 
-                // The open menu's popup may lie over the toggle, so only its place and order are checked.
+                // The open menu's popup may lie over the toggle, so whether it's topmost isn't checked.
                 await row.HoverAsync();
                 await row.Locator(".resource-row-actions .aspire-menu-button").Last.ClickAsync();
                 await page.Mouse.MoveAsync(1, 1);
-                AssertToggle(rest, await row.EvaluateAsync<double[]>(measure), name, "menu open", shownControls, checkTopmost: false);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "menu open", shownControls, checkTopmost: false);
                 await page.Keyboard.PressAsync("Escape");
             }
 
-            static void AssertToggle(double[] rest, double[] current, string row, string state, double shownControls, bool checkTopmost)
+            static void AssertToggle(double[] current, string row, string state, double shownControls, bool checkTopmost)
             {
                 var context = $"{row}, {state}";
-                Assert.True(Math.Abs(current[0] - rest[0]) < 0.5 && Math.Abs(current[1] - rest[1]) < 0.5,
-                    $"{context}: the toggle moved from ({rest[0]}, {rest[1]}) to ({current[0]}, {current[1]}).");
+                Assert.True(current[0] == 1, $"{context}: the toggle doesn't show.");
+                Assert.True(current[1] == 1, $"{context}: the toggle doesn't cover the icon tile.");
                 Assert.True(!checkTopmost || current[2] == 1, $"{context}: something covers the toggle.");
-                Assert.True(current[3] == 1, $"{context}: the toggle doesn't lead the row before its icon and link.");
+                Assert.True(current[3] == 1, $"{context}: the icon's glyph shows under the toggle.");
                 Assert.True(current[4] == 1, $"{context}: the shown actions overlap or don't run left to right in tab order.");
                 Assert.Equal(shownControls, current[5]);
                 Assert.True(current[6] == 1, $"{context}: the name runs into the actions.");

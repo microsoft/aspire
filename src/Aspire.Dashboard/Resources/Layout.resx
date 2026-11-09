@@ -356,6 +356,10 @@
     <value>Stopped</value>
     <comment>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</comment>
   </data>
+  <data name="ResourcePaneNestedCount" xml:space="preserve">
+    <value>Nested resources: {0}</value>
+    <comment>{0} is the number of resources nested under a collapsed resource in the resource list.</comment>
+  </data>
   <data name="ResourceHeaderNotFound" xml:space="preserve">
     <value>Resource not found</value>
   </data>

@@ -664,6 +664,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Nested resources: {0}.
+        /// </summary>
+        public static string ResourcePaneNestedCount {
+            get {
+                return ResourceManager.GetString("ResourcePaneNestedCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Resource not found.
         /// </summary>
         public static string ResourceHeaderNotFound {

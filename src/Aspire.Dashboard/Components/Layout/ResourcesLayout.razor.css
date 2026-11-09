@@ -770,33 +770,69 @@
     bottom: -1px;
 }
 
-/* A parent row leads with its expand toggle, like a file tree. When the list has one, every row's icon moves right
-   by the toggle's width so the icons stay aligned, and the section headers and tree guides, which are measured from
-   the same offset, move with them. A list without parents keeps its icons aligned with the filter box above it. */
-.resource-pane-list:has(.resource-row-toggle-leading) {
-    --resource-row-icon-offset: 30px;
-}
-
+/* A parent's expand toggle takes its icon tile's place rather than a column of its own, so every row's icon stays
+   aligned with the filter box above the list. At rest the tile shows the resource's icon. The chevron shows instead
+   when the row is hovered or has focus, always on touch screens, which can't hover, and always while the parent is
+   collapsed, so hidden rows are never out of sight. Hidden, it can't be clicked or tabbed to, so a click on the icon
+   selects the row as on any other; the row's Left and Right arrow keys collapse and expand it from the keyboard.
+   https://www.w3.org/WAI/ARIA/apg/patterns/treeview/ */
 .resource-row ::deep .resource-row-toggle-leading,
 .resource-row ::deep .resource-row-toggle-leading::part(control) {
-    width: 20px;
-    min-width: 20px;
-    height: 20px;
-    min-height: 20px;
+    width: var(--resource-row-icon-size);
+    min-width: var(--resource-row-icon-size);
+    height: var(--resource-row-icon-size);
+    min-height: var(--resource-row-icon-size);
     margin: 0;
     padding: 0;
+    border-radius: var(--aspire-radius-medium);
 }
 
 .resource-row ::deep .resource-row-toggle-leading {
     position: absolute;
     top: 50%;
-    inset-inline-start: calc(6px + var(--resource-row-depth, 0) * var(--resource-row-depth-step));
+    inset-inline-start: calc(var(--resource-row-icon-offset) + var(--resource-row-depth, 0) * var(--resource-row-depth-step));
     z-index: 1;
+    visibility: hidden;
     transform: translateY(-50%);
+}
+
+.resource-row:is(:hover, :focus-within) ::deep .resource-row-toggle-leading,
+.resource-row ::deep .resource-row-toggle-leading.collapsed {
+    visibility: visible;
+}
+
+.resource-row:has(> .resource-row-toggle-leading):is(:hover, :focus-within) .resource-row-glyph,
+.resource-row:has(> .resource-row-toggle-leading.collapsed) .resource-row-glyph {
+    visibility: hidden;
+}
+
+@media (hover: none) {
+    .resource-row ::deep .resource-row-toggle-leading {
+        visibility: visible;
+    }
+
+    .resource-row:has(> .resource-row-toggle-leading) .resource-row-glyph {
+        visibility: hidden;
+    }
 }
 
 .resource-row ::deep .resource-row-toggle-leading.collapsed svg {
     transform: rotate(-90deg);
+}
+
+/* A collapsed parent's count of the rows it hides, after its name. */
+.resource-row-child-count {
+    flex: 0 0 auto;
+    min-width: 16px;
+    padding: 0 5px;
+    border-radius: var(--aspire-radius-round);
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-regular);
+    line-height: 16px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
 }
 
 /* The expand toggle's own look; where it sits is above (.resource-row-toggle-leading). */

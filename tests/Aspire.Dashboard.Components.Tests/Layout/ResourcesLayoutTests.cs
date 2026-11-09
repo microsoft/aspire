@@ -1176,11 +1176,17 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(Resources.Layout.ResourcePaneReorderUnavailable, Assert.Single(toasts.FindComponents<FluentToast>()).Instance.Title);
         Assert.Equal(["root", "a", "b", "worker"], GetNames());
 
+        Assert.Empty(cut.FindAll("[data-resource-name='root'] .resource-row-child-count"));
         cut.Find("[data-resource-name='root'] .resource-row-toggle").Click();
         Assert.Equal(["root", "worker"], GetNames());
+        // A collapsed parent says how many rows it hides.
+        var childCount = cut.Find("[data-resource-name='root'] .resource-row-child-count");
+        Assert.Equal("2", childCount.TextContent);
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, Resources.Layout.ResourcePaneNestedCount, 2), childCount.GetAttribute("data-tooltip"));
         Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("worker", "root", after: false)));
         cut.Find("[data-resource-name='root'] .resource-row-toggle").Click();
         Assert.Equal(["worker", "root", "a", "b"], GetNames());
+        Assert.Empty(cut.FindAll("[data-resource-name='root'] .resource-row-child-count"));
 
         await channel.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("0", properties: new()
         {
