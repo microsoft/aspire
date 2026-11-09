@@ -690,6 +690,7 @@ async function main() {
 
     ensureExtester();
     patchExtesterLaunchLocale();
+    patchExtesterSessionRetry();
     writeVsCodeLocaleFile();
 
     const extestEnv = getAspireCliEnvironment({
@@ -1523,6 +1524,32 @@ function patchExtesterLaunchLocale() {
   } else {
     throw new Error(`Unable to patch ExTester VS Code launch arguments in ${browserPath} to force the E2E browser locale.`);
   }
+}
+
+// ExTester creates the WebDriver session once in its root `before all` hook, so a transient
+// ChromeDriver startup failure (`SessionNotCreatedError` or `ECONNREFUSED`) fails the whole shard
+// before any test runs. Route the session creation through a bounded retry.
+// Remove this patch when ExTester retries session creation itself.
+function patchExtesterSessionRetry() {
+  const browserPath = path.join(extesterModule, 'out', 'browser.js');
+  const source = fs.readFileSync(browserPath, 'utf8');
+  const target = 'this._driver = await new page_objects_1.Builder()';
+  const replacement = `this._driver = await require(${JSON.stringify(path.join(__dirname, 'e2e-browser-session.cjs'))}).createSessionWithRetry(() => new page_objects_1.Builder()`;
+  const buildCall = '.build();';
+
+  if (source.includes(replacement)) {
+    return;
+  }
+
+  const start = source.indexOf(target);
+  const end = start === -1 ? -1 : source.indexOf(buildCall, start);
+  if (start === -1 || end === -1 || source.indexOf(target, start + target.length) !== -1) {
+    throw new Error(`Unable to patch ExTester WebDriver session creation in ${browserPath} to retry transient startup failures.`);
+  }
+
+  console.log('Patching ExTester WebDriver session creation to retry transient startup failures.');
+  const builderChain = source.slice(start + target.length, end);
+  fs.writeFileSync(browserPath, `${source.slice(0, start)}${replacement}${builderChain}.build());${source.slice(end + buildCall.length)}`);
 }
 
 function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {

@@ -2135,6 +2135,83 @@ builder.Build().Run();
         assert.ok(runner.includes('source.replace(argsDeclarationPattern, () => replacement)'));
     });
 
+    test('patches ExTester to create its WebDriver session through the transient startup retry', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+        const patch = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'patchExtesterSessionRetry');
+        assert.ok(patch);
+
+        const extesterModule = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-extester-patch-'));
+        try {
+            const browserPath = path.join(extesterModule, 'out', 'browser.js');
+            fs.mkdirSync(path.dirname(browserPath));
+            fs.copyFileSync(path.join(extensionRoot, 'node_modules', 'vscode-extension-tester', 'out', 'browser.js'), browserPath);
+            const scriptsDirectory = path.join(extensionRoot, 'scripts');
+            const applyPatch = () => vm.runInNewContext(`${patch.getText(source)}\npatchExtesterSessionRetry();`, {
+                path, fs, console: { log: () => undefined }, extesterModule, __dirname: scriptsDirectory,
+            });
+
+            applyPatch();
+            const patched = fs.readFileSync(browserPath, 'utf8');
+            applyPatch();
+
+            assert.strictEqual(fs.readFileSync(browserPath, 'utf8'), patched);
+            assert.ok(patched.includes(`this._driver = await require(${JSON.stringify(path.join(scriptsDirectory, 'e2e-browser-session.cjs'))}).createSessionWithRetry(() => new page_objects_1.Builder()`));
+            assert.match(patched, /\.setChromeOptions\(options\)\s*\.build\(\)\);/);
+            assert.doesNotThrow(() => new vm.Script(patched));
+        }
+        finally {
+            fs.rmSync(extesterModule, { recursive: true, force: true });
+        }
+    });
+
+    test('retries only transient WebDriver session startup failures within the hook budget', async () => {
+        const { createSessionWithRetry } = require(path.resolve(__dirname, '..', '..', 'scripts', 'e2e-browser-session.cjs')) as {
+            createSessionWithRetry<T>(createSession: () => Promise<T>, options: { attempts?: number; retryDelayMs?: number; retryBudgetMs?: number; now?: () => number; log?: (message: string) => void }): Promise<T>;
+        };
+        const options = { attempts: 3, retryDelayMs: 0, log: () => undefined };
+        const rendererFailure = () => new webDriverError.SessionNotCreatedError('session not created\nfrom disconnected: unable to connect to renderer');
+
+        let calls = 0;
+        const driver = await createSessionWithRetry(async () => {
+            if (++calls === 1) {
+                throw rendererFailure();
+            }
+            if (calls === 2) {
+                // The shape selenium-webdriver's HTTP client produces when ChromeDriver is not listening.
+                throw new Error('ECONNREFUSED connect ECONNREFUSED 127.0.0.1:52938');
+            }
+            return 'driver';
+        }, options);
+        assert.strictEqual(driver, 'driver');
+        assert.strictEqual(calls, 3);
+
+        calls = 0;
+        await assert.rejects(createSessionWithRetry(async () => {
+            calls++;
+            throw rendererFailure();
+        }, options), webDriverError.SessionNotCreatedError);
+        assert.strictEqual(calls, 3);
+
+        calls = 0;
+        await assert.rejects(createSessionWithRetry(async () => {
+            calls++;
+            throw new webDriverError.WebDriverError('unknown error');
+        }, options), webDriverError.WebDriverError);
+        assert.strictEqual(calls, 1);
+
+        // A 60 s DevToolsActivePort failure leaves room for one more attempt, not two.
+        let clock = 0;
+        calls = 0;
+        await assert.rejects(createSessionWithRetry(async () => {
+            calls++;
+            clock += 60000;
+            throw new webDriverError.SessionNotCreatedError('session not created: DevToolsActivePort file doesn\'t exist');
+        }, { ...options, retryDelayMs: 5000, retryBudgetMs: 90000, now: () => clock }), webDriverError.SessionNotCreatedError);
+        assert.strictEqual(calls, 2);
+    });
+
     test('keeps the slow zero-to-running shard timeout above its composed wait budgets', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const zeroToRunning = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'zeroToRunning.e2e.test.ts'), 'utf8');
