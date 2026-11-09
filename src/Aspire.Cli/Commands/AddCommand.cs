@@ -412,7 +412,7 @@ internal sealed class AddCommand : BaseCommand
             // use persistent NuGet configuration; polyglot restores already compose exact overrides.
             var restoreSource = source ?? (project.LanguageId == KnownLanguageId.CSharp ? null : selection.SourceOverride);
             DotNetAppHostNuGetConfigMergerCandidate? configurationCandidate = null;
-            if (restoreSource is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
+            if (source is null && selectedNuGetPackage.Channel.IntegrationSource?.Source is { } integrationSource)
             {
                 // Prepare an exact package mapping so later builds can still restore the integration.
                 // Unlike --source, this keeps ambient feeds available for the SDK and dependencies.

@@ -36,18 +36,29 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.Path, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
-        if (sdkSourceNames)
-        {
-            File.WriteAllText(Path.Combine(workspace.Path, "nuget.config"), """
+        var packageSources = sdkSourceNames ? """
+                    <add key="first" value="https://example.test/first" />
+                    <add key="second" value="https://example.test/second" />
+            """ : $"""
+                    <add key="public" value="{PackageSources.NuGetOrg}" />
+            """;
+        var sourceMapping = sdkSourceNames ? """
+                    <packageSource key="first"><package pattern="Acme.Hosting.*" /></packageSource>
+            """ : """
+                    <packageSource key="public"><package pattern="*" /></packageSource>
+            """;
+        File.WriteAllText(Path.Combine(workspace.Path, "nuget.config"), $$"""
                 <configuration>
                   <packageSources>
                     <clear />
-                    <add key="first" value="https://example.test/first" />
-                    <add key="second" value="https://example.test/second" />
+                {{packageSources}}
                   </packageSources>
+                  <packageSourceMapping>
+                    <clear />
+                {{sourceMapping}}
+                  </packageSourceMapping>
                 </configuration>
                 """);
-        }
         File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), """
             {
               "integrationSources": {
@@ -160,6 +171,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedVersion, added.PackageVersion);
         Assert.Equal(selectedSource, added.Source);
         Assert.Equal("Acme.Hosting.Redis", added.SourcePackagePattern);
+        Assert.Equal([selectedSource],
+            NuGetTestHelper.GetEligiblePackageSources(workspace.Path, added.PackageId));
         Assert.Equal(["first", "second"],
             Assert.Single(interaction.GroupedSelectionPromptCalls).Select(choice => choice.Group!.Label).Order());
         Assert.Equal(2, interaction.DisplayedRenderables.Count);
