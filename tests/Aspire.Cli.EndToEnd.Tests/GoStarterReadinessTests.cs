@@ -69,6 +69,10 @@ public sealed class GoStarterReadinessTests(ITestOutputHelper output)
                 """FRONTEND_URL=$(node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync("frontend.json", "utf8")); const url = data.resources[0].urls.find(u => u.url.startsWith("http://")); if (!url) throw new Error("Missing HTTP frontend URL"); process.stdout.write(url.url.replace(/\/$/, ""));') && curl -fsS --retry 10 --retry-all-errors --retry-delay 1 "$FRONTEND_URL/" > index.html && grep -q '<div id="root"></div>' index.html && curl -fsS "$FRONTEND_URL/api/weatherforecast" > weather.json && node -e 'const assert = require("node:assert/strict"); const weather = require("./weather.json"); assert.equal(weather.length, 5); for (const forecast of weather) { assert.equal(typeof forecast.temperatureC, "number"); assert.equal(typeof forecast.summary, "string"); }'""",
                 counter,
                 TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync(
+                """found=0; for i in $(seq 1 20); do aspire otel spans --format json --limit 100 > spans.json && aspire otel logs --format json --limit 100 > otel-logs.json && node -e 'const assert = require("node:assert/strict"); const spans = require("./spans.json"); const logs = require("./otel-logs.json"); assert.ok(spans.some(span => span.source === "goready-api" && span.attributes?.["url.path"] === "/api/weatherforecast")); assert.ok(logs.some(log => log.resourceName === "goready-api" && log.message.includes("api listening")));' && found=1 && break; sleep 1; done; test "$found" = 1""",
+                counter,
+                TimeSpan.FromMinutes(2));
         }
         finally
         {

@@ -61,6 +61,19 @@ public class GoStarterTemplateTests
         Assert.Equal([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], logo[..8]);
     }
 
+    [Fact]
+    public void GoStarterTemplate_BridgesStandardLogsToOpenTelemetry()
+    {
+        var apiDirectory = Path.Combine(GetGoStarterDirectory(), "api");
+
+        var goMod = File.ReadAllText(Path.Combine(apiDirectory, "go.mod"));
+        Assert.Contains("go.opentelemetry.io/contrib/bridges/otelslog v0.18.0", goMod, StringComparison.Ordinal);
+
+        var telemetry = File.ReadAllText(Path.Combine(apiDirectory, "telemetry.go"));
+        Assert.Contains("otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))", telemetry, StringComparison.Ordinal);
+        Assert.Contains("log.SetOutput(io.MultiWriter(os.Stderr", telemetry, StringComparison.Ordinal);
+    }
+
     private static string GetGoStarterAppHostPath()
     {
         var path = Path.Combine(GetGoStarterDirectory(), "apphost.go");

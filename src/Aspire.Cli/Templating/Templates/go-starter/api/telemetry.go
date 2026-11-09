@@ -8,11 +8,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"log/slog"
 	"net/url"
 	"os"
 	"strings"
 
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
@@ -93,8 +96,11 @@ func setupOTel(ctx context.Context, serviceName string) (func(context.Context) e
 	)
 	otellog.SetLoggerProvider(lp)
 
-	// Route slog to OTel so structured logs appear in the dashboard.
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	// Keep standard-library logs visible in the resource console while also routing them
+	// through slog to the OTel logger provider for the dashboard's structured logs view.
+	otelLogHandler := otelslog.NewHandler(serviceName, otelslog.WithLoggerProvider(lp))
+	slog.SetDefault(slog.New(otelLogHandler))
+	log.SetOutput(io.MultiWriter(os.Stderr, slog.NewLogLogger(otelLogHandler, slog.LevelInfo).Writer()))
 
 	return func(ctx context.Context) error {
 		_ = tp.Shutdown(ctx)
