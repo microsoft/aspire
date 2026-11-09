@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -1826,10 +1826,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // For example "Stopped 1m ago (11/6/2026 2:30:12 PM)". It contains the short age the row shows, so the accessible
     // name includes the visible text (WCAG 2.5.3, label in name: https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
-        $"{rowTime.Label} {GetShortAge(rowTime.Time)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
+        $"{GetRowTimeText(rowTime)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
 
-    // Rows show a short age ("7m ago") because every row repeats it; the tooltip and accessible label keep the
-    // full wording and the exact time (see GetRowTimeDescription).
+    // What a row shows: the verb, so a stopped resource doesn't read as running, and a short age ("Started 7m ago").
+    private string GetRowTimeText((string Label, DateTime Time) rowTime) => $"{rowTime.Label} {GetShortAge(rowTime.Time)}";
+
+    // The short age ("7m ago"), which every row repeats; the tooltip and accessible label add the exact time (see
+    // GetRowTimeDescription).
     private string GetShortAge(DateTime time)
     {
         // Clamp so a time slightly in the future (clock skew between processes) reads as "now".

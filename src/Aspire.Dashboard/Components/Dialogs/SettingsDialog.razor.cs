@@ -93,8 +93,8 @@ public partial class SettingsDialog : IDisposable
         ];
         _groupOverviewOptions = new IconToggleOption<GroupOverview>[]
         {
-            new(GroupOverview.Summary, new Icons.Regular.Size20.DataBarVertical(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-            new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), ResourcesLoc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]),
+            new(GroupOverview.Summary, new Icons.Regular.Size20.DataUsage(), Loc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
+            new(GroupOverview.Graph, new Icons.Regular.Size20.Flow(), ResourcesLoc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]),
         }
         .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
         .ToList();

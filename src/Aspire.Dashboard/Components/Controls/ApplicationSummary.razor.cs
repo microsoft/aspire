@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -120,8 +120,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
         new IconToggleOption<GroupOverview>[]
         {
-            new(GroupOverview.Summary, new Icons.Regular.Size20.DataBarVertical(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
-            new(GroupOverview.Graph, new Icons.Regular.Size20.ShareAndroid(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
+            new(GroupOverview.Summary, new Icons.Regular.Size20.DataUsage(), DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)]),
+            new(GroupOverview.Graph, new Icons.Regular.Size20.Flow(), Loc[nameof(Dashboard.Resources.Resources.GraphPageTitle)])
         }
         .Where(option => option.Value != GroupOverview.Graph || ViewPreferences.IsGraphEnabled)
         .ToList();

@@ -220,6 +220,7 @@
                                 @onclick="@(() => ToggleSection(ResourcesSectionKey))">
                             <span>@ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]</span>
                             <span class="resource-pane-section-count">@paneRows.Count</span>
+                            <span class="resource-pane-section-rule" aria-hidden="true"></span>
                             <span class="resource-pane-section-chevron @(resourcesCollapsed ? "collapsed" : null)">
                                 <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
                             </span>
@@ -243,6 +244,7 @@
                             @onclick="@(() => ToggleSection(ParametersSectionKey))">
                         <span>@Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)]</span>
                         <span class="resource-pane-section-count">@parameterRows.Count</span>
+                        <span class="resource-pane-section-rule" aria-hidden="true"></span>
                         <span class="resource-pane-section-chevron @(parametersCollapsed ? "collapsed" : null)">
                             <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
                         </span>
@@ -265,6 +267,7 @@
                             @onclick="@(() => ToggleSection(TelemetrySectionKey))">
                         <span>@Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]</span>
                         <span class="resource-pane-section-count">@telemetryRows.Count</span>
+                        <span class="resource-pane-section-rule" aria-hidden="true"></span>
                         <span class="resource-pane-section-chevron @(telemetryCollapsed ? "collapsed" : null)">
                             <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Default" />
                         </span>
@@ -918,16 +921,12 @@
                 @{ RenderRowIcon(__builder, item); }
                 @if (IsCompact)
                 {
-                    @* One line per resource: the name with its state dot right after it ("frontend ●"), as in the
-                       full-page list, then the type in an aligned column at the end. At the row's end, next to the type,
-                       the dot read as describing the type ("Project ●") rather than the resource, and it moved when
-                       the table's rows turned into these. The state's name is in the dot's tooltip and the link's
-                       accessible description. There is no room for the availability badge on one line, so an
-                       unavailable row relies on its muted colors and on the reason in its tooltip and accessible
-                       description. *@
+                    @* One line per resource: the name, then aligned columns for type and state, so they line up from
+                       row to row. The state is a dot; its name is in the tooltip and the link's accessible description.
+                       There is no room for the availability badge on one line, so an unavailable row relies on its muted
+                       colors and on the reason in its tooltip and accessible description. *@
                     <span class="resource-row-text">
                         @{ RenderRowName(__builder, item); }
-                        @{ RenderRowStateDot(__builder, item); }
                         @{ RenderRowHiddenIcon(__builder, item, compact: true); }
                     </span>
                     RenderRowErrorSpacer(__builder, item);
@@ -938,6 +937,7 @@
                         {
                             <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         }
+                        @{ RenderRowStateDot(__builder, item); }
                     </span>
                 }
                 else
@@ -953,14 +953,14 @@
                             <span class="state-dot @GetStateClass(resource)"></span><span>@item.State.Text</span>
                             @if (!resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
                             {
-                                @* Only the age shows, after the state; the tooltip says whether it's since starting or stopping. *@
+                                @* The verb and a short age, after the state ("Running · Started 7m ago"). *@
                                 var sidebarTimeDescription = GetRowTimeDescription(sidebarTime);
                                 <span class="resource-row-start-time resource-row-sidebar-start">
                                     <time datetime="@sidebarTime.Time.ToString("O", CultureInfo.InvariantCulture)"
                                           tabindex="0"
                                           aria-label="@sidebarTimeDescription"
                                           data-tooltip="@sidebarTimeDescription"
-                                          data-tooltip-positioning="above">@GetShortAge(sidebarTime.Time)</time>
+                                          data-tooltip-positioning="above">@GetRowTimeText(sidebarTime)</time>
                                 </span>
                             }
                         </span>
@@ -990,21 +990,21 @@
                 @{ RenderRowIcon(__builder, item); }
                 @if (IsCompact)
                 {
-                    @* One line: the name, then the state dot right after it ("frontend ●"). The name column is wide, so
-                       a dot at its end would be far from the name it describes. The type is in the Source column. *@
+                    @* One line, as in the sidebar: the name, then the type and the state dot right-aligned at the end of
+                       the name column ("frontend      Project ●"), so types and dots line up from row to row and the
+                       dot sits next to the Started column it goes with. The Source column shows only the source. *@
                     <span class="resource-row-text">
                         @{ RenderRowName(__builder, item); }
-                        @{ RenderRowStateDot(__builder, item); }
                         @{ RenderRowHiddenIcon(__builder, item, compact: true); }
                     </span>
                     RenderRowErrorSpacer(__builder, item);
-                    @* Rows without a source column entry (parameters) keep their type; the others' types lead the
-                       Source column, and the stylesheet hides this one for them. *@
                     <span class="resource-row-meta">
+                        @* A parameter's type says nothing its key icon and the Parameters section don't. *@
                         @if (!resource.IsParameter)
                         {
                             <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         }
+                        @{ RenderRowStateDot(__builder, item); }
                     </span>
                 }
                 else
@@ -1039,8 +1039,8 @@
                                       aria-label="@rowTimeDescription"
                                       data-tooltip="@rowTimeDescription"
                                       data-tooltip-positioning="above">
-                                    @* Only the short age shows ("7m ago"); the tooltip says whether it's since starting or stopping. *@
-                                    <span class="resource-row-started-age">@GetShortAge(rowTime.Time)</span>
+                                    @* The verb and a short age ("Started 7m ago"); the tooltip adds the exact time. *@
+                                    <span class="resource-row-started-age">@GetRowTimeText(rowTime)</span>
                                 </time>
                             }
                         </span>
@@ -1054,22 +1054,15 @@
                             <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" ShowFirstUrlOnly="true" />
                         }
                     </div>
-                    @* What ran the resource reads best next to its kind ("Container alpine:latest", "Project Api.csproj"),
-                       so on wide panes this column shows both and the name's second line keeps only the state. *@
+                    @* What ran the resource ("alpine:latest", "Api.csproj"). The type is in the name column, next to the
+                       state dot, so this column is the source alone. *@
                     <span class="resource-row-source">
-                        @{
-                            var typeLabel = GetResourceTypeLabel(resource);
-                        }
                         @if (ResourceSourceViewModel.GetSourceViewModel(resource) is { } source)
                         {
                             <span class="resource-row-source-value" tabindex="0"
-                                  data-tooltip="@($"{typeLabel}: {source.Tooltip}")"
+                                  data-tooltip="@source.Tooltip"
                                   data-tooltip-positioning="above"
-                                  aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {typeLabel} {source.Tooltip}")"><span class="resource-row-source-type">@typeLabel</span> @source.Value</span>
-                        }
-                        else
-                        {
-                            <span class="resource-row-source-value"><span class="resource-row-source-type">@typeLabel</span></span>
+                                  aria-label="@($"{ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]}: {source.Tooltip}")">@source.Value</span>
                         }
                     </span>
                 </div>

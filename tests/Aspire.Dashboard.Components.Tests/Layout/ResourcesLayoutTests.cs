@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
@@ -353,15 +353,15 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.Empty(cut.FindAll(".resource-row-source"));
         ResourceSetupHelpers.ToggleResourceList(cut);
+        // The Source column is the source alone; the type is in the name column, before the state dot.
         var source = cut.Find("[data-resource-name='source'] .resource-row-source-value");
-        Assert.Equal($"{type} {value}", source.TextContent);
-        Assert.Equal(type, source.QuerySelector(".resource-row-source-type")!.TextContent);
-        Assert.Equal($"{type}: {original}", source.GetAttribute("data-tooltip"));
-        Assert.Equal($"Source: {type} {original}", source.GetAttribute("aria-label"));
+        Assert.Equal(value, source.TextContent);
+        Assert.Equal(original, source.GetAttribute("data-tooltip"));
+        Assert.Equal($"Source: {original}", source.GetAttribute("aria-label"));
         Assert.Equal("0", source.GetAttribute("tabindex"));
-        var emptySource = cut.Find("[data-resource-name='empty'] .resource-row-source-value");
-        Assert.Equal("Container", emptySource.TextContent);
-        Assert.Null(emptySource.GetAttribute("tabindex"));
+        Assert.Equal(type, cut.Find("[data-resource-name='source'] .resource-row-meta .resource-row-type").TextContent);
+        // A resource without a source keeps an empty track, so the columns stay aligned.
+        Assert.Empty(cut.FindAll("[data-resource-name='empty'] .resource-row-source-value"));
         Assert.Equal(2, cut.FindAll(".resource-row-source").Count);
         Assert.Empty(cut.FindAll(".resource-relationship-summary, .resource-row-dependencies, .resource-row-references"));
     }
@@ -388,7 +388,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         // A two-line row shows the age after the state. A stopped resource's is how long ago it stopped, which says
         // more than how long ago it started; the tooltip says which.
         var workerTime = cut.Find("[data-resource-name='worker'] .resource-row-sidebar-start time");
-        Assert.Equal("1m ago", workerTime.TextContent);
+        Assert.Equal("Stopped 1m ago", workerTime.TextContent);
         Assert.Equal(stopped.ToString("O", System.Globalization.CultureInfo.InvariantCulture), workerTime.GetAttribute("datetime"));
         Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatDateTime(clock, stopped)})", workerTime.GetAttribute("data-tooltip"));
         Assert.Equal(workerTime.GetAttribute("data-tooltip"), workerTime.GetAttribute("aria-label"));
@@ -398,9 +398,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         // The expanded list shows the same short age; the state beside it and the tooltip say which it is.
         ResourceSetupHelpers.ToggleResourceList(cut);
         var wideWorkerTime = cut.Find("[data-resource-name='worker'] .resource-row-wide-metadata time");
-        Assert.Equal("1m ago", wideWorkerTime.TextContent.Trim());
+        Assert.Equal("Stopped 1m ago", wideWorkerTime.TextContent.Trim());
         Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatDateTime(clock, stopped)})", wideWorkerTime.GetAttribute("data-tooltip"));
-        Assert.Equal("3h ago", cut.Find("[data-resource-name='api'] .resource-row-wide-metadata time").TextContent.Trim());
+        Assert.Equal("Started 3h ago", cut.Find("[data-resource-name='api'] .resource-row-wide-metadata time").TextContent.Trim());
     }
 
     [Fact]
@@ -425,7 +425,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         // Two-line rows show the age after the state; a compact row has no room for it.
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
 
-        Assert.Equal(["10m ago", "10m ago"], cut.FindAll(".resource-row-sidebar-start time").Select(time => time.TextContent));
+        Assert.Equal(["Started 10m ago", "Started 10m ago"], cut.FindAll(".resource-row-sidebar-start time").Select(time => time.TextContent));
     }
 
     [Theory]
@@ -478,7 +478,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-row-wide-metadata"));
         Assert.Equal("Running", GetStateText(cut.Find("[data-resource-name='api']")));
         // A compact sidebar row is a single line without the start time. The expanded list below has a column for it.
-        Assert.Equal(compact ? [] : ["10m ago"], cut.FindAll("[data-resource-name='api'] time").Select(time => time.TextContent));
+        Assert.Equal(compact ? [] : ["Started 10m ago"], cut.FindAll("[data-resource-name='api'] time").Select(time => time.TextContent));
         Assert.Equal("Finished", GetStateText(cut.Find("[data-resource-name='finished']")));
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         ResourceSetupHelpers.ToggleResourceList(cut);
@@ -503,14 +503,14 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         var time = health.QuerySelector(".resource-row-start-time time")!;
         Assert.Equal(api.StartTimeStamp!.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture), time.GetAttribute("datetime"));
-        // Every row repeats its age, so the row shows the short form; the tooltip keeps the full wording.
-        Assert.Equal("10m ago", time.TextContent.Trim());
+        // Every row repeats its age, so the row shows the verb and a short age; the tooltip adds the exact time.
+        Assert.Equal("Started 10m ago", time.TextContent.Trim());
         Assert.Equal($"Started 10m ago ({FormatHelpers.FormatDateTime(clock, api.StartTimeStamp.Value)})", time.GetAttribute("data-tooltip"));
         Assert.Equal("above", time.GetAttribute("data-tooltip-positioning"));
         Assert.Equal("0", time.GetAttribute("tabindex"));
         var absent = cut.Find("[data-resource-name='missing'] .resource-row-wide-metadata");
-        // A resource with no source still shows its type in the source column.
-        Assert.Equal("Executable", absent.TextContent.Trim());
+        // A resource with no source leaves the Source column empty; its type is in the name column.
+        Assert.Equal(string.Empty, absent.TextContent.Trim());
         Assert.Empty(absent.QuerySelectorAll("time, .url-container"));
         var parameter = cut.Find("[data-resource-name='key'] .resource-row-wide-metadata");
         Assert.Equal(string.Empty, parameter.TextContent.Trim());
@@ -519,15 +519,15 @@ public class ResourcesLayoutTests : DashboardTestContext
         clock.UtcNow = clock.UtcNow.AddMinutes(1);
         ResourceSetupHelpers.ToggleResourceList(cut);
         ResourceSetupHelpers.ToggleResourceList(cut);
-        cut.WaitForAssertion(() => Assert.Equal("11m ago",
+        cut.WaitForAssertion(() => Assert.Equal("Started 11m ago",
             cut.Find("[data-resource-name='api'] .resource-row-health time").TextContent.Trim()));
 
-        // In the full-page list, a compact row's state dot follows its name rather than ending the wide name column.
-        // There is one dot per row.
+        // In the full-page list, a compact row ends its name column with the type and then the state dot, as the
+        // sidebar does, next to the Started column. There is one dot per row.
         if (compact)
         {
             var dot = Assert.Single(cut.FindAll("[data-resource-name='api'] .resource-row-meta-state"));
-            Assert.Equal("resource-row-text", dot.ParentElement!.ClassName);
+            Assert.Equal("resource-row-meta", dot.ParentElement!.ClassName);
         }
 
         // Compact rows show the state as a dot that names it in its tooltip. The other densities spell it out.
@@ -1201,7 +1201,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task CompactDensity_ShowsOneLineWithStateAfterNameAndTypeColumn()
+    public async Task CompactDensity_ShowsOneLineWithTypeAndStateColumns()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1236,8 +1236,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.ToggleResourceList(cut);
         AssertCompactRows();
 
-        // One line per resource: the name with its state dot right after it, then the type column, with no second
-        // line of state text. Both views put the dot in the name's text, so it describes the resource, not its type.
+        // One line per resource: the name, then the type and state columns, with no second line of state text.
         void AssertCompactRows()
         {
             Assert.Empty(cut.FindAll("[data-resource-name] .resource-row-sub"));
@@ -1247,8 +1246,6 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.True(cacheType.ClassList.Contains("resource-row-type-persistent"));
             Assert.Equal(["Running", "Running"],
                 cut.FindAll("[data-resource-name] .resource-row-meta-state").Select(state => state.GetAttribute("data-tooltip")));
-            Assert.Equal(["resource-row-text", "resource-row-text"],
-                cut.FindAll("[data-resource-name] .resource-row-meta-state").Select(state => state.ParentElement!.ClassName));
         }
     }
 

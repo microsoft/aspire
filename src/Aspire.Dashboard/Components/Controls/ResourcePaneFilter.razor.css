@@ -49,7 +49,8 @@
     margin-bottom: 4px;
     padding: 0 8px 4px 4px;
     border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
-    color: var(--colorNeutralForeground3);
+    /* The same as a menu's header (see .aspire-menu-header), such as the grouping menu next to this one. */
+    color: var(--colorNeutralForeground2);
     font-size: var(--aspire-font-size-body);
     font-weight: var(--aspire-font-weight-semibold);
     line-height: 20px;
