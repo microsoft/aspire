@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Dialogs {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
-        internal Dialogs() {
+        public Dialogs() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,48 +59,25 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
-        ///
-        ///- 📦 Resource state, health checks, and relationships
-        ///- 🖥️ Console logs
-        ///- 📊 Distributed traces
-        ///- 🪵 Structured logs
-        ///
-        ///## Getting started
-        ///
-        ///AI agents access dashboard telemetry through the Aspire CLI. If you haven&apos;t installed it yet, [install the Aspire CLI]({1}).
-        ///
-        ///Initialize AI agent support in your [rest of string was truncated]&quot;;.
+        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀  - 📦 Resource state, health checks, and relationships - 🖥️ Console logs - 📊 Distributed traces - 🪵 Structured logs  ## Getting started  AI agents access dashboard telemetry through the Aspire CLI. If you haven&apos;t installed it yet, [install the Aspire CLI]({1}).  Initialize AI agent support in your project wi [rest of string was truncated].
         /// </summary>
         public static string AIAgentsDialogAppHostDescription {
             get {
                 return ResourceManager.GetString("AIAgentsDialogAppHostDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
-        ///
-        ///- 📊 Distributed traces
-        ///- 🔗 Trace spans
-        ///- 🪵 Structured logs
-        ///- 🗂️ Zip file export
-        ///
-        ///AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.
-        ///
-        ///Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
-        ///
-        ///```bash
-        ///aspire otel l [rest of string was truncated]&quot;;.
+        ///   Looks up a localized string similar to Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀  - 📊 Distributed traces - 🔗 Trace spans - 🪵 Structured logs - 🗂️ Zip file export  AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.  Use Aspire CLI commands to retrieve telemetry data directly in your terminal:  ```bash aspire otel logs --dashbo [rest of string was truncated].
         /// </summary>
         public static string AIAgentsDialogStandaloneDescription {
             get {
                 return ResourceManager.GetString("AIAgentsDialogStandaloneDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AI agents.
         /// </summary>
@@ -109,1366 +86,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("AIAgentsDialogTitle", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Documentation.
-        /// </summary>
-        public static string HelpDialogDocumentationTab {
-            get {
-                return ResourceManager.GetString("HelpDialogDocumentationTab", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Guides and reference for using the Aspire dashboard..
-        /// </summary>
-        public static string HelpDialogDashboardDocumentationDescription {
-            get {
-                return ResourceManager.GetString("HelpDialogDashboardDocumentationDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Source code, releases and issues on GitHub..
-        /// </summary>
-        public static string HelpDialogRepoDescription {
-            get {
-                return ResourceManager.GetString("HelpDialogRepoDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Opens in a new tab.
-        /// </summary>
-        public static string HelpDialogOpensInNewTab {
-            get {
-                return ResourceManager.GetString("HelpDialogOpensInNewTab", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Learn.
-        /// </summary>
-        public static string HelpDialogLearnHeading {
-            get {
-                return ResourceManager.GetString("HelpDialogLearnHeading", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Community and support.
-        /// </summary>
-        public static string HelpDialogCommunityHeading {
-            get {
-                return ResourceManager.GetString("HelpDialogCommunityHeading", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire documentation.
-        /// </summary>
-        public static string HelpDialogAspireDocumentationTitle {
-            get {
-                return ResourceManager.GetString("HelpDialogAspireDocumentationTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Get started with Aspire, its integrations and deployment..
-        /// </summary>
-        public static string HelpDialogAspireDocumentationDescription {
-            get {
-                return ResourceManager.GetString("HelpDialogAspireDocumentationDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Report an issue.
-        /// </summary>
-        public static string HelpDialogReportIssueTitle {
-            get {
-                return ResourceManager.GetString("HelpDialogReportIssueTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Found a bug or have an idea? Open an issue on GitHub..
-        /// </summary>
-        public static string HelpDialogReportIssueDescription {
-            get {
-                return ResourceManager.GetString("HelpDialogReportIssueDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard feedback.
-        /// </summary>
-        public static string HelpDialogDashboardFeedbackTitle {
-            get {
-                return ResourceManager.GetString("HelpDialogDashboardFeedbackTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Share feedback about the evolving dashboard experience..
-        /// </summary>
-        public static string HelpDialogDashboardFeedbackDescription {
-            get {
-                return ResourceManager.GetString("HelpDialogDashboardFeedbackDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Discord.
-        /// </summary>
-        public static string HelpDialogDiscordTitle {
-            get {
-                return ResourceManager.GetString("HelpDialogDiscordTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Chat with the Aspire team and community..
-        /// </summary>
-        public static string HelpDialogDiscordDescription {
-            get {
-                return ResourceManager.GetString("HelpDialogDiscordDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire dashboard version {0}.
-        /// </summary>
-        public static string HelpDialogDashboardVersion {
-            get {
-                return ResourceManager.GetString("HelpDialogDashboardVersion", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire Outage.
-        /// </summary>
-        public static string HelpDialogGameTitle {
-            get {
-                return ResourceManager.GetString("HelpDialogGameTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph..
-        /// </summary>
-        public static string HelpDialogGameDescription {
-            get {
-                return ResourceManager.GetString("HelpDialogGameDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Close.
-        /// </summary>
-        public static string DialogCloseButtonText {
-            get {
-                return ResourceManager.GetString("DialogCloseButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Details.
-        /// </summary>
-        public static string ExemplarsDialogDetailsColumnHeader {
-            get {
-                return ResourceManager.GetString("ExemplarsDialogDetailsColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Timestamp.
-        /// </summary>
-        public static string ExemplarsDialogTimestampColumnHeader {
-            get {
-                return ResourceManager.GetString("ExemplarsDialogTimestampColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Exemplars.
-        /// </summary>
-        public static string ExemplarsDialogTitle {
-            get {
-                return ResourceManager.GetString("ExemplarsDialogTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Trace.
-        /// </summary>
-        public static string ExemplarsDialogTrace {
-            get {
-                return ResourceManager.GetString("ExemplarsDialogTrace", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Trace.
-        /// </summary>
-        public static string ExemplarsDialogTraceColumnHeader {
-            get {
-                return ResourceManager.GetString("ExemplarsDialogTraceColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Value.
-        /// </summary>
-        public static string ExemplarsDialogValueColumnHeader {
-            get {
-                return ResourceManager.GetString("ExemplarsDialogValueColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to A value is required..
-        /// </summary>
-        public static string FieldRequired {
-            get {
-                return ResourceManager.GetString("FieldRequired", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to A maximum length of {1} characters is allowed..
-        /// </summary>
-        public static string FieldTooLong {
-            get {
-                return ResourceManager.GetString("FieldTooLong", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Apply filter.
-        /// </summary>
-        public static string FilterDialogApplyFilterButtonText {
-            get {
-                return ResourceManager.GetString("FilterDialogApplyFilterButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Cancel.
-        /// </summary>
-        public static string FilterDialogCancelButtonText {
-            get {
-                return ResourceManager.GetString("FilterDialogCancelButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Condition.
-        /// </summary>
-        public static string FilterDialogConditionInputLabel {
-            get {
-                return ResourceManager.GetString("FilterDialogConditionInputLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to e.g. 2024-01-15T09:30:00.
-        /// </summary>
-        public static string FilterDialogDatePlaceholder {
-            get {
-                return ResourceManager.GetString("FilterDialogDatePlaceholder", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Date and time.
-        /// </summary>
-        public static string FilterDialogDateValueLabel {
-            get {
-                return ResourceManager.GetString("FilterDialogDateValueLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Disable all.
-        /// </summary>
-        public static string FilterDialogDisableAll {
-            get {
-                return ResourceManager.GetString("FilterDialogDisableAll", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Disable filter.
-        /// </summary>
-        public static string FilterDialogDisableFilterButtonText {
-            get {
-                return ResourceManager.GetString("FilterDialogDisableFilterButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Enable all.
-        /// </summary>
-        public static string FilterDialogEnableAll {
-            get {
-                return ResourceManager.GetString("FilterDialogEnableAll", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Field.
-        /// </summary>
-        public static string FilterDialogFieldPlaceholder {
-            get {
-                return ResourceManager.GetString("FilterDialogFieldPlaceholder", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Invalid date format.
-        /// </summary>
-        public static string FilterDialogInvalidDate {
-            get {
-                return ResourceManager.GetString("FilterDialogInvalidDate", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Parameter.
-        /// </summary>
-        public static string FilterDialogParameterInputLabel {
-            get {
-                return ResourceManager.GetString("FilterDialogParameterInputLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Pick date and time.
-        /// </summary>
-        public static string FilterDialogPickDateButtonTitle {
-            get {
-                return ResourceManager.GetString("FilterDialogPickDateButtonTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Remove filter.
-        /// </summary>
-        public static string FilterDialogRemoveFilterButtonText {
-            get {
-                return ResourceManager.GetString("FilterDialogRemoveFilterButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Value.
-        /// </summary>
-        public static string FilterDialogTextValuePlaceholder {
-            get {
-                return ResourceManager.GetString("FilterDialogTextValuePlaceholder", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Details.
-        /// </summary>
-        public static string GenAIDetailsTabText {
-            get {
-                return ResourceManager.GetString("GenAIDetailsTabText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Error displaying GenAI content:.
-        /// </summary>
-        public static string GenAIDisplayErrorMessageText {
-            get {
-                return ResourceManager.GetString("GenAIDisplayErrorMessageText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Duration.
-        /// </summary>
-        public static string GenAIDurationLabel {
-            get {
-                return ResourceManager.GetString("GenAIDurationLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Error.
-        /// </summary>
-        public static string GenAIErrorHeaderText {
-            get {
-                return ResourceManager.GetString("GenAIErrorHeaderText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Evaluations.
-        /// </summary>
-        public static string GenAIEvaluationsTabText {
-            get {
-                return ResourceManager.GetString("GenAIEvaluationsTabText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Input.
-        /// </summary>
-        public static string GenAIInputHeaderText {
-            get {
-                return ResourceManager.GetString("GenAIInputHeaderText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Input &amp; output.
-        /// </summary>
-        public static string GenAIInputOutputTabText {
-            get {
-                return ResourceManager.GetString("GenAIInputOutputTabText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Input tokens: {0}.
-        /// </summary>
-        public static string GenAIInputTokensText {
-            get {
-                return ResourceManager.GetString("GenAIInputTokensText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to LLM.
-        /// </summary>
-        public static string GenAILLMBadgeText {
-            get {
-                return ResourceManager.GetString("GenAILLMBadgeText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Message.
-        /// </summary>
-        public static string GenAIMessageCategoryMessage {
-            get {
-                return ResourceManager.GetString("GenAIMessageCategoryMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Output.
-        /// </summary>
-        public static string GenAIMessageCategoryOutput {
-            get {
-                return ResourceManager.GetString("GenAIMessageCategoryOutput", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Status.
-        /// </summary>
-        public static string GenAIMessageCategoryStatus {
-            get {
-                return ResourceManager.GetString("GenAIMessageCategoryStatus", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tool calls.
-        /// </summary>
-        public static string GenAIMessageCategoryToolCalls {
-            get {
-                return ResourceManager.GetString("GenAIMessageCategoryToolCalls", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tool response.
-        /// </summary>
-        public static string GenAIMessageCategoryToolResponse {
-            get {
-                return ResourceManager.GetString("GenAIMessageCategoryToolResponse", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Assistant.
-        /// </summary>
-        public static string GenAIMessageTitleAssistant {
-            get {
-                return ResourceManager.GetString("GenAIMessageTitleAssistant", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Error.
-        /// </summary>
-        public static string GenAIMessageTitleError {
-            get {
-                return ResourceManager.GetString("GenAIMessageTitleError", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to System.
-        /// </summary>
-        public static string GenAIMessageTitleSystem {
-            get {
-                return ResourceManager.GetString("GenAIMessageTitleSystem", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tool.
-        /// </summary>
-        public static string GenAIMessageTitleTool {
-            get {
-                return ResourceManager.GetString("GenAIMessageTitleTool", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to User.
-        /// </summary>
-        public static string GenAIMessageTitleUser {
-            get {
-                return ResourceManager.GetString("GenAIMessageTitleUser", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Generative AI messages.
-        /// </summary>
-        public static string GenAIMessageTreeLabel {
-            get {
-                return ResourceManager.GetString("GenAIMessageTreeLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to n/a.
-        /// </summary>
-        public static string GenAINAText {
-            get {
-                return ResourceManager.GetString("GenAINAText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Next.
-        /// </summary>
-        public static string GenAINextButtonText {
-            get {
-                return ResourceManager.GetString("GenAINextButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No message content..
-        /// </summary>
-        public static string GenAINoMessageContent {
-            get {
-                return ResourceManager.GetString("GenAINoMessageContent", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No message content was recorded to telemetry. Additional configuration may be required to view sensitive content. For more information, see &lt;a href=&quot;{0}&quot; target=&quot;_blank&quot;&gt;AI telemetry configuration&lt;/a&gt;..
-        /// </summary>
-        public static string GenAINoMessageContentMoreInformationMessage {
-            get {
-                return ResourceManager.GetString("GenAINoMessageContentMoreInformationMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No messages found..
-        /// </summary>
-        public static string GenAINoMessages {
-            get {
-                return ResourceManager.GetString("GenAINoMessages", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No tools found..
-        /// </summary>
-        public static string GenAINoTools {
-            get {
-                return ResourceManager.GetString("GenAINoTools", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Output.
-        /// </summary>
-        public static string GenAIOutputHeaderText {
-            get {
-                return ResourceManager.GetString("GenAIOutputHeaderText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Output tokens: {0}.
-        /// </summary>
-        public static string GenAIOutputTokensText {
-            get {
-                return ResourceManager.GetString("GenAIOutputTokensText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Preview.
-        /// </summary>
-        public static string GenAIPreviewTabText {
-            get {
-                return ResourceManager.GetString("GenAIPreviewTabText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Previous.
-        /// </summary>
-        public static string GenAIPreviousButtonText {
-            get {
-                return ResourceManager.GetString("GenAIPreviousButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Raw.
-        /// </summary>
-        public static string GenAIRawTabText {
-            get {
-                return ResourceManager.GetString("GenAIRawTabText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tokens.
-        /// </summary>
-        public static string GenAITokensLabel {
-            get {
-                return ResourceManager.GetString("GenAITokensLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tool call.
-        /// </summary>
-        public static string GenAIToolCallButtonText {
-            get {
-                return ResourceManager.GetString("GenAIToolCallButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tool definition.
-        /// </summary>
-        public static string GenAIToolDefinitionButtonText {
-            get {
-                return ResourceManager.GetString("GenAIToolDefinitionButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No parameters.
-        /// </summary>
-        public static string GenAIToolNoParameters {
-            get {
-                return ResourceManager.GetString("GenAIToolNoParameters", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Description.
-        /// </summary>
-        public static string GenAIToolParameterDescription {
-            get {
-                return ResourceManager.GetString("GenAIToolParameterDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Name.
-        /// </summary>
-        public static string GenAIToolParameterName {
-            get {
-                return ResourceManager.GetString("GenAIToolParameterName", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Type.
-        /// </summary>
-        public static string GenAIToolParameterType {
-            get {
-                return ResourceManager.GetString("GenAIToolParameterType", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Required parameter.
-        /// </summary>
-        public static string GenAIToolRequiredParameter {
-            get {
-                return ResourceManager.GetString("GenAIToolRequiredParameter", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Tools.
-        /// </summary>
-        public static string GenAIToolsTabText {
-            get {
-                return ResourceManager.GetString("GenAIToolsTabText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Unexpected or truncated message content..
-        /// </summary>
-        public static string GenAIUnexpectedOrTruncatedContent {
-            get {
-                return ResourceManager.GetString("GenAIUnexpectedOrTruncatedContent", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to General.
-        /// </summary>
-        public static string HelpDialogCategoryNavigation {
-            get {
-                return ResourceManager.GetString("HelpDialogCategoryNavigation", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard navigation.
-        /// </summary>
-        public static string HelpDialogCategoryPageNavigation {
-            get {
-                return ResourceManager.GetString("HelpDialogCategoryPageNavigation", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Panels.
-        /// </summary>
-        public static string HelpDialogCategoryPanels {
-            get {
-                return ResourceManager.GetString("HelpDialogCategoryPanels", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource graph.
-        /// </summary>
-        public static string HelpDialogCategoryResourceGraph {
-            get {
-                return ResourceManager.GetString("HelpDialogCategoryResourceGraph", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Play Aspire Outage, when the graph has focus.
-        /// </summary>
-        public static string HelpDialogPlayGame {
-            get {
-                return ResourceManager.GetString("HelpDialogPlayGame", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Logs &amp; telemetry.
-        /// </summary>
-        public static string HelpDialogCategoryTelemetry {
-            get {
-                return ResourceManager.GetString("HelpDialogCategoryTelemetry", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Decrease panel size.
-        /// </summary>
-        public static string HelpDialogDecreasePanelSize {
-            get {
-                return ResourceManager.GetString("HelpDialogDecreasePanelSize", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Console logs (all resources).
-        /// </summary>
-        public static string HelpDialogGoToConsoleLogs {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToConsoleLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Extensions.
-        /// </summary>
-        public static string HelpDialogGoToExtensions {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToExtensions", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource graph.
-        /// </summary>
-        public static string HelpDialogGoToGraph {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToGraph", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Keyboard shortcuts.
-        /// </summary>
-        public static string HelpDialogGoToHelp {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToHelp", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Metrics.
-        /// </summary>
-        public static string HelpDialogGoToMetrics {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToMetrics", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Parameters.
-        /// </summary>
-        public static string HelpDialogGoToParameters {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToParameters", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resources.
-        /// </summary>
-        public static string HelpDialogGoToResources {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToResources", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Settings.
-        /// </summary>
-        public static string HelpDialogGoToSettings {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToSettings", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Structured logs.
-        /// </summary>
-        public static string HelpDialogGoToStructuredLogs {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToStructuredLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Telemetry sources.
-        /// </summary>
-        public static string HelpDialogGoToTelemetrySources {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToTelemetrySources", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Terminals.
-        /// </summary>
-        public static string HelpDialogGoToTerminals {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToTerminals", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Traces.
-        /// </summary>
-        public static string HelpDialogGoToTraces {
-            get {
-                return ResourceManager.GetString("HelpDialogGoToTraces", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Increase panel size.
-        /// </summary>
-        public static string HelpDialogIncreasePanelSize {
-            get {
-                return ResourceManager.GetString("HelpDialogIncreasePanelSize", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Reset panel sizes.
-        /// </summary>
-        public static string HelpDialogResetPanelSize {
-            get {
-                return ResourceManager.GetString("HelpDialogResetPanelSize", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts..
-        /// </summary>
-        public static string HelpDialogShortcutsHint {
-            get {
-                return ResourceManager.GetString("HelpDialogShortcutsHint", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Close panel.
-        /// </summary>
-        public static string HelpDialogTogglePanelOpen {
-            get {
-                return ResourceManager.GetString("HelpDialogTogglePanelOpen", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Toggle panel orientation.
-        /// </summary>
-        public static string HelpDialogTogglePanelOrientation {
-            get {
-                return ResourceManager.GetString("HelpDialogTogglePanelOrientation", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Toggle terminal dock.
-        /// </summary>
-        public static string HelpDialogToggleTerminalDock {
-            get {
-                return ResourceManager.GetString("HelpDialogToggleTerminalDock", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Cancel.
-        /// </summary>
-        public static string InteractionButtonCancel {
-            get {
-                return ResourceManager.GetString("InteractionButtonCancel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Close.
-        /// </summary>
-        public static string InteractionButtonClose {
-            get {
-                return ResourceManager.GetString("InteractionButtonClose", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to OK.
-        /// </summary>
-        public static string InteractionButtonOk {
-            get {
-                return ResourceManager.GetString("InteractionButtonOk", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Exceeds the maximum size of {0}.
-        /// </summary>
-        public static string InteractionFileExceedsMaxSize {
-            get {
-                return ResourceManager.GetString("InteractionFileExceedsMaxSize", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Choose a file.
-        /// </summary>
-        public static string InteractionFilePlaceholder {
-            get {
-                return ResourceManager.GetString("InteractionFilePlaceholder", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Choose files.
-        /// </summary>
-        public static string InteractionFilePlaceholderMultiple {
-            get {
-                return ResourceManager.GetString("InteractionFilePlaceholderMultiple", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Upload failed.
-        /// </summary>
-        public static string InteractionFileUploadFailed {
-            get {
-                return ResourceManager.GetString("InteractionFileUploadFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to All data.
-        /// </summary>
-        public static string ManageDataAllDataCheckboxLabel {
-            get {
-                return ResourceManager.GetString("ManageDataAllDataCheckboxLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Console logs.
-        /// </summary>
-        public static string ManageDataConsoleLogs {
-            get {
-                return ResourceManager.GetString("ManageDataConsoleLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} for {1}.
-        /// </summary>
-        public static string ManageDataDataTypeForResourceCheckboxLabel {
-            get {
-                return ResourceManager.GetString("ManageDataDataTypeForResourceCheckboxLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Manage logs and telemetry.
-        /// </summary>
-        public static string ManageDataDialogTitle {
-            get {
-                return ResourceManager.GetString("ManageDataDialogTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Export selected.
-        /// </summary>
-        public static string ManageDataExportButtonText {
-            get {
-                return ResourceManager.GetString("ManageDataExportButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Failed to export data.
-        /// </summary>
-        public static string ManageDataExportErrorMessage {
-            get {
-                return ResourceManager.GetString("ManageDataExportErrorMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Failed to import data.
-        /// </summary>
-        public static string ManageDataImportErrorMessage {
-            get {
-                return ResourceManager.GetString("ManageDataImportErrorMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Manage.
-        /// </summary>
-        public static string ManageDataManageButtonText {
-            get {
-                return ResourceManager.GetString("ManageDataManageButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Metrics.
-        /// </summary>
-        public static string ManageDataMetrics {
-            get {
-                return ResourceManager.GetString("ManageDataMetrics", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No resources found.
-        /// </summary>
-        public static string ManageDataNoResources {
-            get {
-                return ResourceManager.GetString("ManageDataNoResources", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Remove selected.
-        /// </summary>
-        public static string ManageDataRemoveButtonText {
-            get {
-                return ResourceManager.GetString("ManageDataRemoveButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Failed to remove data.
-        /// </summary>
-        public static string ManageDataRemoveErrorMessage {
-            get {
-                return ResourceManager.GetString("ManageDataRemoveErrorMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource.
-        /// </summary>
-        public static string ManageDataResource {
-            get {
-                return ResourceManager.GetString("ManageDataResource", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Structured logs.
-        /// </summary>
-        public static string ManageDataStructuredLogs {
-            get {
-                return ResourceManager.GetString("ManageDataStructuredLogs", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Home.
-        /// </summary>
-        public static string ManageDataSummaryColumnHeader {
-            get {
-                return ResourceManager.GetString("ManageDataSummaryColumnHeader", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Traces.
-        /// </summary>
-        public static string ManageDataTraces {
-            get {
-                return ResourceManager.GetString("ManageDataTraces", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Dismiss all.
-        /// </summary>
-        public static string NotificationCenterDismissAll {
-            get {
-                return ResourceManager.GetString("NotificationCenterDismissAll", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No notifications.
-        /// </summary>
-        public static string NotificationCenterEmpty {
-            get {
-                return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Dismiss notification.
-        /// </summary>
-        public static string NotificationEntryDismiss {
-            get {
-                return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Open in text visualizer.
-        /// </summary>
-        public static string OpenInTextVisualizer {
-            get {
-                return ResourceManager.GetString("OpenInTextVisualizer", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Cancel.
-        /// </summary>
-        public static string OpenSpanDialogCancelButtonText {
-            get {
-                return ResourceManager.GetString("OpenSpanDialogCancelButtonText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Waiting for span {0} to load....
-        /// </summary>
-        public static string OpenSpanDialogMessage {
-            get {
-                return ResourceManager.GetString("OpenSpanDialogMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Copy feedback.
-        /// </summary>
-        public static string DashboardFeedbackCopy {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackCopy", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Copy and open discussion.
-        /// </summary>
-        public static string DashboardFeedbackCopyAndOpen {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackCopyAndOpen", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The clipboard could not be accessed. Copy the preview manually..
-        /// </summary>
-        public static string DashboardFeedbackCopyFailed {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackCopyFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Switch to previous dashboard.
-        /// </summary>
-        public static string DashboardFeedbackSwitchToLegacy {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackSwitchToLegacy", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Don&apos;t ask again.
-        /// </summary>
-        public static string DashboardFeedbackPromptIgnore {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptIgnore", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to We'd love your feedback on the new experience..
-        /// </summary>
-        public static string DashboardFeedbackPromptMessage {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Share feedback.
-        /// </summary>
-        public static string DashboardFeedbackPromptShare {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptShare", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Welcome to the new Aspire dashboard!.
-        /// </summary>
-        public static string DashboardFeedbackPromptTitle {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackPromptTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Feedback copied to the clipboard..
-        /// </summary>
-        public static string DashboardFeedbackCopied {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackCopied", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Feedback copied. Paste it into the GitHub discussion to share it..
-        /// </summary>
-        public static string DashboardFeedbackCopiedAndOpened {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackCopiedAndOpened", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself..
-        /// </summary>
-        public static string DashboardFeedbackDescription {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Step {0} of 2.
-        /// </summary>
-        public static string DashboardFeedbackStepProgress {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackStepProgress", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Why are you switching?.
-        /// </summary>
-        public static string DashboardFeedbackStepOneTitle {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackStepOneTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Anything else we should know?.
-        /// </summary>
-        public static string DashboardFeedbackStepTwoTitle {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackStepTwoTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to These details are optional, but they help us understand what to improve..
-        /// </summary>
-        public static string DashboardFeedbackStepTwoDescription {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackStepTwoDescription", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Continue.
-        /// </summary>
-        public static string DashboardFeedbackContinue {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackContinue", resourceCulture);
-            }
-        }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Back.
         /// </summary>
@@ -1477,16 +95,61 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DashboardFeedbackBack", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Preview copied feedback.
+        ///   Looks up a localized string similar to Continue.
         /// </summary>
-        public static string DashboardFeedbackPreviewDisclosure {
+        public static string DashboardFeedbackContinue {
             get {
-                return ResourceManager.GetString("DashboardFeedbackPreviewDisclosure", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackContinue", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Feedback copied to the clipboard..
+        /// </summary>
+        public static string DashboardFeedbackCopied {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopied", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Feedback copied. Paste it into the GitHub discussion to share it..
+        /// </summary>
+        public static string DashboardFeedbackCopiedAndOpened {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopiedAndOpened", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy feedback.
+        /// </summary>
+        public static string DashboardFeedbackCopy {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopy", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Copy and open discussion.
+        /// </summary>
+        public static string DashboardFeedbackCopyAndOpen {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopyAndOpen", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The clipboard could not be accessed. Copy the preview manually..
+        /// </summary>
+        public static string DashboardFeedbackCopyFailed {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackCopyFailed", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Open new discussion and switch.
         /// </summary>
@@ -1495,16 +158,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DashboardFeedbackCopyOpenAndSwitch", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Skip and switch.
+        ///   Looks up a localized string similar to Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself..
         /// </summary>
-        public static string DashboardFeedbackSkipAndSwitch {
+        public static string DashboardFeedbackDescription {
             get {
-                return ResourceManager.GetString("DashboardFeedbackSkipAndSwitch", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Share dashboard feedback.
         /// </summary>
@@ -1513,70 +176,70 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DashboardFeedbackDialogTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to What felt harder or less clear?.
+        ///   Looks up a localized string similar to What was harder or less clear than in the previous dashboard?.
         /// </summary>
         public static string DashboardFeedbackDifficultiesLabel {
             get {
                 return ResourceManager.GetString("DashboardFeedbackDifficultiesLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Time using the new dashboard.
+        ///   Looks up a localized string similar to How long have you used the new dashboard?.
         /// </summary>
         public static string DashboardFeedbackDurationLabel {
             get {
                 return ResourceManager.GetString("DashboardFeedbackDurationLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Less than one hour.
+        ///   Looks up a localized string similar to Less than an hour.
         /// </summary>
         public static string DashboardFeedbackDurationLessThanOneHour {
             get {
                 return ResourceManager.GetString("DashboardFeedbackDurationLessThanOneHour", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to More than one week.
+        ///   Looks up a localized string similar to More than a week.
         /// </summary>
         public static string DashboardFeedbackDurationMoreThanOneWeek {
             get {
                 return ResourceManager.GetString("DashboardFeedbackDurationMoreThanOneWeek", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Prefer not to say.
+        ///   Looks up a localized string similar to I&apos;d rather not say.
         /// </summary>
         public static string DashboardFeedbackDurationNotSpecified {
             get {
                 return ResourceManager.GetString("DashboardFeedbackDurationNotSpecified", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to About one day.
+        ///   Looks up a localized string similar to About a day.
         /// </summary>
         public static string DashboardFeedbackDurationOneDay {
             get {
                 return ResourceManager.GetString("DashboardFeedbackDurationOneDay", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to 2-7 days.
+        ///   Looks up a localized string similar to 2 to 7 days.
         /// </summary>
         public static string DashboardFeedbackDurationTwoToSevenDays {
             get {
                 return ResourceManager.GetString("DashboardFeedbackDurationTwoToSevenDays", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Dashboard experience feedback.
         /// </summary>
@@ -1585,660 +248,970 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DashboardFeedbackMarkdownTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to What are you missing from the new dashboard?.
+        ///   Looks up a localized string similar to What is missing from the new dashboard?.
         /// </summary>
         public static string DashboardFeedbackMissingLabel {
             get {
                 return ResourceManager.GetString("DashboardFeedbackMissingLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to AppHost.
+        ///   Looks up a localized string similar to With an AppHost.
         /// </summary>
         public static string DashboardFeedbackModeAppHost {
             get {
                 return ResourceManager.GetString("DashboardFeedbackModeAppHost", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard mode.
+        ///   Looks up a localized string similar to How do you run the dashboard?.
         /// </summary>
         public static string DashboardFeedbackModeLabel {
             get {
                 return ResourceManager.GetString("DashboardFeedbackModeLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Standalone telemetry.
+        ///   Looks up a localized string similar to Standalone, for telemetry only.
         /// </summary>
         public static string DashboardFeedbackModeStandalone {
             get {
                 return ResourceManager.GetString("DashboardFeedbackModeStandalone", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Describe another reason.
+        ///   Looks up a localized string similar to Tell us what happened.
         /// </summary>
         public static string DashboardFeedbackOtherPlaceholder {
             get {
                 return ResourceManager.GetString("DashboardFeedbackOtherPlaceholder", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Feedback to copy.
+        ///   Looks up a localized string similar to Preview copied feedback.
+        /// </summary>
+        public static string DashboardFeedbackPreviewDisclosure {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPreviewDisclosure", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Your feedback.
         /// </summary>
         public static string DashboardFeedbackPreviewLabel {
             get {
                 return ResourceManager.GetString("DashboardFeedbackPreviewLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Finding application URLs.
+        ///   Looks up a localized string similar to Don&apos;t ask again.
+        /// </summary>
+        public static string DashboardFeedbackPromptIgnore {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptIgnore", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to We&apos;d love your feedback on the new experience..
+        /// </summary>
+        public static string DashboardFeedbackPromptMessage {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Share feedback.
+        /// </summary>
+        public static string DashboardFeedbackPromptShare {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptShare", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Welcome to the new Aspire dashboard!.
+        /// </summary>
+        public static string DashboardFeedbackPromptTitle {
+            get {
+                return ResourceManager.GetString("DashboardFeedbackPromptTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to I couldn&apos;t find my application URLs.
         /// </summary>
         public static string DashboardFeedbackReasonFindingApplicationUrls {
             get {
                 return ResourceManager.GetString("DashboardFeedbackReasonFindingApplicationUrls", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to A missing feature.
+        ///   Looks up a localized string similar to A feature I need is missing.
         /// </summary>
         public static string DashboardFeedbackReasonMissingFeature {
             get {
                 return ResourceManager.GetString("DashboardFeedbackReasonMissingFeature", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Navigation.
+        ///   Looks up a localized string similar to It was hard to find my way around.
         /// </summary>
         public static string DashboardFeedbackReasonNavigation {
             get {
                 return ResourceManager.GetString("DashboardFeedbackReasonNavigation", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Other.
+        ///   Looks up a localized string similar to Another reason.
         /// </summary>
         public static string DashboardFeedbackReasonOther {
             get {
                 return ResourceManager.GetString("DashboardFeedbackReasonOther", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Performance or accessibility.
+        ///   Looks up a localized string similar to It was slow or hard to use with assistive technology.
         /// </summary>
         public static string DashboardFeedbackReasonPerformanceOrAccessibility {
             get {
                 return ResourceManager.GetString("DashboardFeedbackReasonPerformanceOrAccessibility", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Telemetry workflow.
-        /// </summary>
-        public static string DashboardFeedbackReasonTelemetryWorkflow {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackReasonTelemetryWorkflow", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Terminals.
-        /// </summary>
-        public static string DashboardFeedbackReasonTerminals {
-            get {
-                return ResourceManager.GetString("DashboardFeedbackReasonTerminals", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Reasons for returning to the previous dashboard.
+        ///   Looks up a localized string similar to What made you go back? Select all that apply..
         /// </summary>
         public static string DashboardFeedbackReasonsLabel {
             get {
                 return ResourceManager.GetString("DashboardFeedbackReasonsLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Dark.
+        ///   Looks up a localized string similar to The telemetry workflow didn&apos;t work for me.
         /// </summary>
-        public static string SettingsDialogDarkTheme {
+        public static string DashboardFeedbackReasonTelemetryWorkflow {
             get {
-                return ResourceManager.GetString("SettingsDialogDarkTheme", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackReasonTelemetryWorkflow", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Resource logs and telemetry.
+        ///   Looks up a localized string similar to The terminals didn&apos;t work for me.
         /// </summary>
-        public static string SettingsDialogDashboardLogsAndTelemetry {
+        public static string DashboardFeedbackReasonTerminals {
             get {
-                return ResourceManager.GetString("SettingsDialogDashboardLogsAndTelemetry", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackReasonTerminals", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard experience.
+        ///   Looks up a localized string similar to Skip and switch.
         /// </summary>
-        public static string SettingsDialogDashboardExperience {
+        public static string DashboardFeedbackSkipAndSwitch {
             get {
-                return ResourceManager.GetString("SettingsDialogDashboardExperience", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackSkipAndSwitch", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Choose which dashboard experience to use..
+        ///   Looks up a localized string similar to Why are you going back to the previous dashboard?.
         /// </summary>
-        public static string SettingsDialogDashboardExperienceDescription {
+        public static string DashboardFeedbackStepOneTitle {
             get {
-                return ResourceManager.GetString("SettingsDialogDashboardExperienceDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackStepOneTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to New dashboard.
+        ///   Looks up a localized string similar to Step {0} of 2.
         /// </summary>
-        public static string SettingsDialogDashboardExperienceNew {
+        public static string DashboardFeedbackStepProgress {
             get {
-                return ResourceManager.GetString("SettingsDialogDashboardExperienceNew", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackStepProgress", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Previous dashboard.
+        ///   Looks up a localized string similar to Both questions are optional, but your answers help us decide what to improve..
         /// </summary>
-        public static string SettingsDialogDashboardExperiencePrevious {
+        public static string DashboardFeedbackStepTwoDescription {
             get {
-                return ResourceManager.GetString("SettingsDialogDashboardExperiencePrevious", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackStepTwoDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Experience.
+        ///   Looks up a localized string similar to Is there anything else you want to tell us?.
         /// </summary>
-        public static string SettingsDialogDashboardExperienceSelectorLabel {
+        public static string DashboardFeedbackStepTwoTitle {
             get {
-                return ResourceManager.GetString("SettingsDialogDashboardExperienceSelectorLabel", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackStepTwoTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Appearance.
+        ///   Looks up a localized string similar to Switch to previous dashboard.
         /// </summary>
-        public static string SettingsDialogAppearanceGroup {
+        public static string DashboardFeedbackSwitchToLegacy {
             get {
-                return ResourceManager.GetString("SettingsDialogAppearanceGroup", resourceCulture);
+                return ResourceManager.GetString("DashboardFeedbackSwitchToLegacy", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Language and time.
+        ///   Looks up a localized string similar to Close.
         /// </summary>
-        public static string SettingsDialogLanguageAndTimeGroup {
+        public static string DialogCloseButtonText {
             get {
-                return ResourceManager.GetString("SettingsDialogLanguageAndTimeGroup", resourceCulture);
+                return ResourceManager.GetString("DialogCloseButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard experience.
+        ///   Looks up a localized string similar to Details.
         /// </summary>
-        public static string SettingsDialogExperienceGroup {
+        public static string ExemplarsDialogDetailsColumnHeader {
             get {
-                return ResourceManager.GetString("SettingsDialogExperienceGroup", resourceCulture);
+                return ResourceManager.GetString("ExemplarsDialogDetailsColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Data and telemetry.
+        ///   Looks up a localized string similar to Timestamp.
         /// </summary>
-        public static string SettingsDialogDataAndTelemetryGroup {
+        public static string ExemplarsDialogTimestampColumnHeader {
             get {
-                return ResourceManager.GetString("SettingsDialogDataAndTelemetryGroup", resourceCulture);
+                return ResourceManager.GetString("ExemplarsDialogTimestampColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Runtime: {0}.
+        ///   Looks up a localized string similar to Exemplars.
         /// </summary>
-        public static string SettingsDialogDotNetRuntimeVersion {
+        public static string ExemplarsDialogTitle {
             get {
-                return ResourceManager.GetString("SettingsDialogDotNetRuntimeVersion", resourceCulture);
+                return ResourceManager.GetString("ExemplarsDialogTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Language.
+        ///   Looks up a localized string similar to Trace.
         /// </summary>
-        public static string SettingsDialogLanguage {
+        public static string ExemplarsDialogTrace {
             get {
-                return ResourceManager.GetString("SettingsDialogLanguage", resourceCulture);
+                return ResourceManager.GetString("ExemplarsDialogTrace", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The page will reload on language change..
+        ///   Looks up a localized string similar to Trace.
         /// </summary>
-        public static string SettingsDialogLanguagePageReloads {
+        public static string ExemplarsDialogTraceColumnHeader {
             get {
-                return ResourceManager.GetString("SettingsDialogLanguagePageReloads", resourceCulture);
+                return ResourceManager.GetString("ExemplarsDialogTraceColumnHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Light.
+        ///   Looks up a localized string similar to Value.
         /// </summary>
-        public static string SettingsDialogLightTheme {
+        public static string ExemplarsDialogValueColumnHeader {
             get {
-                return ResourceManager.GetString("SettingsDialogLightTheme", resourceCulture);
+                return ResourceManager.GetString("ExemplarsDialogValueColumnHeader", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A value is required..
+        /// </summary>
+        public static string FieldRequired {
+            get {
+                return ResourceManager.GetString("FieldRequired", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A maximum length of {1} characters is allowed..
+        /// </summary>
+        public static string FieldTooLong {
+            get {
+                return ResourceManager.GetString("FieldTooLong", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Apply filter.
+        /// </summary>
+        public static string FilterDialogApplyFilterButtonText {
+            get {
+                return ResourceManager.GetString("FilterDialogApplyFilterButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string FilterDialogCancelButtonText {
+            get {
+                return ResourceManager.GetString("FilterDialogCancelButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Condition.
+        /// </summary>
+        public static string FilterDialogConditionInputLabel {
+            get {
+                return ResourceManager.GetString("FilterDialogConditionInputLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to e.g. 2024-01-15T09:30:00.
+        /// </summary>
+        public static string FilterDialogDatePlaceholder {
+            get {
+                return ResourceManager.GetString("FilterDialogDatePlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Date and time.
+        /// </summary>
+        public static string FilterDialogDateValueLabel {
+            get {
+                return ResourceManager.GetString("FilterDialogDateValueLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Disable all.
+        /// </summary>
+        public static string FilterDialogDisableAll {
+            get {
+                return ResourceManager.GetString("FilterDialogDisableAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Disable filter.
+        /// </summary>
+        public static string FilterDialogDisableFilterButtonText {
+            get {
+                return ResourceManager.GetString("FilterDialogDisableFilterButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Enable all.
+        /// </summary>
+        public static string FilterDialogEnableAll {
+            get {
+                return ResourceManager.GetString("FilterDialogEnableAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Field.
+        /// </summary>
+        public static string FilterDialogFieldPlaceholder {
+            get {
+                return ResourceManager.GetString("FilterDialogFieldPlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Invalid date format.
+        /// </summary>
+        public static string FilterDialogInvalidDate {
+            get {
+                return ResourceManager.GetString("FilterDialogInvalidDate", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Parameter.
+        /// </summary>
+        public static string FilterDialogParameterInputLabel {
+            get {
+                return ResourceManager.GetString("FilterDialogParameterInputLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Pick date and time.
+        /// </summary>
+        public static string FilterDialogPickDateButtonTitle {
+            get {
+                return ResourceManager.GetString("FilterDialogPickDateButtonTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Remove filter.
+        /// </summary>
+        public static string FilterDialogRemoveFilterButtonText {
+            get {
+                return ResourceManager.GetString("FilterDialogRemoveFilterButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Value.
+        /// </summary>
+        public static string FilterDialogTextValuePlaceholder {
+            get {
+                return ResourceManager.GetString("FilterDialogTextValuePlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Details.
+        /// </summary>
+        public static string GenAIDetailsTabText {
+            get {
+                return ResourceManager.GetString("GenAIDetailsTabText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Error displaying GenAI content:.
+        /// </summary>
+        public static string GenAIDisplayErrorMessageText {
+            get {
+                return ResourceManager.GetString("GenAIDisplayErrorMessageText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Duration.
+        /// </summary>
+        public static string GenAIDurationLabel {
+            get {
+                return ResourceManager.GetString("GenAIDurationLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Error.
+        /// </summary>
+        public static string GenAIErrorHeaderText {
+            get {
+                return ResourceManager.GetString("GenAIErrorHeaderText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Evaluations.
+        /// </summary>
+        public static string GenAIEvaluationsTabText {
+            get {
+                return ResourceManager.GetString("GenAIEvaluationsTabText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Input.
+        /// </summary>
+        public static string GenAIInputHeaderText {
+            get {
+                return ResourceManager.GetString("GenAIInputHeaderText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Input &amp; output.
+        /// </summary>
+        public static string GenAIInputOutputTabText {
+            get {
+                return ResourceManager.GetString("GenAIInputOutputTabText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Input tokens: {0}.
+        /// </summary>
+        public static string GenAIInputTokensText {
+            get {
+                return ResourceManager.GetString("GenAIInputTokensText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to LLM.
+        /// </summary>
+        public static string GenAILLMBadgeText {
+            get {
+                return ResourceManager.GetString("GenAILLMBadgeText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Message.
+        /// </summary>
+        public static string GenAIMessageCategoryMessage {
+            get {
+                return ResourceManager.GetString("GenAIMessageCategoryMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Output.
+        /// </summary>
+        public static string GenAIMessageCategoryOutput {
+            get {
+                return ResourceManager.GetString("GenAIMessageCategoryOutput", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Status.
+        /// </summary>
+        public static string GenAIMessageCategoryStatus {
+            get {
+                return ResourceManager.GetString("GenAIMessageCategoryStatus", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tool calls.
+        /// </summary>
+        public static string GenAIMessageCategoryToolCalls {
+            get {
+                return ResourceManager.GetString("GenAIMessageCategoryToolCalls", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Tool response.
+        /// </summary>
+        public static string GenAIMessageCategoryToolResponse {
+            get {
+                return ResourceManager.GetString("GenAIMessageCategoryToolResponse", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Assistant.
+        /// </summary>
+        public static string GenAIMessageTitleAssistant {
+            get {
+                return ResourceManager.GetString("GenAIMessageTitleAssistant", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Error.
+        /// </summary>
+        public static string GenAIMessageTitleError {
+            get {
+                return ResourceManager.GetString("GenAIMessageTitleError", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to System.
         /// </summary>
-        public static string SettingsDialogSystemTheme {
+        public static string GenAIMessageTitleSystem {
             get {
-                return ResourceManager.GetString("SettingsDialogSystemTheme", resourceCulture);
+                return ResourceManager.GetString("GenAIMessageTitleSystem", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard telemetry is enabled. Aspire will collect usage data and send it to Microsoft..
+        ///   Looks up a localized string similar to Tool.
         /// </summary>
-        public static string SettingsDialogTelemetryEnabledInfo {
+        public static string GenAIMessageTitleTool {
             get {
-                return ResourceManager.GetString("SettingsDialogTelemetryEnabledInfo", resourceCulture);
+                return ResourceManager.GetString("GenAIMessageTitleTool", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Why?.
+        ///   Looks up a localized string similar to User.
         /// </summary>
-        public static string SettingsDialogTelemetryInfoLinkText {
+        public static string GenAIMessageTitleUser {
             get {
-                return ResourceManager.GetString("SettingsDialogTelemetryInfoLinkText", resourceCulture);
+                return ResourceManager.GetString("GenAIMessageTitleUser", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Go to usage telemetry documentation.
+        ///   Looks up a localized string similar to Generative AI messages.
         /// </summary>
-        public static string SettingsDialogTelemetryInfoLinkTooltip {
+        public static string GenAIMessageTreeLabel {
             get {
-                return ResourceManager.GetString("SettingsDialogTelemetryInfoLinkTooltip", resourceCulture);
+                return ResourceManager.GetString("GenAIMessageTreeLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Theme.
+        ///   Looks up a localized string similar to n/a.
         /// </summary>
-        public static string SettingsDialogTheme {
+        public static string GenAINAText {
             get {
-                return ResourceManager.GetString("SettingsDialogTheme", resourceCulture);
+                return ResourceManager.GetString("GenAINAText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Overview layout.
+        ///   Looks up a localized string similar to Next.
         /// </summary>
-        public static string SettingsDialogGroupOverview {
+        public static string GenAINextButtonText {
             get {
-                return ResourceManager.GetString("SettingsDialogGroupOverview", resourceCulture);
+                return ResourceManager.GetString("GenAINextButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Summary.
+        ///   Looks up a localized string similar to No message content..
         /// </summary>
-        public static string SettingsDialogGroupOverviewSummary {
+        public static string GenAINoMessageContent {
             get {
-                return ResourceManager.GetString("SettingsDialogGroupOverviewSummary", resourceCulture);
+                return ResourceManager.GetString("GenAINoMessageContent", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Resource list density.
+        ///   Looks up a localized string similar to No message content was recorded to telemetry. Additional configuration may be required to view sensitive content. For more information, see &lt;a href=&quot;{0}&quot; target=&quot;_blank&quot;&gt;AI telemetry configuration&lt;/a&gt;..
         /// </summary>
-        public static string SettingsDialogResourceListDensity {
+        public static string GenAINoMessageContentMoreInformationMessage {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensity", resourceCulture);
+                return ResourceManager.GetString("GenAINoMessageContentMoreInformationMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Comfortable.
+        ///   Looks up a localized string similar to No messages found..
         /// </summary>
-        public static string SettingsDialogResourceListDensityComfortable {
+        public static string GenAINoMessages {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensityComfortable", resourceCulture);
+                return ResourceManager.GetString("GenAINoMessages", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Compact.
+        ///   Looks up a localized string similar to No tools found..
         /// </summary>
-        public static string SettingsDialogResourceListDensityCompact {
+        public static string GenAINoTools {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensityCompact", resourceCulture);
+                return ResourceManager.GetString("GenAINoTools", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Spacious.
+        ///   Looks up a localized string similar to Output.
         /// </summary>
-        public static string SettingsDialogResourceListDensitySpacious {
+        public static string GenAIOutputHeaderText {
             get {
-                return ResourceManager.GetString("SettingsDialogResourceListDensitySpacious", resourceCulture);
+                return ResourceManager.GetString("GenAIOutputHeaderText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Time format.
+        ///   Looks up a localized string similar to Output tokens: {0}.
         /// </summary>
-        public static string SettingsDialogTimeFormat {
+        public static string GenAIOutputTokensText {
             get {
-                return ResourceManager.GetString("SettingsDialogTimeFormat", resourceCulture);
+                return ResourceManager.GetString("GenAIOutputTokensText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to System.
+        ///   Looks up a localized string similar to Preview.
         /// </summary>
-        public static string SettingsDialogTimeFormatSystem {
+        public static string GenAIPreviewTabText {
             get {
-                return ResourceManager.GetString("SettingsDialogTimeFormatSystem", resourceCulture);
+                return ResourceManager.GetString("GenAIPreviewTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to 12-hour.
+        ///   Looks up a localized string similar to Previous.
         /// </summary>
-        public static string SettingsDialogTimeFormatTwelveHour {
+        public static string GenAIPreviousButtonText {
             get {
-                return ResourceManager.GetString("SettingsDialogTimeFormatTwelveHour", resourceCulture);
+                return ResourceManager.GetString("GenAIPreviousButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to 24-hour.
+        ///   Looks up a localized string similar to Raw.
         /// </summary>
-        public static string SettingsDialogTimeFormatTwentyFourHour {
+        public static string GenAIRawTabText {
             get {
-                return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
+                return ResourceManager.GetString("GenAIRawTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Version: {0}.
+        ///   Looks up a localized string similar to Tokens.
         /// </summary>
-        public static string SettingsDialogVersion {
+        public static string GenAITokensLabel {
             get {
-                return ResourceManager.GetString("SettingsDialogVersion", resourceCulture);
+                return ResourceManager.GetString("GenAITokensLabel", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Export all.
+        ///   Looks up a localized string similar to Tool call.
         /// </summary>
-        public static string SettingsExportAllButtonText {
+        public static string GenAIToolCallButtonText {
             get {
-                return ResourceManager.GetString("SettingsExportAllButtonText", resourceCulture);
+                return ResourceManager.GetString("GenAIToolCallButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Import logs and telemetry.
+        ///   Looks up a localized string similar to Tool definition.
         /// </summary>
-        public static string SettingsImportButtonText {
+        public static string GenAIToolDefinitionButtonText {
             get {
-                return ResourceManager.GetString("SettingsImportButtonText", resourceCulture);
+                return ResourceManager.GetString("GenAIToolDefinitionButtonText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Remove all.
+        ///   Looks up a localized string similar to No parameters.
         /// </summary>
-        public static string SettingsRemoveAllButtonText {
+        public static string GenAIToolNoParameters {
             get {
-                return ResourceManager.GetString("SettingsRemoveAllButtonText", resourceCulture);
+                return ResourceManager.GetString("GenAIToolNoParameters", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard&apos;s configured OTLP API key..
+        ///   Looks up a localized string similar to Description.
         /// </summary>
-        public static string TelemetryHelpApiKeyDescription {
+        public static string GenAIToolParameterDescription {
             get {
-                return ResourceManager.GetString("TelemetryHelpApiKeyDescription", resourceCulture);
+                return ResourceManager.GetString("GenAIToolParameterDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Add telemetry.
+        ///   Looks up a localized string similar to Name.
         /// </summary>
-        public static string TelemetryHelpButtonText {
+        public static string GenAIToolParameterName {
             get {
-                return ResourceManager.GetString("TelemetryHelpButtonText", resourceCulture);
+                return ResourceManager.GetString("GenAIToolParameterName", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK&apos;s OTLP exporter settings to specify the certificate and private key..
+        ///   Looks up a localized string similar to Type.
         /// </summary>
-        public static string TelemetryHelpCertificateDescription {
+        public static string GenAIToolParameterType {
             get {
-                return ResourceManager.GetString("TelemetryHelpCertificateDescription", resourceCulture);
+                return ResourceManager.GetString("GenAIToolParameterType", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The dashboard is running in a container. Access it from the host using port forwarding..
+        ///   Looks up a localized string similar to Required parameter.
         /// </summary>
-        public static string TelemetryHelpContainerDescription {
+        public static string GenAIToolRequiredParameter {
             get {
-                return ResourceManager.GetString("TelemetryHelpContainerDescription", resourceCulture);
+                return ResourceManager.GetString("GenAIToolRequiredParameter", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Add telemetry.
+        ///   Looks up a localized string similar to Tools.
         /// </summary>
-        public static string TelemetryHelpDialogTitle {
+        public static string GenAIToolsTabText {
             get {
-                return ResourceManager.GetString("TelemetryHelpDialogTitle", resourceCulture);
+                return ResourceManager.GetString("GenAIToolsTabText", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard endpoint.
+        ///   Looks up a localized string similar to Unexpected or truncated message content..
         /// </summary>
-        public static string TelemetryHelpEndpointHeader {
+        public static string GenAIUnexpectedOrTruncatedContent {
             get {
-                return ResourceManager.GetString("TelemetryHelpEndpointHeader", resourceCulture);
+                return ResourceManager.GetString("GenAIUnexpectedOrTruncatedContent", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to ### 📥 Import telemetry from a file
-        ///
-        ///Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog..
+        ///   Looks up a localized string similar to Get started with Aspire, its integrations and deployment..
         /// </summary>
-        public static string TelemetryHelpImportDescription {
+        public static string HelpDialogAspireDocumentationDescription {
             get {
-                return ResourceManager.GetString("TelemetryHelpImportDescription", resourceCulture);
+                return ResourceManager.GetString("HelpDialogAspireDocumentationDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
-        ///
-        ///### 📡 Send telemetry from your app
-        ///
-        ///Configure your app to export logs, traces, and metrics using [OTLP]({0})..
+        ///   Looks up a localized string similar to Aspire documentation.
         /// </summary>
-        public static string TelemetryHelpIntroduction {
+        public static string HelpDialogAspireDocumentationTitle {
             get {
-                return ResourceManager.GetString("TelemetryHelpIntroduction", resourceCulture);
+                return ResourceManager.GetString("HelpDialogAspireDocumentationTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Learn about managing dashboard data.
+        ///   Looks up a localized string similar to General.
         /// </summary>
-        public static string TelemetryHelpManageDataLink {
+        public static string HelpDialogCategoryNavigation {
             get {
-                return ResourceManager.GetString("TelemetryHelpManageDataLink", resourceCulture);
+                return ResourceManager.GetString("HelpDialogCategoryNavigation", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Configure your app to send telemetry to the dashboard..
+        ///   Looks up a localized string similar to Dashboard navigation.
         /// </summary>
-        public static string TelemetryHelpMessage {
+        public static string HelpDialogCategoryPageNavigation {
             get {
-                return ResourceManager.GetString("TelemetryHelpMessage", resourceCulture);
+                return ResourceManager.GetString("HelpDialogCategoryPageNavigation", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to For setup instructions, see.
+        ///   Looks up a localized string similar to Panels.
         /// </summary>
-        public static string TelemetryHelpMoreInformation {
+        public static string HelpDialogCategoryPanels {
             get {
-                return ResourceManager.GetString("TelemetryHelpMoreInformation", resourceCulture);
+                return ResourceManager.GetString("HelpDialogCategoryPanels", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard..
+        ///   Looks up a localized string similar to Resource graph.
         /// </summary>
-        public static string TelemetryHelpNoEndpointsDescription {
+        public static string HelpDialogCategoryResourceGraph {
             get {
-                return ResourceManager.GetString("TelemetryHelpNoEndpointsDescription", resourceCulture);
+                return ResourceManager.GetString("HelpDialogCategoryResourceGraph", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Protocol.
+        ///   Looks up a localized string similar to Logs &amp; telemetry.
         /// </summary>
-        public static string TelemetryHelpProtocolHeader {
+        public static string HelpDialogCategoryTelemetry {
             get {
-                return ResourceManager.GetString("TelemetryHelpProtocolHeader", resourceCulture);
+                return ResourceManager.GetString("HelpDialogCategoryTelemetry", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Connect your app to the dashboard.
+        ///   Looks up a localized string similar to Community and support.
         /// </summary>
-        public static string TelemetryHelpSendTelemetryLink {
+        public static string HelpDialogCommunityHeading {
             get {
-                return ResourceManager.GetString("TelemetryHelpSendTelemetryLink", resourceCulture);
+                return ResourceManager.GetString("HelpDialogCommunityHeading", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to JSON.
+        ///   Looks up a localized string similar to Guides and reference for using the Aspire dashboard..
         /// </summary>
-        public static string TextVisualizerDialogJsonFormat {
+        public static string HelpDialogDashboardDocumentationDescription {
             get {
-                return ResourceManager.GetString("TextVisualizerDialogJsonFormat", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDashboardDocumentationDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Markdown.
+        ///   Looks up a localized string similar to Share feedback about the evolving dashboard experience..
         /// </summary>
-        public static string TextVisualizerDialogMarkdownFormat {
+        public static string HelpDialogDashboardFeedbackDescription {
             get {
-                return ResourceManager.GetString("TextVisualizerDialogMarkdownFormat", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDashboardFeedbackDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Unformatted.
+        ///   Looks up a localized string similar to Dashboard feedback.
         /// </summary>
-        public static string TextVisualizerDialogPlaintextFormat {
+        public static string HelpDialogDashboardFeedbackTitle {
             get {
-                return ResourceManager.GetString("TextVisualizerDialogPlaintextFormat", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDashboardFeedbackTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Word wrap.
+        ///   Looks up a localized string similar to Aspire dashboard version {0}.
         /// </summary>
-        public static string TextVisualizerWordWrap {
+        public static string HelpDialogDashboardVersion {
             get {
-                return ResourceManager.GetString("TextVisualizerWordWrap", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDashboardVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to SQL.
+        ///   Looks up a localized string similar to Decrease panel size.
         /// </summary>
-        public static string TextVisualizerDialogSqlFormat {
+        public static string HelpDialogDecreasePanelSize {
             get {
-                return ResourceManager.GetString("TextVisualizerDialogSqlFormat", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDecreasePanelSize", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to XML.
+        ///   Looks up a localized string similar to Chat with the Aspire team and community..
         /// </summary>
-        public static string TextVisualizerDialogXmlFormat {
+        public static string HelpDialogDiscordDescription {
             get {
-                return ResourceManager.GetString("TextVisualizerDialogXmlFormat", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDiscordDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Show value.
+        ///   Looks up a localized string similar to Discord.
         /// </summary>
-        public static string TextVisualizerSecretWarningAcknowledge {
+        public static string HelpDialogDiscordTitle {
             get {
-                return ResourceManager.GetString("TextVisualizerSecretWarningAcknowledge", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDiscordTitle", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically.
+        ///   Looks up a localized string similar to Documentation.
         /// </summary>
-        public static string TextVisualizerSecretWarningDescription {
+        public static string HelpDialogDocumentationTab {
             get {
-                return ResourceManager.GetString("TextVisualizerSecretWarningDescription", resourceCulture);
+                return ResourceManager.GetString("HelpDialogDocumentationTab", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Sensitive value hidden.
+        ///   Looks up a localized string similar to In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph..
         /// </summary>
-        public static string TextVisualizerSecretWarningTitle {
+        public static string HelpDialogGameDescription {
             get {
-                return ResourceManager.GetString("TextVisualizerSecretWarningTitle", resourceCulture);
+                return ResourceManager.GetString("HelpDialogGameDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Select format.
+        ///   Looks up a localized string similar to Aspire Outage.
         /// </summary>
-        public static string TextVisualizerSelectFormatType {
+        public static string HelpDialogGameTitle {
             get {
-                return ResourceManager.GetString("TextVisualizerSelectFormatType", resourceCulture);
+                return ResourceManager.GetString("HelpDialogGameTitle", resourceCulture);
             }
         }
+        
         /// <summary>
         ///   Looks up a localized string similar to Go to aspire.dev documentation.
         /// </summary>
@@ -2247,7 +1220,124 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogGetHelpLinkText", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Console logs (all resources).
+        /// </summary>
+        public static string HelpDialogGoToConsoleLogs {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToConsoleLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Extensions.
+        /// </summary>
+        public static string HelpDialogGoToExtensions {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToExtensions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource graph.
+        /// </summary>
+        public static string HelpDialogGoToGraph {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToGraph", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Keyboard shortcuts.
+        /// </summary>
+        public static string HelpDialogGoToHelp {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToHelp", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Metrics.
+        /// </summary>
+        public static string HelpDialogGoToMetrics {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToMetrics", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string HelpDialogGoToParameters {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToParameters", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
+        /// </summary>
+        public static string HelpDialogGoToResources {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToResources", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Settings.
+        /// </summary>
+        public static string HelpDialogGoToSettings {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToSettings", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Structured logs.
+        /// </summary>
+        public static string HelpDialogGoToStructuredLogs {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToStructuredLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Telemetry sources.
+        /// </summary>
+        public static string HelpDialogGoToTelemetrySources {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToTelemetrySources", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Terminals.
+        /// </summary>
+        public static string HelpDialogGoToTerminals {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToTerminals", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Traces.
+        /// </summary>
+        public static string HelpDialogGoToTraces {
+            get {
+                return ResourceManager.GetString("HelpDialogGoToTraces", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Increase panel size.
+        /// </summary>
+        public static string HelpDialogIncreasePanelSize {
+            get {
+                return ResourceManager.GetString("HelpDialogIncreasePanelSize", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Keyboard Shortcuts.
         /// </summary>
@@ -2256,6 +1346,887 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpDialogKeyboardShortcutsTitle", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Learn.
+        /// </summary>
+        public static string HelpDialogLearnHeading {
+            get {
+                return ResourceManager.GetString("HelpDialogLearnHeading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Opens in a new tab.
+        /// </summary>
+        public static string HelpDialogOpensInNewTab {
+            get {
+                return ResourceManager.GetString("HelpDialogOpensInNewTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Play Aspire Outage, when the graph has focus.
+        /// </summary>
+        public static string HelpDialogPlayGame {
+            get {
+                return ResourceManager.GetString("HelpDialogPlayGame", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Source code, releases and issues on GitHub..
+        /// </summary>
+        public static string HelpDialogRepoDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogRepoDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Found a bug or have an idea? Open an issue on GitHub..
+        /// </summary>
+        public static string HelpDialogReportIssueDescription {
+            get {
+                return ResourceManager.GetString("HelpDialogReportIssueDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Report an issue.
+        /// </summary>
+        public static string HelpDialogReportIssueTitle {
+            get {
+                return ResourceManager.GetString("HelpDialogReportIssueTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Reset panel sizes.
+        /// </summary>
+        public static string HelpDialogResetPanelSize {
+            get {
+                return ResourceManager.GetString("HelpDialogResetPanelSize", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts..
+        /// </summary>
+        public static string HelpDialogShortcutsHint {
+            get {
+                return ResourceManager.GetString("HelpDialogShortcutsHint", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Close panel.
+        /// </summary>
+        public static string HelpDialogTogglePanelOpen {
+            get {
+                return ResourceManager.GetString("HelpDialogTogglePanelOpen", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Toggle panel orientation.
+        /// </summary>
+        public static string HelpDialogTogglePanelOrientation {
+            get {
+                return ResourceManager.GetString("HelpDialogTogglePanelOrientation", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Toggle terminal dock.
+        /// </summary>
+        public static string HelpDialogToggleTerminalDock {
+            get {
+                return ResourceManager.GetString("HelpDialogToggleTerminalDock", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string InteractionButtonCancel {
+            get {
+                return ResourceManager.GetString("InteractionButtonCancel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Close.
+        /// </summary>
+        public static string InteractionButtonClose {
+            get {
+                return ResourceManager.GetString("InteractionButtonClose", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to OK.
+        /// </summary>
+        public static string InteractionButtonOk {
+            get {
+                return ResourceManager.GetString("InteractionButtonOk", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Exceeds the maximum size of {0}.
+        /// </summary>
+        public static string InteractionFileExceedsMaxSize {
+            get {
+                return ResourceManager.GetString("InteractionFileExceedsMaxSize", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Choose a file.
+        /// </summary>
+        public static string InteractionFilePlaceholder {
+            get {
+                return ResourceManager.GetString("InteractionFilePlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Choose files.
+        /// </summary>
+        public static string InteractionFilePlaceholderMultiple {
+            get {
+                return ResourceManager.GetString("InteractionFilePlaceholderMultiple", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Upload failed.
+        /// </summary>
+        public static string InteractionFileUploadFailed {
+            get {
+                return ResourceManager.GetString("InteractionFileUploadFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All data.
+        /// </summary>
+        public static string ManageDataAllDataCheckboxLabel {
+            get {
+                return ResourceManager.GetString("ManageDataAllDataCheckboxLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Console logs.
+        /// </summary>
+        public static string ManageDataConsoleLogs {
+            get {
+                return ResourceManager.GetString("ManageDataConsoleLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to {0} for {1}.
+        /// </summary>
+        public static string ManageDataDataTypeForResourceCheckboxLabel {
+            get {
+                return ResourceManager.GetString("ManageDataDataTypeForResourceCheckboxLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Manage logs and telemetry.
+        /// </summary>
+        public static string ManageDataDialogTitle {
+            get {
+                return ResourceManager.GetString("ManageDataDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Export selected.
+        /// </summary>
+        public static string ManageDataExportButtonText {
+            get {
+                return ResourceManager.GetString("ManageDataExportButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to export data.
+        /// </summary>
+        public static string ManageDataExportErrorMessage {
+            get {
+                return ResourceManager.GetString("ManageDataExportErrorMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to import data.
+        /// </summary>
+        public static string ManageDataImportErrorMessage {
+            get {
+                return ResourceManager.GetString("ManageDataImportErrorMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Manage.
+        /// </summary>
+        public static string ManageDataManageButtonText {
+            get {
+                return ResourceManager.GetString("ManageDataManageButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Metrics.
+        /// </summary>
+        public static string ManageDataMetrics {
+            get {
+                return ResourceManager.GetString("ManageDataMetrics", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No resources found.
+        /// </summary>
+        public static string ManageDataNoResources {
+            get {
+                return ResourceManager.GetString("ManageDataNoResources", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Remove selected.
+        /// </summary>
+        public static string ManageDataRemoveButtonText {
+            get {
+                return ResourceManager.GetString("ManageDataRemoveButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to remove data.
+        /// </summary>
+        public static string ManageDataRemoveErrorMessage {
+            get {
+                return ResourceManager.GetString("ManageDataRemoveErrorMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource.
+        /// </summary>
+        public static string ManageDataResource {
+            get {
+                return ResourceManager.GetString("ManageDataResource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Structured logs.
+        /// </summary>
+        public static string ManageDataStructuredLogs {
+            get {
+                return ResourceManager.GetString("ManageDataStructuredLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Summary.
+        /// </summary>
+        public static string ManageDataSummaryColumnHeader {
+            get {
+                return ResourceManager.GetString("ManageDataSummaryColumnHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Traces.
+        /// </summary>
+        public static string ManageDataTraces {
+            get {
+                return ResourceManager.GetString("ManageDataTraces", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dismiss all.
+        /// </summary>
+        public static string NotificationCenterDismissAll {
+            get {
+                return ResourceManager.GetString("NotificationCenterDismissAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No notifications.
+        /// </summary>
+        public static string NotificationCenterEmpty {
+            get {
+                return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dismiss notification.
+        /// </summary>
+        public static string NotificationEntryDismiss {
+            get {
+                return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Open in text visualizer.
+        /// </summary>
+        public static string OpenInTextVisualizer {
+            get {
+                return ResourceManager.GetString("OpenInTextVisualizer", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string OpenSpanDialogCancelButtonText {
+            get {
+                return ResourceManager.GetString("OpenSpanDialogCancelButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for span {0} to load....
+        /// </summary>
+        public static string OpenSpanDialogMessage {
+            get {
+                return ResourceManager.GetString("OpenSpanDialogMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Appearance.
+        /// </summary>
+        public static string SettingsDialogAppearanceGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogAppearanceGroup", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dark.
+        /// </summary>
+        public static string SettingsDialogDarkTheme {
+            get {
+                return ResourceManager.GetString("SettingsDialogDarkTheme", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard experience.
+        /// </summary>
+        public static string SettingsDialogDashboardExperience {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperience", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Choose which dashboard experience to use..
+        /// </summary>
+        public static string SettingsDialogDashboardExperienceDescription {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperienceDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to New dashboard.
+        /// </summary>
+        public static string SettingsDialogDashboardExperienceNew {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperienceNew", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Previous dashboard.
+        /// </summary>
+        public static string SettingsDialogDashboardExperiencePrevious {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperiencePrevious", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Experience.
+        /// </summary>
+        public static string SettingsDialogDashboardExperienceSelectorLabel {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardExperienceSelectorLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource logs and telemetry.
+        /// </summary>
+        public static string SettingsDialogDashboardLogsAndTelemetry {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardLogsAndTelemetry", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Data and telemetry.
+        /// </summary>
+        public static string SettingsDialogDataAndTelemetryGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogDataAndTelemetryGroup", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Runtime: {0}.
+        /// </summary>
+        public static string SettingsDialogDotNetRuntimeVersion {
+            get {
+                return ResourceManager.GetString("SettingsDialogDotNetRuntimeVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard experience.
+        /// </summary>
+        public static string SettingsDialogExperienceGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogExperienceGroup", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Overview layout.
+        /// </summary>
+        public static string SettingsDialogGroupOverview {
+            get {
+                return ResourceManager.GetString("SettingsDialogGroupOverview", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Summary.
+        /// </summary>
+        public static string SettingsDialogGroupOverviewSummary {
+            get {
+                return ResourceManager.GetString("SettingsDialogGroupOverviewSummary", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Language.
+        /// </summary>
+        public static string SettingsDialogLanguage {
+            get {
+                return ResourceManager.GetString("SettingsDialogLanguage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Language and time.
+        /// </summary>
+        public static string SettingsDialogLanguageAndTimeGroup {
+            get {
+                return ResourceManager.GetString("SettingsDialogLanguageAndTimeGroup", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The page will reload on language change..
+        /// </summary>
+        public static string SettingsDialogLanguagePageReloads {
+            get {
+                return ResourceManager.GetString("SettingsDialogLanguagePageReloads", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Light.
+        /// </summary>
+        public static string SettingsDialogLightTheme {
+            get {
+                return ResourceManager.GetString("SettingsDialogLightTheme", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource list density.
+        /// </summary>
+        public static string SettingsDialogResourceListDensity {
+            get {
+                return ResourceManager.GetString("SettingsDialogResourceListDensity", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Comfortable.
+        /// </summary>
+        public static string SettingsDialogResourceListDensityComfortable {
+            get {
+                return ResourceManager.GetString("SettingsDialogResourceListDensityComfortable", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Compact.
+        /// </summary>
+        public static string SettingsDialogResourceListDensityCompact {
+            get {
+                return ResourceManager.GetString("SettingsDialogResourceListDensityCompact", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Spacious.
+        /// </summary>
+        public static string SettingsDialogResourceListDensitySpacious {
+            get {
+                return ResourceManager.GetString("SettingsDialogResourceListDensitySpacious", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to System.
+        /// </summary>
+        public static string SettingsDialogSystemTheme {
+            get {
+                return ResourceManager.GetString("SettingsDialogSystemTheme", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard telemetry is enabled. Aspire will collect usage data and send it to Microsoft..
+        /// </summary>
+        public static string SettingsDialogTelemetryEnabledInfo {
+            get {
+                return ResourceManager.GetString("SettingsDialogTelemetryEnabledInfo", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Why?.
+        /// </summary>
+        public static string SettingsDialogTelemetryInfoLinkText {
+            get {
+                return ResourceManager.GetString("SettingsDialogTelemetryInfoLinkText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Go to usage telemetry documentation.
+        /// </summary>
+        public static string SettingsDialogTelemetryInfoLinkTooltip {
+            get {
+                return ResourceManager.GetString("SettingsDialogTelemetryInfoLinkTooltip", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Theme.
+        /// </summary>
+        public static string SettingsDialogTheme {
+            get {
+                return ResourceManager.GetString("SettingsDialogTheme", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Time format.
+        /// </summary>
+        public static string SettingsDialogTimeFormat {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to System.
+        /// </summary>
+        public static string SettingsDialogTimeFormatSystem {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatSystem", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 12-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwelveHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwelveHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 24-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwentyFourHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Version: {0}.
+        /// </summary>
+        public static string SettingsDialogVersion {
+            get {
+                return ResourceManager.GetString("SettingsDialogVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Export all.
+        /// </summary>
+        public static string SettingsExportAllButtonText {
+            get {
+                return ResourceManager.GetString("SettingsExportAllButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Import logs and telemetry.
+        /// </summary>
+        public static string SettingsImportButtonText {
+            get {
+                return ResourceManager.GetString("SettingsImportButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Remove all.
+        /// </summary>
+        public static string SettingsRemoveAllButtonText {
+            get {
+                return ResourceManager.GetString("SettingsRemoveAllButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard&apos;s configured OTLP API key..
+        /// </summary>
+        public static string TelemetryHelpApiKeyDescription {
+            get {
+                return ResourceManager.GetString("TelemetryHelpApiKeyDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Add telemetry.
+        /// </summary>
+        public static string TelemetryHelpButtonText {
+            get {
+                return ResourceManager.GetString("TelemetryHelpButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK&apos;s OTLP exporter settings to specify the certificate and private key..
+        /// </summary>
+        public static string TelemetryHelpCertificateDescription {
+            get {
+                return ResourceManager.GetString("TelemetryHelpCertificateDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The dashboard is running in a container. Access it from the host using port forwarding..
+        /// </summary>
+        public static string TelemetryHelpContainerDescription {
+            get {
+                return ResourceManager.GetString("TelemetryHelpContainerDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Add telemetry.
+        /// </summary>
+        public static string TelemetryHelpDialogTitle {
+            get {
+                return ResourceManager.GetString("TelemetryHelpDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard endpoint.
+        /// </summary>
+        public static string TelemetryHelpEndpointHeader {
+            get {
+                return ResourceManager.GetString("TelemetryHelpEndpointHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ### 📥 Import telemetry from a file  Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog..
+        /// </summary>
+        public static string TelemetryHelpImportDescription {
+            get {
+                return ResourceManager.GetString("TelemetryHelpImportDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.  ### 📡 Send telemetry from your app  Configure your app to export logs, traces, and metrics using [OTLP]({0})..
+        /// </summary>
+        public static string TelemetryHelpIntroduction {
+            get {
+                return ResourceManager.GetString("TelemetryHelpIntroduction", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Learn about managing dashboard data.
+        /// </summary>
+        public static string TelemetryHelpManageDataLink {
+            get {
+                return ResourceManager.GetString("TelemetryHelpManageDataLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Configure your app to send telemetry to the dashboard..
+        /// </summary>
+        public static string TelemetryHelpMessage {
+            get {
+                return ResourceManager.GetString("TelemetryHelpMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to For setup instructions, see.
+        /// </summary>
+        public static string TelemetryHelpMoreInformation {
+            get {
+                return ResourceManager.GetString("TelemetryHelpMoreInformation", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard..
+        /// </summary>
+        public static string TelemetryHelpNoEndpointsDescription {
+            get {
+                return ResourceManager.GetString("TelemetryHelpNoEndpointsDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Protocol.
+        /// </summary>
+        public static string TelemetryHelpProtocolHeader {
+            get {
+                return ResourceManager.GetString("TelemetryHelpProtocolHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Connect your app to the dashboard.
+        /// </summary>
+        public static string TelemetryHelpSendTelemetryLink {
+            get {
+                return ResourceManager.GetString("TelemetryHelpSendTelemetryLink", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to JSON.
+        /// </summary>
+        public static string TextVisualizerDialogJsonFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogJsonFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Markdown.
+        /// </summary>
+        public static string TextVisualizerDialogMarkdownFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogMarkdownFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Unformatted.
+        /// </summary>
+        public static string TextVisualizerDialogPlaintextFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogPlaintextFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to SQL.
+        /// </summary>
+        public static string TextVisualizerDialogSqlFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogSqlFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to XML.
+        /// </summary>
+        public static string TextVisualizerDialogXmlFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogXmlFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show value.
+        /// </summary>
+        public static string TextVisualizerSecretWarningAcknowledge {
+            get {
+                return ResourceManager.GetString("TextVisualizerSecretWarningAcknowledge", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically.
+        /// </summary>
+        public static string TextVisualizerSecretWarningDescription {
+            get {
+                return ResourceManager.GetString("TextVisualizerSecretWarningDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Sensitive value hidden.
+        /// </summary>
+        public static string TextVisualizerSecretWarningTitle {
+            get {
+                return ResourceManager.GetString("TextVisualizerSecretWarningTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Select format.
+        /// </summary>
+        public static string TextVisualizerSelectFormatType {
+            get {
+                return ResourceManager.GetString("TextVisualizerSelectFormatType", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Word wrap.
+        /// </summary>
+        public static string TextVisualizerWordWrap {
+            get {
+                return ResourceManager.GetString("TextVisualizerWordWrap", resourceCulture);
+            }
+        }
     }
 }
