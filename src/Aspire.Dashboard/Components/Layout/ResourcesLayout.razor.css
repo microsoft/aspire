@@ -1,3 +1,7 @@
+/* The resource list renders resource rows two ways (see RenderSidebarRow and RenderTableRow): the sidebar's picker
+   rows (.resource-row-sidebar) and the full-page list's table rows (.resource-row-table). A rule for one view's
+   resource rows keys to that class. Rules that also style the list's other rows, which both views share (All
+   resources, group headers, telemetry sources), keep the layout's .pane-full-canvas state instead. */
 .resources-layout {
     /* --resource-pane-expanded-width is set inline once the user resizes the pane. */
     --resource-pane-width: var(--resource-pane-expanded-width, 420px);
@@ -828,7 +832,7 @@
     text-underline-offset: 3px;
 }
 
-.pane-full-canvas .resource-row[data-resource-name],
+.pane-full-canvas .resource-row.resource-row-table,
 .pane-full-canvas .resource-row-kind-telemetry {
     cursor: pointer;
 }
@@ -2062,7 +2066,7 @@
 }
 
 @container resource-pane (min-width: 420px) {
-    .resource-row:has(> .resource-row-wide-metadata) {
+    .resource-row.resource-row-table {
         /* Identity and lifecycle actions take priority over secondary metadata. */
         --resource-row-tracks: [identity] minmax(0, 1fr) [status] 104px [endpoint source insights actions] 98px [end];
         --resource-row-actions-column: actions;
@@ -2101,7 +2105,7 @@
         grid-row: 1;
     }
 
-    .resource-row:has(> .resource-row-wide-metadata) > .resource-row-link {
+    .resource-row.resource-row-table > .resource-row-link {
         grid-column: identity;
         /* Pinned so the explicitly placed error link below can't push it to an implicit second row. */
         grid-row: 1;
@@ -2109,14 +2113,14 @@
 
     /* The error link shares the identity track with the row link. The row link keeps a hidden copy of the
        badge so the resource name stops before it instead of running underneath. */
-    .resource-row:has(> .resource-row-wide-metadata) > .resource-row-error-link {
+    .resource-row.resource-row-table > .resource-row-error-link {
         grid-column: identity;
         grid-row: 1;
         justify-self: end;
         align-self: center;
     }
 
-    .resource-row:has(> .resource-row-wide-metadata) .error-badge-spacer {
+    .resource-row.resource-row-table .error-badge-spacer {
         display: inline-flex;
         visibility: hidden;
     }
@@ -2128,7 +2132,7 @@
 }
 
 @container resource-pane (min-width: 540px) {
-    .resource-row:has(> .resource-row-wide-metadata) {
+    .resource-row.resource-row-table {
         --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
     }
 
@@ -2263,7 +2267,7 @@
 @container resource-pane (min-width: 420px) {
     /* Fixed action slots reserve a missing endpoint just like missing metadata.
        Narrower panes retain lifecycle commands in the existing overflow menu. */
-    .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+    .resource-row.resource-row-table .resource-row-actions {
         display: grid;
         grid-template-columns: 20px repeat(3, 24px);
         grid-column: var(--resource-row-actions-column);
@@ -2303,14 +2307,14 @@
 }
 
 @container resource-pane (min-width: 720px) {
-    .resource-row:has(> .resource-row-wide-metadata) {
+    .resource-row.resource-row-table {
         --resource-row-tracks: [identity] minmax(200px, 1.5fr) [status] 104px [endpoint] minmax(96px, 1fr) [source insights actions] 180px [end];
         column-gap: var(--spacingHorizontalM);
     }
 
     /* The toggle, two lifecycle commands, the primary endpoint and the menu. The URLs column lists the URLs, and
        console logs, the terminal and JSON are in the menu. */
-    .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+    .resource-row.resource-row-table .resource-row-actions {
         grid-template-columns: 20px repeat(4, 28px);
         gap: var(--aspire-space-1);
     }
@@ -2335,7 +2339,7 @@
 }
 
 @container resource-pane (min-width: 960px) {
-    .resource-row:has(> .resource-row-wide-metadata) {
+    .resource-row.resource-row-table {
         --resource-row-tracks: [identity] minmax(220px, calc(320px + var(--resource-row-identity-extra, 0px))) [status] 96px [source] minmax(200px, 1fr) [endpoint] minmax(96px, 1fr) [insights actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalS);
     }
@@ -2368,7 +2372,7 @@
         display: none;
     }
 
-    .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+    .resource-row.resource-row-table .resource-row-actions {
         width: var(--resource-row-actions-width);
         justify-self: end;
     }
@@ -2443,43 +2447,43 @@
    error badge, rather than being cut off mid-word. It's laid out as text rather than as flex items, so it's cut once,
    at its end: the age gives way first, then the state. (Flex items each shrink a little, so both would get an
    ellipsis.) Both keep their full text: the age in its tooltip, the state in the row's accessible description. */
-.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub {
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub {
     display: block;
     text-overflow: ellipsis;
 }
 
-.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub > .state-dot,
-.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub ::deep > svg {
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub > .state-dot,
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub ::deep > svg {
     display: inline-block;
     margin-inline-end: 8px;
     vertical-align: middle;
 }
 
-.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub > .resource-row-sidebar-start {
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub > .resource-row-sidebar-start {
     display: inline;
     margin-inline-start: 8px;
 }
 
-.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sidebar-start > time {
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sidebar-start > time {
     display: inline;
 }
 
 /* The full-page list's second line, the state and type, is cut the same way, for example before an error badge, which
    the row link reserves room for (see .error-badge-spacer). The type gives way first, then the state. The spacing
    matches the line's flex gap. */
-.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub {
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub {
     display: block;
     text-overflow: ellipsis;
 }
 
-.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub > .state-dot,
-.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub ::deep > svg {
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub > .state-dot,
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub ::deep > svg {
     display: inline-block;
     margin-inline-end: 5px;
     vertical-align: middle;
 }
 
-.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row[data-resource-name] .resource-row-sub > .resource-row-sep {
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub > .resource-row-sep {
     margin-inline: 5px;
 }
 
@@ -2652,7 +2656,7 @@
 }
 
 @container resource-pane (min-width: 420px) {
-    .resource-pane-list.density-compact .resource-row:has(> .resource-row-wide-metadata) > .resource-row-error-link {
+    .resource-pane-list.density-compact .resource-row.resource-row-table > .resource-row-error-link {
         margin-inline-end: calc(var(--resource-row-meta-type-width) + 34px);
     }
 }
@@ -2783,7 +2787,7 @@
 @container resource-pane (min-width: 1440px) {
     /* Source and URLs share the spare width, so neither bunches up against the other; activity stays next to
        actions. The status track holds only the age ("58m ago"). */
-    .resource-row:has(> .resource-row-wide-metadata) {
+    .resource-row.resource-row-table {
         --resource-row-tracks: [identity] calc(260px + var(--resource-row-identity-extra, 0px)) [status] 96px [source] minmax(200px, 1fr) [endpoint] minmax(200px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
     }
 
@@ -2822,14 +2826,14 @@
 }
 
 @container resource-pane (min-width: 1600px) {
-    .resource-row:has(> .resource-row-wide-metadata) {
+    .resource-row.resource-row-table {
         --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 96px [source] minmax(220px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalL);
     }
 }
 
 @container resource-pane (min-width: 1800px) {
-    .resource-row:has(> .resource-row-wide-metadata) {
+    .resource-row.resource-row-table {
         --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] 96px [source] minmax(352px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
     }
 }
@@ -2837,7 +2841,7 @@
 /* The full-page list's action slots: two lifecycle commands, then the menu. Its rows have no toggle slot (the toggle
    leads the row) and no open-URL slot (the URLs column has the links). These outrank the shared slot rules above. */
 @container resource-pane (min-width: 420px) {
-    .pane-full-canvas .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+    .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
         grid-template-columns: repeat(3, 24px);
     }
 
@@ -2855,7 +2859,7 @@
 }
 
 @container resource-pane (min-width: 720px) {
-    .pane-full-canvas .resource-row:has(> .resource-row-wide-metadata) .resource-row-actions {
+    .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
         grid-template-columns: repeat(3, 28px);
     }
 }
