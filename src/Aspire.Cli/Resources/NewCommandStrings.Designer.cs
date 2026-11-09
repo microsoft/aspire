@@ -88,15 +88,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Cloning template repository....
-        /// </summary>
-        internal static string CloningTemplateRepository {
-            get {
-                return ResourceManager.GetString("CloningTemplateRepository", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Templates from configured sources cannot be combined with --source, --version, --channel, or --language..
         /// </summary>
         internal static string ConfiguredTemplateConflictingOptions {
@@ -309,15 +300,6 @@ namespace Aspire.Cli.Resources {
         internal static string OutputPathContainsInvalidCharacters {
             get {
                 return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Resolving template repository ref....
-        /// </summary>
-        internal static string ResolvingTemplateRepository {
-            get {
-                return ResourceManager.GetString("ResolvingTemplateRepository", resourceCulture);
             }
         }
         

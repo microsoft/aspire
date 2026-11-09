@@ -1712,14 +1712,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     [InlineData(true, "ssh://git@git.example/team/configuration.git")]
     [InlineData(false, "https://git.example/configuration/[team]")]
     [InlineData(true, "https://git.example/configuration/[team]")]
-    public async Task Acquire_NotifiesAndShowsStatusBeforeGitWithoutRepeatingForCachedSnapshot(
+    public async Task Acquire_NotifiesBeforeGitWithoutStatusOrRepeatingForCachedSnapshot(
         bool interactive, string repository)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var source = new ConfigSource { Repository = repository, Path = AspireConfigFile.FileName };
         var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService();
-        var status = string.Format(SharedCommandStrings.FetchingSourceStatus, SharedCommandStrings.GitFetchConfigurationSource);
         var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
             SharedCommandStrings.GitFetchConfigurationSource, repository).EscapeMarkup()}[/]";
         var notified = false;
@@ -1734,17 +1733,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 notified = true;
             }
         };
-        interaction.ShowStatusCallback = statusText =>
-        {
-            Assert.True(notified);
-            Assert.Equal(status, statusText);
-            Assert.Empty(git.ResolutionModes);
-            Assert.Empty(git.FetchModes);
-        };
         git.ReadConfiguration = (_, _) =>
         {
             Assert.True(notified);
-            Assert.Equal(status, Assert.Single(interaction.ShownStatuses));
+            Assert.Empty(interaction.ShownStatuses);
             return Task.FromResult(("version-1", new JsonObject()));
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
@@ -1755,7 +1747,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Same(first, cached);
         Assert.Equal(1, git.Calls);
-        Assert.Equal(status, Assert.Single(interaction.ShownStatuses));
+        Assert.Empty(interaction.ShownStatuses);
         Assert.Collection(interaction.DisplayedMessages,
             message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
             message => Assert.Equal(fetchMessage, message.Message));

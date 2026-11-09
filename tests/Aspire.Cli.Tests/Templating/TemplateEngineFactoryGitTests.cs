@@ -28,6 +28,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(commands.RunCallback);
         commands.RunCallback = (command, token) =>
         {
+            Assert.Empty(interaction.ShownStatuses);
             var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
             Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
             Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
@@ -49,6 +50,7 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
         var templates = await factory.GetTemplatesAsync(source, TestContext.Current.CancellationToken);
 
         Assert.Equal("git-template", Assert.Single(templates).Name);
+        Assert.Empty(interaction.ShownStatuses);
         var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
         Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);

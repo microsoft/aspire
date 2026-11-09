@@ -121,10 +121,6 @@
     <value>Fetching {0} from {1} using Git...</value>
     <comment>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</comment>
   </data>
-  <data name="FetchingSourceStatus" xml:space="preserve">
-    <value>Fetching {0} using Git...</value>
-    <comment>Short Git-acquisition status text. {0} is the localized content being fetched, such as "configuration source" or "templates".</comment>
-  </data>
   <data name="FetchingSourceWithAuthentication" xml:space="preserve">
     <value>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</value>
     <comment>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</comment>

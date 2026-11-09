@@ -115,15 +115,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Fetching {0} using Git....
-        /// </summary>
-        internal static string FetchingSourceStatus {
-            get {
-                return ResourceManager.GetString("FetchingSourceStatus", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Fetching {0} from {1} using Git. Git may prompt you to authenticate..
         /// </summary>
         internal static string FetchingSourceWithAuthentication {

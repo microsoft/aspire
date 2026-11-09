@@ -188,7 +188,7 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Fact]
-    public async Task ConfiguredGitSources_MixedSearchSelectsGitTemplateAndShowsAcquisitionStages()
+    public async Task ConfiguredGitSources_MixedSearchSelectsGitTemplateWithoutAcquisitionStatus()
     {
         const string repository = "https://example.test/templates.git";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -210,9 +210,7 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal(
                 providerTemplates.Select(template => template.Description),
                 options.Select(formatter).SkipLast(2));
-            Assert.Equal(
-                [NewCommandStrings.ResolvingTemplateRepository, NewCommandStrings.CloningTemplateRepository],
-                interaction.ShownStatuses);
+            Assert.Empty(interaction.ShownStatuses);
             return options[^2];
         };
         var services = CreateServices(workspace, interaction, interactive: true);

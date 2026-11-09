@@ -5,4 +5,3 @@
 
 🚨 Only use sources you trust. Content from these sources can run code on your machine.
 📥 Fetching configuration source from https://git.example/configuration using Git. Git may prompt you to authenticate.
-Fetching configuration source using Git...
