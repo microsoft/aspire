@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Telemetry;
 using Aspire.Cli.Tests.Utils;
@@ -28,13 +29,9 @@ internal static class TestConfigSourceServices
 
     public static ConfigSourceService Create(CliExecutionContext context, IGitClient? git = null,
         TimeProvider? clock = null, IEnvironment? environment = null, TestConfigSourceDetector? detector = null,
-        TestInteractionService? interaction = null, bool interactive = false, FileInfo? globalSettingsFile = null)
+        IInteractionService? interaction = null, bool interactive = false)
     {
-        var configurationService = new TestConfigurationService
-        {
-            SettingsFilePath = globalSettingsFile?.FullName ?? Path.Combine(context.WorkingDirectory.FullName, ".aspire", "settings.global.json")
-        };
-        return new ConfigSourceService(context, configurationService, environment ?? new TestEnvironment(), detector ?? new TestConfigSourceDetector(),
+        return new ConfigSourceService(context, environment ?? new TestEnvironment(), detector ?? new TestConfigSourceDetector(),
             git ?? new TestConfigSourceRepository(), clock ?? TimeProvider.System, interaction ?? new TestInteractionService(),
             interactive ? TestHelpers.CreateInteractiveHostEnvironment() : TestHelpers.CreateNonInteractiveHostEnvironment(),
             NullLogger<ConfigSourceService>.Instance);

@@ -233,6 +233,42 @@ public partial class GitCommandRunnerTests
     }
 
     [Fact]
+    public async Task VerifyOpenSshAsync_AllowsSlowStartup()
+    {
+        var probe = CreateShellStartInfo(
+            "sleep 6; printf 'OpenSSH_test' >&2",
+            "Start-Sleep -Seconds 6; [Console]::Error.Write('OpenSSH_test')");
+        probe.RedirectStandardInput = true;
+
+        Assert.True(await CreateRunner().VerifyOpenSshAsync(probe, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("OpenSSH_test", 0, true)]
+    [InlineData("OpenSSH_test", 1, false)]
+    [InlineData("not OpenSSH", 0, false)]
+    public async Task VerifyOpenSshAsync_RequiresSuccessfulOpenSshBanner(string banner, int exitCode, bool expected)
+    {
+        var probe = CreateShellStartInfo(
+            $"printf '%s' '{banner}' >&2; exit {exitCode}",
+            $"[Console]::Error.Write('{banner}'); exit {exitCode}");
+        probe.RedirectStandardInput = true;
+
+        Assert.Equal(expected, await CreateRunner().VerifyOpenSshAsync(probe, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task VerifyOpenSshAsync_HonorsCancellation()
+    {
+        var probe = CreateShellStartInfo("sleep 60", "Start-Sleep -Seconds 60");
+        probe.RedirectStandardInput = true;
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cancellation.CancelAfter(TimeSpan.FromMilliseconds(100));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateRunner().VerifyOpenSshAsync(probe, cancellation.Token));
+    }
+
+    [Fact]
     [RequiresTools(["git", "ssh"])]
     public async Task ConfigureUnattendedSsh_RelativePathEntriesUseGitDirectoryBeforeAbsoluteFallback()
     {

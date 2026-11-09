@@ -241,26 +241,14 @@
   <data name="NoTemplateVersionsFoundInChannel" xml:space="preserve">
     <value>No template versions found in channel '{0}'.</value>
   </data>
-  <data name="SearchForMoreTemplates" xml:space="preserve">
-    <value>Search for more templates</value>
-  </data>
   <data name="ConfiguredTemplateConflictingOptions" xml:space="preserve">
     <value>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</value>
   </data>
-  <data name="TemplateSearchPrompt" xml:space="preserve">
-    <value>Search templates (leave empty to list all)</value>
+  <data name="TemplateSourceExplanation" xml:space="preserve">
+    <value>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</value>
   </data>
-  <data name="SearchingTemplateSource" xml:space="preserve">
-    <value>Searching template source '{0}'...</value>
-  </data>
-  <data name="SearchTemplatesAgain" xml:space="preserve">
-    <value>Search again</value>
-  </data>
-  <data name="BackToDefaultTemplates" xml:space="preserve">
-    <value>Back to default templates</value>
-  </data>
-  <data name="NoMatchingConfiguredTemplates" xml:space="preserve">
-    <value>No matching templates were found in the configured sources.</value>
+  <data name="BuiltInTemplates" xml:space="preserve">
+    <value>Built-in templates</value>
   </data>
   <data name="NoConfiguredTemplateSources" xml:space="preserve">
     <value>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</value>
@@ -278,7 +266,10 @@
     <value>Invalid template setting '{0}': {1}</value>
   </data>
   <data name="TemplateSourceUnknownField" xml:space="preserve">
-    <value>Unknown source field. Use an absolute 'path', or 'repository' with optional 'ref'/'path'.</value>
+    <value>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</value>
+  </data>
+  <data name="TemplateSourceDisplayNameInvalid" xml:space="preserve">
+    <value>Expected a display name string without control characters, or null to use the source alias.</value>
   </data>
   <data name="TemplateSourceStringRequired" xml:space="preserve">
     <value>Expected a nonempty string without control characters.</value>
@@ -290,7 +281,7 @@
     <value>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</value>
   </data>
   <data name="TemplateSourceNameRequired" xml:space="preserve">
-    <value>Template source names must be nonempty and must not contain dots, colons, or control characters.</value>
+    <value>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</value>
   </data>
   <data name="TemplateSourceCannotExtendString" xml:space="preserve">
     <value>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</value>
@@ -305,7 +296,7 @@
     <value>Add a named template source to global configuration after confirming you trust it.</value>
   </data>
   <data name="TemplateSourceTrustPrompt" xml:space="preserve">
-    <value>Templates can run code. Do you trust template source '{0}' ({1})?</value>
+    <value>Do you trust template source '{0}' ({1})?</value>
   </data>
   <data name="TemplateSourceYesOptionDescription" xml:space="preserve">
     <value>Trust the template source and skip confirmation.</value>
@@ -345,9 +336,6 @@
   </data>
   <data name="TemplateSourceListEmpty" xml:space="preserve">
     <value>No template sources are configured. Use 'aspire template source add' to add one.</value>
-  </data>
-  <data name="TemplateSourceNameHeader" xml:space="preserve">
-    <value>Name</value>
   </data>
   <data name="TemplateSourceConfigurationHeader" xml:space="preserve">
     <value>Configuration</value>

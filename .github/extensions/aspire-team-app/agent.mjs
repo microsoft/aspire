@@ -16,6 +16,8 @@
 //     evaluates the failing checks manually; Discuss-review talks through the outstanding
 //     feedback and lays out response options; Address-feedback works the unresolved review
 //     threads and resolves them; the conflict action runs a direct git flow.
+//     The opt-in detached preference uses create_session instead, with PR checkout
+//     performed in the isolated worktree and results kept in that session.
 //   - "current-session": do the work right here, in the session that owns the canvas,
 //     without spawning a sub-session. Useful when the canvas is already open on the PR's
 //     own repo and the user wants to stay in this conversation.
@@ -168,7 +170,7 @@ const UNTRUSTED =
 
 // Build the prompt for a card action. Throws on an unknown kind/target or an invalid PR
 // so the caller returns a 400 rather than sending the agent a malformed instruction.
-export function buildAgentActionPrompt(kind, rawPr, target = "new-session") {
+export function buildAgentActionPrompt(kind, rawPr, target = "new-session", prefs = {}) {
   if (!AGENT_ACTION_KINDS.includes(kind)) {
     throw new Error(`Unknown card action: ${kind}`);
   }
@@ -186,6 +188,7 @@ export function buildAgentActionPrompt(kind, rawPr, target = "new-session") {
     pr,
     ref: `${pr.repository}#${pr.number}`,
     url,
+    detachedSessions: prefs.detachedSessions === true,
   };
 
   // Degrade new-session to current-session for non-github.com PRs (see effectiveActionTarget):
@@ -291,6 +294,25 @@ function newSessionPrompt(kind, ctx) {
 // sub-session actually runs once open_pr_session has checked out the repo.
 function openPrSessionPrompt({ verb, summary, ctx, kickoff }) {
   const { pr } = ctx;
+  if (ctx.detachedSessions) {
+    const detachedKickoff = `Work on pull request ${ctx.ref}: ${ctx.url} in THIS detached session. Do not open another session.
+
+Fetch the live pull request with gh and check out its branch in this session's isolated worktree before doing the requested work. Verify that the checkout matches the live PR head. Preserve the PR's base repository, head repository, and head branch so any authorized push targets the original PR, including fork PRs. If checkout fails or the repository does not match, report the error and stop.
+
+${kickoff}`;
+    return `Open a new detached project session to ${verb} pull request ${ctx.ref} in the context of ${pr.repository}. ${summary}
+
+Use list_repositories to find the configured repository matching ${JSON.stringify(pr.repository)}. If it is not configured or the match is ambiguous, explain the problem and stop; do not silently clone a repository or open a child session.
+
+Use create_session with:
+- project_id: the matching repository's returned ID
+- detached: true
+- workspace_type: "worktree"
+- kickoff.mode: "interactive"
+- kickoff.prompt: ${JSON.stringify(detachedKickoff)}
+
+Leave base_branch unset. After creation, use get_session with the returned session ID to verify that it has no parent or coordinating creator. If creation or verification fails, report that explicitly; do not fall back to open_pr_session. Results and questions belong in the detached session, not this dashboard conversation.`;
+  }
   return `Open a new sub-session to ${verb} pull request ${pr.repository}#${pr.number} in the context of ${pr.repository}. ${summary}
 
 Use the open_pr_session tool with:
@@ -304,7 +326,7 @@ Use the open_pr_session tool with:
 // Test/Review kickoff. Skill detection happens in the sub-session — not in the extension —
 // because that is where the repo is checked out and its skills are actually loaded, so it
 // sees the real skill set (repo, user, and plugin skills) rather than guessing from files.
-function skillKickoff(verb, { ref, url }) {
+function skillKickoff(verb, { ref, url, detachedSessions }) {
   const skill = verb === "test" ? "/pr-testing" : "/code-review";
   const skillName = skill.slice(1);
   const noun = verb === "test" ? "PR-testing" : "code-review";
@@ -321,7 +343,7 @@ First choose how to proceed, based on THIS repository's own skills:
 2. If a suitable ${noun} skill exists, run it against this PR by invoking it as \`/{skill-name} ${url}\` (for this repo that is \`${skill} ${url}\`) and follow it end to end.
 3. If this repo has no ${noun} skill, do NOT force one \u2014 do a thorough manual ${verb} instead: ${manualFallback}.
 
-When you are done, report back with your findings.`;
+When you are done, ${detachedSessions ? "report your findings in this session" : "report back with your findings"}.`;
 }
 
 function conflictKickoff({ ref, url }) {
@@ -364,14 +386,14 @@ Report the failing checks, the most likely root cause of each, and a concrete su
 // Discuss-review kickoff. This is an advisory, conversational action: it surfaces the PR's
 // outstanding review feedback and lays out response options rather than autonomously reviewing
 // or rewriting. No skill routing \u2014 the value is the discussion, not a fresh review pass.
-function discussReviewKickoff({ ref, url }) {
+function discussReviewKickoff({ ref, url, detachedSessions }) {
   return `You are going to talk through the outstanding review on pull request ${ref}: ${url}
 
 ${UNTRUSTED}
 
 Read the PR's review state: the unresolved review threads, any requested changes, and whatever is blocking it from merging. Summarize the outstanding feedback clearly, and for each point lay out concrete options for how to respond (for example: accept and make the change, push back with a rationale, or ask the reviewer for clarification) with a short recommendation.
 
-This is a discussion, not an autonomous rewrite: surface the feedback and the options and report back \u2014 do not make code changes or push without checking in first.`;
+This is a discussion, not an autonomous rewrite: surface the feedback and the options and ${detachedSessions ? "report in this session" : "report back"} \u2014 do not make code changes or push without checking in first.`;
 }
 
 // Address-feedback kickoff. Unlike discuss-review (advisory), this action actually works the

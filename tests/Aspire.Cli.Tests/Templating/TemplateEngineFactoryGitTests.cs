@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Commands;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
@@ -15,6 +16,43 @@ namespace Aspire.Cli.Tests.Templating;
 public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
 {
     private const string CommitSha = TestGitCommandRunner.DefaultCommitSha;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RepositoryTemplate_WarnsBeforeAcquisitionIncludingCachedCheckouts(bool cached)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var commands = TestGitCommandRunner.CreateForTemplateCheckout(CreateTemplateCheckoutAsync);
+        var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(commands.RunCallback);
+        commands.RunCallback = (command, token) =>
+        {
+            var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+            Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
+            Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+            Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+            return run(command, token);
+        };
+        var services = CreateServices(workspace, commands);
+        services.AddSingleton<IInteractionService>(interaction);
+        var source = new TemplateSource(".", "repository", CommitSha);
+        if (cached)
+        {
+            using var warmup = services.BuildServiceProvider();
+            await GetFactory(warmup).GetTemplatesAsync(source, TestContext.Current.CancellationToken);
+            interaction.DisplayedMessages.Clear();
+        }
+        using var provider = services.BuildServiceProvider();
+        var factory = GetFactory(provider);
+
+        var templates = await factory.GetTemplatesAsync(source, TestContext.Current.CancellationToken);
+
+        Assert.Equal("git-template", Assert.Single(templates).Name);
+        var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+    }
 
     [Theory]
     [InlineData(40)]

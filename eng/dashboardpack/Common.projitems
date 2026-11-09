@@ -4,7 +4,7 @@
   <Import Project="$(RepoRoot)eng/ContentPackage.targets" />
 
   <PropertyGroup>
-    <TargetFramework>net11.0</TargetFramework>
+    <TargetFramework>$(AspireDashboardTargetFramework)</TargetFramework>
     <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsWindows()) and $(DashboardRuntime.StartsWith('win-'))">true</CanPublishDashboardNativeAot>
     <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsLinux()) and $(DashboardRuntime.StartsWith('linux-'))">true</CanPublishDashboardNativeAot>
     <CanPublishDashboardNativeAot Condition="'$(SkipNativeBuild)' != 'true' and $([System.OperatingSystem]::IsMacOS()) and $(DashboardRuntime.StartsWith('osx-'))">true</CanPublishDashboardNativeAot>

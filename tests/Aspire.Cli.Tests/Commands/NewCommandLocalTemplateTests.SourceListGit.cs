@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -49,13 +50,13 @@ public partial class NewCommandLocalTemplateTests
         var prompts = 0;
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (prompt, choices, _, _) =>
+            ConfirmCallback = (prompt, defaultValue) =>
             {
                 prompts++;
                 Assert.False(json);
                 Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
-                Assert.Equal([ConfigSourceStrings.Accept, ConfigSourceStrings.Decline], choices.Cast<string>());
-                return accept ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
+                Assert.True(defaultValue);
+                return accept;
             }
         };
 
@@ -117,7 +118,7 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(shouldPrompt ? 1 : 0, prompts);
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Empty(interaction.StringPromptCalls);
-        Assert.Empty(interaction.BooleanPromptCalls);
+        Assert.Equal(prompts, interaction.BooleanPromptCalls.Count);
         Assert.Empty(interaction.DisplayedLines);
         Assert.Empty(interaction.DisplayedPlainText);
         Assert.Empty(interaction.DisplayedSuccess);
@@ -163,7 +164,7 @@ public partial class NewCommandLocalTemplateTests
 
         if (json)
         {
-            Assert.Empty(interaction.DisplayedRenderables);
+            Assert.Equal(useSource is true ? 1 : 0, interaction.DisplayedRenderables.Count);
             Assert.Equal(ConsoleOutput.Error, interaction.Console);
             Assert.All(interaction.DisplayedMessages,
                 message => Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride ?? interaction.Console));
@@ -180,8 +181,107 @@ public partial class NewCommandLocalTemplateTests
             var console = AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(writer), Ansi = AnsiSupport.No });
             console.Profile.Capabilities.Ansi = false;
             console.Profile.Width = 160;
-            console.Write(Assert.Single(interaction.DisplayedRenderables));
+            Assert.Collection(interaction.DisplayedRenderables,
+                details => Assert.IsType<Padder>(details),
+                sources => Assert.IsType<Table>(sources));
+            console.Write(interaction.DisplayedRenderables[^1]);
             await Verify(writer.ToString()).UseParameters(json, useSource, accept, priorCache);
+        }
+    }
+
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, false)]
+    [InlineData(null, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(null, true, false)]
+    [InlineData(null, false, true)]
+    public async Task ConfiguredGitSources_InitialPickerHonorsInheritedConsentAndGlobalOverrides(bool? consent, bool priorCache, bool accept)
+    {
+        var usesInheritedSource = consent is true || consent is null && accept;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (source, _, _) = await CreateTemplateSourceConfigurationRepositoryAsync(workspace);
+        await CreateSearchTemplateAsync(workspace, "personal", "personal", "Personal", "Personal");
+        var templates = workspace.CreateDirectory("template repository");
+        await CreateSearchTemplateAsync(workspace, "template repository/templates/proof", "proof", "Proof", "Inherited");
+        await GitTestHelper.RunGitAsync(templates.FullName, outputHelper, "init", "--initial-branch=main");
+        await GitTestHelper.ConfigureGitIdentityAsync(templates.FullName, outputHelper);
+        await GitTestHelper.RunGitAsync(templates.FullName, outputHelper, "add", ".");
+        await GitTestHelper.RunGitAsync(templates.FullName, outputHelper, "commit", "-m", "Inherited template");
+        await GitTestHelper.RunGitAsync(templates.FullName, outputHelper, "branch", "templates/preview");
+        var git = new TestGitCommandRunner();
+        if (priorCache)
+        {
+            using var previous = CreateRealGitTemplateSourceServices(
+                workspace, new TestInteractionService(), git, source).BuildServiceProvider();
+            Assert.Equal(CliExitCodes.Success, await previous.GetRequiredService<RootCommand>()
+                .Parse("template source list --format json --use-config-source").InvokeAsync().DefaultTimeout());
+            git.Commands.Clear();
+        }
+
+        var interaction = new TestInteractionService();
+        interaction.SetupStringPromptResponse("Hello");
+        var selections = 0;
+        interaction.ConfirmCallback = (prompt, _) =>
+        {
+            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            Assert.Null(consent);
+            Assert.Empty(git.Commands);
+            Assert.Single(interaction.DisplayedMessages,
+                message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
+            return accept;
+        };
+        interaction.PromptForSelectionCallback = (_, choices, formatter, _) =>
+        {
+            selections++;
+            var options = choices.Cast<object>().ToArray();
+            Assert.Equal(usesInheritedSource
+                ? ["Personal (personal) - personal", "Proof (proof) - git-proof"]
+                : new[] { "Personal (personal) - personal" },
+                options.Select(formatter).TakeLast(usesInheritedSource ? 2 : 1));
+            var label = usesInheritedSource ? "Proof (proof) - git-proof" : "Personal (personal) - personal";
+            return Assert.Single(options, option => formatter(option) == label);
+        };
+        var services = CreateRealGitTemplateSourceServices(workspace, interaction, git, source);
+        services.AddSingleton<IProcessExecutionFactory>(
+            new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
+        using var provider = services.BuildServiceProvider();
+        _ = provider.GetRequiredService<IGitCommandRunner>();
+        var run = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(git.RunCallback);
+        var fixtureUrl = new Uri(templates.FullName).AbsoluteUri;
+        // Keep configuration acquisition and template checkout on real Git while mapping
+        // the inherited HTTPS source to a local fixture, without contacting any remote.
+        git.RunCallback = (command, token) => run(command with
+        {
+            Arguments = command.Arguments.Select(argument =>
+                argument == "https://git.example/proof-templates" ? fixtureUrl : argument).ToArray()
+        }, token);
+        await WriteConfiguredSourcesAsync(provider, new() { ["personal"] = Path.Combine(workspace.Path, "personal") });
+        var globalPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(true);
+        var originalGlobal = await File.ReadAllTextAsync(globalPath);
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse($"new {(consent is null ? "" : $"--use-config-source {consent.Value.ToString().ToLowerInvariant()} ")}--name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        Assert.Equal(1, selections);
+        Assert.Empty(interaction.DisplayedErrors);
+        var warnings = interaction.DisplayedMessages.Where(
+            message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]").ToArray();
+        Assert.Equal(2, warnings.Length);
+        Assert.All(warnings, warning => Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride));
+        Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalPath));
+        Assert.Equal(usesInheritedSource ? "Inherited: Hello" : "Personal: Hello",
+            await File.ReadAllTextAsync(Path.Combine(workspace.Path, "out", "Demo.txt")));
+        if (usesInheritedSource)
+        {
+            Assert.Contains(GetGitResolutions(git), call => call == ("https://git.example/proof-templates", "refs/heads/templates/preview"));
+            Assert.Equal("https://git.example/proof-templates", Assert.Single(GetGitFetches(git)).Repository);
+        }
+        else
+        {
+            Assert.Empty(git.Commands);
         }
     }
 

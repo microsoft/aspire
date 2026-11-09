@@ -22,10 +22,30 @@
         <target state="translated">현재 작업 트리에서 실행 중인 AppHost를 찾을 수 없습니다. '--apphost &lt;path&gt;'를 사용하여 직접 대상으로 지정하거나, '--all'을 사용하여 다른 작업 트리의 AppHost를 포함하세요.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FetchingSource">
+        <source>Fetching {0} using Git...</source>
+        <target state="new">Fetching {0} using Git...</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates".</note>
+      </trans-unit>
+      <trans-unit id="FetchingSourceWithAuthentication">
+        <source>Fetching {0} using Git. Git may prompt you to authenticate.</source>
+        <target state="new">Fetching {0} using Git. Git may prompt you to authenticate.</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates".</note>
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="translated">분리된 AppHost 결과에 대한 출력 형식</target>
         <note />
+      </trans-unit>
+      <trans-unit id="GitFetchConfigurationSource">
+        <source>configuration source</source>
+        <target state="new">configuration source</target>
+        <note>The content inserted into the Git-fetch notice.</note>
+      </trans-unit>
+      <trans-unit id="GitFetchTemplates">
+        <source>templates</source>
+        <target state="new">templates</target>
+        <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
@@ -122,6 +142,16 @@
         <target state="translated">{0} 명령은 --비대화형 옵션을 지정한 경우 --yes가 필요합니다.</target>
         <note>{0} is the command name.</note>
       </trans-unit>
+      <trans-unit id="NuGetSearchLimitWarning">
+        <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
+        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <note>{0} is the maximum number of packages searched per feed.</note>
+      </trans-unit>
+      <trans-unit id="NuGetSearchSourceFailedWarning">
+        <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
+        <target state="new">Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</target>
+        <note>{0} is the redacted NuGet source name or URL.</note>
+      </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>
         <target state="translated">작업에 사용할 환경입니다. 기본값은 'Production'입니다.</target>
@@ -170,6 +200,66 @@
       <trans-unit id="SelectAppHost">
         <source>Select an AppHost to {0}:</source>
         <target state="translated">{0}에 대한 AppHost 선택:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceFeed">
+        <source>Package feed</source>
+        <target state="new">Package feed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitPath">
+        <source>Git path</source>
+        <target state="new">Git path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitRepository">
+        <source>Git source</source>
+        <target state="new">Git source</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceMarketplace">
+        <source>Marketplace</source>
+        <target state="new">Marketplace</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceName">
+        <source>Name</source>
+        <target state="new">Name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV1Catalog">
+        <source>OpenCode V1 catalog</source>
+        <target state="new">OpenCode V1 catalog</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV2Catalog">
+        <source>OpenCode V2 catalog</source>
+        <target state="new">OpenCode V2 catalog</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePath">
+        <source>Path</source>
+        <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePatterns">
+        <source>Package patterns</source>
+        <target state="new">Package patterns</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePlugins">
+        <source>Plugins</source>
+        <target state="new">Plugins</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceRef">
+        <source>Git ref</source>
+        <target state="new">Git ref</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceTrustWarning">
+        <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
+        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

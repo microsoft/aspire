@@ -199,6 +199,7 @@ public class NuGetPackageOperationConfigurationTests(ITestOutputHelper outputHel
             workloadId: "writer-test",
             PackageSourceOverrideMappings.CreateForSourceOnlyOperations("https://example.test/selected/v3/index.json"),
             restrictToSelectedSources: restricted,
+            overrideIntegrationSources: true,
             hasAuthoritativeAspirePolicy: true,
             cancellationToken: TestContext.Current.CancellationToken);
 
@@ -233,7 +234,8 @@ public class NuGetPackageOperationConfigurationTests(ITestOutputHelper outputHel
             NullLogger<NuGetClient>.Instance);
         var service = new BundleNuGetService(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient)
+            nuGetClient,
+            new TestConfigurationService())
         {
             SourceIdentityKeyFactory = static () => s_sourceIdentityKey
         };

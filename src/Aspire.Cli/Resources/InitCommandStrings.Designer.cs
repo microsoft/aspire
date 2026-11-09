@@ -232,7 +232,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The programming language for the AppHost (csharp, typescript).
+        ///   Looks up a localized string similar to The programming language for the AppHost.
         /// </summary>
         internal static string LanguageOptionDescription {
             get {

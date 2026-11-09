@@ -72,6 +72,43 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         Assert.Equal(totalUrls, overflowItems.Count);
     }
 
+    [Fact]
+    public void Render_MasksAddressesButLinksToThemAndLetsTextAddressesTakeFocus()
+    {
+        const string link = "https://localhost:5000/login?token=synthetic-secret";
+        const string tcp = "tcp://localhost:5432?password=synthetic-secret";
+        const string other = "https://localhost:5001/?key=synthetic-secret";
+
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        FluentUISetupHelpers.SetupFluentOverflow(this);
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
+
+        var cut = Render<UrlsColumnDisplay>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.HasMultipleReplicas, false);
+            builder.Add(p => p.DisplayedUrls, new List<DisplayedUrl>
+            {
+                new() { Index = 0, Name = "https", Text = link, Url = link, OriginalUrlString = link },
+                new() { Index = 1, Name = "tcp", Text = tcp, Url = null, OriginalUrlString = tcp },
+                new() { Index = 2, Name = "other", Text = other, Url = other, OriginalUrlString = other }
+            });
+        });
+
+        // A query value can be a secret, so the text and tooltip mask it, but the link opens the full address.
+        var anchor = cut.FindAll("fluent-overflow > div a").First(a => a.GetAttribute("href") == link);
+        Assert.Equal("https://localhost:5000/login?token=●●●●●●●●", anchor.TextContent);
+        Assert.Equal("https://localhost:5000/login?token=●●●●●●●●", anchor.GetAttribute("data-tooltip"));
+
+        // An address that isn't a link takes focus so its full value can be read in the tooltip.
+        var text = cut.Find("fluent-overflow > div span[tabindex]");
+        Assert.Equal("tcp://localhost:5432?password=●●●●●●●●", text.TextContent);
+        Assert.Equal("tcp://localhost:5432?password=●●●●●●●●", text.GetAttribute("data-tooltip"));
+        Assert.Equal("tcp://localhost:5432?password=●●●●●●●●", text.GetAttribute("aria-label"));
+        Assert.Equal("0", text.GetAttribute("tabindex"));
+    }
+
     private static List<DisplayedUrl> CreateDisplayedUrls(int count)
     {
         return Enumerable.Range(0, count).Select(i => new DisplayedUrl

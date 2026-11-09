@@ -299,6 +299,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             ["AppHost:Path"] = AppHostPath,
             ["AppHost:FilePath"] = appHostFilePath,
             ["AppHost:DashboardApplicationName"] = dashboardApplicationName,
+            // The build configuration (Debug/Release) propagated to .NET project resources. Guest AppHosts
+            // don't have one, so the prebuilt AppHost server's configuration isn't applied to user projects.
+            ["AppHost:BuildConfiguration"] = options.Configuration,
             [AspireStore.AspireStorePathKeyName] = aspireDir
         });
 
@@ -419,6 +422,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
         _innerBuilder.Services.TryAddSingleton<IDotnetSdkVersionProvider, DotnetSdkVersionProvider>();
+        _innerBuilder.Services.AddSingleton<InteractionServiceConsumerState>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
@@ -636,6 +640,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, WslcContainerRuntime>(KnownContainerRuntimes.Wslc);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<ContainerRuntimeReadiness>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
@@ -906,7 +911,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             ValidateResourceName(resource);
         }
 
-        var application = new DistributedApplication(_innerBuilder.Build());
+        var host = _innerBuilder.Build();
+
+        // Initialize readiness only for the original application. Testing wrappers share its services
+        // and may be constructed after the before-start hooks have already completed.
+        host.Services.GetRequiredService<InteractionServiceConsumerState>().Ready = false;
+        var application = new DistributedApplication(host);
 
         _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 

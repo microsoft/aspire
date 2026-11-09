@@ -3,15 +3,56 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Publishing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
 /// <summary>
-/// Provides extension methods for subscribing to <see cref="IDistributedApplicationEvent"/> and <see cref="IDistributedApplicationResourceEvent"/> events.
+/// Provides extension methods for publishing resource allocation and subscribing to application events.
 /// </summary>
 public static class DistributedApplicationEventingExtensions
 {
+    /// <summary>
+    /// Completes a resource's endpoint allocation before notifying subscribers.
+    /// </summary>
+    /// <param name="eventing">The event dispatcher.</param>
+    /// <param name="event">The resource allocation notification.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes after URL customization and notification dispatch.</returns>
+    /// <remarks>
+    /// Call this after assigning the resource's physical endpoints. The host awaits URL customization
+    /// and finalizes browser origins before dispatching the allocation notification.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+    [AspireExportIgnore(Reason = "Endpoint allocation completion is used by .NET resource integrations.")]
+    public static Task PublishResourceEndpointsAllocatedAsync(this IDistributedApplicationEventing eventing, ResourceEndpointsAllocatedEvent @event, CancellationToken cancellationToken) =>
+        eventing.PublishResourceEndpointsAllocatedAsync(@event, EventDispatchBehavior.BlockingSequential, cancellationToken);
+
+    /// <summary>
+    /// Completes a resource's endpoint allocation before dispatching its notification with the specified behavior.
+    /// </summary>
+    /// <param name="eventing">The event dispatcher.</param>
+    /// <param name="event">The resource allocation notification.</param>
+    /// <param name="dispatchBehavior">The dispatch behavior for notification subscribers.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that completes after URL customization and the requested notification dispatch.</returns>
+    /// <remarks>
+    /// URL customization is always awaited before notification dispatch, including when subscribers
+    /// use a non-blocking dispatch behavior.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">An argument is <see langword="null"/>.</exception>
+    [AspireExportIgnore(Reason = "Endpoint allocation completion is used by .NET resource integrations.")]
+    public static Task PublishResourceEndpointsAllocatedAsync(this IDistributedApplicationEventing eventing, ResourceEndpointsAllocatedEvent @event, EventDispatchBehavior dispatchBehavior, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(eventing);
+        ArgumentNullException.ThrowIfNull(@event);
+
+        return @event.Services.GetRequiredService<ApplicationOrchestrator>()
+            .PublishEndpointsAllocatedAsync([@event], eventing, dispatchBehavior, cancellationToken);
+    }
+
     /// <summary>
     /// Subscribes a callback to the <see cref="BeforeStartEvent"/> event within the AppHost.
     /// </summary>

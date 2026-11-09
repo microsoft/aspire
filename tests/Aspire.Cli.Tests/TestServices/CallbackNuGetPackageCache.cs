@@ -27,14 +27,14 @@ internal sealed class CallbackNuGetPackageCache(
         return getTemplatePackagesAsyncCallback(configuration.OriginalWorkingDirectory, prerelease, configuration.ConfigurationFile, cancellationToken);
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(NuGetPackageOperationConfiguration configuration, bool prerelease, CancellationToken cancellationToken)
-        => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+    public Task<PackageSearchResult<NuGetPackage>> GetIntegrationPackagesAsync(NuGetPackageOperationConfiguration configuration, bool prerelease, CancellationToken cancellationToken)
+        => Task.FromResult(new PackageSearchResult<NuGetPackage>([], LimitReached: false, FailedSources: []));
 
     public Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(NuGetPackageOperationConfiguration configuration, bool prerelease, CancellationToken cancellationToken)
         => Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
-    public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(NuGetPackageOperationConfiguration configuration, string packageId, Func<string, bool>? filter, bool prerelease, bool useCache, CancellationToken cancellationToken)
-        => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+    public Task<PackageSearchResult<NuGetPackage>> GetPackagesAsync(NuGetPackageOperationConfiguration configuration, string packageId, Func<string, bool>? filter, bool prerelease, bool useCache, CancellationToken cancellationToken)
+        => Task.FromResult(new PackageSearchResult<NuGetPackage>([], LimitReached: false, FailedSources: []));
 
     public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(NuGetPackageOperationConfiguration configuration, string exactPackageId, bool prerelease, bool useCache, CancellationToken cancellationToken)
         => Task.FromResult<IEnumerable<NuGetPackage>>([]);

@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 
@@ -12,9 +13,18 @@ public partial class UrlsColumnDisplay
 {
     private const int MaxRenderedOverflowItems = 20;
 
+    // Credentials (redis://:password@host), fragments (#access_token=...) and query values (?token=...) can carry
+    // secrets, so the address is shown without the first two and with the values masked, as the resource overview does
+    // (see DashboardUIHelpers.MaskUrlForDisplay).
     internal static string GetTooltipText(DisplayedUrl displayedUrl)
     {
-        return displayedUrl.Url ?? displayedUrl.OriginalUrlString;
+        return DashboardUIHelpers.MaskUrlForDisplay(displayedUrl.Url ?? displayedUrl.OriginalUrlString);
+    }
+
+    // A URL's display name is shown as is. Without one, the text is the address, masked like the tooltip.
+    internal static string GetDisplayText(DisplayedUrl displayedUrl)
+    {
+        return string.IsNullOrEmpty(displayedUrl.DisplayName) ? DashboardUIHelpers.MaskUrlForDisplay(displayedUrl.Text) : displayedUrl.Text;
     }
 
     [Parameter, EditorRequired]

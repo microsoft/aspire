@@ -253,6 +253,12 @@ const (
 	// EndpointPropertyTlsEnabled indicates whether TLS is enabled on the endpoint.
 	// Returns TrueString or FalseString.
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
+	// EndpointPropertyBrowserOrigins - Comma-separated browser-facing origins for
+	// this endpoint.
+	EndpointPropertyBrowserOrigins EndpointProperty = "BrowserOrigins"
+	// EndpointPropertyPrimaryBrowserOrigin is the primary browser-facing origin for
+	// this endpoint.
+	EndpointPropertyPrimaryBrowserOrigin EndpointProperty = "PrimaryBrowserOrigin"
 )
 
 // InputType specifies the type of input for an [InteractionInput].
@@ -1922,7 +1928,7 @@ func newAfterPublishEventFromHandle(h *handle, c *client) AfterPublishEvent {
 
 // Model is the [DistributedApplicationModel] instance.
 func (s *afterPublishEvent) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1941,7 +1947,7 @@ func (s *afterPublishEvent) Model() DistributedApplicationModel {
 
 // Services is the [ServiceProvider] for the app host.
 func (s *afterPublishEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -1992,7 +1998,7 @@ func newAfterResourcesCreatedEventFromHandle(h *handle, c *client) AfterResource
 
 // Model is the [DistributedApplicationModel] instance.
 func (s *afterResourcesCreatedEvent) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2011,7 +2017,7 @@ func (s *afterResourcesCreatedEvent) Model() DistributedApplicationModel {
 
 // Services is the [ServiceProvider] instance.
 func (s *afterResourcesCreatedEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2068,7 +2074,7 @@ func newAspireStoreFromHandle(h *handle, c *client) AspireStore {
 
 // BasePath gets the base path of this store.
 func (s *aspireStore) BasePath() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -2085,7 +2091,7 @@ func (s *aspireStore) BasePath() (string, error) {
 // sourceFilename. The resulting file name will depend on the content of the
 // file.
 func (s *aspireStore) GetFileNameWithContent(filenameTemplate string, sourceFilename string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"aspireStore": s.handle.ToJSON(),
@@ -3245,6 +3251,20 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -3390,7 +3410,7 @@ func (*aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) isContainerResou
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsHttp2Service() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3402,7 +3422,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsHttp2Service
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -3421,7 +3441,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) CreateExecutio
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) ExcludeFromManifest() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3434,7 +3454,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) ExcludeFromMan
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) ExcludeFromMcp() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3445,7 +3465,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) ExcludeFromMcp
 
 // GetEndpoint gets an endpoint reference
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3465,7 +3485,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetEndpoint(na
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -3481,7 +3501,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetResourceNam
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -3498,7 +3518,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetSerializedA
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -3514,7 +3534,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) HasSerializedA
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3533,7 +3553,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnBeforeResour
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3553,7 +3573,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnInitializeRe
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3572,7 +3592,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceEndp
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceReady(callback func(arg ResourceReadyEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3591,7 +3611,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceRead
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3611,7 +3631,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceStop
 // PublishAsConnectionString changes the resource to be published as a
 // connection string reference in the manifest.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConnectionString() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3623,7 +3643,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConne
 // PublishAsContainer changes the resource to be published as a container in the
 // manifest.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsContainer() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3637,7 +3657,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConta
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3656,7 +3676,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) SubscribeHttps
 
 // TestWaitFor waits for another resource (test version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3670,7 +3690,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(de
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3689,7 +3709,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnviro
 
 // WaitFor waits for another resource to be ready
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitFor(dependency Resource, options ...*WaitForOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3710,7 +3730,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitFor(depend
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3730,7 +3750,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForComplet
 
 // WaitForStart waits for another resource to start
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3751,7 +3771,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForStart(d
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3764,7 +3784,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgs(args 
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3784,7 +3804,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsCallba
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsReplace(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3796,7 +3816,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsReplac
 
 // WithBindMount adds a bind mount to a container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3818,7 +3838,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBindMount(
 // Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildArg(name string, value any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -3838,7 +3858,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildArg(n
 // WithBuildSecret adds a secret build argument when the container is built from
 // a Dockerfile.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildSecret(name string, value ParameterResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3852,7 +3872,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildSecre
 
 // WithCancellableOperation performs a cancellable operation
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3860,7 +3880,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -3872,7 +3892,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3891,7 +3911,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCertificat
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCertificateTrustScope(scope CertificateTrustScope) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3903,7 +3923,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCertificat
 
 // WithChildRelationship sets a child relationship
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithChildRelationship(child Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3916,7 +3936,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithChildRelat
 
 // WithCommand adds a resource command
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3944,7 +3964,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCommand(na
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3957,7 +3977,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithComputeEnv
 
 // WithConfig configures the resource with a DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3970,7 +3990,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(con
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -3990,7 +4010,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerB
 // WithContainerCertificatePaths adds container certificate path overrides used
 // for certificate trust at run time.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4009,7 +4029,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerC
 // WithContainerFiles creates or updates files and folders in a container by
 // copying them from a source path on the host.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4031,7 +4051,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 // WithContainerFilesCallback creates or updates files and/or folders at the
 // destination path in the container using entries produced by a callback.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4040,7 +4060,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -4063,7 +4083,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 // that behavior with a custom name, but could lead to naming conflicts if the
 // specified name is not unique.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerName(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4075,7 +4095,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerN
 
 // WithContainerNetworkAlias adds a network alias to container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerNetworkAlias(alias string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4088,7 +4108,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerN
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerRegistry(registry Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -4103,7 +4123,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerR
 // arguments to add to the container runtime run command when a container
 // resource is started.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerRuntimeArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4115,7 +4135,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerR
 
 // WithCorrelationId sets the correlation ID
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCorrelationId(correlationId string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4127,7 +4147,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCorrelatio
 
 // WithCreatedAt sets the created timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4140,7 +4160,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDashboardPosition(position float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4152,7 +4172,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDashboardP
 
 // WithDependency adds a dependency on another resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -4170,7 +4190,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDeveloperCertificateTrust(trust bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4183,7 +4203,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDeveloperC
 // WithDockerfile - Causes Aspire to build the specified container image from a
 // Dockerfile.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4203,7 +4223,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4222,7 +4242,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile
 // WithDockerfileBuilder configures the resource to use a programmatically
 // generated Dockerfile
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfileBuilder(contextPath string, callback func(arg DockerfileBuilderCallbackContext), options ...*WithDockerfileBuilderOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4250,7 +4270,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile
 // WithDockerfileFactory builds the specified container image from a Dockerfile
 // generated by an asynchronous factory function.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfileFactory(contextPath string, dockerfileFactory func(arg DockerfileFactoryContext) string, options ...*WithDockerfileFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4276,7 +4296,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile
 
 // WithEndpoint adds a network endpoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoint(options ...*WithEndpointOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4294,7 +4314,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoint(o
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4324,7 +4344,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointCa
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointProxySupport(proxyEnabled bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4336,7 +4356,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointPr
 
 // WithEndpoints sets the endpoints
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(endpoints []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4348,7 +4368,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(
 
 // WithEntrypoint sets the Entrypoint for the container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEntrypoint(entrypoint string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4361,7 +4381,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEntrypoint
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironment(name string, value any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -4381,7 +4401,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4400,7 +4420,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 
 // WithEnvironmentVariables sets environment variables
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentVariables(variables map[string]string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4412,7 +4432,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithExplicitStart() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4424,7 +4444,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithExplicitSt
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithExternalHttpEndpoints() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4435,7 +4455,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithExternalHt
 
 // WithHealthCheck adds a health check by key
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHealthCheck(key string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4447,7 +4467,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHealthChec
 
 // WithHidden hides the resource from default resource lists
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHidden() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4459,7 +4479,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHidden() A
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4477,7 +4497,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHiddenOnCo
 
 // WithHttpCommand adds an HTTP resource command
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4498,7 +4518,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpComman
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4516,7 +4536,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpEndpoi
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4543,7 +4563,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpEndpoi
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4561,7 +4581,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpHealth
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4582,7 +4602,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpProbe(
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4605,7 +4625,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsCerti
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4623,7 +4643,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsDevel
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4641,7 +4661,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsEndpo
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4668,7 +4688,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsEndpo
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithIconName(iconName string, options ...*WithIconNameOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4687,7 +4707,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithIconName(i
 
 // WithImage allows overriding the image on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImage(image string, options ...*WithImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4706,7 +4726,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImage(imag
 
 // WithImagePullPolicy sets the pull policy for the container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4719,7 +4739,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePullP
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4738,7 +4758,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePushO
 
 // WithImageRegistry allows overriding the image registry on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageRegistry(registry string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4750,7 +4770,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageRegis
 
 // WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageSHA256(sha256 string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4762,7 +4782,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageSHA25
 
 // WithImageTag allows overriding the image tag on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageTag(tag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4774,7 +4794,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageTag(t
 
 // WithLifetime sets the lifetime behavior of the container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetime(lifetime ContainerLifetime) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4787,7 +4807,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetime(l
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetimeOf(sourceBuilder Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -4801,7 +4821,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetimeOf
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMcpServer(options ...*WithMcpServerOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4819,7 +4839,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMcpServer(
 
 // WithMergeEndpoint configures a named endpoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4832,7 +4852,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpo
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4846,7 +4866,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpo
 
 // WithMergeLabel adds a label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel(label string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4858,7 +4878,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabelCategorized(label string, category string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4871,7 +4891,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel
 
 // WithMergeLogging configures resource logging
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4890,7 +4910,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4910,7 +4930,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 
 // WithMergeRoute configures a route
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute(path string, method string, handler string, priority float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4925,7 +4945,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4941,7 +4961,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 
 // WithModifiedAt sets the modified timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithModifiedAt(modifiedAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4953,7 +4973,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithModifiedAt
 
 // WithNestedConfig configures with nested DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithNestedConfig(config *TestNestedDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4965,7 +4985,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithNestedConf
 
 // WithOptionalCallback configures with optional callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -4991,7 +5011,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 
 // WithOptionalString adds an optional string parameter
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5009,7 +5029,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalSt
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5028,7 +5048,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOtlpExport
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentProcessLifetime(parentProcessId float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5040,7 +5060,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentProc
 
 // WithParentRelationship sets the parent relationship
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentRelationship(parent Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -5053,7 +5073,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentRela
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPersistentLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5066,7 +5086,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPersistent
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5086,7 +5106,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineCo
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5114,7 +5134,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineSt
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5129,7 +5149,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5158,7 +5178,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(source any, options ...*WithReferenceOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -5184,7 +5204,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5196,7 +5216,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceE
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRelationship(resourceBuilder Resource, type_ string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -5211,7 +5231,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRelationsh
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImageName(remoteImageName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5223,7 +5243,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImag
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImageTag(remoteImageTag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5237,7 +5257,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImag
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5258,7 +5278,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5282,10 +5302,22 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -5298,7 +5330,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSerialized
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5309,7 +5341,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSessionLif
 
 // WithStatus sets the resource status
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5322,7 +5354,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(sta
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTags(tags []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5335,7 +5367,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTags(tags 
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(options ...*WithTerminalOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5365,7 +5397,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal(o
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5379,7 +5411,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTrait(name
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -5398,7 +5430,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDepen
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -5424,7 +5456,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url an
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5448,7 +5480,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlForEndp
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5467,7 +5499,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrls(callb
 
 // WithValidator adds validation callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(validator func(arg TestResourceContext) bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5485,7 +5517,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(
 
 // WithVaultDirect configures vault using direct interface target
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirect(option string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5497,7 +5529,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirec
 
 // WithVolume adds a volume to a container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVolume(target string, options ...*WithVolumeOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -5517,7 +5549,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVolume(tar
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithoutHttpsCertificate() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -5554,7 +5586,7 @@ func newBeforePublishEventFromHandle(h *handle, c *client) BeforePublishEvent {
 
 // Model is the [DistributedApplicationModel] instance.
 func (s *beforePublishEvent) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -5573,7 +5605,7 @@ func (s *beforePublishEvent) Model() DistributedApplicationModel {
 
 // Services is the [ServiceProvider] for the app host.
 func (s *beforePublishEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -5621,7 +5653,7 @@ func newBeforeResourceStartedEventFromHandle(h *handle, c *client) BeforeResourc
 
 // Resource gets the Resource property
 func (s *beforeResourceStartedEvent) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -5638,7 +5670,7 @@ func (s *beforeResourceStartedEvent) Resource() Resource {
 
 // Services gets the Services property
 func (s *beforeResourceStartedEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -5687,7 +5719,7 @@ func newBeforeStartEventFromHandle(h *handle, c *client) BeforeStartEvent {
 
 // Model is the [DistributedApplicationModel] instance.
 func (s *beforeStartEvent) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -5706,7 +5738,7 @@ func (s *beforeStartEvent) Model() DistributedApplicationModel {
 
 // Services is the [ServiceProvider] instance.
 func (s *beforeStartEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -6651,6 +6683,20 @@ type CSharpAppResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) CSharpAppResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -6787,7 +6833,7 @@ func (*cSharpAppResource) isProjectResource() {}
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *cSharpAppResource) AsHttp2Service() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6799,7 +6845,7 @@ func (s *cSharpAppResource) AsHttp2Service() CSharpAppResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *cSharpAppResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -6819,7 +6865,7 @@ func (s *cSharpAppResource) CreateExecutionConfiguration() ExecutionConfiguratio
 // DisableForwardedHeaders configures the project to disable forwarded headers
 // when being published.
 func (s *cSharpAppResource) DisableForwardedHeaders() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6830,7 +6876,7 @@ func (s *cSharpAppResource) DisableForwardedHeaders() CSharpAppResource {
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *cSharpAppResource) ExcludeFromManifest() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6843,7 +6889,7 @@ func (s *cSharpAppResource) ExcludeFromManifest() CSharpAppResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *cSharpAppResource) ExcludeFromMcp() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6854,7 +6900,7 @@ func (s *cSharpAppResource) ExcludeFromMcp() CSharpAppResource {
 
 // GetEndpoint gets an endpoint reference
 func (s *cSharpAppResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6874,7 +6920,7 @@ func (s *cSharpAppResource) GetEndpoint(name string) EndpointReference {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *cSharpAppResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -6890,7 +6936,7 @@ func (s *cSharpAppResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *cSharpAppResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -6907,7 +6953,7 @@ func (s *cSharpAppResource) GetSerializedAnnotation(annotationId string) (string
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *cSharpAppResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -6923,7 +6969,7 @@ func (s *cSharpAppResource) HasSerializedAnnotation(annotationId string) (bool, 
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *cSharpAppResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6942,7 +6988,7 @@ func (s *cSharpAppResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *cSharpAppResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6962,7 +7008,7 @@ func (s *cSharpAppResource) OnInitializeResource(callback func(arg InitializeRes
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *cSharpAppResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -6981,7 +7027,7 @@ func (s *cSharpAppResource) OnResourceEndpointsAllocated(callback func(arg Resou
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *cSharpAppResource) OnResourceReady(callback func(arg ResourceReadyEvent)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7000,7 +7046,7 @@ func (s *cSharpAppResource) OnResourceReady(callback func(arg ResourceReadyEvent
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *cSharpAppResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7020,7 +7066,7 @@ func (s *cSharpAppResource) OnResourceStopped(callback func(arg ResourceStoppedE
 // PublishAsDockerFile publishes a project as a Docker file with optional
 // container configuration
 func (s *cSharpAppResource) PublishAsDockerFile(options ...*PublishAsDockerFileOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7047,7 +7093,7 @@ func (s *cSharpAppResource) PublishAsDockerFile(options ...*PublishAsDockerFileO
 // PublishWithContainerFiles configures the resource to copy container files
 // from the specified source resource during publishing.
 func (s *cSharpAppResource) PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7064,7 +7110,7 @@ func (s *cSharpAppResource) PublishWithContainerFiles(source ResourceWithContain
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *cSharpAppResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7083,7 +7129,7 @@ func (s *cSharpAppResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 
 // TestWaitFor waits for another resource (test version)
 func (s *cSharpAppResource) TestWaitFor(dependency Resource) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7097,7 +7143,7 @@ func (s *cSharpAppResource) TestWaitFor(dependency Resource) CSharpAppResource {
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *cSharpAppResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7116,7 +7162,7 @@ func (s *cSharpAppResource) TestWithEnvironmentCallback(callback func(arg TestEn
 
 // WaitFor waits for another resource to be ready
 func (s *cSharpAppResource) WaitFor(dependency Resource, options ...*WaitForOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7137,7 +7183,7 @@ func (s *cSharpAppResource) WaitFor(dependency Resource, options ...*WaitForOpti
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *cSharpAppResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7157,7 +7203,7 @@ func (s *cSharpAppResource) WaitForCompletion(dependency Resource, options ...*W
 
 // WaitForStart waits for another resource to start
 func (s *cSharpAppResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7178,7 +7224,7 @@ func (s *cSharpAppResource) WaitForStart(dependency Resource, options ...*WaitFo
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *cSharpAppResource) WithArgs(args []string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7191,7 +7237,7 @@ func (s *cSharpAppResource) WithArgs(args []string) CSharpAppResource {
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *cSharpAppResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7211,7 +7257,7 @@ func (s *cSharpAppResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *cSharpAppResource) WithArgsReplace(args []string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7223,7 +7269,7 @@ func (s *cSharpAppResource) WithArgsReplace(args []string) CSharpAppResource {
 
 // WithCancellableOperation performs a cancellable operation
 func (s *cSharpAppResource) WithCancellableOperation(operation func(arg *CancellationToken)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7231,7 +7277,7 @@ func (s *cSharpAppResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -7243,7 +7289,7 @@ func (s *cSharpAppResource) WithCancellableOperation(operation func(arg *Cancell
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *cSharpAppResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7262,7 +7308,7 @@ func (s *cSharpAppResource) WithCertificateTrustEnvironment(certificateBundleEnv
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *cSharpAppResource) WithCertificateTrustScope(scope CertificateTrustScope) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7274,7 +7320,7 @@ func (s *cSharpAppResource) WithCertificateTrustScope(scope CertificateTrustScop
 
 // WithChildRelationship sets a child relationship
 func (s *cSharpAppResource) WithChildRelationship(child Resource) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7287,7 +7333,7 @@ func (s *cSharpAppResource) WithChildRelationship(child Resource) CSharpAppResou
 
 // WithCommand adds a resource command
 func (s *cSharpAppResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7315,7 +7361,7 @@ func (s *cSharpAppResource) WithCommand(name string, displayName string, execute
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *cSharpAppResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7328,7 +7374,7 @@ func (s *cSharpAppResource) WithComputeEnvironment(computeEnvironmentResource Co
 
 // WithConfig configures the resource with a DTO
 func (s *cSharpAppResource) WithConfig(config *TestConfigDto) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7341,7 +7387,7 @@ func (s *cSharpAppResource) WithConfig(config *TestConfigDto) CSharpAppResource 
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *cSharpAppResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7361,7 +7407,7 @@ func (s *cSharpAppResource) WithContainerBuildOptions(callback func(arg Containe
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *cSharpAppResource) WithContainerRegistry(registry Resource) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7374,7 +7420,7 @@ func (s *cSharpAppResource) WithContainerRegistry(registry Resource) CSharpAppRe
 
 // WithCorrelationId sets the correlation ID
 func (s *cSharpAppResource) WithCorrelationId(correlationId string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7386,7 +7432,7 @@ func (s *cSharpAppResource) WithCorrelationId(correlationId string) CSharpAppRes
 
 // WithCreatedAt sets the created timestamp
 func (s *cSharpAppResource) WithCreatedAt(createdAt string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7399,7 +7445,7 @@ func (s *cSharpAppResource) WithCreatedAt(createdAt string) CSharpAppResource {
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *cSharpAppResource) WithDashboardPosition(position float64) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7411,7 +7457,7 @@ func (s *cSharpAppResource) WithDashboardPosition(position float64) CSharpAppRes
 
 // WithDependency adds a dependency on another resource
 func (s *cSharpAppResource) WithDependency(dependency ResourceWithConnectionString) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7429,7 +7475,7 @@ func (s *cSharpAppResource) WithDependency(dependency ResourceWithConnectionStri
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *cSharpAppResource) WithDeveloperCertificateTrust(trust bool) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7442,7 +7488,7 @@ func (s *cSharpAppResource) WithDeveloperCertificateTrust(trust bool) CSharpAppR
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *cSharpAppResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7460,7 +7506,7 @@ func (s *cSharpAppResource) WithDockerfileBaseImage(options ...*WithDockerfileBa
 
 // WithEndpoint adds a network endpoint
 func (s *cSharpAppResource) WithEndpoint(options ...*WithEndpointOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7478,7 +7524,7 @@ func (s *cSharpAppResource) WithEndpoint(options ...*WithEndpointOptions) CSharp
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *cSharpAppResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7508,7 +7554,7 @@ func (s *cSharpAppResource) WithEndpointCallback(endpointName string, callback f
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *cSharpAppResource) WithEndpointProxySupport(proxyEnabled bool) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7520,7 +7566,7 @@ func (s *cSharpAppResource) WithEndpointProxySupport(proxyEnabled bool) CSharpAp
 
 // WithEndpoints sets the endpoints
 func (s *cSharpAppResource) WithEndpoints(endpoints []string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7533,7 +7579,7 @@ func (s *cSharpAppResource) WithEndpoints(endpoints []string) CSharpAppResource 
 // WithEndpointsInEnvironment includes only the specified project endpoint names
 // in environment-variable injection.
 func (s *cSharpAppResource) WithEndpointsInEnvironment(endpointNames []string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -7546,7 +7592,7 @@ func (s *cSharpAppResource) WithEndpointsInEnvironment(endpointNames []string) C
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *cSharpAppResource) WithEnvironment(name string, value any) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -7566,7 +7612,7 @@ func (s *cSharpAppResource) WithEnvironment(name string, value any) CSharpAppRes
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *cSharpAppResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7585,7 +7631,7 @@ func (s *cSharpAppResource) WithEnvironmentCallback(callback func(arg Environmen
 
 // WithEnvironmentVariables sets environment variables
 func (s *cSharpAppResource) WithEnvironmentVariables(variables map[string]string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7597,7 +7643,7 @@ func (s *cSharpAppResource) WithEnvironmentVariables(variables map[string]string
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *cSharpAppResource) WithExplicitStart() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7609,7 +7655,7 @@ func (s *cSharpAppResource) WithExplicitStart() CSharpAppResource {
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *cSharpAppResource) WithExternalHttpEndpoints() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7620,7 +7666,7 @@ func (s *cSharpAppResource) WithExternalHttpEndpoints() CSharpAppResource {
 
 // WithHealthCheck adds a health check by key
 func (s *cSharpAppResource) WithHealthCheck(key string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7632,7 +7678,7 @@ func (s *cSharpAppResource) WithHealthCheck(key string) CSharpAppResource {
 
 // WithHidden hides the resource from default resource lists
 func (s *cSharpAppResource) WithHidden() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7644,7 +7690,7 @@ func (s *cSharpAppResource) WithHidden() CSharpAppResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *cSharpAppResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7662,7 +7708,7 @@ func (s *cSharpAppResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompl
 
 // WithHttpCommand adds an HTTP resource command
 func (s *cSharpAppResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7683,7 +7729,7 @@ func (s *cSharpAppResource) WithHttpCommand(path string, displayName string, opt
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *cSharpAppResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7701,7 +7747,7 @@ func (s *cSharpAppResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *cSharpAppResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7728,7 +7774,7 @@ func (s *cSharpAppResource) WithHttpEndpointCallback(callback func(obj EndpointU
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *cSharpAppResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7746,7 +7792,7 @@ func (s *cSharpAppResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckO
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *cSharpAppResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7767,7 +7813,7 @@ func (s *cSharpAppResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *cSharpAppResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7790,7 +7836,7 @@ func (s *cSharpAppResource) WithHttpsCertificateConfiguration(callback func(arg 
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *cSharpAppResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7808,7 +7854,7 @@ func (s *cSharpAppResource) WithHttpsDeveloperCertificate(options ...*WithHttpsD
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *cSharpAppResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7826,7 +7872,7 @@ func (s *cSharpAppResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptio
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *cSharpAppResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7853,7 +7899,7 @@ func (s *cSharpAppResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *cSharpAppResource) WithIconName(iconName string, options ...*WithIconNameOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7873,7 +7919,7 @@ func (s *cSharpAppResource) WithIconName(iconName string, options ...*WithIconNa
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7893,7 +7939,7 @@ func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImag
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *cSharpAppResource) WithLifetimeOf(sourceBuilder Resource) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7907,7 +7953,7 @@ func (s *cSharpAppResource) WithLifetimeOf(sourceBuilder Resource) CSharpAppReso
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *cSharpAppResource) WithMcpServer(options ...*WithMcpServerOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7925,7 +7971,7 @@ func (s *cSharpAppResource) WithMcpServer(options ...*WithMcpServerOptions) CSha
 
 // WithMergeEndpoint configures a named endpoint
 func (s *cSharpAppResource) WithMergeEndpoint(endpointName string, port float64) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7938,7 +7984,7 @@ func (s *cSharpAppResource) WithMergeEndpoint(endpointName string, port float64)
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *cSharpAppResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7952,7 +7998,7 @@ func (s *cSharpAppResource) WithMergeEndpointScheme(endpointName string, port fl
 
 // WithMergeLabel adds a label to the resource
 func (s *cSharpAppResource) WithMergeLabel(label string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7964,7 +8010,7 @@ func (s *cSharpAppResource) WithMergeLabel(label string) CSharpAppResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *cSharpAppResource) WithMergeLabelCategorized(label string, category string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7977,7 +8023,7 @@ func (s *cSharpAppResource) WithMergeLabelCategorized(label string, category str
 
 // WithMergeLogging configures resource logging
 func (s *cSharpAppResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -7996,7 +8042,7 @@ func (s *cSharpAppResource) WithMergeLogging(logLevel string, options ...*WithMe
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *cSharpAppResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8016,7 +8062,7 @@ func (s *cSharpAppResource) WithMergeLoggingPath(logLevel string, logPath string
 
 // WithMergeRoute configures a route
 func (s *cSharpAppResource) WithMergeRoute(path string, method string, handler string, priority float64) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8031,7 +8077,7 @@ func (s *cSharpAppResource) WithMergeRoute(path string, method string, handler s
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *cSharpAppResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8047,7 +8093,7 @@ func (s *cSharpAppResource) WithMergeRouteMiddleware(path string, method string,
 
 // WithModifiedAt sets the modified timestamp
 func (s *cSharpAppResource) WithModifiedAt(modifiedAt string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8059,7 +8105,7 @@ func (s *cSharpAppResource) WithModifiedAt(modifiedAt string) CSharpAppResource 
 
 // WithNestedConfig configures with nested DTO
 func (s *cSharpAppResource) WithNestedConfig(config *TestNestedDto) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8071,7 +8117,7 @@ func (s *cSharpAppResource) WithNestedConfig(config *TestNestedDto) CSharpAppRes
 
 // WithOptionalCallback configures with optional callback
 func (s *cSharpAppResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8097,7 +8143,7 @@ func (s *cSharpAppResource) WithOptionalCallback(options ...*WithOptionalCallbac
 
 // WithOptionalString adds an optional string parameter
 func (s *cSharpAppResource) WithOptionalString(options ...*WithOptionalStringOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8115,7 +8161,7 @@ func (s *cSharpAppResource) WithOptionalString(options ...*WithOptionalStringOpt
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *cSharpAppResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8134,7 +8180,7 @@ func (s *cSharpAppResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *cSharpAppResource) WithParentProcessLifetime(parentProcessId float64) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8146,7 +8192,7 @@ func (s *cSharpAppResource) WithParentProcessLifetime(parentProcessId float64) C
 
 // WithParentRelationship sets the parent relationship
 func (s *cSharpAppResource) WithParentRelationship(parent Resource) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -8159,7 +8205,7 @@ func (s *cSharpAppResource) WithParentRelationship(parent Resource) CSharpAppRes
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *cSharpAppResource) WithPersistentLifetime() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8172,7 +8218,7 @@ func (s *cSharpAppResource) WithPersistentLifetime() CSharpAppResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *cSharpAppResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8192,7 +8238,7 @@ func (s *cSharpAppResource) WithPipelineConfiguration(callback func(obj Pipeline
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *cSharpAppResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8220,7 +8266,7 @@ func (s *cSharpAppResource) WithPipelineStepFactory(stepName string, callback fu
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *cSharpAppResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8235,7 +8281,7 @@ func (s *cSharpAppResource) WithProcessCommand(commandName string, displayName s
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8264,7 +8310,7 @@ func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displa
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *cSharpAppResource) WithReference(source any, options ...*WithReferenceOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -8290,7 +8336,7 @@ func (s *cSharpAppResource) WithReference(source any, options ...*WithReferenceO
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *cSharpAppResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8302,7 +8348,7 @@ func (s *cSharpAppResource) WithReferenceEnvironment(options *ReferenceEnvironme
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *cSharpAppResource) WithRelationship(resourceBuilder Resource, type_ string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -8317,7 +8363,7 @@ func (s *cSharpAppResource) WithRelationship(resourceBuilder Resource, type_ str
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *cSharpAppResource) WithRemoteImageName(remoteImageName string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8329,7 +8375,7 @@ func (s *cSharpAppResource) WithRemoteImageName(remoteImageName string) CSharpAp
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *cSharpAppResource) WithRemoteImageTag(remoteImageTag string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8342,7 +8388,7 @@ func (s *cSharpAppResource) WithRemoteImageTag(remoteImageTag string) CSharpAppR
 // WithReplicas configures how many replicas of the project should be created
 // for the project.
 func (s *cSharpAppResource) WithReplicas(replicas float64) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8356,7 +8402,7 @@ func (s *cSharpAppResource) WithReplicas(replicas float64) CSharpAppResource {
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *cSharpAppResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8377,7 +8423,7 @@ func (s *cSharpAppResource) WithRequiredCommand(command string, options ...*With
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *cSharpAppResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8401,10 +8447,22 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *cSharpAppResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) CSharpAppResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *cSharpAppResource) WithSerializedAnnotation(annotationId string, json string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -8417,7 +8475,7 @@ func (s *cSharpAppResource) WithSerializedAnnotation(annotationId string, json s
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *cSharpAppResource) WithSessionLifetime() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8428,7 +8486,7 @@ func (s *cSharpAppResource) WithSessionLifetime() CSharpAppResource {
 
 // WithStatus sets the resource status
 func (s *cSharpAppResource) WithStatus(status TestResourceStatus) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8441,7 +8499,7 @@ func (s *cSharpAppResource) WithStatus(status TestResourceStatus) CSharpAppResou
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *cSharpAppResource) WithTags(tags []string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8454,7 +8512,7 @@ func (s *cSharpAppResource) WithTags(tags []string) CSharpAppResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8484,7 +8542,7 @@ func (s *cSharpAppResource) WithTerminal(options ...*WithTerminalOptions) CSharp
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *cSharpAppResource) WithTrait(name string, value string) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8498,7 +8556,7 @@ func (s *cSharpAppResource) WithTrait(name string, value string) CSharpAppResour
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -8517,7 +8575,7 @@ func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResourc
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *cSharpAppResource) WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -8543,7 +8601,7 @@ func (s *cSharpAppResource) WithUrl(url any, options ...*WithUrlOptions) CSharpA
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *cSharpAppResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8567,7 +8625,7 @@ func (s *cSharpAppResource) WithUrlForEndpoint(endpointName string, callback fun
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *cSharpAppResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8586,7 +8644,7 @@ func (s *cSharpAppResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 
 // WithValidator adds validation callback
 func (s *cSharpAppResource) WithValidator(validator func(arg TestResourceContext) bool) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8604,7 +8662,7 @@ func (s *cSharpAppResource) WithValidator(validator func(arg TestResourceContext
 
 // WithVolume adds a volume to a project resource.
 func (s *cSharpAppResource) WithVolume(target string, name string, env string, options ...*ProjectResourceWithVolumeOptions) CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -8626,7 +8684,7 @@ func (s *cSharpAppResource) WithVolume(target string, name string, env string, o
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *cSharpAppResource) WithoutHttpsCertificate() CSharpAppResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -8674,7 +8732,7 @@ func newCommandLineArgsCallbackContextFromHandle(h *handle, c *client) CommandLi
 // Args gets the editor used to manipulate command-line arguments in polyglot
 // callbacks.
 func (s *commandLineArgsCallbackContext) Args() CommandLineArgsEditor {
-	if s.err != nil { return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -8693,7 +8751,7 @@ func (s *commandLineArgsCallbackContext) Args() CommandLineArgsEditor {
 
 // ExecutionContext gets the execution context associated with this callback.
 func (s *commandLineArgsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -8712,7 +8770,7 @@ func (s *commandLineArgsCallbackContext) ExecutionContext() DistributedApplicati
 
 // Log gets the logger facade used by polyglot callbacks.
 func (s *commandLineArgsCallbackContext) Log() LogFacade {
-	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -8731,7 +8789,7 @@ func (s *commandLineArgsCallbackContext) Log() LogFacade {
 
 // Resource is the resource associated with this callback context.
 func (s *commandLineArgsCallbackContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -8782,7 +8840,7 @@ func newCommandLineArgsEditorFromHandle(h *handle, c *client) CommandLineArgsEdi
 // Add adds a command-line argument.
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue.
 func (s *commandLineArgsEditor) Add(value any) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -8800,7 +8858,7 @@ func (s *commandLineArgsEditor) Add(value any) error {
 
 // Clear clears all command-line arguments.
 func (s *commandLineArgsEditor) Clear() error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -8867,7 +8925,7 @@ func newConfigurationFromHandle(h *handle, c *client) Configuration {
 
 // Exists checks whether a configuration section exists.
 func (s *configuration) Exists(key string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -8883,7 +8941,7 @@ func (s *configuration) Exists(key string) (bool, error) {
 
 // GetChildren gets the child sections of a configuration handle.
 func (s *configuration) GetChildren() ([]ConfigurationSection, error) {
-	if s.err != nil { var zero []ConfigurationSection; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []ConfigurationSection; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -8898,7 +8956,7 @@ func (s *configuration) GetChildren() ([]ConfigurationSection, error) {
 
 // GetConfigValue gets a configuration value by key.
 func (s *configuration) GetConfigValue(key string) (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -8914,7 +8972,7 @@ func (s *configuration) GetConfigValue(key string) (*string, error) {
 
 // GetConnectionString gets a connection string by name.
 func (s *configuration) GetConnectionString(name string) (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -8930,7 +8988,7 @@ func (s *configuration) GetConnectionString(name string) (*string, error) {
 
 // GetSection gets a configuration section by key.
 func (s *configuration) GetSection(key string) ConfigurationSection {
-	if s.err != nil { return &configurationSection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &configurationSection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -8982,7 +9040,7 @@ func newConfigurationSectionFromHandle(h *handle, c *client) ConfigurationSectio
 
 // Key gets the Key property
 func (s *configurationSection) Key() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -8997,7 +9055,7 @@ func (s *configurationSection) Key() (string, error) {
 
 // Path gets the Path property
 func (s *configurationSection) Path() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9012,7 +9070,7 @@ func (s *configurationSection) Path() (string, error) {
 
 // SetValue sets the Value property
 func (s *configurationSection) SetValue(value *string) ConfigurationSection {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9024,7 +9082,7 @@ func (s *configurationSection) SetValue(value *string) ConfigurationSection {
 
 // Value gets the Value property
 func (s *configurationSection) Value() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9065,7 +9123,7 @@ func newConnectionStringAvailableEventFromHandle(h *handle, c *client) Connectio
 
 // Resource gets the Resource property
 func (s *connectionStringAvailableEvent) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9082,7 +9140,7 @@ func (s *connectionStringAvailableEvent) Resource() Resource {
 
 // Services gets the Services property
 func (s *connectionStringAvailableEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9274,7 +9332,7 @@ func newContainerBuildOptionsCallbackContextFromHandle(h *handle, c *client) Con
 
 // CancellationToken gets the cancellation token.
 func (s *containerBuildOptionsCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9289,7 +9347,7 @@ func (s *containerBuildOptionsCallbackContext) CancellationToken() (*Cancellatio
 
 // Destination gets the destination for the container image.
 func (s *containerBuildOptionsCallbackContext) Destination() (*ContainerImageDestination, error) {
-	if s.err != nil { var zero *ContainerImageDestination; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *ContainerImageDestination; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9304,7 +9362,7 @@ func (s *containerBuildOptionsCallbackContext) Destination() (*ContainerImageDes
 
 // ExecutionContext gets the distributed application execution context.
 func (s *containerBuildOptionsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9323,7 +9381,7 @@ func (s *containerBuildOptionsCallbackContext) ExecutionContext() DistributedApp
 
 // ImageFormat gets the container image format.
 func (s *containerBuildOptionsCallbackContext) ImageFormat() (*ContainerImageFormat, error) {
-	if s.err != nil { var zero *ContainerImageFormat; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *ContainerImageFormat; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9338,7 +9396,7 @@ func (s *containerBuildOptionsCallbackContext) ImageFormat() (*ContainerImageFor
 
 // LocalImageName gets the local image name for the built container.
 func (s *containerBuildOptionsCallbackContext) LocalImageName() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9353,7 +9411,7 @@ func (s *containerBuildOptionsCallbackContext) LocalImageName() (*string, error)
 
 // LocalImageTag gets the local image tag for the built container.
 func (s *containerBuildOptionsCallbackContext) LocalImageTag() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9368,7 +9426,7 @@ func (s *containerBuildOptionsCallbackContext) LocalImageTag() (*string, error) 
 
 // Logger gets the logger instance.
 func (s *containerBuildOptionsCallbackContext) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9387,7 +9445,7 @@ func (s *containerBuildOptionsCallbackContext) Logger() Logger {
 
 // OutputPath gets the output path for the container archive.
 func (s *containerBuildOptionsCallbackContext) OutputPath() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9402,7 +9460,7 @@ func (s *containerBuildOptionsCallbackContext) OutputPath() (*string, error) {
 
 // Resource gets the resource being built.
 func (s *containerBuildOptionsCallbackContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9419,7 +9477,7 @@ func (s *containerBuildOptionsCallbackContext) Resource() Resource {
 
 // Services gets the service provider.
 func (s *containerBuildOptionsCallbackContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9438,7 +9496,7 @@ func (s *containerBuildOptionsCallbackContext) Services() ServiceProvider {
 
 // SetDestination sets the destination for the container image.
 func (s *containerBuildOptionsCallbackContext) SetDestination(value *ContainerImageDestination) ContainerBuildOptionsCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9450,7 +9508,7 @@ func (s *containerBuildOptionsCallbackContext) SetDestination(value *ContainerIm
 
 // SetImageFormat sets the container image format.
 func (s *containerBuildOptionsCallbackContext) SetImageFormat(value *ContainerImageFormat) ContainerBuildOptionsCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9462,7 +9520,7 @@ func (s *containerBuildOptionsCallbackContext) SetImageFormat(value *ContainerIm
 
 // SetLocalImageName sets the local image name for the built container.
 func (s *containerBuildOptionsCallbackContext) SetLocalImageName(value *string) ContainerBuildOptionsCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9474,7 +9532,7 @@ func (s *containerBuildOptionsCallbackContext) SetLocalImageName(value *string) 
 
 // SetLocalImageTag sets the local image tag for the built container.
 func (s *containerBuildOptionsCallbackContext) SetLocalImageTag(value *string) ContainerBuildOptionsCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9486,7 +9544,7 @@ func (s *containerBuildOptionsCallbackContext) SetLocalImageTag(value *string) C
 
 // SetOutputPath sets the output path for the container archive.
 func (s *containerBuildOptionsCallbackContext) SetOutputPath(value *string) ContainerBuildOptionsCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9498,7 +9556,7 @@ func (s *containerBuildOptionsCallbackContext) SetOutputPath(value *string) Cont
 
 // SetTargetPlatform sets the target platform for the container.
 func (s *containerBuildOptionsCallbackContext) SetTargetPlatform(value *ContainerTargetPlatform) ContainerBuildOptionsCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9510,7 +9568,7 @@ func (s *containerBuildOptionsCallbackContext) SetTargetPlatform(value *Containe
 
 // TargetPlatform gets the target platform for the container.
 func (s *containerBuildOptionsCallbackContext) TargetPlatform() (*ContainerTargetPlatform, error) {
-	if s.err != nil { var zero *ContainerTargetPlatform; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *ContainerTargetPlatform; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9585,7 +9643,7 @@ func newContainerFileSystemCallbackContextFromHandle(h *handle, c *client) Conta
 // CreateCertificateFile creates a PEM container certificate file entry with the
 // OpenSSL subject-hash symlink.
 func (s *containerFileSystemCallbackContext) CreateCertificateFile(name string, options ...*CreateCertificateFileOptions) ContainerFileSystemItem {
-	if s.err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9613,7 +9671,7 @@ func (s *containerFileSystemCallbackContext) CreateCertificateFile(name string, 
 // CreateDirectory creates a container directory entry containing the specified
 // child entries.
 func (s *containerFileSystemCallbackContext) CreateDirectory(name string, entries []ContainerFileSystemItem, options ...*CreateDirectoryOptions) ContainerFileSystemItem {
-	if s.err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9642,7 +9700,7 @@ func (s *containerFileSystemCallbackContext) CreateDirectory(name string, entrie
 // CreateFile creates a container file entry with inline contents or a host
 // source path.
 func (s *containerFileSystemCallbackContext) CreateFile(name string, options ...*CreateFileOptions) ContainerFileSystemItem {
-	if s.err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerFileSystemItem{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9669,7 +9727,7 @@ func (s *containerFileSystemCallbackContext) CreateFile(name string, options ...
 
 // Model - The app model resource the callback is associated with.
 func (s *containerFileSystemCallbackContext) Model() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9687,7 +9745,7 @@ func (s *containerFileSystemCallbackContext) Model() Resource {
 // Services is a [ServiceProvider] that can be used to resolve services in the
 // callback.
 func (s *containerFileSystemCallbackContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9792,7 +9850,7 @@ func newContainerImagePushOptionsFromHandle(h *handle, c *client) ContainerImage
 // RemoteImageName gets the remote image name (repository path without registry
 // endpoint or tag).
 func (s *containerImagePushOptions) RemoteImageName() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9807,7 +9865,7 @@ func (s *containerImagePushOptions) RemoteImageName() (*string, error) {
 
 // RemoteImageTag gets the remote image tag.
 func (s *containerImagePushOptions) RemoteImageTag() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9823,7 +9881,7 @@ func (s *containerImagePushOptions) RemoteImageTag() (*string, error) {
 // SetRemoteImageName sets the remote image name (repository path without
 // registry endpoint or tag).
 func (s *containerImagePushOptions) SetRemoteImageName(value *string) ContainerImagePushOptions {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9835,7 +9893,7 @@ func (s *containerImagePushOptions) SetRemoteImageName(value *string) ContainerI
 
 // SetRemoteImageTag sets the remote image tag.
 func (s *containerImagePushOptions) SetRemoteImageTag(value *string) ContainerImagePushOptions {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9895,7 +9953,7 @@ func newContainerImagePushOptionsCallbackContextFromHandle(h *handle, c *client)
 // CancellationToken gets the cancellation token to observe while configuring
 // image push options.
 func (s *containerImagePushOptionsCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9911,7 +9969,7 @@ func (s *containerImagePushOptionsCallbackContext) CancellationToken() (*Cancell
 // Options gets the container image push options that can be modified by the
 // callback.
 func (s *containerImagePushOptionsCallbackContext) Options() ContainerImagePushOptions {
-	if s.err != nil { return &containerImagePushOptions{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerImagePushOptions{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9931,7 +9989,7 @@ func (s *containerImagePushOptionsCallbackContext) Options() ContainerImagePushO
 // Resource gets the resource being configured for container image push
 // operations.
 func (s *containerImagePushOptionsCallbackContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9974,7 +10032,7 @@ func newContainerImageReferenceFromHandle(h *handle, c *client) ContainerImageRe
 
 // Resource gets the resource that this container image is associated with.
 func (s *containerImageReference) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -9991,7 +10049,7 @@ func (s *containerImageReference) Resource() Resource {
 
 // ValueExpression gets the ValueExpression property
 func (s *containerImageReference) ValueExpression() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -10039,7 +10097,7 @@ func newContainerMountAnnotationFromHandle(h *handle, c *client) ContainerMountA
 
 // IsReadOnly gets a value indicating whether the volume mount is read-only.
 func (s *containerMountAnnotation) IsReadOnly() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -10055,7 +10113,7 @@ func (s *containerMountAnnotation) IsReadOnly() (bool, error) {
 // Source gets the source of the bind mount or name if a volume. Can be nil if
 // the mount is an anonymous volume.
 func (s *containerMountAnnotation) Source() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -10070,7 +10128,7 @@ func (s *containerMountAnnotation) Source() (*string, error) {
 
 // Target gets the target of the mount.
 func (s *containerMountAnnotation) Target() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -10085,7 +10143,7 @@ func (s *containerMountAnnotation) Target() (string, error) {
 
 // Type gets the type of the mount.
 func (s *containerMountAnnotation) Type() (ContainerMountType, error) {
-	if s.err != nil { var zero ContainerMountType; return zero, s.err }
+	if err := s.Err(); err != nil { var zero ContainerMountType; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -10125,7 +10183,7 @@ func newContainerPortReferenceFromHandle(h *handle, c *client) ContainerPortRefe
 
 // Resource gets the resource that this container port is associated with.
 func (s *containerPortReference) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -10142,7 +10200,7 @@ func (s *containerPortReference) Resource() Resource {
 
 // ValueExpression gets the ValueExpression property
 func (s *containerPortReference) ValueExpression() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -10610,6 +10668,20 @@ type ContainerRegistryResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerRegistryResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -10716,7 +10788,7 @@ func newContainerRegistryResourceFromHandle(h *handle, c *client) ContainerRegis
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *containerRegistryResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -10735,7 +10807,7 @@ func (s *containerRegistryResource) CreateExecutionConfiguration() ExecutionConf
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *containerRegistryResource) ExcludeFromManifest() ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10748,7 +10820,7 @@ func (s *containerRegistryResource) ExcludeFromManifest() ContainerRegistryResou
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *containerRegistryResource) ExcludeFromMcp() ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10759,7 +10831,7 @@ func (s *containerRegistryResource) ExcludeFromMcp() ContainerRegistryResource {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *containerRegistryResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -10775,7 +10847,7 @@ func (s *containerRegistryResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *containerRegistryResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -10792,7 +10864,7 @@ func (s *containerRegistryResource) GetSerializedAnnotation(annotationId string)
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *containerRegistryResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -10808,7 +10880,7 @@ func (s *containerRegistryResource) HasSerializedAnnotation(annotationId string)
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *containerRegistryResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10827,7 +10899,7 @@ func (s *containerRegistryResource) OnBeforeResourceStarted(callback func(arg Be
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *containerRegistryResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10846,7 +10918,7 @@ func (s *containerRegistryResource) OnInitializeResource(callback func(arg Initi
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *containerRegistryResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10865,7 +10937,7 @@ func (s *containerRegistryResource) OnResourceReady(callback func(arg ResourceRe
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *containerRegistryResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10887,7 +10959,7 @@ func (s *containerRegistryResource) OnResourceStopped(callback func(arg Resource
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *containerRegistryResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10906,7 +10978,7 @@ func (s *containerRegistryResource) SubscribeHttpsEndpointsUpdate(callback func(
 
 // TestWaitFor waits for another resource (test version)
 func (s *containerRegistryResource) TestWaitFor(dependency Resource) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -10919,7 +10991,7 @@ func (s *containerRegistryResource) TestWaitFor(dependency Resource) ContainerRe
 
 // WithCancellableOperation performs a cancellable operation
 func (s *containerRegistryResource) WithCancellableOperation(operation func(arg *CancellationToken)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10927,7 +10999,7 @@ func (s *containerRegistryResource) WithCancellableOperation(operation func(arg 
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -10938,7 +11010,7 @@ func (s *containerRegistryResource) WithCancellableOperation(operation func(arg 
 
 // WithChildRelationship sets a child relationship
 func (s *containerRegistryResource) WithChildRelationship(child Resource) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -10951,7 +11023,7 @@ func (s *containerRegistryResource) WithChildRelationship(child Resource) Contai
 
 // WithCommand adds a resource command
 func (s *containerRegistryResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10978,7 +11050,7 @@ func (s *containerRegistryResource) WithCommand(name string, displayName string,
 
 // WithConfig configures the resource with a DTO
 func (s *containerRegistryResource) WithConfig(config *TestConfigDto) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -10991,7 +11063,7 @@ func (s *containerRegistryResource) WithConfig(config *TestConfigDto) ContainerR
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *containerRegistryResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11011,7 +11083,7 @@ func (s *containerRegistryResource) WithContainerBuildOptions(callback func(arg 
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *containerRegistryResource) WithContainerRegistry(registry Resource) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -11024,7 +11096,7 @@ func (s *containerRegistryResource) WithContainerRegistry(registry Resource) Con
 
 // WithCorrelationId sets the correlation ID
 func (s *containerRegistryResource) WithCorrelationId(correlationId string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11036,7 +11108,7 @@ func (s *containerRegistryResource) WithCorrelationId(correlationId string) Cont
 
 // WithCreatedAt sets the created timestamp
 func (s *containerRegistryResource) WithCreatedAt(createdAt string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11049,7 +11121,7 @@ func (s *containerRegistryResource) WithCreatedAt(createdAt string) ContainerReg
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *containerRegistryResource) WithDashboardPosition(position float64) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11061,7 +11133,7 @@ func (s *containerRegistryResource) WithDashboardPosition(position float64) Cont
 
 // WithDependency adds a dependency on another resource
 func (s *containerRegistryResource) WithDependency(dependency ResourceWithConnectionString) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -11075,7 +11147,7 @@ func (s *containerRegistryResource) WithDependency(dependency ResourceWithConnec
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *containerRegistryResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11093,7 +11165,7 @@ func (s *containerRegistryResource) WithDockerfileBaseImage(options ...*WithDock
 
 // WithEndpoints sets the endpoints
 func (s *containerRegistryResource) WithEndpoints(endpoints []string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11105,7 +11177,7 @@ func (s *containerRegistryResource) WithEndpoints(endpoints []string) ContainerR
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *containerRegistryResource) WithExplicitStart() ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11116,7 +11188,7 @@ func (s *containerRegistryResource) WithExplicitStart() ContainerRegistryResourc
 
 // WithHealthCheck adds a health check by key
 func (s *containerRegistryResource) WithHealthCheck(key string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11128,7 +11200,7 @@ func (s *containerRegistryResource) WithHealthCheck(key string) ContainerRegistr
 
 // WithHidden hides the resource from default resource lists
 func (s *containerRegistryResource) WithHidden() ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11140,7 +11212,7 @@ func (s *containerRegistryResource) WithHidden() ContainerRegistryResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *containerRegistryResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11159,7 +11231,7 @@ func (s *containerRegistryResource) WithHiddenOnCompletion(options ...*WithHidde
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *containerRegistryResource) WithIconName(iconName string, options ...*WithIconNameOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11179,7 +11251,7 @@ func (s *containerRegistryResource) WithIconName(iconName string, options ...*Wi
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *containerRegistryResource) WithLifetimeOf(sourceBuilder Resource) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -11192,7 +11264,7 @@ func (s *containerRegistryResource) WithLifetimeOf(sourceBuilder Resource) Conta
 
 // WithMergeEndpoint configures a named endpoint
 func (s *containerRegistryResource) WithMergeEndpoint(endpointName string, port float64) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11205,7 +11277,7 @@ func (s *containerRegistryResource) WithMergeEndpoint(endpointName string, port 
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *containerRegistryResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11219,7 +11291,7 @@ func (s *containerRegistryResource) WithMergeEndpointScheme(endpointName string,
 
 // WithMergeLabel adds a label to the resource
 func (s *containerRegistryResource) WithMergeLabel(label string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11231,7 +11303,7 @@ func (s *containerRegistryResource) WithMergeLabel(label string) ContainerRegist
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *containerRegistryResource) WithMergeLabelCategorized(label string, category string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11244,7 +11316,7 @@ func (s *containerRegistryResource) WithMergeLabelCategorized(label string, cate
 
 // WithMergeLogging configures resource logging
 func (s *containerRegistryResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11263,7 +11335,7 @@ func (s *containerRegistryResource) WithMergeLogging(logLevel string, options ..
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *containerRegistryResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11283,7 +11355,7 @@ func (s *containerRegistryResource) WithMergeLoggingPath(logLevel string, logPat
 
 // WithMergeRoute configures a route
 func (s *containerRegistryResource) WithMergeRoute(path string, method string, handler string, priority float64) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11298,7 +11370,7 @@ func (s *containerRegistryResource) WithMergeRoute(path string, method string, h
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *containerRegistryResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11314,7 +11386,7 @@ func (s *containerRegistryResource) WithMergeRouteMiddleware(path string, method
 
 // WithModifiedAt sets the modified timestamp
 func (s *containerRegistryResource) WithModifiedAt(modifiedAt string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11326,7 +11398,7 @@ func (s *containerRegistryResource) WithModifiedAt(modifiedAt string) ContainerR
 
 // WithNestedConfig configures with nested DTO
 func (s *containerRegistryResource) WithNestedConfig(config *TestNestedDto) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11338,7 +11410,7 @@ func (s *containerRegistryResource) WithNestedConfig(config *TestNestedDto) Cont
 
 // WithOptionalCallback configures with optional callback
 func (s *containerRegistryResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11364,7 +11436,7 @@ func (s *containerRegistryResource) WithOptionalCallback(options ...*WithOptiona
 
 // WithOptionalString adds an optional string parameter
 func (s *containerRegistryResource) WithOptionalString(options ...*WithOptionalStringOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11383,7 +11455,7 @@ func (s *containerRegistryResource) WithOptionalString(options ...*WithOptionalS
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *containerRegistryResource) WithParentProcessLifetime(parentProcessId float64) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11395,7 +11467,7 @@ func (s *containerRegistryResource) WithParentProcessLifetime(parentProcessId fl
 
 // WithParentRelationship sets the parent relationship
 func (s *containerRegistryResource) WithParentRelationship(parent Resource) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -11408,7 +11480,7 @@ func (s *containerRegistryResource) WithParentRelationship(parent Resource) Cont
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *containerRegistryResource) WithPersistentLifetime() ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11421,7 +11493,7 @@ func (s *containerRegistryResource) WithPersistentLifetime() ContainerRegistryRe
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *containerRegistryResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11441,7 +11513,7 @@ func (s *containerRegistryResource) WithPipelineConfiguration(callback func(obj 
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *containerRegistryResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11469,7 +11541,7 @@ func (s *containerRegistryResource) WithPipelineStepFactory(stepName string, cal
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *containerRegistryResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11484,7 +11556,7 @@ func (s *containerRegistryResource) WithProcessCommand(commandName string, displ
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *containerRegistryResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11512,7 +11584,7 @@ func (s *containerRegistryResource) WithProcessCommandFactory(commandName string
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *containerRegistryResource) WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -11528,7 +11600,7 @@ func (s *containerRegistryResource) WithRelationship(resourceBuilder Resource, t
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *containerRegistryResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11549,7 +11621,7 @@ func (s *containerRegistryResource) WithRequiredCommand(command string, options 
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *containerRegistryResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11573,10 +11645,22 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *containerRegistryResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerRegistryResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *containerRegistryResource) WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -11589,7 +11673,7 @@ func (s *containerRegistryResource) WithSerializedAnnotation(annotationId string
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *containerRegistryResource) WithSessionLifetime() ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11600,7 +11684,7 @@ func (s *containerRegistryResource) WithSessionLifetime() ContainerRegistryResou
 
 // WithStatus sets the resource status
 func (s *containerRegistryResource) WithStatus(status TestResourceStatus) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11613,7 +11697,7 @@ func (s *containerRegistryResource) WithStatus(status TestResourceStatus) Contai
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *containerRegistryResource) WithTags(tags []string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11626,7 +11710,7 @@ func (s *containerRegistryResource) WithTags(tags []string) ContainerRegistryRes
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11656,7 +11740,7 @@ func (s *containerRegistryResource) WithTerminal(options ...*WithTerminalOptions
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *containerRegistryResource) WithTrait(name string, value string) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11670,7 +11754,7 @@ func (s *containerRegistryResource) WithTrait(name string, value string) Contain
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *containerRegistryResource) WithUnionDependency(dependency any) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -11689,7 +11773,7 @@ func (s *containerRegistryResource) WithUnionDependency(dependency any) Containe
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *containerRegistryResource) WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -11715,7 +11799,7 @@ func (s *containerRegistryResource) WithUrl(url any, options ...*WithUrlOptions)
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *containerRegistryResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11739,7 +11823,7 @@ func (s *containerRegistryResource) WithUrlForEndpoint(endpointName string, call
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *containerRegistryResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -11758,7 +11842,7 @@ func (s *containerRegistryResource) WithUrls(callback func(obj ResourceUrlsCallb
 
 // WithValidator adds validation callback
 func (s *containerRegistryResource) WithValidator(validator func(arg TestResourceContext) bool) ContainerRegistryResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -12917,6 +13001,20 @@ type ContainerResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -13059,7 +13157,7 @@ func (*containerResource) isContainerResource() {}
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *containerResource) AsHttp2Service() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13071,7 +13169,7 @@ func (s *containerResource) AsHttp2Service() ContainerResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *containerResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -13090,7 +13188,7 @@ func (s *containerResource) CreateExecutionConfiguration() ExecutionConfiguratio
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *containerResource) ExcludeFromManifest() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13103,7 +13201,7 @@ func (s *containerResource) ExcludeFromManifest() ContainerResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *containerResource) ExcludeFromMcp() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13114,7 +13212,7 @@ func (s *containerResource) ExcludeFromMcp() ContainerResource {
 
 // GetEndpoint gets an endpoint reference
 func (s *containerResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13134,7 +13232,7 @@ func (s *containerResource) GetEndpoint(name string) EndpointReference {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *containerResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -13150,7 +13248,7 @@ func (s *containerResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *containerResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -13167,7 +13265,7 @@ func (s *containerResource) GetSerializedAnnotation(annotationId string) (string
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *containerResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -13183,7 +13281,7 @@ func (s *containerResource) HasSerializedAnnotation(annotationId string) (bool, 
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *containerResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13202,7 +13300,7 @@ func (s *containerResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *containerResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13222,7 +13320,7 @@ func (s *containerResource) OnInitializeResource(callback func(arg InitializeRes
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *containerResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13241,7 +13339,7 @@ func (s *containerResource) OnResourceEndpointsAllocated(callback func(arg Resou
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *containerResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13260,7 +13358,7 @@ func (s *containerResource) OnResourceReady(callback func(arg ResourceReadyEvent
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *containerResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13280,7 +13378,7 @@ func (s *containerResource) OnResourceStopped(callback func(arg ResourceStoppedE
 // PublishAsConnectionString changes the resource to be published as a
 // connection string reference in the manifest.
 func (s *containerResource) PublishAsConnectionString() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13292,7 +13390,7 @@ func (s *containerResource) PublishAsConnectionString() ContainerResource {
 // PublishAsContainer changes the resource to be published as a container in the
 // manifest.
 func (s *containerResource) PublishAsContainer() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13306,7 +13404,7 @@ func (s *containerResource) PublishAsContainer() ContainerResource {
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *containerResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13325,7 +13423,7 @@ func (s *containerResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 
 // TestWaitFor waits for another resource (test version)
 func (s *containerResource) TestWaitFor(dependency Resource) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13339,7 +13437,7 @@ func (s *containerResource) TestWaitFor(dependency Resource) ContainerResource {
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *containerResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13358,7 +13456,7 @@ func (s *containerResource) TestWithEnvironmentCallback(callback func(arg TestEn
 
 // WaitFor waits for another resource to be ready
 func (s *containerResource) WaitFor(dependency Resource, options ...*WaitForOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13379,7 +13477,7 @@ func (s *containerResource) WaitFor(dependency Resource, options ...*WaitForOpti
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *containerResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13399,7 +13497,7 @@ func (s *containerResource) WaitForCompletion(dependency Resource, options ...*W
 
 // WaitForStart waits for another resource to start
 func (s *containerResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13420,7 +13518,7 @@ func (s *containerResource) WaitForStart(dependency Resource, options ...*WaitFo
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *containerResource) WithArgs(args []string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13433,7 +13531,7 @@ func (s *containerResource) WithArgs(args []string) ContainerResource {
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *containerResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13453,7 +13551,7 @@ func (s *containerResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *containerResource) WithArgsReplace(args []string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13465,7 +13563,7 @@ func (s *containerResource) WithArgsReplace(args []string) ContainerResource {
 
 // WithBindMount adds a bind mount to a container resource.
 func (s *containerResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13487,7 +13585,7 @@ func (s *containerResource) WithBindMount(source string, target string, options 
 // Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *containerResource) WithBuildArg(name string, value any) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -13507,7 +13605,7 @@ func (s *containerResource) WithBuildArg(name string, value any) ContainerResour
 // WithBuildSecret adds a secret build argument when the container is built from
 // a Dockerfile.
 func (s *containerResource) WithBuildSecret(name string, value ParameterResource) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13521,7 +13619,7 @@ func (s *containerResource) WithBuildSecret(name string, value ParameterResource
 
 // WithCancellableOperation performs a cancellable operation
 func (s *containerResource) WithCancellableOperation(operation func(arg *CancellationToken)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13529,7 +13627,7 @@ func (s *containerResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -13541,7 +13639,7 @@ func (s *containerResource) WithCancellableOperation(operation func(arg *Cancell
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *containerResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13560,7 +13658,7 @@ func (s *containerResource) WithCertificateTrustEnvironment(certificateBundleEnv
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *containerResource) WithCertificateTrustScope(scope CertificateTrustScope) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13572,7 +13670,7 @@ func (s *containerResource) WithCertificateTrustScope(scope CertificateTrustScop
 
 // WithChildRelationship sets a child relationship
 func (s *containerResource) WithChildRelationship(child Resource) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13585,7 +13683,7 @@ func (s *containerResource) WithChildRelationship(child Resource) ContainerResou
 
 // WithCommand adds a resource command
 func (s *containerResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13613,7 +13711,7 @@ func (s *containerResource) WithCommand(name string, displayName string, execute
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *containerResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13626,7 +13724,7 @@ func (s *containerResource) WithComputeEnvironment(computeEnvironmentResource Co
 
 // WithConfig configures the resource with a DTO
 func (s *containerResource) WithConfig(config *TestConfigDto) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13639,7 +13737,7 @@ func (s *containerResource) WithConfig(config *TestConfigDto) ContainerResource 
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *containerResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13659,7 +13757,7 @@ func (s *containerResource) WithContainerBuildOptions(callback func(arg Containe
 // WithContainerCertificatePaths adds container certificate path overrides used
 // for certificate trust at run time.
 func (s *containerResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13678,7 +13776,7 @@ func (s *containerResource) WithContainerCertificatePaths(options ...*WithContai
 // WithContainerFiles creates or updates files and folders in a container by
 // copying them from a source path on the host.
 func (s *containerResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13700,7 +13798,7 @@ func (s *containerResource) WithContainerFiles(destinationPath string, sourcePat
 // WithContainerFilesCallback creates or updates files and/or folders at the
 // destination path in the container using entries produced by a callback.
 func (s *containerResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13709,7 +13807,7 @@ func (s *containerResource) WithContainerFilesCallback(destinationPath string, c
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -13732,7 +13830,7 @@ func (s *containerResource) WithContainerFilesCallback(destinationPath string, c
 // that behavior with a custom name, but could lead to naming conflicts if the
 // specified name is not unique.
 func (s *containerResource) WithContainerName(name string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13744,7 +13842,7 @@ func (s *containerResource) WithContainerName(name string) ContainerResource {
 
 // WithContainerNetworkAlias adds a network alias to container resource.
 func (s *containerResource) WithContainerNetworkAlias(alias string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13757,7 +13855,7 @@ func (s *containerResource) WithContainerNetworkAlias(alias string) ContainerRes
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *containerResource) WithContainerRegistry(registry Resource) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13772,7 +13870,7 @@ func (s *containerResource) WithContainerRegistry(registry Resource) ContainerRe
 // arguments to add to the container runtime run command when a container
 // resource is started.
 func (s *containerResource) WithContainerRuntimeArgs(args []string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13784,7 +13882,7 @@ func (s *containerResource) WithContainerRuntimeArgs(args []string) ContainerRes
 
 // WithCorrelationId sets the correlation ID
 func (s *containerResource) WithCorrelationId(correlationId string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13796,7 +13894,7 @@ func (s *containerResource) WithCorrelationId(correlationId string) ContainerRes
 
 // WithCreatedAt sets the created timestamp
 func (s *containerResource) WithCreatedAt(createdAt string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13809,7 +13907,7 @@ func (s *containerResource) WithCreatedAt(createdAt string) ContainerResource {
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *containerResource) WithDashboardPosition(position float64) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13821,7 +13919,7 @@ func (s *containerResource) WithDashboardPosition(position float64) ContainerRes
 
 // WithDependency adds a dependency on another resource
 func (s *containerResource) WithDependency(dependency ResourceWithConnectionString) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13839,7 +13937,7 @@ func (s *containerResource) WithDependency(dependency ResourceWithConnectionStri
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *containerResource) WithDeveloperCertificateTrust(trust bool) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13852,7 +13950,7 @@ func (s *containerResource) WithDeveloperCertificateTrust(trust bool) ContainerR
 // WithDockerfile - Causes Aspire to build the specified container image from a
 // Dockerfile.
 func (s *containerResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13872,7 +13970,7 @@ func (s *containerResource) WithDockerfile(contextPath string, options ...*WithD
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *containerResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13891,7 +13989,7 @@ func (s *containerResource) WithDockerfileBaseImage(options ...*WithDockerfileBa
 // WithDockerfileBuilder configures the resource to use a programmatically
 // generated Dockerfile
 func (s *containerResource) WithDockerfileBuilder(contextPath string, callback func(arg DockerfileBuilderCallbackContext), options ...*WithDockerfileBuilderOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13919,7 +14017,7 @@ func (s *containerResource) WithDockerfileBuilder(contextPath string, callback f
 // WithDockerfileFactory builds the specified container image from a Dockerfile
 // generated by an asynchronous factory function.
 func (s *containerResource) WithDockerfileFactory(contextPath string, dockerfileFactory func(arg DockerfileFactoryContext) string, options ...*WithDockerfileFactoryOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13945,7 +14043,7 @@ func (s *containerResource) WithDockerfileFactory(contextPath string, dockerfile
 
 // WithEndpoint adds a network endpoint
 func (s *containerResource) WithEndpoint(options ...*WithEndpointOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13963,7 +14061,7 @@ func (s *containerResource) WithEndpoint(options ...*WithEndpointOptions) Contai
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *containerResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -13993,7 +14091,7 @@ func (s *containerResource) WithEndpointCallback(endpointName string, callback f
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *containerResource) WithEndpointProxySupport(proxyEnabled bool) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14005,7 +14103,7 @@ func (s *containerResource) WithEndpointProxySupport(proxyEnabled bool) Containe
 
 // WithEndpoints sets the endpoints
 func (s *containerResource) WithEndpoints(endpoints []string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14017,7 +14115,7 @@ func (s *containerResource) WithEndpoints(endpoints []string) ContainerResource 
 
 // WithEntrypoint sets the Entrypoint for the container.
 func (s *containerResource) WithEntrypoint(entrypoint string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14030,7 +14128,7 @@ func (s *containerResource) WithEntrypoint(entrypoint string) ContainerResource 
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *containerResource) WithEnvironment(name string, value any) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -14050,7 +14148,7 @@ func (s *containerResource) WithEnvironment(name string, value any) ContainerRes
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *containerResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14069,7 +14167,7 @@ func (s *containerResource) WithEnvironmentCallback(callback func(arg Environmen
 
 // WithEnvironmentVariables sets environment variables
 func (s *containerResource) WithEnvironmentVariables(variables map[string]string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14081,7 +14179,7 @@ func (s *containerResource) WithEnvironmentVariables(variables map[string]string
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *containerResource) WithExplicitStart() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14093,7 +14191,7 @@ func (s *containerResource) WithExplicitStart() ContainerResource {
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *containerResource) WithExternalHttpEndpoints() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14104,7 +14202,7 @@ func (s *containerResource) WithExternalHttpEndpoints() ContainerResource {
 
 // WithHealthCheck adds a health check by key
 func (s *containerResource) WithHealthCheck(key string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14116,7 +14214,7 @@ func (s *containerResource) WithHealthCheck(key string) ContainerResource {
 
 // WithHidden hides the resource from default resource lists
 func (s *containerResource) WithHidden() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14128,7 +14226,7 @@ func (s *containerResource) WithHidden() ContainerResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *containerResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14146,7 +14244,7 @@ func (s *containerResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompl
 
 // WithHttpCommand adds an HTTP resource command
 func (s *containerResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14167,7 +14265,7 @@ func (s *containerResource) WithHttpCommand(path string, displayName string, opt
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *containerResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14185,7 +14283,7 @@ func (s *containerResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *containerResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14212,7 +14310,7 @@ func (s *containerResource) WithHttpEndpointCallback(callback func(obj EndpointU
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *containerResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14230,7 +14328,7 @@ func (s *containerResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckO
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *containerResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14251,7 +14349,7 @@ func (s *containerResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *containerResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14274,7 +14372,7 @@ func (s *containerResource) WithHttpsCertificateConfiguration(callback func(arg 
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *containerResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14292,7 +14390,7 @@ func (s *containerResource) WithHttpsDeveloperCertificate(options ...*WithHttpsD
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *containerResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14310,7 +14408,7 @@ func (s *containerResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptio
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *containerResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14337,7 +14435,7 @@ func (s *containerResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *containerResource) WithIconName(iconName string, options ...*WithIconNameOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14356,7 +14454,7 @@ func (s *containerResource) WithIconName(iconName string, options ...*WithIconNa
 
 // WithImage allows overriding the image on a container.
 func (s *containerResource) WithImage(image string, options ...*WithImageOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14375,7 +14473,7 @@ func (s *containerResource) WithImage(image string, options ...*WithImageOptions
 
 // WithImagePullPolicy sets the pull policy for the container resource.
 func (s *containerResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14388,7 +14486,7 @@ func (s *containerResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) Cont
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *containerResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14407,7 +14505,7 @@ func (s *containerResource) WithImagePushOptions(callback func(arg ContainerImag
 
 // WithImageRegistry allows overriding the image registry on a container.
 func (s *containerResource) WithImageRegistry(registry string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14419,7 +14517,7 @@ func (s *containerResource) WithImageRegistry(registry string) ContainerResource
 
 // WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *containerResource) WithImageSHA256(sha256 string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14431,7 +14529,7 @@ func (s *containerResource) WithImageSHA256(sha256 string) ContainerResource {
 
 // WithImageTag allows overriding the image tag on a container.
 func (s *containerResource) WithImageTag(tag string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14443,7 +14541,7 @@ func (s *containerResource) WithImageTag(tag string) ContainerResource {
 
 // WithLifetime sets the lifetime behavior of the container resource.
 func (s *containerResource) WithLifetime(lifetime ContainerLifetime) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14456,7 +14554,7 @@ func (s *containerResource) WithLifetime(lifetime ContainerLifetime) ContainerRe
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *containerResource) WithLifetimeOf(sourceBuilder Resource) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -14470,7 +14568,7 @@ func (s *containerResource) WithLifetimeOf(sourceBuilder Resource) ContainerReso
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *containerResource) WithMcpServer(options ...*WithMcpServerOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14488,7 +14586,7 @@ func (s *containerResource) WithMcpServer(options ...*WithMcpServerOptions) Cont
 
 // WithMergeEndpoint configures a named endpoint
 func (s *containerResource) WithMergeEndpoint(endpointName string, port float64) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14501,7 +14599,7 @@ func (s *containerResource) WithMergeEndpoint(endpointName string, port float64)
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *containerResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14515,7 +14613,7 @@ func (s *containerResource) WithMergeEndpointScheme(endpointName string, port fl
 
 // WithMergeLabel adds a label to the resource
 func (s *containerResource) WithMergeLabel(label string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14527,7 +14625,7 @@ func (s *containerResource) WithMergeLabel(label string) ContainerResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *containerResource) WithMergeLabelCategorized(label string, category string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14540,7 +14638,7 @@ func (s *containerResource) WithMergeLabelCategorized(label string, category str
 
 // WithMergeLogging configures resource logging
 func (s *containerResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14559,7 +14657,7 @@ func (s *containerResource) WithMergeLogging(logLevel string, options ...*WithMe
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *containerResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14579,7 +14677,7 @@ func (s *containerResource) WithMergeLoggingPath(logLevel string, logPath string
 
 // WithMergeRoute configures a route
 func (s *containerResource) WithMergeRoute(path string, method string, handler string, priority float64) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14594,7 +14692,7 @@ func (s *containerResource) WithMergeRoute(path string, method string, handler s
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *containerResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14610,7 +14708,7 @@ func (s *containerResource) WithMergeRouteMiddleware(path string, method string,
 
 // WithModifiedAt sets the modified timestamp
 func (s *containerResource) WithModifiedAt(modifiedAt string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14622,7 +14720,7 @@ func (s *containerResource) WithModifiedAt(modifiedAt string) ContainerResource 
 
 // WithNestedConfig configures with nested DTO
 func (s *containerResource) WithNestedConfig(config *TestNestedDto) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14634,7 +14732,7 @@ func (s *containerResource) WithNestedConfig(config *TestNestedDto) ContainerRes
 
 // WithOptionalCallback configures with optional callback
 func (s *containerResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14660,7 +14758,7 @@ func (s *containerResource) WithOptionalCallback(options ...*WithOptionalCallbac
 
 // WithOptionalString adds an optional string parameter
 func (s *containerResource) WithOptionalString(options ...*WithOptionalStringOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14678,7 +14776,7 @@ func (s *containerResource) WithOptionalString(options ...*WithOptionalStringOpt
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *containerResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14697,7 +14795,7 @@ func (s *containerResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *containerResource) WithParentProcessLifetime(parentProcessId float64) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14709,7 +14807,7 @@ func (s *containerResource) WithParentProcessLifetime(parentProcessId float64) C
 
 // WithParentRelationship sets the parent relationship
 func (s *containerResource) WithParentRelationship(parent Resource) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -14722,7 +14820,7 @@ func (s *containerResource) WithParentRelationship(parent Resource) ContainerRes
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *containerResource) WithPersistentLifetime() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14735,7 +14833,7 @@ func (s *containerResource) WithPersistentLifetime() ContainerResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *containerResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14755,7 +14853,7 @@ func (s *containerResource) WithPipelineConfiguration(callback func(obj Pipeline
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *containerResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14783,7 +14881,7 @@ func (s *containerResource) WithPipelineStepFactory(stepName string, callback fu
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *containerResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14798,7 +14896,7 @@ func (s *containerResource) WithProcessCommand(commandName string, displayName s
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *containerResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14827,7 +14925,7 @@ func (s *containerResource) WithProcessCommandFactory(commandName string, displa
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *containerResource) WithReference(source any, options ...*WithReferenceOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -14853,7 +14951,7 @@ func (s *containerResource) WithReference(source any, options ...*WithReferenceO
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *containerResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14865,7 +14963,7 @@ func (s *containerResource) WithReferenceEnvironment(options *ReferenceEnvironme
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *containerResource) WithRelationship(resourceBuilder Resource, type_ string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -14880,7 +14978,7 @@ func (s *containerResource) WithRelationship(resourceBuilder Resource, type_ str
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *containerResource) WithRemoteImageName(remoteImageName string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14892,7 +14990,7 @@ func (s *containerResource) WithRemoteImageName(remoteImageName string) Containe
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *containerResource) WithRemoteImageTag(remoteImageTag string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14906,7 +15004,7 @@ func (s *containerResource) WithRemoteImageTag(remoteImageTag string) ContainerR
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *containerResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14927,7 +15025,7 @@ func (s *containerResource) WithRequiredCommand(command string, options ...*With
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *containerResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14951,10 +15049,22 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *containerResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ContainerResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *containerResource) WithSerializedAnnotation(annotationId string, json string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -14967,7 +15077,7 @@ func (s *containerResource) WithSerializedAnnotation(annotationId string, json s
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *containerResource) WithSessionLifetime() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14978,7 +15088,7 @@ func (s *containerResource) WithSessionLifetime() ContainerResource {
 
 // WithStatus sets the resource status
 func (s *containerResource) WithStatus(status TestResourceStatus) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -14991,7 +15101,7 @@ func (s *containerResource) WithStatus(status TestResourceStatus) ContainerResou
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *containerResource) WithTags(tags []string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15004,7 +15114,7 @@ func (s *containerResource) WithTags(tags []string) ContainerResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15034,7 +15144,7 @@ func (s *containerResource) WithTerminal(options ...*WithTerminalOptions) Contai
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *containerResource) WithTrait(name string, value string) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15048,7 +15158,7 @@ func (s *containerResource) WithTrait(name string, value string) ContainerResour
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *containerResource) WithUnionDependency(dependency any) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -15067,7 +15177,7 @@ func (s *containerResource) WithUnionDependency(dependency any) ContainerResourc
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *containerResource) WithUrl(url any, options ...*WithUrlOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -15093,7 +15203,7 @@ func (s *containerResource) WithUrl(url any, options ...*WithUrlOptions) Contain
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *containerResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15117,7 +15227,7 @@ func (s *containerResource) WithUrlForEndpoint(endpointName string, callback fun
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *containerResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15136,7 +15246,7 @@ func (s *containerResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 
 // WithValidator adds validation callback
 func (s *containerResource) WithValidator(validator func(arg TestResourceContext) bool) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15154,7 +15264,7 @@ func (s *containerResource) WithValidator(validator func(arg TestResourceContext
 
 // WithVolume adds a volume to a container resource.
 func (s *containerResource) WithVolume(target string, options ...*WithVolumeOptions) ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -15174,7 +15284,7 @@ func (s *containerResource) WithVolume(target string, options ...*WithVolumeOpti
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *containerResource) WithoutHttpsCertificate() ContainerResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15218,7 +15328,7 @@ func newDistributedApplicationFromHandle(h *handle, c *client) DistributedApplic
 
 // Run runs the distributed application
 func (s *distributedApplication) Run(options ...*RunOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -15534,6 +15644,20 @@ type DistributedApplicationBuilder interface {
 	// by Aspire, enabling testability and consistent secret management.
 	UserSecretsManager() UserSecretsManager
 
+	// WithOutputDiffing adds an opt-in target that checks for stale generated
+	// pipeline output.
+	//
+	// Parameters:
+	//   - options: Optional parameters; see [WithOutputDiffingOptions].
+	//
+	// Returns: The [DistributedApplicationBuilder] for chaining.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationBuilder
+
 	// Build invokes the build capability and returns the running application.
 	Build() (DistributedApplication, error)
 
@@ -15554,7 +15678,7 @@ func newDistributedApplicationBuilderFromHandle(h *handle, c *client) Distribute
 
 // AddCSharpApp adds a C# application resource
 func (s *distributedApplicationBuilder) AddCSharpApp(name string, path string, options ...*AddCSharpAppOptions) CSharpAppResource {
-	if s.err != nil { return &cSharpAppResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &cSharpAppResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15582,7 +15706,7 @@ func (s *distributedApplicationBuilder) AddCSharpApp(name string, path string, o
 
 // AddConnectionString adds a connection string resource
 func (s *distributedApplicationBuilder) AddConnectionString(name string, options ...*AddConnectionStringOptions) ResourceWithConnectionString {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15608,7 +15732,7 @@ func (s *distributedApplicationBuilder) AddConnectionString(name string, options
 // AddContainer adds a container resource to the application.
 // Allowed types for parameter image: string, *AddContainerOptions.
 func (s *distributedApplicationBuilder) AddContainer(name string, image any) ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	switch image.(type) {
 	case string, *AddContainerOptions:
 	default:
@@ -15636,7 +15760,7 @@ func (s *distributedApplicationBuilder) AddContainer(name string, image any) Con
 // AddContainerRegistry adds a container registry resource
 // Allowed types for parameter endpoint: string, ParameterResource.
 func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoint any, options ...*AddContainerRegistryOptions) ContainerRegistryResource {
-	if s.err != nil { return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	switch endpoint.(type) {
 	case string, ParameterResource:
 	default:
@@ -15671,7 +15795,7 @@ func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoi
 // AddDockerfile adds a Dockerfile to the application model that can be treated
 // like a container resource.
 func (s *distributedApplicationBuilder) AddDockerfile(name string, contextPath string, options ...*AddDockerfileOptions) ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15700,7 +15824,7 @@ func (s *distributedApplicationBuilder) AddDockerfile(name string, contextPath s
 // AddDockerfileBuilder adds a container resource built from a programmatically
 // generated Dockerfile
 func (s *distributedApplicationBuilder) AddDockerfileBuilder(name string, contextPath string, callback func(arg DockerfileBuilderCallbackContext), options ...*AddDockerfileBuilderOptions) ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15738,7 +15862,7 @@ func (s *distributedApplicationBuilder) AddDockerfileBuilder(name string, contex
 // treated like a container resource, with the Dockerfile content generated by
 // an asynchronous factory function.
 func (s *distributedApplicationBuilder) AddDockerfileFactory(name string, contextPath string, dockerfileFactory func(arg DockerfileFactoryContext) string, options ...*AddDockerfileFactoryOptions) ContainerResource {
-	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15773,7 +15897,7 @@ func (s *distributedApplicationBuilder) AddDockerfileFactory(name string, contex
 
 // AddDotnetTool adds a .NET tool resource to the application model.
 func (s *distributedApplicationBuilder) AddDotnetTool(name string, packageId string) DotnetToolResource {
-	if s.err != nil { return &dotnetToolResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &dotnetToolResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15795,7 +15919,7 @@ func (s *distributedApplicationBuilder) AddDotnetTool(name string, packageId str
 // AddEventingSubscriber adds an ATS-friendly eventing subscriber callback to
 // the distributed-application builder.
 func (s *distributedApplicationBuilder) AddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15814,7 +15938,7 @@ func (s *distributedApplicationBuilder) AddEventingSubscriber(subscribe func(arg
 
 // AddExecutable adds an executable resource to the application model.
 func (s *distributedApplicationBuilder) AddExecutable(name string, command string, workingDirectory string, args []string) ExecutableResource {
-	if s.err != nil { return &executableResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executableResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15838,7 +15962,7 @@ func (s *distributedApplicationBuilder) AddExecutable(name string, command strin
 // AddExternalService adds an external service resource
 // Allowed types for parameter url: string, ParameterResource.
 func (s *distributedApplicationBuilder) AddExternalService(name string, url any) ExternalServiceResource {
-	if s.err != nil { return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	switch url.(type) {
 	case string, ParameterResource:
 	default:
@@ -15866,7 +15990,7 @@ func (s *distributedApplicationBuilder) AddExternalService(name string, url any)
 // AddHealthCheck adds a custom health check callback to the
 // distributed-application builder.
 func (s *distributedApplicationBuilder) AddHealthCheck(name string, check func(...any) *HealthCheckResult) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15885,7 +16009,7 @@ func (s *distributedApplicationBuilder) AddHealthCheck(name string, check func(.
 
 // AddParameter adds a parameter resource
 func (s *distributedApplicationBuilder) AddParameter(name string, options ...*AddParameterOptions) ParameterResource {
-	if s.err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15913,7 +16037,7 @@ func (s *distributedApplicationBuilder) AddParameter(name string, options ...*Ad
 // AddParameterFromConfiguration adds a parameter resource to the application,
 // with a value coming from configuration.
 func (s *distributedApplicationBuilder) AddParameterFromConfiguration(name string, configurationKey string, options ...*AddParameterFromConfigurationOptions) ParameterResource {
-	if s.err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15942,7 +16066,7 @@ func (s *distributedApplicationBuilder) AddParameterFromConfiguration(name strin
 // AddParameterWithGeneratedValue adds a parameter with a generated default
 // value
 func (s *distributedApplicationBuilder) AddParameterWithGeneratedValue(name string, value *GenerateParameterDefault, options ...*AddParameterWithGeneratedValueOptions) ParameterResource {
-	if s.err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15970,7 +16094,7 @@ func (s *distributedApplicationBuilder) AddParameterWithGeneratedValue(name stri
 
 // AddProject adds a .NET project resource
 func (s *distributedApplicationBuilder) AddProject(name string, projectPath string, options ...*AddProjectOptions) ProjectResource {
-	if s.err != nil { return &projectResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -15998,7 +16122,7 @@ func (s *distributedApplicationBuilder) AddProject(name string, projectPath stri
 
 // AddTestRedis adds a test Redis resource from ATS documentation.
 func (s *distributedApplicationBuilder) AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource {
-	if s.err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16025,7 +16149,7 @@ func (s *distributedApplicationBuilder) AddTestRedis(name string, options ...*Ad
 
 // AddTestVault adds a test vault resource
 func (s *distributedApplicationBuilder) AddTestVault(name string) TestVaultResource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16044,7 +16168,7 @@ func (s *distributedApplicationBuilder) AddTestVault(name string) TestVaultResou
 // AppHostDirectory - Directory of the project where the app host is located.
 // Defaults to the content root if there's no project.
 func (s *distributedApplicationBuilder) AppHostDirectory() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16059,7 +16183,7 @@ func (s *distributedApplicationBuilder) AppHostDirectory() (string, error) {
 
 // Environment gets the Environment property
 func (s *distributedApplicationBuilder) Environment() HostEnvironment {
-	if s.err != nil { return &hostEnvironment{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &hostEnvironment{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16078,7 +16202,7 @@ func (s *distributedApplicationBuilder) Environment() HostEnvironment {
 
 // Eventing infrastructure for AppHost lifecycle.
 func (s *distributedApplicationBuilder) Eventing() DistributedApplicationEventing {
-	if s.err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16097,7 +16221,7 @@ func (s *distributedApplicationBuilder) Eventing() DistributedApplicationEventin
 
 // ExecutionContext - Execution context for this invocation of the AppHost.
 func (s *distributedApplicationBuilder) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16116,7 +16240,7 @@ func (s *distributedApplicationBuilder) ExecutionContext() DistributedApplicatio
 
 // GetConfiguration gets the application configuration.
 func (s *distributedApplicationBuilder) GetConfiguration() Configuration {
-	if s.err != nil { return &configuration{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &configuration{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16135,7 +16259,7 @@ func (s *distributedApplicationBuilder) GetConfiguration() Configuration {
 
 // Pipeline gets the deployment pipeline for this distributed application.
 func (s *distributedApplicationBuilder) Pipeline() DistributedApplicationPipeline {
-	if s.err != nil { return &distributedApplicationPipeline{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationPipeline{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16155,7 +16279,7 @@ func (s *distributedApplicationBuilder) Pipeline() DistributedApplicationPipelin
 // SubscribeAfterPublish subscribes to the AfterPublish event, which fires after
 // the application is published.
 func (s *distributedApplicationBuilder) SubscribeAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16183,7 +16307,7 @@ func (s *distributedApplicationBuilder) SubscribeAfterPublish(callback func(arg 
 // SubscribeAfterResourcesCreated subscribes to the AfterResourcesCreated event,
 // which fires after all resources are created.
 func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16211,7 +16335,7 @@ func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback 
 // SubscribeBeforePublish subscribes to the BeforePublish event, which fires
 // before the application is published.
 func (s *distributedApplicationBuilder) SubscribeBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16239,7 +16363,7 @@ func (s *distributedApplicationBuilder) SubscribeBeforePublish(callback func(arg
 // SubscribeBeforeStart subscribes to the BeforeStart event, which fires before
 // the application starts.
 func (s *distributedApplicationBuilder) SubscribeBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16267,7 +16391,7 @@ func (s *distributedApplicationBuilder) SubscribeBeforeStart(callback func(arg B
 // TryAddEventingSubscriber attempts to add an ATS-friendly eventing subscriber
 // callback to the distributed-application builder.
 func (s *distributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16286,7 +16410,7 @@ func (s *distributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(
 
 // UserSecretsManager gets the service for managing user secrets.
 func (s *distributedApplicationBuilder) UserSecretsManager() UserSecretsManager {
-	if s.err != nil { return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16301,6 +16425,25 @@ func (s *distributedApplicationBuilder) UserSecretsManager() UserSecretsManager 
 		return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &userSecretsManager{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// WithOutputDiffing adds an opt-in target that checks for stale generated
+// pipeline output.
+func (s *distributedApplicationBuilder) WithOutputDiffing(options ...*WithOutputDiffingOptions) DistributedApplicationBuilder {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOutputDiffingOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOutputDiffing", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // DistributedApplicationEventSubscription represents a subscription to an event
@@ -16355,7 +16498,7 @@ func newDistributedApplicationEventingFromHandle(h *handle, c *client) Distribut
 
 // Unsubscribe from an event.
 func (s *distributedApplicationEventing) Unsubscribe(subscription AnyDistributedApplicationEventSubscription) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	if subscription != nil { if err := subscription.Err(); err != nil { return err } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -16421,7 +16564,7 @@ func newDistributedApplicationExecutionContextFromHandle(h *handle, c *client) D
 
 // IsPublishMode returns true if the current operation is publishing.
 func (s *distributedApplicationExecutionContext) IsPublishMode() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16436,7 +16579,7 @@ func (s *distributedApplicationExecutionContext) IsPublishMode() (bool, error) {
 
 // IsRunMode returns true if the current operation is running.
 func (s *distributedApplicationExecutionContext) IsRunMode() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16451,7 +16594,7 @@ func (s *distributedApplicationExecutionContext) IsRunMode() (bool, error) {
 
 // Operation is the operation currently being performed by the AppHost.
 func (s *distributedApplicationExecutionContext) Operation() (DistributedApplicationOperation, error) {
-	if s.err != nil { var zero DistributedApplicationOperation; return zero, s.err }
+	if err := s.Err(); err != nil { var zero DistributedApplicationOperation; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16467,7 +16610,7 @@ func (s *distributedApplicationExecutionContext) Operation() (DistributedApplica
 // PublisherName is the name of the publisher that is being used if Operation is
 // set to Publish.
 func (s *distributedApplicationExecutionContext) PublisherName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16483,7 +16626,7 @@ func (s *distributedApplicationExecutionContext) PublisherName() (string, error)
 // RunConfiguration describes how the AppHost is being run. Only meaningful when
 // Operation is Run; otherwise every aspect holds its default value.
 func (s *distributedApplicationExecutionContext) RunConfiguration() (*RunConfiguration, error) {
-	if s.err != nil { var zero *RunConfiguration; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *RunConfiguration; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16498,7 +16641,7 @@ func (s *distributedApplicationExecutionContext) RunConfiguration() (*RunConfigu
 
 // ServiceProvider is the [ServiceProvider] for the AppHost.
 func (s *distributedApplicationExecutionContext) ServiceProvider() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16517,7 +16660,7 @@ func (s *distributedApplicationExecutionContext) ServiceProvider() ServiceProvid
 
 // Services is the [ServiceProvider] for the AppHost.
 func (s *distributedApplicationExecutionContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16538,7 +16681,7 @@ func (s *distributedApplicationExecutionContext) Services() ServiceProvider {
 //
 // The name of the publisher that is being used if Operation is set to Publish.
 func (s *distributedApplicationExecutionContext) SetPublisherName(value string) DistributedApplicationExecutionContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16603,7 +16746,7 @@ func newDistributedApplicationModelFromHandle(h *handle, c *client) DistributedA
 
 // FindResourceByName finds a resource by name.
 func (s *distributedApplicationModel) FindResourceByName(name string) Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"model": s.handle.ToJSON(),
@@ -16621,7 +16764,7 @@ func (s *distributedApplicationModel) FindResourceByName(name string) Resource {
 
 // GetResources gets all resources in the distributed application model.
 func (s *distributedApplicationModel) GetResources() ([]Resource, error) {
-	if s.err != nil { var zero []Resource; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []Resource; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"model": s.handle.ToJSON(),
@@ -16685,7 +16828,7 @@ func newDistributedApplicationPipelineFromHandle(h *handle, c *client) Distribut
 // AddStep adds an application-level pipeline step in a TypeScript-friendly
 // shape.
 func (s *distributedApplicationPipeline) AddStep(stepName string, callback func(arg PipelineStepContext), options ...*AddStepOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"pipeline": s.handle.ToJSON(),
@@ -16713,7 +16856,7 @@ func (s *distributedApplicationPipeline) AddStep(stepName string, callback func(
 // Configure registers a pipeline configuration callback in a
 // TypeScript-friendly shape.
 func (s *distributedApplicationPipeline) Configure(callback func(arg PipelineConfigurationContext)) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"pipeline": s.handle.ToJSON(),
@@ -16734,7 +16877,7 @@ func (s *distributedApplicationPipeline) Configure(callback func(arg PipelineCon
 // validation that requires build-only containers to be consumed by another
 // resource.
 func (s *distributedApplicationPipeline) DisableBuildOnlyContainerValidation() DistributedApplicationPipeline {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"pipeline": s.handle.ToJSON(),
@@ -16807,7 +16950,7 @@ func newDockerfileBuilderFromHandle(h *handle, c *client) DockerfileBuilder {
 
 // AddContainerFilesStages adds Dockerfile stages for published container files
 func (s *dockerfileBuilder) AddContainerFilesStages(resource Resource, options ...*AddContainerFilesStagesOptions) DockerfileBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -16827,7 +16970,7 @@ func (s *dockerfileBuilder) AddContainerFilesStages(resource Resource, options .
 
 // Arg adds a global ARG statement to the Dockerfile
 func (s *dockerfileBuilder) Arg(name string, options ...*ArgOptions) DockerfileBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16846,7 +16989,7 @@ func (s *dockerfileBuilder) Arg(name string, options ...*ArgOptions) DockerfileB
 
 // From adds a FROM statement to start a Dockerfile stage
 func (s *dockerfileBuilder) From(image string, options ...*FromOptions) DockerfileStage {
-	if s.err != nil { return &dockerfileStage{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &dockerfileStage{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -16906,7 +17049,7 @@ func newDockerfileBuilderCallbackContextFromHandle(h *handle, c *client) Dockerf
 
 // Builder gets the Dockerfile builder instance.
 func (s *dockerfileBuilderCallbackContext) Builder() DockerfileBuilder {
-	if s.err != nil { return &dockerfileBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &dockerfileBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16926,7 +17069,7 @@ func (s *dockerfileBuilderCallbackContext) Builder() DockerfileBuilder {
 // CancellationToken gets the cancellation token to observe while waiting for
 // the task to complete.
 func (s *dockerfileBuilderCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16941,7 +17084,7 @@ func (s *dockerfileBuilderCallbackContext) CancellationToken() (*CancellationTok
 
 // Resource gets the resource being built.
 func (s *dockerfileBuilderCallbackContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -16958,7 +17101,7 @@ func (s *dockerfileBuilderCallbackContext) Resource() Resource {
 
 // Services gets the service provider for dependency injection.
 func (s *dockerfileBuilderCallbackContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -17007,7 +17150,7 @@ func newDockerfileFactoryContextFromHandle(h *handle, c *client) DockerfileFacto
 //
 //	var containerAnnotation = context.Resource.Annotations.OfType<ContainerImageAnnotation>().FirstOrDefault(); var baseImage = containerAnnotation?.Image ?? "alpine:latest";
 func (s *dockerfileFactoryContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -17097,7 +17240,7 @@ func newDockerfileStageFromHandle(h *handle, c *client) DockerfileStage {
 
 // AddContainerFiles adds COPY --from statements for published container files
 func (s *dockerfileStage) AddContainerFiles(resource Resource, rootDestinationPath string, options ...*AddContainerFilesOptions) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -17118,7 +17261,7 @@ func (s *dockerfileStage) AddContainerFiles(resource Resource, rootDestinationPa
 
 // Arg adds an ARG statement to a Dockerfile stage
 func (s *dockerfileStage) Arg(name string, options ...*ArgOptions) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17137,7 +17280,7 @@ func (s *dockerfileStage) Arg(name string, options ...*ArgOptions) DockerfileSta
 
 // Cmd adds a CMD statement to a Dockerfile stage
 func (s *dockerfileStage) Cmd(command []string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17149,7 +17292,7 @@ func (s *dockerfileStage) Cmd(command []string) DockerfileStage {
 
 // Comment adds a comment to a Dockerfile stage
 func (s *dockerfileStage) Comment(comment string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17161,7 +17304,7 @@ func (s *dockerfileStage) Comment(comment string) DockerfileStage {
 
 // Copy adds a COPY statement to a Dockerfile stage
 func (s *dockerfileStage) Copy(source string, destination string, options ...*CopyOptions) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17181,7 +17324,7 @@ func (s *dockerfileStage) Copy(source string, destination string, options ...*Co
 
 // CopyFrom adds a COPY --from statement to a Dockerfile stage
 func (s *dockerfileStage) CopyFrom(from string, source string, destination string, options ...*CopyFromOptions) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17202,7 +17345,7 @@ func (s *dockerfileStage) CopyFrom(from string, source string, destination strin
 
 // EmptyLine adds an empty line to a Dockerfile stage
 func (s *dockerfileStage) EmptyLine() DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17213,7 +17356,7 @@ func (s *dockerfileStage) EmptyLine() DockerfileStage {
 
 // Entrypoint adds an ENTRYPOINT statement to a Dockerfile stage
 func (s *dockerfileStage) Entrypoint(command []string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17225,7 +17368,7 @@ func (s *dockerfileStage) Entrypoint(command []string) DockerfileStage {
 
 // Env adds an ENV statement to a Dockerfile stage
 func (s *dockerfileStage) Env(name string, value string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17238,7 +17381,7 @@ func (s *dockerfileStage) Env(name string, value string) DockerfileStage {
 
 // Expose adds an EXPOSE statement to a Dockerfile stage
 func (s *dockerfileStage) Expose(port float64) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17250,7 +17393,7 @@ func (s *dockerfileStage) Expose(port float64) DockerfileStage {
 
 // Run adds a RUN statement to a Dockerfile stage
 func (s *dockerfileStage) Run(command string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17262,7 +17405,7 @@ func (s *dockerfileStage) Run(command string) DockerfileStage {
 
 // RunWithMounts adds a RUN statement with mounts to a Dockerfile stage
 func (s *dockerfileStage) RunWithMounts(command string, mounts []string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17275,7 +17418,7 @@ func (s *dockerfileStage) RunWithMounts(command string, mounts []string) Dockerf
 
 // User adds a USER statement to a Dockerfile stage
 func (s *dockerfileStage) User(user string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -17287,7 +17430,7 @@ func (s *dockerfileStage) User(user string) DockerfileStage {
 
 // WorkDir adds a WORKDIR statement to a Dockerfile stage
 func (s *dockerfileStage) WorkDir(path string) DockerfileStage {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"stage": s.handle.ToJSON(),
@@ -18213,6 +18356,20 @@ type DotnetToolResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) DotnetToolResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -18430,7 +18587,7 @@ func (*dotnetToolResource) isExecutableResource() {}
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *dotnetToolResource) AsHttp2Service() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18442,7 +18599,7 @@ func (s *dotnetToolResource) AsHttp2Service() DotnetToolResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *dotnetToolResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -18461,7 +18618,7 @@ func (s *dotnetToolResource) CreateExecutionConfiguration() ExecutionConfigurati
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *dotnetToolResource) ExcludeFromManifest() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18474,7 +18631,7 @@ func (s *dotnetToolResource) ExcludeFromManifest() DotnetToolResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *dotnetToolResource) ExcludeFromMcp() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18485,7 +18642,7 @@ func (s *dotnetToolResource) ExcludeFromMcp() DotnetToolResource {
 
 // GetEndpoint gets an endpoint reference
 func (s *dotnetToolResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18505,7 +18662,7 @@ func (s *dotnetToolResource) GetEndpoint(name string) EndpointReference {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *dotnetToolResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -18521,7 +18678,7 @@ func (s *dotnetToolResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *dotnetToolResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -18538,7 +18695,7 @@ func (s *dotnetToolResource) GetSerializedAnnotation(annotationId string) (strin
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *dotnetToolResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -18554,7 +18711,7 @@ func (s *dotnetToolResource) HasSerializedAnnotation(annotationId string) (bool,
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *dotnetToolResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18573,7 +18730,7 @@ func (s *dotnetToolResource) OnBeforeResourceStarted(callback func(arg BeforeRes
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *dotnetToolResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18593,7 +18750,7 @@ func (s *dotnetToolResource) OnInitializeResource(callback func(arg InitializeRe
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *dotnetToolResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18612,7 +18769,7 @@ func (s *dotnetToolResource) OnResourceEndpointsAllocated(callback func(arg Reso
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *dotnetToolResource) OnResourceReady(callback func(arg ResourceReadyEvent)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18631,7 +18788,7 @@ func (s *dotnetToolResource) OnResourceReady(callback func(arg ResourceReadyEven
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *dotnetToolResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18650,7 +18807,7 @@ func (s *dotnetToolResource) OnResourceStopped(callback func(arg ResourceStopped
 
 // PublishAsDockerFile publishes an executable as a Docker file
 func (s *dotnetToolResource) PublishAsDockerFile(configure func(obj ContainerResource)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18672,7 +18829,7 @@ func (s *dotnetToolResource) PublishAsDockerFile(configure func(obj ContainerRes
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *dotnetToolResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18691,7 +18848,7 @@ func (s *dotnetToolResource) SubscribeHttpsEndpointsUpdate(callback func(obj Htt
 
 // TestWaitFor waits for another resource (test version)
 func (s *dotnetToolResource) TestWaitFor(dependency Resource) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18705,7 +18862,7 @@ func (s *dotnetToolResource) TestWaitFor(dependency Resource) DotnetToolResource
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *dotnetToolResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18724,7 +18881,7 @@ func (s *dotnetToolResource) TestWithEnvironmentCallback(callback func(arg TestE
 
 // WaitFor waits for another resource to be ready
 func (s *dotnetToolResource) WaitFor(dependency Resource, options ...*WaitForOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18745,7 +18902,7 @@ func (s *dotnetToolResource) WaitFor(dependency Resource, options ...*WaitForOpt
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *dotnetToolResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18765,7 +18922,7 @@ func (s *dotnetToolResource) WaitForCompletion(dependency Resource, options ...*
 
 // WaitForStart waits for another resource to start
 func (s *dotnetToolResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18786,7 +18943,7 @@ func (s *dotnetToolResource) WaitForStart(dependency Resource, options ...*WaitF
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *dotnetToolResource) WithArgs(args []string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18799,7 +18956,7 @@ func (s *dotnetToolResource) WithArgs(args []string) DotnetToolResource {
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *dotnetToolResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18819,7 +18976,7 @@ func (s *dotnetToolResource) WithArgsCallback(callback func(obj CommandLineArgsC
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *dotnetToolResource) WithArgsReplace(args []string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18831,7 +18988,7 @@ func (s *dotnetToolResource) WithArgsReplace(args []string) DotnetToolResource {
 
 // WithCancellableOperation performs a cancellable operation
 func (s *dotnetToolResource) WithCancellableOperation(operation func(arg *CancellationToken)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18839,7 +18996,7 @@ func (s *dotnetToolResource) WithCancellableOperation(operation func(arg *Cancel
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -18851,7 +19008,7 @@ func (s *dotnetToolResource) WithCancellableOperation(operation func(arg *Cancel
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *dotnetToolResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18870,7 +19027,7 @@ func (s *dotnetToolResource) WithCertificateTrustEnvironment(certificateBundleEn
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *dotnetToolResource) WithCertificateTrustScope(scope CertificateTrustScope) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18882,7 +19039,7 @@ func (s *dotnetToolResource) WithCertificateTrustScope(scope CertificateTrustSco
 
 // WithChildRelationship sets a child relationship
 func (s *dotnetToolResource) WithChildRelationship(child Resource) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18895,7 +19052,7 @@ func (s *dotnetToolResource) WithChildRelationship(child Resource) DotnetToolRes
 
 // WithCommand adds a resource command
 func (s *dotnetToolResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18923,7 +19080,7 @@ func (s *dotnetToolResource) WithCommand(name string, displayName string, execut
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *dotnetToolResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18936,7 +19093,7 @@ func (s *dotnetToolResource) WithComputeEnvironment(computeEnvironmentResource C
 
 // WithConfig configures the resource with a DTO
 func (s *dotnetToolResource) WithConfig(config *TestConfigDto) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18949,7 +19106,7 @@ func (s *dotnetToolResource) WithConfig(config *TestConfigDto) DotnetToolResourc
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *dotnetToolResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18969,7 +19126,7 @@ func (s *dotnetToolResource) WithContainerBuildOptions(callback func(arg Contain
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *dotnetToolResource) WithContainerRegistry(registry Resource) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18982,7 +19139,7 @@ func (s *dotnetToolResource) WithContainerRegistry(registry Resource) DotnetTool
 
 // WithCorrelationId sets the correlation ID
 func (s *dotnetToolResource) WithCorrelationId(correlationId string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -18994,7 +19151,7 @@ func (s *dotnetToolResource) WithCorrelationId(correlationId string) DotnetToolR
 
 // WithCreatedAt sets the created timestamp
 func (s *dotnetToolResource) WithCreatedAt(createdAt string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19007,7 +19164,7 @@ func (s *dotnetToolResource) WithCreatedAt(createdAt string) DotnetToolResource 
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *dotnetToolResource) WithDashboardPosition(position float64) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19019,7 +19176,7 @@ func (s *dotnetToolResource) WithDashboardPosition(position float64) DotnetToolR
 
 // WithDependency adds a dependency on another resource
 func (s *dotnetToolResource) WithDependency(dependency ResourceWithConnectionString) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -19037,7 +19194,7 @@ func (s *dotnetToolResource) WithDependency(dependency ResourceWithConnectionStr
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *dotnetToolResource) WithDeveloperCertificateTrust(trust bool) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19050,7 +19207,7 @@ func (s *dotnetToolResource) WithDeveloperCertificateTrust(trust bool) DotnetToo
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *dotnetToolResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19068,7 +19225,7 @@ func (s *dotnetToolResource) WithDockerfileBaseImage(options ...*WithDockerfileB
 
 // WithEndpoint adds a network endpoint
 func (s *dotnetToolResource) WithEndpoint(options ...*WithEndpointOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19086,7 +19243,7 @@ func (s *dotnetToolResource) WithEndpoint(options ...*WithEndpointOptions) Dotne
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *dotnetToolResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19116,7 +19273,7 @@ func (s *dotnetToolResource) WithEndpointCallback(endpointName string, callback 
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *dotnetToolResource) WithEndpointProxySupport(proxyEnabled bool) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19128,7 +19285,7 @@ func (s *dotnetToolResource) WithEndpointProxySupport(proxyEnabled bool) DotnetT
 
 // WithEndpoints sets the endpoints
 func (s *dotnetToolResource) WithEndpoints(endpoints []string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19141,7 +19298,7 @@ func (s *dotnetToolResource) WithEndpoints(endpoints []string) DotnetToolResourc
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *dotnetToolResource) WithEnvironment(name string, value any) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -19161,7 +19318,7 @@ func (s *dotnetToolResource) WithEnvironment(name string, value any) DotnetToolR
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *dotnetToolResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19180,7 +19337,7 @@ func (s *dotnetToolResource) WithEnvironmentCallback(callback func(arg Environme
 
 // WithEnvironmentVariables sets environment variables
 func (s *dotnetToolResource) WithEnvironmentVariables(variables map[string]string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19192,7 +19349,7 @@ func (s *dotnetToolResource) WithEnvironmentVariables(variables map[string]strin
 
 // WithExecutableCommand sets the command for the executable resource.
 func (s *dotnetToolResource) WithExecutableCommand(command string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19205,7 +19362,7 @@ func (s *dotnetToolResource) WithExecutableCommand(command string) DotnetToolRes
 // WithExecutableDebugSupport adds VS Code-compatible debug metadata for an
 // executable resource.
 func (s *dotnetToolResource) WithExecutableDebugSupport(launchConfigurationType string, scriptPath string, options ...*WithExecutableDebugSupportOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19225,7 +19382,7 @@ func (s *dotnetToolResource) WithExecutableDebugSupport(launchConfigurationType 
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *dotnetToolResource) WithExplicitStart() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19237,7 +19394,7 @@ func (s *dotnetToolResource) WithExplicitStart() DotnetToolResource {
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *dotnetToolResource) WithExternalHttpEndpoints() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19248,7 +19405,7 @@ func (s *dotnetToolResource) WithExternalHttpEndpoints() DotnetToolResource {
 
 // WithHealthCheck adds a health check by key
 func (s *dotnetToolResource) WithHealthCheck(key string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19260,7 +19417,7 @@ func (s *dotnetToolResource) WithHealthCheck(key string) DotnetToolResource {
 
 // WithHidden hides the resource from default resource lists
 func (s *dotnetToolResource) WithHidden() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19272,7 +19429,7 @@ func (s *dotnetToolResource) WithHidden() DotnetToolResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *dotnetToolResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19290,7 +19447,7 @@ func (s *dotnetToolResource) WithHiddenOnCompletion(options ...*WithHiddenOnComp
 
 // WithHttpCommand adds an HTTP resource command
 func (s *dotnetToolResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19311,7 +19468,7 @@ func (s *dotnetToolResource) WithHttpCommand(path string, displayName string, op
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *dotnetToolResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19329,7 +19486,7 @@ func (s *dotnetToolResource) WithHttpEndpoint(options ...*WithHttpEndpointOption
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *dotnetToolResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19356,7 +19513,7 @@ func (s *dotnetToolResource) WithHttpEndpointCallback(callback func(obj Endpoint
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *dotnetToolResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19374,7 +19531,7 @@ func (s *dotnetToolResource) WithHttpHealthCheck(options ...*WithHttpHealthCheck
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *dotnetToolResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19395,7 +19552,7 @@ func (s *dotnetToolResource) WithHttpProbe(probeType ProbeType, options ...*With
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *dotnetToolResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19418,7 +19575,7 @@ func (s *dotnetToolResource) WithHttpsCertificateConfiguration(callback func(arg
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *dotnetToolResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19436,7 +19593,7 @@ func (s *dotnetToolResource) WithHttpsDeveloperCertificate(options ...*WithHttps
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *dotnetToolResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19454,7 +19611,7 @@ func (s *dotnetToolResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOpti
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *dotnetToolResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19481,7 +19638,7 @@ func (s *dotnetToolResource) WithHttpsEndpointCallback(callback func(obj Endpoin
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *dotnetToolResource) WithIconName(iconName string, options ...*WithIconNameOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19501,7 +19658,7 @@ func (s *dotnetToolResource) WithIconName(iconName string, options ...*WithIconN
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19521,7 +19678,7 @@ func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerIma
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *dotnetToolResource) WithLifetimeOf(sourceBuilder Resource) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -19535,7 +19692,7 @@ func (s *dotnetToolResource) WithLifetimeOf(sourceBuilder Resource) DotnetToolRe
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *dotnetToolResource) WithMcpServer(options ...*WithMcpServerOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19553,7 +19710,7 @@ func (s *dotnetToolResource) WithMcpServer(options ...*WithMcpServerOptions) Dot
 
 // WithMergeEndpoint configures a named endpoint
 func (s *dotnetToolResource) WithMergeEndpoint(endpointName string, port float64) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19566,7 +19723,7 @@ func (s *dotnetToolResource) WithMergeEndpoint(endpointName string, port float64
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *dotnetToolResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19580,7 +19737,7 @@ func (s *dotnetToolResource) WithMergeEndpointScheme(endpointName string, port f
 
 // WithMergeLabel adds a label to the resource
 func (s *dotnetToolResource) WithMergeLabel(label string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19592,7 +19749,7 @@ func (s *dotnetToolResource) WithMergeLabel(label string) DotnetToolResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *dotnetToolResource) WithMergeLabelCategorized(label string, category string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19605,7 +19762,7 @@ func (s *dotnetToolResource) WithMergeLabelCategorized(label string, category st
 
 // WithMergeLogging configures resource logging
 func (s *dotnetToolResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19624,7 +19781,7 @@ func (s *dotnetToolResource) WithMergeLogging(logLevel string, options ...*WithM
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *dotnetToolResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19644,7 +19801,7 @@ func (s *dotnetToolResource) WithMergeLoggingPath(logLevel string, logPath strin
 
 // WithMergeRoute configures a route
 func (s *dotnetToolResource) WithMergeRoute(path string, method string, handler string, priority float64) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19659,7 +19816,7 @@ func (s *dotnetToolResource) WithMergeRoute(path string, method string, handler 
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *dotnetToolResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19675,7 +19832,7 @@ func (s *dotnetToolResource) WithMergeRouteMiddleware(path string, method string
 
 // WithModifiedAt sets the modified timestamp
 func (s *dotnetToolResource) WithModifiedAt(modifiedAt string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19687,7 +19844,7 @@ func (s *dotnetToolResource) WithModifiedAt(modifiedAt string) DotnetToolResourc
 
 // WithNestedConfig configures with nested DTO
 func (s *dotnetToolResource) WithNestedConfig(config *TestNestedDto) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19699,7 +19856,7 @@ func (s *dotnetToolResource) WithNestedConfig(config *TestNestedDto) DotnetToolR
 
 // WithOptionalCallback configures with optional callback
 func (s *dotnetToolResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19725,7 +19882,7 @@ func (s *dotnetToolResource) WithOptionalCallback(options ...*WithOptionalCallba
 
 // WithOptionalString adds an optional string parameter
 func (s *dotnetToolResource) WithOptionalString(options ...*WithOptionalStringOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19743,7 +19900,7 @@ func (s *dotnetToolResource) WithOptionalString(options ...*WithOptionalStringOp
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *dotnetToolResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19762,7 +19919,7 @@ func (s *dotnetToolResource) WithOtlpExporter(options ...*WithOtlpExporterOption
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *dotnetToolResource) WithParentProcessLifetime(parentProcessId float64) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19774,7 +19931,7 @@ func (s *dotnetToolResource) WithParentProcessLifetime(parentProcessId float64) 
 
 // WithParentRelationship sets the parent relationship
 func (s *dotnetToolResource) WithParentRelationship(parent Resource) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -19787,7 +19944,7 @@ func (s *dotnetToolResource) WithParentRelationship(parent Resource) DotnetToolR
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *dotnetToolResource) WithPersistentLifetime() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19800,7 +19957,7 @@ func (s *dotnetToolResource) WithPersistentLifetime() DotnetToolResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *dotnetToolResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19820,7 +19977,7 @@ func (s *dotnetToolResource) WithPipelineConfiguration(callback func(obj Pipelin
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *dotnetToolResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19848,7 +20005,7 @@ func (s *dotnetToolResource) WithPipelineStepFactory(stepName string, callback f
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *dotnetToolResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19863,7 +20020,7 @@ func (s *dotnetToolResource) WithProcessCommand(commandName string, displayName 
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19892,7 +20049,7 @@ func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displ
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *dotnetToolResource) WithReference(source any, options ...*WithReferenceOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -19918,7 +20075,7 @@ func (s *dotnetToolResource) WithReference(source any, options ...*WithReference
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *dotnetToolResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19930,7 +20087,7 @@ func (s *dotnetToolResource) WithReferenceEnvironment(options *ReferenceEnvironm
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *dotnetToolResource) WithRelationship(resourceBuilder Resource, type_ string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -19945,7 +20102,7 @@ func (s *dotnetToolResource) WithRelationship(resourceBuilder Resource, type_ st
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *dotnetToolResource) WithRemoteImageName(remoteImageName string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19957,7 +20114,7 @@ func (s *dotnetToolResource) WithRemoteImageName(remoteImageName string) DotnetT
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *dotnetToolResource) WithRemoteImageTag(remoteImageTag string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19971,7 +20128,7 @@ func (s *dotnetToolResource) WithRemoteImageTag(remoteImageTag string) DotnetToo
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *dotnetToolResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -19992,7 +20149,7 @@ func (s *dotnetToolResource) WithRequiredCommand(command string, options ...*Wit
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *dotnetToolResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20016,10 +20173,22 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *dotnetToolResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) DotnetToolResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *dotnetToolResource) WithSerializedAnnotation(annotationId string, json string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -20032,7 +20201,7 @@ func (s *dotnetToolResource) WithSerializedAnnotation(annotationId string, json 
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *dotnetToolResource) WithSessionLifetime() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20043,7 +20212,7 @@ func (s *dotnetToolResource) WithSessionLifetime() DotnetToolResource {
 
 // WithStatus sets the resource status
 func (s *dotnetToolResource) WithStatus(status TestResourceStatus) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20056,7 +20225,7 @@ func (s *dotnetToolResource) WithStatus(status TestResourceStatus) DotnetToolRes
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *dotnetToolResource) WithTags(tags []string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20069,7 +20238,7 @@ func (s *dotnetToolResource) WithTags(tags []string) DotnetToolResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20099,7 +20268,7 @@ func (s *dotnetToolResource) WithTerminal(options ...*WithTerminalOptions) Dotne
 // WithToolIgnoreExistingFeeds configures the tool to use only the specified
 // package sources, ignoring existing NuGet configuration.
 func (s *dotnetToolResource) WithToolIgnoreExistingFeeds() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20111,7 +20280,7 @@ func (s *dotnetToolResource) WithToolIgnoreExistingFeeds() DotnetToolResource {
 // WithToolIgnoreFailedSources configures the resource to treat package source
 // failures as warnings.
 func (s *dotnetToolResource) WithToolIgnoreFailedSources() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20123,7 +20292,7 @@ func (s *dotnetToolResource) WithToolIgnoreFailedSources() DotnetToolResource {
 // WithToolPackage sets the package identifier for the tool configuration
 // associated with the resource builder.
 func (s *dotnetToolResource) WithToolPackage(packageId string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20135,7 +20304,7 @@ func (s *dotnetToolResource) WithToolPackage(packageId string) DotnetToolResourc
 
 // WithToolPrerelease allows prerelease versions of the tool to be used
 func (s *dotnetToolResource) WithToolPrerelease() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20146,7 +20315,7 @@ func (s *dotnetToolResource) WithToolPrerelease() DotnetToolResource {
 
 // WithToolSource adds a NuGet package source for tool acquisition.
 func (s *dotnetToolResource) WithToolSource(source string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20158,7 +20327,7 @@ func (s *dotnetToolResource) WithToolSource(source string) DotnetToolResource {
 
 // WithToolVersion sets the package version for a tool to use.
 func (s *dotnetToolResource) WithToolVersion(version string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20171,7 +20340,7 @@ func (s *dotnetToolResource) WithToolVersion(version string) DotnetToolResource 
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *dotnetToolResource) WithTrait(name string, value string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20185,7 +20354,7 @@ func (s *dotnetToolResource) WithTrait(name string, value string) DotnetToolReso
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *dotnetToolResource) WithUnionDependency(dependency any) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -20204,7 +20373,7 @@ func (s *dotnetToolResource) WithUnionDependency(dependency any) DotnetToolResou
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *dotnetToolResource) WithUrl(url any, options ...*WithUrlOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -20230,7 +20399,7 @@ func (s *dotnetToolResource) WithUrl(url any, options ...*WithUrlOptions) Dotnet
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *dotnetToolResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20254,7 +20423,7 @@ func (s *dotnetToolResource) WithUrlForEndpoint(endpointName string, callback fu
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *dotnetToolResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20273,7 +20442,7 @@ func (s *dotnetToolResource) WithUrls(callback func(obj ResourceUrlsCallbackCont
 
 // WithValidator adds validation callback
 func (s *dotnetToolResource) WithValidator(validator func(arg TestResourceContext) bool) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20291,7 +20460,7 @@ func (s *dotnetToolResource) WithValidator(validator func(arg TestResourceContex
 
 // WithVolume adds a volume to an executable resource.
 func (s *dotnetToolResource) WithVolume(target string, name string, env string, options ...*ExecutableResourceWithVolumeOptions) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -20312,7 +20481,7 @@ func (s *dotnetToolResource) WithVolume(target string, name string, env string, 
 
 // WithWorkingDirectory sets the working directory for the executable resource.
 func (s *dotnetToolResource) WithWorkingDirectory(workingDirectory string) DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20325,7 +20494,7 @@ func (s *dotnetToolResource) WithWorkingDirectory(workingDirectory string) Dotne
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *dotnetToolResource) WithoutHttpsCertificate() DotnetToolResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -20338,6 +20507,16 @@ func (s *dotnetToolResource) WithoutHttpsCertificate() DotnetToolResource {
 // endpoints.
 type EndpointReference interface {
 	handleReference
+
+	// BrowserOrigins gets a deferred comma-separated list of browser-facing origins
+	// associated with this endpoint.
+	//
+	// Origins use finalized URL customization and are independent of this
+	// reference's service-discovery network context. Origins are distinct and
+	// ordered by display preference. The allocated HTTP(S) endpoint origin is
+	// included after display origins, even if its display links are removed. An
+	// endpoint without HTTP(S) origins resolves to an empty string.
+	BrowserOrigins() EndpointReferenceExpression
 
 	// EndpointName gets the name of the endpoint associated with the endpoint
 	// reference.
@@ -20408,6 +20587,16 @@ type EndpointReference interface {
 	// Port gets the port for this endpoint.
 	Port() (float64, error)
 
+	// PrimaryBrowserOrigin gets the deferred primary browser-facing origin
+	// associated with this endpoint.
+	//
+	// Returns the first origin in BrowserOrigins, following finalized URL display
+	// ordering. The allocated HTTP(S) endpoint origin is used when no display
+	// origins remain. An endpoint without HTTP(S) origins resolves to an empty
+	// string. This value is independent of this reference's service-discovery
+	// network context.
+	PrimaryBrowserOrigin() EndpointReferenceExpression
+
 	// Property gets the specified property expression of the endpoint.
 	//
 	// Parameters:
@@ -20451,10 +20640,30 @@ func newEndpointReferenceFromHandle(h *handle, c *client) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// BrowserOrigins gets a deferred comma-separated list of browser-facing origins
+// associated with this endpoint.
+func (s *endpointReference) BrowserOrigins() EndpointReferenceExpression {
+	if err := s.Err(); err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // EndpointName gets the name of the endpoint associated with the endpoint
 // reference.
 func (s *endpointReference) EndpointName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20470,7 +20679,7 @@ func (s *endpointReference) EndpointName() (string, error) {
 // ErrorMessage gets a custom error message to be thrown when the endpoint
 // annotation is not found.
 func (s *endpointReference) ErrorMessage() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20486,7 +20695,7 @@ func (s *endpointReference) ErrorMessage() (*string, error) {
 // ExcludeReferenceEndpoint gets a value indicating whether this endpoint is
 // excluded from the default set when referencing the resource's endpoints.
 func (s *endpointReference) ExcludeReferenceEndpoint() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20501,7 +20710,7 @@ func (s *endpointReference) ExcludeReferenceEndpoint() (bool, error) {
 
 // Exists gets a value indicating whether the endpoint exists.
 func (s *endpointReference) Exists() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20517,7 +20726,7 @@ func (s *endpointReference) Exists() (bool, error) {
 // GetTlsValue gets a conditional expression that resolves to the enabledValue
 // when TLS is enabled on the endpoint, or to the disabledValue otherwise.
 func (s *endpointReference) GetTlsValue(enabledValue *ReferenceExpression, disabledValue *ReferenceExpression) *ReferenceExpression {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	if enabledValue != nil { if err := enabledValue.Err(); err != nil { s.setErr(err); return nil } }
 	if disabledValue != nil { if err := disabledValue.Err(); err != nil { s.setErr(err); return nil } }
 	ctx := context.Background()
@@ -20539,7 +20748,7 @@ func (s *endpointReference) GetTlsValue(enabledValue *ReferenceExpression, disab
 // GetValueAsync gets the URL of the endpoint asynchronously. Waits for the
 // endpoint to be allocated if necessary.
 func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20567,7 +20776,7 @@ func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (*st
 
 // Host gets the host for this endpoint.
 func (s *endpointReference) Host() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20582,7 +20791,7 @@ func (s *endpointReference) Host() (string, error) {
 
 // IsAllocated gets a value indicating whether the endpoint is allocated.
 func (s *endpointReference) IsAllocated() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20597,7 +20806,7 @@ func (s *endpointReference) IsAllocated() (bool, error) {
 
 // IsHttp gets a value indicating whether the endpoint uses HTTP scheme.
 func (s *endpointReference) IsHttp() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20617,7 +20826,7 @@ func (s *endpointReference) IsHttp() (bool, error) {
 // allow http endpoints that are dynamically updated to https to be mapped
 // correctly despite the endpoint name no longer matching the scheme.
 func (s *endpointReference) IsHttpSchemeNamedEndpoint() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20632,7 +20841,7 @@ func (s *endpointReference) IsHttpSchemeNamedEndpoint() (bool, error) {
 
 // IsHttps gets a value indicating whether the endpoint uses HTTPS scheme.
 func (s *endpointReference) IsHttps() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20647,7 +20856,7 @@ func (s *endpointReference) IsHttps() (bool, error) {
 
 // Port gets the port for this endpoint.
 func (s *endpointReference) Port() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20660,9 +20869,29 @@ func (s *endpointReference) Port() (float64, error) {
 	return decodeAs[float64](result)
 }
 
+// PrimaryBrowserOrigin gets the deferred primary browser-facing origin
+// associated with this endpoint.
+func (s *endpointReference) PrimaryBrowserOrigin() EndpointReferenceExpression {
+	if err := s.Err(); err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin", reqArgs)
+	if err != nil {
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin returned unexpected type %T", result)
+		return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // Property gets the specified property expression of the endpoint.
 func (s *endpointReference) Property(property EndpointProperty) EndpointReferenceExpression {
-	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20682,7 +20911,7 @@ func (s *endpointReference) Property(property EndpointProperty) EndpointReferenc
 
 // Resource gets the resource owner of the endpoint reference.
 func (s *endpointReference) Resource() ResourceWithEndpoints {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20699,7 +20928,7 @@ func (s *endpointReference) Resource() ResourceWithEndpoints {
 
 // Scheme gets the scheme for this endpoint.
 func (s *endpointReference) Scheme() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20715,7 +20944,7 @@ func (s *endpointReference) Scheme() (string, error) {
 // TargetPort gets the target port for this endpoint. If the port is dynamically
 // allocated, this will return nil.
 func (s *endpointReference) TargetPort() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20730,7 +20959,7 @@ func (s *endpointReference) TargetPort() (*float64, error) {
 
 // TlsEnabled gets a value indicating whether TLS is enabled for this endpoint.
 func (s *endpointReference) TlsEnabled() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20745,7 +20974,7 @@ func (s *endpointReference) TlsEnabled() (bool, error) {
 
 // Url gets the URL for this endpoint.
 func (s *endpointReference) Url() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20789,7 +21018,7 @@ func newEndpointReferenceExpressionFromHandle(h *handle, c *client) EndpointRefe
 
 // Endpoint gets the [EndpointReference].
 func (s *endpointReferenceExpression) Endpoint() EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20808,7 +21037,7 @@ func (s *endpointReferenceExpression) Endpoint() EndpointReference {
 
 // Property gets the [EndpointProperty] for the property expression.
 func (s *endpointReferenceExpression) Property() (EndpointProperty, error) {
-	if s.err != nil { var zero EndpointProperty; return zero, s.err }
+	if err := s.Err(); err != nil { var zero EndpointProperty; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20823,7 +21052,7 @@ func (s *endpointReferenceExpression) Property() (EndpointProperty, error) {
 
 // ValueExpression gets the expression of the property of the endpoint.
 func (s *endpointReferenceExpression) ValueExpression() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20924,7 +21153,7 @@ func newEndpointUpdateContextFromHandle(h *handle, c *client) EndpointUpdateCont
 // ExcludeReferenceEndpoint reports whether the endpoint is excluded from the
 // default reference set.
 func (s *endpointUpdateContext) ExcludeReferenceEndpoint() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20939,7 +21168,7 @@ func (s *endpointUpdateContext) ExcludeReferenceEndpoint() (bool, error) {
 
 // IsExternal reports whether the endpoint is external.
 func (s *endpointUpdateContext) IsExternal() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20954,7 +21183,7 @@ func (s *endpointUpdateContext) IsExternal() (bool, error) {
 
 // IsProxied reports whether the endpoint is proxied.
 func (s *endpointUpdateContext) IsProxied() (*bool, error) {
-	if s.err != nil { var zero *bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20969,7 +21198,7 @@ func (s *endpointUpdateContext) IsProxied() (*bool, error) {
 
 // Name gets the endpoint name.
 func (s *endpointUpdateContext) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20984,7 +21213,7 @@ func (s *endpointUpdateContext) Name() (string, error) {
 
 // Port gets the desired host port.
 func (s *endpointUpdateContext) Port() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -20999,7 +21228,7 @@ func (s *endpointUpdateContext) Port() (*float64, error) {
 
 // Protocol gets the network protocol.
 func (s *endpointUpdateContext) Protocol() (ProtocolType, error) {
-	if s.err != nil { var zero ProtocolType; return zero, s.err }
+	if err := s.Err(); err != nil { var zero ProtocolType; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21015,7 +21244,7 @@ func (s *endpointUpdateContext) Protocol() (ProtocolType, error) {
 // SetExcludeReferenceEndpoint sets whether the endpoint is excluded from the
 // default reference set.
 func (s *endpointUpdateContext) SetExcludeReferenceEndpoint(value bool) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21027,7 +21256,7 @@ func (s *endpointUpdateContext) SetExcludeReferenceEndpoint(value bool) Endpoint
 
 // SetIsExternal sets whether the endpoint is external.
 func (s *endpointUpdateContext) SetIsExternal(value bool) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21039,7 +21268,7 @@ func (s *endpointUpdateContext) SetIsExternal(value bool) EndpointUpdateContext 
 
 // SetIsProxied sets whether the endpoint is proxied.
 func (s *endpointUpdateContext) SetIsProxied(value *bool) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21051,7 +21280,7 @@ func (s *endpointUpdateContext) SetIsProxied(value *bool) EndpointUpdateContext 
 
 // SetPort sets the desired host port.
 func (s *endpointUpdateContext) SetPort(value *float64) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21063,7 +21292,7 @@ func (s *endpointUpdateContext) SetPort(value *float64) EndpointUpdateContext {
 
 // SetProtocol sets the network protocol.
 func (s *endpointUpdateContext) SetProtocol(value ProtocolType) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21075,7 +21304,7 @@ func (s *endpointUpdateContext) SetProtocol(value ProtocolType) EndpointUpdateCo
 
 // SetTargetHost sets the target host.
 func (s *endpointUpdateContext) SetTargetHost(value string) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21087,7 +21316,7 @@ func (s *endpointUpdateContext) SetTargetHost(value string) EndpointUpdateContex
 
 // SetTargetPort sets the target port.
 func (s *endpointUpdateContext) SetTargetPort(value *float64) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21099,7 +21328,7 @@ func (s *endpointUpdateContext) SetTargetPort(value *float64) EndpointUpdateCont
 
 // SetTlsEnabled sets whether TLS is enabled.
 func (s *endpointUpdateContext) SetTlsEnabled(value bool) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21111,7 +21340,7 @@ func (s *endpointUpdateContext) SetTlsEnabled(value bool) EndpointUpdateContext 
 
 // SetTransport sets the transport.
 func (s *endpointUpdateContext) SetTransport(value string) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21123,7 +21352,7 @@ func (s *endpointUpdateContext) SetTransport(value string) EndpointUpdateContext
 
 // SetUriScheme sets the URI scheme.
 func (s *endpointUpdateContext) SetUriScheme(value string) EndpointUpdateContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21135,7 +21364,7 @@ func (s *endpointUpdateContext) SetUriScheme(value string) EndpointUpdateContext
 
 // TargetHost gets the target host.
 func (s *endpointUpdateContext) TargetHost() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21150,7 +21379,7 @@ func (s *endpointUpdateContext) TargetHost() (string, error) {
 
 // TargetPort gets the target port.
 func (s *endpointUpdateContext) TargetPort() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21165,7 +21394,7 @@ func (s *endpointUpdateContext) TargetPort() (*float64, error) {
 
 // TlsEnabled reports whether TLS is enabled.
 func (s *endpointUpdateContext) TlsEnabled() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21180,7 +21409,7 @@ func (s *endpointUpdateContext) TlsEnabled() (bool, error) {
 
 // Transport gets the transport.
 func (s *endpointUpdateContext) Transport() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21195,7 +21424,7 @@ func (s *endpointUpdateContext) Transport() (string, error) {
 
 // UriScheme gets the URI scheme.
 func (s *endpointUpdateContext) UriScheme() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21248,7 +21477,7 @@ func newEnvironmentCallbackContextFromHandle(h *handle, c *client) EnvironmentCa
 // Environment gets the editor used to set environment variables in polyglot
 // callbacks.
 func (s *environmentCallbackContext) Environment() EnvironmentEditor {
-	if s.err != nil { return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21268,7 +21497,7 @@ func (s *environmentCallbackContext) Environment() EnvironmentEditor {
 // ExecutionContext gets the execution context associated with this invocation
 // of the AppHost.
 func (s *environmentCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21287,7 +21516,7 @@ func (s *environmentCallbackContext) ExecutionContext() DistributedApplicationEx
 
 // Log gets the logger facade used by polyglot callbacks.
 func (s *environmentCallbackContext) Log() LogFacade {
-	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21306,7 +21535,7 @@ func (s *environmentCallbackContext) Log() LogFacade {
 
 // Resource is the resource associated with this callback context.
 func (s *environmentCallbackContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21355,7 +21584,7 @@ func newEnvironmentEditorFromHandle(h *handle, c *client) EnvironmentEditor {
 // Set sets an environment variable.
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue.
 func (s *environmentEditor) Set(name string, value any) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -21438,7 +21667,7 @@ func newEventingSubscriberRegistrationContextFromHandle(h *handle, c *client) Ev
 // CancellationToken is the cancellation token associated with the subscriber
 // registration.
 func (s *eventingSubscriberRegistrationContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21453,7 +21682,7 @@ func (s *eventingSubscriberRegistrationContext) CancellationToken() (*Cancellati
 
 // ExecutionContext is the execution context for the AppHost invocation.
 func (s *eventingSubscriberRegistrationContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21473,7 +21702,7 @@ func (s *eventingSubscriberRegistrationContext) ExecutionContext() DistributedAp
 // OnAfterPublish subscribes to the AfterPublish event from an eventing
 // subscriber registration context.
 func (s *eventingSubscriberRegistrationContext) OnAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21501,7 +21730,7 @@ func (s *eventingSubscriberRegistrationContext) OnAfterPublish(callback func(arg
 // OnAfterResourcesCreated subscribes to the AfterResourcesCreated event from an
 // eventing subscriber registration context.
 func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21529,7 +21758,7 @@ func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback
 // OnBeforePublish subscribes to the BeforePublish event from an eventing
 // subscriber registration context.
 func (s *eventingSubscriberRegistrationContext) OnBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -21557,7 +21786,7 @@ func (s *eventingSubscriberRegistrationContext) OnBeforePublish(callback func(ar
 // OnBeforeStart subscribes to the BeforeStart event from an eventing subscriber
 // registration context.
 func (s *eventingSubscriberRegistrationContext) OnBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription {
-	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -22504,6 +22733,20 @@ type ExecutableResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -22648,7 +22891,7 @@ func (*executableResource) isExecutableResource() {}
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *executableResource) AsHttp2Service() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22660,7 +22903,7 @@ func (s *executableResource) AsHttp2Service() ExecutableResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *executableResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -22679,7 +22922,7 @@ func (s *executableResource) CreateExecutionConfiguration() ExecutionConfigurati
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *executableResource) ExcludeFromManifest() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22692,7 +22935,7 @@ func (s *executableResource) ExcludeFromManifest() ExecutableResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *executableResource) ExcludeFromMcp() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22703,7 +22946,7 @@ func (s *executableResource) ExcludeFromMcp() ExecutableResource {
 
 // GetEndpoint gets an endpoint reference
 func (s *executableResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22723,7 +22966,7 @@ func (s *executableResource) GetEndpoint(name string) EndpointReference {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *executableResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -22739,7 +22982,7 @@ func (s *executableResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *executableResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -22756,7 +22999,7 @@ func (s *executableResource) GetSerializedAnnotation(annotationId string) (strin
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *executableResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -22772,7 +23015,7 @@ func (s *executableResource) HasSerializedAnnotation(annotationId string) (bool,
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *executableResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22791,7 +23034,7 @@ func (s *executableResource) OnBeforeResourceStarted(callback func(arg BeforeRes
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *executableResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22811,7 +23054,7 @@ func (s *executableResource) OnInitializeResource(callback func(arg InitializeRe
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *executableResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22830,7 +23073,7 @@ func (s *executableResource) OnResourceEndpointsAllocated(callback func(arg Reso
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *executableResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22849,7 +23092,7 @@ func (s *executableResource) OnResourceReady(callback func(arg ResourceReadyEven
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *executableResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22868,7 +23111,7 @@ func (s *executableResource) OnResourceStopped(callback func(arg ResourceStopped
 
 // PublishAsDockerFile publishes an executable as a Docker file
 func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerResource)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22890,7 +23133,7 @@ func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerRes
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *executableResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22909,7 +23152,7 @@ func (s *executableResource) SubscribeHttpsEndpointsUpdate(callback func(obj Htt
 
 // TestWaitFor waits for another resource (test version)
 func (s *executableResource) TestWaitFor(dependency Resource) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -22923,7 +23166,7 @@ func (s *executableResource) TestWaitFor(dependency Resource) ExecutableResource
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *executableResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -22942,7 +23185,7 @@ func (s *executableResource) TestWithEnvironmentCallback(callback func(arg TestE
 
 // WaitFor waits for another resource to be ready
 func (s *executableResource) WaitFor(dependency Resource, options ...*WaitForOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -22963,7 +23206,7 @@ func (s *executableResource) WaitFor(dependency Resource, options ...*WaitForOpt
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *executableResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -22983,7 +23226,7 @@ func (s *executableResource) WaitForCompletion(dependency Resource, options ...*
 
 // WaitForStart waits for another resource to start
 func (s *executableResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -23004,7 +23247,7 @@ func (s *executableResource) WaitForStart(dependency Resource, options ...*WaitF
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *executableResource) WithArgs(args []string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23017,7 +23260,7 @@ func (s *executableResource) WithArgs(args []string) ExecutableResource {
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *executableResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23037,7 +23280,7 @@ func (s *executableResource) WithArgsCallback(callback func(obj CommandLineArgsC
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *executableResource) WithArgsReplace(args []string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23049,7 +23292,7 @@ func (s *executableResource) WithArgsReplace(args []string) ExecutableResource {
 
 // WithCancellableOperation performs a cancellable operation
 func (s *executableResource) WithCancellableOperation(operation func(arg *CancellationToken)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23057,7 +23300,7 @@ func (s *executableResource) WithCancellableOperation(operation func(arg *Cancel
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -23069,7 +23312,7 @@ func (s *executableResource) WithCancellableOperation(operation func(arg *Cancel
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *executableResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23088,7 +23331,7 @@ func (s *executableResource) WithCertificateTrustEnvironment(certificateBundleEn
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *executableResource) WithCertificateTrustScope(scope CertificateTrustScope) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23100,7 +23343,7 @@ func (s *executableResource) WithCertificateTrustScope(scope CertificateTrustSco
 
 // WithChildRelationship sets a child relationship
 func (s *executableResource) WithChildRelationship(child Resource) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -23113,7 +23356,7 @@ func (s *executableResource) WithChildRelationship(child Resource) ExecutableRes
 
 // WithCommand adds a resource command
 func (s *executableResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23141,7 +23384,7 @@ func (s *executableResource) WithCommand(name string, displayName string, execut
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *executableResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -23154,7 +23397,7 @@ func (s *executableResource) WithComputeEnvironment(computeEnvironmentResource C
 
 // WithConfig configures the resource with a DTO
 func (s *executableResource) WithConfig(config *TestConfigDto) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23167,7 +23410,7 @@ func (s *executableResource) WithConfig(config *TestConfigDto) ExecutableResourc
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *executableResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23187,7 +23430,7 @@ func (s *executableResource) WithContainerBuildOptions(callback func(arg Contain
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *executableResource) WithContainerRegistry(registry Resource) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -23200,7 +23443,7 @@ func (s *executableResource) WithContainerRegistry(registry Resource) Executable
 
 // WithCorrelationId sets the correlation ID
 func (s *executableResource) WithCorrelationId(correlationId string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23212,7 +23455,7 @@ func (s *executableResource) WithCorrelationId(correlationId string) ExecutableR
 
 // WithCreatedAt sets the created timestamp
 func (s *executableResource) WithCreatedAt(createdAt string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23225,7 +23468,7 @@ func (s *executableResource) WithCreatedAt(createdAt string) ExecutableResource 
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *executableResource) WithDashboardPosition(position float64) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23237,7 +23480,7 @@ func (s *executableResource) WithDashboardPosition(position float64) ExecutableR
 
 // WithDependency adds a dependency on another resource
 func (s *executableResource) WithDependency(dependency ResourceWithConnectionString) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -23255,7 +23498,7 @@ func (s *executableResource) WithDependency(dependency ResourceWithConnectionStr
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *executableResource) WithDeveloperCertificateTrust(trust bool) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23268,7 +23511,7 @@ func (s *executableResource) WithDeveloperCertificateTrust(trust bool) Executabl
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *executableResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23286,7 +23529,7 @@ func (s *executableResource) WithDockerfileBaseImage(options ...*WithDockerfileB
 
 // WithEndpoint adds a network endpoint
 func (s *executableResource) WithEndpoint(options ...*WithEndpointOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23304,7 +23547,7 @@ func (s *executableResource) WithEndpoint(options ...*WithEndpointOptions) Execu
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *executableResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23334,7 +23577,7 @@ func (s *executableResource) WithEndpointCallback(endpointName string, callback 
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *executableResource) WithEndpointProxySupport(proxyEnabled bool) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23346,7 +23589,7 @@ func (s *executableResource) WithEndpointProxySupport(proxyEnabled bool) Executa
 
 // WithEndpoints sets the endpoints
 func (s *executableResource) WithEndpoints(endpoints []string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23359,7 +23602,7 @@ func (s *executableResource) WithEndpoints(endpoints []string) ExecutableResourc
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *executableResource) WithEnvironment(name string, value any) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -23379,7 +23622,7 @@ func (s *executableResource) WithEnvironment(name string, value any) ExecutableR
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *executableResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23398,7 +23641,7 @@ func (s *executableResource) WithEnvironmentCallback(callback func(arg Environme
 
 // WithEnvironmentVariables sets environment variables
 func (s *executableResource) WithEnvironmentVariables(variables map[string]string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23410,7 +23653,7 @@ func (s *executableResource) WithEnvironmentVariables(variables map[string]strin
 
 // WithExecutableCommand sets the command for the executable resource.
 func (s *executableResource) WithExecutableCommand(command string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23423,7 +23666,7 @@ func (s *executableResource) WithExecutableCommand(command string) ExecutableRes
 // WithExecutableDebugSupport adds VS Code-compatible debug metadata for an
 // executable resource.
 func (s *executableResource) WithExecutableDebugSupport(launchConfigurationType string, scriptPath string, options ...*WithExecutableDebugSupportOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23443,7 +23686,7 @@ func (s *executableResource) WithExecutableDebugSupport(launchConfigurationType 
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *executableResource) WithExplicitStart() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23455,7 +23698,7 @@ func (s *executableResource) WithExplicitStart() ExecutableResource {
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *executableResource) WithExternalHttpEndpoints() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23466,7 +23709,7 @@ func (s *executableResource) WithExternalHttpEndpoints() ExecutableResource {
 
 // WithHealthCheck adds a health check by key
 func (s *executableResource) WithHealthCheck(key string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23478,7 +23721,7 @@ func (s *executableResource) WithHealthCheck(key string) ExecutableResource {
 
 // WithHidden hides the resource from default resource lists
 func (s *executableResource) WithHidden() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23490,7 +23733,7 @@ func (s *executableResource) WithHidden() ExecutableResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *executableResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23508,7 +23751,7 @@ func (s *executableResource) WithHiddenOnCompletion(options ...*WithHiddenOnComp
 
 // WithHttpCommand adds an HTTP resource command
 func (s *executableResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23529,7 +23772,7 @@ func (s *executableResource) WithHttpCommand(path string, displayName string, op
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *executableResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23547,7 +23790,7 @@ func (s *executableResource) WithHttpEndpoint(options ...*WithHttpEndpointOption
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *executableResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23574,7 +23817,7 @@ func (s *executableResource) WithHttpEndpointCallback(callback func(obj Endpoint
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *executableResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23592,7 +23835,7 @@ func (s *executableResource) WithHttpHealthCheck(options ...*WithHttpHealthCheck
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *executableResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23613,7 +23856,7 @@ func (s *executableResource) WithHttpProbe(probeType ProbeType, options ...*With
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *executableResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23636,7 +23879,7 @@ func (s *executableResource) WithHttpsCertificateConfiguration(callback func(arg
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *executableResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23654,7 +23897,7 @@ func (s *executableResource) WithHttpsDeveloperCertificate(options ...*WithHttps
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *executableResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23672,7 +23915,7 @@ func (s *executableResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOpti
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *executableResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23699,7 +23942,7 @@ func (s *executableResource) WithHttpsEndpointCallback(callback func(obj Endpoin
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *executableResource) WithIconName(iconName string, options ...*WithIconNameOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23719,7 +23962,7 @@ func (s *executableResource) WithIconName(iconName string, options ...*WithIconN
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *executableResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23739,7 +23982,7 @@ func (s *executableResource) WithImagePushOptions(callback func(arg ContainerIma
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *executableResource) WithLifetimeOf(sourceBuilder Resource) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -23753,7 +23996,7 @@ func (s *executableResource) WithLifetimeOf(sourceBuilder Resource) ExecutableRe
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *executableResource) WithMcpServer(options ...*WithMcpServerOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23771,7 +24014,7 @@ func (s *executableResource) WithMcpServer(options ...*WithMcpServerOptions) Exe
 
 // WithMergeEndpoint configures a named endpoint
 func (s *executableResource) WithMergeEndpoint(endpointName string, port float64) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23784,7 +24027,7 @@ func (s *executableResource) WithMergeEndpoint(endpointName string, port float64
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *executableResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23798,7 +24041,7 @@ func (s *executableResource) WithMergeEndpointScheme(endpointName string, port f
 
 // WithMergeLabel adds a label to the resource
 func (s *executableResource) WithMergeLabel(label string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23810,7 +24053,7 @@ func (s *executableResource) WithMergeLabel(label string) ExecutableResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *executableResource) WithMergeLabelCategorized(label string, category string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23823,7 +24066,7 @@ func (s *executableResource) WithMergeLabelCategorized(label string, category st
 
 // WithMergeLogging configures resource logging
 func (s *executableResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23842,7 +24085,7 @@ func (s *executableResource) WithMergeLogging(logLevel string, options ...*WithM
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *executableResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23862,7 +24105,7 @@ func (s *executableResource) WithMergeLoggingPath(logLevel string, logPath strin
 
 // WithMergeRoute configures a route
 func (s *executableResource) WithMergeRoute(path string, method string, handler string, priority float64) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23877,7 +24120,7 @@ func (s *executableResource) WithMergeRoute(path string, method string, handler 
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *executableResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23893,7 +24136,7 @@ func (s *executableResource) WithMergeRouteMiddleware(path string, method string
 
 // WithModifiedAt sets the modified timestamp
 func (s *executableResource) WithModifiedAt(modifiedAt string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23905,7 +24148,7 @@ func (s *executableResource) WithModifiedAt(modifiedAt string) ExecutableResourc
 
 // WithNestedConfig configures with nested DTO
 func (s *executableResource) WithNestedConfig(config *TestNestedDto) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23917,7 +24160,7 @@ func (s *executableResource) WithNestedConfig(config *TestNestedDto) ExecutableR
 
 // WithOptionalCallback configures with optional callback
 func (s *executableResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23943,7 +24186,7 @@ func (s *executableResource) WithOptionalCallback(options ...*WithOptionalCallba
 
 // WithOptionalString adds an optional string parameter
 func (s *executableResource) WithOptionalString(options ...*WithOptionalStringOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23961,7 +24204,7 @@ func (s *executableResource) WithOptionalString(options ...*WithOptionalStringOp
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *executableResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23980,7 +24223,7 @@ func (s *executableResource) WithOtlpExporter(options ...*WithOtlpExporterOption
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *executableResource) WithParentProcessLifetime(parentProcessId float64) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -23992,7 +24235,7 @@ func (s *executableResource) WithParentProcessLifetime(parentProcessId float64) 
 
 // WithParentRelationship sets the parent relationship
 func (s *executableResource) WithParentRelationship(parent Resource) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -24005,7 +24248,7 @@ func (s *executableResource) WithParentRelationship(parent Resource) ExecutableR
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *executableResource) WithPersistentLifetime() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24018,7 +24261,7 @@ func (s *executableResource) WithPersistentLifetime() ExecutableResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *executableResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24038,7 +24281,7 @@ func (s *executableResource) WithPipelineConfiguration(callback func(obj Pipelin
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *executableResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24066,7 +24309,7 @@ func (s *executableResource) WithPipelineStepFactory(stepName string, callback f
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *executableResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24081,7 +24324,7 @@ func (s *executableResource) WithProcessCommand(commandName string, displayName 
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *executableResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24110,7 +24353,7 @@ func (s *executableResource) WithProcessCommandFactory(commandName string, displ
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *executableResource) WithReference(source any, options ...*WithReferenceOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -24136,7 +24379,7 @@ func (s *executableResource) WithReference(source any, options ...*WithReference
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *executableResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24148,7 +24391,7 @@ func (s *executableResource) WithReferenceEnvironment(options *ReferenceEnvironm
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *executableResource) WithRelationship(resourceBuilder Resource, type_ string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -24163,7 +24406,7 @@ func (s *executableResource) WithRelationship(resourceBuilder Resource, type_ st
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *executableResource) WithRemoteImageName(remoteImageName string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24175,7 +24418,7 @@ func (s *executableResource) WithRemoteImageName(remoteImageName string) Executa
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *executableResource) WithRemoteImageTag(remoteImageTag string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24189,7 +24432,7 @@ func (s *executableResource) WithRemoteImageTag(remoteImageTag string) Executabl
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *executableResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24210,7 +24453,7 @@ func (s *executableResource) WithRequiredCommand(command string, options ...*Wit
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *executableResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24234,10 +24477,22 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *executableResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExecutableResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *executableResource) WithSerializedAnnotation(annotationId string, json string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -24250,7 +24505,7 @@ func (s *executableResource) WithSerializedAnnotation(annotationId string, json 
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *executableResource) WithSessionLifetime() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24261,7 +24516,7 @@ func (s *executableResource) WithSessionLifetime() ExecutableResource {
 
 // WithStatus sets the resource status
 func (s *executableResource) WithStatus(status TestResourceStatus) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24274,7 +24529,7 @@ func (s *executableResource) WithStatus(status TestResourceStatus) ExecutableRes
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *executableResource) WithTags(tags []string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24287,7 +24542,7 @@ func (s *executableResource) WithTags(tags []string) ExecutableResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24317,7 +24572,7 @@ func (s *executableResource) WithTerminal(options ...*WithTerminalOptions) Execu
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *executableResource) WithTrait(name string, value string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24331,7 +24586,7 @@ func (s *executableResource) WithTrait(name string, value string) ExecutableReso
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *executableResource) WithUnionDependency(dependency any) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -24350,7 +24605,7 @@ func (s *executableResource) WithUnionDependency(dependency any) ExecutableResou
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *executableResource) WithUrl(url any, options ...*WithUrlOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -24376,7 +24631,7 @@ func (s *executableResource) WithUrl(url any, options ...*WithUrlOptions) Execut
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *executableResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24400,7 +24655,7 @@ func (s *executableResource) WithUrlForEndpoint(endpointName string, callback fu
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *executableResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24419,7 +24674,7 @@ func (s *executableResource) WithUrls(callback func(obj ResourceUrlsCallbackCont
 
 // WithValidator adds validation callback
 func (s *executableResource) WithValidator(validator func(arg TestResourceContext) bool) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24437,7 +24692,7 @@ func (s *executableResource) WithValidator(validator func(arg TestResourceContex
 
 // WithVolume adds a volume to an executable resource.
 func (s *executableResource) WithVolume(target string, name string, env string, options ...*ExecutableResourceWithVolumeOptions) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -24458,7 +24713,7 @@ func (s *executableResource) WithVolume(target string, name string, env string, 
 
 // WithWorkingDirectory sets the working directory for the executable resource.
 func (s *executableResource) WithWorkingDirectory(workingDirectory string) ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24471,7 +24726,7 @@ func (s *executableResource) WithWorkingDirectory(workingDirectory string) Execu
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *executableResource) WithoutHttpsCertificate() ExecutableResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24523,7 +24778,7 @@ func newExecuteCommandContextFromHandle(h *handle, c *client) ExecuteCommandCont
 // Arguments gets the invocation arguments supplied by the client when the
 // command is executed.
 func (s *executeCommandContext) Arguments() InteractionInputCollection {
-	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -24542,7 +24797,7 @@ func (s *executeCommandContext) Arguments() InteractionInputCollection {
 
 // CancellationToken is the cancellation token.
 func (s *executeCommandContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -24557,7 +24812,7 @@ func (s *executeCommandContext) CancellationToken() (*CancellationToken, error) 
 
 // Logger is the logger for the resource.
 func (s *executeCommandContext) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -24576,7 +24831,7 @@ func (s *executeCommandContext) Logger() Logger {
 
 // ResourceName is the resource name.
 func (s *executeCommandContext) ResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -24591,7 +24846,7 @@ func (s *executeCommandContext) ResourceName() (string, error) {
 
 // Services is the service provider.
 func (s *executeCommandContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -24678,7 +24933,7 @@ func newExecutionConfigurationBuilderFromHandle(h *handle, c *client) ExecutionC
 
 // Build builds the execution configuration for the specified builder.
 func (s *executionConfigurationBuilder) Build(executionContext DistributedApplicationExecutionContext, options ...*BuildOptions) ExecutionConfigurationResult {
-	if s.err != nil { return &executionConfigurationResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	if executionContext != nil { if err := executionContext.Err(); err != nil { return &executionConfigurationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -24713,7 +24968,7 @@ func (s *executionConfigurationBuilder) Build(executionContext DistributedApplic
 // WithArgumentsConfig adds a command line arguments configuration gatherer to
 // the builder.
 func (s *executionConfigurationBuilder) WithArgumentsConfig() ExecutionConfigurationBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24725,7 +24980,7 @@ func (s *executionConfigurationBuilder) WithArgumentsConfig() ExecutionConfigura
 // WithCertificateTrustConfig adds a certificate trust configuration gatherer to
 // the builder.
 func (s *executionConfigurationBuilder) WithCertificateTrustConfig(configContextFactory func(arg CertificateTrustScope) *CertificateTrustExecutionConfigurationContext) ExecutionConfigurationBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24744,7 +24999,7 @@ func (s *executionConfigurationBuilder) WithCertificateTrustConfig(configContext
 // WithEnvironmentVariablesConfig adds an environment variables configuration
 // gatherer to the builder.
 func (s *executionConfigurationBuilder) WithEnvironmentVariablesConfig() ExecutionConfigurationBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24756,7 +25011,7 @@ func (s *executionConfigurationBuilder) WithEnvironmentVariablesConfig() Executi
 // WithHttpsCertificateConfig adds an HTTPS certificate configuration gatherer
 // using certificate metadata instead of a raw X509 certificate.
 func (s *executionConfigurationBuilder) WithHttpsCertificateConfig(configContextFactory func(arg *HttpsCertificateInfo) *HttpsCertificateExecutionConfigurationContext) ExecutionConfigurationBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -24809,7 +25064,7 @@ func newExecutionConfigurationResultFromHandle(h *handle, c *client) ExecutionCo
 // GetCertificateTrustData gets certificate trust execution-configuration data
 // when present.
 func (s *executionConfigurationResult) GetCertificateTrustData() (*CertificateTrustExecutionConfigurationExportData, error) {
-	if s.err != nil { var zero *CertificateTrustExecutionConfigurationExportData; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CertificateTrustExecutionConfigurationExportData; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -24825,7 +25080,7 @@ func (s *executionConfigurationResult) GetCertificateTrustData() (*CertificateTr
 // GetHttpsCertificateData gets HTTPS certificate execution-configuration data
 // when present.
 func (s *executionConfigurationResult) GetHttpsCertificateData() (*HttpsCertificateExecutionConfigurationExportData, error) {
-	if s.err != nil { var zero *HttpsCertificateExecutionConfigurationExportData; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *HttpsCertificateExecutionConfigurationExportData; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
@@ -25300,6 +25555,20 @@ type ExternalServiceResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ExternalServiceResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -25406,7 +25675,7 @@ func newExternalServiceResourceFromHandle(h *handle, c *client) ExternalServiceR
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *externalServiceResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -25425,7 +25694,7 @@ func (s *externalServiceResource) CreateExecutionConfiguration() ExecutionConfig
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *externalServiceResource) ExcludeFromManifest() ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25438,7 +25707,7 @@ func (s *externalServiceResource) ExcludeFromManifest() ExternalServiceResource 
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *externalServiceResource) ExcludeFromMcp() ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25449,7 +25718,7 @@ func (s *externalServiceResource) ExcludeFromMcp() ExternalServiceResource {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *externalServiceResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -25465,7 +25734,7 @@ func (s *externalServiceResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *externalServiceResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -25482,7 +25751,7 @@ func (s *externalServiceResource) GetSerializedAnnotation(annotationId string) (
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *externalServiceResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -25498,7 +25767,7 @@ func (s *externalServiceResource) HasSerializedAnnotation(annotationId string) (
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *externalServiceResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25517,7 +25786,7 @@ func (s *externalServiceResource) OnBeforeResourceStarted(callback func(arg Befo
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *externalServiceResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25536,7 +25805,7 @@ func (s *externalServiceResource) OnInitializeResource(callback func(arg Initial
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *externalServiceResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25555,7 +25824,7 @@ func (s *externalServiceResource) OnResourceReady(callback func(arg ResourceRead
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *externalServiceResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25577,7 +25846,7 @@ func (s *externalServiceResource) OnResourceStopped(callback func(arg ResourceSt
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *externalServiceResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25596,7 +25865,7 @@ func (s *externalServiceResource) SubscribeHttpsEndpointsUpdate(callback func(ob
 
 // TestWaitFor waits for another resource (test version)
 func (s *externalServiceResource) TestWaitFor(dependency Resource) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -25609,7 +25878,7 @@ func (s *externalServiceResource) TestWaitFor(dependency Resource) ExternalServi
 
 // WithCancellableOperation performs a cancellable operation
 func (s *externalServiceResource) WithCancellableOperation(operation func(arg *CancellationToken)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25617,7 +25886,7 @@ func (s *externalServiceResource) WithCancellableOperation(operation func(arg *C
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -25628,7 +25897,7 @@ func (s *externalServiceResource) WithCancellableOperation(operation func(arg *C
 
 // WithChildRelationship sets a child relationship
 func (s *externalServiceResource) WithChildRelationship(child Resource) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -25641,7 +25910,7 @@ func (s *externalServiceResource) WithChildRelationship(child Resource) External
 
 // WithCommand adds a resource command
 func (s *externalServiceResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25668,7 +25937,7 @@ func (s *externalServiceResource) WithCommand(name string, displayName string, e
 
 // WithConfig configures the resource with a DTO
 func (s *externalServiceResource) WithConfig(config *TestConfigDto) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25681,7 +25950,7 @@ func (s *externalServiceResource) WithConfig(config *TestConfigDto) ExternalServ
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *externalServiceResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25701,7 +25970,7 @@ func (s *externalServiceResource) WithContainerBuildOptions(callback func(arg Co
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *externalServiceResource) WithContainerRegistry(registry Resource) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -25714,7 +25983,7 @@ func (s *externalServiceResource) WithContainerRegistry(registry Resource) Exter
 
 // WithCorrelationId sets the correlation ID
 func (s *externalServiceResource) WithCorrelationId(correlationId string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25726,7 +25995,7 @@ func (s *externalServiceResource) WithCorrelationId(correlationId string) Extern
 
 // WithCreatedAt sets the created timestamp
 func (s *externalServiceResource) WithCreatedAt(createdAt string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25739,7 +26008,7 @@ func (s *externalServiceResource) WithCreatedAt(createdAt string) ExternalServic
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *externalServiceResource) WithDashboardPosition(position float64) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25751,7 +26020,7 @@ func (s *externalServiceResource) WithDashboardPosition(position float64) Extern
 
 // WithDependency adds a dependency on another resource
 func (s *externalServiceResource) WithDependency(dependency ResourceWithConnectionString) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -25765,7 +26034,7 @@ func (s *externalServiceResource) WithDependency(dependency ResourceWithConnecti
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *externalServiceResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25783,7 +26052,7 @@ func (s *externalServiceResource) WithDockerfileBaseImage(options ...*WithDocker
 
 // WithEndpoints sets the endpoints
 func (s *externalServiceResource) WithEndpoints(endpoints []string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25795,7 +26064,7 @@ func (s *externalServiceResource) WithEndpoints(endpoints []string) ExternalServ
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *externalServiceResource) WithExplicitStart() ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25806,7 +26075,7 @@ func (s *externalServiceResource) WithExplicitStart() ExternalServiceResource {
 
 // WithHealthCheck adds a health check by key
 func (s *externalServiceResource) WithHealthCheck(key string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25818,7 +26087,7 @@ func (s *externalServiceResource) WithHealthCheck(key string) ExternalServiceRes
 
 // WithHidden hides the resource from default resource lists
 func (s *externalServiceResource) WithHidden() ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25830,7 +26099,7 @@ func (s *externalServiceResource) WithHidden() ExternalServiceResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *externalServiceResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25849,7 +26118,7 @@ func (s *externalServiceResource) WithHiddenOnCompletion(options ...*WithHiddenO
 // WithHttpHealthCheck adds an HTTP health check to the external service for
 // polyglot app hosts.
 func (s *externalServiceResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25868,7 +26137,7 @@ func (s *externalServiceResource) WithHttpHealthCheck(options ...*WithHttpHealth
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *externalServiceResource) WithIconName(iconName string, options ...*WithIconNameOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25888,7 +26157,7 @@ func (s *externalServiceResource) WithIconName(iconName string, options ...*With
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *externalServiceResource) WithLifetimeOf(sourceBuilder Resource) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -25901,7 +26170,7 @@ func (s *externalServiceResource) WithLifetimeOf(sourceBuilder Resource) Externa
 
 // WithMergeEndpoint configures a named endpoint
 func (s *externalServiceResource) WithMergeEndpoint(endpointName string, port float64) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25914,7 +26183,7 @@ func (s *externalServiceResource) WithMergeEndpoint(endpointName string, port fl
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *externalServiceResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25928,7 +26197,7 @@ func (s *externalServiceResource) WithMergeEndpointScheme(endpointName string, p
 
 // WithMergeLabel adds a label to the resource
 func (s *externalServiceResource) WithMergeLabel(label string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25940,7 +26209,7 @@ func (s *externalServiceResource) WithMergeLabel(label string) ExternalServiceRe
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *externalServiceResource) WithMergeLabelCategorized(label string, category string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25953,7 +26222,7 @@ func (s *externalServiceResource) WithMergeLabelCategorized(label string, catego
 
 // WithMergeLogging configures resource logging
 func (s *externalServiceResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25972,7 +26241,7 @@ func (s *externalServiceResource) WithMergeLogging(logLevel string, options ...*
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *externalServiceResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -25992,7 +26261,7 @@ func (s *externalServiceResource) WithMergeLoggingPath(logLevel string, logPath 
 
 // WithMergeRoute configures a route
 func (s *externalServiceResource) WithMergeRoute(path string, method string, handler string, priority float64) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26007,7 +26276,7 @@ func (s *externalServiceResource) WithMergeRoute(path string, method string, han
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *externalServiceResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26023,7 +26292,7 @@ func (s *externalServiceResource) WithMergeRouteMiddleware(path string, method s
 
 // WithModifiedAt sets the modified timestamp
 func (s *externalServiceResource) WithModifiedAt(modifiedAt string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26035,7 +26304,7 @@ func (s *externalServiceResource) WithModifiedAt(modifiedAt string) ExternalServ
 
 // WithNestedConfig configures with nested DTO
 func (s *externalServiceResource) WithNestedConfig(config *TestNestedDto) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26047,7 +26316,7 @@ func (s *externalServiceResource) WithNestedConfig(config *TestNestedDto) Extern
 
 // WithOptionalCallback configures with optional callback
 func (s *externalServiceResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26073,7 +26342,7 @@ func (s *externalServiceResource) WithOptionalCallback(options ...*WithOptionalC
 
 // WithOptionalString adds an optional string parameter
 func (s *externalServiceResource) WithOptionalString(options ...*WithOptionalStringOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26092,7 +26361,7 @@ func (s *externalServiceResource) WithOptionalString(options ...*WithOptionalStr
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *externalServiceResource) WithParentProcessLifetime(parentProcessId float64) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26104,7 +26373,7 @@ func (s *externalServiceResource) WithParentProcessLifetime(parentProcessId floa
 
 // WithParentRelationship sets the parent relationship
 func (s *externalServiceResource) WithParentRelationship(parent Resource) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -26117,7 +26386,7 @@ func (s *externalServiceResource) WithParentRelationship(parent Resource) Extern
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *externalServiceResource) WithPersistentLifetime() ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26130,7 +26399,7 @@ func (s *externalServiceResource) WithPersistentLifetime() ExternalServiceResour
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *externalServiceResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26150,7 +26419,7 @@ func (s *externalServiceResource) WithPipelineConfiguration(callback func(obj Pi
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *externalServiceResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26178,7 +26447,7 @@ func (s *externalServiceResource) WithPipelineStepFactory(stepName string, callb
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *externalServiceResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26193,7 +26462,7 @@ func (s *externalServiceResource) WithProcessCommand(commandName string, display
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *externalServiceResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26221,7 +26490,7 @@ func (s *externalServiceResource) WithProcessCommandFactory(commandName string, 
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *externalServiceResource) WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -26237,7 +26506,7 @@ func (s *externalServiceResource) WithRelationship(resourceBuilder Resource, typ
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *externalServiceResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26258,7 +26527,7 @@ func (s *externalServiceResource) WithRequiredCommand(command string, options ..
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *externalServiceResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26282,10 +26551,22 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *externalServiceResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ExternalServiceResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *externalServiceResource) WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -26298,7 +26579,7 @@ func (s *externalServiceResource) WithSerializedAnnotation(annotationId string, 
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *externalServiceResource) WithSessionLifetime() ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26309,7 +26590,7 @@ func (s *externalServiceResource) WithSessionLifetime() ExternalServiceResource 
 
 // WithStatus sets the resource status
 func (s *externalServiceResource) WithStatus(status TestResourceStatus) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26322,7 +26603,7 @@ func (s *externalServiceResource) WithStatus(status TestResourceStatus) External
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *externalServiceResource) WithTags(tags []string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26335,7 +26616,7 @@ func (s *externalServiceResource) WithTags(tags []string) ExternalServiceResourc
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26365,7 +26646,7 @@ func (s *externalServiceResource) WithTerminal(options ...*WithTerminalOptions) 
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *externalServiceResource) WithTrait(name string, value string) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26379,7 +26660,7 @@ func (s *externalServiceResource) WithTrait(name string, value string) ExternalS
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *externalServiceResource) WithUnionDependency(dependency any) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -26398,7 +26679,7 @@ func (s *externalServiceResource) WithUnionDependency(dependency any) ExternalSe
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *externalServiceResource) WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -26424,7 +26705,7 @@ func (s *externalServiceResource) WithUrl(url any, options ...*WithUrlOptions) E
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *externalServiceResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26448,7 +26729,7 @@ func (s *externalServiceResource) WithUrlForEndpoint(endpointName string, callba
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *externalServiceResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26467,7 +26748,7 @@ func (s *externalServiceResource) WithUrls(callback func(obj ResourceUrlsCallbac
 
 // WithValidator adds validation callback
 func (s *externalServiceResource) WithValidator(validator func(arg TestResourceContext) bool) ExternalServiceResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -26545,7 +26826,7 @@ func newHostEnvironmentFromHandle(h *handle, c *client) HostEnvironment {
 
 // ApplicationName gets the ApplicationName property
 func (s *hostEnvironment) ApplicationName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26560,7 +26841,7 @@ func (s *hostEnvironment) ApplicationName() (string, error) {
 
 // ContentRootPath gets the ContentRootPath property
 func (s *hostEnvironment) ContentRootPath() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26575,7 +26856,7 @@ func (s *hostEnvironment) ContentRootPath() (string, error) {
 
 // EnvironmentName gets the EnvironmentName property
 func (s *hostEnvironment) EnvironmentName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26590,7 +26871,7 @@ func (s *hostEnvironment) EnvironmentName() (string, error) {
 
 // IsDevelopment checks if the environment is Development.
 func (s *hostEnvironment) IsDevelopment() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"environment": s.handle.ToJSON(),
@@ -26605,7 +26886,7 @@ func (s *hostEnvironment) IsDevelopment() (bool, error) {
 
 // IsEnvironment checks if the environment matches the specified name.
 func (s *hostEnvironment) IsEnvironment(environmentName string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"environment": s.handle.ToJSON(),
@@ -26621,7 +26902,7 @@ func (s *hostEnvironment) IsEnvironment(environmentName string) (bool, error) {
 
 // IsProduction checks if the environment is Production.
 func (s *hostEnvironment) IsProduction() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"environment": s.handle.ToJSON(),
@@ -26636,7 +26917,7 @@ func (s *hostEnvironment) IsProduction() (bool, error) {
 
 // IsStaging checks if the environment is Staging.
 func (s *hostEnvironment) IsStaging() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"environment": s.handle.ToJSON(),
@@ -26651,7 +26932,7 @@ func (s *hostEnvironment) IsStaging() (bool, error) {
 
 // SetApplicationName sets the ApplicationName property
 func (s *hostEnvironment) SetApplicationName(value string) HostEnvironment {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26663,7 +26944,7 @@ func (s *hostEnvironment) SetApplicationName(value string) HostEnvironment {
 
 // SetContentRootPath sets the ContentRootPath property
 func (s *hostEnvironment) SetContentRootPath(value string) HostEnvironment {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26675,7 +26956,7 @@ func (s *hostEnvironment) SetContentRootPath(value string) HostEnvironment {
 
 // SetEnvironmentName sets the EnvironmentName property
 func (s *hostEnvironment) SetEnvironmentName(value string) HostEnvironment {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26721,7 +27002,7 @@ func newHttpCommandPrepareRequestContextFromHandle(h *handle, c *client) HttpCom
 // Arguments gets the invocation arguments supplied by the client when the
 // command is executed.
 func (s *httpCommandPrepareRequestContext) Arguments() InteractionInputCollection {
-	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26740,7 +27021,7 @@ func (s *httpCommandPrepareRequestContext) Arguments() InteractionInputCollectio
 
 // CancellationToken is the cancellation token.
 func (s *httpCommandPrepareRequestContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26755,7 +27036,7 @@ func (s *httpCommandPrepareRequestContext) CancellationToken() (*CancellationTok
 
 // Endpoint - The endpoint the request is targeting.
 func (s *httpCommandPrepareRequestContext) Endpoint() EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26774,7 +27055,7 @@ func (s *httpCommandPrepareRequestContext) Endpoint() EndpointReference {
 
 // ResourceName - The name of the resource the command was configured on.
 func (s *httpCommandPrepareRequestContext) ResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26890,7 +27171,7 @@ func newHttpsCertificateConfigurationCallbackAnnotationContextFromHandle(h *hand
 // Arguments gets the editor used to manipulate the command-line arguments in
 // polyglot callbacks.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) Arguments() CommandLineArgsEditor {
-	if s.err != nil { return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26910,7 +27191,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) Arguments() Com
 // CancellationToken gets the CancellationToken that can be used to cancel the
 // operation.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26926,7 +27207,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) CancellationTok
 // CertificatePath is a value provider that will resolve to a path to the
 // certificate file.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificatePath() *ReferenceExpression {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26944,7 +27225,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificatePath
 // CertificateWithKeyPath is a value provider that will resolve to a path to the
 // certificate and key concatenated together in PEM format.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificateWithKeyPath() *ReferenceExpression {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26962,7 +27243,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) CertificateWith
 // Environment gets the editor used to set environment variables in polyglot
 // callbacks.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) Environment() EnvironmentEditor {
-	if s.err != nil { return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -26982,7 +27263,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) Environment() E
 // ExecutionContext gets the [DistributedApplicationExecutionContext] for this
 // session.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27002,7 +27283,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) ExecutionContex
 // KeyPath is a value provider that will resolve to a path to the private key
 // for the certificate.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) KeyPath() *ReferenceExpression {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27020,7 +27301,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) KeyPath() *Refe
 // PfxPath is a value provider that will resolve to a path to a PFX file for the
 // key pair.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) PfxPath() *ReferenceExpression {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27037,7 +27318,7 @@ func (s *httpsCertificateConfigurationCallbackAnnotationContext) PfxPath() *Refe
 
 // Resource gets the resource to which the annotation is applied.
 func (s *httpsCertificateConfigurationCallbackAnnotationContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27107,7 +27388,7 @@ func newHttpsEndpointUpdateCallbackContextFromHandle(h *handle, c *client) Https
 
 // CancellationToken gets the CancellationToken for the operation.
 func (s *httpsEndpointUpdateCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27122,7 +27403,7 @@ func (s *httpsEndpointUpdateCallbackContext) CancellationToken() (*CancellationT
 
 // Model gets the [DistributedApplicationModel] instance.
 func (s *httpsEndpointUpdateCallbackContext) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27141,7 +27422,7 @@ func (s *httpsEndpointUpdateCallbackContext) Model() DistributedApplicationModel
 
 // Resource gets the [Resource] that is being configured for HTTPS.
 func (s *httpsEndpointUpdateCallbackContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27158,7 +27439,7 @@ func (s *httpsEndpointUpdateCallbackContext) Resource() Resource {
 
 // Services gets the [ServiceProvider] instance from the application.
 func (s *httpsEndpointUpdateCallbackContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27255,7 +27536,7 @@ func newInitializeResourceEventFromHandle(h *handle, c *client) InitializeResour
 
 // Eventing is the [DistributedApplicationEventing] service for the app host.
 func (s *initializeResourceEvent) Eventing() DistributedApplicationEventing {
-	if s.err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27275,7 +27556,7 @@ func (s *initializeResourceEvent) Eventing() DistributedApplicationEventing {
 // Logger is an instance of [Logger] that can be used to log messages for the
 // resource.
 func (s *initializeResourceEvent) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27294,7 +27575,7 @@ func (s *initializeResourceEvent) Logger() Logger {
 
 // Notifications is the [ResourceNotificationService] for the app host.
 func (s *initializeResourceEvent) Notifications() ResourceNotificationService {
-	if s.err != nil { return &resourceNotificationService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &resourceNotificationService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27313,7 +27594,7 @@ func (s *initializeResourceEvent) Notifications() ResourceNotificationService {
 
 // Resource gets the Resource property
 func (s *initializeResourceEvent) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27330,7 +27611,7 @@ func (s *initializeResourceEvent) Resource() Resource {
 
 // Services is the [ServiceProvider] for the app host.
 func (s *initializeResourceEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27387,7 +27668,7 @@ func newInputsDialogValidationContextFromHandle(h *handle, c *client) InputsDial
 // AddValidationError adds a validation error for the input with the specified
 // name.
 func (s *inputsDialogValidationContext) AddValidationError(inputName string, errorMessage string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27400,7 +27681,7 @@ func (s *inputsDialogValidationContext) AddValidationError(inputName string, err
 
 // CancellationToken gets the cancellation token for the validation operation.
 func (s *inputsDialogValidationContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27415,7 +27696,7 @@ func (s *inputsDialogValidationContext) CancellationToken() (*CancellationToken,
 
 // Inputs gets the inputs that are being validated.
 func (s *inputsDialogValidationContext) Inputs() InteractionInputCollection {
-	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27434,7 +27715,7 @@ func (s *inputsDialogValidationContext) Inputs() InteractionInputCollection {
 
 // Services gets the service provider for resolving services during validation.
 func (s *inputsDialogValidationContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27487,7 +27768,7 @@ func newInputsInteractionResultFromHandle(h *handle, c *client) InputsInteractio
 // Canceled gets a value indicating whether the interaction was canceled by the
 // user.
 func (s *inputsInteractionResult) Canceled() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27503,7 +27784,7 @@ func (s *inputsInteractionResult) Canceled() (bool, error) {
 // Inputs gets the inputs returned from the interaction. Empty when Canceled is
 // true.
 func (s *inputsInteractionResult) Inputs() InteractionInputCollection {
-	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27583,7 +27864,7 @@ func newInteractionInputBuilderFromHandle(h *handle, c *client) InteractionInput
 
 // ReleaseFiles releases uploaded files associated with the input.
 func (s *interactionInputBuilder) ReleaseFiles() error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27594,7 +27875,7 @@ func (s *interactionInputBuilder) ReleaseFiles() error {
 
 // WithChoiceOptions sets the choice options for the input.
 func (s *interactionInputBuilder) WithChoiceOptions(choices []*InteractionChoiceOption) InteractionInputBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27607,7 +27888,7 @@ func (s *interactionInputBuilder) WithChoiceOptions(choices []*InteractionChoice
 // WithDynamicLoading attaches a callback that dynamically loads or updates the
 // input after the prompt starts.
 func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*DynamicLoadingOptions) InteractionInputBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27634,7 +27915,7 @@ func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg Interacti
 
 // WithValue sets the value of the input.
 func (s *interactionInputBuilder) WithValue(value string) InteractionInputBuilder {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27686,7 +27967,7 @@ func newInteractionInputCollectionFromHandle(h *handle, c *client) InteractionIn
 
 // ToArray gets all inputs in declaration order.
 func (s *interactionInputCollection) ToArray() ([]*InteractionInput, error) {
-	if s.err != nil { var zero []*InteractionInput; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []*InteractionInput; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27701,7 +27982,7 @@ func (s *interactionInputCollection) ToArray() ([]*InteractionInput, error) {
 
 // Get returns the input with the specified name, or nil if no input matches.
 func (s *interactionInputCollection) Get(name string) (*InteractionInput, error) {
-	if s.err != nil { return nil, s.err }
+	if err := s.Err(); err != nil { return nil, err }
 	inputs, err := s.ToArray()
 	if err != nil { return nil, err }
 	for _, input := range inputs {
@@ -27784,7 +28065,7 @@ func newInteractionInputLoadContextFromHandle(h *handle, c *client) InteractionI
 // Input gets a handle to the input that is loading. Mutate the input through
 // this handle.
 func (s *interactionInputLoadContext) Input() InteractionLoadingInput {
-	if s.err != nil { return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionLoadingInput{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27803,7 +28084,7 @@ func (s *interactionInputLoadContext) Input() InteractionLoadingInput {
 
 // Inputs gets all inputs in the prompt, including the one currently loading.
 func (s *interactionInputLoadContext) Inputs() InteractionInputCollection {
-	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27866,7 +28147,7 @@ func newInteractionLoadingInputFromHandle(h *handle, c *client) InteractionLoadi
 
 // GetName gets the name of the input.
 func (s *interactionLoadingInput) GetName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27881,7 +28162,7 @@ func (s *interactionLoadingInput) GetName() (string, error) {
 
 // SetChoiceOptions sets the choice options for the input.
 func (s *interactionLoadingInput) SetChoiceOptions(choices []*InteractionChoiceOption) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -27893,7 +28174,7 @@ func (s *interactionLoadingInput) SetChoiceOptions(choices []*InteractionChoiceO
 
 // SetValue sets the value of the input.
 func (s *interactionLoadingInput) SetValue(value string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -28006,7 +28287,7 @@ func newInteractionServiceFromHandle(h *handle, c *client) InteractionService {
 
 // CreateBooleanInput creates a boolean (checkbox) input.
 func (s *interactionService) CreateBooleanInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
-	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28034,7 +28315,7 @@ func (s *interactionService) CreateBooleanInput(name string, options ...*CreateI
 
 // CreateChoiceInput creates a choice input that selects from a list of options.
 func (s *interactionService) CreateChoiceInput(name string, options ...*CreateChoiceInputOptions) InteractionInputBuilder {
-	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28061,7 +28342,7 @@ func (s *interactionService) CreateChoiceInput(name string, options ...*CreateCh
 
 // CreateFileInput creates a file input.
 func (s *interactionService) CreateFileInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
-	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28089,7 +28370,7 @@ func (s *interactionService) CreateFileInput(name string, options ...*CreateInte
 
 // CreateNumberInput creates a numeric input.
 func (s *interactionService) CreateNumberInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
-	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28117,7 +28398,7 @@ func (s *interactionService) CreateNumberInput(name string, options ...*CreateIn
 
 // CreateSecretInput creates a secret (masked) text input.
 func (s *interactionService) CreateSecretInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
-	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28145,7 +28426,7 @@ func (s *interactionService) CreateSecretInput(name string, options ...*CreateIn
 
 // CreateTextInput creates a single-line text input.
 func (s *interactionService) CreateTextInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
-	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28174,7 +28455,7 @@ func (s *interactionService) CreateTextInput(name string, options ...*CreateInte
 // IsAvailable gets a value indicating whether the interaction service is
 // available to prompt the user.
 func (s *interactionService) IsAvailable() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28190,7 +28471,7 @@ func (s *interactionService) IsAvailable() (bool, error) {
 // PromptConfirmation prompts the user for confirmation with an OK/Cancel
 // dialog.
 func (s *interactionService) PromptConfirmation(title string, message string, options ...*PromptConfirmationOptions) (*BoolInteractionResult, error) {
-	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *BoolInteractionResult; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28220,7 +28501,7 @@ func (s *interactionService) PromptConfirmation(title string, message string, op
 
 // PromptInput prompts the user for a single input.
 func (s *interactionService) PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions) (*InputInteractionResult, error) {
-	if s.err != nil { var zero *InputInteractionResult; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *InputInteractionResult; return zero, err }
 	if input != nil { if err := input.Err(); err != nil { var zero *InputInteractionResult; return zero, err } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -28252,7 +28533,7 @@ func (s *interactionService) PromptInput(title string, message string, input Int
 
 // PromptInputs prompts the user for multiple inputs.
 func (s *interactionService) PromptInputs(title string, message string, inputs []InteractionInputBuilder, options ...*PromptInputsOptions) InputsInteractionResult {
-	if s.err != nil { return &inputsInteractionResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &inputsInteractionResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28287,7 +28568,7 @@ func (s *interactionService) PromptInputs(title string, message string, inputs [
 
 // PromptMessageBox prompts the user with a message box dialog.
 func (s *interactionService) PromptMessageBox(title string, message string, options ...*PromptMessageBoxOptions) (*BoolInteractionResult, error) {
-	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *BoolInteractionResult; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28317,7 +28598,7 @@ func (s *interactionService) PromptMessageBox(title string, message string, opti
 
 // PromptNotification prompts the user with a notification.
 func (s *interactionService) PromptNotification(title string, message string, options ...*PromptNotificationOptions) (*BoolInteractionResult, error) {
-	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *BoolInteractionResult; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28348,7 +28629,7 @@ func (s *interactionService) PromptNotification(title string, message string, op
 // PromptProgress displays a progress dialog with an indeterminate progress
 // indicator.
 func (s *interactionService) PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error) {
-	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *BoolInteractionResult; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"interactionService": s.handle.ToJSON(),
@@ -28420,7 +28701,7 @@ func newLogFacadeFromHandle(h *handle, c *client) LogFacade {
 
 // Debug writes a debug log message.
 func (s *logFacade) Debug(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -28432,7 +28713,7 @@ func (s *logFacade) Debug(message string) error {
 
 // Error writes an error log message.
 func (s *logFacade) Error(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -28444,7 +28725,7 @@ func (s *logFacade) Error(message string) error {
 
 // Info writes an informational log message.
 func (s *logFacade) Info(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -28456,7 +28737,7 @@ func (s *logFacade) Info(message string) error {
 
 // Warning writes a warning log message.
 func (s *logFacade) Warning(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -28502,7 +28783,7 @@ func newLoggerFromHandle(h *handle, c *client) Logger {
 
 // Log logs a message with a specified log level.
 func (s *logger) Log(level string, message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"logger": s.handle.ToJSON(),
@@ -28515,7 +28796,7 @@ func (s *logger) Log(level string, message string) error {
 
 // LogDebug logs a debug message.
 func (s *logger) LogDebug(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"logger": s.handle.ToJSON(),
@@ -28527,7 +28808,7 @@ func (s *logger) LogDebug(message string) error {
 
 // LogError logs an error message.
 func (s *logger) LogError(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"logger": s.handle.ToJSON(),
@@ -28539,7 +28820,7 @@ func (s *logger) LogError(message string) error {
 
 // LogInformation logs an information message.
 func (s *logger) LogInformation(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"logger": s.handle.ToJSON(),
@@ -28551,7 +28832,7 @@ func (s *logger) LogInformation(message string) error {
 
 // LogWarning logs a warning message.
 func (s *logger) LogWarning(message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"logger": s.handle.ToJSON(),
@@ -28590,7 +28871,7 @@ func newLoggerFactoryFromHandle(h *handle, c *client) LoggerFactory {
 
 // CreateLogger creates a logger for the specified category name.
 func (s *loggerFactory) CreateLogger(categoryName string) Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"loggerFactory": s.handle.ToJSON(),
@@ -29124,6 +29405,20 @@ type ParameterResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ParameterResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -29230,7 +29525,7 @@ func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *parameterResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -29249,7 +29544,7 @@ func (s *parameterResource) CreateExecutionConfiguration() ExecutionConfiguratio
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *parameterResource) ExcludeFromManifest() ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29262,7 +29557,7 @@ func (s *parameterResource) ExcludeFromManifest() ParameterResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *parameterResource) ExcludeFromMcp() ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29273,7 +29568,7 @@ func (s *parameterResource) ExcludeFromMcp() ParameterResource {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *parameterResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -29289,7 +29584,7 @@ func (s *parameterResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *parameterResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -29306,7 +29601,7 @@ func (s *parameterResource) GetSerializedAnnotation(annotationId string) (string
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *parameterResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -29322,7 +29617,7 @@ func (s *parameterResource) HasSerializedAnnotation(annotationId string) (bool, 
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *parameterResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29341,7 +29636,7 @@ func (s *parameterResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *parameterResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29360,7 +29655,7 @@ func (s *parameterResource) OnInitializeResource(callback func(arg InitializeRes
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *parameterResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29379,7 +29674,7 @@ func (s *parameterResource) OnResourceReady(callback func(arg ResourceReadyEvent
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29398,7 +29693,7 @@ func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedE
 
 // SetValueAsync sets or replaces the value for this parameter.
 func (s *parameterResource) SetValueAsync(options ...*SetValueAsyncOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -29425,7 +29720,7 @@ func (s *parameterResource) SetValueAsync(options ...*SetValueAsyncOptions) erro
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *parameterResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29444,7 +29739,7 @@ func (s *parameterResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 
 // TestWaitFor waits for another resource (test version)
 func (s *parameterResource) TestWaitFor(dependency Resource) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -29458,7 +29753,7 @@ func (s *parameterResource) TestWaitFor(dependency Resource) ParameterResource {
 // TryGetCurrentValue gets the current value for this parameter without waiting
 // for unresolved input.
 func (s *parameterResource) TryGetCurrentValue() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -29473,7 +29768,7 @@ func (s *parameterResource) TryGetCurrentValue() (*string, error) {
 
 // WithCancellableOperation performs a cancellable operation
 func (s *parameterResource) WithCancellableOperation(operation func(arg *CancellationToken)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29481,7 +29776,7 @@ func (s *parameterResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -29492,7 +29787,7 @@ func (s *parameterResource) WithCancellableOperation(operation func(arg *Cancell
 
 // WithChildRelationship sets a child relationship
 func (s *parameterResource) WithChildRelationship(child Resource) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -29505,7 +29800,7 @@ func (s *parameterResource) WithChildRelationship(child Resource) ParameterResou
 
 // WithCommand adds a resource command
 func (s *parameterResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29532,7 +29827,7 @@ func (s *parameterResource) WithCommand(name string, displayName string, execute
 
 // WithConfig configures the resource with a DTO
 func (s *parameterResource) WithConfig(config *TestConfigDto) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29545,7 +29840,7 @@ func (s *parameterResource) WithConfig(config *TestConfigDto) ParameterResource 
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *parameterResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29565,7 +29860,7 @@ func (s *parameterResource) WithContainerBuildOptions(callback func(arg Containe
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *parameterResource) WithContainerRegistry(registry Resource) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -29578,7 +29873,7 @@ func (s *parameterResource) WithContainerRegistry(registry Resource) ParameterRe
 
 // WithCorrelationId sets the correlation ID
 func (s *parameterResource) WithCorrelationId(correlationId string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29590,7 +29885,7 @@ func (s *parameterResource) WithCorrelationId(correlationId string) ParameterRes
 
 // WithCreatedAt sets the created timestamp
 func (s *parameterResource) WithCreatedAt(createdAt string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29603,7 +29898,7 @@ func (s *parameterResource) WithCreatedAt(createdAt string) ParameterResource {
 // WithCustomInput sets a custom input for the parameter resource from a
 // polyglot app host.
 func (s *parameterResource) WithCustomInput(options *ParameterCustomInputOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29616,7 +29911,7 @@ func (s *parameterResource) WithCustomInput(options *ParameterCustomInputOptions
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *parameterResource) WithDashboardPosition(position float64) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29628,7 +29923,7 @@ func (s *parameterResource) WithDashboardPosition(position float64) ParameterRes
 
 // WithDependency adds a dependency on another resource
 func (s *parameterResource) WithDependency(dependency ResourceWithConnectionString) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -29641,7 +29936,7 @@ func (s *parameterResource) WithDependency(dependency ResourceWithConnectionStri
 
 // WithDescription sets the description of the parameter resource.
 func (s *parameterResource) WithDescription(description string, options ...*WithDescriptionOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29661,7 +29956,7 @@ func (s *parameterResource) WithDescription(description string, options ...*With
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *parameterResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29679,7 +29974,7 @@ func (s *parameterResource) WithDockerfileBaseImage(options ...*WithDockerfileBa
 
 // WithEndpoints sets the endpoints
 func (s *parameterResource) WithEndpoints(endpoints []string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29691,7 +29986,7 @@ func (s *parameterResource) WithEndpoints(endpoints []string) ParameterResource 
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *parameterResource) WithExplicitStart() ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29702,7 +29997,7 @@ func (s *parameterResource) WithExplicitStart() ParameterResource {
 
 // WithHealthCheck adds a health check by key
 func (s *parameterResource) WithHealthCheck(key string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29714,7 +30009,7 @@ func (s *parameterResource) WithHealthCheck(key string) ParameterResource {
 
 // WithHidden hides the resource from default resource lists
 func (s *parameterResource) WithHidden() ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29726,7 +30021,7 @@ func (s *parameterResource) WithHidden() ParameterResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *parameterResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29745,7 +30040,7 @@ func (s *parameterResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompl
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *parameterResource) WithIconName(iconName string, options ...*WithIconNameOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29765,7 +30060,7 @@ func (s *parameterResource) WithIconName(iconName string, options ...*WithIconNa
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *parameterResource) WithLifetimeOf(sourceBuilder Resource) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -29778,7 +30073,7 @@ func (s *parameterResource) WithLifetimeOf(sourceBuilder Resource) ParameterReso
 
 // WithMergeEndpoint configures a named endpoint
 func (s *parameterResource) WithMergeEndpoint(endpointName string, port float64) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29791,7 +30086,7 @@ func (s *parameterResource) WithMergeEndpoint(endpointName string, port float64)
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *parameterResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29805,7 +30100,7 @@ func (s *parameterResource) WithMergeEndpointScheme(endpointName string, port fl
 
 // WithMergeLabel adds a label to the resource
 func (s *parameterResource) WithMergeLabel(label string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29817,7 +30112,7 @@ func (s *parameterResource) WithMergeLabel(label string) ParameterResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *parameterResource) WithMergeLabelCategorized(label string, category string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29830,7 +30125,7 @@ func (s *parameterResource) WithMergeLabelCategorized(label string, category str
 
 // WithMergeLogging configures resource logging
 func (s *parameterResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29849,7 +30144,7 @@ func (s *parameterResource) WithMergeLogging(logLevel string, options ...*WithMe
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *parameterResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29869,7 +30164,7 @@ func (s *parameterResource) WithMergeLoggingPath(logLevel string, logPath string
 
 // WithMergeRoute configures a route
 func (s *parameterResource) WithMergeRoute(path string, method string, handler string, priority float64) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29884,7 +30179,7 @@ func (s *parameterResource) WithMergeRoute(path string, method string, handler s
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *parameterResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29900,7 +30195,7 @@ func (s *parameterResource) WithMergeRouteMiddleware(path string, method string,
 
 // WithModifiedAt sets the modified timestamp
 func (s *parameterResource) WithModifiedAt(modifiedAt string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29912,7 +30207,7 @@ func (s *parameterResource) WithModifiedAt(modifiedAt string) ParameterResource 
 
 // WithNestedConfig configures with nested DTO
 func (s *parameterResource) WithNestedConfig(config *TestNestedDto) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29924,7 +30219,7 @@ func (s *parameterResource) WithNestedConfig(config *TestNestedDto) ParameterRes
 
 // WithOptional marks the parameter resource as optional.
 func (s *parameterResource) WithOptional() ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29935,7 +30230,7 @@ func (s *parameterResource) WithOptional() ParameterResource {
 
 // WithOptionalCallback configures with optional callback
 func (s *parameterResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29961,7 +30256,7 @@ func (s *parameterResource) WithOptionalCallback(options ...*WithOptionalCallbac
 
 // WithOptionalString adds an optional string parameter
 func (s *parameterResource) WithOptionalString(options ...*WithOptionalStringOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29980,7 +30275,7 @@ func (s *parameterResource) WithOptionalString(options ...*WithOptionalStringOpt
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *parameterResource) WithParentProcessLifetime(parentProcessId float64) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -29992,7 +30287,7 @@ func (s *parameterResource) WithParentProcessLifetime(parentProcessId float64) P
 
 // WithParentRelationship sets the parent relationship
 func (s *parameterResource) WithParentRelationship(parent Resource) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -30005,7 +30300,7 @@ func (s *parameterResource) WithParentRelationship(parent Resource) ParameterRes
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *parameterResource) WithPersistentLifetime() ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30018,7 +30313,7 @@ func (s *parameterResource) WithPersistentLifetime() ParameterResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *parameterResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30038,7 +30333,7 @@ func (s *parameterResource) WithPipelineConfiguration(callback func(obj Pipeline
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *parameterResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30066,7 +30361,7 @@ func (s *parameterResource) WithPipelineStepFactory(stepName string, callback fu
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *parameterResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30081,7 +30376,7 @@ func (s *parameterResource) WithProcessCommand(commandName string, displayName s
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *parameterResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30109,7 +30404,7 @@ func (s *parameterResource) WithProcessCommandFactory(commandName string, displa
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -30123,7 +30418,7 @@ func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ str
 
 // WithRequired sets whether the parameter resource requires a value.
 func (s *parameterResource) WithRequired(options ...*WithRequiredOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30143,7 +30438,7 @@ func (s *parameterResource) WithRequired(options ...*WithRequiredOptions) Parame
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *parameterResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30164,7 +30459,7 @@ func (s *parameterResource) WithRequiredCommand(command string, options ...*With
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *parameterResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30188,10 +30483,22 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *parameterResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ParameterResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *parameterResource) WithSerializedAnnotation(annotationId string, json string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -30204,7 +30511,7 @@ func (s *parameterResource) WithSerializedAnnotation(annotationId string, json s
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *parameterResource) WithSessionLifetime() ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30215,7 +30522,7 @@ func (s *parameterResource) WithSessionLifetime() ParameterResource {
 
 // WithStatus sets the resource status
 func (s *parameterResource) WithStatus(status TestResourceStatus) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30228,7 +30535,7 @@ func (s *parameterResource) WithStatus(status TestResourceStatus) ParameterResou
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *parameterResource) WithTags(tags []string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30241,7 +30548,7 @@ func (s *parameterResource) WithTags(tags []string) ParameterResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30271,7 +30578,7 @@ func (s *parameterResource) WithTerminal(options ...*WithTerminalOptions) Parame
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *parameterResource) WithTrait(name string, value string) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30285,7 +30592,7 @@ func (s *parameterResource) WithTrait(name string, value string) ParameterResour
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *parameterResource) WithUnionDependency(dependency any) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -30304,7 +30611,7 @@ func (s *parameterResource) WithUnionDependency(dependency any) ParameterResourc
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *parameterResource) WithUrl(url any, options ...*WithUrlOptions) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -30330,7 +30637,7 @@ func (s *parameterResource) WithUrl(url any, options ...*WithUrlOptions) Paramet
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *parameterResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30354,7 +30661,7 @@ func (s *parameterResource) WithUrlForEndpoint(endpointName string, callback fun
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *parameterResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30373,7 +30680,7 @@ func (s *parameterResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 
 // WithValidator adds validation callback
 func (s *parameterResource) WithValidator(validator func(arg TestResourceContext) bool) ParameterResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -30425,7 +30732,7 @@ func newPipelineConfigurationContextFromHandle(h *handle, c *client) PipelineCon
 
 // GetSteps gets all pipeline steps with the specified tag.
 func (s *pipelineConfigurationContext) GetSteps(tag string) ([]PipelineStep, error) {
-	if s.err != nil { var zero []PipelineStep; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []PipelineStep; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30441,7 +30748,7 @@ func (s *pipelineConfigurationContext) GetSteps(tag string) ([]PipelineStep, err
 
 // Log gets the logger facade used by polyglot callbacks.
 func (s *pipelineConfigurationContext) Log() LogFacade {
-	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30460,7 +30767,7 @@ func (s *pipelineConfigurationContext) Log() LogFacade {
 
 // Pipeline gets the pipeline editor used by polyglot callbacks.
 func (s *pipelineConfigurationContext) Pipeline() PipelineEditor {
-	if s.err != nil { return &pipelineEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &pipelineEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30528,7 +30835,7 @@ func newPipelineContextFromHandle(h *handle, c *client) PipelineContext {
 
 // CancellationToken gets the cancellation token for the pipeline operation.
 func (s *pipelineContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30543,7 +30850,7 @@ func (s *pipelineContext) CancellationToken() (*CancellationToken, error) {
 
 // ExecutionContext gets the execution context for the distributed application.
 func (s *pipelineContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30562,7 +30869,7 @@ func (s *pipelineContext) ExecutionContext() DistributedApplicationExecutionCont
 
 // Logger gets the logger for pipeline operations.
 func (s *pipelineContext) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30581,7 +30888,7 @@ func (s *pipelineContext) Logger() Logger {
 
 // Model gets the distributed application model to be deployed.
 func (s *pipelineContext) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30600,7 +30907,7 @@ func (s *pipelineContext) Model() DistributedApplicationModel {
 
 // Services gets the service provider for dependency resolution.
 func (s *pipelineContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30619,7 +30926,7 @@ func (s *pipelineContext) Services() ServiceProvider {
 
 // SetCancellationToken sets the cancellation token for the pipeline operation.
 func (s *pipelineContext) SetCancellationToken(options ...*SetCancellationTokenOptions) PipelineContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30644,7 +30951,7 @@ func (s *pipelineContext) SetCancellationToken(options ...*SetCancellationTokenO
 // Summary gets the pipeline summary that steps can add information to. The
 // summary will be displayed to users after pipeline execution completes.
 func (s *pipelineContext) Summary() PipelineSummary {
-	if s.err != nil { return &pipelineSummary{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &pipelineSummary{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30696,7 +31003,7 @@ func newPipelineEditorFromHandle(h *handle, c *client) PipelineEditor {
 
 // Steps gets all configured pipeline steps.
 func (s *pipelineEditor) Steps() ([]PipelineStep, error) {
-	if s.err != nil { var zero []PipelineStep; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []PipelineStep; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30711,7 +31018,7 @@ func (s *pipelineEditor) Steps() ([]PipelineStep, error) {
 
 // StepsByTag gets all pipeline steps that have the specified tag.
 func (s *pipelineEditor) StepsByTag(tag string) ([]PipelineStep, error) {
-	if s.err != nil { var zero []PipelineStep; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []PipelineStep; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30789,7 +31096,7 @@ func newPipelineStepFromHandle(h *handle, c *client) PipelineStep {
 
 // AddTag adds a tag to the step.
 func (s *pipelineStep) AddTag(tag string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30801,7 +31108,7 @@ func (s *pipelineStep) AddTag(tag string) error {
 
 // DependsOn adds a dependency on another step.
 func (s *pipelineStep) DependsOn(stepName string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30814,6 +31121,8 @@ func (s *pipelineStep) DependsOn(stepName string) error {
 // DependsOnSteps gets or initializes the list of step names that this step
 // depends on.
 func (s *pipelineStep) DependsOnSteps() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.dependsOnSteps == nil {
 		s.dependsOnSteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps")
 	}
@@ -30822,7 +31131,7 @@ func (s *pipelineStep) DependsOnSteps() *List[string] {
 
 // Description gets or initializes the description of the step.
 func (s *pipelineStep) Description() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30837,7 +31146,7 @@ func (s *pipelineStep) Description() (*string, error) {
 
 // Name gets or initializes the unique name of the step.
 func (s *pipelineStep) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30853,7 +31162,7 @@ func (s *pipelineStep) Name() (string, error) {
 // RequiredBy specifies that this step is required by another step. This creates
 // the inverse relationship where the other step will depend on this step.
 func (s *pipelineStep) RequiredBy(stepName string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30867,6 +31176,8 @@ func (s *pipelineStep) RequiredBy(stepName string) error {
 // step to complete before they can finish. This is used internally during
 // pipeline construction and is converted to DependsOn relationships.
 func (s *pipelineStep) RequiredBySteps() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.requiredBySteps == nil {
 		s.requiredBySteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps")
 	}
@@ -30875,6 +31186,8 @@ func (s *pipelineStep) RequiredBySteps() *List[string] {
 
 // Tags gets or initializes the list of tags that categorize this step.
 func (s *pipelineStep) Tags() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.tags == nil {
 		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.tags")
 	}
@@ -30938,7 +31251,7 @@ func newPipelineStepContextFromHandle(h *handle, c *client) PipelineStepContext 
 
 // CancellationToken gets the cancellation token for the pipeline operation.
 func (s *pipelineStepContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30953,7 +31266,7 @@ func (s *pipelineStepContext) CancellationToken() (*CancellationToken, error) {
 
 // ExecutionContext gets the execution context for the distributed application.
 func (s *pipelineStepContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30973,7 +31286,7 @@ func (s *pipelineStepContext) ExecutionContext() DistributedApplicationExecution
 // Logger gets the logger for pipeline operations that writes to both the
 // pipeline logger and the step logger.
 func (s *pipelineStepContext) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -30992,7 +31305,7 @@ func (s *pipelineStepContext) Logger() Logger {
 
 // Model gets the distributed application model to be deployed.
 func (s *pipelineStepContext) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31011,7 +31324,7 @@ func (s *pipelineStepContext) Model() DistributedApplicationModel {
 
 // PipelineContext gets the pipeline context shared across all steps.
 func (s *pipelineStepContext) PipelineContext() PipelineContext {
-	if s.err != nil { return &pipelineContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &pipelineContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31031,7 +31344,7 @@ func (s *pipelineStepContext) PipelineContext() PipelineContext {
 // ReportingStep gets the publishing step associated with this specific step
 // execution.
 func (s *pipelineStepContext) ReportingStep() ReportingStep {
-	if s.err != nil { return &reportingStep{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &reportingStep{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31050,7 +31363,7 @@ func (s *pipelineStepContext) ReportingStep() ReportingStep {
 
 // Services gets the service provider for dependency resolution.
 func (s *pipelineStepContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31070,7 +31383,7 @@ func (s *pipelineStepContext) Services() ServiceProvider {
 // Summary gets the pipeline summary that steps can add information to. The
 // summary will be displayed to users after pipeline execution completes.
 func (s *pipelineStepContext) Summary() PipelineSummary {
-	if s.err != nil { return &pipelineSummary{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &pipelineSummary{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31117,7 +31430,7 @@ func newPipelineStepFactoryContextFromHandle(h *handle, c *client) PipelineStepF
 // PipelineContext gets the pipeline context that has the model and other
 // properties.
 func (s *pipelineStepFactoryContext) PipelineContext() PipelineContext {
-	if s.err != nil { return &pipelineContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &pipelineContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31136,7 +31449,7 @@ func (s *pipelineStepFactoryContext) PipelineContext() PipelineContext {
 
 // Resource gets the resource that this factory is associated with.
 func (s *pipelineStepFactoryContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31198,7 +31511,7 @@ func newPipelineSummaryFromHandle(h *handle, c *client) PipelineSummary {
 
 // Add adds a key-value pair to the pipeline summary with a plain-text value.
 func (s *pipelineSummary) Add(key string, value string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -31212,7 +31525,7 @@ func (s *pipelineSummary) Add(key string, value string) error {
 // AddMarkdown adds a key-value pair to the pipeline summary with a
 // Markdown-formatted value.
 func (s *pipelineSummary) AddMarkdown(key string, markdownString string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"summary": s.handle.ToJSON(),
@@ -31255,7 +31568,7 @@ func newProgressContextFromHandle(h *handle, c *client) ProgressContext {
 // CancellationToken gets the CancellationToken that is triggered when the user
 // clicks the cancel button or the operation is externally canceled.
 func (s *progressContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -32196,6 +32509,20 @@ type ProjectResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) ProjectResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -32332,7 +32659,7 @@ func (*projectResource) isProjectResource() {}
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *projectResource) AsHttp2Service() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32344,7 +32671,7 @@ func (s *projectResource) AsHttp2Service() ProjectResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *projectResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -32364,7 +32691,7 @@ func (s *projectResource) CreateExecutionConfiguration() ExecutionConfigurationB
 // DisableForwardedHeaders configures the project to disable forwarded headers
 // when being published.
 func (s *projectResource) DisableForwardedHeaders() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32375,7 +32702,7 @@ func (s *projectResource) DisableForwardedHeaders() ProjectResource {
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *projectResource) ExcludeFromManifest() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32388,7 +32715,7 @@ func (s *projectResource) ExcludeFromManifest() ProjectResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *projectResource) ExcludeFromMcp() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32399,7 +32726,7 @@ func (s *projectResource) ExcludeFromMcp() ProjectResource {
 
 // GetEndpoint gets an endpoint reference
 func (s *projectResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32419,7 +32746,7 @@ func (s *projectResource) GetEndpoint(name string) EndpointReference {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *projectResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -32435,7 +32762,7 @@ func (s *projectResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *projectResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -32452,7 +32779,7 @@ func (s *projectResource) GetSerializedAnnotation(annotationId string) (string, 
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *projectResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -32468,7 +32795,7 @@ func (s *projectResource) HasSerializedAnnotation(annotationId string) (bool, er
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *projectResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32487,7 +32814,7 @@ func (s *projectResource) OnBeforeResourceStarted(callback func(arg BeforeResour
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *projectResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32507,7 +32834,7 @@ func (s *projectResource) OnInitializeResource(callback func(arg InitializeResou
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *projectResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32526,7 +32853,7 @@ func (s *projectResource) OnResourceEndpointsAllocated(callback func(arg Resourc
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *projectResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32545,7 +32872,7 @@ func (s *projectResource) OnResourceReady(callback func(arg ResourceReadyEvent))
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *projectResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32565,7 +32892,7 @@ func (s *projectResource) OnResourceStopped(callback func(arg ResourceStoppedEve
 // PublishAsDockerFile publishes a project as a Docker file with optional
 // container configuration
 func (s *projectResource) PublishAsDockerFile(options ...*PublishAsDockerFileOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32592,7 +32919,7 @@ func (s *projectResource) PublishAsDockerFile(options ...*PublishAsDockerFileOpt
 // PublishWithContainerFiles configures the resource to copy container files
 // from the specified source resource during publishing.
 func (s *projectResource) PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32609,7 +32936,7 @@ func (s *projectResource) PublishWithContainerFiles(source ResourceWithContainer
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *projectResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32628,7 +32955,7 @@ func (s *projectResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsE
 
 // TestWaitFor waits for another resource (test version)
 func (s *projectResource) TestWaitFor(dependency Resource) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32642,7 +32969,7 @@ func (s *projectResource) TestWaitFor(dependency Resource) ProjectResource {
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *projectResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32661,7 +32988,7 @@ func (s *projectResource) TestWithEnvironmentCallback(callback func(arg TestEnvi
 
 // WaitFor waits for another resource to be ready
 func (s *projectResource) WaitFor(dependency Resource, options ...*WaitForOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32682,7 +33009,7 @@ func (s *projectResource) WaitFor(dependency Resource, options ...*WaitForOption
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *projectResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32702,7 +33029,7 @@ func (s *projectResource) WaitForCompletion(dependency Resource, options ...*Wai
 
 // WaitForStart waits for another resource to start
 func (s *projectResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32723,7 +33050,7 @@ func (s *projectResource) WaitForStart(dependency Resource, options ...*WaitForS
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *projectResource) WithArgs(args []string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32736,7 +33063,7 @@ func (s *projectResource) WithArgs(args []string) ProjectResource {
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *projectResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32756,7 +33083,7 @@ func (s *projectResource) WithArgsCallback(callback func(obj CommandLineArgsCall
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *projectResource) WithArgsReplace(args []string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32768,7 +33095,7 @@ func (s *projectResource) WithArgsReplace(args []string) ProjectResource {
 
 // WithCancellableOperation performs a cancellable operation
 func (s *projectResource) WithCancellableOperation(operation func(arg *CancellationToken)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32776,7 +33103,7 @@ func (s *projectResource) WithCancellableOperation(operation func(arg *Cancellat
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -32788,7 +33115,7 @@ func (s *projectResource) WithCancellableOperation(operation func(arg *Cancellat
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *projectResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32807,7 +33134,7 @@ func (s *projectResource) WithCertificateTrustEnvironment(certificateBundleEnvir
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *projectResource) WithCertificateTrustScope(scope CertificateTrustScope) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32819,7 +33146,7 @@ func (s *projectResource) WithCertificateTrustScope(scope CertificateTrustScope)
 
 // WithChildRelationship sets a child relationship
 func (s *projectResource) WithChildRelationship(child Resource) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32832,7 +33159,7 @@ func (s *projectResource) WithChildRelationship(child Resource) ProjectResource 
 
 // WithCommand adds a resource command
 func (s *projectResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32860,7 +33187,7 @@ func (s *projectResource) WithCommand(name string, displayName string, executeCo
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *projectResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32873,7 +33200,7 @@ func (s *projectResource) WithComputeEnvironment(computeEnvironmentResource Comp
 
 // WithConfig configures the resource with a DTO
 func (s *projectResource) WithConfig(config *TestConfigDto) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32886,7 +33213,7 @@ func (s *projectResource) WithConfig(config *TestConfigDto) ProjectResource {
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *projectResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32906,7 +33233,7 @@ func (s *projectResource) WithContainerBuildOptions(callback func(arg ContainerB
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *projectResource) WithContainerRegistry(registry Resource) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32919,7 +33246,7 @@ func (s *projectResource) WithContainerRegistry(registry Resource) ProjectResour
 
 // WithCorrelationId sets the correlation ID
 func (s *projectResource) WithCorrelationId(correlationId string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32931,7 +33258,7 @@ func (s *projectResource) WithCorrelationId(correlationId string) ProjectResourc
 
 // WithCreatedAt sets the created timestamp
 func (s *projectResource) WithCreatedAt(createdAt string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32944,7 +33271,7 @@ func (s *projectResource) WithCreatedAt(createdAt string) ProjectResource {
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *projectResource) WithDashboardPosition(position float64) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32956,7 +33283,7 @@ func (s *projectResource) WithDashboardPosition(position float64) ProjectResourc
 
 // WithDependency adds a dependency on another resource
 func (s *projectResource) WithDependency(dependency ResourceWithConnectionString) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -32974,7 +33301,7 @@ func (s *projectResource) WithDependency(dependency ResourceWithConnectionString
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *projectResource) WithDeveloperCertificateTrust(trust bool) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -32987,7 +33314,7 @@ func (s *projectResource) WithDeveloperCertificateTrust(trust bool) ProjectResou
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *projectResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33005,7 +33332,7 @@ func (s *projectResource) WithDockerfileBaseImage(options ...*WithDockerfileBase
 
 // WithEndpoint adds a network endpoint
 func (s *projectResource) WithEndpoint(options ...*WithEndpointOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33023,7 +33350,7 @@ func (s *projectResource) WithEndpoint(options ...*WithEndpointOptions) ProjectR
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *projectResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33053,7 +33380,7 @@ func (s *projectResource) WithEndpointCallback(endpointName string, callback fun
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *projectResource) WithEndpointProxySupport(proxyEnabled bool) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33065,7 +33392,7 @@ func (s *projectResource) WithEndpointProxySupport(proxyEnabled bool) ProjectRes
 
 // WithEndpoints sets the endpoints
 func (s *projectResource) WithEndpoints(endpoints []string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33078,7 +33405,7 @@ func (s *projectResource) WithEndpoints(endpoints []string) ProjectResource {
 // WithEndpointsInEnvironment includes only the specified project endpoint names
 // in environment-variable injection.
 func (s *projectResource) WithEndpointsInEnvironment(endpointNames []string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -33091,7 +33418,7 @@ func (s *projectResource) WithEndpointsInEnvironment(endpointNames []string) Pro
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *projectResource) WithEnvironment(name string, value any) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -33111,7 +33438,7 @@ func (s *projectResource) WithEnvironment(name string, value any) ProjectResourc
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *projectResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33130,7 +33457,7 @@ func (s *projectResource) WithEnvironmentCallback(callback func(arg EnvironmentC
 
 // WithEnvironmentVariables sets environment variables
 func (s *projectResource) WithEnvironmentVariables(variables map[string]string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33142,7 +33469,7 @@ func (s *projectResource) WithEnvironmentVariables(variables map[string]string) 
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *projectResource) WithExplicitStart() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33154,7 +33481,7 @@ func (s *projectResource) WithExplicitStart() ProjectResource {
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *projectResource) WithExternalHttpEndpoints() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33165,7 +33492,7 @@ func (s *projectResource) WithExternalHttpEndpoints() ProjectResource {
 
 // WithHealthCheck adds a health check by key
 func (s *projectResource) WithHealthCheck(key string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33177,7 +33504,7 @@ func (s *projectResource) WithHealthCheck(key string) ProjectResource {
 
 // WithHidden hides the resource from default resource lists
 func (s *projectResource) WithHidden() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33189,7 +33516,7 @@ func (s *projectResource) WithHidden() ProjectResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *projectResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33207,7 +33534,7 @@ func (s *projectResource) WithHiddenOnCompletion(options ...*WithHiddenOnComplet
 
 // WithHttpCommand adds an HTTP resource command
 func (s *projectResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33228,7 +33555,7 @@ func (s *projectResource) WithHttpCommand(path string, displayName string, optio
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *projectResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33246,7 +33573,7 @@ func (s *projectResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) 
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *projectResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33273,7 +33600,7 @@ func (s *projectResource) WithHttpEndpointCallback(callback func(obj EndpointUpd
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *projectResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33291,7 +33618,7 @@ func (s *projectResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOpt
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *projectResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33312,7 +33639,7 @@ func (s *projectResource) WithHttpProbe(probeType ProbeType, options ...*WithHtt
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *projectResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33335,7 +33662,7 @@ func (s *projectResource) WithHttpsCertificateConfiguration(callback func(arg Ht
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *projectResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33353,7 +33680,7 @@ func (s *projectResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDev
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *projectResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33371,7 +33698,7 @@ func (s *projectResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *projectResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33398,7 +33725,7 @@ func (s *projectResource) WithHttpsEndpointCallback(callback func(obj EndpointUp
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *projectResource) WithIconName(iconName string, options ...*WithIconNameOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33418,7 +33745,7 @@ func (s *projectResource) WithIconName(iconName string, options ...*WithIconName
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33438,7 +33765,7 @@ func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImageP
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *projectResource) WithLifetimeOf(sourceBuilder Resource) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -33452,7 +33779,7 @@ func (s *projectResource) WithLifetimeOf(sourceBuilder Resource) ProjectResource
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *projectResource) WithMcpServer(options ...*WithMcpServerOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33470,7 +33797,7 @@ func (s *projectResource) WithMcpServer(options ...*WithMcpServerOptions) Projec
 
 // WithMergeEndpoint configures a named endpoint
 func (s *projectResource) WithMergeEndpoint(endpointName string, port float64) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33483,7 +33810,7 @@ func (s *projectResource) WithMergeEndpoint(endpointName string, port float64) P
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *projectResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33497,7 +33824,7 @@ func (s *projectResource) WithMergeEndpointScheme(endpointName string, port floa
 
 // WithMergeLabel adds a label to the resource
 func (s *projectResource) WithMergeLabel(label string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33509,7 +33836,7 @@ func (s *projectResource) WithMergeLabel(label string) ProjectResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *projectResource) WithMergeLabelCategorized(label string, category string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33522,7 +33849,7 @@ func (s *projectResource) WithMergeLabelCategorized(label string, category strin
 
 // WithMergeLogging configures resource logging
 func (s *projectResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33541,7 +33868,7 @@ func (s *projectResource) WithMergeLogging(logLevel string, options ...*WithMerg
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *projectResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33561,7 +33888,7 @@ func (s *projectResource) WithMergeLoggingPath(logLevel string, logPath string, 
 
 // WithMergeRoute configures a route
 func (s *projectResource) WithMergeRoute(path string, method string, handler string, priority float64) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33576,7 +33903,7 @@ func (s *projectResource) WithMergeRoute(path string, method string, handler str
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *projectResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33592,7 +33919,7 @@ func (s *projectResource) WithMergeRouteMiddleware(path string, method string, h
 
 // WithModifiedAt sets the modified timestamp
 func (s *projectResource) WithModifiedAt(modifiedAt string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33604,7 +33931,7 @@ func (s *projectResource) WithModifiedAt(modifiedAt string) ProjectResource {
 
 // WithNestedConfig configures with nested DTO
 func (s *projectResource) WithNestedConfig(config *TestNestedDto) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33616,7 +33943,7 @@ func (s *projectResource) WithNestedConfig(config *TestNestedDto) ProjectResourc
 
 // WithOptionalCallback configures with optional callback
 func (s *projectResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33642,7 +33969,7 @@ func (s *projectResource) WithOptionalCallback(options ...*WithOptionalCallbackO
 
 // WithOptionalString adds an optional string parameter
 func (s *projectResource) WithOptionalString(options ...*WithOptionalStringOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33660,7 +33987,7 @@ func (s *projectResource) WithOptionalString(options ...*WithOptionalStringOptio
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *projectResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33679,7 +34006,7 @@ func (s *projectResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) 
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *projectResource) WithParentProcessLifetime(parentProcessId float64) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33691,7 +34018,7 @@ func (s *projectResource) WithParentProcessLifetime(parentProcessId float64) Pro
 
 // WithParentRelationship sets the parent relationship
 func (s *projectResource) WithParentRelationship(parent Resource) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -33704,7 +34031,7 @@ func (s *projectResource) WithParentRelationship(parent Resource) ProjectResourc
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *projectResource) WithPersistentLifetime() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33717,7 +34044,7 @@ func (s *projectResource) WithPersistentLifetime() ProjectResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *projectResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33737,7 +34064,7 @@ func (s *projectResource) WithPipelineConfiguration(callback func(obj PipelineCo
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *projectResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33765,7 +34092,7 @@ func (s *projectResource) WithPipelineStepFactory(stepName string, callback func
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *projectResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33780,7 +34107,7 @@ func (s *projectResource) WithProcessCommand(commandName string, displayName str
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *projectResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33809,7 +34136,7 @@ func (s *projectResource) WithProcessCommandFactory(commandName string, displayN
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *projectResource) WithReference(source any, options ...*WithReferenceOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -33835,7 +34162,7 @@ func (s *projectResource) WithReference(source any, options ...*WithReferenceOpt
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *projectResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33847,7 +34174,7 @@ func (s *projectResource) WithReferenceEnvironment(options *ReferenceEnvironment
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *projectResource) WithRelationship(resourceBuilder Resource, type_ string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -33862,7 +34189,7 @@ func (s *projectResource) WithRelationship(resourceBuilder Resource, type_ strin
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *projectResource) WithRemoteImageName(remoteImageName string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33874,7 +34201,7 @@ func (s *projectResource) WithRemoteImageName(remoteImageName string) ProjectRes
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *projectResource) WithRemoteImageTag(remoteImageTag string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33887,7 +34214,7 @@ func (s *projectResource) WithRemoteImageTag(remoteImageTag string) ProjectResou
 // WithReplicas configures how many replicas of the project should be created
 // for the project.
 func (s *projectResource) WithReplicas(replicas float64) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33901,7 +34228,7 @@ func (s *projectResource) WithReplicas(replicas float64) ProjectResource {
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *projectResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33922,7 +34249,7 @@ func (s *projectResource) WithRequiredCommand(command string, options ...*WithRe
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *projectResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33946,10 +34273,22 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *projectResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) ProjectResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *projectResource) WithSerializedAnnotation(annotationId string, json string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -33962,7 +34301,7 @@ func (s *projectResource) WithSerializedAnnotation(annotationId string, json str
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *projectResource) WithSessionLifetime() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33973,7 +34312,7 @@ func (s *projectResource) WithSessionLifetime() ProjectResource {
 
 // WithStatus sets the resource status
 func (s *projectResource) WithStatus(status TestResourceStatus) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33986,7 +34325,7 @@ func (s *projectResource) WithStatus(status TestResourceStatus) ProjectResource 
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *projectResource) WithTags(tags []string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -33999,7 +34338,7 @@ func (s *projectResource) WithTags(tags []string) ProjectResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34029,7 +34368,7 @@ func (s *projectResource) WithTerminal(options ...*WithTerminalOptions) ProjectR
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *projectResource) WithTrait(name string, value string) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34043,7 +34382,7 @@ func (s *projectResource) WithTrait(name string, value string) ProjectResource {
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *projectResource) WithUnionDependency(dependency any) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -34062,7 +34401,7 @@ func (s *projectResource) WithUnionDependency(dependency any) ProjectResource {
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *projectResource) WithUrl(url any, options ...*WithUrlOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -34088,7 +34427,7 @@ func (s *projectResource) WithUrl(url any, options ...*WithUrlOptions) ProjectRe
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *projectResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34112,7 +34451,7 @@ func (s *projectResource) WithUrlForEndpoint(endpointName string, callback func(
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *projectResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34131,7 +34470,7 @@ func (s *projectResource) WithUrls(callback func(obj ResourceUrlsCallbackContext
 
 // WithValidator adds validation callback
 func (s *projectResource) WithValidator(validator func(arg TestResourceContext) bool) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34149,7 +34488,7 @@ func (s *projectResource) WithValidator(validator func(arg TestResourceContext) 
 
 // WithVolume adds a volume to a project resource.
 func (s *projectResource) WithVolume(target string, name string, env string, options ...*ProjectResourceWithVolumeOptions) ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -34171,7 +34510,7 @@ func (s *projectResource) WithVolume(target string, name string, env string, opt
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *projectResource) WithoutHttpsCertificate() ProjectResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -34232,7 +34571,7 @@ func newProjectResourceOptionsFromHandle(h *handle, c *client) ProjectResourceOp
 // ExcludeKestrelEndpoints - If set, ignore endpoints coming from Kestrel
 // configuration.
 func (s *projectResourceOptions) ExcludeKestrelEndpoints() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34248,7 +34587,7 @@ func (s *projectResourceOptions) ExcludeKestrelEndpoints() (bool, error) {
 // ExcludeLaunchProfile - If set, no launch profile will be used, and
 // LaunchProfileName will be ignored.
 func (s *projectResourceOptions) ExcludeLaunchProfile() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34264,7 +34603,7 @@ func (s *projectResourceOptions) ExcludeLaunchProfile() (bool, error) {
 // LaunchProfileName is the launch profile to use. If nil then the default
 // launch profile will be used.
 func (s *projectResourceOptions) LaunchProfileName() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34281,7 +34620,7 @@ func (s *projectResourceOptions) LaunchProfileName() (*string, error) {
 //
 // If set, ignore endpoints coming from Kestrel configuration.
 func (s *projectResourceOptions) SetExcludeKestrelEndpoints(value bool) ProjectResourceOptions {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34296,7 +34635,7 @@ func (s *projectResourceOptions) SetExcludeKestrelEndpoints(value bool) ProjectR
 // If set, no launch profile will be used, and LaunchProfileName will be
 // ignored.
 func (s *projectResourceOptions) SetExcludeLaunchProfile(value bool) ProjectResourceOptions {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34311,7 +34650,7 @@ func (s *projectResourceOptions) SetExcludeLaunchProfile(value bool) ProjectReso
 // The launch profile to use. If nil then the default launch profile will be
 // used.
 func (s *projectResourceOptions) SetLaunchProfileName(value *string) ProjectResourceOptions {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34370,7 +34709,7 @@ func newReferenceExpressionBuilderFromHandle(h *handle, c *client) ReferenceExpr
 
 // AppendFormatted appends a formatted value to the expression.
 func (s *referenceExpressionBuilder) AppendFormatted(value string, options ...*AppendFormattedOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34389,7 +34728,7 @@ func (s *referenceExpressionBuilder) AppendFormatted(value string, options ...*A
 
 // AppendLiteral appends a literal value to the expression.
 func (s *referenceExpressionBuilder) AppendLiteral(value string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34401,7 +34740,7 @@ func (s *referenceExpressionBuilder) AppendLiteral(value string) error {
 
 // AppendValueProvider appends a value provider to the reference expression
 func (s *referenceExpressionBuilder) AppendValueProvider(valueProvider any, options ...*AppendValueProviderOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34420,7 +34759,7 @@ func (s *referenceExpressionBuilder) AppendValueProvider(valueProvider any, opti
 
 // Build builds the reference expression
 func (s *referenceExpressionBuilder) Build() *ReferenceExpression {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34437,7 +34776,7 @@ func (s *referenceExpressionBuilder) Build() *ReferenceExpression {
 
 // IsEmpty indicates whether the expression is empty.
 func (s *referenceExpressionBuilder) IsEmpty() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34503,7 +34842,7 @@ func newReportingStepFromHandle(h *handle, c *client) ReportingStep {
 
 // CompleteStep completes the reporting step with plain-text completion text.
 func (s *reportingStep) CompleteStep(completionText string, options ...*CompleteStepOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingStep": s.handle.ToJSON(),
@@ -34529,7 +34868,7 @@ func (s *reportingStep) CompleteStep(completionText string, options ...*Complete
 // CompleteStepMarkdown completes the reporting step with Markdown-formatted
 // completion text.
 func (s *reportingStep) CompleteStepMarkdown(markdownString string, options ...*CompleteStepMarkdownOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingStep": s.handle.ToJSON(),
@@ -34555,7 +34894,7 @@ func (s *reportingStep) CompleteStepMarkdown(markdownString string, options ...*
 // CreateMarkdownTask creates a reporting task with Markdown-formatted status
 // text.
 func (s *reportingStep) CreateMarkdownTask(markdownString string, options ...*CreateMarkdownTaskOptions) ReportingTask {
-	if s.err != nil { return &reportingTask{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &reportingTask{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingStep": s.handle.ToJSON(),
@@ -34588,7 +34927,7 @@ func (s *reportingStep) CreateMarkdownTask(markdownString string, options ...*Cr
 
 // CreateTask creates a reporting task with plain-text status text.
 func (s *reportingStep) CreateTask(statusText string, options ...*CreateTaskOptions) ReportingTask {
-	if s.err != nil { return &reportingTask{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &reportingTask{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingStep": s.handle.ToJSON(),
@@ -34621,7 +34960,7 @@ func (s *reportingStep) CreateTask(statusText string, options ...*CreateTaskOpti
 
 // LogStep logs a plain-text message for the reporting step.
 func (s *reportingStep) LogStep(level string, message string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingStep": s.handle.ToJSON(),
@@ -34634,7 +34973,7 @@ func (s *reportingStep) LogStep(level string, message string) error {
 
 // LogStepMarkdown logs a Markdown-formatted message for the reporting step.
 func (s *reportingStep) LogStepMarkdown(level string, markdownString string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingStep": s.handle.ToJSON(),
@@ -34692,7 +35031,7 @@ func newReportingTaskFromHandle(h *handle, c *client) ReportingTask {
 
 // CompleteTask completes the reporting task with plain-text completion text.
 func (s *reportingTask) CompleteTask(options ...*CompleteTaskOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingTask": s.handle.ToJSON(),
@@ -34717,7 +35056,7 @@ func (s *reportingTask) CompleteTask(options ...*CompleteTaskOptions) error {
 // CompleteTaskMarkdown completes the reporting task with Markdown-formatted
 // completion text.
 func (s *reportingTask) CompleteTaskMarkdown(markdownString string, options ...*CompleteTaskMarkdownOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingTask": s.handle.ToJSON(),
@@ -34742,7 +35081,7 @@ func (s *reportingTask) CompleteTaskMarkdown(markdownString string, options ...*
 
 // UpdateTask updates the reporting task with plain-text status text.
 func (s *reportingTask) UpdateTask(statusText string, options ...*UpdateTaskOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingTask": s.handle.ToJSON(),
@@ -34768,7 +35107,7 @@ func (s *reportingTask) UpdateTask(statusText string, options ...*UpdateTaskOpti
 // UpdateTaskMarkdown updates the reporting task with Markdown-formatted status
 // text.
 func (s *reportingTask) UpdateTaskMarkdown(markdownString string, options ...*UpdateTaskMarkdownOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"reportingTask": s.handle.ToJSON(),
@@ -34863,7 +35202,7 @@ func newRequiredCommandValidationContextFromHandle(h *handle, c *client) Require
 // CancellationToken gets a cancellation token that can be used to cancel the
 // validation.
 func (s *requiredCommandValidationContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34878,7 +35217,7 @@ func (s *requiredCommandValidationContext) CancellationToken() (*CancellationTok
 
 // Failure creates a failed validation result with the specified message.
 func (s *requiredCommandValidationContext) Failure(validationMessage string) RequiredCommandValidationResult {
-	if s.err != nil { return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34898,7 +35237,7 @@ func (s *requiredCommandValidationContext) Failure(validationMessage string) Req
 
 // ResolvedPath gets the resolved full path to the command executable.
 func (s *requiredCommandValidationContext) ResolvedPath() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34913,7 +35252,7 @@ func (s *requiredCommandValidationContext) ResolvedPath() (string, error) {
 
 // Services gets the service provider for accessing application services.
 func (s *requiredCommandValidationContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34932,7 +35271,7 @@ func (s *requiredCommandValidationContext) Services() ServiceProvider {
 
 // Success creates a successful validation result.
 func (s *requiredCommandValidationContext) Success() RequiredCommandValidationResult {
-	if s.err != nil { return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &requiredCommandValidationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -34988,7 +35327,7 @@ func newRequiredCommandValidationResultFromHandle(h *handle, c *client) Required
 
 // IsValid gets a value indicating whether the command validation succeeded.
 func (s *requiredCommandValidationResult) IsValid() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35004,7 +35343,7 @@ func (s *requiredCommandValidationResult) IsValid() (bool, error) {
 // ValidationMessage gets an optional validation message describing why
 // validation failed.
 func (s *requiredCommandValidationResult) ValidationMessage() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35053,7 +35392,7 @@ func newResourceCommandServiceFromHandle(h *handle, c *client) ResourceCommandSe
 // ExecuteCommandAsync executes a command for the specified resource.
 // Allowed types for parameter resource: string, Resource.
 func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error) {
-	if s.err != nil { var zero *ExecuteCommandResult; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *ExecuteCommandResult; return zero, err }
 	switch resource.(type) {
 	case string, Resource:
 	default:
@@ -35091,8 +35430,13 @@ func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName s
 // ResourceEndpointsAllocatedEvent - This event is raised by orchestrators to
 // signal to resources that their endpoints have been allocated.
 //
-// Any resources that customize their URLs via a ResourceUrlsCallbackAnnotation
-// will have their callbacks invoked during this event.
+// Resources that customize their URLs via a ResourceUrlsCallbackAnnotation have
+// their callbacks invoked before event handlers run. Browser URL references
+// contain the finalized values at that point. Endpoint and URL configuration
+// must be registered before this event is published. Browser-facing resource
+// allocators should complete allocation through
+// PublishResourceEndpointsAllocatedAsync so URL customization completes before
+// the notification is dispatched.
 type ResourceEndpointsAllocatedEvent interface {
 	handleReference
 
@@ -35119,7 +35463,7 @@ func newResourceEndpointsAllocatedEventFromHandle(h *handle, c *client) Resource
 
 // Resource gets the Resource property
 func (s *resourceEndpointsAllocatedEvent) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35136,7 +35480,7 @@ func (s *resourceEndpointsAllocatedEvent) Resource() Resource {
 
 // Services gets the Services property
 func (s *resourceEndpointsAllocatedEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35181,7 +35525,7 @@ func newResourceLoggerServiceFromHandle(h *handle, c *client) ResourceLoggerServ
 
 // CompleteLog completes the log stream for a resource.
 func (s *resourceLoggerService) CompleteLog(resource Resource) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	if resource != nil { if err := resource.Err(); err != nil { return err } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -35194,7 +35538,7 @@ func (s *resourceLoggerService) CompleteLog(resource Resource) error {
 
 // CompleteLogByName completes the log stream by resource name.
 func (s *resourceLoggerService) CompleteLogByName(resourceName string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"loggerService": s.handle.ToJSON(),
@@ -35251,7 +35595,7 @@ func newResourceNotificationServiceFromHandle(h *handle, c *client) ResourceNoti
 
 // PublishResourceUpdate publishes an update for a resource's state.
 func (s *resourceNotificationService) PublishResourceUpdate(resource Resource, options ...*PublishResourceUpdateOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	if resource != nil { if err := resource.Err(); err != nil { return err } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -35271,7 +35615,7 @@ func (s *resourceNotificationService) PublishResourceUpdate(resource Resource, o
 
 // TryGetResourceState tries to get the current state of a resource.
 func (s *resourceNotificationService) TryGetResourceState(resourceName string) (*ResourceEventDto, error) {
-	if s.err != nil { var zero *ResourceEventDto; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *ResourceEventDto; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"notificationService": s.handle.ToJSON(),
@@ -35287,7 +35631,7 @@ func (s *resourceNotificationService) TryGetResourceState(resourceName string) (
 
 // WaitForDependencies waits for all dependencies of a resource to be ready.
 func (s *resourceNotificationService) WaitForDependencies(resource Resource) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	if resource != nil { if err := resource.Err(); err != nil { return err } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -35300,7 +35644,7 @@ func (s *resourceNotificationService) WaitForDependencies(resource Resource) err
 
 // WaitForResourceHealthy waits for a resource to become healthy.
 func (s *resourceNotificationService) WaitForResourceHealthy(resourceName string) (*ResourceEventDto, error) {
-	if s.err != nil { var zero *ResourceEventDto; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *ResourceEventDto; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"notificationService": s.handle.ToJSON(),
@@ -35316,7 +35660,7 @@ func (s *resourceNotificationService) WaitForResourceHealthy(resourceName string
 
 // WaitForResourceState waits for a resource to reach a specified state.
 func (s *resourceNotificationService) WaitForResourceState(resourceName string, options ...*WaitForResourceStateOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"notificationService": s.handle.ToJSON(),
@@ -35336,7 +35680,7 @@ func (s *resourceNotificationService) WaitForResourceState(resourceName string, 
 // WaitForResourceStates waits for a resource to reach one of the specified
 // states.
 func (s *resourceNotificationService) WaitForResourceStates(resourceName string, targetStates []string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"notificationService": s.handle.ToJSON(),
@@ -35382,7 +35726,7 @@ func newResourceReadyEventFromHandle(h *handle, c *client) ResourceReadyEvent {
 
 // Resource is the resource that is in a healthy state.
 func (s *resourceReadyEvent) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35399,7 +35743,7 @@ func (s *resourceReadyEvent) Resource() Resource {
 
 // Services gets the Services property
 func (s *resourceReadyEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35446,7 +35790,7 @@ func newResourceStoppedEventFromHandle(h *handle, c *client) ResourceStoppedEven
 
 // Resource gets the Resource property
 func (s *resourceStoppedEvent) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35463,7 +35807,7 @@ func (s *resourceStoppedEvent) Resource() Resource {
 
 // Services gets the Services property
 func (s *resourceStoppedEvent) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35521,7 +35865,7 @@ func newResourceUrlsCallbackContextFromHandle(h *handle, c *client) ResourceUrls
 // ExecutionContext gets the execution context associated with this invocation
 // of the AppHost.
 func (s *resourceUrlsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35540,7 +35884,7 @@ func (s *resourceUrlsCallbackContext) ExecutionContext() DistributedApplicationE
 
 // GetEndpoint gets an endpoint reference from the associated resource
 func (s *resourceUrlsCallbackContext) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35560,7 +35904,7 @@ func (s *resourceUrlsCallbackContext) GetEndpoint(name string) EndpointReference
 
 // Log gets the logger facade used by polyglot callbacks.
 func (s *resourceUrlsCallbackContext) Log() LogFacade {
-	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35579,7 +35923,7 @@ func (s *resourceUrlsCallbackContext) Log() LogFacade {
 
 // Resource gets the resource this the URLs are associated with.
 func (s *resourceUrlsCallbackContext) Resource() Resource {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35596,7 +35940,7 @@ func (s *resourceUrlsCallbackContext) Resource() Resource {
 
 // Urls gets the editor used to manipulate displayed URLs in polyglot callbacks.
 func (s *resourceUrlsCallbackContext) Urls() ResourceUrlsEditor {
-	if s.err != nil { return &resourceUrlsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &resourceUrlsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35658,7 +36002,7 @@ func newResourceUrlsEditorFromHandle(h *handle, c *client) ResourceUrlsEditor {
 // Add adds a displayed URL.
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *resourceUrlsEditor) Add(url any, options ...*AddOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -35684,7 +36028,7 @@ func (s *resourceUrlsEditor) Add(url any, options ...*AddOptions) error {
 // AddForEndpoint adds a displayed URL for a specific endpoint.
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *resourceUrlsEditor) AddForEndpoint(endpoint EndpointReference, url any, options ...*AddForEndpointOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	if endpoint != nil { if err := endpoint.Err(); err != nil { return err } }
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -35711,7 +36055,7 @@ func (s *resourceUrlsEditor) AddForEndpoint(endpoint EndpointReference, url any,
 
 // ExecutionContext gets the execution context associated with this editor.
 func (s *resourceUrlsEditor) ExecutionContext() DistributedApplicationExecutionContext {
-	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -35769,7 +36113,7 @@ func newResourceWithContainerFilesFromHandle(h *handle, c *client) ResourceWithC
 // ClearContainerFilesSources removes any container files source annotation from
 // the resource being built.
 func (s *resourceWithContainerFiles) ClearContainerFilesSources() ResourceWithContainerFiles {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -35781,7 +36125,7 @@ func (s *resourceWithContainerFiles) ClearContainerFilesSources() ResourceWithCo
 // WithContainerFilesSource adds a container files source annotation to the
 // resource being built, specifying the path to the container files source.
 func (s *resourceWithContainerFiles) WithContainerFilesSource(sourcePath string) ResourceWithContainerFiles {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -35863,7 +36207,7 @@ func newServiceProviderFromHandle(h *handle, c *client) ServiceProvider {
 
 // GetAspireStore gets the Aspire store from the service provider.
 func (s *serviceProvider) GetAspireStore() AspireStore {
-	if s.err != nil { return &aspireStore{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &aspireStore{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -35883,7 +36227,7 @@ func (s *serviceProvider) GetAspireStore() AspireStore {
 // GetDistributedApplicationModel gets the distributed application model from
 // the service provider.
 func (s *serviceProvider) GetDistributedApplicationModel() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -35903,7 +36247,7 @@ func (s *serviceProvider) GetDistributedApplicationModel() DistributedApplicatio
 // GetEventing gets the distributed application eventing service from the
 // service provider.
 func (s *serviceProvider) GetEventing() DistributedApplicationEventing {
-	if s.err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -35922,7 +36266,7 @@ func (s *serviceProvider) GetEventing() DistributedApplicationEventing {
 
 // GetInteractionService gets the interaction service from the service provider.
 func (s *serviceProvider) GetInteractionService() InteractionService {
-	if s.err != nil { return &interactionService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &interactionService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -35941,7 +36285,7 @@ func (s *serviceProvider) GetInteractionService() InteractionService {
 
 // GetLoggerFactory gets the logger factory from the service provider.
 func (s *serviceProvider) GetLoggerFactory() LoggerFactory {
-	if s.err != nil { return &loggerFactory{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &loggerFactory{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -35961,7 +36305,7 @@ func (s *serviceProvider) GetLoggerFactory() LoggerFactory {
 // GetResourceCommandService gets the resource command service from the service
 // provider.
 func (s *serviceProvider) GetResourceCommandService() ResourceCommandService {
-	if s.err != nil { return &resourceCommandService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &resourceCommandService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -35981,7 +36325,7 @@ func (s *serviceProvider) GetResourceCommandService() ResourceCommandService {
 // GetResourceLoggerService gets the resource logger service from the service
 // provider.
 func (s *serviceProvider) GetResourceLoggerService() ResourceLoggerService {
-	if s.err != nil { return &resourceLoggerService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &resourceLoggerService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -36001,7 +36345,7 @@ func (s *serviceProvider) GetResourceLoggerService() ResourceLoggerService {
 // GetResourceNotificationService gets the resource notification service from
 // the service provider.
 func (s *serviceProvider) GetResourceNotificationService() ResourceNotificationService {
-	if s.err != nil { return &resourceNotificationService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &resourceNotificationService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -36021,7 +36365,7 @@ func (s *serviceProvider) GetResourceNotificationService() ResourceNotificationS
 // GetUserSecretsManager gets the user secrets manager from the service
 // provider.
 func (s *serviceProvider) GetUserSecretsManager() UserSecretsManager {
-	if s.err != nil { return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"serviceProvider": s.handle.ToJSON(),
@@ -36083,7 +36427,7 @@ func newTestCallbackContextFromHandle(h *handle, c *client) TestCallbackContext 
 
 // CancellationToken is supported by ATS.
 func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *CancellationToken; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36098,7 +36442,7 @@ func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
 
 // Name gets the Name property
 func (s *testCallbackContext) Name() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36115,7 +36459,7 @@ func (s *testCallbackContext) Name() (*string, error) {
 //
 // CancellationToken is supported by ATS.
 func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTokenOptions) TestCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36139,7 +36483,7 @@ func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTo
 
 // SetName sets the Name property
 func (s *testCallbackContext) SetName(value *string) TestCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36151,7 +36495,7 @@ func (s *testCallbackContext) SetName(value *string) TestCallbackContext {
 
 // SetValue sets the Value property
 func (s *testCallbackContext) SetValue(value float64) TestCallbackContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36163,7 +36507,7 @@ func (s *testCallbackContext) SetValue(value float64) TestCallbackContext {
 
 // Value gets the Value property
 func (s *testCallbackContext) Value() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -36209,6 +36553,8 @@ func newTestCollectionContextFromHandle(h *handle, c *client) TestCollectionCont
 // Items - List property - should generate AspireList getter like Dictionary
 // properties.
 func (s *testCollectionContext) Items() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.items == nil {
 		s.items = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
 	}
@@ -36217,6 +36563,8 @@ func (s *testCollectionContext) Items() *List[string] {
 
 // Metadata - Dictionary property - already works with AspireDict getter.
 func (s *testCollectionContext) Metadata() *Dict[string, string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.metadata == nil {
 		s.metadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
 	}
@@ -37367,6 +37715,20 @@ type TestDatabaseResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource
+
 	// WithSerializedAnnotation stores a serialized ATS annotation payload on a
 	// resource, replacing any existing annotation with the same ID.
 	//
@@ -37509,7 +37871,7 @@ func (*testDatabaseResource) isContainerResource() {}
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *testDatabaseResource) AsHttp2Service() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37521,7 +37883,7 @@ func (s *testDatabaseResource) AsHttp2Service() TestDatabaseResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *testDatabaseResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -37540,7 +37902,7 @@ func (s *testDatabaseResource) CreateExecutionConfiguration() ExecutionConfigura
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *testDatabaseResource) ExcludeFromManifest() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37553,7 +37915,7 @@ func (s *testDatabaseResource) ExcludeFromManifest() TestDatabaseResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *testDatabaseResource) ExcludeFromMcp() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37564,7 +37926,7 @@ func (s *testDatabaseResource) ExcludeFromMcp() TestDatabaseResource {
 
 // GetEndpoint gets an endpoint reference
 func (s *testDatabaseResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37584,7 +37946,7 @@ func (s *testDatabaseResource) GetEndpoint(name string) EndpointReference {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *testDatabaseResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -37600,7 +37962,7 @@ func (s *testDatabaseResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *testDatabaseResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -37617,7 +37979,7 @@ func (s *testDatabaseResource) GetSerializedAnnotation(annotationId string) (str
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *testDatabaseResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -37633,7 +37995,7 @@ func (s *testDatabaseResource) HasSerializedAnnotation(annotationId string) (boo
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *testDatabaseResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37652,7 +38014,7 @@ func (s *testDatabaseResource) OnBeforeResourceStarted(callback func(arg BeforeR
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *testDatabaseResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37672,7 +38034,7 @@ func (s *testDatabaseResource) OnInitializeResource(callback func(arg Initialize
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *testDatabaseResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37691,7 +38053,7 @@ func (s *testDatabaseResource) OnResourceEndpointsAllocated(callback func(arg Re
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *testDatabaseResource) OnResourceReady(callback func(arg ResourceReadyEvent)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37710,7 +38072,7 @@ func (s *testDatabaseResource) OnResourceReady(callback func(arg ResourceReadyEv
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *testDatabaseResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37730,7 +38092,7 @@ func (s *testDatabaseResource) OnResourceStopped(callback func(arg ResourceStopp
 // PublishAsConnectionString changes the resource to be published as a
 // connection string reference in the manifest.
 func (s *testDatabaseResource) PublishAsConnectionString() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37742,7 +38104,7 @@ func (s *testDatabaseResource) PublishAsConnectionString() TestDatabaseResource 
 // PublishAsContainer changes the resource to be published as a container in the
 // manifest.
 func (s *testDatabaseResource) PublishAsContainer() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37756,7 +38118,7 @@ func (s *testDatabaseResource) PublishAsContainer() TestDatabaseResource {
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *testDatabaseResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37775,7 +38137,7 @@ func (s *testDatabaseResource) SubscribeHttpsEndpointsUpdate(callback func(obj H
 
 // TestWaitFor waits for another resource (test version)
 func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -37789,7 +38151,7 @@ func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseReso
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37808,7 +38170,7 @@ func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg Tes
 
 // WaitFor waits for another resource to be ready
 func (s *testDatabaseResource) WaitFor(dependency Resource, options ...*WaitForOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -37829,7 +38191,7 @@ func (s *testDatabaseResource) WaitFor(dependency Resource, options ...*WaitForO
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *testDatabaseResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -37849,7 +38211,7 @@ func (s *testDatabaseResource) WaitForCompletion(dependency Resource, options ..
 
 // WaitForStart waits for another resource to start
 func (s *testDatabaseResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -37870,7 +38232,7 @@ func (s *testDatabaseResource) WaitForStart(dependency Resource, options ...*Wai
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *testDatabaseResource) WithArgs(args []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37883,7 +38245,7 @@ func (s *testDatabaseResource) WithArgs(args []string) TestDatabaseResource {
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *testDatabaseResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37903,7 +38265,7 @@ func (s *testDatabaseResource) WithArgsCallback(callback func(obj CommandLineArg
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *testDatabaseResource) WithArgsReplace(args []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37915,7 +38277,7 @@ func (s *testDatabaseResource) WithArgsReplace(args []string) TestDatabaseResour
 
 // WithBindMount adds a bind mount to a container resource.
 func (s *testDatabaseResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37937,7 +38299,7 @@ func (s *testDatabaseResource) WithBindMount(source string, target string, optio
 // Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *testDatabaseResource) WithBuildArg(name string, value any) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -37957,7 +38319,7 @@ func (s *testDatabaseResource) WithBuildArg(name string, value any) TestDatabase
 // WithBuildSecret adds a secret build argument when the container is built from
 // a Dockerfile.
 func (s *testDatabaseResource) WithBuildSecret(name string, value ParameterResource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -37971,7 +38333,7 @@ func (s *testDatabaseResource) WithBuildSecret(name string, value ParameterResou
 
 // WithCancellableOperation performs a cancellable operation
 func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -37979,7 +38341,7 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -37991,7 +38353,7 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *testDatabaseResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38010,7 +38372,7 @@ func (s *testDatabaseResource) WithCertificateTrustEnvironment(certificateBundle
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *testDatabaseResource) WithCertificateTrustScope(scope CertificateTrustScope) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38022,7 +38384,7 @@ func (s *testDatabaseResource) WithCertificateTrustScope(scope CertificateTrustS
 
 // WithChildRelationship sets a child relationship
 func (s *testDatabaseResource) WithChildRelationship(child Resource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -38035,7 +38397,7 @@ func (s *testDatabaseResource) WithChildRelationship(child Resource) TestDatabas
 
 // WithCommand adds a resource command
 func (s *testDatabaseResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38063,7 +38425,7 @@ func (s *testDatabaseResource) WithCommand(name string, displayName string, exec
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *testDatabaseResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -38076,7 +38438,7 @@ func (s *testDatabaseResource) WithComputeEnvironment(computeEnvironmentResource
 
 // WithConfig configures the resource with a DTO
 func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38089,7 +38451,7 @@ func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseRes
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *testDatabaseResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38109,7 +38471,7 @@ func (s *testDatabaseResource) WithContainerBuildOptions(callback func(arg Conta
 // WithContainerCertificatePaths adds container certificate path overrides used
 // for certificate trust at run time.
 func (s *testDatabaseResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38128,7 +38490,7 @@ func (s *testDatabaseResource) WithContainerCertificatePaths(options ...*WithCon
 // WithContainerFiles creates or updates files and folders in a container by
 // copying them from a source path on the host.
 func (s *testDatabaseResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38150,7 +38512,7 @@ func (s *testDatabaseResource) WithContainerFiles(destinationPath string, source
 // WithContainerFilesCallback creates or updates files and/or folders at the
 // destination path in the container using entries produced by a callback.
 func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38159,7 +38521,7 @@ func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -38182,7 +38544,7 @@ func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string
 // that behavior with a custom name, but could lead to naming conflicts if the
 // specified name is not unique.
 func (s *testDatabaseResource) WithContainerName(name string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38194,7 +38556,7 @@ func (s *testDatabaseResource) WithContainerName(name string) TestDatabaseResour
 
 // WithContainerNetworkAlias adds a network alias to container resource.
 func (s *testDatabaseResource) WithContainerNetworkAlias(alias string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38207,7 +38569,7 @@ func (s *testDatabaseResource) WithContainerNetworkAlias(alias string) TestDatab
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *testDatabaseResource) WithContainerRegistry(registry Resource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -38222,7 +38584,7 @@ func (s *testDatabaseResource) WithContainerRegistry(registry Resource) TestData
 // arguments to add to the container runtime run command when a container
 // resource is started.
 func (s *testDatabaseResource) WithContainerRuntimeArgs(args []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38234,7 +38596,7 @@ func (s *testDatabaseResource) WithContainerRuntimeArgs(args []string) TestDatab
 
 // WithCorrelationId sets the correlation ID
 func (s *testDatabaseResource) WithCorrelationId(correlationId string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38246,7 +38608,7 @@ func (s *testDatabaseResource) WithCorrelationId(correlationId string) TestDatab
 
 // WithCreatedAt sets the created timestamp
 func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38259,7 +38621,7 @@ func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResou
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *testDatabaseResource) WithDashboardPosition(position float64) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38271,7 +38633,7 @@ func (s *testDatabaseResource) WithDashboardPosition(position float64) TestDatab
 
 // WithDependency adds a dependency on another resource
 func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -38289,7 +38651,7 @@ func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionS
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *testDatabaseResource) WithDeveloperCertificateTrust(trust bool) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38302,7 +38664,7 @@ func (s *testDatabaseResource) WithDeveloperCertificateTrust(trust bool) TestDat
 // WithDockerfile - Causes Aspire to build the specified container image from a
 // Dockerfile.
 func (s *testDatabaseResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38322,7 +38684,7 @@ func (s *testDatabaseResource) WithDockerfile(contextPath string, options ...*Wi
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *testDatabaseResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38341,7 +38703,7 @@ func (s *testDatabaseResource) WithDockerfileBaseImage(options ...*WithDockerfil
 // WithDockerfileBuilder configures the resource to use a programmatically
 // generated Dockerfile
 func (s *testDatabaseResource) WithDockerfileBuilder(contextPath string, callback func(arg DockerfileBuilderCallbackContext), options ...*WithDockerfileBuilderOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38369,7 +38731,7 @@ func (s *testDatabaseResource) WithDockerfileBuilder(contextPath string, callbac
 // WithDockerfileFactory builds the specified container image from a Dockerfile
 // generated by an asynchronous factory function.
 func (s *testDatabaseResource) WithDockerfileFactory(contextPath string, dockerfileFactory func(arg DockerfileFactoryContext) string, options ...*WithDockerfileFactoryOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38395,7 +38757,7 @@ func (s *testDatabaseResource) WithDockerfileFactory(contextPath string, dockerf
 
 // WithEndpoint adds a network endpoint
 func (s *testDatabaseResource) WithEndpoint(options ...*WithEndpointOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38413,7 +38775,7 @@ func (s *testDatabaseResource) WithEndpoint(options ...*WithEndpointOptions) Tes
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *testDatabaseResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38443,7 +38805,7 @@ func (s *testDatabaseResource) WithEndpointCallback(endpointName string, callbac
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *testDatabaseResource) WithEndpointProxySupport(proxyEnabled bool) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38455,7 +38817,7 @@ func (s *testDatabaseResource) WithEndpointProxySupport(proxyEnabled bool) TestD
 
 // WithEndpoints sets the endpoints
 func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38467,7 +38829,7 @@ func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseRes
 
 // WithEntrypoint sets the Entrypoint for the container.
 func (s *testDatabaseResource) WithEntrypoint(entrypoint string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38480,7 +38842,7 @@ func (s *testDatabaseResource) WithEntrypoint(entrypoint string) TestDatabaseRes
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *testDatabaseResource) WithEnvironment(name string, value any) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -38500,7 +38862,7 @@ func (s *testDatabaseResource) WithEnvironment(name string, value any) TestDatab
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *testDatabaseResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38519,7 +38881,7 @@ func (s *testDatabaseResource) WithEnvironmentCallback(callback func(arg Environ
 
 // WithEnvironmentVariables sets environment variables
 func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38531,7 +38893,7 @@ func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]str
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *testDatabaseResource) WithExplicitStart() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38543,7 +38905,7 @@ func (s *testDatabaseResource) WithExplicitStart() TestDatabaseResource {
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *testDatabaseResource) WithExternalHttpEndpoints() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38554,7 +38916,7 @@ func (s *testDatabaseResource) WithExternalHttpEndpoints() TestDatabaseResource 
 
 // WithHealthCheck adds a health check by key
 func (s *testDatabaseResource) WithHealthCheck(key string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38566,7 +38928,7 @@ func (s *testDatabaseResource) WithHealthCheck(key string) TestDatabaseResource 
 
 // WithHidden hides the resource from default resource lists
 func (s *testDatabaseResource) WithHidden() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38578,7 +38940,7 @@ func (s *testDatabaseResource) WithHidden() TestDatabaseResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *testDatabaseResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38596,7 +38958,7 @@ func (s *testDatabaseResource) WithHiddenOnCompletion(options ...*WithHiddenOnCo
 
 // WithHttpCommand adds an HTTP resource command
 func (s *testDatabaseResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38617,7 +38979,7 @@ func (s *testDatabaseResource) WithHttpCommand(path string, displayName string, 
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *testDatabaseResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38635,7 +38997,7 @@ func (s *testDatabaseResource) WithHttpEndpoint(options ...*WithHttpEndpointOpti
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *testDatabaseResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38662,7 +39024,7 @@ func (s *testDatabaseResource) WithHttpEndpointCallback(callback func(obj Endpoi
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *testDatabaseResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38680,7 +39042,7 @@ func (s *testDatabaseResource) WithHttpHealthCheck(options ...*WithHttpHealthChe
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *testDatabaseResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38701,7 +39063,7 @@ func (s *testDatabaseResource) WithHttpProbe(probeType ProbeType, options ...*Wi
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *testDatabaseResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38724,7 +39086,7 @@ func (s *testDatabaseResource) WithHttpsCertificateConfiguration(callback func(a
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *testDatabaseResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38742,7 +39104,7 @@ func (s *testDatabaseResource) WithHttpsDeveloperCertificate(options ...*WithHtt
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *testDatabaseResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38760,7 +39122,7 @@ func (s *testDatabaseResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOp
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *testDatabaseResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38787,7 +39149,7 @@ func (s *testDatabaseResource) WithHttpsEndpointCallback(callback func(obj Endpo
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *testDatabaseResource) WithIconName(iconName string, options ...*WithIconNameOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38806,7 +39168,7 @@ func (s *testDatabaseResource) WithIconName(iconName string, options ...*WithIco
 
 // WithImage allows overriding the image on a container.
 func (s *testDatabaseResource) WithImage(image string, options ...*WithImageOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38825,7 +39187,7 @@ func (s *testDatabaseResource) WithImage(image string, options ...*WithImageOpti
 
 // WithImagePullPolicy sets the pull policy for the container resource.
 func (s *testDatabaseResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38838,7 +39200,7 @@ func (s *testDatabaseResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) T
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *testDatabaseResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38857,7 +39219,7 @@ func (s *testDatabaseResource) WithImagePushOptions(callback func(arg ContainerI
 
 // WithImageRegistry allows overriding the image registry on a container.
 func (s *testDatabaseResource) WithImageRegistry(registry string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38869,7 +39231,7 @@ func (s *testDatabaseResource) WithImageRegistry(registry string) TestDatabaseRe
 
 // WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *testDatabaseResource) WithImageSHA256(sha256 string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38881,7 +39243,7 @@ func (s *testDatabaseResource) WithImageSHA256(sha256 string) TestDatabaseResour
 
 // WithImageTag allows overriding the image tag on a container.
 func (s *testDatabaseResource) WithImageTag(tag string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38893,7 +39255,7 @@ func (s *testDatabaseResource) WithImageTag(tag string) TestDatabaseResource {
 
 // WithLifetime sets the lifetime behavior of the container resource.
 func (s *testDatabaseResource) WithLifetime(lifetime ContainerLifetime) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38906,7 +39268,7 @@ func (s *testDatabaseResource) WithLifetime(lifetime ContainerLifetime) TestData
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *testDatabaseResource) WithLifetimeOf(sourceBuilder Resource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -38920,7 +39282,7 @@ func (s *testDatabaseResource) WithLifetimeOf(sourceBuilder Resource) TestDataba
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *testDatabaseResource) WithMcpServer(options ...*WithMcpServerOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38938,7 +39300,7 @@ func (s *testDatabaseResource) WithMcpServer(options ...*WithMcpServerOptions) T
 
 // WithMergeEndpoint configures a named endpoint
 func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38951,7 +39313,7 @@ func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38965,7 +39327,7 @@ func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port
 
 // WithMergeLabel adds a label to the resource
 func (s *testDatabaseResource) WithMergeLabel(label string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38977,7 +39339,7 @@ func (s *testDatabaseResource) WithMergeLabel(label string) TestDatabaseResource
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testDatabaseResource) WithMergeLabelCategorized(label string, category string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -38990,7 +39352,7 @@ func (s *testDatabaseResource) WithMergeLabelCategorized(label string, category 
 
 // WithMergeLogging configures resource logging
 func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39009,7 +39371,7 @@ func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*Wit
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39029,7 +39391,7 @@ func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath str
 
 // WithMergeRoute configures a route
 func (s *testDatabaseResource) WithMergeRoute(path string, method string, handler string, priority float64) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39044,7 +39406,7 @@ func (s *testDatabaseResource) WithMergeRoute(path string, method string, handle
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39060,7 +39422,7 @@ func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method stri
 
 // WithModifiedAt sets the modified timestamp
 func (s *testDatabaseResource) WithModifiedAt(modifiedAt string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39072,7 +39434,7 @@ func (s *testDatabaseResource) WithModifiedAt(modifiedAt string) TestDatabaseRes
 
 // WithNestedConfig configures with nested DTO
 func (s *testDatabaseResource) WithNestedConfig(config *TestNestedDto) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39084,7 +39446,7 @@ func (s *testDatabaseResource) WithNestedConfig(config *TestNestedDto) TestDatab
 
 // WithOptionalCallback configures with optional callback
 func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39110,7 +39472,7 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCall
 
 // WithOptionalString adds an optional string parameter
 func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39128,7 +39490,7 @@ func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalString
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *testDatabaseResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39147,7 +39509,7 @@ func (s *testDatabaseResource) WithOtlpExporter(options ...*WithOtlpExporterOpti
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *testDatabaseResource) WithParentProcessLifetime(parentProcessId float64) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39159,7 +39521,7 @@ func (s *testDatabaseResource) WithParentProcessLifetime(parentProcessId float64
 
 // WithParentRelationship sets the parent relationship
 func (s *testDatabaseResource) WithParentRelationship(parent Resource) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -39172,7 +39534,7 @@ func (s *testDatabaseResource) WithParentRelationship(parent Resource) TestDatab
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *testDatabaseResource) WithPersistentLifetime() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39185,7 +39547,7 @@ func (s *testDatabaseResource) WithPersistentLifetime() TestDatabaseResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *testDatabaseResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39205,7 +39567,7 @@ func (s *testDatabaseResource) WithPipelineConfiguration(callback func(obj Pipel
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *testDatabaseResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39233,7 +39595,7 @@ func (s *testDatabaseResource) WithPipelineStepFactory(stepName string, callback
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *testDatabaseResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39248,7 +39610,7 @@ func (s *testDatabaseResource) WithProcessCommand(commandName string, displayNam
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39277,7 +39639,7 @@ func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, dis
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *testDatabaseResource) WithReference(source any, options ...*WithReferenceOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -39303,7 +39665,7 @@ func (s *testDatabaseResource) WithReference(source any, options ...*WithReferen
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *testDatabaseResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39315,7 +39677,7 @@ func (s *testDatabaseResource) WithReferenceEnvironment(options *ReferenceEnviro
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *testDatabaseResource) WithRelationship(resourceBuilder Resource, type_ string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -39330,7 +39692,7 @@ func (s *testDatabaseResource) WithRelationship(resourceBuilder Resource, type_ 
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *testDatabaseResource) WithRemoteImageName(remoteImageName string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39342,7 +39704,7 @@ func (s *testDatabaseResource) WithRemoteImageName(remoteImageName string) TestD
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *testDatabaseResource) WithRemoteImageTag(remoteImageTag string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39356,7 +39718,7 @@ func (s *testDatabaseResource) WithRemoteImageTag(remoteImageTag string) TestDat
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *testDatabaseResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39377,7 +39739,7 @@ func (s *testDatabaseResource) WithRequiredCommand(command string, options ...*W
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *testDatabaseResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39401,10 +39763,22 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *testDatabaseResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestDatabaseResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *testDatabaseResource) WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -39417,7 +39791,7 @@ func (s *testDatabaseResource) WithSerializedAnnotation(annotationId string, jso
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testDatabaseResource) WithSessionLifetime() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39428,7 +39802,7 @@ func (s *testDatabaseResource) WithSessionLifetime() TestDatabaseResource {
 
 // WithStatus sets the resource status
 func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39441,7 +39815,7 @@ func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabas
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *testDatabaseResource) WithTags(tags []string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39454,7 +39828,7 @@ func (s *testDatabaseResource) WithTags(tags []string) TestDatabaseResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39484,7 +39858,7 @@ func (s *testDatabaseResource) WithTerminal(options ...*WithTerminalOptions) Tes
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *testDatabaseResource) WithTrait(name string, value string) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39498,7 +39872,7 @@ func (s *testDatabaseResource) WithTrait(name string, value string) TestDatabase
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -39517,7 +39891,7 @@ func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseR
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *testDatabaseResource) WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -39543,7 +39917,7 @@ func (s *testDatabaseResource) WithUrl(url any, options ...*WithUrlOptions) Test
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *testDatabaseResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39567,7 +39941,7 @@ func (s *testDatabaseResource) WithUrlForEndpoint(endpointName string, callback 
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *testDatabaseResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39586,7 +39960,7 @@ func (s *testDatabaseResource) WithUrls(callback func(obj ResourceUrlsCallbackCo
 
 // WithValidator adds validation callback
 func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceContext) bool) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39604,7 +39978,7 @@ func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceCont
 
 // WithVolume adds a volume to a container resource.
 func (s *testDatabaseResource) WithVolume(target string, options ...*WithVolumeOptions) TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -39624,7 +39998,7 @@ func (s *testDatabaseResource) WithVolume(target string, options ...*WithVolumeO
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *testDatabaseResource) WithoutHttpsCertificate() TestDatabaseResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -39673,7 +40047,7 @@ func newTestEnvironmentContextFromHandle(h *handle, c *client) TestEnvironmentCo
 
 // Description gets the Description property
 func (s *testEnvironmentContext) Description() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39688,7 +40062,7 @@ func (s *testEnvironmentContext) Description() (*string, error) {
 
 // Name gets the Name property
 func (s *testEnvironmentContext) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39703,7 +40077,7 @@ func (s *testEnvironmentContext) Name() (string, error) {
 
 // Priority gets the Priority property
 func (s *testEnvironmentContext) Priority() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39718,7 +40092,7 @@ func (s *testEnvironmentContext) Priority() (float64, error) {
 
 // SetDescription sets the Description property
 func (s *testEnvironmentContext) SetDescription(value *string) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39730,7 +40104,7 @@ func (s *testEnvironmentContext) SetDescription(value *string) TestEnvironmentCo
 
 // SetName sets the Name property
 func (s *testEnvironmentContext) SetName(value string) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39742,7 +40116,7 @@ func (s *testEnvironmentContext) SetName(value string) TestEnvironmentContext {
 
 // SetPriority sets the Priority property
 func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39788,6 +40162,8 @@ func newTestMutableCollectionContextFromHandle(h *handle, c *client) TestMutable
 
 // Counts gets the Counts property
 func (s *testMutableCollectionContext) Counts() *Dict[string, float64] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.counts == nil {
 		s.counts = newDictWithGetter[string, float64](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
 	}
@@ -39796,7 +40172,7 @@ func (s *testMutableCollectionContext) Counts() *Dict[string, float64] {
 
 // SetCounts sets the Counts property
 func (s *testMutableCollectionContext) SetCounts(value *Dict[string, float64]) TestMutableCollectionContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39808,7 +40184,7 @@ func (s *testMutableCollectionContext) SetCounts(value *Dict[string, float64]) T
 
 // SetTags sets the Tags property
 func (s *testMutableCollectionContext) SetTags(value *List[string]) TestMutableCollectionContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39820,6 +40196,8 @@ func (s *testMutableCollectionContext) SetTags(value *List[string]) TestMutableC
 
 // Tags gets the Tags property
 func (s *testMutableCollectionContext) Tags() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.tags == nil {
 		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags")
 	}
@@ -39854,7 +40232,7 @@ func newTestMutablePromiseCollisionResourceFromHandle(h *handle, c *client) Test
 
 // SetValue sets the test value.
 func (s *testMutablePromiseCollisionResource) SetValue(value string) TestMutablePromiseCollisionResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -39866,7 +40244,7 @@ func (s *testMutablePromiseCollisionResource) SetValue(value string) TestMutable
 
 // Value gets the test value.
 func (s *testMutablePromiseCollisionResource) Value() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -41139,6 +41517,20 @@ type TestRedisResource interface {
 	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
 
+	// WithResourceTypeDisplayName overrides the human-readable resource type label.
+	//
+	// When not specified, the resource class supplies the default label, falling
+	// back to the resource type. This setting affects the dashboard and CLI output,
+	// not resource identity, service discovery, or OpenTelemetry identity. Repeated
+	// calls replace the previous override.
+	//
+	// Parameters:
+	//   - resourceTypeDisplayName: The type label, such as Redis or PostgreSQL
+	//     Server.
+	//
+	// Returns: The resource builder.
+	WithResourceTypeDisplayName(resourceTypeDisplayName string) TestRedisResource
+
 	// WithScalarField sets a scalar field value
 	//
 	// Allowed types for parameter value: string, float64, bool (float64 accepts any
@@ -41294,7 +41686,7 @@ func (*testRedisResource) isContainerResource() {}
 
 // AddTestChildDatabase adds a child database to a test Redis resource
 func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource {
-	if s.err != nil { return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41322,7 +41714,7 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 // AsHttp2Service configures a resource to mark all endpoints' transport as
 // HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *testRedisResource) AsHttp2Service() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41334,7 +41726,7 @@ func (s *testRedisResource) AsHttp2Service() TestRedisResource {
 // CreateExecutionConfiguration creates an execution configuration builder for
 // the specified resource.
 func (s *testRedisResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -41353,7 +41745,7 @@ func (s *testRedisResource) CreateExecutionConfiguration() ExecutionConfiguratio
 
 // ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *testRedisResource) ExcludeFromManifest() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41366,7 +41758,7 @@ func (s *testRedisResource) ExcludeFromManifest() TestRedisResource {
 // MCP server. The resource is excluded from results that return resources,
 // console logs and telemetry.
 func (s *testRedisResource) ExcludeFromMcp() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41378,7 +41770,7 @@ func (s *testRedisResource) ExcludeFromMcp() TestRedisResource {
 // GetConnectionProperty retrieves the value of a specified connection property
 // from the resource's connection properties.
 func (s *testRedisResource) GetConnectionProperty(key string) *ReferenceExpression {
-	if s.err != nil { return nil }
+	if s.Err() != nil { return nil }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -41396,7 +41788,7 @@ func (s *testRedisResource) GetConnectionProperty(key string) *ReferenceExpressi
 
 // GetEndpoint gets an endpoint reference
 func (s *testRedisResource) GetEndpoint(name string) EndpointReference {
-	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41416,7 +41808,7 @@ func (s *testRedisResource) GetEndpoint(name string) EndpointReference {
 
 // GetEndpoints gets the endpoints
 func (s *testRedisResource) GetEndpoints() ([]string, error) {
-	if s.err != nil { var zero []string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero []string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41431,6 +41823,8 @@ func (s *testRedisResource) GetEndpoints() ([]string, error) {
 
 // GetMetadata gets the metadata for the resource
 func (s *testRedisResource) GetMetadata() *Dict[string, string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.getMetadata == nil {
 		s.getMetadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getMetadata")
 	}
@@ -41439,7 +41833,7 @@ func (s *testRedisResource) GetMetadata() *Dict[string, string] {
 
 // GetResourceName gets the name of the resource from a builder.
 func (s *testRedisResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -41455,7 +41849,7 @@ func (s *testRedisResource) GetResourceName() (string, error) {
 // GetSerializedAnnotation gets a serialized ATS annotation payload from a
 // resource.
 func (s *testRedisResource) GetSerializedAnnotation(annotationId string) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -41471,7 +41865,7 @@ func (s *testRedisResource) GetSerializedAnnotation(annotationId string) (string
 
 // GetStatusAsync gets the status of the resource asynchronously
 func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41499,6 +41893,8 @@ func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (s
 
 // GetTags gets the tags for the resource
 func (s *testRedisResource) GetTags() *List[string] {
+	s.collectionMu.Lock()
+	defer s.collectionMu.Unlock()
 	if s.getTags == nil {
 		s.getTags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getTags")
 	}
@@ -41508,7 +41904,7 @@ func (s *testRedisResource) GetTags() *List[string] {
 // HasSerializedAnnotation determines whether a resource has a serialized ATS
 // annotation with the specified ID.
 func (s *testRedisResource) HasSerializedAnnotation(annotationId string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -41524,7 +41920,7 @@ func (s *testRedisResource) HasSerializedAnnotation(annotationId string) (bool, 
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *testRedisResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41544,7 +41940,7 @@ func (s *testRedisResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 // OnConnectionStringAvailable subscribes to the ConnectionStringAvailable
 // event.
 func (s *testRedisResource) OnConnectionStringAvailable(callback func(arg ConnectionStringAvailableEvent)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41563,7 +41959,7 @@ func (s *testRedisResource) OnConnectionStringAvailable(callback func(arg Connec
 
 // OnInitializeResource subscribes to the InitializeResource event.
 func (s *testRedisResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41583,7 +41979,7 @@ func (s *testRedisResource) OnInitializeResource(callback func(arg InitializeRes
 // OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated
 // event.
 func (s *testRedisResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41602,7 +41998,7 @@ func (s *testRedisResource) OnResourceEndpointsAllocated(callback func(arg Resou
 
 // OnResourceReady subscribes to the ResourceReady event.
 func (s *testRedisResource) OnResourceReady(callback func(arg ResourceReadyEvent)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41621,7 +42017,7 @@ func (s *testRedisResource) OnResourceReady(callback func(arg ResourceReadyEvent
 
 // OnResourceStopped subscribes to the ResourceStopped event.
 func (s *testRedisResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41641,7 +42037,7 @@ func (s *testRedisResource) OnResourceStopped(callback func(arg ResourceStoppedE
 // PublishAsConnectionString changes the resource to be published as a
 // connection string reference in the manifest.
 func (s *testRedisResource) PublishAsConnectionString() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41653,7 +42049,7 @@ func (s *testRedisResource) PublishAsConnectionString() TestRedisResource {
 // PublishAsContainer changes the resource to be published as a container in the
 // manifest.
 func (s *testRedisResource) PublishAsContainer() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41667,7 +42063,7 @@ func (s *testRedisResource) PublishAsContainer() TestRedisResource {
 // available for the resource. This is used to conditionally update endpoint URI
 // schemes or perform other HTTPS-related configuration at startup.
 func (s *testRedisResource) SubscribeHttpsEndpointsUpdate(callback func(obj HttpsEndpointUpdateCallbackContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41686,7 +42082,7 @@ func (s *testRedisResource) SubscribeHttpsEndpointsUpdate(callback func(obj Http
 
 // TestWaitFor waits for another resource (test version)
 func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -41700,7 +42096,7 @@ func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
 // TestWithEnvironmentCallback configures environment with callback (test
 // version)
 func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41719,7 +42115,7 @@ func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEn
 
 // WaitFor waits for another resource to be ready
 func (s *testRedisResource) WaitFor(dependency Resource, options ...*WaitForOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -41740,7 +42136,7 @@ func (s *testRedisResource) WaitFor(dependency Resource, options ...*WaitForOpti
 // WaitForCompletion waits for the dependency resource to enter the Exited or
 // Finished state before starting the resource.
 func (s *testRedisResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -41760,7 +42156,7 @@ func (s *testRedisResource) WaitForCompletion(dependency Resource, options ...*W
 
 // WaitForReadyAsync waits for the resource to be ready
 func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41789,7 +42185,7 @@ func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitF
 
 // WaitForStart waits for another resource to start
 func (s *testRedisResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -41810,7 +42206,7 @@ func (s *testRedisResource) WaitForStart(dependency Resource, options ...*WaitFo
 // WithArgs adds arguments to be passed to a resource that supports arguments
 // when it is launched.
 func (s *testRedisResource) WithArgs(args []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41823,7 +42219,7 @@ func (s *testRedisResource) WithArgs(args []string) TestRedisResource {
 // WithArgsCallback adds a callback to be executed with a list of command-line
 // arguments when a resource is started.
 func (s *testRedisResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41843,7 +42239,7 @@ func (s *testRedisResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 // WithArgsReplace replaces the arguments to be passed to a resource that
 // supports arguments when it is launched.
 func (s *testRedisResource) WithArgsReplace(args []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41855,7 +42251,7 @@ func (s *testRedisResource) WithArgsReplace(args []string) TestRedisResource {
 
 // WithBindMount adds a bind mount to a container resource.
 func (s *testRedisResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41877,7 +42273,7 @@ func (s *testRedisResource) WithBindMount(source string, target string, options 
 // Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *testRedisResource) WithBuildArg(name string, value any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -41897,7 +42293,7 @@ func (s *testRedisResource) WithBuildArg(name string, value any) TestRedisResour
 // WithBuildSecret adds a secret build argument when the container is built from
 // a Dockerfile.
 func (s *testRedisResource) WithBuildSecret(name string, value ParameterResource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -41911,7 +42307,7 @@ func (s *testRedisResource) WithBuildSecret(name string, value ParameterResource
 
 // WithCancellableOperation performs a cancellable operation
 func (s *testRedisResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41919,7 +42315,7 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -41931,7 +42327,7 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 // WithCertificateTrustEnvironment configures environment variables that point
 // to Aspire-managed certificate trust paths.
 func (s *testRedisResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41950,7 +42346,7 @@ func (s *testRedisResource) WithCertificateTrustEnvironment(certificateBundleEnv
 
 // WithCertificateTrustScope sets the certificate trust scope
 func (s *testRedisResource) WithCertificateTrustScope(scope CertificateTrustScope) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -41962,7 +42358,7 @@ func (s *testRedisResource) WithCertificateTrustScope(scope CertificateTrustScop
 
 // WithChildRelationship sets a child relationship
 func (s *testRedisResource) WithChildRelationship(child Resource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -41975,7 +42371,7 @@ func (s *testRedisResource) WithChildRelationship(child Resource) TestRedisResou
 
 // WithCommand adds a resource command
 func (s *testRedisResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42003,7 +42399,7 @@ func (s *testRedisResource) WithCommand(name string, displayName string, execute
 // WithComputeEnvironment configures the compute environment for the compute
 // resource.
 func (s *testRedisResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -42017,7 +42413,7 @@ func (s *testRedisResource) WithComputeEnvironment(computeEnvironmentResource Co
 // WithConcreteVaultResource configures a Redis resource with the concrete vault
 // resource as a parameter.
 func (s *testRedisResource) WithConcreteVaultResource(resource Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -42030,7 +42426,7 @@ func (s *testRedisResource) WithConcreteVaultResource(resource Aspire_Hosting_Co
 
 // WithConfig configures the resource with a DTO
 func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42044,7 +42440,7 @@ func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource 
 // being built.
 // Allowed types for parameter value: string, *ReferenceExpression.
 func (s *testRedisResource) WithConnectionProperty(name string, value any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -42063,7 +42459,7 @@ func (s *testRedisResource) WithConnectionProperty(name string, value any) TestR
 
 // WithConnectionString sets the connection string using a reference expression
 func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpression) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if connectionString != nil { if err := connectionString.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -42077,7 +42473,7 @@ func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpr
 // WithConnectionStringDirect sets connection string using direct interface
 // target
 func (s *testRedisResource) WithConnectionStringDirect(connectionString string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42090,7 +42486,7 @@ func (s *testRedisResource) WithConnectionStringDirect(connectionString string) 
 // WithContainerBuildOptions configures container build options for a compute
 // resource using an async callback.
 func (s *testRedisResource) WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42110,7 +42506,7 @@ func (s *testRedisResource) WithContainerBuildOptions(callback func(arg Containe
 // WithContainerCertificatePaths adds container certificate path overrides used
 // for certificate trust at run time.
 func (s *testRedisResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42129,7 +42525,7 @@ func (s *testRedisResource) WithContainerCertificatePaths(options ...*WithContai
 // WithContainerFiles creates or updates files and folders in a container by
 // copying them from a source path on the host.
 func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42151,7 +42547,7 @@ func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePat
 // WithContainerFilesCallback creates or updates files and/or folders at the
 // destination path in the container using entries produced by a callback.
 func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42160,7 +42556,7 @@ func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, c
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -42183,7 +42579,7 @@ func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, c
 // that behavior with a custom name, but could lead to naming conflicts if the
 // specified name is not unique.
 func (s *testRedisResource) WithContainerName(name string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42195,7 +42591,7 @@ func (s *testRedisResource) WithContainerName(name string) TestRedisResource {
 
 // WithContainerNetworkAlias adds a network alias to container resource.
 func (s *testRedisResource) WithContainerNetworkAlias(alias string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42208,7 +42604,7 @@ func (s *testRedisResource) WithContainerNetworkAlias(alias string) TestRedisRes
 // WithContainerRegistry configures the resource to use the specified container
 // registry for container image operations.
 func (s *testRedisResource) WithContainerRegistry(registry Resource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -42223,7 +42619,7 @@ func (s *testRedisResource) WithContainerRegistry(registry Resource) TestRedisRe
 // arguments to add to the container runtime run command when a container
 // resource is started.
 func (s *testRedisResource) WithContainerRuntimeArgs(args []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42235,7 +42631,7 @@ func (s *testRedisResource) WithContainerRuntimeArgs(args []string) TestRedisRes
 
 // WithCorrelationId sets the correlation ID
 func (s *testRedisResource) WithCorrelationId(correlationId string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42247,7 +42643,7 @@ func (s *testRedisResource) WithCorrelationId(correlationId string) TestRedisRes
 
 // WithCreatedAt sets the created timestamp
 func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42260,7 +42656,7 @@ func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 // WithDashboardPosition sets the default resource position in the dashboard.
 // Saved dashboard ordering takes precedence.
 func (s *testRedisResource) WithDashboardPosition(position float64) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42272,7 +42668,7 @@ func (s *testRedisResource) WithDashboardPosition(position float64) TestRedisRes
 
 // WithDataVolume adds a data volume with persistence
 func (s *testRedisResource) WithDataVolume(options ...*WithDataVolumeOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42290,7 +42686,7 @@ func (s *testRedisResource) WithDataVolume(options ...*WithDataVolumeOptions) Te
 
 // WithDependency adds a dependency on another resource
 func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionString) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -42308,7 +42704,7 @@ func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionStri
 // development scenarios; in publish mode resources will use their default
 // certificate trust.
 func (s *testRedisResource) WithDeveloperCertificateTrust(trust bool) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42321,7 +42717,7 @@ func (s *testRedisResource) WithDeveloperCertificateTrust(trust bool) TestRedisR
 // WithDockerfile - Causes Aspire to build the specified container image from a
 // Dockerfile.
 func (s *testRedisResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42341,7 +42737,7 @@ func (s *testRedisResource) WithDockerfile(contextPath string, options ...*WithD
 // WithDockerfileBaseImage configures custom base images for generated
 // Dockerfiles.
 func (s *testRedisResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42360,7 +42756,7 @@ func (s *testRedisResource) WithDockerfileBaseImage(options ...*WithDockerfileBa
 // WithDockerfileBuilder configures the resource to use a programmatically
 // generated Dockerfile
 func (s *testRedisResource) WithDockerfileBuilder(contextPath string, callback func(arg DockerfileBuilderCallbackContext), options ...*WithDockerfileBuilderOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42388,7 +42784,7 @@ func (s *testRedisResource) WithDockerfileBuilder(contextPath string, callback f
 // WithDockerfileFactory builds the specified container image from a Dockerfile
 // generated by an asynchronous factory function.
 func (s *testRedisResource) WithDockerfileFactory(contextPath string, dockerfileFactory func(arg DockerfileFactoryContext) string, options ...*WithDockerfileFactoryOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42414,7 +42810,7 @@ func (s *testRedisResource) WithDockerfileFactory(contextPath string, dockerfile
 
 // WithEndpoint adds a network endpoint
 func (s *testRedisResource) WithEndpoint(options ...*WithEndpointOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42432,7 +42828,7 @@ func (s *testRedisResource) WithEndpoint(options ...*WithEndpointOptions) TestRe
 
 // WithEndpointCallback updates a named endpoint via callback
 func (s *testRedisResource) WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42462,7 +42858,7 @@ func (s *testRedisResource) WithEndpointCallback(endpointName string, callback f
 // resource. If set to false, endpoints belonging to the resource will ignore
 // the configured proxy settings and run proxy-less.
 func (s *testRedisResource) WithEndpointProxySupport(proxyEnabled bool) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42474,7 +42870,7 @@ func (s *testRedisResource) WithEndpointProxySupport(proxyEnabled bool) TestRedi
 
 // WithEndpoints sets the endpoints
 func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42486,7 +42882,7 @@ func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource 
 
 // WithEntrypoint sets the Entrypoint for the container.
 func (s *testRedisResource) WithEntrypoint(entrypoint string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42499,7 +42895,7 @@ func (s *testRedisResource) WithEntrypoint(entrypoint string) TestRedisResource 
 // WithEnvironment sets an environment variable
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue.
 func (s *testRedisResource) WithEnvironment(name string, value any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -42519,7 +42915,7 @@ func (s *testRedisResource) WithEnvironment(name string, value any) TestRedisRes
 // WithEnvironmentCallback allows for the population of environment variables on
 // a resource.
 func (s *testRedisResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42538,7 +42934,7 @@ func (s *testRedisResource) WithEnvironmentCallback(callback func(arg Environmen
 
 // WithEnvironmentVariables sets environment variables
 func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42550,7 +42946,7 @@ func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string
 
 // WithExplicitStart - Prevents resource from starting automatically
 func (s *testRedisResource) WithExplicitStart() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42562,7 +42958,7 @@ func (s *testRedisResource) WithExplicitStart() TestRedisResource {
 // WithExternalHttpEndpoints marks existing http or https endpoints on a
 // resource as external.
 func (s *testRedisResource) WithExternalHttpEndpoints() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42573,7 +42969,7 @@ func (s *testRedisResource) WithExternalHttpEndpoints() TestRedisResource {
 
 // WithHealthCheck adds a health check by key
 func (s *testRedisResource) WithHealthCheck(key string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42585,7 +42981,7 @@ func (s *testRedisResource) WithHealthCheck(key string) TestRedisResource {
 
 // WithHidden hides the resource from default resource lists
 func (s *testRedisResource) WithHidden() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42597,7 +42993,7 @@ func (s *testRedisResource) WithHidden() TestRedisResource {
 // WithHiddenOnCompletion hides the resource from default resource lists after
 // successful completion
 func (s *testRedisResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42615,7 +43011,7 @@ func (s *testRedisResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompl
 
 // WithHttpCommand adds an HTTP resource command
 func (s *testRedisResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42636,7 +43032,7 @@ func (s *testRedisResource) WithHttpCommand(path string, displayName string, opt
 
 // WithHttpEndpoint adds an HTTP endpoint
 func (s *testRedisResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42654,7 +43050,7 @@ func (s *testRedisResource) WithHttpEndpoint(options ...*WithHttpEndpointOptions
 
 // WithHttpEndpointCallback updates an HTTP endpoint via callback
 func (s *testRedisResource) WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42681,7 +43077,7 @@ func (s *testRedisResource) WithHttpEndpointCallback(callback func(obj EndpointU
 // WithHttpHealthCheck adds a health check to the resource which is mapped to a
 // specific endpoint.
 func (s *testRedisResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42699,7 +43095,7 @@ func (s *testRedisResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckO
 
 // WithHttpProbe adds an HTTP health probe to the resource
 func (s *testRedisResource) WithHttpProbe(probeType ProbeType, options ...*WithHttpProbeOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42720,7 +43116,7 @@ func (s *testRedisResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 // resource to use a specific HTTPS/TLS certificate key pair for server
 // authentication.
 func (s *testRedisResource) WithHttpsCertificateConfiguration(callback func(arg HttpsCertificateConfigurationCallbackAnnotationContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42743,7 +43139,7 @@ func (s *testRedisResource) WithHttpsCertificateConfiguration(callback func(arg 
 // certificate will only be used when running in local development scenarios; in
 // publish mode resources will use their default certificate configuration.
 func (s *testRedisResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42761,7 +43157,7 @@ func (s *testRedisResource) WithHttpsDeveloperCertificate(options ...*WithHttpsD
 
 // WithHttpsEndpoint adds an HTTPS endpoint
 func (s *testRedisResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42779,7 +43175,7 @@ func (s *testRedisResource) WithHttpsEndpoint(options ...*WithHttpsEndpointOptio
 
 // WithHttpsEndpointCallback updates an HTTPS endpoint via callback
 func (s *testRedisResource) WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42806,7 +43202,7 @@ func (s *testRedisResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 // WithIconName specifies the icon to use when displaying the resource in the
 // dashboard.
 func (s *testRedisResource) WithIconName(iconName string, options ...*WithIconNameOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42825,7 +43221,7 @@ func (s *testRedisResource) WithIconName(iconName string, options ...*WithIconNa
 
 // WithImage allows overriding the image on a container.
 func (s *testRedisResource) WithImage(image string, options ...*WithImageOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42844,7 +43240,7 @@ func (s *testRedisResource) WithImage(image string, options ...*WithImageOptions
 
 // WithImagePullPolicy sets the pull policy for the container resource.
 func (s *testRedisResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42857,7 +43253,7 @@ func (s *testRedisResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) Test
 // WithImagePushOptions adds an asynchronous callback to configure container
 // image push options for the resource.
 func (s *testRedisResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42876,7 +43272,7 @@ func (s *testRedisResource) WithImagePushOptions(callback func(arg ContainerImag
 
 // WithImageRegistry allows overriding the image registry on a container.
 func (s *testRedisResource) WithImageRegistry(registry string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42888,7 +43284,7 @@ func (s *testRedisResource) WithImageRegistry(registry string) TestRedisResource
 
 // WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *testRedisResource) WithImageSHA256(sha256 string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42900,7 +43296,7 @@ func (s *testRedisResource) WithImageSHA256(sha256 string) TestRedisResource {
 
 // WithImageTag allows overriding the image tag on a container.
 func (s *testRedisResource) WithImageTag(tag string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42912,7 +43308,7 @@ func (s *testRedisResource) WithImageTag(tag string) TestRedisResource {
 
 // WithLifetime sets the lifetime behavior of the container resource.
 func (s *testRedisResource) WithLifetime(lifetime ContainerLifetime) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42925,7 +43321,7 @@ func (s *testRedisResource) WithLifetime(lifetime ContainerLifetime) TestRedisRe
 // WithLifetimeOf configures a resource to match the lifetime of another
 // resource.
 func (s *testRedisResource) WithLifetimeOf(sourceBuilder Resource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -42939,7 +43335,7 @@ func (s *testRedisResource) WithLifetimeOf(sourceBuilder Resource) TestRedisReso
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
 // server on the specified endpoint.
 func (s *testRedisResource) WithMcpServer(options ...*WithMcpServerOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42957,7 +43353,7 @@ func (s *testRedisResource) WithMcpServer(options ...*WithMcpServerOptions) Test
 
 // WithMergeEndpoint configures a named endpoint
 func (s *testRedisResource) WithMergeEndpoint(endpointName string, port float64) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42970,7 +43366,7 @@ func (s *testRedisResource) WithMergeEndpoint(endpointName string, port float64)
 
 // WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42984,7 +43380,7 @@ func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port fl
 
 // WithMergeLabel adds a label to the resource
 func (s *testRedisResource) WithMergeLabel(label string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -42996,7 +43392,7 @@ func (s *testRedisResource) WithMergeLabel(label string) TestRedisResource {
 
 // WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testRedisResource) WithMergeLabelCategorized(label string, category string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43009,7 +43405,7 @@ func (s *testRedisResource) WithMergeLabelCategorized(label string, category str
 
 // WithMergeLogging configures resource logging
 func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43028,7 +43424,7 @@ func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMe
 
 // WithMergeLoggingPath configures resource logging with file path
 func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43048,7 +43444,7 @@ func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string
 
 // WithMergeRoute configures a route
 func (s *testRedisResource) WithMergeRoute(path string, method string, handler string, priority float64) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43063,7 +43459,7 @@ func (s *testRedisResource) WithMergeRoute(path string, method string, handler s
 
 // WithMergeRouteMiddleware configures a route with middleware
 func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43079,7 +43475,7 @@ func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string,
 
 // WithModifiedAt sets the modified timestamp
 func (s *testRedisResource) WithModifiedAt(modifiedAt string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43091,7 +43487,7 @@ func (s *testRedisResource) WithModifiedAt(modifiedAt string) TestRedisResource 
 
 // WithMultiParamHandleCallback - Tests multi-param callback destructuring
 func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 TestCallbackContext, arg2 TestEnvironmentContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43111,7 +43507,7 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 // WithMutablePromiseCollisionResources configures a Redis resource with
 // mutable-property and parameter-only resources whose generated names collide.
 func (s *testRedisResource) WithMutablePromiseCollisionResources(resource TestMutablePromiseCollisionResource, resourcePromise TestMutablePromiseCollisionResourcePromise) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -43126,7 +43522,7 @@ func (s *testRedisResource) WithMutablePromiseCollisionResources(resource TestMu
 
 // WithNestedConfig configures with nested DTO
 func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43138,7 +43534,7 @@ func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisRes
 
 // WithOptionalCallback configures with optional callback
 func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43164,7 +43560,7 @@ func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbac
 
 // WithOptionalString adds an optional string parameter
 func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43182,7 +43578,7 @@ func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOpt
 
 // WithOtlpExporter configures OTLP telemetry export
 func (s *testRedisResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43201,7 +43597,7 @@ func (s *testRedisResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 // WithParentProcessLifetime configures a resource to use a persistent lifetime
 // that ends when a parent process exits.
 func (s *testRedisResource) WithParentProcessLifetime(parentProcessId float64) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43213,7 +43609,7 @@ func (s *testRedisResource) WithParentProcessLifetime(parentProcessId float64) T
 
 // WithParentRelationship sets the parent relationship
 func (s *testRedisResource) WithParentRelationship(parent Resource) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -43226,7 +43622,7 @@ func (s *testRedisResource) WithParentRelationship(parent Resource) TestRedisRes
 
 // WithPersistence configures the Redis resource with persistence
 func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43244,7 +43640,7 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 
 // WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *testRedisResource) WithPersistentLifetime() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43257,7 +43653,7 @@ func (s *testRedisResource) WithPersistentLifetime() TestRedisResource {
 // pipeline configuration phase, allowing modification of step dependencies and
 // relationships.
 func (s *testRedisResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43277,7 +43673,7 @@ func (s *testRedisResource) WithPipelineConfiguration(callback func(obj Pipeline
 // WithPipelineStepFactory adds a pipeline step to the resource that will be
 // executed during deployment.
 func (s *testRedisResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43305,7 +43701,7 @@ func (s *testRedisResource) WithPipelineStepFactory(stepName string, callback fu
 // WithProcessCommand adds a command to the resource that starts a local process
 // when invoked.
 func (s *testRedisResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43320,7 +43716,7 @@ func (s *testRedisResource) WithProcessCommand(commandName string, displayName s
 // WithProcessCommandFactory adds a command to the resource that starts a local
 // process created by a callback when invoked.
 func (s *testRedisResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43349,7 +43745,7 @@ func (s *testRedisResource) WithProcessCommandFactory(commandName string, displa
 // WithPromiseCollisionResources configures a Redis resource with parameter-only
 // resources whose generated names collide.
 func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resource != nil { if err := resource.Err(); err != nil { s.setErr(err); return s } }
 	if resourcePromise != nil { if err := resourcePromise.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -43364,7 +43760,7 @@ func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCo
 
 // WithRedisSpecific - Redis-specific configuration
 func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43377,7 +43773,7 @@ func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *testRedisResource) WithReference(source any, options ...*WithReferenceOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -43403,7 +43799,7 @@ func (s *testRedisResource) WithReference(source any, options ...*WithReferenceO
 // WithReferenceEnvironment configures how information is injected into
 // environment variables when the resource references other resources.
 func (s *testRedisResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43415,7 +43811,7 @@ func (s *testRedisResource) WithReferenceEnvironment(options *ReferenceEnvironme
 
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *testRedisResource) WithRelationship(resourceBuilder Resource, type_ string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -43430,7 +43826,7 @@ func (s *testRedisResource) WithRelationship(resourceBuilder Resource, type_ str
 // WithRemoteImageName sets the remote image name (without registry endpoint or
 // tag) for container push operations.
 func (s *testRedisResource) WithRemoteImageName(remoteImageName string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43442,7 +43838,7 @@ func (s *testRedisResource) WithRemoteImageName(remoteImageName string) TestRedi
 
 // WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *testRedisResource) WithRemoteImageTag(remoteImageTag string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43456,7 +43852,7 @@ func (s *testRedisResource) WithRemoteImageTag(remoteImageTag string) TestRedisR
 // command/executable to be available on the local machine PATH before it can
 // start.
 func (s *testRedisResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43477,7 +43873,7 @@ func (s *testRedisResource) WithRequiredCommand(command string, options ...*With
 // command/executable to be available on the local machine PATH before it can
 // start, with custom validation logic.
 func (s *testRedisResource) WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43501,10 +43897,22 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 	return s
 }
 
+// WithResourceTypeDisplayName overrides the human-readable resource type label.
+func (s *testRedisResource) WithResourceTypeDisplayName(resourceTypeDisplayName string) TestRedisResource {
+	if s.Err() != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["resourceTypeDisplayName"] = serializeValue(resourceTypeDisplayName)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withResourceTypeDisplayName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithScalarField sets a scalar field value
 // Allowed types for parameter value: string, float64, bool (float64 accepts any built-in Go numeric type).
 func (s *testRedisResource) WithScalarField(path string, value any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch value.(type) {
 	case string, float64, bool, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32:
 	default:
@@ -43524,7 +43932,7 @@ func (s *testRedisResource) WithScalarField(path string, value any) TestRedisRes
 // WithSerializedAnnotation stores a serialized ATS annotation payload on a
 // resource, replacing any existing annotation with the same ID.
 func (s *testRedisResource) WithSerializedAnnotation(annotationId string, json string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -43537,7 +43945,7 @@ func (s *testRedisResource) WithSerializedAnnotation(annotationId string, json s
 
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testRedisResource) WithSessionLifetime() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43548,7 +43956,7 @@ func (s *testRedisResource) WithSessionLifetime() TestRedisResource {
 
 // WithStatus sets the resource status
 func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43561,7 +43969,7 @@ func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResou
 // WithTags adds AppHost-defined dashboard tags that users cannot remove.
 // Repeated calls add tags.
 func (s *testRedisResource) WithTags(tags []string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43574,7 +43982,7 @@ func (s *testRedisResource) WithTags(tags []string) TestRedisResource {
 // WithTerminal adds an interactive terminal session to a resource with an
 // optional callback to configure its initial dimensions.
 func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43604,7 +44012,7 @@ func (s *testRedisResource) WithTerminal(options ...*WithTerminalOptions) TestRe
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *testRedisResource) WithTrait(name string, value string) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43618,7 +44026,7 @@ func (s *testRedisResource) WithTrait(name string, value string) TestRedisResour
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -43637,7 +44045,7 @@ func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResourc
 // WithUrl adds or modifies displayed URLs
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *testRedisResource) WithUrl(url any, options ...*WithUrlOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -43663,7 +44071,7 @@ func (s *testRedisResource) WithUrl(url any, options ...*WithUrlOptions) TestRed
 // WithUrlForEndpoint registers a callback to update the URL displayed for the
 // endpoint with the specified name.
 func (s *testRedisResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43687,7 +44095,7 @@ func (s *testRedisResource) WithUrlForEndpoint(endpointName string, callback fun
 // WithUrls registers a callback to customize the URLs displayed for the
 // resource.
 func (s *testRedisResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43706,7 +44114,7 @@ func (s *testRedisResource) WithUrls(callback func(obj ResourceUrlsCallbackConte
 
 // WithValidator adds validation callback
 func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43724,7 +44132,7 @@ func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext
 
 // WithVolume adds a volume to a container resource.
 func (s *testRedisResource) WithVolume(target string, options ...*WithVolumeOptions) TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resource": s.handle.ToJSON(),
@@ -43744,7 +44152,7 @@ func (s *testRedisResource) WithVolume(target string, options ...*WithVolumeOpti
 // WithoutHttpsCertificate - Disable HTTPS/TLS server certificate configuration
 // for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *testRedisResource) WithoutHttpsCertificate() TestRedisResource {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
@@ -43796,7 +44204,7 @@ func newTestResourceContextFromHandle(h *handle, c *client) TestResourceContext 
 
 // GetValueAsync - Instance method that should be exposed as async method.
 func (s *testResourceContext) GetValueAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43811,7 +44219,7 @@ func (s *testResourceContext) GetValueAsync() (string, error) {
 
 // Name gets the Name property
 func (s *testResourceContext) Name() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43826,7 +44234,7 @@ func (s *testResourceContext) Name() (string, error) {
 
 // SetName sets the Name property
 func (s *testResourceContext) SetName(value string) TestResourceContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43838,7 +44246,7 @@ func (s *testResourceContext) SetName(value string) TestResourceContext {
 
 // SetValue sets the Value property
 func (s *testResourceContext) SetValue(value float64) TestResourceContext {
-	if s.err != nil { return s }
+	if s.Err() != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43850,7 +44258,7 @@ func (s *testResourceContext) SetValue(value float64) TestResourceContext {
 
 // SetValueAsync - Instance method with parameter.
 func (s *testResourceContext) SetValueAsync(value string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43862,7 +44270,7 @@ func (s *testResourceContext) SetValueAsync(value string) error {
 
 // ValidateAsync - Instance method with return type.
 func (s *testResourceContext) ValidateAsync() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43877,7 +44285,7 @@ func (s *testResourceContext) ValidateAsync() (bool, error) {
 
 // Value gets the Value property
 func (s *testResourceContext) Value() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43949,7 +44357,7 @@ func newTestReturnValueContextFromHandle(h *handle, c *client) TestReturnValueCo
 
 // GetInt invokes the GetInt method
 func (s *testReturnValueContext) GetInt() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43964,7 +44372,7 @@ func (s *testReturnValueContext) GetInt() (float64, error) {
 
 // GetIntTaskAsync invokes the GetIntTaskAsync method
 func (s *testReturnValueContext) GetIntTaskAsync() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43979,7 +44387,7 @@ func (s *testReturnValueContext) GetIntTaskAsync() (float64, error) {
 
 // GetIntValueTaskAsync invokes the GetIntValueTaskAsync method
 func (s *testReturnValueContext) GetIntValueTaskAsync() (float64, error) {
-	if s.err != nil { var zero float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -43994,7 +44402,7 @@ func (s *testReturnValueContext) GetIntValueTaskAsync() (float64, error) {
 
 // GetNullableInt invokes the GetNullableInt method
 func (s *testReturnValueContext) GetNullableInt() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44009,7 +44417,7 @@ func (s *testReturnValueContext) GetNullableInt() (*float64, error) {
 
 // GetNullableIntTaskAsync invokes the GetNullableIntTaskAsync method
 func (s *testReturnValueContext) GetNullableIntTaskAsync() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44024,7 +44432,7 @@ func (s *testReturnValueContext) GetNullableIntTaskAsync() (*float64, error) {
 
 // GetNullableIntValueTaskAsync invokes the GetNullableIntValueTaskAsync method
 func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*float64, error) {
-	if s.err != nil { var zero *float64; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *float64; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44039,7 +44447,7 @@ func (s *testReturnValueContext) GetNullableIntValueTaskAsync() (*float64, error
 
 // GetNullableString invokes the GetNullableString method
 func (s *testReturnValueContext) GetNullableString() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44054,7 +44462,7 @@ func (s *testReturnValueContext) GetNullableString() (*string, error) {
 
 // GetNullableStringTaskAsync invokes the GetNullableStringTaskAsync method
 func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44070,7 +44478,7 @@ func (s *testReturnValueContext) GetNullableStringTaskAsync() (*string, error) {
 // GetNullableStringValueTaskAsync invokes the GetNullableStringValueTaskAsync
 // method
 func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44085,7 +44493,7 @@ func (s *testReturnValueContext) GetNullableStringValueTaskAsync() (*string, err
 
 // GetString invokes the GetString method
 func (s *testReturnValueContext) GetString() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44100,7 +44508,7 @@ func (s *testReturnValueContext) GetString() (string, error) {
 
 // GetStringTaskAsync invokes the GetStringTaskAsync method
 func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44115,7 +44523,7 @@ func (s *testReturnValueContext) GetStringTaskAsync() (string, error) {
 
 // GetStringValueTaskAsync invokes the GetStringValueTaskAsync method
 func (s *testReturnValueContext) GetStringValueTaskAsync() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44158,7 +44566,7 @@ func newUpdateCommandStateContextFromHandle(h *handle, c *client) UpdateCommandS
 // ResourceSnapshot gets the resource snapshot data available to polyglot
 // command state callbacks.
 func (s *updateCommandStateContext) ResourceSnapshot() (*UpdateCommandStateResourceSnapshot, error) {
-	if s.err != nil { var zero *UpdateCommandStateResourceSnapshot; return zero, s.err }
+	if err := s.Err(); err != nil { var zero *UpdateCommandStateResourceSnapshot; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44173,7 +44581,7 @@ func (s *updateCommandStateContext) ResourceSnapshot() (*UpdateCommandStateResou
 
 // Services is the service provider.
 func (s *updateCommandStateContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	if err := s.Err(); err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44257,7 +44665,7 @@ func newUserSecretsManagerFromHandle(h *handle, c *client) UserSecretsManager {
 
 // FilePath gets the path to the user secrets file.
 func (s *userSecretsManager) FilePath() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
+	if err := s.Err(); err != nil { var zero string; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44273,7 +44681,7 @@ func (s *userSecretsManager) FilePath() (string, error) {
 // GetOrSetSecret gets a secret value if it exists in configuration, or sets it
 // to the provided value if it does not.
 func (s *userSecretsManager) GetOrSetSecret(resourceBuilder Resource, name string, value string) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { return err } }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -44288,7 +44696,7 @@ func (s *userSecretsManager) GetOrSetSecret(resourceBuilder Resource, name strin
 
 // IsAvailable gets a value indicating whether user secrets are available.
 func (s *userSecretsManager) IsAvailable() (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44303,7 +44711,7 @@ func (s *userSecretsManager) IsAvailable() (bool, error) {
 
 // SaveStateJson saves state to user secrets from a JSON string.
 func (s *userSecretsManager) SaveStateJson(json string, options ...*SaveStateJsonOptions) error {
-	if s.err != nil { return s.err }
+	if err := s.Err(); err != nil { return err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"userSecretsManager": s.handle.ToJSON(),
@@ -44328,7 +44736,7 @@ func (s *userSecretsManager) SaveStateJson(json string, options ...*SaveStateJso
 
 // TryDeleteSecret attempts to delete a user secret value synchronously.
 func (s *userSecretsManager) TryDeleteSecret(name string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -44344,7 +44752,7 @@ func (s *userSecretsManager) TryDeleteSecret(name string) (bool, error) {
 
 // TrySetSecret attempts to set a user secret value synchronously.
 func (s *userSecretsManager) TrySetSecret(name string, value string) (bool, error) {
-	if s.err != nil { var zero bool; return zero, s.err }
+	if err := s.Err(); err != nil { var zero bool; return zero, err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
@@ -45076,6 +45484,27 @@ type SetCancellationTokenOptions struct {
 func (o *SetCancellationTokenOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
+	return m
+}
+
+// WithOutputDiffingOptions carries optional parameters for WithOutputDiffing.
+type WithOutputDiffingOptions struct {
+	// TargetStep is the step whose completed output is compared. Defaults to
+	// publish.
+	TargetStep *string `json:"targetStep,omitempty"`
+	// DiffStepName is the comparison target name. When null, uses the target name
+	// followed by -and-diff.
+	DiffStepName *string `json:"diffStepName,omitempty"`
+	// Description is an optional description of the comparison target.
+	Description *string `json:"description,omitempty"`
+}
+
+func (o *WithOutputDiffingOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.TargetStep != nil { m["targetStep"] = serializeValue(o.TargetStep) }
+	if o.DiffStepName != nil { m["diffStepName"] = serializeValue(o.DiffStepName) }
+	if o.Description != nil { m["description"] = serializeValue(o.Description) }
 	return m
 }
 
@@ -46150,7 +46579,7 @@ func registerWrappers(c *client) {
 
 // Build invokes the build capability and returns the running application.
 func (b *distributedApplicationBuilder) Build() (DistributedApplication, error) {
-	if b.err != nil { return nil, b.err }
+	if err := b.Err(); err != nil { return nil, err }
 	result, err := b.client.invokeCapability(context.Background(), "Aspire.Hosting/build", map[string]any{
 		"context": b.handle.ToJSON(),
 	})

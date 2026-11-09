@@ -33,6 +33,10 @@ public partial class AspireMenuItem
         {
             var attributes = new Dictionary<string, object>(Item.AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty);
             attributes["data-tooltip"] = ItemTooltip;
+            if (Item.Role is MenuItemRole.Checkbox or MenuItemRole.Radio)
+            {
+                attributes["aria-checked"] = Item.Checked ? "true" : "false";
+            }
             if (Item.Role is MenuItemRole.Radio)
             {
                 // A radio option is chosen by its native click, or Enter or Space, rather than by the web component's

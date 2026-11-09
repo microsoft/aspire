@@ -23,6 +23,7 @@ using Aspire.Hosting.DevTunnels;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
@@ -4948,8 +4949,12 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         });
 
         var kubernetesService = new TestKubernetesService();
+        builder.Services.AddSingleton<Hosting.Eventing.IDistributedApplicationEventing>(eventing);
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var orchestrator = app.Services.GetRequiredService<Hosting.Orchestrator.ApplicationOrchestrator>();
+        events.Subscribe<OnEndpointsAllocatedContext>(context => orchestrator.PublishEndpointsAllocatedAsync(
+            context.Events, eventing, Hosting.Eventing.EventDispatchBehavior.BlockingSequential, context.CancellationToken));
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events, distributedApplicationEventing: eventing);
         await appExecutor.RunApplicationAsync();
 
@@ -5140,6 +5145,50 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BrowserUrlsForAllocatedBatchAreFinalizedBeforeEventHandlers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var events = new DcpExecutorEvents();
+        builder.Services.AddSingleton(events);
+        var callbackCount = 0;
+        var frontend = builder.AddContainer("frontend", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithUrlForEndpoint("http", url =>
+            {
+                url.Url = "https://frontend.example/app";
+                Interlocked.Increment(ref callbackCount);
+            });
+        var backend = builder.AddContainer("backend", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithUrlForEndpoint("http", url =>
+            {
+                url.Url = "https://backend.example/app";
+                Interlocked.Increment(ref callbackCount);
+            });
+        var observedResources = new List<string>();
+        builder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>(async (@event, ct) =>
+        {
+            Assert.Equal(2, callbackCount);
+            Assert.Equal($"https://frontend.example,{frontend.GetEndpoint("http").Url}", await frontend.GetEndpoint("http").BrowserOrigins.GetValueAsync(ct));
+            Assert.Equal($"https://backend.example,{backend.GetEndpoint("http").Url}", await backend.GetEndpoint("http").BrowserOrigins.GetValueAsync(ct));
+            observedResources.Add(@event.Resource.Name);
+        });
+
+        using var app = builder.Build();
+        _ = app.Services.GetRequiredService<Hosting.Orchestrator.ApplicationOrchestrator>();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: new TestKubernetesService(),
+            events: events,
+            distributedApplicationEventing: builder.Eventing);
+
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Equal(["frontend", "backend"], observedResources);
+        Assert.Equal(2, callbackCount);
+    }
+
+    [Fact]
     public async Task ResourceEndpointsAllocatedEventSubscribersBlockDcpStartup()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -5160,9 +5209,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         });
 
         var kubernetesService = new TestKubernetesService();
+        var events = new DcpExecutorEvents();
+        builder.Services.AddSingleton(events);
+        builder.Services.AddSingleton<Hosting.Eventing.IDistributedApplicationEventing>(eventing);
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, distributedApplicationEventing: eventing);
+        _ = app.Services.GetRequiredService<Hosting.Orchestrator.ApplicationOrchestrator>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, events: events, distributedApplicationEventing: eventing);
 
         var runTask = appExecutor.RunApplicationAsync();
         await subscriberEntered.Task.DefaultTimeout();
@@ -5272,6 +5325,74 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var envVarVal = dcpCtr.Spec.Env?.Single(v => v.Name == "PORT_AND_PROTOCOL_SET").Value;
         Assert.False(string.IsNullOrWhiteSpace(envVarVal));
         Assert.Equal(desiredTargetPort, int.Parse(envVarVal, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ExecutableStoppedBeforeLaunch_ReportedAsFailedToStart_Succeeds()
+    {
+        // DCP reports FailedToStart (a terminal state) when Spec.Stop is set before the process was launched,
+        // e.g. when a resource is stopped right after a restart re-created it. That must count as stopped.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.FailedToStart };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+
+        // A single attempt: the stop outcome is decided by the state DCP reports, not by polling.
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(dcpExe.Spec.Stop);
+        Assert.Equal(ExecutableState.FailedToStart, dcpExe.Status?.State);
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ContainerStoppedBeforeLaunch_ReportedAsFailedToStart_Succeeds()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService { StoppedContainerState = ContainerState.FailedToStart };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpCtr = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        var reference = appExecutor.GetResource(dcpCtr.Metadata.Name);
+
+        await appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(dcpCtr.Spec.Stop);
+        Assert.Equal(ContainerState.FailedToStart, dcpCtr.Status?.State);
+    }
+
+    [Fact]
+    public async Task StopResourceAsync_ExecutableStillRunning_Throws()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app.exe", ".");
+
+        var kubernetesService = new TestKubernetesService { StoppedExecutableState = ExecutableState.Running };
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: kubernetesService);
+        appExecutor.DeleteResourceRetryPipeline = new ResiliencePipelineBuilder<bool>().Build();
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var dcpExe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        var reference = appExecutor.GetResource(dcpExe.Metadata.Name);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.StopResourceAsync(reference, TestContext.Current.CancellationToken)).DefaultTimeout();
+        Assert.Equal($"Failed to stop resource '{dcpExe.Metadata.Name}'.", ex.Message);
     }
 
     [Fact]
@@ -5968,6 +6089,85 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
         Assert.Equal(expectedArgs, argAnnotations.Select(a => a.Argument));
         AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
+    }
+
+    [Fact]
+    public async Task ProjectResource_AppHostGlobalArtifactsPath_IsForwardedToDotnetRun()
+    {
+        // https://github.com/microsoft/aspire/issues/6887: building the AppHost with `--artifacts-path` also redirects
+        // the output of its project resources, so `dotnet run --no-build` must use the same artifacts path to find it.
+        var artifactsPath = Path.Combine(Path.GetTempPath(), "aspire-artifacts");
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<TestProject>("proj", launchProfileName: null)
+            .WithArgs("app-arg");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var distributedApplicationOptions = new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DcpExecutorTests).Assembly.FullName,
+            GlobalArtifactsPath = artifactsPath
+        };
+        var executor = CreateAppExecutor(model, kubernetesService: kubernetes, distributedApplicationOptions: distributedApplicationOptions);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        var expectedArgs = new List<string> { "run", "--project", "TestProject", "--artifacts-path", artifactsPath };
+        if (GetTestAssemblyConfiguration() is { } configuration)
+        {
+            expectedArgs.AddRange(["--configuration", configuration]);
+        }
+        expectedArgs.AddRange(["--no-launch-profile", "app-arg"]);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+        Assert.True(exe.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        Assert.Equal(["app-arg"], argAnnotations.Select(a => a.Argument));
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, exe.Spec.Args);
+    }
+
+    [Theory]
+    [InlineData("run", true)]
+    [InlineData("watch", false)]
+    public async Task ProjectWithDotnetExecutableAnnotation_AppHostGlobalArtifactsPath_IsForwardedToDotnetRunOnly(string verb, bool expectArtifactsPath)
+    {
+        var artifactsPath = Path.Combine(Path.GetTempPath(), "aspire-artifacts");
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<TestProject>("proj", launchProfileName: null)
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/app"
+            })
+            .WithArgs(verb, "--project", "/tmp/app/app.csproj");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var distributedApplicationOptions = new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DcpExecutorTests).Assembly.FullName,
+            GlobalArtifactsPath = artifactsPath
+        };
+        var executor = CreateAppExecutor(model, kubernetesService: kubernetes, distributedApplicationOptions: distributedApplicationOptions);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        var expectedArgs = new List<string> { verb };
+        if (GetTestAssemblyConfiguration() is { } configuration)
+        {
+            expectedArgs.AddRange(["--configuration", configuration]);
+        }
+        if (expectArtifactsPath)
+        {
+            expectedArgs.AddRange(["--artifacts-path", artifactsPath]);
+        }
+        expectedArgs.AddRange(["--no-launch-profile", "--project", "/tmp/app/app.csproj"]);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
     }
 
     [Fact]
@@ -10146,13 +10346,16 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge()
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("frontend.dev.localhost")]
+    [InlineData("Frontend.Dev.Localhost")]
+    public async Task ContainerHostUrlWithoutMatchingHostEndpointUsesContainerHostBridge(string host)
     {
         var builder = DistributedApplication.CreateBuilder();
 
         builder.AddContainer("aContainer", "image")
-            .WithEnvironment("URL", new HostUrl("https://localhost:17092/path"));
+            .WithEnvironment("URL", new HostUrl($"https://{host}:17092/path"));
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -10175,8 +10378,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             s => s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName));
     }
 
-    [Fact]
-    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort()
+    [Theory]
+    [InlineData("localhost")]
+    [InlineData("frontend.dev.localhost")]
+    public async Task ContainerHostUrlMatchingHostEndpointUsesTunnelPort(string host)
     {
         var builder = DistributedApplication.CreateBuilder();
 
@@ -10184,7 +10389,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
 
         builder.AddContainer("aContainer", "image")
-            .WithEnvironment("URL", new HostUrl("https://localhost:5678/path"));
+            .WithEnvironment("URL", new HostUrl($"https://{host}:5678/path"));
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();

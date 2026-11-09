@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Aspire.Hosting.Devcontainers.Codespaces;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -10,6 +12,26 @@ namespace Aspire.Hosting.Tests.Codespaces;
 [Trait("Partition", "4")]
 public class CodespacesUrlRewriterTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData("http://localhost:8080/path?x=1#fragment", true, "https://test-codespace-8080.app.github.dev/path?x=1#fragment")]
+    [InlineData("https://localhost:7443/path", true, "https://test-codespace-7443.app.github.dev/path")]
+    [InlineData("https://public.example/path", false, null)]
+    [InlineData("https://example.devtunnels.ms/path", false, null)]
+    [InlineData("tcp://localhost:5432", false, null)]
+    [InlineData("http://test-codespace-8080.app.github.dev/path", false, null)]
+    public void ResourceProjectionOnlyRewritesLocalHttpUrls(string url, bool expected, string? expectedUrl)
+    {
+        var rewriter = new CodespacesUrlRewriter(Options.Create(new CodespacesOptions
+        {
+            IsCodespace = true,
+            CodespaceName = "test-codespace",
+            PortForwardingDomain = "app.github.dev"
+        }));
+
+        Assert.Equal(expected, rewriter.TryRewriteResourceUrl(url, out var rewritten));
+        Assert.Equal(expectedUrl, rewritten);
+    }
+
     [Fact]
     public async Task VerifyUrlsRewriterStopsWhenNotInCodespaces()
     {
@@ -90,7 +112,7 @@ public class CodespacesUrlRewriterTests(ITestOutputHelper testOutputHelper)
             u =>
             {
                 Assert.Equal("Test", u.Name);
-                Assert.Equal("http://test-codespace-1234.app.github.dev/", u.Url);
+                Assert.Equal("https://test-codespace-1234.app.github.dev/", u.Url);
                 Assert.False(u.IsInternal);
             }
             );

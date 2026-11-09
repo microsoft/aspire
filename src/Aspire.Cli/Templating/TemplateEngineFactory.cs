@@ -144,8 +144,15 @@ internal sealed partial class TemplateEngineFactory(
         var pathRoot = Path.Combine(cacheRoot, "repository");
         var relativePath = TemplateSource.GetRepositoryRelativePath(templatePath, pathRoot);
 
+        interactionService.DisplaySourceTrustWarning(executionContext);
         try
         {
+            // Ref resolution can authenticate even when its commit is already cached.
+            var resolveRemoteRef = reference is null || !GitClient.IsCommitSha(reference);
+            if (resolveRemoteRef)
+            {
+                interactionService.DisplayGitFetchNotice(SharedCommandStrings.GitFetchTemplates, hostEnvironment.SupportsInteractiveInput);
+            }
             var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,
                 () => WithGitTimeoutAsync(
                     token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken));
@@ -161,6 +168,10 @@ internal sealed partial class TemplateEngineFactory(
                 return GetRepositoryTemplatePath(cacheDirectory, relativePath);
             }
 
+            if (!resolveRemoteRef)
+            {
+                interactionService.DisplayGitFetchNotice(SharedCommandStrings.GitFetchTemplates, hostEnvironment.SupportsInteractiveInput);
+            }
             using var checkout = TemporaryCacheDirectory.Create(cacheRoot, "repo", DeleteCheckout, DeleteLease);
             var repositoryRoot = new DirectoryInfo(Path.Combine(checkout.FullName, "repository"));
             await interactionService.ShowStatusAsync(NewCommandStrings.CloningTemplateRepository, async () =>

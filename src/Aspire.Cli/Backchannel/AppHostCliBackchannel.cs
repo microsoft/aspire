@@ -78,12 +78,22 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting stop");
 
-        await rpc.InvokeWithProfilingAsync(
-            profilingTelemetry,
-            "apphost",
-            "RequestStopAsync",
-            [],
-            cancellationToken);
+        try
+        {
+            await rpc.InvokeWithProfilingAsync(
+                profilingTelemetry,
+                "apphost",
+                "RequestStopAsync",
+                [],
+                cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested && BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
+        {
+            // The AppHost stops its application before StreamJsonRpc writes the response, so shutdown
+            // can close the backchannel first. A closed backchannel means the AppHost is gone or exiting,
+            // which is the outcome the caller asked for. Callers observe the real result from the AppHost's exit code.
+            logger.LogDebug(ex, "Backchannel closed before the AppHost acknowledged the stop request.");
+        }
     }
 
     public async Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)

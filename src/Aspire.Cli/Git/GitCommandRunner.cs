@@ -269,8 +269,17 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
         probe.FileName = executable;
         probe.ArgumentList.Clear();
         probe.ArgumentList.Add("-V");
+
+        return await VerifyOpenSshAsync(probe, cancellationToken) ? executable : null;
+    }
+
+    internal async Task<bool> VerifyOpenSshAsync(ProcessStartInfo probe, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        // Allow slow OpenSSH initialization on busy Windows runners without exceeding
+        // the caller's acquisition deadline or leaving an unbounded probe.
         var result = await ProcessCaptureRunner.RunAsync<string?>(
-            probe, TimeSpan.FromSeconds(5),
+            probe, TimeSpan.FromSeconds(30),
             async (process, token) =>
             {
                 process.StandardInput.Close();
@@ -280,9 +289,11 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, ILog
                 return (await stdout + await stderr).Trim();
             },
             () => null, NullLogger.Instance, cancellationToken);
+        logger.LogDebug("OpenSSH verification completed after {Elapsed}; exit code {ExitCode}, failure {Failure}, cancelled {Cancelled}.",
+            stopwatch.Elapsed, result.ExitCode, result.FailureKind, result.Cancelled);
         cancellationToken.ThrowIfCancellationRequested();
         return !result.Cancelled && result.FailureKind is null && result.ExitCode == 0
-            && result.Capture?.StartsWith("OpenSSH_", StringComparison.Ordinal) is true ? executable : null;
+            && result.Capture?.StartsWith("OpenSSH_", StringComparison.Ordinal) is true;
     }
 
     internal static string NormalizeSshPath(string path, string workingDirectory)

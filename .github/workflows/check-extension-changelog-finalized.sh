@@ -133,12 +133,12 @@ fi
 from_sha="${BASH_REMATCH[2]}"
 to_sha="${BASH_REMATCH[3]}"
 
-if ! printf '%s\n' "$current_section" | grep -Fxq "$finalized_marker_line"; then
+if ! grep -Fxq "$finalized_marker_line" <<< "$current_section"; then
   emit_release_error "$heading_line_number" "The current release section $version_heading must contain the finalized release marker."
   exit 1
 fi
 
-if ! printf '%s\n' "$current_section" | grep -Eq '^- .*[^[:space:]]'; then
+if ! grep -Eq '^- .*[^[:space:]]' <<< "$current_section"; then
   emit_release_error "$heading_line_number" "The current release section $version_heading must contain at least one '- ' release-note bullet with non-whitespace content."
   exit 1
 fi
