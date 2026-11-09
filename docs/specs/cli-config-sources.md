@@ -556,9 +556,11 @@ development experience.** Each distinct configured feed is displayed using
 **Name**, **Package feed**, and **Package patterns**. Built-in channels and ambient
 NuGet sources are not included in these detail blocks. Configured feeds remain
 visible when ambient discovery also supplies packages from the same feed.
-SDK search results that identify feeds by their NuGet source names are resolved
-to configured feed locations before selection and installation, matching native
-search results.
+SDK source names are resolved to configured feed locations when reading live or
+cached SDK search output, matching native search results. The remaining search,
+selection, and installation pipeline uses locations only. A source name that
+looks like another feed's location is still resolved as a name in SDK output;
+native locations are never reinterpreted as names.
 Pickers group choices under source names only when multiple feeds supply choices.
 When ambient and configured sources offer the same package and version from the
 same feed, the choice retains its configured source name.

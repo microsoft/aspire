@@ -96,24 +96,50 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interaction;
             options.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
             options.AddCommandPrompterFactory = provider => new AddCommandPrompter(provider.GetRequiredService<IInteractionService>());
-            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            options.DotNetCliExecutionFactoryFactory = _ => new TestProcessExecutionFactory
             {
-                SearchPackagesAsyncCallback = (workingDirectory, _, exactMatch, _, _, _, config, _, _, _) =>
+                AssertionCallback = (args, _, workingDirectory, invocationOptions) =>
                 {
-                    var settings = config is null
-                        ? NuGetTestHelper.LoadSettings(workingDirectory.FullName)
-                        : Settings.LoadSpecificSettings(config.Directory!.FullName, config.Name);
+                    var settings = NuGetTestHelper.LoadSettings(workingDirectory.FullName);
+                    if (args is ["nuget", "config", "paths"])
+                    {
+                        foreach (var path in settings.GetConfigFilePaths())
+                        {
+                            invocationOptions.StandardOutputCallback?.Invoke(path);
+                        }
+                        return;
+                    }
+                    var configIndex = Array.IndexOf(args, "--configfile");
+                    if (configIndex >= 0)
+                    {
+                        var config = new FileInfo(args[configIndex + 1]);
+                        settings = Settings.LoadSpecificSettings(config.Directory!.FullName, config.Name);
+                    }
                     var feed = Assert.Single(new PackageSourceProvider(settings).LoadPackageSources(), source => source.IsEnabled);
+                    var exactMatch = args.Contains("--exact-match");
                     if (exactMatch)
                     {
                         Assert.Equal(selectedSource, feed.Source);
                     }
-                    return (0, [new()
+                    invocationOptions.StandardOutputCallback?.Invoke(JsonSerializer.Serialize(new
                     {
-                        Id = "Acme.Hosting.Redis",
-                        Version = exactMatch || feed.Source != selectedSource ? "1.0.0" : "2.0.0",
-                        Source = feed.Name
-                    }]);
+                        version = 2,
+                        searchResult = new[]
+                        {
+                            new
+                            {
+                                sourceName = feed.Name,
+                                packages = new[]
+                                {
+                                    new
+                                    {
+                                        id = "Acme.Hosting.Redis",
+                                        latestVersion = exactMatch || feed.Source != selectedSource ? "1.0.0" : "2.0.0"
+                                    }
+                                }
+                            }
+                        }
+                    }));
                 }
             };
         });

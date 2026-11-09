@@ -143,13 +143,13 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             {
                 SearchPackagesAsyncCallback = (_, _, exactMatch, _, _, _, _, _, _, _) => exactMatch
                     ? (0, [
-                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = "ambient" },
-                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = "selected" }
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = ambientFeed },
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = selectedFeed }
                     ])
                     : (0, [
-                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = "ambient" },
-                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = "selected" },
-                        new NuGetPackage { Id = "CommunityToolkit.Aspire.Hosting.Custom", Version = "2.0.0", Source = "ambient" }
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = ambientFeed },
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = selectedFeed },
+                        new NuGetPackage { Id = "CommunityToolkit.Aspire.Hosting.Custom", Version = "2.0.0", Source = ambientFeed }
                     ])
             };
         });
