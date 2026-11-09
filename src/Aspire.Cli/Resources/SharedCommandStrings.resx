@@ -133,6 +133,10 @@
     <value>templates</value>
     <comment>The content inserted into the Git-fetch notice.</comment>
   </data>
+  <data name="GitFetchTemplatesFromSource" xml:space="preserve">
+    <value>templates from {0}</value>
+    <comment>{0} is the Git template repository, optionally followed by its path and ref. The formatted content is inserted into the Git-fetch notice.</comment>
+  </data>
   <data name="ScanningForRunningAppHosts" xml:space="preserve">
     <value>Scanning for running AppHosts...</value>
   </data>

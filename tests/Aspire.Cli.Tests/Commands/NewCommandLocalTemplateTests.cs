@@ -1447,8 +1447,10 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
             Directory.CreateDirectory(Path.Combine(destination.FullName, ".git"));
             await CreateTemplateAsync(workspace, Path.GetRelativePath(workspace.Path, Path.Combine(destination.FullName, "template")));
         });
+        var source = new TemplateSource("template", "-repository", pinnedCommit ? TestGitCommandRunner.DefaultCommitSha : "main");
+        var fetchSource = $"-repository ({SharedCommandStrings.SourceGitPath}: template, {SharedCommandStrings.SourceRef}: {source.RepositoryRef})";
         var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
-            SharedCommandStrings.GitFetchTemplates)}[/]";
+            string.Format(SharedCommandStrings.GitFetchTemplatesFromSource, fetchSource))}[/]";
         interaction.DisplayMessageCallback = (emoji, message, consoleOverride) =>
         {
             if (message == fetchMessage)
@@ -1466,7 +1468,6 @@ public partial class NewCommandLocalTemplateTests(ITestOutputHelper outputHelper
         services.AddSingleton<IGitCommandRunner>(gitCommands);
         using var provider = services.BuildServiceProvider();
         var templates = provider.GetRequiredService<ITemplateProvider>();
-        var source = new TemplateSource("template", "-repository", pinnedCommit ? TestGitCommandRunner.DefaultCommitSha : "main");
 
         var first = Assert.Single(await templates.GetTemplatesAsync(source));
         var cached = Assert.Single(await templates.GetTemplatesAsync(source));
