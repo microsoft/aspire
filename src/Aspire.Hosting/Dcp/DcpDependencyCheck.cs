@@ -69,8 +69,8 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
         try
         {
-            // A completed 'dcp info' check already validated the DCP version.
-            if (_checkDone)
+            // A successful 'dcp info' check already validated the DCP version.
+            if (_dcpInfo is not null)
             {
                 return _dcpInfo;
             }
@@ -79,11 +79,12 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
             {
                 return _dcpVersionInfo;
             }
-            _versionCheckDone = true;
 
             // 'dcp version' validates the DCP installation without probing the container runtime,
             // which 'dcp info' does and which can hang when the runtime CLI is unresponsive.
+            // Only cache a completed check so a failed or cancelled probe is retried on the next call.
             _dcpVersionInfo = await RunDcpAsync("version", cancellationToken).ConfigureAwait(false);
+            _versionCheckDone = true;
             return _dcpVersionInfo;
         }
         finally

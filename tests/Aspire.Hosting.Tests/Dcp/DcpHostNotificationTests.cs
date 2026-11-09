@@ -809,6 +809,29 @@ public sealed class DcpHostNotificationTests
         }
     }
 
+    [Fact]
+    public async Task GetDcpVersionAsync_RetriesAfterFailedCheck()
+    {
+        var dcpDir = Directory.CreateTempSubdirectory("aspire-dcp-version-retry");
+        try
+        {
+            var cliPath = Path.Combine(dcpDir.FullName, OperatingSystem.IsWindows() ? "dcp.cmd" : "dcp");
+            var dependencyCheck = new DcpDependencyCheck(Options.Create(new DcpOptions { CliPath = cliPath, DependencyCheckTimeout = 10 }));
+
+            await Assert.ThrowsAsync<FileNotFoundException>(() => dependencyCheck.GetDcpVersionAsync()).DefaultTimeout();
+
+            Assert.Equal(cliPath, CreateFakeDcpWithHangingInfo(dcpDir.FullName));
+            var dcpInfo = await dependencyCheck.GetDcpVersionAsync().DefaultTimeout();
+
+            Assert.NotNull(dcpInfo);
+            Assert.Equal(DcpVersion.Dev, dcpInfo.Version);
+        }
+        finally
+        {
+            DeleteDirectoryBestEffort(dcpDir);
+        }
+    }
+
     private static DcpHost CreateDcpHostForDependencyCheckTests(IOptions<DcpOptions> dcpOptions, IDcpDependencyCheckService dependencyCheckService, DistributedApplicationModel model)
     {
         return new DcpHost(
