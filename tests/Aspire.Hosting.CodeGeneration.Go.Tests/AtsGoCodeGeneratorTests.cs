@@ -311,6 +311,7 @@ public class AtsGoCodeGeneratorTests
                     "bytes"
                     "context"
                     "errors"
+                    "fmt"
                     "math"
                     "net"
                     "runtime"
@@ -373,6 +374,64 @@ public class AtsGoCodeGeneratorTests
                     return map[string]any{"jsonrpc": "2.0", "id": id, "method": "invokeCallback", "params": []any{callbackID, args}}
                 }
 
+                func TestReadMessagePreservesIntegerBoundaries(t *testing.T) {
+                    cases := []struct {
+                        name    string
+                        payload string
+                        decode  func(any) error
+                    }{
+                        {
+                            name:    "int64 minimum",
+                            payload: `{"jsonrpc":"2.0","id":1,"result":-9223372036854775808}`,
+                            decode: func(raw any) error {
+                                value, err := decodeAs[int64](raw)
+                                if err == nil && value != math.MinInt64 {
+                                    return fmt.Errorf("got %d, want %d", value, int64(math.MinInt64))
+                                }
+                                return err
+                            },
+                        },
+                        {
+                            name:    "int64 maximum",
+                            payload: `{"jsonrpc":"2.0","id":1,"result":9223372036854775807}`,
+                            decode: func(raw any) error {
+                                value, err := decodeAs[int64](raw)
+                                if err == nil && value != math.MaxInt64 {
+                                    return fmt.Errorf("got %d, want %d", value, int64(math.MaxInt64))
+                                }
+                                return err
+                            },
+                        },
+                        {
+                            name:    "uint64 maximum",
+                            payload: `{"jsonrpc":"2.0","id":1,"result":18446744073709551615}`,
+                            decode: func(raw any) error {
+                                value, err := decodeAs[uint64](raw)
+                                if err == nil && value != math.MaxUint64 {
+                                    return fmt.Errorf("got %d, want %d", value, uint64(math.MaxUint64))
+                                }
+                                return err
+                            },
+                        },
+                    }
+
+                    for _, tc := range cases {
+                        t.Run(tc.name, func(t *testing.T) {
+                            var wire bytes.Buffer
+                            if err := writeMessageBody(&wire, []byte(tc.payload)); err != nil {
+                                t.Fatal(err)
+                            }
+                            message, err := readMessage(bufio.NewReader(&wire))
+                            if err != nil {
+                                t.Fatal(err)
+                            }
+                            if err := tc.decode(message["result"]); err != nil {
+                                t.Fatal(err)
+                            }
+                        })
+                    }
+                }
+
                 func TestPanickingCallbackIsAnsweredWithError(t *testing.T) {
                     c, host := newFakeHost(t)
                     var nilMap map[string]int
@@ -390,10 +449,12 @@ public class AtsGoCodeGeneratorTests
                         host.write(callbackRequest(i+1, c.registerCallback(tc.callback), nil))
                         response := host.read()
                         errObj, _ := response["error"].(map[string]any)
-                        if response["id"] != float64(i+1) || errObj == nil || response["result"] != nil {
+                        responseID, validID := jsonRPCID(response["id"])
+                        if !validID || responseID != int64(i+1) || errObj == nil || response["result"] != nil {
                             t.Fatalf("%s: got %v, want an error response", tc.name, response)
                         }
-                        if errObj["code"] != float64(-32603) || errObj["message"] != tc.want {
+                        code, validCode := jsonRPCID(errObj["code"])
+                        if !validCode || code != -32603 || errObj["message"] != tc.want {
                             t.Errorf("%s: got error %v, want code -32603 and message %q", tc.name, errObj, tc.want)
                         }
                     }
@@ -434,7 +495,8 @@ public class AtsGoCodeGeneratorTests
                         host.write(callbackRequest(1, id, args))
                         response := host.read()
                         errObj, _ := response["error"].(map[string]any)
-                        if called || errObj["code"] != float64(-32602) {
+                        code, validCode := jsonRPCID(errObj["code"])
+                        if called || !validCode || code != -32602 {
                             t.Fatalf("got %v, called=%v; want invalid params without calling user code", response, called)
                         }
                     }
@@ -506,7 +568,8 @@ public class AtsGoCodeGeneratorTests
                         host.write(callbackRequest(1, c.registerCallback(func(...any) any { return value }), nil))
                         response := host.read()
                         errObj, _ := response["error"].(map[string]any)
-                        if errObj["code"] != float64(-32603) {
+                        code, validCode := jsonRPCID(errObj["code"])
+                        if !validCode || code != -32603 {
                             t.Fatalf("got %v, want a callback encoding error", response)
                         }
                     }
@@ -2015,6 +2078,19 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_CreateBuilderUsesFunctionalOptions()
+    {
+        var aspireGo = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies())["aspire.go"];
+
+        Assert.Contains("func CreateBuilder(options ...CreateBuilderOption)", aspireGo);
+        Assert.Contains("type CreateBuilderOption interface", aspireGo);
+        Assert.Contains("type CreateBuilderProjectDirectory string", aspireGo);
+        Assert.Contains("func (value CreateBuilderProjectDirectory) apply(options *CreateBuilderOptions)", aspireGo);
+        Assert.Contains("func (option *CreateBuilderOptions) apply(options *CreateBuilderOptions)", aspireGo);
+        Assert.DoesNotContain("func CreateBuilder(options ...*CreateBuilderOptions)", aspireGo);
+    }
+
+    [Fact]
     public void GeneratedCode_DtoCallbacksReturnMutatedArguments()
     {
         var atsContext = CreateContextFromBothAssemblies();
@@ -2491,6 +2567,59 @@ public class AtsGoCodeGeneratorTests
         Assert.Matches(@"Options\s+\*InteractionInputsDialogOptions `json:""options,omitempty""`", aspireGo);
         Assert.Contains("func PromptInputOptionsValue(value *InteractionInputsDialogOptions) PromptInputOption", aspireGo);
         Assert.Contains("func PromptInputCancellationToken(value *CancellationToken) PromptInputOption", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_ReservesDistinctExportedOptionNames()
+    {
+        var stringType = new AtsTypeRef
+        {
+            TypeId = AtsConstants.String,
+            ClrType = typeof(string),
+            Category = AtsTypeCategory.Primitive
+        };
+        var voidType = new AtsTypeRef { TypeId = AtsConstants.Void, Category = AtsTypeCategory.Primitive };
+        var capabilities = new[]
+        {
+            new AtsCapabilityInfo
+            {
+                CapabilityId = "Tests/withFoo",
+                MethodName = "withFoo",
+                Parameters = [new AtsParameterInfo { Name = "barBaz", Type = stringType, IsOptional = true }],
+                ReturnType = voidType
+            },
+            new AtsCapabilityInfo
+            {
+                CapabilityId = "Tests/withFooBar",
+                MethodName = "withFooBar",
+                Parameters = [new AtsParameterInfo { Name = "baz", Type = stringType, IsOptional = true }],
+                ReturnType = voidType
+            }
+        };
+        var context = new AtsContext
+        {
+            Capabilities = capabilities,
+            HandleTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Tests/FooBarBaz",
+                    Name = "FooBarBaz",
+                    Properties = []
+                }
+            ],
+            EnumTypes = []
+        };
+
+        var aspireGo = new AtsGoCodeGenerator().GenerateDistributedApplication(context)["aspire.go"];
+        var optionTypes = Regex.Matches(aspireGo, @"(?m)^type (FooBarBaz\d+) string$")
+            .Select(match => match.Groups[1].Value)
+            .ToList();
+
+        Assert.Equal(2, optionTypes.Count);
+        Assert.Equal(2, optionTypes.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(optionTypes, name => Assert.True(char.IsUpper(name[0])));
     }
 
     [Fact]

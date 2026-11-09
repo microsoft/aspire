@@ -20,7 +20,7 @@
           "name": "CreateBuilder",
           "typeId": "Aspire.Hosting/createBuilder",
           "owningAssembly": "Aspire.Hosting",
-          "declaration": "func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuilder, error)",
+          "declaration": "func CreateBuilder(options ...CreateBuilderOption) (DistributedApplicationBuilder, error)",
           "summary": "CreateBuilder establishes a connection to the AppHost and returns a new builder."
         },
         {

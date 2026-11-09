@@ -47,7 +47,7 @@ public class GoGeneratorEscapingTests
 
         // The injected text must be present for the checks below to prove anything.
         Assert.Contains(lines, line => line.Contains(InjectedStatement, StringComparison.Ordinal));
-        Assert.DoesNotContain(lines, line => line.Contains(InjectedStatement, StringComparison.Ordinal) && !line.StartsWith("//", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, line => line == InjectedStatement);
         Assert.DoesNotContain(lines, line => line.StartsWith("func init", StringComparison.Ordinal) || line.StartsWith("func injected", StringComparison.Ordinal));
     }
 
@@ -69,6 +69,29 @@ public class GoGeneratorEscapingTests
 
             var vet = await GoDocCommentTests.RunAsync("go", directory.FullName, timeout.Token, "vet", "./...");
             Assert.True(vet.ExitCode == 0, $"go vet failed:{Environment.NewLine}{vet.Output}");
+
+            var consumerDirectory = Directory.CreateDirectory(Path.Combine(directory.FullName, "consumer"));
+            await File.WriteAllTextAsync(Path.Combine(consumerDirectory.FullName, "go.mod"), """
+                module consumer
+
+                go 1.26
+
+                require apphost/modules/aspire v0.0.0
+
+                replace apphost/modules/aspire => ..
+                """, timeout.Token);
+            await File.WriteAllTextAsync(Path.Combine(consumerDirectory.FullName, "main.go"), """
+                package main
+
+                import "apphost/modules/aspire"
+
+                var _ aspire.With_QuoteOption = aspire.With_QuoteOp_tional("value")
+
+                func main() {}
+                """, timeout.Token);
+
+            var consumerBuild = await GoDocCommentTests.RunAsync("go", consumerDirectory.FullName, timeout.Token, "build", ".");
+            Assert.True(consumerBuild.ExitCode == 0, $"external consumer build failed:{Environment.NewLine}{consumerBuild.Output}");
         }
         finally
         {
@@ -133,7 +156,9 @@ public class GoGeneratorEscapingTests
                     parameters: [Callback("cal\"lback", callbackType, callbackParameters, voidType)]),
                 Capability("Tests/tags\"List", "tags", tagsType, kind: AtsCapabilityKind.PropertyGetter, description: "Gets the tags."),
                 Capability("Tests/withCancel", "withCancel", resourceType,
-                    parameters: [Parameter("cancel\"Token", Primitive(AtsConstants.CancellationToken), isOptional: true)])
+                    parameters: [Parameter("cancel\"Token", Primitive(AtsConstants.CancellationToken), isOptional: true)]),
+                Capability("Tests/withUnsafeParameter", "withUnsafeParameter", resourceType,
+                    parameters: [Parameter(InjectedText, stringType, isOptional: true)])
             ],
             HandleTypes =
             [

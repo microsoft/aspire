@@ -213,6 +213,40 @@ public class GoApiExportTests
         Assert.Equal("PromptInputOption", prompt.Options!.TypeName);
         Assert.False(prompt.Options.IsDirect);
         Assert.Contains(prompt.Options.Fields, field => field is { Name: "Options", DeclaredType: "*InteractionInputsDialogOptions", JsonName: "options" });
+
+        var optionDeclaration = Assert.Single(
+            s_everything.Value.Declarations,
+            declaration => declaration.Content.StartsWith("type WithPersistenceOption interface", StringComparison.Ordinal));
+        Assert.Equal(
+            "type WithPersistenceOption interface {\n\tapply(*WithPersistenceOptions)\n}",
+            optionDeclaration.Content);
+    }
+
+    [Fact]
+    public void ApiExport_WithEmptyGeneratedTypes_StillExportsSynthesizedApplicationInterfaces()
+    {
+        var context = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+
+        var model = new AtsGoCodeGenerator().BuildApiModel(
+            context,
+            "Test",
+            PackageVersion,
+            [HostingAssemblyName],
+            CancellationToken.None);
+
+        Assert.Contains(
+            model.Declarations,
+            declaration => declaration.Content ==
+                "type DistributedApplication interface {\n\thandleReference\n\tErr() error\n}");
+        Assert.Contains(
+            model.Modules.Single().Items,
+            item => item.Name == "DistributedApplication" && item.Kind == GoApiItemKind.Interface);
     }
 
     [Fact]
@@ -646,6 +680,19 @@ public class GoApiExportTests
                 (GoDeclarationKind.Function, "", "\u00DCberFunc", "func \u00DCberFunc()")
             ],
             declarations.Select(declaration => (declaration.Kind, declaration.Owner, declaration.Name, declaration.Signature)));
+    }
+
+    [Fact]
+    public void Scan_RecognizesGofmtOneLineInterfaceBodies()
+    {
+        var declarations = GoDeclarationScanner.Scan(
+            "package aspire\n\ntype DistributedApplication interface{ handleReference }\n",
+            includeBodyDocs: false);
+
+        var declaration = Assert.Single(declarations);
+        Assert.Equal(GoDeclarationKind.Type, declaration.Kind);
+        Assert.Equal("DistributedApplication", declaration.Name);
+        Assert.Equal("type DistributedApplication interface", declaration.Signature);
     }
 
     [Fact]

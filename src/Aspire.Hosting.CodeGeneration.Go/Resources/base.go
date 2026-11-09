@@ -354,10 +354,7 @@ func (l *List[T]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (l *List[T]) Get(index int) (T, error) {
@@ -525,10 +522,7 @@ func (d *Dict[K, V]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (d *Dict[K, V]) Get(key K) (V, error) {

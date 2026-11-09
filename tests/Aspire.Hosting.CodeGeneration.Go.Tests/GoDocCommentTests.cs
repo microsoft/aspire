@@ -228,6 +228,13 @@ public class GoDocCommentTests
             {
                 await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
             }
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "options_compatibility.go"), """
+                package aspire
+
+                func compileLegacyOptions(resource TestRedisResource) {
+                    resource.WithPersistence(&WithPersistenceOptions{})
+                }
+                """, timeout.Token);
 
             var build = await RunAsync("go", directory.FullName, timeout.Token, "build", "./...");
             Assert.True(build.ExitCode == 0, $"go build failed:{Environment.NewLine}{build.Output}");

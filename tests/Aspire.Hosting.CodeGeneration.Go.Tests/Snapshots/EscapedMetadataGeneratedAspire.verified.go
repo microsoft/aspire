@@ -130,6 +130,10 @@ type EscapedResource interface {
 	// Deprecated: Adds Foo. func init() {} //
 	WithHostileDocumentation(value string) EscapedResource
 
+	// Parameters:
+	//   - options: Optional parameters; see [WithUnsafeParameterOption].
+	WithUnsafeParameter(options ...WithUnsafeParameterOption) EscapedResource
+
 	// Tags gets the tags.
 	Tags() *List[string]
 
@@ -338,6 +342,31 @@ func (s *escapedResource) WithHostileDocumentation(value string) EscapedResource
 	return s
 }
 
+func (s *escapedResource) WithUnsafeParameter(options ...WithUnsafeParameterOption) EscapedResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithUnsafeParameterOptions{}
+		for _, opt := range options {
+			if opt != nil {
+				opt.apply(merged)
+			}
+		}
+		for k, v := range merged.ToMap() {
+			reqArgs[k] = v
+		}
+	}
+	if _, err := s.client.invokeCapability(ctx, "Tests/withUnsafeParameter", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // ============================================================================
 // Options structs
 // ============================================================================
@@ -353,10 +382,16 @@ type With_QuoteOption interface {
 	apply(*With_QuoteOptions)
 }
 
-// _QuoteOp_tional sets op"tional for With_Quote.
-type _QuoteOp_tional string
+func (option *With_QuoteOptions) apply(options *With_QuoteOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (value _QuoteOp_tional) apply(options *With_QuoteOptions) {
+// With_QuoteOp_tional sets Op_tional for With_Quote.
+type With_QuoteOp_tional string
+
+func (value With_QuoteOp_tional) apply(options *With_QuoteOptions) {
 	options.Op_tional = (*string)(&value)
 }
 
@@ -381,21 +416,61 @@ type WithCancelOption interface {
 	apply(*WithCancelOptions)
 }
 
-// CancelCancel_Token sets cancel"Token for WithCancel.
-type cancelCancel_TokenOption struct{ value *CancellationToken }
+func (option *WithCancelOptions) apply(options *WithCancelOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option cancelCancel_TokenOption) apply(options *WithCancelOptions) {
+// CancelCancel_Token sets Cancel_Token for WithCancel.
+type cancelCancel_Token struct{ value *CancellationToken }
+
+func (option cancelCancel_Token) apply(options *WithCancelOptions) {
 	options.Cancel_Token = option.value
 }
 
 func CancelCancel_Token(value *CancellationToken) WithCancelOption {
-	return cancelCancel_TokenOption{value: value}
+	return cancelCancel_Token{value: value}
 }
 
 func (o *WithCancelOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil {
 		return m
+	}
+	return m
+}
+
+// WithUnsafeParameterOptions carries optional parameters for WithUnsafeParameter.
+type WithUnsafeParameterOptions struct {
+	Adds_Foo__func_init_________ *string `json:"Adds Foo.\nfunc init() {}\n// ,omitempty"`
+}
+
+// WithUnsafeParameterOption configures WithUnsafeParameter.
+type WithUnsafeParameterOption interface {
+	apply(*WithUnsafeParameterOptions)
+}
+
+func (option *WithUnsafeParameterOptions) apply(options *WithUnsafeParameterOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// UnsafeParameterAdds_Foo__func_init_________ sets Adds_Foo__func_init_________ for WithUnsafeParameter.
+type UnsafeParameterAdds_Foo__func_init_________ string
+
+func (value UnsafeParameterAdds_Foo__func_init_________) apply(options *WithUnsafeParameterOptions) {
+	options.Adds_Foo__func_init_________ = (*string)(&value)
+}
+
+func (o *WithUnsafeParameterOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil {
+		return m
+	}
+	if o.Adds_Foo__func_init_________ != nil {
+		m["Adds Foo.\nfunc init() {}\n// "] = serializeValue(o.Adds_Foo__func_init_________)
 	}
 	return m
 }

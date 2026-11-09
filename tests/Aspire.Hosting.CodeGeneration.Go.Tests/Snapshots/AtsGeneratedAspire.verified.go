@@ -3609,7 +3609,13 @@ type AddTestRedisOption interface {
 	apply(*AddTestRedisOptions)
 }
 
-// AddTestRedisPort sets port for AddTestRedis.
+func (option *AddTestRedisOptions) apply(options *AddTestRedisOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddTestRedisPort sets Port for AddTestRedis.
 type AddTestRedisPort int
 
 func (value AddTestRedisPort) apply(options *AddTestRedisOptions) {
@@ -3637,7 +3643,13 @@ type AddTestChildDatabaseOption interface {
 	apply(*AddTestChildDatabaseOptions)
 }
 
-// AddTestChildDatabaseDatabaseName sets databaseName for AddTestChildDatabase.
+func (option *AddTestChildDatabaseOptions) apply(options *AddTestChildDatabaseOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddTestChildDatabaseDatabaseName sets DatabaseName for AddTestChildDatabase.
 type AddTestChildDatabaseDatabaseName string
 
 func (value AddTestChildDatabaseDatabaseName) apply(options *AddTestChildDatabaseOptions) {
@@ -3665,7 +3677,13 @@ type WithPersistenceOption interface {
 	apply(*WithPersistenceOptions)
 }
 
-// PersistenceMode sets mode for WithPersistence.
+func (option *WithPersistenceOptions) apply(options *WithPersistenceOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PersistenceMode sets Mode for WithPersistence.
 type PersistenceMode TestPersistenceMode
 
 func (value PersistenceMode) apply(options *WithPersistenceOptions) {
@@ -3694,14 +3712,20 @@ type WithOptionalStringOption interface {
 	apply(*WithOptionalStringOptions)
 }
 
-// OptionalStringValue sets value for WithOptionalString.
+func (option *WithOptionalStringOptions) apply(options *WithOptionalStringOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OptionalStringValue sets Value for WithOptionalString.
 type OptionalStringValue string
 
 func (value OptionalStringValue) apply(options *WithOptionalStringOptions) {
 	options.Value = (*string)(&value)
 }
 
-// OptionalStringEnabled sets enabled for WithOptionalString.
+// OptionalStringEnabled sets Enabled for WithOptionalString.
 type OptionalStringEnabled bool
 
 func (value OptionalStringEnabled) apply(options *WithOptionalStringOptions) {
@@ -3732,11 +3756,17 @@ type WithOptionalCallbackOption interface {
 	apply(*WithOptionalCallbackOptions)
 }
 
-// OptionalCallbackCallback sets callback for WithOptionalCallback.
+func (option *WithOptionalCallbackOptions) apply(options *WithOptionalCallbackOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OptionalCallbackCallback sets Callback for WithOptionalCallback.
 type OptionalCallbackCallback func(arg TestCallbackContext)
 
 func (value OptionalCallbackCallback) apply(options *WithOptionalCallbackOptions) {
-	options.Callback = value
+	options.Callback = (func(arg TestCallbackContext))(value)
 }
 
 func (o *WithOptionalCallbackOptions) ToMap() map[string]any {
@@ -3757,15 +3787,21 @@ type GetStatusAsyncOption interface {
 	apply(*GetStatusAsyncOptions)
 }
 
-// GetStatusAsyncCancellationToken sets cancellationToken for GetStatusAsync.
-type getStatusAsyncCancellationTokenOption struct{ value *CancellationToken }
+func (option *GetStatusAsyncOptions) apply(options *GetStatusAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option getStatusAsyncCancellationTokenOption) apply(options *GetStatusAsyncOptions) {
+// GetStatusAsyncCancellationToken sets CancellationToken for GetStatusAsync.
+type getStatusAsyncCancellationToken struct{ value *CancellationToken }
+
+func (option getStatusAsyncCancellationToken) apply(options *GetStatusAsyncOptions) {
 	options.CancellationToken = option.value
 }
 
 func GetStatusAsyncCancellationToken(value *CancellationToken) GetStatusAsyncOption {
-	return getStatusAsyncCancellationTokenOption{value: value}
+	return getStatusAsyncCancellationToken{value: value}
 }
 
 func (o *GetStatusAsyncOptions) ToMap() map[string]any {
@@ -3786,15 +3822,21 @@ type WaitForReadyAsyncOption interface {
 	apply(*WaitForReadyAsyncOptions)
 }
 
-// WaitForReadyAsyncCancellationToken sets cancellationToken for WaitForReadyAsync.
-type waitForReadyAsyncCancellationTokenOption struct{ value *CancellationToken }
+func (option *WaitForReadyAsyncOptions) apply(options *WaitForReadyAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option waitForReadyAsyncCancellationTokenOption) apply(options *WaitForReadyAsyncOptions) {
+// WaitForReadyAsyncCancellationToken sets CancellationToken for WaitForReadyAsync.
+type waitForReadyAsyncCancellationToken struct{ value *CancellationToken }
+
+func (option waitForReadyAsyncCancellationToken) apply(options *WaitForReadyAsyncOptions) {
 	options.CancellationToken = option.value
 }
 
 func WaitForReadyAsyncCancellationToken(value *CancellationToken) WaitForReadyAsyncOption {
-	return waitForReadyAsyncCancellationTokenOption{value: value}
+	return waitForReadyAsyncCancellationToken{value: value}
 }
 
 func (o *WaitForReadyAsyncOptions) ToMap() map[string]any {
@@ -3816,14 +3858,20 @@ type TestDatabaseResourceWithDataVolumeOption interface {
 	apply(*TestDatabaseResourceWithDataVolumeOptions)
 }
 
-// TestDatabaseResourceWithDataVolumeName sets name for WithDataVolume.
+func (option *TestDatabaseResourceWithDataVolumeOptions) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// TestDatabaseResourceWithDataVolumeName sets Name for WithDataVolume.
 type TestDatabaseResourceWithDataVolumeName string
 
 func (value TestDatabaseResourceWithDataVolumeName) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
 	options.Name = (*string)(&value)
 }
 
-// TestDatabaseResourceWithDataVolumeIsReadOnly sets isReadOnly for WithDataVolume.
+// TestDatabaseResourceWithDataVolumeIsReadOnly sets IsReadOnly for WithDataVolume.
 type TestDatabaseResourceWithDataVolumeIsReadOnly bool
 
 func (value TestDatabaseResourceWithDataVolumeIsReadOnly) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
@@ -3855,14 +3903,20 @@ type WithMergeLoggingOption interface {
 	apply(*WithMergeLoggingOptions)
 }
 
-// MergeLoggingEnableConsole sets enableConsole for WithMergeLogging.
+func (option *WithMergeLoggingOptions) apply(options *WithMergeLoggingOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// MergeLoggingEnableConsole sets EnableConsole for WithMergeLogging.
 type MergeLoggingEnableConsole bool
 
 func (value MergeLoggingEnableConsole) apply(options *WithMergeLoggingOptions) {
 	options.EnableConsole = (*bool)(&value)
 }
 
-// MergeLoggingMaxFiles sets maxFiles for WithMergeLogging.
+// MergeLoggingMaxFiles sets MaxFiles for WithMergeLogging.
 type MergeLoggingMaxFiles int
 
 func (value MergeLoggingMaxFiles) apply(options *WithMergeLoggingOptions) {
@@ -3894,14 +3948,20 @@ type WithMergeLoggingPathOption interface {
 	apply(*WithMergeLoggingPathOptions)
 }
 
-// MergeLoggingPathEnableConsole sets enableConsole for WithMergeLoggingPath.
+func (option *WithMergeLoggingPathOptions) apply(options *WithMergeLoggingPathOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// MergeLoggingPathEnableConsole sets EnableConsole for WithMergeLoggingPath.
 type MergeLoggingPathEnableConsole bool
 
 func (value MergeLoggingPathEnableConsole) apply(options *WithMergeLoggingPathOptions) {
 	options.EnableConsole = (*bool)(&value)
 }
 
-// MergeLoggingPathMaxFiles sets maxFiles for WithMergeLoggingPath.
+// MergeLoggingPathMaxFiles sets MaxFiles for WithMergeLoggingPath.
 type MergeLoggingPathMaxFiles int
 
 func (value MergeLoggingPathMaxFiles) apply(options *WithMergeLoggingPathOptions) {
@@ -3932,15 +3992,21 @@ type SetCancellationTokenOption interface {
 	apply(*SetCancellationTokenOptions)
 }
 
-// SetCancellationTokenValue sets value for SetCancellationToken.
-type setCancellationTokenValueOption struct{ value *CancellationToken }
+func (option *SetCancellationTokenOptions) apply(options *SetCancellationTokenOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option setCancellationTokenValueOption) apply(options *SetCancellationTokenOptions) {
+// SetCancellationTokenValue sets Value for SetCancellationToken.
+type setCancellationTokenValue struct{ value *CancellationToken }
+
+func (option setCancellationTokenValue) apply(options *SetCancellationTokenOptions) {
 	options.Value = option.value
 }
 
 func SetCancellationTokenValue(value *CancellationToken) SetCancellationTokenOption {
-	return setCancellationTokenValueOption{value: value}
+	return setCancellationTokenValue{value: value}
 }
 
 func (o *SetCancellationTokenOptions) ToMap() map[string]any {
@@ -4452,10 +4518,7 @@ func (l *List[T]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (l *List[T]) Get(index int) (T, error) {
@@ -4623,10 +4686,7 @@ func (d *Dict[K, V]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (d *Dict[K, V]) Get(key K) (V, error) {
@@ -5200,6 +5260,7 @@ package aspire
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -6184,9 +6245,13 @@ func extractResult(response map[string]any) (any, error) {
 	if errObj, hasErr := response["error"]; hasErr {
 		errMap, _ := errObj.(map[string]any)
 		rpcErr := &rpcError{message: getString(errMap, "message"), data: errMap["data"]}
-		// A decoded response carries the code as float64; the error that
+		// A decoded response carries the code as json.Number; the error that
 		// connection.close synthesizes for pending requests carries an int.
 		switch code := errMap["code"].(type) {
+		case json.Number:
+			if parsed, err := code.Int64(); err == nil {
+				rpcErr.code = int(parsed)
+			}
 		case float64:
 			rpcErr.code = int(code)
 		case int:
@@ -6276,8 +6341,12 @@ func readMessage(reader *bufio.Reader) (map[string]any, error) {
 		return nil, err
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	// Preserve integer tokens until decodeAs knows the generated target type. Decoding through float64
+	// first would lose precision for signed and unsigned 64-bit values above 2^53.
+	decoder.UseNumber()
 	var message map[string]any
-	if err := json.Unmarshal(body, &message); err != nil {
+	if err := decoder.Decode(&message); err != nil {
 		return nil, err
 	}
 	return message, nil

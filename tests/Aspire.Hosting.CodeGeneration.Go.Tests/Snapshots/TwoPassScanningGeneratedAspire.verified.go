@@ -53375,15 +53375,21 @@ type AddContainerRegistryOption interface {
 	apply(*AddContainerRegistryOptions)
 }
 
-// AddContainerRegistryRepository sets repository for AddContainerRegistry.
-type addContainerRegistryRepositoryOption struct{ value any }
+func (option *AddContainerRegistryOptions) apply(options *AddContainerRegistryOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option addContainerRegistryRepositoryOption) apply(options *AddContainerRegistryOptions) {
+// AddContainerRegistryRepository sets Repository for AddContainerRegistry.
+type addContainerRegistryRepository struct{ value any }
+
+func (option addContainerRegistryRepository) apply(options *AddContainerRegistryOptions) {
 	options.Repository = option.value
 }
 
 func AddContainerRegistryRepository(value any) AddContainerRegistryOption {
-	return addContainerRegistryRepositoryOption{value: value}
+	return addContainerRegistryRepository{value: value}
 }
 
 func (o *AddContainerRegistryOptions) ToMap() map[string]any {
@@ -53408,7 +53414,13 @@ type WithBindMountOption interface {
 	apply(*WithBindMountOptions)
 }
 
-// BindMountIsReadOnly sets isReadOnly for WithBindMount.
+func (option *WithBindMountOptions) apply(options *WithBindMountOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// BindMountIsReadOnly sets IsReadOnly for WithBindMount.
 type BindMountIsReadOnly bool
 
 func (value BindMountIsReadOnly) apply(options *WithBindMountOptions) {
@@ -53437,7 +53449,13 @@ type WithImageOption interface {
 	apply(*WithImageOptions)
 }
 
-// ImageTag sets tag for WithImage.
+func (option *WithImageOptions) apply(options *WithImageOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ImageTag sets Tag for WithImage.
 type ImageTag string
 
 func (value ImageTag) apply(options *WithImageOptions) {
@@ -53470,17 +53488,23 @@ type WithDockerfileOption interface {
 	apply(*WithDockerfileOptions)
 }
 
-// DockerfileDockerfilePath sets dockerfilePath for WithDockerfile.
+func (option *WithDockerfileOptions) apply(options *WithDockerfileOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// DockerfileDockerfilePath sets DockerfilePath for WithDockerfile.
 type DockerfileDockerfilePath string
 
 func (value DockerfileDockerfilePath) apply(options *WithDockerfileOptions) {
 	options.DockerfilePath = (*string)(&value)
 }
 
-// DockerfileStageValue sets stage for WithDockerfile.
-type DockerfileStageValue string
+// DockerfileStage2 sets Stage for WithDockerfile.
+type DockerfileStage2 string
 
-func (value DockerfileStageValue) apply(options *WithDockerfileOptions) {
+func (value DockerfileStage2) apply(options *WithDockerfileOptions) {
 	options.Stage = (*string)(&value)
 }
 
@@ -53510,7 +53534,13 @@ type WithDockerfileFactoryOption interface {
 	apply(*WithDockerfileFactoryOptions)
 }
 
-// DockerfileFactoryStage sets stage for WithDockerfileFactory.
+func (option *WithDockerfileFactoryOptions) apply(options *WithDockerfileFactoryOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// DockerfileFactoryStage sets Stage for WithDockerfileFactory.
 type DockerfileFactoryStage string
 
 func (value DockerfileFactoryStage) apply(options *WithDockerfileFactoryOptions) {
@@ -53543,14 +53573,20 @@ type AddDockerfileOption interface {
 	apply(*AddDockerfileOptions)
 }
 
-// AddDockerfileDockerfilePath sets dockerfilePath for AddDockerfile.
+func (option *AddDockerfileOptions) apply(options *AddDockerfileOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddDockerfileDockerfilePath sets DockerfilePath for AddDockerfile.
 type AddDockerfileDockerfilePath string
 
 func (value AddDockerfileDockerfilePath) apply(options *AddDockerfileOptions) {
 	options.DockerfilePath = (*string)(&value)
 }
 
-// AddDockerfileStage sets stage for AddDockerfile.
+// AddDockerfileStage sets Stage for AddDockerfile.
 type AddDockerfileStage string
 
 func (value AddDockerfileStage) apply(options *AddDockerfileOptions) {
@@ -53583,7 +53619,13 @@ type AddDockerfileFactoryOption interface {
 	apply(*AddDockerfileFactoryOptions)
 }
 
-// AddDockerfileFactoryStage sets stage for AddDockerfileFactory.
+func (option *AddDockerfileFactoryOptions) apply(options *AddDockerfileFactoryOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddDockerfileFactoryStage sets Stage for AddDockerfileFactory.
 type AddDockerfileFactoryStage string
 
 func (value AddDockerfileFactoryStage) apply(options *AddDockerfileFactoryOptions) {
@@ -53613,7 +53655,13 @@ type AddDockerfileBuilderOption interface {
 	apply(*AddDockerfileBuilderOptions)
 }
 
-// AddDockerfileBuilderStage sets stage for AddDockerfileBuilder.
+func (option *AddDockerfileBuilderOptions) apply(options *AddDockerfileBuilderOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddDockerfileBuilderStage sets Stage for AddDockerfileBuilder.
 type AddDockerfileBuilderStage string
 
 func (value AddDockerfileBuilderStage) apply(options *AddDockerfileBuilderOptions) {
@@ -53649,25 +53697,31 @@ type WithContainerCertificatePathsOption interface {
 	apply(*WithContainerCertificatePathsOptions)
 }
 
-// ContainerCertificatePathsCustomCertificatesDestination sets customCertificatesDestination for WithContainerCertificatePaths.
+func (option *WithContainerCertificatePathsOptions) apply(options *WithContainerCertificatePathsOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ContainerCertificatePathsCustomCertificatesDestination sets CustomCertificatesDestination for WithContainerCertificatePaths.
 type ContainerCertificatePathsCustomCertificatesDestination string
 
 func (value ContainerCertificatePathsCustomCertificatesDestination) apply(options *WithContainerCertificatePathsOptions) {
 	options.CustomCertificatesDestination = (*string)(&value)
 }
 
-// ContainerCertificatePathsDefaultCertificateBundlePaths sets defaultCertificateBundlePaths for WithContainerCertificatePaths.
+// ContainerCertificatePathsDefaultCertificateBundlePaths sets DefaultCertificateBundlePaths for WithContainerCertificatePaths.
 type ContainerCertificatePathsDefaultCertificateBundlePaths []string
 
 func (value ContainerCertificatePathsDefaultCertificateBundlePaths) apply(options *WithContainerCertificatePathsOptions) {
-	options.DefaultCertificateBundlePaths = value
+	options.DefaultCertificateBundlePaths = ([]string)(value)
 }
 
-// ContainerCertificatePathsDefaultCertificateDirectoryPaths sets defaultCertificateDirectoryPaths for WithContainerCertificatePaths.
+// ContainerCertificatePathsDefaultCertificateDirectoryPaths sets DefaultCertificateDirectoryPaths for WithContainerCertificatePaths.
 type ContainerCertificatePathsDefaultCertificateDirectoryPaths []string
 
 func (value ContainerCertificatePathsDefaultCertificateDirectoryPaths) apply(options *WithContainerCertificatePathsOptions) {
-	options.DefaultCertificateDirectoryPaths = value
+	options.DefaultCertificateDirectoryPaths = ([]string)(value)
 }
 
 func (o *WithContainerCertificatePathsOptions) ToMap() map[string]any {
@@ -53698,15 +53752,21 @@ type WithContainerFilesOption interface {
 	apply(*WithContainerFilesOptions)
 }
 
-// ContainerFilesOptionsValue sets options for WithContainerFiles.
-type containerFilesOptionsValueOption struct{ value *ContainerFilesOptions }
+func (option *WithContainerFilesOptions) apply(options *WithContainerFilesOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option containerFilesOptionsValueOption) apply(options *WithContainerFilesOptions) {
+// ContainerFilesOptions2 sets Options for WithContainerFiles.
+type containerFilesOptions2 struct{ value *ContainerFilesOptions }
+
+func (option containerFilesOptions2) apply(options *WithContainerFilesOptions) {
 	options.Options = option.value
 }
 
-func ContainerFilesOptionsValue(value *ContainerFilesOptions) WithContainerFilesOption {
-	return containerFilesOptionsValueOption{value: value}
+func ContainerFilesOptions2(value *ContainerFilesOptions) WithContainerFilesOption {
+	return containerFilesOptions2{value: value}
 }
 
 func (o *WithContainerFilesOptions) ToMap() map[string]any {
@@ -53731,15 +53791,21 @@ type WithContainerFilesCallbackOption interface {
 	apply(*WithContainerFilesCallbackOptions)
 }
 
-// ContainerFilesCallbackOptions sets options for WithContainerFilesCallback.
-type containerFilesCallbackOptionsOption struct{ value *ContainerFilesOptions }
+func (option *WithContainerFilesCallbackOptions) apply(options *WithContainerFilesCallbackOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option containerFilesCallbackOptionsOption) apply(options *WithContainerFilesCallbackOptions) {
+// ContainerFilesCallbackOptions sets Options for WithContainerFilesCallback.
+type containerFilesCallbackOptions struct{ value *ContainerFilesOptions }
+
+func (option containerFilesCallbackOptions) apply(options *WithContainerFilesCallbackOptions) {
 	options.Options = option.value
 }
 
 func ContainerFilesCallbackOptions(value *ContainerFilesOptions) WithContainerFilesCallbackOption {
-	return containerFilesCallbackOptionsOption{value: value}
+	return containerFilesCallbackOptions{value: value}
 }
 
 func (o *WithContainerFilesCallbackOptions) ToMap() map[string]any {
@@ -53765,7 +53831,13 @@ type WithDockerfileBuilderOption interface {
 	apply(*WithDockerfileBuilderOptions)
 }
 
-// DockerfileBuilderStage sets stage for WithDockerfileBuilder.
+func (option *WithDockerfileBuilderOptions) apply(options *WithDockerfileBuilderOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// DockerfileBuilderStage sets Stage for WithDockerfileBuilder.
 type DockerfileBuilderStage string
 
 func (value DockerfileBuilderStage) apply(options *WithDockerfileBuilderOptions) {
@@ -53798,14 +53870,20 @@ type WithDockerfileBaseImageOption interface {
 	apply(*WithDockerfileBaseImageOptions)
 }
 
-// DockerfileBaseImageBuildImage sets buildImage for WithDockerfileBaseImage.
+func (option *WithDockerfileBaseImageOptions) apply(options *WithDockerfileBaseImageOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// DockerfileBaseImageBuildImage sets BuildImage for WithDockerfileBaseImage.
 type DockerfileBaseImageBuildImage string
 
 func (value DockerfileBaseImageBuildImage) apply(options *WithDockerfileBaseImageOptions) {
 	options.BuildImage = (*string)(&value)
 }
 
-// DockerfileBaseImageRuntimeImage sets runtimeImage for WithDockerfileBaseImage.
+// DockerfileBaseImageRuntimeImage sets RuntimeImage for WithDockerfileBaseImage.
 type DockerfileBaseImageRuntimeImage string
 
 func (value DockerfileBaseImageRuntimeImage) apply(options *WithDockerfileBaseImageOptions) {
@@ -53837,15 +53915,21 @@ type RunOption interface {
 	apply(*RunOptions)
 }
 
-// RunCancellationToken sets cancellationToken for Run.
-type runCancellationTokenOption struct{ value *CancellationToken }
+func (option *RunOptions) apply(options *RunOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option runCancellationTokenOption) apply(options *RunOptions) {
+// RunCancellationToken sets CancellationToken for Run.
+type runCancellationToken struct{ value *CancellationToken }
+
+func (option runCancellationToken) apply(options *RunOptions) {
 	options.CancellationToken = option.value
 }
 
 func RunCancellationToken(value *CancellationToken) RunOption {
-	return runCancellationTokenOption{value: value}
+	return runCancellationToken{value: value}
 }
 
 func (o *RunOptions) ToMap() map[string]any {
@@ -53868,21 +53952,27 @@ type WithHttpHealthCheckOption interface {
 	apply(*WithHttpHealthCheckOptions)
 }
 
-// HttpHealthCheckPath sets path for WithHttpHealthCheck.
+func (option *WithHttpHealthCheckOptions) apply(options *WithHttpHealthCheckOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// HttpHealthCheckPath sets Path for WithHttpHealthCheck.
 type HttpHealthCheckPath string
 
 func (value HttpHealthCheckPath) apply(options *WithHttpHealthCheckOptions) {
 	options.Path = (*string)(&value)
 }
 
-// HttpHealthCheckStatusCode sets statusCode for WithHttpHealthCheck.
+// HttpHealthCheckStatusCode sets StatusCode for WithHttpHealthCheck.
 type HttpHealthCheckStatusCode int
 
 func (value HttpHealthCheckStatusCode) apply(options *WithHttpHealthCheckOptions) {
 	options.StatusCode = (*int)(&value)
 }
 
-// HttpHealthCheckEndpointName sets endpointName for WithHttpHealthCheck.
+// HttpHealthCheckEndpointName sets EndpointName for WithHttpHealthCheck.
 type HttpHealthCheckEndpointName string
 
 func (value HttpHealthCheckEndpointName) apply(options *WithHttpHealthCheckOptions) {
@@ -53921,14 +54011,20 @@ type WithMcpServerOption interface {
 	apply(*WithMcpServerOptions)
 }
 
-// McpServerPath sets path for WithMcpServer.
+func (option *WithMcpServerOptions) apply(options *WithMcpServerOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// McpServerPath sets Path for WithMcpServer.
 type McpServerPath string
 
 func (value McpServerPath) apply(options *WithMcpServerOptions) {
 	options.Path = (*string)(&value)
 }
 
-// McpServerEndpointName sets endpointName for WithMcpServer.
+// McpServerEndpointName sets EndpointName for WithMcpServer.
 type McpServerEndpointName string
 
 func (value McpServerEndpointName) apply(options *WithMcpServerOptions) {
@@ -53959,7 +54055,13 @@ type WithOtlpExporterOption interface {
 	apply(*WithOtlpExporterOptions)
 }
 
-// OtlpExporterProtocol sets protocol for WithOtlpExporter.
+func (option *WithOtlpExporterOptions) apply(options *WithOtlpExporterOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OtlpExporterProtocol sets Protocol for WithOtlpExporter.
 type OtlpExporterProtocol OtlpProtocol
 
 func (value OtlpExporterProtocol) apply(options *WithOtlpExporterOptions) {
@@ -53989,21 +54091,27 @@ type AddParameterOption interface {
 	apply(*AddParameterOptions)
 }
 
-// AddParameterValue sets value for AddParameter.
+func (option *AddParameterOptions) apply(options *AddParameterOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddParameterValue sets Value for AddParameter.
 type AddParameterValue string
 
 func (value AddParameterValue) apply(options *AddParameterOptions) {
 	options.Value = (*string)(&value)
 }
 
-// AddParameterPublishValueAsDefault sets publishValueAsDefault for AddParameter.
+// AddParameterPublishValueAsDefault sets PublishValueAsDefault for AddParameter.
 type AddParameterPublishValueAsDefault bool
 
 func (value AddParameterPublishValueAsDefault) apply(options *AddParameterOptions) {
 	options.PublishValueAsDefault = (*bool)(&value)
 }
 
-// AddParameterSecret sets secret for AddParameter.
+// AddParameterSecret sets Secret for AddParameter.
 type AddParameterSecret bool
 
 func (value AddParameterSecret) apply(options *AddParameterOptions) {
@@ -54039,7 +54147,13 @@ type AddParameterFromConfigurationOption interface {
 	apply(*AddParameterFromConfigurationOptions)
 }
 
-// AddParameterFromConfigurationSecret sets secret for AddParameterFromConfiguration.
+func (option *AddParameterFromConfigurationOptions) apply(options *AddParameterFromConfigurationOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddParameterFromConfigurationSecret sets Secret for AddParameterFromConfiguration.
 type AddParameterFromConfigurationSecret bool
 
 func (value AddParameterFromConfigurationSecret) apply(options *AddParameterFromConfigurationOptions) {
@@ -54068,14 +54182,20 @@ type AddParameterWithGeneratedValueOption interface {
 	apply(*AddParameterWithGeneratedValueOptions)
 }
 
-// AddParameterWithGeneratedValueSecret sets secret for AddParameterWithGeneratedValue.
+func (option *AddParameterWithGeneratedValueOptions) apply(options *AddParameterWithGeneratedValueOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddParameterWithGeneratedValueSecret sets Secret for AddParameterWithGeneratedValue.
 type AddParameterWithGeneratedValueSecret bool
 
 func (value AddParameterWithGeneratedValueSecret) apply(options *AddParameterWithGeneratedValueOptions) {
 	options.Secret = (*bool)(&value)
 }
 
-// AddParameterWithGeneratedValuePersist sets persist for AddParameterWithGeneratedValue.
+// AddParameterWithGeneratedValuePersist sets Persist for AddParameterWithGeneratedValue.
 type AddParameterWithGeneratedValuePersist bool
 
 func (value AddParameterWithGeneratedValuePersist) apply(options *AddParameterWithGeneratedValueOptions) {
@@ -54109,7 +54229,13 @@ type WithDescriptionOption interface {
 	apply(*WithDescriptionOptions)
 }
 
-// DescriptionEnableMarkdown sets enableMarkdown for WithDescription.
+func (option *WithDescriptionOptions) apply(options *WithDescriptionOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// DescriptionEnableMarkdown sets EnableMarkdown for WithDescription.
 type DescriptionEnableMarkdown bool
 
 func (value DescriptionEnableMarkdown) apply(options *WithDescriptionOptions) {
@@ -54139,7 +54265,13 @@ type WithRequiredOption interface {
 	apply(*WithRequiredOptions)
 }
 
-// RequiredRequired sets required for WithRequired.
+func (option *WithRequiredOptions) apply(options *WithRequiredOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// RequiredRequired sets Required for WithRequired.
 type RequiredRequired bool
 
 func (value RequiredRequired) apply(options *WithRequiredOptions) {
@@ -54167,15 +54299,21 @@ type AddConnectionStringOption interface {
 	apply(*AddConnectionStringOptions)
 }
 
-// AddConnectionStringEnvironmentVariableNameOrExpression sets environmentVariableNameOrExpression for AddConnectionString.
-type addConnectionStringEnvironmentVariableNameOrExpressionOption struct{ value any }
+func (option *AddConnectionStringOptions) apply(options *AddConnectionStringOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option addConnectionStringEnvironmentVariableNameOrExpressionOption) apply(options *AddConnectionStringOptions) {
+// AddConnectionStringEnvironmentVariableNameOrExpression sets EnvironmentVariableNameOrExpression for AddConnectionString.
+type addConnectionStringEnvironmentVariableNameOrExpression struct{ value any }
+
+func (option addConnectionStringEnvironmentVariableNameOrExpression) apply(options *AddConnectionStringOptions) {
 	options.EnvironmentVariableNameOrExpression = option.value
 }
 
 func AddConnectionStringEnvironmentVariableNameOrExpression(value any) AddConnectionStringOption {
-	return addConnectionStringEnvironmentVariableNameOrExpressionOption{value: value}
+	return addConnectionStringEnvironmentVariableNameOrExpression{value: value}
 }
 
 func (o *AddConnectionStringOptions) ToMap() map[string]any {
@@ -54206,21 +54344,27 @@ type WithOutputDiffingOption interface {
 	apply(*WithOutputDiffingOptions)
 }
 
-// OutputDiffingTargetStep sets targetStep for WithOutputDiffing.
+func (option *WithOutputDiffingOptions) apply(options *WithOutputDiffingOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OutputDiffingTargetStep sets TargetStep for WithOutputDiffing.
 type OutputDiffingTargetStep string
 
 func (value OutputDiffingTargetStep) apply(options *WithOutputDiffingOptions) {
 	options.TargetStep = (*string)(&value)
 }
 
-// OutputDiffingDiffStepName sets diffStepName for WithOutputDiffing.
+// OutputDiffingDiffStepName sets DiffStepName for WithOutputDiffing.
 type OutputDiffingDiffStepName string
 
 func (value OutputDiffingDiffStepName) apply(options *WithOutputDiffingOptions) {
 	options.DiffStepName = (*string)(&value)
 }
 
-// OutputDiffingDescription sets description for WithOutputDiffing.
+// OutputDiffingDescription sets Description for WithOutputDiffing.
 type OutputDiffingDescription string
 
 func (value OutputDiffingDescription) apply(options *WithOutputDiffingOptions) {
@@ -54254,15 +54398,21 @@ type AddProjectOption interface {
 	apply(*AddProjectOptions)
 }
 
-// AddProjectLaunchProfileOrOptions sets launchProfileOrOptions for AddProject.
-type addProjectLaunchProfileOrOptionsOption struct{ value any }
+func (option *AddProjectOptions) apply(options *AddProjectOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option addProjectLaunchProfileOrOptionsOption) apply(options *AddProjectOptions) {
+// AddProjectLaunchProfileOrOptions sets LaunchProfileOrOptions for AddProject.
+type addProjectLaunchProfileOrOptions struct{ value any }
+
+func (option addProjectLaunchProfileOrOptions) apply(options *AddProjectOptions) {
 	options.LaunchProfileOrOptions = option.value
 }
 
 func AddProjectLaunchProfileOrOptions(value any) AddProjectOption {
-	return addProjectLaunchProfileOrOptionsOption{value: value}
+	return addProjectLaunchProfileOrOptions{value: value}
 }
 
 func (o *AddProjectOptions) ToMap() map[string]any {
@@ -54286,15 +54436,21 @@ type AddCSharpAppOption interface {
 	apply(*AddCSharpAppOptions)
 }
 
-// AddCSharpAppOptionsValue sets options for AddCSharpApp.
-type addCSharpAppOptionsValueOption struct{ value ProjectResourceOptions }
+func (option *AddCSharpAppOptions) apply(options *AddCSharpAppOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option addCSharpAppOptionsValueOption) apply(options *AddCSharpAppOptions) {
+// AddCSharpAppOptionsValue sets Options for AddCSharpApp.
+type addCSharpAppOptionsValue struct{ value ProjectResourceOptions }
+
+func (option addCSharpAppOptionsValue) apply(options *AddCSharpAppOptions) {
 	options.Options = &option.value
 }
 
 func AddCSharpAppOptionsValue(value ProjectResourceOptions) AddCSharpAppOption {
-	return addCSharpAppOptionsValueOption{value: value}
+	return addCSharpAppOptionsValue{value: value}
 }
 
 func (o *AddCSharpAppOptions) ToMap() map[string]any {
@@ -54319,11 +54475,17 @@ type PublishAsDockerFileOption interface {
 	apply(*PublishAsDockerFileOptions)
 }
 
-// PublishAsDockerFileConfigure sets configure for PublishAsDockerFile.
+func (option *PublishAsDockerFileOptions) apply(options *PublishAsDockerFileOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PublishAsDockerFileConfigure sets Configure for PublishAsDockerFile.
 type PublishAsDockerFileConfigure func(obj ContainerResource)
 
 func (value PublishAsDockerFileConfigure) apply(options *PublishAsDockerFileOptions) {
-	options.Configure = value
+	options.Configure = (func(obj ContainerResource))(value)
 }
 
 func (o *PublishAsDockerFileOptions) ToMap() map[string]any {
@@ -54346,7 +54508,13 @@ type WithRequiredCommandOption interface {
 	apply(*WithRequiredCommandOptions)
 }
 
-// RequiredCommandHelpLink sets helpLink for WithRequiredCommand.
+func (option *WithRequiredCommandOptions) apply(options *WithRequiredCommandOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// RequiredCommandHelpLink sets HelpLink for WithRequiredCommand.
 type RequiredCommandHelpLink string
 
 func (value RequiredCommandHelpLink) apply(options *WithRequiredCommandOptions) {
@@ -54376,7 +54544,13 @@ type WithRequiredCommandValidationOption interface {
 	apply(*WithRequiredCommandValidationOptions)
 }
 
-// RequiredCommandValidationHelpLink sets helpLink for WithRequiredCommandValidation.
+func (option *WithRequiredCommandValidationOptions) apply(options *WithRequiredCommandValidationOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// RequiredCommandValidationHelpLink sets HelpLink for WithRequiredCommandValidation.
 type RequiredCommandValidationHelpLink string
 
 func (value RequiredCommandValidationHelpLink) apply(options *WithRequiredCommandValidationOptions) {
@@ -54406,21 +54580,27 @@ type WithReferenceOption interface {
 	apply(*WithReferenceOptions)
 }
 
-// ReferenceConnectionName sets connectionName for WithReference.
+func (option *WithReferenceOptions) apply(options *WithReferenceOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ReferenceConnectionName sets ConnectionName for WithReference.
 type ReferenceConnectionName string
 
 func (value ReferenceConnectionName) apply(options *WithReferenceOptions) {
 	options.ConnectionName = (*string)(&value)
 }
 
-// ReferenceOptional sets optional for WithReference.
+// ReferenceOptional sets Optional for WithReference.
 type ReferenceOptional bool
 
 func (value ReferenceOptional) apply(options *WithReferenceOptions) {
 	options.Optional = (*bool)(&value)
 }
 
-// ReferenceName sets name for WithReference.
+// ReferenceName sets Name for WithReference.
 type ReferenceName string
 
 func (value ReferenceName) apply(options *WithReferenceOptions) {
@@ -54454,7 +54634,13 @@ type WithEndpointCallbackOption interface {
 	apply(*WithEndpointCallbackOptions)
 }
 
-// EndpointCallbackCreateIfNotExists sets createIfNotExists for WithEndpointCallback.
+func (option *WithEndpointCallbackOptions) apply(options *WithEndpointCallbackOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// EndpointCallbackCreateIfNotExists sets CreateIfNotExists for WithEndpointCallback.
 type EndpointCallbackCreateIfNotExists bool
 
 func (value EndpointCallbackCreateIfNotExists) apply(options *WithEndpointCallbackOptions) {
@@ -54483,14 +54669,20 @@ type WithHttpEndpointCallbackOption interface {
 	apply(*WithHttpEndpointCallbackOptions)
 }
 
-// HttpEndpointCallbackName sets name for WithHttpEndpointCallback.
+func (option *WithHttpEndpointCallbackOptions) apply(options *WithHttpEndpointCallbackOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// HttpEndpointCallbackName sets Name for WithHttpEndpointCallback.
 type HttpEndpointCallbackName string
 
 func (value HttpEndpointCallbackName) apply(options *WithHttpEndpointCallbackOptions) {
 	options.Name = (*string)(&value)
 }
 
-// HttpEndpointCallbackCreateIfNotExists sets createIfNotExists for WithHttpEndpointCallback.
+// HttpEndpointCallbackCreateIfNotExists sets CreateIfNotExists for WithHttpEndpointCallback.
 type HttpEndpointCallbackCreateIfNotExists bool
 
 func (value HttpEndpointCallbackCreateIfNotExists) apply(options *WithHttpEndpointCallbackOptions) {
@@ -54522,14 +54714,20 @@ type WithHttpsEndpointCallbackOption interface {
 	apply(*WithHttpsEndpointCallbackOptions)
 }
 
-// HttpsEndpointCallbackName sets name for WithHttpsEndpointCallback.
+func (option *WithHttpsEndpointCallbackOptions) apply(options *WithHttpsEndpointCallbackOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// HttpsEndpointCallbackName sets Name for WithHttpsEndpointCallback.
 type HttpsEndpointCallbackName string
 
 func (value HttpsEndpointCallbackName) apply(options *WithHttpsEndpointCallbackOptions) {
 	options.Name = (*string)(&value)
 }
 
-// HttpsEndpointCallbackCreateIfNotExists sets createIfNotExists for WithHttpsEndpointCallback.
+// HttpsEndpointCallbackCreateIfNotExists sets CreateIfNotExists for WithHttpsEndpointCallback.
 type HttpsEndpointCallbackCreateIfNotExists bool
 
 func (value HttpsEndpointCallbackCreateIfNotExists) apply(options *WithHttpsEndpointCallbackOptions) {
@@ -54583,56 +54781,62 @@ type WithEndpointOption interface {
 	apply(*WithEndpointOptions)
 }
 
-// EndpointPort sets port for WithEndpoint.
+func (option *WithEndpointOptions) apply(options *WithEndpointOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// EndpointPort sets Port for WithEndpoint.
 type EndpointPort int
 
 func (value EndpointPort) apply(options *WithEndpointOptions) {
 	options.Port = (*int)(&value)
 }
 
-// EndpointTargetPort sets targetPort for WithEndpoint.
+// EndpointTargetPort sets TargetPort for WithEndpoint.
 type EndpointTargetPort int
 
 func (value EndpointTargetPort) apply(options *WithEndpointOptions) {
 	options.TargetPort = (*int)(&value)
 }
 
-// EndpointScheme sets scheme for WithEndpoint.
+// EndpointScheme sets Scheme for WithEndpoint.
 type EndpointScheme string
 
 func (value EndpointScheme) apply(options *WithEndpointOptions) {
 	options.Scheme = (*string)(&value)
 }
 
-// EndpointName sets name for WithEndpoint.
+// EndpointName sets Name for WithEndpoint.
 type EndpointName string
 
 func (value EndpointName) apply(options *WithEndpointOptions) {
 	options.Name = (*string)(&value)
 }
 
-// EndpointEnv sets env for WithEndpoint.
+// EndpointEnv sets Env for WithEndpoint.
 type EndpointEnv string
 
 func (value EndpointEnv) apply(options *WithEndpointOptions) {
 	options.Env = (*string)(&value)
 }
 
-// EndpointIsProxied sets isProxied for WithEndpoint.
+// EndpointIsProxied sets IsProxied for WithEndpoint.
 type EndpointIsProxied bool
 
 func (value EndpointIsProxied) apply(options *WithEndpointOptions) {
 	options.IsProxied = (*bool)(&value)
 }
 
-// EndpointIsExternal sets isExternal for WithEndpoint.
+// EndpointIsExternal sets IsExternal for WithEndpoint.
 type EndpointIsExternal bool
 
 func (value EndpointIsExternal) apply(options *WithEndpointOptions) {
 	options.IsExternal = (*bool)(&value)
 }
 
-// EndpointProtocol sets protocol for WithEndpoint.
+// EndpointProtocol sets Protocol for WithEndpoint.
 type EndpointProtocol ProtocolType
 
 func (value EndpointProtocol) apply(options *WithEndpointOptions) {
@@ -54693,35 +54897,41 @@ type WithHttpEndpointOption interface {
 	apply(*WithHttpEndpointOptions)
 }
 
-// HttpEndpointPort sets port for WithHttpEndpoint.
+func (option *WithHttpEndpointOptions) apply(options *WithHttpEndpointOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// HttpEndpointPort sets Port for WithHttpEndpoint.
 type HttpEndpointPort int
 
 func (value HttpEndpointPort) apply(options *WithHttpEndpointOptions) {
 	options.Port = (*int)(&value)
 }
 
-// HttpEndpointTargetPort sets targetPort for WithHttpEndpoint.
+// HttpEndpointTargetPort sets TargetPort for WithHttpEndpoint.
 type HttpEndpointTargetPort int
 
 func (value HttpEndpointTargetPort) apply(options *WithHttpEndpointOptions) {
 	options.TargetPort = (*int)(&value)
 }
 
-// HttpEndpointName sets name for WithHttpEndpoint.
+// HttpEndpointName sets Name for WithHttpEndpoint.
 type HttpEndpointName string
 
 func (value HttpEndpointName) apply(options *WithHttpEndpointOptions) {
 	options.Name = (*string)(&value)
 }
 
-// HttpEndpointEnv sets env for WithHttpEndpoint.
+// HttpEndpointEnv sets Env for WithHttpEndpoint.
 type HttpEndpointEnv string
 
 func (value HttpEndpointEnv) apply(options *WithHttpEndpointOptions) {
 	options.Env = (*string)(&value)
 }
 
-// HttpEndpointIsProxied sets isProxied for WithHttpEndpoint.
+// HttpEndpointIsProxied sets IsProxied for WithHttpEndpoint.
 type HttpEndpointIsProxied bool
 
 func (value HttpEndpointIsProxied) apply(options *WithHttpEndpointOptions) {
@@ -54772,35 +54982,41 @@ type WithHttpsEndpointOption interface {
 	apply(*WithHttpsEndpointOptions)
 }
 
-// HttpsEndpointPort sets port for WithHttpsEndpoint.
+func (option *WithHttpsEndpointOptions) apply(options *WithHttpsEndpointOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// HttpsEndpointPort sets Port for WithHttpsEndpoint.
 type HttpsEndpointPort int
 
 func (value HttpsEndpointPort) apply(options *WithHttpsEndpointOptions) {
 	options.Port = (*int)(&value)
 }
 
-// HttpsEndpointTargetPort sets targetPort for WithHttpsEndpoint.
+// HttpsEndpointTargetPort sets TargetPort for WithHttpsEndpoint.
 type HttpsEndpointTargetPort int
 
 func (value HttpsEndpointTargetPort) apply(options *WithHttpsEndpointOptions) {
 	options.TargetPort = (*int)(&value)
 }
 
-// HttpsEndpointName sets name for WithHttpsEndpoint.
+// HttpsEndpointName sets Name for WithHttpsEndpoint.
 type HttpsEndpointName string
 
 func (value HttpsEndpointName) apply(options *WithHttpsEndpointOptions) {
 	options.Name = (*string)(&value)
 }
 
-// HttpsEndpointEnv sets env for WithHttpsEndpoint.
+// HttpsEndpointEnv sets Env for WithHttpsEndpoint.
 type HttpsEndpointEnv string
 
 func (value HttpsEndpointEnv) apply(options *WithHttpsEndpointOptions) {
 	options.Env = (*string)(&value)
 }
 
-// HttpsEndpointIsProxied sets isProxied for WithHttpsEndpoint.
+// HttpsEndpointIsProxied sets IsProxied for WithHttpsEndpoint.
 type HttpsEndpointIsProxied bool
 
 func (value HttpsEndpointIsProxied) apply(options *WithHttpsEndpointOptions) {
@@ -54840,7 +55056,13 @@ type WithUrlOption interface {
 	apply(*WithUrlOptions)
 }
 
-// UrlDisplayText sets displayText for WithUrl.
+func (option *WithUrlOptions) apply(options *WithUrlOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// UrlDisplayText sets DisplayText for WithUrl.
 type UrlDisplayText string
 
 func (value UrlDisplayText) apply(options *WithUrlOptions) {
@@ -54868,7 +55090,13 @@ type WaitForOption interface {
 	apply(*WaitForOptions)
 }
 
-// WaitForWaitBehavior sets waitBehavior for WaitFor.
+func (option *WaitForOptions) apply(options *WaitForOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// WaitForWaitBehavior sets WaitBehavior for WaitFor.
 type WaitForWaitBehavior WaitBehavior
 
 func (value WaitForWaitBehavior) apply(options *WaitForOptions) {
@@ -54896,7 +55124,13 @@ type WaitForStartOption interface {
 	apply(*WaitForStartOptions)
 }
 
-// WaitForStartWaitBehavior sets waitBehavior for WaitForStart.
+func (option *WaitForStartOptions) apply(options *WaitForStartOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// WaitForStartWaitBehavior sets WaitBehavior for WaitForStart.
 type WaitForStartWaitBehavior WaitBehavior
 
 func (value WaitForStartWaitBehavior) apply(options *WaitForStartOptions) {
@@ -54925,7 +55159,13 @@ type WaitForCompletionOption interface {
 	apply(*WaitForCompletionOptions)
 }
 
-// WaitForCompletionExitCode sets exitCode for WaitForCompletion.
+func (option *WaitForCompletionOptions) apply(options *WaitForCompletionOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// WaitForCompletionExitCode sets ExitCode for WaitForCompletion.
 type WaitForCompletionExitCode int
 
 func (value WaitForCompletionExitCode) apply(options *WaitForCompletionOptions) {
@@ -54954,15 +55194,21 @@ type WithCommandOption interface {
 	apply(*WithCommandOptions)
 }
 
-// CommandCommandOptions sets commandOptions for WithCommand.
-type commandCommandOptionsOption struct{ value *CommandOptions }
+func (option *WithCommandOptions) apply(options *WithCommandOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option commandCommandOptionsOption) apply(options *WithCommandOptions) {
+// CommandCommandOptions sets CommandOptions for WithCommand.
+type commandCommandOptions struct{ value *CommandOptions }
+
+func (option commandCommandOptions) apply(options *WithCommandOptions) {
 	options.CommandOptions = option.value
 }
 
 func CommandCommandOptions(value *CommandOptions) WithCommandOption {
-	return commandCommandOptionsOption{value: value}
+	return commandCommandOptions{value: value}
 }
 
 func (o *WithCommandOptions) ToMap() map[string]any {
@@ -54986,17 +55232,23 @@ type WithProcessCommandFactoryOption interface {
 	apply(*WithProcessCommandFactoryOptions)
 }
 
-// ProcessCommandFactoryOptions sets options for WithProcessCommandFactory.
-type processCommandFactoryOptionsOption struct {
+func (option *WithProcessCommandFactoryOptions) apply(options *WithProcessCommandFactoryOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ProcessCommandFactoryOptions sets Options for WithProcessCommandFactory.
+type processCommandFactoryOptions struct {
 	value *ProcessCommandResultExportOptions
 }
 
-func (option processCommandFactoryOptionsOption) apply(options *WithProcessCommandFactoryOptions) {
+func (option processCommandFactoryOptions) apply(options *WithProcessCommandFactoryOptions) {
 	options.Options = option.value
 }
 
 func ProcessCommandFactoryOptions(value *ProcessCommandResultExportOptions) WithProcessCommandFactoryOption {
-	return processCommandFactoryOptionsOption{value: value}
+	return processCommandFactoryOptions{value: value}
 }
 
 func (o *WithProcessCommandFactoryOptions) ToMap() map[string]any {
@@ -55020,15 +55272,21 @@ type WithHttpCommandOption interface {
 	apply(*WithHttpCommandOptions)
 }
 
-// HttpCommandOptions sets options for WithHttpCommand.
-type httpCommandOptionsOption struct{ value *HttpCommandExportOptions }
+func (option *WithHttpCommandOptions) apply(options *WithHttpCommandOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option httpCommandOptionsOption) apply(options *WithHttpCommandOptions) {
+// HttpCommandOptions sets Options for WithHttpCommand.
+type httpCommandOptions struct{ value *HttpCommandExportOptions }
+
+func (option httpCommandOptions) apply(options *WithHttpCommandOptions) {
 	options.Options = option.value
 }
 
 func HttpCommandOptions(value *HttpCommandExportOptions) WithHttpCommandOption {
-	return httpCommandOptionsOption{value: value}
+	return httpCommandOptions{value: value}
 }
 
 func (o *WithHttpCommandOptions) ToMap() map[string]any {
@@ -55054,7 +55312,13 @@ type WithCertificateTrustEnvironmentOption interface {
 	apply(*WithCertificateTrustEnvironmentOptions)
 }
 
-// CertificateTrustEnvironmentCertificateDirectoriesEnvironmentVariable sets certificateDirectoriesEnvironmentVariable for WithCertificateTrustEnvironment.
+func (option *WithCertificateTrustEnvironmentOptions) apply(options *WithCertificateTrustEnvironmentOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CertificateTrustEnvironmentCertificateDirectoriesEnvironmentVariable sets CertificateDirectoriesEnvironmentVariable for WithCertificateTrustEnvironment.
 type CertificateTrustEnvironmentCertificateDirectoriesEnvironmentVariable string
 
 func (value CertificateTrustEnvironmentCertificateDirectoriesEnvironmentVariable) apply(options *WithCertificateTrustEnvironmentOptions) {
@@ -55084,15 +55348,21 @@ type WithHttpsDeveloperCertificateOption interface {
 	apply(*WithHttpsDeveloperCertificateOptions)
 }
 
-// HttpsDeveloperCertificatePassword sets password for WithHttpsDeveloperCertificate.
-type httpsDeveloperCertificatePasswordOption struct{ value ParameterResource }
+func (option *WithHttpsDeveloperCertificateOptions) apply(options *WithHttpsDeveloperCertificateOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option httpsDeveloperCertificatePasswordOption) apply(options *WithHttpsDeveloperCertificateOptions) {
+// HttpsDeveloperCertificatePassword sets Password for WithHttpsDeveloperCertificate.
+type httpsDeveloperCertificatePassword struct{ value ParameterResource }
+
+func (option httpsDeveloperCertificatePassword) apply(options *WithHttpsDeveloperCertificateOptions) {
 	options.Password = &option.value
 }
 
 func HttpsDeveloperCertificatePassword(value ParameterResource) WithHttpsDeveloperCertificateOption {
-	return httpsDeveloperCertificatePasswordOption{value: value}
+	return httpsDeveloperCertificatePassword{value: value}
 }
 
 func (o *WithHttpsDeveloperCertificateOptions) ToMap() map[string]any {
@@ -55118,7 +55388,13 @@ type WithIconNameOption interface {
 	apply(*WithIconNameOptions)
 }
 
-// IconNameIconVariant sets iconVariant for WithIconName.
+func (option *WithIconNameOptions) apply(options *WithIconNameOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// IconNameIconVariant sets IconVariant for WithIconName.
 type IconNameIconVariant IconVariant
 
 func (value IconNameIconVariant) apply(options *WithIconNameOptions) {
@@ -55151,14 +55427,20 @@ type WithExecutableDebugSupportOption interface {
 	apply(*WithExecutableDebugSupportOptions)
 }
 
-// ExecutableDebugSupportRuntimeExecutable sets runtimeExecutable for WithExecutableDebugSupport.
+func (option *WithExecutableDebugSupportOptions) apply(options *WithExecutableDebugSupportOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ExecutableDebugSupportRuntimeExecutable sets RuntimeExecutable for WithExecutableDebugSupport.
 type ExecutableDebugSupportRuntimeExecutable string
 
 func (value ExecutableDebugSupportRuntimeExecutable) apply(options *WithExecutableDebugSupportOptions) {
 	options.RuntimeExecutable = (*string)(&value)
 }
 
-// ExecutableDebugSupportLaunchMethod sets launchMethod for WithExecutableDebugSupport.
+// ExecutableDebugSupportLaunchMethod sets LaunchMethod for WithExecutableDebugSupport.
 type ExecutableDebugSupportLaunchMethod string
 
 func (value ExecutableDebugSupportLaunchMethod) apply(options *WithExecutableDebugSupportOptions) {
@@ -55195,49 +55477,55 @@ type WithHttpProbeOption interface {
 	apply(*WithHttpProbeOptions)
 }
 
-// HttpProbePath sets path for WithHttpProbe.
+func (option *WithHttpProbeOptions) apply(options *WithHttpProbeOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// HttpProbePath sets Path for WithHttpProbe.
 type HttpProbePath string
 
 func (value HttpProbePath) apply(options *WithHttpProbeOptions) {
 	options.Path = (*string)(&value)
 }
 
-// HttpProbeInitialDelaySeconds sets initialDelaySeconds for WithHttpProbe.
+// HttpProbeInitialDelaySeconds sets InitialDelaySeconds for WithHttpProbe.
 type HttpProbeInitialDelaySeconds int
 
 func (value HttpProbeInitialDelaySeconds) apply(options *WithHttpProbeOptions) {
 	options.InitialDelaySeconds = (*int)(&value)
 }
 
-// HttpProbePeriodSeconds sets periodSeconds for WithHttpProbe.
+// HttpProbePeriodSeconds sets PeriodSeconds for WithHttpProbe.
 type HttpProbePeriodSeconds int
 
 func (value HttpProbePeriodSeconds) apply(options *WithHttpProbeOptions) {
 	options.PeriodSeconds = (*int)(&value)
 }
 
-// HttpProbeTimeoutSeconds sets timeoutSeconds for WithHttpProbe.
+// HttpProbeTimeoutSeconds sets TimeoutSeconds for WithHttpProbe.
 type HttpProbeTimeoutSeconds int
 
 func (value HttpProbeTimeoutSeconds) apply(options *WithHttpProbeOptions) {
 	options.TimeoutSeconds = (*int)(&value)
 }
 
-// HttpProbeFailureThreshold sets failureThreshold for WithHttpProbe.
+// HttpProbeFailureThreshold sets FailureThreshold for WithHttpProbe.
 type HttpProbeFailureThreshold int
 
 func (value HttpProbeFailureThreshold) apply(options *WithHttpProbeOptions) {
 	options.FailureThreshold = (*int)(&value)
 }
 
-// HttpProbeSuccessThreshold sets successThreshold for WithHttpProbe.
+// HttpProbeSuccessThreshold sets SuccessThreshold for WithHttpProbe.
 type HttpProbeSuccessThreshold int
 
 func (value HttpProbeSuccessThreshold) apply(options *WithHttpProbeOptions) {
 	options.SuccessThreshold = (*int)(&value)
 }
 
-// HttpProbeEndpointName sets endpointName for WithHttpProbe.
+// HttpProbeEndpointName sets EndpointName for WithHttpProbe.
 type HttpProbeEndpointName string
 
 func (value HttpProbeEndpointName) apply(options *WithHttpProbeOptions) {
@@ -55287,18 +55575,24 @@ type WithHiddenOnCompletionOption interface {
 	apply(*WithHiddenOnCompletionOptions)
 }
 
-// HiddenOnCompletionExitCode sets exitCode for WithHiddenOnCompletion.
+func (option *WithHiddenOnCompletionOptions) apply(options *WithHiddenOnCompletionOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// HiddenOnCompletionExitCode sets ExitCode for WithHiddenOnCompletion.
 type HiddenOnCompletionExitCode int
 
 func (value HiddenOnCompletionExitCode) apply(options *WithHiddenOnCompletionOptions) {
 	options.ExitCode = (*int)(&value)
 }
 
-// HiddenOnCompletionExitCodes sets exitCodes for WithHiddenOnCompletion.
+// HiddenOnCompletionExitCodes sets ExitCodes for WithHiddenOnCompletion.
 type HiddenOnCompletionExitCodes []int
 
 func (value HiddenOnCompletionExitCodes) apply(options *WithHiddenOnCompletionOptions) {
-	options.ExitCodes = value
+	options.ExitCodes = ([]int)(value)
 }
 
 func (o *WithHiddenOnCompletionOptions) ToMap() map[string]any {
@@ -55326,11 +55620,17 @@ type WithTerminalOption interface {
 	apply(*WithTerminalOptions)
 }
 
-// TerminalConfigure sets configure for WithTerminal.
+func (option *WithTerminalOptions) apply(options *WithTerminalOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// TerminalConfigure sets Configure for WithTerminal.
 type TerminalConfigure func(obj *TerminalOptions)
 
 func (value TerminalConfigure) apply(options *WithTerminalOptions) {
-	options.Configure = value
+	options.Configure = (func(obj *TerminalOptions))(value)
 }
 
 func (o *WithTerminalOptions) ToMap() map[string]any {
@@ -55351,15 +55651,21 @@ type SetCancellationTokenOption interface {
 	apply(*SetCancellationTokenOptions)
 }
 
-// SetCancellationTokenValue sets value for SetCancellationToken.
-type setCancellationTokenValueOption struct{ value *CancellationToken }
+func (option *SetCancellationTokenOptions) apply(options *SetCancellationTokenOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option setCancellationTokenValueOption) apply(options *SetCancellationTokenOptions) {
+// SetCancellationTokenValue sets Value for SetCancellationToken.
+type setCancellationTokenValue struct{ value *CancellationToken }
+
+func (option setCancellationTokenValue) apply(options *SetCancellationTokenOptions) {
 	options.Value = option.value
 }
 
 func SetCancellationTokenValue(value *CancellationToken) SetCancellationTokenOption {
-	return setCancellationTokenValueOption{value: value}
+	return setCancellationTokenValue{value: value}
 }
 
 func (o *SetCancellationTokenOptions) ToMap() map[string]any {
@@ -55387,28 +55693,34 @@ type WithPipelineStepFactoryOption interface {
 	apply(*WithPipelineStepFactoryOptions)
 }
 
-// PipelineStepFactoryDependsOn sets dependsOn for WithPipelineStepFactory.
+func (option *WithPipelineStepFactoryOptions) apply(options *WithPipelineStepFactoryOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PipelineStepFactoryDependsOn sets DependsOn for WithPipelineStepFactory.
 type PipelineStepFactoryDependsOn []string
 
 func (value PipelineStepFactoryDependsOn) apply(options *WithPipelineStepFactoryOptions) {
-	options.DependsOn = value
+	options.DependsOn = ([]string)(value)
 }
 
-// PipelineStepFactoryRequiredBy sets requiredBy for WithPipelineStepFactory.
+// PipelineStepFactoryRequiredBy sets RequiredBy for WithPipelineStepFactory.
 type PipelineStepFactoryRequiredBy []string
 
 func (value PipelineStepFactoryRequiredBy) apply(options *WithPipelineStepFactoryOptions) {
-	options.RequiredBy = value
+	options.RequiredBy = ([]string)(value)
 }
 
-// PipelineStepFactoryTags sets tags for WithPipelineStepFactory.
+// PipelineStepFactoryTags sets Tags for WithPipelineStepFactory.
 type PipelineStepFactoryTags []string
 
 func (value PipelineStepFactoryTags) apply(options *WithPipelineStepFactoryOptions) {
-	options.Tags = value
+	options.Tags = ([]string)(value)
 }
 
-// PipelineStepFactoryDescription sets description for WithPipelineStepFactory.
+// PipelineStepFactoryDescription sets Description for WithPipelineStepFactory.
 type PipelineStepFactoryDescription string
 
 func (value PipelineStepFactoryDescription) apply(options *WithPipelineStepFactoryOptions) {
@@ -55448,14 +55760,20 @@ type WithVolumeOption interface {
 	apply(*WithVolumeOptions)
 }
 
-// VolumeName sets name for WithVolume.
+func (option *WithVolumeOptions) apply(options *WithVolumeOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// VolumeName sets Name for WithVolume.
 type VolumeName string
 
 func (value VolumeName) apply(options *WithVolumeOptions) {
 	options.Name = (*string)(&value)
 }
 
-// VolumeIsReadOnly sets isReadOnly for WithVolume.
+// VolumeIsReadOnly sets IsReadOnly for WithVolume.
 type VolumeIsReadOnly bool
 
 func (value VolumeIsReadOnly) apply(options *WithVolumeOptions) {
@@ -55487,7 +55805,13 @@ type ProjectResourceWithVolumeOption interface {
 	apply(*ProjectResourceWithVolumeOptions)
 }
 
-// ProjectResourceWithVolumeIsReadOnly sets isReadOnly for WithVolume.
+func (option *ProjectResourceWithVolumeOptions) apply(options *ProjectResourceWithVolumeOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ProjectResourceWithVolumeIsReadOnly sets IsReadOnly for WithVolume.
 type ProjectResourceWithVolumeIsReadOnly bool
 
 func (value ProjectResourceWithVolumeIsReadOnly) apply(options *ProjectResourceWithVolumeOptions) {
@@ -55516,7 +55840,13 @@ type ExecutableResourceWithVolumeOption interface {
 	apply(*ExecutableResourceWithVolumeOptions)
 }
 
-// ExecutableResourceWithVolumeIsReadOnly sets isReadOnly for WithVolume.
+func (option *ExecutableResourceWithVolumeOptions) apply(options *ExecutableResourceWithVolumeOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ExecutableResourceWithVolumeIsReadOnly sets IsReadOnly for WithVolume.
 type ExecutableResourceWithVolumeIsReadOnly bool
 
 func (value ExecutableResourceWithVolumeIsReadOnly) apply(options *ExecutableResourceWithVolumeOptions) {
@@ -55544,7 +55874,13 @@ type ArgOption interface {
 	apply(*ArgOptions)
 }
 
-// ArgDefaultValue sets defaultValue for Arg.
+func (option *ArgOptions) apply(options *ArgOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ArgDefaultValue sets DefaultValue for Arg.
 type ArgDefaultValue string
 
 func (value ArgDefaultValue) apply(options *ArgOptions) {
@@ -55572,7 +55908,13 @@ type FromOption interface {
 	apply(*FromOptions)
 }
 
-// FromStageName sets stageName for From.
+func (option *FromOptions) apply(options *FromOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// FromStageName sets StageName for From.
 type FromStageName string
 
 func (value FromStageName) apply(options *FromOptions) {
@@ -55600,7 +55942,13 @@ type CopyOption interface {
 	apply(*CopyOptions)
 }
 
-// CopyChown sets chown for Copy.
+func (option *CopyOptions) apply(options *CopyOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CopyChown sets Chown for Copy.
 type CopyChown string
 
 func (value CopyChown) apply(options *CopyOptions) {
@@ -55628,7 +55976,13 @@ type CopyFromOption interface {
 	apply(*CopyFromOptions)
 }
 
-// CopyFromChown sets chown for CopyFrom.
+func (option *CopyFromOptions) apply(options *CopyFromOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CopyFromChown sets Chown for CopyFrom.
 type CopyFromChown string
 
 func (value CopyFromChown) apply(options *CopyFromOptions) {
@@ -55656,15 +56010,21 @@ type AddContainerFilesStagesOption interface {
 	apply(*AddContainerFilesStagesOptions)
 }
 
-// AddContainerFilesStagesLogger sets logger for AddContainerFilesStages.
-type addContainerFilesStagesLoggerOption struct{ value Logger }
+func (option *AddContainerFilesStagesOptions) apply(options *AddContainerFilesStagesOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option addContainerFilesStagesLoggerOption) apply(options *AddContainerFilesStagesOptions) {
+// AddContainerFilesStagesLogger sets Logger for AddContainerFilesStages.
+type addContainerFilesStagesLogger struct{ value Logger }
+
+func (option addContainerFilesStagesLogger) apply(options *AddContainerFilesStagesOptions) {
 	options.Logger = &option.value
 }
 
 func AddContainerFilesStagesLogger(value Logger) AddContainerFilesStagesOption {
-	return addContainerFilesStagesLoggerOption{value: value}
+	return addContainerFilesStagesLogger{value: value}
 }
 
 func (o *AddContainerFilesStagesOptions) ToMap() map[string]any {
@@ -55688,15 +56048,21 @@ type AddContainerFilesOption interface {
 	apply(*AddContainerFilesOptions)
 }
 
-// AddContainerFilesLogger sets logger for AddContainerFiles.
-type addContainerFilesLoggerOption struct{ value Logger }
+func (option *AddContainerFilesOptions) apply(options *AddContainerFilesOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option addContainerFilesLoggerOption) apply(options *AddContainerFilesOptions) {
+// AddContainerFilesLogger sets Logger for AddContainerFiles.
+type addContainerFilesLogger struct{ value Logger }
+
+func (option addContainerFilesLogger) apply(options *AddContainerFilesOptions) {
 	options.Logger = &option.value
 }
 
 func AddContainerFilesLogger(value Logger) AddContainerFilesOption {
-	return addContainerFilesLoggerOption{value: value}
+	return addContainerFilesLogger{value: value}
 }
 
 func (o *AddContainerFilesOptions) ToMap() map[string]any {
@@ -55723,26 +56089,32 @@ type BuildOption interface {
 	apply(*BuildOptions)
 }
 
-// BuildResourceLogger sets resourceLogger for Build.
-type buildResourceLoggerOption struct{ value Logger }
+func (option *BuildOptions) apply(options *BuildOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option buildResourceLoggerOption) apply(options *BuildOptions) {
+// BuildResourceLogger sets ResourceLogger for Build.
+type buildResourceLogger struct{ value Logger }
+
+func (option buildResourceLogger) apply(options *BuildOptions) {
 	options.ResourceLogger = &option.value
 }
 
 func BuildResourceLogger(value Logger) BuildOption {
-	return buildResourceLoggerOption{value: value}
+	return buildResourceLogger{value: value}
 }
 
-// BuildCancellationToken sets cancellationToken for Build.
-type buildCancellationTokenOption struct{ value *CancellationToken }
+// BuildCancellationToken sets CancellationToken for Build.
+type buildCancellationToken struct{ value *CancellationToken }
 
-func (option buildCancellationTokenOption) apply(options *BuildOptions) {
+func (option buildCancellationToken) apply(options *BuildOptions) {
 	options.CancellationToken = option.value
 }
 
 func BuildCancellationToken(value *CancellationToken) BuildOption {
-	return buildCancellationTokenOption{value: value}
+	return buildCancellationToken{value: value}
 }
 
 func (o *BuildOptions) ToMap() map[string]any {
@@ -55767,26 +56139,32 @@ type PromptConfirmationOption interface {
 	apply(*PromptConfirmationOptions)
 }
 
-// PromptConfirmationOptionsValue sets options for PromptConfirmation.
-type promptConfirmationOptionsValueOption struct{ value *InteractionMessageBoxOptions }
+func (option *PromptConfirmationOptions) apply(options *PromptConfirmationOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option promptConfirmationOptionsValueOption) apply(options *PromptConfirmationOptions) {
+// PromptConfirmationOptionsValue sets Options for PromptConfirmation.
+type promptConfirmationOptionsValue struct{ value *InteractionMessageBoxOptions }
+
+func (option promptConfirmationOptionsValue) apply(options *PromptConfirmationOptions) {
 	options.Options = option.value
 }
 
 func PromptConfirmationOptionsValue(value *InteractionMessageBoxOptions) PromptConfirmationOption {
-	return promptConfirmationOptionsValueOption{value: value}
+	return promptConfirmationOptionsValue{value: value}
 }
 
-// PromptConfirmationCancellationToken sets cancellationToken for PromptConfirmation.
-type promptConfirmationCancellationTokenOption struct{ value *CancellationToken }
+// PromptConfirmationCancellationToken sets CancellationToken for PromptConfirmation.
+type promptConfirmationCancellationToken struct{ value *CancellationToken }
 
-func (option promptConfirmationCancellationTokenOption) apply(options *PromptConfirmationOptions) {
+func (option promptConfirmationCancellationToken) apply(options *PromptConfirmationOptions) {
 	options.CancellationToken = option.value
 }
 
 func PromptConfirmationCancellationToken(value *CancellationToken) PromptConfirmationOption {
-	return promptConfirmationCancellationTokenOption{value: value}
+	return promptConfirmationCancellationToken{value: value}
 }
 
 func (o *PromptConfirmationOptions) ToMap() map[string]any {
@@ -55811,26 +56189,32 @@ type PromptMessageBoxOption interface {
 	apply(*PromptMessageBoxOptions)
 }
 
-// PromptMessageBoxOptionsValue sets options for PromptMessageBox.
-type promptMessageBoxOptionsValueOption struct{ value *InteractionMessageBoxOptions }
+func (option *PromptMessageBoxOptions) apply(options *PromptMessageBoxOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option promptMessageBoxOptionsValueOption) apply(options *PromptMessageBoxOptions) {
+// PromptMessageBoxOptionsValue sets Options for PromptMessageBox.
+type promptMessageBoxOptionsValue struct{ value *InteractionMessageBoxOptions }
+
+func (option promptMessageBoxOptionsValue) apply(options *PromptMessageBoxOptions) {
 	options.Options = option.value
 }
 
 func PromptMessageBoxOptionsValue(value *InteractionMessageBoxOptions) PromptMessageBoxOption {
-	return promptMessageBoxOptionsValueOption{value: value}
+	return promptMessageBoxOptionsValue{value: value}
 }
 
-// PromptMessageBoxCancellationToken sets cancellationToken for PromptMessageBox.
-type promptMessageBoxCancellationTokenOption struct{ value *CancellationToken }
+// PromptMessageBoxCancellationToken sets CancellationToken for PromptMessageBox.
+type promptMessageBoxCancellationToken struct{ value *CancellationToken }
 
-func (option promptMessageBoxCancellationTokenOption) apply(options *PromptMessageBoxOptions) {
+func (option promptMessageBoxCancellationToken) apply(options *PromptMessageBoxOptions) {
 	options.CancellationToken = option.value
 }
 
 func PromptMessageBoxCancellationToken(value *CancellationToken) PromptMessageBoxOption {
-	return promptMessageBoxCancellationTokenOption{value: value}
+	return promptMessageBoxCancellationToken{value: value}
 }
 
 func (o *PromptMessageBoxOptions) ToMap() map[string]any {
@@ -55855,28 +56239,34 @@ type PromptNotificationOption interface {
 	apply(*PromptNotificationOptions)
 }
 
-// PromptNotificationOptionsValue sets options for PromptNotification.
-type promptNotificationOptionsValueOption struct {
+func (option *PromptNotificationOptions) apply(options *PromptNotificationOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PromptNotificationOptionsValue sets Options for PromptNotification.
+type promptNotificationOptionsValue struct {
 	value *InteractionNotificationOptions
 }
 
-func (option promptNotificationOptionsValueOption) apply(options *PromptNotificationOptions) {
+func (option promptNotificationOptionsValue) apply(options *PromptNotificationOptions) {
 	options.Options = option.value
 }
 
 func PromptNotificationOptionsValue(value *InteractionNotificationOptions) PromptNotificationOption {
-	return promptNotificationOptionsValueOption{value: value}
+	return promptNotificationOptionsValue{value: value}
 }
 
-// PromptNotificationCancellationToken sets cancellationToken for PromptNotification.
-type promptNotificationCancellationTokenOption struct{ value *CancellationToken }
+// PromptNotificationCancellationToken sets CancellationToken for PromptNotification.
+type promptNotificationCancellationToken struct{ value *CancellationToken }
 
-func (option promptNotificationCancellationTokenOption) apply(options *PromptNotificationOptions) {
+func (option promptNotificationCancellationToken) apply(options *PromptNotificationOptions) {
 	options.CancellationToken = option.value
 }
 
 func PromptNotificationCancellationToken(value *CancellationToken) PromptNotificationOption {
-	return promptNotificationCancellationTokenOption{value: value}
+	return promptNotificationCancellationToken{value: value}
 }
 
 func (o *PromptNotificationOptions) ToMap() map[string]any {
@@ -55901,26 +56291,32 @@ type PromptProgressOption interface {
 	apply(*PromptProgressOptions)
 }
 
-// PromptProgressOptionsValue sets options for PromptProgress.
-type promptProgressOptionsValueOption struct{ value *InteractionProgressOptions }
+func (option *PromptProgressOptions) apply(options *PromptProgressOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option promptProgressOptionsValueOption) apply(options *PromptProgressOptions) {
+// PromptProgressOptionsValue sets Options for PromptProgress.
+type promptProgressOptionsValue struct{ value *InteractionProgressOptions }
+
+func (option promptProgressOptionsValue) apply(options *PromptProgressOptions) {
 	options.Options = option.value
 }
 
 func PromptProgressOptionsValue(value *InteractionProgressOptions) PromptProgressOption {
-	return promptProgressOptionsValueOption{value: value}
+	return promptProgressOptionsValue{value: value}
 }
 
-// PromptProgressCancellationToken sets cancellationToken for PromptProgress.
-type promptProgressCancellationTokenOption struct{ value *CancellationToken }
+// PromptProgressCancellationToken sets CancellationToken for PromptProgress.
+type promptProgressCancellationToken struct{ value *CancellationToken }
 
-func (option promptProgressCancellationTokenOption) apply(options *PromptProgressOptions) {
+func (option promptProgressCancellationToken) apply(options *PromptProgressOptions) {
 	options.CancellationToken = option.value
 }
 
 func PromptProgressCancellationToken(value *CancellationToken) PromptProgressOption {
-	return promptProgressCancellationTokenOption{value: value}
+	return promptProgressCancellationToken{value: value}
 }
 
 func (o *PromptProgressOptions) ToMap() map[string]any {
@@ -55945,28 +56341,34 @@ type PromptInputOption interface {
 	apply(*PromptInputOptions)
 }
 
-// PromptInputOptionsValue sets options for PromptInput.
-type promptInputOptionsValueOption struct {
+func (option *PromptInputOptions) apply(options *PromptInputOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PromptInputOptionsValue sets Options for PromptInput.
+type promptInputOptionsValue struct {
 	value *InteractionInputsDialogOptions
 }
 
-func (option promptInputOptionsValueOption) apply(options *PromptInputOptions) {
+func (option promptInputOptionsValue) apply(options *PromptInputOptions) {
 	options.Options = option.value
 }
 
 func PromptInputOptionsValue(value *InteractionInputsDialogOptions) PromptInputOption {
-	return promptInputOptionsValueOption{value: value}
+	return promptInputOptionsValue{value: value}
 }
 
-// PromptInputCancellationToken sets cancellationToken for PromptInput.
-type promptInputCancellationTokenOption struct{ value *CancellationToken }
+// PromptInputCancellationToken sets CancellationToken for PromptInput.
+type promptInputCancellationToken struct{ value *CancellationToken }
 
-func (option promptInputCancellationTokenOption) apply(options *PromptInputOptions) {
+func (option promptInputCancellationToken) apply(options *PromptInputOptions) {
 	options.CancellationToken = option.value
 }
 
 func PromptInputCancellationToken(value *CancellationToken) PromptInputOption {
-	return promptInputCancellationTokenOption{value: value}
+	return promptInputCancellationToken{value: value}
 }
 
 func (o *PromptInputOptions) ToMap() map[string]any {
@@ -55991,28 +56393,34 @@ type PromptInputsOption interface {
 	apply(*PromptInputsOptions)
 }
 
-// PromptInputsOptionsValue sets options for PromptInputs.
-type promptInputsOptionsValueOption struct {
+func (option *PromptInputsOptions) apply(options *PromptInputsOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PromptInputsOptionsValue sets Options for PromptInputs.
+type promptInputsOptionsValue struct {
 	value *InteractionInputsDialogOptions
 }
 
-func (option promptInputsOptionsValueOption) apply(options *PromptInputsOptions) {
+func (option promptInputsOptionsValue) apply(options *PromptInputsOptions) {
 	options.Options = option.value
 }
 
 func PromptInputsOptionsValue(value *InteractionInputsDialogOptions) PromptInputsOption {
-	return promptInputsOptionsValueOption{value: value}
+	return promptInputsOptionsValue{value: value}
 }
 
-// PromptInputsCancellationToken sets cancellationToken for PromptInputs.
-type promptInputsCancellationTokenOption struct{ value *CancellationToken }
+// PromptInputsCancellationToken sets CancellationToken for PromptInputs.
+type promptInputsCancellationToken struct{ value *CancellationToken }
 
-func (option promptInputsCancellationTokenOption) apply(options *PromptInputsOptions) {
+func (option promptInputsCancellationToken) apply(options *PromptInputsOptions) {
 	options.CancellationToken = option.value
 }
 
 func PromptInputsCancellationToken(value *CancellationToken) PromptInputsOption {
-	return promptInputsCancellationTokenOption{value: value}
+	return promptInputsCancellationToken{value: value}
 }
 
 func (o *PromptInputsOptions) ToMap() map[string]any {
@@ -56036,17 +56444,23 @@ type CreateTextInputOption interface {
 	apply(*CreateTextInputOptions)
 }
 
-// CreateTextInputOptionsValue sets options for CreateTextInput.
-type createTextInputOptionsValueOption struct {
+func (option *CreateTextInputOptions) apply(options *CreateTextInputOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateTextInputOptionsValue sets Options for CreateTextInput.
+type createTextInputOptionsValue struct {
 	value *CreateInteractionInputOptions
 }
 
-func (option createTextInputOptionsValueOption) apply(options *CreateTextInputOptions) {
+func (option createTextInputOptionsValue) apply(options *CreateTextInputOptions) {
 	options.Options = option.value
 }
 
 func CreateTextInputOptionsValue(value *CreateInteractionInputOptions) CreateTextInputOption {
-	return createTextInputOptionsValueOption{value: value}
+	return createTextInputOptionsValue{value: value}
 }
 
 func (o *CreateTextInputOptions) ToMap() map[string]any {
@@ -56070,17 +56484,23 @@ type CreateSecretInputOption interface {
 	apply(*CreateSecretInputOptions)
 }
 
-// CreateSecretInputOptionsValue sets options for CreateSecretInput.
-type createSecretInputOptionsValueOption struct {
+func (option *CreateSecretInputOptions) apply(options *CreateSecretInputOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateSecretInputOptionsValue sets Options for CreateSecretInput.
+type createSecretInputOptionsValue struct {
 	value *CreateInteractionInputOptions
 }
 
-func (option createSecretInputOptionsValueOption) apply(options *CreateSecretInputOptions) {
+func (option createSecretInputOptionsValue) apply(options *CreateSecretInputOptions) {
 	options.Options = option.value
 }
 
 func CreateSecretInputOptionsValue(value *CreateInteractionInputOptions) CreateSecretInputOption {
-	return createSecretInputOptionsValueOption{value: value}
+	return createSecretInputOptionsValue{value: value}
 }
 
 func (o *CreateSecretInputOptions) ToMap() map[string]any {
@@ -56104,17 +56524,23 @@ type CreateBooleanInputOption interface {
 	apply(*CreateBooleanInputOptions)
 }
 
-// CreateBooleanInputOptionsValue sets options for CreateBooleanInput.
-type createBooleanInputOptionsValueOption struct {
+func (option *CreateBooleanInputOptions) apply(options *CreateBooleanInputOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateBooleanInputOptionsValue sets Options for CreateBooleanInput.
+type createBooleanInputOptionsValue struct {
 	value *CreateInteractionInputOptions
 }
 
-func (option createBooleanInputOptionsValueOption) apply(options *CreateBooleanInputOptions) {
+func (option createBooleanInputOptionsValue) apply(options *CreateBooleanInputOptions) {
 	options.Options = option.value
 }
 
 func CreateBooleanInputOptionsValue(value *CreateInteractionInputOptions) CreateBooleanInputOption {
-	return createBooleanInputOptionsValueOption{value: value}
+	return createBooleanInputOptionsValue{value: value}
 }
 
 func (o *CreateBooleanInputOptions) ToMap() map[string]any {
@@ -56138,17 +56564,23 @@ type CreateNumberInputOption interface {
 	apply(*CreateNumberInputOptions)
 }
 
-// CreateNumberInputOptionsValue sets options for CreateNumberInput.
-type createNumberInputOptionsValueOption struct {
+func (option *CreateNumberInputOptions) apply(options *CreateNumberInputOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateNumberInputOptionsValue sets Options for CreateNumberInput.
+type createNumberInputOptionsValue struct {
 	value *CreateInteractionInputOptions
 }
 
-func (option createNumberInputOptionsValueOption) apply(options *CreateNumberInputOptions) {
+func (option createNumberInputOptionsValue) apply(options *CreateNumberInputOptions) {
 	options.Options = option.value
 }
 
 func CreateNumberInputOptionsValue(value *CreateInteractionInputOptions) CreateNumberInputOption {
-	return createNumberInputOptionsValueOption{value: value}
+	return createNumberInputOptionsValue{value: value}
 }
 
 func (o *CreateNumberInputOptions) ToMap() map[string]any {
@@ -56172,17 +56604,23 @@ type CreateFileInputOption interface {
 	apply(*CreateFileInputOptions)
 }
 
-// CreateFileInputOptionsValue sets options for CreateFileInput.
-type createFileInputOptionsValueOption struct {
+func (option *CreateFileInputOptions) apply(options *CreateFileInputOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateFileInputOptionsValue sets Options for CreateFileInput.
+type createFileInputOptionsValue struct {
 	value *CreateInteractionInputOptions
 }
 
-func (option createFileInputOptionsValueOption) apply(options *CreateFileInputOptions) {
+func (option createFileInputOptionsValue) apply(options *CreateFileInputOptions) {
 	options.Options = option.value
 }
 
 func CreateFileInputOptionsValue(value *CreateInteractionInputOptions) CreateFileInputOption {
-	return createFileInputOptionsValueOption{value: value}
+	return createFileInputOptionsValue{value: value}
 }
 
 func (o *CreateFileInputOptions) ToMap() map[string]any {
@@ -56210,24 +56648,30 @@ type CreateChoiceInputOption interface {
 	apply(*CreateChoiceInputOptions)
 }
 
-// CreateChoiceInputChoices sets choices for CreateChoiceInput.
+func (option *CreateChoiceInputOptions) apply(options *CreateChoiceInputOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateChoiceInputChoices sets Choices for CreateChoiceInput.
 type CreateChoiceInputChoices []*InteractionChoiceOption
 
 func (value CreateChoiceInputChoices) apply(options *CreateChoiceInputOptions) {
-	options.Choices = value
+	options.Choices = ([]*InteractionChoiceOption)(value)
 }
 
-// CreateChoiceInputOptionsValue sets options for CreateChoiceInput.
-type createChoiceInputOptionsValueOption struct {
+// CreateChoiceInputOptionsValue sets Options for CreateChoiceInput.
+type createChoiceInputOptionsValue struct {
 	value *CreateInteractionInputOptions
 }
 
-func (option createChoiceInputOptionsValueOption) apply(options *CreateChoiceInputOptions) {
+func (option createChoiceInputOptionsValue) apply(options *CreateChoiceInputOptions) {
 	options.Options = option.value
 }
 
 func CreateChoiceInputOptionsValue(value *CreateInteractionInputOptions) CreateChoiceInputOption {
-	return createChoiceInputOptionsValueOption{value: value}
+	return createChoiceInputOptionsValue{value: value}
 }
 
 func (o *CreateChoiceInputOptions) ToMap() map[string]any {
@@ -56255,15 +56699,21 @@ type WithDynamicLoadingOption interface {
 	apply(*WithDynamicLoadingOptions)
 }
 
-// DynamicLoadingOptionsValue sets options for WithDynamicLoading.
-type dynamicLoadingOptionsValueOption struct{ value *DynamicLoadingOptions }
+func (option *WithDynamicLoadingOptions) apply(options *WithDynamicLoadingOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option dynamicLoadingOptionsValueOption) apply(options *WithDynamicLoadingOptions) {
+// DynamicLoadingOptions2 sets Options for WithDynamicLoading.
+type dynamicLoadingOptions2 struct{ value *DynamicLoadingOptions }
+
+func (option dynamicLoadingOptions2) apply(options *WithDynamicLoadingOptions) {
 	options.Options = option.value
 }
 
-func DynamicLoadingOptionsValue(value *DynamicLoadingOptions) WithDynamicLoadingOption {
-	return dynamicLoadingOptionsValueOption{value: value}
+func DynamicLoadingOptions2(value *DynamicLoadingOptions) WithDynamicLoadingOption {
+	return dynamicLoadingOptions2{value: value}
 }
 
 func (o *WithDynamicLoadingOptions) ToMap() map[string]any {
@@ -56287,7 +56737,13 @@ type WaitForResourceStateOption interface {
 	apply(*WaitForResourceStateOptions)
 }
 
-// WaitForResourceStateTargetState sets targetState for WaitForResourceState.
+func (option *WaitForResourceStateOptions) apply(options *WaitForResourceStateOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// WaitForResourceStateTargetState sets TargetState for WaitForResourceState.
 type WaitForResourceStateTargetState string
 
 func (value WaitForResourceStateTargetState) apply(options *WaitForResourceStateOptions) {
@@ -56316,14 +56772,20 @@ type PublishResourceUpdateOption interface {
 	apply(*PublishResourceUpdateOptions)
 }
 
-// PublishResourceUpdateState sets state for PublishResourceUpdate.
+func (option *PublishResourceUpdateOptions) apply(options *PublishResourceUpdateOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PublishResourceUpdateState sets State for PublishResourceUpdate.
 type PublishResourceUpdateState string
 
 func (value PublishResourceUpdateState) apply(options *PublishResourceUpdateOptions) {
 	options.State = (*string)(&value)
 }
 
-// PublishResourceUpdateStateStyle sets stateStyle for PublishResourceUpdate.
+// PublishResourceUpdateStateStyle sets StateStyle for PublishResourceUpdate.
 type PublishResourceUpdateStateStyle string
 
 func (value PublishResourceUpdateStateStyle) apply(options *PublishResourceUpdateOptions) {
@@ -56357,18 +56819,24 @@ type AddStepOption interface {
 	apply(*AddStepOptions)
 }
 
-// AddStepDependsOn sets dependsOn for AddStep.
+func (option *AddStepOptions) apply(options *AddStepOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddStepDependsOn sets DependsOn for AddStep.
 type AddStepDependsOn []string
 
 func (value AddStepDependsOn) apply(options *AddStepOptions) {
-	options.DependsOn = value
+	options.DependsOn = ([]string)(value)
 }
 
-// AddStepRequiredBy sets requiredBy for AddStep.
+// AddStepRequiredBy sets RequiredBy for AddStep.
 type AddStepRequiredBy []string
 
 func (value AddStepRequiredBy) apply(options *AddStepOptions) {
-	options.RequiredBy = value
+	options.RequiredBy = ([]string)(value)
 }
 
 func (o *AddStepOptions) ToMap() map[string]any {
@@ -56395,15 +56863,21 @@ type CreateTaskOption interface {
 	apply(*CreateTaskOptions)
 }
 
-// CreateTaskCancellationToken sets cancellationToken for CreateTask.
-type createTaskCancellationTokenOption struct{ value *CancellationToken }
+func (option *CreateTaskOptions) apply(options *CreateTaskOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option createTaskCancellationTokenOption) apply(options *CreateTaskOptions) {
+// CreateTaskCancellationToken sets CancellationToken for CreateTask.
+type createTaskCancellationToken struct{ value *CancellationToken }
+
+func (option createTaskCancellationToken) apply(options *CreateTaskOptions) {
 	options.CancellationToken = option.value
 }
 
 func CreateTaskCancellationToken(value *CancellationToken) CreateTaskOption {
-	return createTaskCancellationTokenOption{value: value}
+	return createTaskCancellationToken{value: value}
 }
 
 func (o *CreateTaskOptions) ToMap() map[string]any {
@@ -56424,15 +56898,21 @@ type CreateMarkdownTaskOption interface {
 	apply(*CreateMarkdownTaskOptions)
 }
 
-// CreateMarkdownTaskCancellationToken sets cancellationToken for CreateMarkdownTask.
-type createMarkdownTaskCancellationTokenOption struct{ value *CancellationToken }
+func (option *CreateMarkdownTaskOptions) apply(options *CreateMarkdownTaskOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option createMarkdownTaskCancellationTokenOption) apply(options *CreateMarkdownTaskOptions) {
+// CreateMarkdownTaskCancellationToken sets CancellationToken for CreateMarkdownTask.
+type createMarkdownTaskCancellationToken struct{ value *CancellationToken }
+
+func (option createMarkdownTaskCancellationToken) apply(options *CreateMarkdownTaskOptions) {
 	options.CancellationToken = option.value
 }
 
 func CreateMarkdownTaskCancellationToken(value *CancellationToken) CreateMarkdownTaskOption {
-	return createMarkdownTaskCancellationTokenOption{value: value}
+	return createMarkdownTaskCancellationToken{value: value}
 }
 
 func (o *CreateMarkdownTaskOptions) ToMap() map[string]any {
@@ -56454,22 +56934,28 @@ type CompleteStepOption interface {
 	apply(*CompleteStepOptions)
 }
 
-// CompleteStepCompletionState sets completionState for CompleteStep.
+func (option *CompleteStepOptions) apply(options *CompleteStepOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CompleteStepCompletionState sets CompletionState for CompleteStep.
 type CompleteStepCompletionState string
 
 func (value CompleteStepCompletionState) apply(options *CompleteStepOptions) {
 	options.CompletionState = (*string)(&value)
 }
 
-// CompleteStepCancellationToken sets cancellationToken for CompleteStep.
-type completeStepCancellationTokenOption struct{ value *CancellationToken }
+// CompleteStepCancellationToken sets CancellationToken for CompleteStep.
+type completeStepCancellationToken struct{ value *CancellationToken }
 
-func (option completeStepCancellationTokenOption) apply(options *CompleteStepOptions) {
+func (option completeStepCancellationToken) apply(options *CompleteStepOptions) {
 	options.CancellationToken = option.value
 }
 
 func CompleteStepCancellationToken(value *CancellationToken) CompleteStepOption {
-	return completeStepCancellationTokenOption{value: value}
+	return completeStepCancellationToken{value: value}
 }
 
 func (o *CompleteStepOptions) ToMap() map[string]any {
@@ -56494,22 +56980,28 @@ type CompleteStepMarkdownOption interface {
 	apply(*CompleteStepMarkdownOptions)
 }
 
-// CompleteStepMarkdownCompletionState sets completionState for CompleteStepMarkdown.
+func (option *CompleteStepMarkdownOptions) apply(options *CompleteStepMarkdownOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CompleteStepMarkdownCompletionState sets CompletionState for CompleteStepMarkdown.
 type CompleteStepMarkdownCompletionState string
 
 func (value CompleteStepMarkdownCompletionState) apply(options *CompleteStepMarkdownOptions) {
 	options.CompletionState = (*string)(&value)
 }
 
-// CompleteStepMarkdownCancellationToken sets cancellationToken for CompleteStepMarkdown.
-type completeStepMarkdownCancellationTokenOption struct{ value *CancellationToken }
+// CompleteStepMarkdownCancellationToken sets CancellationToken for CompleteStepMarkdown.
+type completeStepMarkdownCancellationToken struct{ value *CancellationToken }
 
-func (option completeStepMarkdownCancellationTokenOption) apply(options *CompleteStepMarkdownOptions) {
+func (option completeStepMarkdownCancellationToken) apply(options *CompleteStepMarkdownOptions) {
 	options.CancellationToken = option.value
 }
 
 func CompleteStepMarkdownCancellationToken(value *CancellationToken) CompleteStepMarkdownOption {
-	return completeStepMarkdownCancellationTokenOption{value: value}
+	return completeStepMarkdownCancellationToken{value: value}
 }
 
 func (o *CompleteStepMarkdownOptions) ToMap() map[string]any {
@@ -56533,15 +57025,21 @@ type UpdateTaskOption interface {
 	apply(*UpdateTaskOptions)
 }
 
-// UpdateTaskCancellationToken sets cancellationToken for UpdateTask.
-type updateTaskCancellationTokenOption struct{ value *CancellationToken }
+func (option *UpdateTaskOptions) apply(options *UpdateTaskOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option updateTaskCancellationTokenOption) apply(options *UpdateTaskOptions) {
+// UpdateTaskCancellationToken sets CancellationToken for UpdateTask.
+type updateTaskCancellationToken struct{ value *CancellationToken }
+
+func (option updateTaskCancellationToken) apply(options *UpdateTaskOptions) {
 	options.CancellationToken = option.value
 }
 
 func UpdateTaskCancellationToken(value *CancellationToken) UpdateTaskOption {
-	return updateTaskCancellationTokenOption{value: value}
+	return updateTaskCancellationToken{value: value}
 }
 
 func (o *UpdateTaskOptions) ToMap() map[string]any {
@@ -56562,15 +57060,21 @@ type UpdateTaskMarkdownOption interface {
 	apply(*UpdateTaskMarkdownOptions)
 }
 
-// UpdateTaskMarkdownCancellationToken sets cancellationToken for UpdateTaskMarkdown.
-type updateTaskMarkdownCancellationTokenOption struct{ value *CancellationToken }
+func (option *UpdateTaskMarkdownOptions) apply(options *UpdateTaskMarkdownOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option updateTaskMarkdownCancellationTokenOption) apply(options *UpdateTaskMarkdownOptions) {
+// UpdateTaskMarkdownCancellationToken sets CancellationToken for UpdateTaskMarkdown.
+type updateTaskMarkdownCancellationToken struct{ value *CancellationToken }
+
+func (option updateTaskMarkdownCancellationToken) apply(options *UpdateTaskMarkdownOptions) {
 	options.CancellationToken = option.value
 }
 
 func UpdateTaskMarkdownCancellationToken(value *CancellationToken) UpdateTaskMarkdownOption {
-	return updateTaskMarkdownCancellationTokenOption{value: value}
+	return updateTaskMarkdownCancellationToken{value: value}
 }
 
 func (o *UpdateTaskMarkdownOptions) ToMap() map[string]any {
@@ -56593,29 +57097,35 @@ type CompleteTaskOption interface {
 	apply(*CompleteTaskOptions)
 }
 
-// CompleteTaskCompletionMessage sets completionMessage for CompleteTask.
+func (option *CompleteTaskOptions) apply(options *CompleteTaskOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CompleteTaskCompletionMessage sets CompletionMessage for CompleteTask.
 type CompleteTaskCompletionMessage string
 
 func (value CompleteTaskCompletionMessage) apply(options *CompleteTaskOptions) {
 	options.CompletionMessage = (*string)(&value)
 }
 
-// CompleteTaskCompletionState sets completionState for CompleteTask.
+// CompleteTaskCompletionState sets CompletionState for CompleteTask.
 type CompleteTaskCompletionState string
 
 func (value CompleteTaskCompletionState) apply(options *CompleteTaskOptions) {
 	options.CompletionState = (*string)(&value)
 }
 
-// CompleteTaskCancellationToken sets cancellationToken for CompleteTask.
-type completeTaskCancellationTokenOption struct{ value *CancellationToken }
+// CompleteTaskCancellationToken sets CancellationToken for CompleteTask.
+type completeTaskCancellationToken struct{ value *CancellationToken }
 
-func (option completeTaskCancellationTokenOption) apply(options *CompleteTaskOptions) {
+func (option completeTaskCancellationToken) apply(options *CompleteTaskOptions) {
 	options.CancellationToken = option.value
 }
 
 func CompleteTaskCancellationToken(value *CancellationToken) CompleteTaskOption {
-	return completeTaskCancellationTokenOption{value: value}
+	return completeTaskCancellationToken{value: value}
 }
 
 func (o *CompleteTaskOptions) ToMap() map[string]any {
@@ -56643,22 +57153,28 @@ type CompleteTaskMarkdownOption interface {
 	apply(*CompleteTaskMarkdownOptions)
 }
 
-// CompleteTaskMarkdownCompletionState sets completionState for CompleteTaskMarkdown.
+func (option *CompleteTaskMarkdownOptions) apply(options *CompleteTaskMarkdownOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CompleteTaskMarkdownCompletionState sets CompletionState for CompleteTaskMarkdown.
 type CompleteTaskMarkdownCompletionState string
 
 func (value CompleteTaskMarkdownCompletionState) apply(options *CompleteTaskMarkdownOptions) {
 	options.CompletionState = (*string)(&value)
 }
 
-// CompleteTaskMarkdownCancellationToken sets cancellationToken for CompleteTaskMarkdown.
-type completeTaskMarkdownCancellationTokenOption struct{ value *CancellationToken }
+// CompleteTaskMarkdownCancellationToken sets CancellationToken for CompleteTaskMarkdown.
+type completeTaskMarkdownCancellationToken struct{ value *CancellationToken }
 
-func (option completeTaskMarkdownCancellationTokenOption) apply(options *CompleteTaskMarkdownOptions) {
+func (option completeTaskMarkdownCancellationToken) apply(options *CompleteTaskMarkdownOptions) {
 	options.CancellationToken = option.value
 }
 
 func CompleteTaskMarkdownCancellationToken(value *CancellationToken) CompleteTaskMarkdownOption {
-	return completeTaskMarkdownCancellationTokenOption{value: value}
+	return completeTaskMarkdownCancellationToken{value: value}
 }
 
 func (o *CompleteTaskMarkdownOptions) ToMap() map[string]any {
@@ -56686,22 +57202,28 @@ type ExecuteCommandAsyncOption interface {
 	apply(*ExecuteCommandAsyncOptions)
 }
 
-// ExecuteCommandAsyncArguments sets arguments for ExecuteCommandAsync.
+func (option *ExecuteCommandAsyncOptions) apply(options *ExecuteCommandAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// ExecuteCommandAsyncArguments sets Arguments for ExecuteCommandAsync.
 type ExecuteCommandAsyncArguments map[string]string
 
 func (value ExecuteCommandAsyncArguments) apply(options *ExecuteCommandAsyncOptions) {
-	options.Arguments = value
+	options.Arguments = (map[string]string)(value)
 }
 
-// ExecuteCommandAsyncCancellationToken sets cancellationToken for ExecuteCommandAsync.
-type executeCommandAsyncCancellationTokenOption struct{ value *CancellationToken }
+// ExecuteCommandAsyncCancellationToken sets CancellationToken for ExecuteCommandAsync.
+type executeCommandAsyncCancellationToken struct{ value *CancellationToken }
 
-func (option executeCommandAsyncCancellationTokenOption) apply(options *ExecuteCommandAsyncOptions) {
+func (option executeCommandAsyncCancellationToken) apply(options *ExecuteCommandAsyncOptions) {
 	options.CancellationToken = option.value
 }
 
 func ExecuteCommandAsyncCancellationToken(value *CancellationToken) ExecuteCommandAsyncOption {
-	return executeCommandAsyncCancellationTokenOption{value: value}
+	return executeCommandAsyncCancellationToken{value: value}
 }
 
 func (o *ExecuteCommandAsyncOptions) ToMap() map[string]any {
@@ -56726,15 +57248,21 @@ type SaveStateJsonOption interface {
 	apply(*SaveStateJsonOptions)
 }
 
-// SaveStateJsonCancellationToken sets cancellationToken for SaveStateJson.
-type saveStateJsonCancellationTokenOption struct{ value *CancellationToken }
+func (option *SaveStateJsonOptions) apply(options *SaveStateJsonOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option saveStateJsonCancellationTokenOption) apply(options *SaveStateJsonOptions) {
+// SaveStateJsonCancellationToken sets CancellationToken for SaveStateJson.
+type saveStateJsonCancellationToken struct{ value *CancellationToken }
+
+func (option saveStateJsonCancellationToken) apply(options *SaveStateJsonOptions) {
 	options.CancellationToken = option.value
 }
 
 func SaveStateJsonCancellationToken(value *CancellationToken) SaveStateJsonOption {
-	return saveStateJsonCancellationTokenOption{value: value}
+	return saveStateJsonCancellationToken{value: value}
 }
 
 func (o *SaveStateJsonOptions) ToMap() map[string]any {
@@ -56769,42 +57297,48 @@ type CreateFileOption interface {
 	apply(*CreateFileOptions)
 }
 
-// CreateFileContents sets contents for CreateFile.
+func (option *CreateFileOptions) apply(options *CreateFileOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateFileContents sets Contents for CreateFile.
 type CreateFileContents string
 
 func (value CreateFileContents) apply(options *CreateFileOptions) {
 	options.Contents = (*string)(&value)
 }
 
-// CreateFileSourcePath sets sourcePath for CreateFile.
+// CreateFileSourcePath sets SourcePath for CreateFile.
 type CreateFileSourcePath string
 
 func (value CreateFileSourcePath) apply(options *CreateFileOptions) {
 	options.SourcePath = (*string)(&value)
 }
 
-// CreateFileOwner sets owner for CreateFile.
+// CreateFileOwner sets Owner for CreateFile.
 type CreateFileOwner int
 
 func (value CreateFileOwner) apply(options *CreateFileOptions) {
 	options.Owner = (*int)(&value)
 }
 
-// CreateFileGroup sets group for CreateFile.
+// CreateFileGroup sets Group for CreateFile.
 type CreateFileGroup int
 
 func (value CreateFileGroup) apply(options *CreateFileOptions) {
 	options.Group = (*int)(&value)
 }
 
-// CreateFileMode sets mode for CreateFile.
+// CreateFileMode sets Mode for CreateFile.
 type CreateFileMode int
 
 func (value CreateFileMode) apply(options *CreateFileOptions) {
 	options.Mode = (*int)(&value)
 }
 
-// CreateFileContinueOnError sets continueOnError for CreateFile.
+// CreateFileContinueOnError sets ContinueOnError for CreateFile.
 type CreateFileContinueOnError bool
 
 func (value CreateFileContinueOnError) apply(options *CreateFileOptions) {
@@ -56861,42 +57395,48 @@ type CreateCertificateFileOption interface {
 	apply(*CreateCertificateFileOptions)
 }
 
-// CreateCertificateFileContents sets contents for CreateCertificateFile.
+func (option *CreateCertificateFileOptions) apply(options *CreateCertificateFileOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateCertificateFileContents sets Contents for CreateCertificateFile.
 type CreateCertificateFileContents string
 
 func (value CreateCertificateFileContents) apply(options *CreateCertificateFileOptions) {
 	options.Contents = (*string)(&value)
 }
 
-// CreateCertificateFileSourcePath sets sourcePath for CreateCertificateFile.
+// CreateCertificateFileSourcePath sets SourcePath for CreateCertificateFile.
 type CreateCertificateFileSourcePath string
 
 func (value CreateCertificateFileSourcePath) apply(options *CreateCertificateFileOptions) {
 	options.SourcePath = (*string)(&value)
 }
 
-// CreateCertificateFileOwner sets owner for CreateCertificateFile.
+// CreateCertificateFileOwner sets Owner for CreateCertificateFile.
 type CreateCertificateFileOwner int
 
 func (value CreateCertificateFileOwner) apply(options *CreateCertificateFileOptions) {
 	options.Owner = (*int)(&value)
 }
 
-// CreateCertificateFileGroup sets group for CreateCertificateFile.
+// CreateCertificateFileGroup sets Group for CreateCertificateFile.
 type CreateCertificateFileGroup int
 
 func (value CreateCertificateFileGroup) apply(options *CreateCertificateFileOptions) {
 	options.Group = (*int)(&value)
 }
 
-// CreateCertificateFileMode sets mode for CreateCertificateFile.
+// CreateCertificateFileMode sets Mode for CreateCertificateFile.
 type CreateCertificateFileMode int
 
 func (value CreateCertificateFileMode) apply(options *CreateCertificateFileOptions) {
 	options.Mode = (*int)(&value)
 }
 
-// CreateCertificateFileContinueOnError sets continueOnError for CreateCertificateFile.
+// CreateCertificateFileContinueOnError sets ContinueOnError for CreateCertificateFile.
 type CreateCertificateFileContinueOnError bool
 
 func (value CreateCertificateFileContinueOnError) apply(options *CreateCertificateFileOptions) {
@@ -56945,21 +57485,27 @@ type CreateDirectoryOption interface {
 	apply(*CreateDirectoryOptions)
 }
 
-// CreateDirectoryOwner sets owner for CreateDirectory.
+func (option *CreateDirectoryOptions) apply(options *CreateDirectoryOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateDirectoryOwner sets Owner for CreateDirectory.
 type CreateDirectoryOwner int
 
 func (value CreateDirectoryOwner) apply(options *CreateDirectoryOptions) {
 	options.Owner = (*int)(&value)
 }
 
-// CreateDirectoryGroup sets group for CreateDirectory.
+// CreateDirectoryGroup sets Group for CreateDirectory.
 type CreateDirectoryGroup int
 
 func (value CreateDirectoryGroup) apply(options *CreateDirectoryOptions) {
 	options.Group = (*int)(&value)
 }
 
-// CreateDirectoryMode sets mode for CreateDirectory.
+// CreateDirectoryMode sets Mode for CreateDirectory.
 type CreateDirectoryMode int
 
 func (value CreateDirectoryMode) apply(options *CreateDirectoryOptions) {
@@ -56994,15 +57540,21 @@ type GetValueAsyncOption interface {
 	apply(*GetValueAsyncOptions)
 }
 
-// GetValueAsyncCancellationToken sets cancellationToken for GetValueAsync.
-type getValueAsyncCancellationTokenOption struct{ value *CancellationToken }
+func (option *GetValueAsyncOptions) apply(options *GetValueAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option getValueAsyncCancellationTokenOption) apply(options *GetValueAsyncOptions) {
+// GetValueAsyncCancellationToken sets CancellationToken for GetValueAsync.
+type getValueAsyncCancellationToken struct{ value *CancellationToken }
+
+func (option getValueAsyncCancellationToken) apply(options *GetValueAsyncOptions) {
 	options.CancellationToken = option.value
 }
 
 func GetValueAsyncCancellationToken(value *CancellationToken) GetValueAsyncOption {
-	return getValueAsyncCancellationTokenOption{value: value}
+	return getValueAsyncCancellationToken{value: value}
 }
 
 func (o *GetValueAsyncOptions) ToMap() map[string]any {
@@ -57027,22 +57579,28 @@ type SetValueAsyncOption interface {
 	apply(*SetValueAsyncOptions)
 }
 
-// SetValueAsyncValue sets value for SetValueAsync.
+func (option *SetValueAsyncOptions) apply(options *SetValueAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// SetValueAsyncValue sets Value for SetValueAsync.
 type SetValueAsyncValue string
 
 func (value SetValueAsyncValue) apply(options *SetValueAsyncOptions) {
 	options.Value = (*string)(&value)
 }
 
-// SetValueAsyncCancellationToken sets cancellationToken for SetValueAsync.
-type setValueAsyncCancellationTokenOption struct{ value *CancellationToken }
+// SetValueAsyncCancellationToken sets CancellationToken for SetValueAsync.
+type setValueAsyncCancellationToken struct{ value *CancellationToken }
 
-func (option setValueAsyncCancellationTokenOption) apply(options *SetValueAsyncOptions) {
+func (option setValueAsyncCancellationToken) apply(options *SetValueAsyncOptions) {
 	options.CancellationToken = option.value
 }
 
 func SetValueAsyncCancellationToken(value *CancellationToken) SetValueAsyncOption {
-	return setValueAsyncCancellationTokenOption{value: value}
+	return setValueAsyncCancellationToken{value: value}
 }
 
 func (o *SetValueAsyncOptions) ToMap() map[string]any {
@@ -57067,7 +57625,13 @@ type AppendFormattedOption interface {
 	apply(*AppendFormattedOptions)
 }
 
-// AppendFormattedFormat sets format for AppendFormatted.
+func (option *AppendFormattedOptions) apply(options *AppendFormattedOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AppendFormattedFormat sets Format for AppendFormatted.
 type AppendFormattedFormat string
 
 func (value AppendFormattedFormat) apply(options *AppendFormattedOptions) {
@@ -57096,7 +57660,13 @@ type AppendValueProviderOption interface {
 	apply(*AppendValueProviderOptions)
 }
 
-// AppendValueProviderFormat sets format for AppendValueProvider.
+func (option *AppendValueProviderOptions) apply(options *AppendValueProviderOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AppendValueProviderFormat sets Format for AppendValueProvider.
 type AppendValueProviderFormat string
 
 func (value AppendValueProviderFormat) apply(options *AppendValueProviderOptions) {
@@ -57125,7 +57695,13 @@ type AddOption interface {
 	apply(*AddOptions)
 }
 
-// AddDisplayText sets displayText for Add.
+func (option *AddOptions) apply(options *AddOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddDisplayText sets DisplayText for Add.
 type AddDisplayText string
 
 func (value AddDisplayText) apply(options *AddOptions) {
@@ -57154,7 +57730,13 @@ type AddForEndpointOption interface {
 	apply(*AddForEndpointOptions)
 }
 
-// AddForEndpointDisplayText sets displayText for AddForEndpoint.
+func (option *AddForEndpointOptions) apply(options *AddForEndpointOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddForEndpointDisplayText sets DisplayText for AddForEndpoint.
 type AddForEndpointDisplayText string
 
 func (value AddForEndpointDisplayText) apply(options *AddForEndpointOptions) {
@@ -57182,7 +57764,13 @@ type AddTestRedisOption interface {
 	apply(*AddTestRedisOptions)
 }
 
-// AddTestRedisPort sets port for AddTestRedis.
+func (option *AddTestRedisOptions) apply(options *AddTestRedisOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddTestRedisPort sets Port for AddTestRedis.
 type AddTestRedisPort int
 
 func (value AddTestRedisPort) apply(options *AddTestRedisOptions) {
@@ -57210,7 +57798,13 @@ type AddTestChildDatabaseOption interface {
 	apply(*AddTestChildDatabaseOptions)
 }
 
-// AddTestChildDatabaseDatabaseName sets databaseName for AddTestChildDatabase.
+func (option *AddTestChildDatabaseOptions) apply(options *AddTestChildDatabaseOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// AddTestChildDatabaseDatabaseName sets DatabaseName for AddTestChildDatabase.
 type AddTestChildDatabaseDatabaseName string
 
 func (value AddTestChildDatabaseDatabaseName) apply(options *AddTestChildDatabaseOptions) {
@@ -57238,7 +57832,13 @@ type WithPersistenceOption interface {
 	apply(*WithPersistenceOptions)
 }
 
-// PersistenceMode sets mode for WithPersistence.
+func (option *WithPersistenceOptions) apply(options *WithPersistenceOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// PersistenceMode sets Mode for WithPersistence.
 type PersistenceMode TestPersistenceMode
 
 func (value PersistenceMode) apply(options *WithPersistenceOptions) {
@@ -57267,14 +57867,20 @@ type WithOptionalStringOption interface {
 	apply(*WithOptionalStringOptions)
 }
 
-// OptionalStringValue sets value for WithOptionalString.
+func (option *WithOptionalStringOptions) apply(options *WithOptionalStringOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OptionalStringValue sets Value for WithOptionalString.
 type OptionalStringValue string
 
 func (value OptionalStringValue) apply(options *WithOptionalStringOptions) {
 	options.Value = (*string)(&value)
 }
 
-// OptionalStringEnabled sets enabled for WithOptionalString.
+// OptionalStringEnabled sets Enabled for WithOptionalString.
 type OptionalStringEnabled bool
 
 func (value OptionalStringEnabled) apply(options *WithOptionalStringOptions) {
@@ -57305,11 +57911,17 @@ type WithOptionalCallbackOption interface {
 	apply(*WithOptionalCallbackOptions)
 }
 
-// OptionalCallbackCallback sets callback for WithOptionalCallback.
+func (option *WithOptionalCallbackOptions) apply(options *WithOptionalCallbackOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// OptionalCallbackCallback sets Callback for WithOptionalCallback.
 type OptionalCallbackCallback func(arg TestCallbackContext)
 
 func (value OptionalCallbackCallback) apply(options *WithOptionalCallbackOptions) {
-	options.Callback = value
+	options.Callback = (func(arg TestCallbackContext))(value)
 }
 
 func (o *WithOptionalCallbackOptions) ToMap() map[string]any {
@@ -57330,15 +57942,21 @@ type GetStatusAsyncOption interface {
 	apply(*GetStatusAsyncOptions)
 }
 
-// GetStatusAsyncCancellationToken sets cancellationToken for GetStatusAsync.
-type getStatusAsyncCancellationTokenOption struct{ value *CancellationToken }
+func (option *GetStatusAsyncOptions) apply(options *GetStatusAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option getStatusAsyncCancellationTokenOption) apply(options *GetStatusAsyncOptions) {
+// GetStatusAsyncCancellationToken sets CancellationToken for GetStatusAsync.
+type getStatusAsyncCancellationToken struct{ value *CancellationToken }
+
+func (option getStatusAsyncCancellationToken) apply(options *GetStatusAsyncOptions) {
 	options.CancellationToken = option.value
 }
 
 func GetStatusAsyncCancellationToken(value *CancellationToken) GetStatusAsyncOption {
-	return getStatusAsyncCancellationTokenOption{value: value}
+	return getStatusAsyncCancellationToken{value: value}
 }
 
 func (o *GetStatusAsyncOptions) ToMap() map[string]any {
@@ -57359,15 +57977,21 @@ type WaitForReadyAsyncOption interface {
 	apply(*WaitForReadyAsyncOptions)
 }
 
-// WaitForReadyAsyncCancellationToken sets cancellationToken for WaitForReadyAsync.
-type waitForReadyAsyncCancellationTokenOption struct{ value *CancellationToken }
+func (option *WaitForReadyAsyncOptions) apply(options *WaitForReadyAsyncOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
 
-func (option waitForReadyAsyncCancellationTokenOption) apply(options *WaitForReadyAsyncOptions) {
+// WaitForReadyAsyncCancellationToken sets CancellationToken for WaitForReadyAsync.
+type waitForReadyAsyncCancellationToken struct{ value *CancellationToken }
+
+func (option waitForReadyAsyncCancellationToken) apply(options *WaitForReadyAsyncOptions) {
 	options.CancellationToken = option.value
 }
 
 func WaitForReadyAsyncCancellationToken(value *CancellationToken) WaitForReadyAsyncOption {
-	return waitForReadyAsyncCancellationTokenOption{value: value}
+	return waitForReadyAsyncCancellationToken{value: value}
 }
 
 func (o *WaitForReadyAsyncOptions) ToMap() map[string]any {
@@ -57389,14 +58013,20 @@ type WithDataVolumeOption interface {
 	apply(*WithDataVolumeOptions)
 }
 
-// DataVolumeName sets name for WithDataVolume.
+func (option *WithDataVolumeOptions) apply(options *WithDataVolumeOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// DataVolumeName sets Name for WithDataVolume.
 type DataVolumeName string
 
 func (value DataVolumeName) apply(options *WithDataVolumeOptions) {
 	options.Name = (*string)(&value)
 }
 
-// DataVolumeIsReadOnly sets isReadOnly for WithDataVolume.
+// DataVolumeIsReadOnly sets IsReadOnly for WithDataVolume.
 type DataVolumeIsReadOnly bool
 
 func (value DataVolumeIsReadOnly) apply(options *WithDataVolumeOptions) {
@@ -57428,14 +58058,20 @@ type WithMergeLoggingOption interface {
 	apply(*WithMergeLoggingOptions)
 }
 
-// MergeLoggingEnableConsole sets enableConsole for WithMergeLogging.
+func (option *WithMergeLoggingOptions) apply(options *WithMergeLoggingOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// MergeLoggingEnableConsole sets EnableConsole for WithMergeLogging.
 type MergeLoggingEnableConsole bool
 
 func (value MergeLoggingEnableConsole) apply(options *WithMergeLoggingOptions) {
 	options.EnableConsole = (*bool)(&value)
 }
 
-// MergeLoggingMaxFiles sets maxFiles for WithMergeLogging.
+// MergeLoggingMaxFiles sets MaxFiles for WithMergeLogging.
 type MergeLoggingMaxFiles int
 
 func (value MergeLoggingMaxFiles) apply(options *WithMergeLoggingOptions) {
@@ -57467,14 +58103,20 @@ type WithMergeLoggingPathOption interface {
 	apply(*WithMergeLoggingPathOptions)
 }
 
-// MergeLoggingPathEnableConsole sets enableConsole for WithMergeLoggingPath.
+func (option *WithMergeLoggingPathOptions) apply(options *WithMergeLoggingPathOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// MergeLoggingPathEnableConsole sets EnableConsole for WithMergeLoggingPath.
 type MergeLoggingPathEnableConsole bool
 
 func (value MergeLoggingPathEnableConsole) apply(options *WithMergeLoggingPathOptions) {
 	options.EnableConsole = (*bool)(&value)
 }
 
-// MergeLoggingPathMaxFiles sets maxFiles for WithMergeLoggingPath.
+// MergeLoggingPathMaxFiles sets MaxFiles for WithMergeLoggingPath.
 type MergeLoggingPathMaxFiles int
 
 func (value MergeLoggingPathMaxFiles) apply(options *WithMergeLoggingPathOptions) {
@@ -57493,6 +58135,73 @@ func (o *WithMergeLoggingPathOptions) ToMap() map[string]any {
 		m["maxFiles"] = serializeValue(o.MaxFiles)
 	}
 	return m
+}
+
+// CreateBuilderOption configures CreateBuilder.
+type CreateBuilderOption interface {
+	apply(*CreateBuilderOptions)
+}
+
+func (option *CreateBuilderOptions) apply(options *CreateBuilderOptions) {
+	if option != nil {
+		*options = *deepUpdate(options, option)
+	}
+}
+
+// CreateBuilderArgs sets Args for CreateBuilder.
+type CreateBuilderArgs []string
+
+func (value CreateBuilderArgs) apply(options *CreateBuilderOptions) {
+	options.Args = ([]string)(value)
+}
+
+// CreateBuilderProjectDirectory sets ProjectDirectory for CreateBuilder.
+type CreateBuilderProjectDirectory string
+
+func (value CreateBuilderProjectDirectory) apply(options *CreateBuilderOptions) {
+	options.ProjectDirectory = (*string)(&value)
+}
+
+// CreateBuilderAppHostFilePath sets AppHostFilePath for CreateBuilder.
+type CreateBuilderAppHostFilePath string
+
+func (value CreateBuilderAppHostFilePath) apply(options *CreateBuilderOptions) {
+	options.AppHostFilePath = (*string)(&value)
+}
+
+// CreateBuilderContainerRegistryOverride sets ContainerRegistryOverride for CreateBuilder.
+type CreateBuilderContainerRegistryOverride string
+
+func (value CreateBuilderContainerRegistryOverride) apply(options *CreateBuilderOptions) {
+	options.ContainerRegistryOverride = (*string)(&value)
+}
+
+// CreateBuilderDisableDashboard sets DisableDashboard for CreateBuilder.
+type CreateBuilderDisableDashboard bool
+
+func (value CreateBuilderDisableDashboard) apply(options *CreateBuilderOptions) {
+	options.DisableDashboard = (bool)(value)
+}
+
+// CreateBuilderDashboardApplicationName sets DashboardApplicationName for CreateBuilder.
+type CreateBuilderDashboardApplicationName string
+
+func (value CreateBuilderDashboardApplicationName) apply(options *CreateBuilderOptions) {
+	options.DashboardApplicationName = (*string)(&value)
+}
+
+// CreateBuilderAllowUnsecuredTransport sets AllowUnsecuredTransport for CreateBuilder.
+type CreateBuilderAllowUnsecuredTransport bool
+
+func (value CreateBuilderAllowUnsecuredTransport) apply(options *CreateBuilderOptions) {
+	options.AllowUnsecuredTransport = (bool)(value)
+}
+
+// CreateBuilderEnableResourceLogging sets EnableResourceLogging for CreateBuilder.
+type CreateBuilderEnableResourceLogging bool
+
+func (value CreateBuilderEnableResourceLogging) apply(options *CreateBuilderOptions) {
+	options.EnableResourceLogging = (bool)(value)
 }
 
 // ============================================================================
@@ -57891,7 +58600,7 @@ func (b *distributedApplicationBuilder) Build() (DistributedApplication, error) 
 }
 
 // CreateBuilder establishes a connection to the AppHost and returns a new builder.
-func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuilder, error) {
+func CreateBuilder(options ...CreateBuilderOption) (DistributedApplicationBuilder, error) {
 	socketPath := os.Getenv("REMOTE_APP_HOST_SOCKET_PATH")
 	if socketPath == "" {
 		return nil, fmt.Errorf("REMOTE_APP_HOST_SOCKET_PATH environment variable not set. Run this application using `aspire run`")
@@ -57908,7 +58617,7 @@ func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuil
 		merged := &CreateBuilderOptions{}
 		for _, opt := range options {
 			if opt != nil {
-				merged = deepUpdate(merged, opt)
+				opt.apply(merged)
 			}
 		}
 		for k, v := range merged.ToMap() {

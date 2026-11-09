@@ -72,6 +72,10 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     // capabilityId → resolved Options type name (qualified when simple name collides with a DTO or another capability's Options)
     private readonly Dictionary<string, string> _optionsTypeNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _optionInterfaceNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string CapabilityId, string ParameterName), string> _optionValueNames = new();
+    private string? _createBuilderOptionInterfaceName;
+    private readonly Dictionary<string, string> _createBuilderOptionValueNames = new(StringComparer.Ordinal);
 
     // typeId → documentation captured for the handle type
     private readonly Dictionary<string, AtsDocumentationInfo> _handleDocumentation = new(StringComparer.Ordinal);
@@ -182,6 +186,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         GenerateAcceptingInterfaces();
         GenerateConcreteHandleTypes(capabilitiesByConcreteImpl);
         GenerateOptionsStructs(context.Capabilities);
+        GenerateCreateBuilderOptions(context);
         GenerateRegisterWrappers();
         GenerateCreateBuilder(context);
 
@@ -372,6 +377,78 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             _optionsTypeNames[capability.CapabilityId] = resolvedName;
         }
 
+        // Generated option interfaces and values are package-level declarations too. Reserve all names
+        // once, before emission, so independently derived names cannot collide with each other or with
+        // exported values and enum constants.
+        _reservedNames.UnionWith(_optionsTypeNames.Values);
+        _reservedNames.UnionWith(BuildExportedValueTree(context.ExportedValues).Children.Keys);
+        foreach (var enumType in context.EnumTypes)
+        {
+            if (enumType.ClrType is null)
+            {
+                continue;
+            }
+
+            foreach (var member in Enum.GetNames(enumType.ClrType))
+            {
+                _reservedNames.Add(GetEnumMemberConstantName(_enumNames[enumType.TypeId], member));
+            }
+        }
+
+        _optionInterfaceNames.Clear();
+        _optionValueNames.Clear();
+        var interfaceNamesByOptionsType = new Dictionary<string, string>(StringComparer.Ordinal);
+        var valueNamesByOptionsField = new Dictionary<(string OptionsType, string FieldName), string>();
+        foreach (var capability in context.Capabilities)
+        {
+            if (!_optionsTypeNames.TryGetValue(capability.CapabilityId, out var optionsType))
+            {
+                continue;
+            }
+
+            if (!interfaceNamesByOptionsType.TryGetValue(optionsType, out var optionInterface))
+            {
+                var candidate = optionsType.EndsWith("Options", StringComparison.Ordinal)
+                    ? optionsType[..^1]
+                    : optionsType + "Option";
+                optionInterface = ReserveName(candidate, takenLowercase: false);
+                interfaceNamesByOptionsType[optionsType] = optionInterface;
+            }
+            _optionInterfaceNames[capability.CapabilityId] = optionInterface;
+
+            var targetParamName = capability.TargetParameterName ?? "builder";
+            foreach (var parameter in capability.Parameters.Where(parameter =>
+                !string.Equals(parameter.Name, targetParamName, StringComparison.Ordinal)
+                && (IsCancellationToken(parameter) || parameter.IsOptional)))
+            {
+                var fieldName = ToPascalCase(parameter.Name);
+                var sharedKey = (optionsType, fieldName);
+                if (!valueNamesByOptionsField.TryGetValue(sharedKey, out var optionValue))
+                {
+                    var candidate = GetOptionValueNameCandidate(optionsType, fieldName);
+                    if (candidate == optionsType || candidate == optionInterface)
+                    {
+                        candidate += "Value";
+                    }
+                    optionValue = ReserveName(candidate, takenLowercase: true);
+                    valueNamesByOptionsField[sharedKey] = optionValue;
+                }
+                _optionValueNames[(capability.CapabilityId, parameter.Name)] = optionValue;
+            }
+        }
+
+        _createBuilderOptionInterfaceName = null;
+        _createBuilderOptionValueNames.Clear();
+        if (context.DtoTypes.FirstOrDefault(dto => dto.Name == "CreateBuilderOptions") is { } createBuilderOptions)
+        {
+            _createBuilderOptionInterfaceName = ReserveName("CreateBuilderOption", takenLowercase: false);
+            foreach (var property in createBuilderOptions.Properties)
+            {
+                var candidate = $"CreateBuilder{ToPascalCase(property.Name)}";
+                _createBuilderOptionValueNames[property.Name] = ReserveName(candidate, takenLowercase: false);
+            }
+        }
+
         BuildAcceptingInterfaces(context);
 
         // Every doc render dereferences _docs, and the renderer resolves type names through the maps
@@ -422,26 +499,6 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         if (baseTypeIds.Count == 0)
         {
             return;
-        }
-
-        // Options struct names are resolved above but not reserved, exported value roots are emitted
-        // verbatim as package-level vars (see GenerateExportedValues), and enum members are emitted as
-        // package-level consts named after their enum (see GenerateEnumTypes). Reserve all of them here
-        // to keep an accepting interface from colliding with any of them. This is the last step of
-        // BuildNameMaps, so it cannot change a name chosen earlier.
-        _reservedNames.UnionWith(_optionsTypeNames.Values);
-        _reservedNames.UnionWith(BuildExportedValueTree(context.ExportedValues).Children.Keys);
-        foreach (var enumType in context.EnumTypes)
-        {
-            if (enumType.ClrType is null)
-            {
-                continue;
-            }
-
-            foreach (var member in Enum.GetNames(enumType.ClrType))
-            {
-                _reservedNames.Add(GetEnumMemberConstantName(_enumNames[enumType.TypeId], member));
-            }
         }
 
         foreach (var typeId in baseTypeIds.OrderBy(id => _interfaceNames[id], StringComparer.Ordinal))
@@ -2155,13 +2212,17 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             WriteLine($"\tapply(*{name})");
             WriteLine("}");
             WriteLine();
+            WriteLine($"func (option *{name}) apply(options *{name}) {{");
+            WriteLine("\tif option != nil { *options = *deepUpdate(options, option) }");
+            WriteLine("}");
+            WriteLine();
 
             foreach (var p in optionalParams)
             {
                 var fieldName = ToPascalCase(p.Name);
                 var optionName = GetOptionFunctionName(capability, p);
                 var parameterType = RenderOptionFunctionParameterType(p);
-                WriteLine($"// {optionName} sets {p.Name} for {ToPascalCase(capability.MethodName)}.");
+                WriteLine($"// {optionName} sets {fieldName} for {ToPascalCase(capability.MethodName)}.");
                 if (CanUseDirectOptionType(p))
                 {
                     WriteLine($"type {optionName} {parameterType}");
@@ -2172,7 +2233,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    var implementationName = ToCamelCase(optionName) + "Option";
+                    var implementationName = ToCamelCase(optionName);
                     WriteLine($"type {implementationName} struct {{ value {parameterType} }}");
                     WriteLine();
                     WriteLine($"func (option {implementationName}) apply(options *{name}) {{");
@@ -2214,6 +2275,81 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         }
     }
 
+    private void GenerateCreateBuilderOptions(AtsContext context)
+    {
+        if (_createBuilderOptionInterfaceName is null
+            || context.DtoTypes.FirstOrDefault(dto => dto.Name == "CreateBuilderOptions") is not { } dto
+            || !_dtoNames.TryGetValue(dto.TypeId, out var optionsType))
+        {
+            return;
+        }
+
+        WriteLine($"// {_createBuilderOptionInterfaceName} configures CreateBuilder.");
+        WriteLine($"type {_createBuilderOptionInterfaceName} interface {{");
+        WriteLine($"\tapply(*{optionsType})");
+        WriteLine("}");
+        WriteLine();
+        WriteLine($"func (option *{optionsType}) apply(options *{optionsType}) {{");
+        WriteLine("\tif option != nil { *options = *deepUpdate(options, option) }");
+        WriteLine("}");
+        WriteLine();
+
+        foreach (var property in dto.Properties)
+        {
+            var fieldName = ToPascalCase(property.Name);
+            var optionName = _createBuilderOptionValueNames[property.Name];
+            var valueType = RenderCreateBuilderOptionValueType(property);
+            var fieldType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
+
+            WriteLine($"// {optionName} sets {fieldName} for CreateBuilder.");
+            if (CanUseDirectOptionType(property.Type))
+            {
+                WriteLine($"type {optionName} {valueType}");
+                WriteLine();
+                WriteLine($"func (value {optionName}) apply(options *{optionsType}) {{");
+                var assignment = fieldType == $"*{valueType}"
+                    ? $"(*{valueType})(&value)"
+                    : $"({fieldType})(value)";
+                WriteLine($"\toptions.{fieldName} = {assignment}");
+                WriteLine("}");
+            }
+            else
+            {
+                var implementationName = ToCamelCase(optionName);
+                WriteLine($"type {implementationName} struct {{ value {valueType} }}");
+                WriteLine();
+                WriteLine($"func (option {implementationName}) apply(options *{optionsType}) {{");
+                WriteLine($"\toptions.{fieldName} = option.value");
+                WriteLine("}");
+                WriteLine();
+                WriteLine($"func {optionName}(value {valueType}) {_createBuilderOptionInterfaceName} {{");
+                WriteLine($"\treturn {implementationName}{{value: value}}");
+                WriteLine("}");
+            }
+            WriteLine();
+        }
+    }
+
+    private string RenderCreateBuilderOptionValueType(AtsDtoPropertyInfo property)
+    {
+        var type = MapDtoPropertyTypeToGo(property.Type, isOptional: false);
+        return property.Type.Category is AtsTypeCategory.Primitive or AtsTypeCategory.Enum
+            && type.StartsWith("*", StringComparison.Ordinal)
+                ? type[1..]
+                : type;
+    }
+
+    private static bool CanUseDirectOptionType(AtsTypeRef type)
+    {
+        return type.Category switch
+        {
+            AtsTypeCategory.Primitive => type.TypeId is not (AtsConstants.Any or AtsConstants.ReferenceExpressionTypeId),
+            AtsTypeCategory.Enum or AtsTypeCategory.Callback or AtsTypeCategory.Array => true,
+            AtsTypeCategory.List or AtsTypeCategory.Dict => type.IsReadOnly,
+            _ => false
+        };
+    }
+
     /// <summary>
     /// Field type for an Options struct member. Callbacks render as their
     /// typed Go function signature; CT renders as *CancellationToken; other
@@ -2241,30 +2377,33 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
     private string GetOptionInterfaceName(AtsCapabilityInfo capability)
     {
-        var optionsType = GetOptionsTypeName(capability);
-        return optionsType.EndsWith("Options", StringComparison.Ordinal)
-            ? optionsType[..^1]
-            : optionsType + "Option";
+        return _optionInterfaceNames.TryGetValue(capability.CapabilityId, out var name)
+            ? name
+            : $"{ToPascalCase(capability.MethodName)}Option";
     }
 
     private string GetOptionFunctionName(AtsCapabilityInfo capability, AtsParameterInfo parameter)
     {
-        var prefix = GetOptionsTypeName(capability);
+        return _optionValueNames.TryGetValue((capability.CapabilityId, parameter.Name), out var name)
+            ? name
+            : GetOptionValueNameCandidate(GetOptionsTypeName(capability), ToPascalCase(parameter.Name));
+    }
+
+    private static string GetOptionValueNameCandidate(string optionsTypeName, string fieldName)
+    {
+        var prefix = optionsTypeName;
         if (prefix.EndsWith("Options", StringComparison.Ordinal))
         {
             prefix = prefix[..^"Options".Length];
         }
-        if (prefix.StartsWith("With", StringComparison.Ordinal))
+        if (prefix.StartsWith("With", StringComparison.Ordinal)
+            && prefix.Length > "With".Length
+            && char.IsUpper(prefix["With".Length]))
         {
             prefix = prefix["With".Length..];
         }
 
-        var name = prefix + ToPascalCase(parameter.Name);
-        return IsNameTaken(name)
-            || string.Equals(name, GetOptionsTypeName(capability), StringComparison.Ordinal)
-            || string.Equals(name, GetOptionInterfaceName(capability), StringComparison.Ordinal)
-                ? name + "Value"
-                : name;
+        return prefix + fieldName;
     }
 
     private string RenderOptionFunctionParameterType(AtsParameterInfo parameter)
@@ -2291,13 +2430,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             return false;
         }
 
-        return type.Category switch
-        {
-            AtsTypeCategory.Primitive => type.TypeId is not (AtsConstants.Any or AtsConstants.ReferenceExpressionTypeId),
-            AtsTypeCategory.Enum or AtsTypeCategory.Callback or AtsTypeCategory.Array => true,
-            AtsTypeCategory.List or AtsTypeCategory.Dict => type.IsReadOnly,
-            _ => false
-        };
+        return CanUseDirectOptionType(type);
     }
 
     private string RenderDirectOptionAssignment(AtsParameterInfo parameter)
@@ -2309,7 +2442,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             return $"(*{parameterType})(&value)";
         }
 
-        return fieldType == parameterType ? "value" : $"{fieldType}(value)";
+        return $"({fieldType})(value)";
     }
 
     private string RenderWrappedOptionAssignment(AtsParameterInfo parameter)
@@ -2634,9 +2767,9 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         // CreateBuilder factory.
         var createOptionsType = GetCreateBuilderOptionsType(context);
         WriteLine($"// CreateBuilder establishes a connection to the AppHost and returns a new builder.");
-        if (createOptionsType is not null)
+        if (createOptionsType is not null && _createBuilderOptionInterfaceName is not null)
         {
-            WriteLine($"func CreateBuilder(options ...*{createOptionsType}) ({builderInterface}, error) {{");
+            WriteLine($"func CreateBuilder(options ...{_createBuilderOptionInterfaceName}) ({builderInterface}, error) {{");
         }
         else
         {
@@ -2652,12 +2785,12 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("\tregisterWrappers(c)");
         WriteLine();
         WriteLine("\tresolved := map[string]any{}");
-        if (createOptionsType is not null)
+        if (createOptionsType is not null && _createBuilderOptionInterfaceName is not null)
         {
             WriteLine("\tif len(options) > 0 {");
             WriteLine($"\t\tmerged := &{createOptionsType}{{}}");
             WriteLine("\t\tfor _, opt := range options {");
-            WriteLine("\t\t\tif opt != nil { merged = deepUpdate(merged, opt) }");
+            WriteLine("\t\t\tif opt != nil { opt.apply(merged) }");
             WriteLine("\t\t}");
             WriteLine("\t\tfor k, v := range merged.ToMap() { resolved[k] = v }");
             WriteLine("\t}");

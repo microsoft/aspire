@@ -108,9 +108,14 @@ internal sealed partial class AtsGoCodeGenerator
 
     private static string FormatProjectionSource(string source)
     {
-        const string prefix = "package aspire\n\n";
-        var formatted = FormatGoSource("api-projection.go", prefix + source);
-        return formatted[prefix.Length..].TrimEnd('\n');
+        const string packageLine = "package aspire\n";
+        var formatted = FormatGoSource("api-projection.go", packageLine + "\n" + source);
+        if (!formatted.StartsWith(packageLine, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("gofmt removed the synthetic package declaration.");
+        }
+
+        return formatted[packageLine.Length..].Trim('\n');
     }
 
     // ── Hand-written runtime ─────────────────────────────────────────────────
@@ -271,14 +276,14 @@ internal sealed partial class AtsGoCodeGenerator
     private void ProjectGeneratedTypes(ApiExportScope scope)
     {
         var context = scope.Context;
-        var declarations = GoDeclarationScanner.Scan(
-            CaptureEmitted(() =>
-            {
-                GenerateEnumTypes(context.EnumTypes);
-                GenerateDtoTypes(context.DtoTypes);
-                GenerateOptionsStructs(context.Capabilities);
-            }),
-            includeBodyDocs: true);
+        var emittedSource = CaptureEmitted(() =>
+        {
+            GenerateEnumTypes(context.EnumTypes);
+            GenerateDtoTypes(context.DtoTypes);
+            GenerateOptionsStructs(context.Capabilities);
+            GenerateCreateBuilderOptions(context);
+        });
+        var declarations = GoDeclarationScanner.Scan(emittedSource, includeBodyDocs: true);
 
         var membersByOwner = declarations
             .Where(declaration => declaration.Kind != GoDeclarationKind.Type)
@@ -323,10 +328,23 @@ internal sealed partial class AtsGoCodeGenerator
             .Where(item => !CanUseDirectOptionType(item.Parameter))
             .GroupBy(item => item.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().Producer, StringComparer.Ordinal);
+        var createBuilderOptions = context.DtoTypes.FirstOrDefault(dto => dto.Name == "CreateBuilderOptions");
+        var createBuilderValueTypes = createBuilderOptions?.Properties
+            .Where(property => CanUseDirectOptionType(property.Type))
+            .ToDictionary(property => _createBuilderOptionValueNames[property.Name], StringComparer.Ordinal)
+            ?? [];
+        var createBuilderFunctions = createBuilderOptions?.Properties
+            .Where(property => !CanUseDirectOptionType(property.Type))
+            .ToDictionary(property => _createBuilderOptionValueNames[property.Name], StringComparer.Ordinal)
+            ?? [];
 
         foreach (var type in declarations.Where(declaration => declaration.Kind == GoDeclarationKind.Type))
         {
             var members = membersByOwner[type.Name].ToList();
+            var declarationContent = optionInterfacesByName.ContainsKey(type.Name)
+                || type.Name == _createBuilderOptionInterfaceName
+                ? GoDeclarationScanner.ReadTypeDeclaration(emittedSource, type.Name)
+                : null;
 
             if (enumsByName.TryGetValue(type.Name, out var enumType))
             {
@@ -346,17 +364,67 @@ internal sealed partial class AtsGoCodeGenerator
             else if (optionInterfacesByName.TryGetValue(type.Name, out producer))
             {
                 var owner = GetCapabilityOwningAssemblyName(context, producer.Capability);
-                AddGeneratedType(scope, GoApiItemKind.Type, "type", $"{owner}/{type.Name}", owner, type, members, producer.UsedBy, dtoType: null);
+                AddGeneratedType(
+                    scope,
+                    GoApiItemKind.Type,
+                    "type",
+                    $"{owner}/{type.Name}",
+                    owner,
+                    type,
+                    members,
+                    producer.UsedBy,
+                    dtoType: null,
+                    declarationContent: declarationContent);
             }
             else if (optionValueTypesByName.TryGetValue(type.Name, out producer))
             {
                 var owner = GetCapabilityOwningAssemblyName(context, producer.Capability);
                 AddGeneratedType(scope, GoApiItemKind.Type, "type", $"{owner}/{type.Name}", owner, type, members, producer.UsedBy, dtoType: null);
             }
+            else if (type.Name == _createBuilderOptionInterfaceName || createBuilderValueTypes.ContainsKey(type.Name))
+            {
+                AddGeneratedType(
+                    scope,
+                    GoApiItemKind.Type,
+                    "type",
+                    $"{ApiExportRuntimeOwner}/{type.Name}",
+                    ApiExportRuntimeOwner,
+                    type,
+                    members,
+                    usedBy: [AtsConstants.CreateBuilderCapability],
+                    dtoType: null,
+                    declarationContent: declarationContent);
+            }
         }
 
         foreach (var function in declarations.Where(declaration => declaration.Kind == GoDeclarationKind.Function))
         {
+            if (createBuilderFunctions.ContainsKey(function.Name))
+            {
+                scope.AddDeclaration(new GoApiDeclaration
+                {
+                    Id = $"{ApiExportRuntimeOwner}:function:{function.Name}",
+                    Content = function.Signature,
+                    OwningAssemblyName = ApiExportRuntimeOwner
+                });
+                if (scope.IsOwned(ApiExportRuntimeOwner))
+                {
+                    scope.AddItem(new GoApiItem
+                    {
+                        Id = $"function:{function.Name}",
+                        TypeId = $"{ApiExportRuntimeOwner}/{function.Name}",
+                        Kind = GoApiItemKind.Function,
+                        Name = function.Name,
+                        Declaration = function.Signature,
+                        OwningAssemblyName = ApiExportRuntimeOwner,
+                        Summary = function.Summary,
+                        Remarks = function.Remarks,
+                        UsedBy = [AtsConstants.CreateBuilderCapability]
+                    });
+                }
+                continue;
+            }
+
             if (!optionFunctionsByName.TryGetValue(function.Name, out var producer))
             {
                 continue;
@@ -398,12 +466,13 @@ internal sealed partial class AtsGoCodeGenerator
         GoDeclaration type,
         List<GoDeclaration> members,
         IReadOnlyList<string> usedBy,
-        AtsDtoTypeInfo? dtoType)
+        AtsDtoTypeInfo? dtoType,
+        string? declarationContent = null)
     {
         scope.AddDeclaration(new GoApiDeclaration
         {
             Id = $"{owner}:{slug}:{type.Name}",
-            Content = RenderTypeFragment(type, members),
+            Content = declarationContent ?? RenderTypeFragment(type, members),
             OwningAssemblyName = owner
         });
 

@@ -3,6 +3,7 @@ package aspire
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -987,9 +988,13 @@ func extractResult(response map[string]any) (any, error) {
 	if errObj, hasErr := response["error"]; hasErr {
 		errMap, _ := errObj.(map[string]any)
 		rpcErr := &rpcError{message: getString(errMap, "message"), data: errMap["data"]}
-		// A decoded response carries the code as float64; the error that
+		// A decoded response carries the code as json.Number; the error that
 		// connection.close synthesizes for pending requests carries an int.
 		switch code := errMap["code"].(type) {
+		case json.Number:
+			if parsed, err := code.Int64(); err == nil {
+				rpcErr.code = int(parsed)
+			}
 		case float64:
 			rpcErr.code = int(code)
 		case int:
@@ -1079,8 +1084,12 @@ func readMessage(reader *bufio.Reader) (map[string]any, error) {
 		return nil, err
 	}
 
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	// Preserve integer tokens until decodeAs knows the generated target type. Decoding through float64
+	// first would lose precision for signed and unsigned 64-bit values above 2^53.
+	decoder.UseNumber()
 	var message map[string]any
-	if err := json.Unmarshal(body, &message); err != nil {
+	if err := decoder.Decode(&message); err != nil {
 		return nil, err
 	}
 	return message, nil
