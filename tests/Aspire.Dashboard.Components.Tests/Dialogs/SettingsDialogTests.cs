@@ -45,8 +45,10 @@ public sealed class SettingsDialogTests : DashboardTestContext
         var cut = Render<SettingsDialog>();
 
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-        Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
+        Assert.IsType<Icons.Regular.Size20.ChartMultiple>(
             cut.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Summary).Icon);
+        Assert.IsType<Icons.Regular.Size20.Flowchart>(
+            cut.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Graph).Icon);
     }
 
     [Fact]

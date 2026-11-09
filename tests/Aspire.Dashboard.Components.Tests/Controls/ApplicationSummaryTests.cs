@@ -47,8 +47,13 @@ public class ApplicationSummaryTests : DashboardTestContext
         // The list layout is only offered inside the resources layout, which owns the full-page list.
         Assert.Equal(graphEnabled ? ["Summary", "Graph"] : ["Summary"],
             outlet.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-        Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
+        Assert.IsType<Icons.Regular.Size20.ChartMultiple>(
             outlet.FindComponent<IconToggleGroup<OverviewLayout>>().Instance.Options.Single(option => option.Value == OverviewLayout.Summary).Icon);
+        if (graphEnabled)
+        {
+            Assert.IsType<Icons.Regular.Size20.Flowchart>(
+                outlet.FindComponent<IconToggleGroup<OverviewLayout>>().Instance.Options.Single(option => option.Value == OverviewLayout.Graph).Icon);
+        }
     }
 
     [Fact]

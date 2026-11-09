@@ -32,11 +32,11 @@ internal static class OverviewLayoutOptions
     {
         var options = new List<IconToggleOption<OverviewLayout>>
         {
-            new(OverviewLayout.Summary, new Icons.Regular.Size20.DataBarVertical(), dialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)])
+            new(OverviewLayout.Summary, new Icons.Regular.Size20.ChartMultiple(), dialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsDialogGroupOverviewSummary)])
         };
         if (isGraphEnabled)
         {
-            options.Add(new(OverviewLayout.Graph, new Icons.Regular.Size20.ShareAndroid(), resourcesLoc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]));
+            options.Add(new(OverviewLayout.Graph, new Icons.Regular.Size20.Flowchart(), resourcesLoc[nameof(Dashboard.Resources.Resources.GraphPageTitle)]));
         }
         options.Add(new(OverviewLayout.List, new Icons.Regular.Size20.TextBulletListLtr(), resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceOverviewLayoutList)]));
 
