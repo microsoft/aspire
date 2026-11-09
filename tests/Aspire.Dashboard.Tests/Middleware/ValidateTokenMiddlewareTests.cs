@@ -6,6 +6,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -174,7 +175,9 @@ public class ValidateTokenMiddlewareTests
         var location = response.Headers.Location?.OriginalString;
         Assert.NotNull(location);
         Assert.StartsWith("/login?returnUrl=", location, StringComparison.Ordinal);
-        Assert.False(Uri.TryCreate(location, UriKind.Absolute, out _));
+        // Don't use Uri.TryCreate(..., UriKind.Absolute) to detect an external redirect. On Linux and macOS a rooted path such as
+        // "/login" is parsed as an absolute file: URI, so that check passes or fails depending on the OS.
+        Assert.True(RedirectHttpResult.IsLocalUrl(location));
         Assert.DoesNotContain("t=wrong", location, StringComparison.Ordinal);
     }
 
