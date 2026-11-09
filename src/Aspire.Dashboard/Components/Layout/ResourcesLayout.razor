@@ -863,78 +863,56 @@
     }
 
     // Rows are rendered by a method rather than a RenderFragment so each row's @key stays among its siblings.
+    // The resource list renders its rows two ways: the sidebar's picker rows, and the full-page list's table rows with
+    // columns. Each has its own renderer and its own root class (resource-row-sidebar, resource-row-table), and the
+    // stylesheet keys each view's rules to that class. The pieces both share (tree guides and expand toggle, icon, error
+    // badge, actions) are rendered by the methods below, so they look and behave the same in both.
     private void RenderResourceRow(RenderTreeBuilder __builder, ResourceViewModel resource, ResourceGridViewModel? row, IReadOnlyList<bool>? treeGuides = null)
     {
-        var resourceName = GetResourceName(resource);
-        var isSelected = IsSelected(resourceName);
-        var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
-        var errorCount = GetUnviewedErrorCount(resource);
-        var depth = row?.Depth ?? 0;
-        var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true);
-        var primaryUrl = urls.FirstOrDefault(url => url.Url is not null);
+        if (_isPaneFullCanvas)
+        {
+            RenderTableRow(__builder, new ResourceRowContext(this, resource, row, treeGuides));
+        }
+        else
+        {
+            RenderSidebarRow(__builder, new ResourceRowContext(this, resource, row, treeGuides));
+        }
+    }
+
+    // What both row renderers compute about a resource.
+    private sealed class ResourceRowContext(ResourcesLayout layout, ResourceViewModel resource, ResourceGridViewModel? row, IReadOnlyList<bool>? treeGuides)
+    {
+        public ResourceViewModel Resource { get; } = resource;
+        public ResourceGridViewModel? Row { get; } = row;
+        public IReadOnlyList<bool>? TreeGuides { get; } = treeGuides;
+        public string Name { get; } = layout.GetResourceName(resource);
+        public bool IsSelected { get; } = layout.IsSelected(layout.GetResourceName(resource));
+        public ResourceStateViewModel State { get; } = ResourceStateViewModel.GetStateViewModel(resource, layout.ColumnsLoc);
+        public int ErrorCount { get; } = layout.GetUnviewedErrorCount(resource);
+        public int Depth { get; } = row?.Depth ?? 0;
+        public List<DisplayedUrl> Urls { get; } = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true);
+        public DisplayedUrl? PrimaryUrl => Urls.FirstOrDefault(url => url.Url is not null);
         // The whole row is the drag source, so reordering doesn't need a separate grip.
-        var canReorder = CanReorderResources && !resource.IsParameter;
+        public bool CanReorder { get; } = layout.CanReorderResources && !resource.IsParameter;
+        public string? UnavailableReason { get; } = layout.GetResourceUnavailableReason(resource);
+        public bool IsHidden { get; } = resource.IsResourceHidden(showHiddenResources: false);
+    }
 
-        var unavailableReason = GetResourceUnavailableReason(resource);
-
-        <div class="resource-row @(resource.IsParameter ? "resource-row-kind-parameter" : "resource-row-kind-resource") @(isSelected ? "selected" : string.Empty) @(resource.IsResourceHidden(showHiddenResources: false) ? "resource-row-hidden" : null) @(unavailableReason is not null ? "resource-row-unavailable" : null)"
+    private void RenderSidebarRow(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        var resource = item.Resource;
+        <div class="@GetRowClass(item, "resource-row-sidebar")"
              data-selection-all="@(IsAllSelected ? "true" : null)"
              data-resource-name="@resource.Name"
              data-resource-parent="@GetReorderParentName(resource)"
-             data-resource-tree-row="@(row is not null ? "true" : null)"
-             style="@(depth == 0 ? null : $"--resource-row-depth: {depth}")"
+             data-resource-tree-row="@(item.Row is not null ? "true" : null)"
+             style="@(item.Depth == 0 ? null : $"--resource-row-depth: {item.Depth}")"
              @key="resource.Name">
-            @if (treeGuides is not null)
-            {
-                for (var level = 0; level < treeGuides.Count; level++)
-                {
-                    if (treeGuides[level] || level == treeGuides.Count - 1)
-                    {
-                        <span class="resource-tree-guide @(treeGuides[level] ? "continuing" : null) @(level == treeGuides.Count - 1 ? "branch" : null)"
-                              style="@($"--tree-level: {level}")" aria-hidden="true"></span>
-                    }
-                }
-                @if (row is { Children.Count: > 0, IsCollapsed: false })
-                {
-                    <span class="resource-tree-stem" aria-hidden="true"></span>
-                }
-            }
-            @if (row is { Children.Count: > 0 })
-            {
-                @* A parent's expand toggle comes before its icon, like a file tree, rather than among the actions at
-                   the end of the row. A sibling of the row link, not inside it: a button can't be nested in a link. *@
-                <FluentButton Appearance="ButtonAppearance.Transparent"
-                              Class="@($"resource-row-toggle resource-row-toggle-leading {(row.IsCollapsed ? "collapsed" : string.Empty)}")"
-                              IconOnly="true"
-                              aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]"
-                              aria-expanded="@((!row.IsCollapsed).ToString().ToLowerInvariant())"
-                              OnClick="@(() => OnToggleCollapseAsync(row))">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
-                </FluentButton>
-            }
-            <a class="resource-row-link"
-               href="@GetRowUrl(resourceName)"
-               style="@(depth == 0 ? null : $"--resource-row-depth: {depth}")"
-               data-resource-depth="@depth"
-               aria-current="@GetRowAriaCurrent(isSelected)"
-               aria-label="@resourceName"
-               aria-description="@GetResourceAccessibilityDescription(resource, stateViewModel.Text, errorCount, unavailableReason)"
-               data-tooltip="@unavailableReason"
-               data-resource-unavailable-reason="@unavailableReason"
-               draggable="@(canReorder ? "true" : null)"
-               data-resource-drag-handle="@canReorder"
-               aria-keyshortcuts="@($"{(canReorder ? "Alt+ArrowUp Alt+ArrowDown " : null)}{(row is not null ? "ArrowLeft ArrowRight" : null)}".Trim())"
-               @onclick="@(e => OnRowClickAsync(e, resourceName))"
+            @{ RenderRowLead(__builder, item); }
+            <a @attributes="@GetRowLinkAttributes(item)"
+               @onclick="@(e => OnRowClickAsync(e, item.Name))"
                @onclick:preventDefault="true">
-                <span class="resource-row-icon">
-                    <span class="resource-row-glyph">
-                        <FluentIcon Width="16px"
-                                    Color="Color.Custom"
-                                    CustomColor="@(unavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
-                                    Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
-                    </span>
-                    <PersistentContainerBadge Resource="@resource" />
-                </span>
+                @{ RenderRowIcon(__builder, item); }
                 @if (IsCompact)
                 {
                     @* One line per resource: the name, then aligned columns for type and state, so they line up from
@@ -942,30 +920,10 @@
                        There is no room for the availability badge on one line, so an unavailable row relies on its muted
                        colors and on the reason in its tooltip and accessible description. *@
                     <span class="resource-row-text">
-                        <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
-                        @if (_isPaneFullCanvas)
-                        {
-                            @* The full-page list's name column is wide, so the state dot follows the name ("frontend ●")
-                               rather than ending the column, far from the name it describes. The narrow sidebar keeps
-                               it in an aligned column at the end of the row. *@
-                            <span class="resource-row-meta-state" data-tooltip="@stateViewModel.Text">
-                                <span class="state-dot @GetStateClass(resource)"></span>
-                            </span>
-                        }
-                        @if (resource.IsResourceHidden(showHiddenResources: false))
-                        {
-                            <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())"
-                                        Class="resource-row-hidden-icon"
-                                        data-tooltip="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
-                                        aria-label="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
-                                        Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
-                        }
+                        @{ RenderRowName(__builder, item); }
+                        @{ RenderRowHiddenIcon(__builder, item, compact: true); }
                     </span>
-                    @if (errorCount > 0)
-                    {
-                        @* Reserves the badge's width before the columns. The real badge, a sibling link, is overlaid here. *@
-                        <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
-                    }
+                    RenderRowErrorSpacer(__builder, item);
                     <span class="resource-row-meta">
                         @* A parameter's type says nothing its key icon and the Parameters section don't, so it's left
                            out, which leaves its name the room. *@
@@ -973,32 +931,21 @@
                         {
                             <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         }
-                        @if (!_isPaneFullCanvas)
-                        {
-                            <span class="resource-row-meta-state" data-tooltip="@stateViewModel.Text">
-                                <span class="state-dot @GetStateClass(resource)"></span>
-                            </span>
-                        }
+                        @{ RenderRowStateDot(__builder, item); }
                     </span>
                 }
                 else
                 {
                     <span class="resource-row-text">
                         <span class="resource-row-title">
-                            <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@resourceName" /></span>
+                            @{ RenderRowName(__builder, item); }
                         </span>
                         <span class="resource-row-sub">
-                            @if (resource.IsResourceHidden(showHiddenResources: false))
-                            {
-                                <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())"
-                                            data-tooltip="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
-                                            aria-label="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
-                                            Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
-                            }
+                            @{ RenderRowHiddenIcon(__builder, item, compact: false); }
                             @* The parts have no whitespace between them. Where this line flows as text, so that it ends with
                                an ellipsis, whitespace would render as spaces on top of their margins. *@
-                            <span class="state-dot @GetStateClass(resource)"></span><span>@stateViewModel.Text</span>
-                            @if (!_isPaneFullCanvas && !resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
+                            <span class="state-dot @GetStateClass(resource)"></span><span>@item.State.Text</span>
+                            @if (!resource.IsParameter && GetRowTime(resource) is { } sidebarTime)
                             {
                                 @* Only the age shows, after the state; the tooltip says whether it's since starting or stopping. *@
                                 var sidebarTimeDescription = GetRowTimeDescription(sidebarTime);
@@ -1010,29 +957,68 @@
                                           data-tooltip-positioning="above">@GetShortAge(sidebarTime.Time)</time>
                                 </span>
                             }
-                            @if (_isPaneFullCanvas)
-                            {
-                                <span class="resource-row-sep resource-row-type-sep" aria-hidden="true">·</span><span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" tabindex="0" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
-                            }
                         </span>
                     </span>
-                    @if (errorCount > 0)
-                    {
-                        @* Reserves the badge's width in the grid layouts, where the real badge overlays the end of this link. *@
-                        <span class="error-badge error-badge-spacer" aria-hidden="true">@errorCount</span>
-                    }
+                    RenderRowErrorSpacer(__builder, item);
                 }
             </a>
-            @if (errorCount > 0)
-            {
-                var errorsLabel = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount);
-                @* A sibling link, not nested in the row link: opening the error logs must not change the row selection. *@
-                <a class="error-badge resource-row-error-link"
-                   href="@DashboardUrls.StructuredLogsUrl(resourceName, logLevel: "error")"
-                   aria-label="@errorsLabel"
-                   data-tooltip="@errorsLabel">@errorCount</a>
-            }
-            @if (_isPaneFullCanvas && !resource.IsParameter)
+            @{ RenderRowErrorLink(__builder, item); }
+            @RenderResourceActions(resource, showLabels: false, item.Row, item.PrimaryUrl)
+        </div>
+    }
+
+    private void RenderTableRow(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        var resource = item.Resource;
+        <div class="@GetRowClass(item, "resource-row-table")"
+             data-selection-all="@(IsAllSelected ? "true" : null)"
+             data-resource-name="@resource.Name"
+             data-resource-parent="@GetReorderParentName(resource)"
+             data-resource-tree-row="@(item.Row is not null ? "true" : null)"
+             style="@(item.Depth == 0 ? null : $"--resource-row-depth: {item.Depth}")"
+             @key="resource.Name">
+            @{ RenderRowLead(__builder, item); }
+            <a @attributes="@GetRowLinkAttributes(item)"
+               @onclick="@(e => OnRowClickAsync(e, item.Name))"
+               @onclick:preventDefault="true">
+                @{ RenderRowIcon(__builder, item); }
+                @if (IsCompact)
+                {
+                    @* One line: the name, then the state dot right after it ("frontend ●"). The name column is wide, so
+                       a dot at its end would be far from the name it describes. The type is in the Source column. *@
+                    <span class="resource-row-text">
+                        @{ RenderRowName(__builder, item); }
+                        @{ RenderRowStateDot(__builder, item); }
+                        @{ RenderRowHiddenIcon(__builder, item, compact: true); }
+                    </span>
+                    RenderRowErrorSpacer(__builder, item);
+                    @* Rows without a source column entry (parameters) keep their type; the others' types lead the
+                       Source column, and the stylesheet hides this one for them. *@
+                    <span class="resource-row-meta">
+                        @if (!resource.IsParameter)
+                        {
+                            <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
+                        }
+                    </span>
+                }
+                else
+                {
+                    <span class="resource-row-text">
+                        <span class="resource-row-title">
+                            @{ RenderRowName(__builder, item); }
+                        </span>
+                        <span class="resource-row-sub">
+                            @{ RenderRowHiddenIcon(__builder, item, compact: false); }
+                            @* The parts have no whitespace between them. Where this line flows as text, so that it ends with
+                               an ellipsis, whitespace would render as spaces on top of their margins. *@
+                            <span class="state-dot @GetStateClass(resource)"></span><span>@item.State.Text</span><span class="resource-row-sep resource-row-type-sep" aria-hidden="true">·</span><span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" tabindex="0" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
+                        </span>
+                    </span>
+                    RenderRowErrorSpacer(__builder, item);
+                }
+            </a>
+            @{ RenderRowErrorLink(__builder, item); }
+            @if (!resource.IsParameter)
             {
                 @* Sibling links, not nested anchors: opening an endpoint must not change the row selection. *@
                 <div class="resource-row-wide-metadata">
@@ -1054,12 +1040,12 @@
                         </span>
                     </span>
                     <div class="resource-row-endpoints">
-                        @if (urls.Count > 0)
+                        @if (item.Urls.Count > 0)
                         {
                             @* The resources grid's URLs column, showing the first URL and a +N button listing the rest, so a
                                resource with many URLs doesn't widen the column. Links and buttons don't select the row
                                (see ResourcesLayout.razor.js). *@
-                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@urls" ShowFirstUrlOnly="true" />
+                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" ShowFirstUrlOnly="true" />
                         }
                     </div>
                     @* What ran the resource reads best next to its kind ("Container alpine:latest", "Project Api.csproj"),
@@ -1082,7 +1068,7 @@
                     </span>
                 </div>
             }
-            else if (_isPaneFullCanvas)
+            else
             {
                 @* Parameters reserve the same quiet tracks without inventing health, endpoints, or start times. *@
                 <div class="resource-row-wide-metadata" aria-hidden="true">
@@ -1093,13 +1079,147 @@
                     <span class="resource-row-source"></span>
                 </div>
             }
-            @if (_isPaneFullCanvas && !resource.IsParameter &&
-                GetTelemetryResource(resource) is { } activityResource)
+            @if (!resource.IsParameter && GetTelemetryResource(resource) is { } activityResource)
             {
-                <ResourcePaneInsights Layout="@this" ResourceKey="@activityResource.ResourceKey" ResourceName="@resourceName" />
+                <ResourcePaneInsights Layout="@this" ResourceKey="@activityResource.ResourceKey" ResourceName="@item.Name" />
             }
-            @RenderResourceActions(resource, showLabels: false, row, primaryUrl)
+            @RenderResourceActions(resource, showLabels: false, item.Row, item.PrimaryUrl)
         </div>
+    }
+
+    private static string GetRowClass(ResourceRowContext item, string viewClass) =>
+        string.Join(' ', new[]
+        {
+            "resource-row",
+            viewClass,
+            item.Resource.IsParameter ? "resource-row-kind-parameter" : "resource-row-kind-resource",
+            item.IsSelected ? "selected" : null,
+            item.IsHidden ? "resource-row-hidden" : null,
+            item.UnavailableReason is not null ? "resource-row-unavailable" : null
+        }.Where(c => c is not null));
+
+    private Dictionary<string, object> GetRowLinkAttributes(ResourceRowContext item)
+    {
+        var attributes = new Dictionary<string, object>
+        {
+            ["class"] = "resource-row-link",
+            ["href"] = GetRowUrl(item.Name),
+            ["data-resource-depth"] = item.Depth,
+            ["aria-label"] = item.Name,
+            ["aria-description"] = GetResourceAccessibilityDescription(item.Resource, item.State.Text, item.ErrorCount, item.UnavailableReason),
+            ["data-resource-drag-handle"] = item.CanReorder,
+            ["aria-keyshortcuts"] = $"{(item.CanReorder ? "Alt+ArrowUp Alt+ArrowDown " : null)}{(item.Row is not null ? "ArrowLeft ArrowRight" : null)}".Trim()
+        };
+        if (item.Depth != 0)
+        {
+            attributes["style"] = $"--resource-row-depth: {item.Depth}";
+        }
+        if (GetRowAriaCurrent(item.IsSelected) is { } ariaCurrent)
+        {
+            attributes["aria-current"] = ariaCurrent;
+        }
+        if (item.UnavailableReason is { } reason)
+        {
+            attributes["data-tooltip"] = reason;
+            attributes["data-resource-unavailable-reason"] = reason;
+        }
+        if (item.CanReorder)
+        {
+            attributes["draggable"] = "true";
+        }
+        return attributes;
+    }
+
+    // The tree guides that connect a nested row to its parent, and a parent's expand toggle. The toggle comes before the
+    // icon, like a file tree, as a sibling of the row link: a button can't be nested in a link.
+    private void RenderRowLead(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        if (item.TreeGuides is { } treeGuides)
+        {
+            for (var level = 0; level < treeGuides.Count; level++)
+            {
+                if (treeGuides[level] || level == treeGuides.Count - 1)
+                {
+                    <span class="resource-tree-guide @(treeGuides[level] ? "continuing" : null) @(level == treeGuides.Count - 1 ? "branch" : null)"
+                          style="@($"--tree-level: {level}")" aria-hidden="true"></span>
+                }
+            }
+            if (item.Row is { Children.Count: > 0, IsCollapsed: false })
+            {
+                <span class="resource-tree-stem" aria-hidden="true"></span>
+            }
+        }
+        if (item.Row is { Children.Count: > 0 } row)
+        {
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          Class="@($"resource-row-toggle resource-row-toggle-leading {(row.IsCollapsed ? "collapsed" : string.Empty)}")"
+                          IconOnly="true"
+                          aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]"
+                          aria-expanded="@((!row.IsCollapsed).ToString().ToLowerInvariant())"
+                          OnClick="@(() => OnToggleCollapseAsync(row))">
+                <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />
+            </FluentButton>
+        }
+    }
+
+    private void RenderRowIcon(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        <span class="resource-row-icon">
+            <span class="resource-row-glyph">
+                <FluentIcon Width="16px"
+                            Color="Color.Custom"
+                            CustomColor="@(item.UnavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
+                            Value="@ResourceIconHelpers.GetIconForResource(IconResolver, item.Resource, IconSize.Size16)" />
+            </span>
+            <PersistentContainerBadge Resource="@item.Resource" />
+        </span>
+    }
+
+    private void RenderRowName(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@item.Name" /></span>
+    }
+
+    private void RenderRowStateDot(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        <span class="resource-row-meta-state" data-tooltip="@item.State.Text">
+            <span class="state-dot @GetStateClass(item.Resource)"></span>
+        </span>
+    }
+
+    private void RenderRowHiddenIcon(RenderTreeBuilder __builder, ResourceRowContext item, bool compact)
+    {
+        if (item.IsHidden)
+        {
+            <FluentIcon Value="@(new Icons.Regular.Size16.EyeOff())"
+                        Class="@(compact ? "resource-row-hidden-icon" : null)"
+                        data-tooltip="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
+                        aria-label="@ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)]"
+                        Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+        }
+    }
+
+    // Reserves the error badge's width in the row link. The real badge, a sibling link (see RenderRowErrorLink), is
+    // overlaid here.
+    private static void RenderRowErrorSpacer(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        if (item.ErrorCount > 0)
+        {
+            <span class="error-badge error-badge-spacer" aria-hidden="true">@item.ErrorCount</span>
+        }
+    }
+
+    // A sibling link, not nested in the row link: opening the error logs must not change the row selection.
+    private void RenderRowErrorLink(RenderTreeBuilder __builder, ResourceRowContext item)
+    {
+        if (item.ErrorCount > 0)
+        {
+            var errorsLabel = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], item.ErrorCount);
+            <a class="error-badge resource-row-error-link"
+               href="@DashboardUrls.StructuredLogsUrl(item.Name, logLevel: "error")"
+               aria-label="@errorsLabel"
+               data-tooltip="@errorsLabel">@item.ErrorCount</a>
+        }
     }
 
 }
