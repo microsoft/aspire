@@ -396,7 +396,9 @@ internal sealed partial class TemplateEngineFactory(
         try
         {
             var evaluatedDefaults = promptDefaults.Evaluate(settings, name, cancellationToken);
-            var promptState = (hostEnvironment.SupportsInteractiveInput || computedParameters.Count > 0) && template.ParameterDefinitions.Any(parameter =>
+            // Disabled parameters must be skipped before injecting well-known values even without
+            // prompts: a full SDK version is not a valid value for a major/minor-only choice.
+            var promptState = template.ParameterDefinitions.Any(parameter =>
                 !string.IsNullOrEmpty(parameter.Precedence.IsEnabledCondition) || !string.IsNullOrEmpty(parameter.Precedence.IsRequiredCondition))
                 ? new TemplateParameterPromptState(settings, template, name, logger, computedParameters)
                 : null;
