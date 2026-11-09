@@ -228,18 +228,38 @@ export function registerTabOverflow(registrationId, dotNetRef) {
     // Only a replaced strip needs attaching again. The strip is rendered into the header's section outlet on desktop
     // and into the layout's own header on mobile, so only those containers are watched: observing the whole document
     // would run this on every console log line, terminal frame and grid update.
+    //
+    // MainLayout renders its header, and the .header-context in it, only on desktop, so switching between mobile and
+    // desktop replaces the container. The layout root is watched too, for its direct children only (the header coming
+    // and going, not content updates), and the containers are observed again whenever they've been replaced.
+    // Otherwise the observations would stay on the detached container, and a later navigation that replaces the tab
+    // strip wouldn't measure it.
+    const bindContainers = () => {
+        const containers = [".header-context", ".resource-context-header"]
+            .map(selector => document.querySelector(selector))
+            .filter(Boolean);
+        if (state.containers && containers.length === state.containers.length &&
+            containers.every((container, index) => container === state.containers[index])) {
+            return;
+        }
+        state.containers = containers;
+        state.bodyObserver.disconnect();
+        for (const container of containers.length > 0 ? containers : [document.body]) {
+            state.bodyObserver.observe(container, { childList: true, subtree: true });
+        }
+        const layoutRoot = document.querySelector(".layout");
+        if (layoutRoot) {
+            state.bodyObserver.observe(layoutRoot, { childList: true });
+        }
+    };
     state.bodyObserver = new MutationObserver(() => {
+        bindContainers();
         const nav = document.querySelector(".resource-tabs-nav");
         if (nav !== state.nav || (nav?.querySelector(".resources-tab-header") ?? null) !== state.tablist) {
             schedule();
         }
     });
-    const stripContainers = [".header-context", ".resource-context-header"]
-        .map(selector => document.querySelector(selector))
-        .filter(Boolean);
-    for (const container of stripContainers.length > 0 ? stripContainers : [document.body]) {
-        state.bodyObserver.observe(container, { childList: true, subtree: true });
-    }
+    bindContainers();
     window.addEventListener("resize", schedule);
     state.schedule = schedule;
     // Recording switches can mount the new layout before the old layout finishes disposing.

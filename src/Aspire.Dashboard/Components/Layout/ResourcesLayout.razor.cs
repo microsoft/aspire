@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
@@ -58,13 +57,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
     // Blazor compares event handlers and delegates by reference when it diffs a render. A lambda created for each row
     // on each render would make every row's handlers, buttons and menus look changed, so each resource's handlers
-    // are created once and reused across renders (see RowHandlers).
+    // are created once and reused across renders (see RowHandlers). They're keyed by the resource's unique name, not
+    // the name a row shows: a display name can equal another resource's unique name.
     private readonly Dictionary<string, RowHandlers> _rowHandlers = new(StringComparers.ResourceName);
+    // Telemetry-only rows have no resource, only a name to select, and are kept apart so they can't share an entry
+    // with a resource whose unique name is the same.
+    private readonly Dictionary<string, EventCallback<MouseEventArgs>> _telemetryRowClicks = new(StringComparers.ResourceName);
     // Resources whose display name is shared by another resource, such as replicas, are shown by their unique name.
     // The set is rebuilt lazily when the resources change, so resolving a name doesn't scan every resource.
-    private HashSet<string> _duplicateDisplayNames = new(StringComparers.ResourceName);
+    private DuplicateDisplayNames _duplicateDisplayNames = new(Version: -1, Names: new(StringComparers.ResourceName));
     private int _resourceVersion;
-    private int _duplicateDisplayNamesVersion = -1;
 
     private Task? _resourceSubscriptionTask;
     private Task? _ageRefreshTask;
@@ -698,7 +700,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         if (DetailParentUrl is { } parentUrl)
         {
+            // CloseDetailAsync only prepares the close: the close button navigates to the parent URL after it (see
+            // DetailPageCloseButton), and a scoped overview's parent, the unscoped list, is a different URL.
             await CloseDetailAsync(parentUrl);
+            NavigationManager.NavigateTo(parentUrl);
         }
         else
         {
@@ -1713,9 +1718,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return true;
     }
 
-    private async Task OnToggleCollapseAsync(string resourceName)
+    private async Task OnToggleCollapseAsync(string uniqueResourceName)
     {
-        if (!TryGetRowResource(resourceName, out var resource))
+        if (!_resourceByName.TryGetValue(uniqueResourceName, out var resource))
         {
             return;
         }
@@ -2031,11 +2036,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         NavigationManager.NavigateTo(GetResourceTerminalUrl(resource));
     }
 
-    private Task ExecuteResourceCommandAsync(string resourceName, string commandName)
+    private Task ExecuteResourceCommandAsync(string uniqueResourceName, string commandName)
     {
         // The row's handler is shared across renders, so the resource and command are resolved when it runs: the
         // resource may have been replaced by an update since the handler was created.
-        if (!TryGetRowResource(resourceName, out var resource) ||
+        if (!_resourceByName.TryGetValue(uniqueResourceName, out var resource) ||
             resource.Commands.FirstOrDefault(c => string.Equals(c.Name, commandName, StringComparisons.CommandName)) is not { } command)
         {
             return Task.CompletedTask;
@@ -2061,10 +2066,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private HashSet<string> GetDuplicateDisplayNames()
     {
-        // The resource subscription updates the resources and the version on another thread. A render that runs
-        // between the two rebuilds the set again on the next render, so it's never stale for longer than that.
+        // Renders and command completions (which continue on the thread pool) can both get here, while the resource
+        // subscription updates the resources and then the version on another thread. The set and the version it was
+        // built for are published together as one immutable snapshot, so concurrent rebuilds can't pair a set built
+        // from older resources with a newer version, which would keep it stale until the next resource update. A
+        // snapshot built while an update is in progress is labeled with the earlier version and rebuilt next time.
         var version = Volatile.Read(ref _resourceVersion);
-        if (version != _duplicateDisplayNamesVersion)
+        var snapshot = Volatile.Read(ref _duplicateDisplayNames);
+        if (snapshot.Version != version)
         {
             var seen = new HashSet<string>(StringComparers.ResourceName);
             var duplicates = new HashSet<string>(StringComparers.ResourceName);
@@ -2076,51 +2085,54 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 }
             }
 
-            _duplicateDisplayNames = duplicates;
-            _duplicateDisplayNamesVersion = version;
+            snapshot = new DuplicateDisplayNames(version, duplicates);
+            Volatile.Write(ref _duplicateDisplayNames, snapshot);
         }
 
-        return _duplicateDisplayNames;
+        return snapshot.Names;
     }
 
-    private RowHandlers GetRowHandlers(string resourceName)
+    private sealed record DuplicateDisplayNames(int Version, HashSet<string> Names);
+
+    private RowHandlers GetRowHandlers(ResourceViewModel resource)
     {
-        if (!_rowHandlers.TryGetValue(resourceName, out var handlers))
+        if (!_rowHandlers.TryGetValue(resource.Name, out var handlers))
         {
-            handlers = new RowHandlers(this, resourceName);
-            _rowHandlers[resourceName] = handlers;
+            handlers = new RowHandlers(this, resource.Name);
+            _rowHandlers[resource.Name] = handlers;
         }
 
         return handlers;
     }
 
-    // Removes the handlers of resources that no longer exist. A row's name can also change, from its display name to its
-    // unique name when a replica appears, and the old entry is then removed too.
+    private EventCallback<MouseEventArgs> GetTelemetryRowClick(string telemetryResourceName)
+    {
+        if (!_telemetryRowClicks.TryGetValue(telemetryResourceName, out var click))
+        {
+            click = EventCallback.Factory.Create<MouseEventArgs>(this, e => OnRowClickAsync(e, telemetryResourceName));
+            _telemetryRowClicks[telemetryResourceName] = click;
+        }
+
+        return click;
+    }
+
+    // Removes the handlers of resources and telemetry sources that no longer exist.
     private void PruneRowHandlers()
     {
-        if (_rowHandlers.Count == 0)
-        {
-            return;
-        }
-
-        var names = new HashSet<string>(StringComparers.ResourceName);
-        foreach (var resource in _resourceByName.Values)
-        {
-            names.Add(GetResourceName(resource));
-        }
-        foreach (var telemetryResource in _telemetryOnlyResources)
-        {
-            names.Add(telemetryResource.Name);
-        }
-
-        foreach (var name in _rowHandlers.Keys.Where(name => !names.Contains(name)).ToList())
+        foreach (var name in _rowHandlers.Keys.Where(name => !_resourceByName.ContainsKey(name)).ToList())
         {
             _rowHandlers.Remove(name);
         }
-    }
 
-    private bool TryGetRowResource(string resourceName, [NotNullWhen(true)] out ResourceViewModel? resource) =>
-        ResourceViewModel.TryGetResourceByName(resourceName, _resourceByName, out resource);
+        if (_telemetryRowClicks.Count > 0)
+        {
+            var telemetryNames = _telemetryOnlyResources.Select(resource => resource.Name).ToHashSet(StringComparers.ResourceName);
+            foreach (var name in _telemetryRowClicks.Keys.Where(name => !telemetryNames.Contains(name)).ToList())
+            {
+                _telemetryRowClicks.Remove(name);
+            }
+        }
+    }
 
     private string GetResourceTypeLabel(ResourceViewModel resource) => resource.GetResourceTypeDisplayName(ResourcesLoc);
 
@@ -2642,6 +2654,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             if (IsResourceGroupSelected(groupResourceNames))
             {
+                if (_isPaneFullCanvas)
+                {
+                    // Like a row: closing a scoped detail can retain this selection and its filtered parent URL, and
+                    // choosing the selection again reopens its content.
+                    SetResourceListVisible(false);
+                }
+
                 // Like a row, selecting the selected group again keeps the selection.
                 return;
             }
@@ -3008,8 +3027,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     /// <summary>
     /// The event handlers of a resource's row, and of its actions in the resource overview. They're created once per
-    /// resource name and reused by every render, so Blazor sees unchanged handlers and skips re-rendering the row's
-    /// buttons and menus. Each handler resolves the current resource when it runs.
+    /// resource and reused by every render, so Blazor sees unchanged handlers and skips re-rendering the row's buttons
+    /// and menus. Each handler resolves the current resource by its unique name when it runs. The name a row shows,
+    /// and selects, is its display name unless another resource shares it, and a display name can equal another
+    /// resource's unique name, so it can't be used to find the resource.
     /// </summary>
     private sealed class RowHandlers
     {
@@ -3017,13 +3038,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         private readonly string _resourceName;
         private readonly Dictionary<string, EventCallback<MouseEventArgs>> _commands = new(StringComparers.CommandName);
 
-        public RowHandlers(ResourcesLayout layout, string resourceName)
+        public RowHandlers(ResourcesLayout layout, string uniqueResourceName)
         {
             _layout = layout;
-            _resourceName = resourceName;
-            Click = EventCallback.Factory.Create<MouseEventArgs>(layout, e => layout.OnRowClickAsync(e, resourceName));
-            ToggleCollapse = EventCallback.Factory.Create<MouseEventArgs>(layout, () => layout.OnToggleCollapseAsync(resourceName));
-            MenuItems = () => layout.TryGetRowResource(resourceName, out var resource) ? layout.GetResourceMenuItems(resource) : [];
+            _resourceName = uniqueResourceName;
+            Click = EventCallback.Factory.Create<MouseEventArgs>(layout, e =>
+                layout._resourceByName.TryGetValue(uniqueResourceName, out var resource)
+                    ? layout.OnRowClickAsync(e, layout.GetResourceName(resource))
+                    : Task.CompletedTask);
+            ToggleCollapse = EventCallback.Factory.Create<MouseEventArgs>(layout, () => layout.OnToggleCollapseAsync(uniqueResourceName));
+            MenuItems = () => layout._resourceByName.TryGetValue(uniqueResourceName, out var resource) ? layout.GetResourceMenuItems(resource) : [];
         }
 
         public EventCallback<MouseEventArgs> Click { get; }

@@ -320,7 +320,7 @@
                                    aria-description="@($"{Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]}{(unavailableReason is not null ? $"; {unavailableReason}" : null)}")"
                                    data-tooltip="@unavailableReason"
                                    data-resource-unavailable-reason="@unavailableReason"
-                                   @onclick="@GetRowHandlers(telemetryResourceName).Click"
+                                   @onclick="@GetTelemetryRowClick(telemetryResourceName)"
                                    @onclick:preventDefault="true">
                                     <span class="resource-row-icon">
                                         <FluentIcon Width="16px"
@@ -506,7 +506,7 @@
     internal RenderFragment RenderResourceActions(ResourceViewModel resource, bool showLabels, ResourceGridViewModel? row, DisplayedUrl? primaryUrl = null) => __builder =>
     {
         var resourceName = GetResourceName(resource);
-        var handlers = GetRowHandlers(resourceName);
+        var handlers = GetRowHandlers(resource);
         var actionIndex = 0;
         var highlightedIndex = 0;
         // A compact sidebar row puts the expand toggle after its actions. Where rows can be hovered, the toggle is the
@@ -950,7 +950,7 @@
                draggable="@(canReorder ? "true" : null)"
                data-resource-drag-handle="@canReorder"
                aria-keyshortcuts="@($"{(canReorder ? "Alt+ArrowUp Alt+ArrowDown " : null)}{(row is not null ? "ArrowLeft ArrowRight" : null)}".Trim())"
-               @onclick="@GetRowHandlers(resourceName).Click"
+               @onclick="@GetRowHandlers(resource).Click"
                @onclick:preventDefault="true">
                 <span class="resource-row-icon">
                     <span class="resource-row-glyph">

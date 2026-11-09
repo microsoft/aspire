@@ -1466,6 +1466,38 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Contains(menuButton.Instance.ItemsProvider(), item => item.Text == "Custom command");
     }
 
+    [Fact]
+    public async Task RowActions_ResolveTheirResourceByUniqueNameWhenADisplayNameMatchesAnotherResource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var executed = new List<(string Resource, string Command)>();
+        var stop = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "Stop", iconVariant: IconVariant.Filled);
+        // "worker-xyz" is shown as "api-abc", which is also the unique name of the resource shown as "api".
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("worker-xyz", displayName: "api-abc", state: KnownResourceState.Running, commands: [stop]),
+                ModelTestHelpers.CreateResource("api-abc", displayName: "api", state: KnownResourceState.Running, commands: [stop])
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            executeResourceCommand: (resource, _, command, _, _) =>
+            {
+                executed.Add((resource, command.Name));
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            }));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".resource-row-actions").Count));
+
+        // The row shows its display name, but its actions act on the resource itself.
+        var stopButton = cut.Find("[data-resource-name='worker-xyz'] .resource-row-actions fluent-button[aria-label='Stop api-abc']");
+        await cut.InvokeAsync(() => stopButton.Click());
+        cut.WaitForAssertion(() => Assert.Equal([("worker-xyz", "resource-stop")], executed));
+        var menuButton = cut.FindComponents<AspireMenuButton>().Single(b => b.Instance.Title == "Actions for api-abc");
+        Assert.NotEmpty(menuButton.Instance.ItemsProvider());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1984,6 +2016,30 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
+    }
+
+    [Fact]
+    public async Task ScopedOverview_ChoosingList_ShowsTheFullPageListLikeTheCloseButton()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.AddResourceSelection(DashboardUrls.ResourceListUrl(), ["api", "cache"]));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.Equal(["api", "cache"], cut.Instance.SelectedResourceNames);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        // A scoped overview's parent is the list of all resources, at another URL, so choosing List has to navigate
+        // there, as the close button does.
+        await cut.InvokeAsync(cut.Instance.ShowResourceListAsync);
+        cut.Render();
+
+        Assert.Equal("resources", navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
     }
 
     [Theory]

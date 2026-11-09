@@ -452,6 +452,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     await page.SetViewportSizeAsync(width <= 560 ? 2000 : width, 1000);
                     if (width <= 560)
                     {
+                        // The separator handles keys only once its script is registered.
+                        await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("aria-disabled", "false");
                         await page.Locator(".resource-pane-resizer").PressAsync(width == ResourcesLayout.MinimumPaneWidthPx ? "Home" : "End");
                         await Assertions.Expect(page.Locator(".resource-pane-resizer"))
                             .ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));
@@ -1037,6 +1039,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     if (width <= 560)
                     {
                         var separator = page.Locator(".resource-pane-resizer");
+                        // The separator handles keys only once its script is registered.
+                        await Assertions.Expect(separator).ToHaveAttributeAsync("aria-disabled", "false");
                         await separator.FocusAsync();
                         await separator.PressAsync(width == ResourcesLayout.MinimumPaneWidthPx ? "Home" : "End");
                         await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", width.ToString(CultureInfo.InvariantCulture));

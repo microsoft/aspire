@@ -180,6 +180,44 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task SelectedGroup_ReopensParentFromFullCanvasWithoutClearingSelection()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("worker", resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("cache")
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping
+            ? (true, nameof(ResourcePaneGrouping.ResourceType))
+            : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/traces/detail/missing?resource=api&resource=worker&type=server");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        // Closing a trace detail keeps its multi-resource scope, which is the Project group, behind the full-page list.
+        await cut.Find(".detail-page-close").ClickAsync();
+        cut.Render();
+        var parent = navigation.Uri;
+        Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        // Choosing the selected group again reopens its content, as choosing a selected resource does.
+        await cut.Find(".resource-tag-header.selected .resource-tag-link").ClickAsync();
+        cut.Render();
+
+        Assert.Equal(parent, navigation.Uri);
+        Assert.Equal(["api", "worker"], cut.Instance.SelectedResourceNames);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resource-content").HasAttribute("inert"));
+    }
+
+    [Fact]
     public async Task CloseDetail_PreservesFullCanvasAcrossDestinationSessionStateRedirect()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
