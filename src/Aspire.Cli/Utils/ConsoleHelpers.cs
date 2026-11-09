@@ -79,6 +79,32 @@ internal static class ConsoleHelpers
         interactionService.DisplaySourceTrustWarning();
     }
 
+    public static void DisplayTemplateGitFetchNotice(this IInteractionService interactionService,
+        string repository, string path, string? reference, bool mayPromptForAuthentication)
+    {
+        var source = PackageSourceRedactor.RedactForDisplay(repository);
+        List<string> qualifiers = [];
+        if (path is not ("." or "./" or ".\\"))
+        {
+            qualifiers.Add($"{SharedCommandStrings.SourceGitPath}: {path}");
+        }
+        if (reference is not null and not "HEAD")
+        {
+            qualifiers.Add($"{SharedCommandStrings.SourceRef}: {reference}");
+        }
+        if (qualifiers.Count > 0)
+        {
+            source += $" ({string.Join(", ", qualifiers)})";
+        }
+
+        // Identify the source before Git can prompt for credentials. With basic auth,
+        // an ambiguous prompt could send a user's password to the wrong Git server,
+        // where that server could log it.
+        interactionService.DisplayGitFetchNotice(
+            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source),
+            mayPromptForAuthentication);
+    }
+
     public static void DisplayGitFetchNotice(this IInteractionService interactionService, string content, bool mayPromptForAuthentication)
     {
         var message = mayPromptForAuthentication

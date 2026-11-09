@@ -113,8 +113,11 @@ Before Git acquisition begins, the CLI writes an informational notice to stderr:
 Non-interactive acquisitions show **Fetching configuration source using Git...**
 instead, because authentication prompts are disabled. Reusing an in-memory
 snapshot does not repeat the notice, and background version checks remain quiet.
-Repository templates reuse these notices with **templates** as the content being
-fetched, keeping the download and authentication guidance consistent.
+Repository templates identify the repository in these notices, for example
+**Fetching templates from https://example.test/team/templates.git using Git. Git may prompt you to authenticate.**
+Non-default paths and refs are included to distinguish sources within the same
+repository. Show this identity before Git can ask for credentials so users can
+check the destination before entering a basic-authentication password.
 
 - **Accept:** acquire and validate the remote file, then materialize allowlisted values and a `configSource` binding in the created or initialized project's `aspire.config.json`.
 - **Decline:** continue normally without Git acquisition or template-source inheritance from that source for the rest of the command, and save `"configSource": { "optOut": true }` after successful project creation or initialization. Independently configured global template sources remain available.
@@ -205,6 +208,8 @@ Configuration sources and repository templates share [GitClient](../../src/Aspir
 Resolve the configured selector before initializing the bare acquisition repository, and explicitly select SHA-1 or SHA-256 from the resolved commit ID. This also supports SHA-256 repositories selected by branch or default ref, rather than only by a pinned commit. Ref resolution shares the operation's timeout and interactive or unattended authentication policy. Interactive ref resolution captures the advertised refs on stdout but inherits stderr so Git authentication instructions remain visible immediately.
 
 When the CLI host supports interactive input, fetch with inherited terminal input and output so Git and credential helpers can display instructions immediately and handle credentials directly. Keep local Git queries captured, including configuration-file contents. Do not copy interactive Git diagnostics into Aspire logs or telemetry; report a failed interactive fetch as an inaccessible repository after Git displays its own diagnostics.
+
+Repository initialization, shallow fetches, and detached checkouts use Git's supported `--quiet` option to suppress routine success/progress output without suppressing authentication prompts or diagnostics. Ref and blob queries retain complete stdout capture for parsing. Explicit operations display captured stderr on the error console on both success and failure, but parsed stdout is never copied there. Background version checks defer all captured stderr, including successful-command warnings, through the ordinary advisory notification path until command exit; machine-readable invocations suppress those notifications and diagnostics together. Interactive remote stderr remains inherited so authentication instructions are visible immediately. Quiet acquisition does not change source consent, credential-helper behavior, or the unattended authentication and cancellation policies below.
 
 Unattended configuration-source Git operations (including opted-in JSON listing, non-interactive `new`/`init`, and advisory checks) override `core.askPass` only for the child process and disable `GIT_ASKPASS`, `SSH_ASKPASS`, terminal prompts and Git Credential Manager interaction. Standard input receives EOF. This also applies when `--non-interactive`, `ASPIRE_NON_INTERACTIVE`, or CI disables host input. Credential helpers remain enabled for cached credentials; custom credential helpers must themselves run without prompting. Interactive Git acquisition and captured template-repository acquisition retain their existing authentication behavior.
 

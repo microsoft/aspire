@@ -151,6 +151,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to templates from {0}.
+        /// </summary>
+        internal static string GitFetchTemplatesFromSource {
+            get {
+                return ResourceManager.GetString("GitFetchTemplatesFromSource", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Language.
         /// </summary>
         internal static string HeaderLanguage {

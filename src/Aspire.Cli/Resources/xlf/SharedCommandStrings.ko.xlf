@@ -47,6 +47,11 @@
         <target state="new">templates</target>
         <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
+      <trans-unit id="GitFetchTemplatesFromSource">
+        <source>templates from {0}</source>
+        <target state="new">templates from {0}</target>
+        <note>{0} is the Git template repository, optionally followed by its path and ref. The formatted content is inserted into the Git-fetch notice.</note>
+      </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
         <target state="translated">언어</target>

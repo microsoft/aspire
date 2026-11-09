@@ -84,6 +84,8 @@ internal sealed class TestConfigSourceDetector : IInternalMicrosoftDetector
 
 internal sealed class TestConfigSourceRepository : IGitClient
 {
+    public IGitClient WithStandardErrorHandler(Action<string> standardErrorHandler) => this;
+
     private readonly ConcurrentDictionary<string, RepositoryState> _repositories = new();
     private int _calls;
     private int _checkCalls;

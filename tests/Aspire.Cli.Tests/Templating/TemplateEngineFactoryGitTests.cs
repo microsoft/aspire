@@ -78,10 +78,10 @@ public class TemplateEngineFactoryGitTests(ITestOutputHelper outputHelper)
             },
             command =>
             {
-                Assert.Equal(["fetch", "--depth", "1", "--no-tags", "--", "-repository with spaces", commit], command.Arguments);
+                Assert.Equal(["fetch", "--quiet", "--depth", "1", "--no-tags", "--", "-repository with spaces", commit], command.Arguments);
                 Assert.Equal(destination, command.WorkingDirectory.FullName);
             },
-            command => Assert.Equal(["checkout", "--detach", "--force", "FETCH_HEAD"], command.Arguments),
+            command => Assert.Equal(["checkout", "--quiet", "--detach", "--force", "FETCH_HEAD"], command.Arguments),
             command => Assert.Equal(["rev-parse", "--verify", "HEAD"], command.Arguments));
         Assert.All(commands.Commands, command => Assert.Equal(GitCommandMode.Captured, command.Mode));
     }
