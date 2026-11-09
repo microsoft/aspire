@@ -107,16 +107,10 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
 
         // `aspire add` must complete using the registered darc feed in both mapping modes.
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
-        // C# projects use NuGet.config rather than a pinned CLI channel. Select the staging
-        // version explicitly in the picker instead of relying on the first package/feed match.
-        await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(
-            string.Format(System.Globalization.CultureInfo.CurrentCulture, AddCommandStrings.SelectAVersionOfPackage, "Aspire.Hosting.Redis"),
-            timeout: TimeSpan.FromMinutes(1));
-        await auto.TypeAsync(staging.Version);
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(2));
+        // C# projects use NuGet.config rather than a pinned CLI channel. Specify the staging
+        // version directly so the test doesn't depend on a version picker appearing.
+        await auto.RunCommandAsync($"aspire add Aspire.Hosting.Redis --version {staging.Version}", counter,
+            timeout: TimeSpan.FromMinutes(2));
         var redisReference = Assert.Single(XDocument.Load(appHostCsproj).Descendants("PackageReference"),
             reference => (string?)reference.Attribute("Include") == "Aspire.Hosting.Redis");
         Assert.Equal(staging.Version, (string?)redisReference.Attribute("Version"));
