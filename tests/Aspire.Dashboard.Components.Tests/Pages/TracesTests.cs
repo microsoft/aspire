@@ -186,11 +186,8 @@ public class TracesTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".trace-service-tag"), element => element.TextContent.Contains("(2)", StringComparison.Ordinal)));
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(1)]
-    [InlineData(10)]
-    public async Task Render_StaleOverflowIndex_RendersOnlyCurrentResources(int staleIndex)
+    [Fact]
+    public async Task Render_TraceResources_RendersEveryResourceTagForBrowserOverflow()
     {
         SetupTracesServices();
 
@@ -198,69 +195,59 @@ public class TracesTests : DashboardTestContext
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
-            new ResourceSpans
-            {
-                Resource = CreateResource(),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans = { CreateSpan(traceId: "trace", spanId: "span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
-                    }
-                }
-            }
+            CreateResourceSpans("frontend", CreateSpan(traceId: "trace", spanId: "span-1", startTime: timestamp, endTime: timestamp.AddSeconds(3))),
+            CreateResourceSpans("catalogservice",
+                CreateSpan(traceId: "trace", spanId: "span-2", parentSpanId: "span-1", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2)),
+                CreateSpan(traceId: "trace", spanId: "span-3", parentSpanId: "span-1", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2))),
+            CreateResourceSpans("catalogdb", CreateSpan(traceId: "trace", spanId: "span-4", parentSpanId: "span-2", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2)))
         });
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
         await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
-        var overflow = cut.FindComponent<FluentOverflow<TraceResourceSummary>>();
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
+        {
+            StartIndex = 0,
+            Count = 0
+        }).AsTask());
+        var expectedTags = Assert.Single(result.Items).Resources.Select(resource => $"{resource.Resource.ResourceName} ({resource.TotalSpans})").ToList();
+        Assert.Equal(3, expectedTags.Count);
 
-        // A delayed browser measurement can reference resources that are no longer in the row.
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = 0, Text = "TestService (1)" },
-            new OverflowItem { Index = staleIndex, Text = "RemovedService (1)" }
-        ]));
-
+        // The browser decides which tags fit and fills the count, so the server renders every tag and an empty
+        // count placeholder. The hidden tags stay in the accessibility tree, and the count is presentational.
         cut.WaitForAssertion(() =>
         {
-            // The stale index is ignored, so only the current resource is counted.
-            Assert.Equal("+1", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
+            var tagLine = cut.Find("aspire-tag-overflow");
+            var children = tagLine.Children.ToList();
+            Assert.Equal(expectedTags, children.SkipLast(1).Select(child => string.Join(" ", child.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))));
+            Assert.All(children.SkipLast(1), child => Assert.Contains("trace-service-tag", child.ClassList));
+            var more = children[^1];
+            Assert.True(more.HasAttribute("data-tag-overflow-more"));
+            Assert.Equal("true", more.GetAttribute("aria-hidden"));
+            Assert.Equal(string.Empty, more.TextContent);
+            Assert.All(children, child =>
+            {
+                Assert.False(child.HasAttribute("data-count"));
+                Assert.False(child.HasAttribute("data-tag-overflow-hidden"));
+            });
         });
 
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = staleIndex, Text = "RemovedService (1)" }
-        ]));
-
-        cut.WaitForAssertion(() =>
+        static ResourceSpans CreateResourceSpans(string resourceName, params Span[] spans)
         {
-            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
-        });
-
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = 0, Text = "TestService (1)" }
-        ]));
-        cut.WaitForAssertion(() => Assert.Equal("+1", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim()));
-
-        overflow.Render(builder => builder.Add(p => p.Items, Array.Empty<TraceResourceSummary>()));
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
-        });
-
-        await overflow.InvokeAsync(() => overflow.Instance.OverflowRaisedAsync(
-        [
-            new OverflowItem { Index = 0, Text = "TestService (1)" }
-        ]));
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Equal("+0", cut.Find(".fluent-overflow-more .trace-tag").TextContent.Trim());
-        });
+            return new ResourceSpans
+            {
+                Resource = CreateResource(name: resourceName, instanceId: resourceName),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { spans }
+                    }
+                }
+            };
+        }
     }
 
     [Theory]
