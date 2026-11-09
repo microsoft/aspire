@@ -26,7 +26,9 @@ public class RoutedComponentAuthorizationTests
     [Fact]
     public void RoutedComponents_RequireFrontendPolicyUnlessExplicitlyAnonymous()
     {
-        var routedComponents = GetRoutedComponents();
+        var routedComponents = typeof(DashboardWebApplication).Assembly.GetTypes()
+            .Where(type => type.IsDefined(typeof(RouteAttribute), inherit: false))
+            .ToList();
 
         Assert.NotEmpty(routedComponents);
         Assert.Contains(typeof(DashboardLogin), routedComponents);
@@ -36,50 +38,28 @@ public class RoutedComponentAuthorizationTests
         foreach (var component in routedComponents)
         {
             // AuthorizeRouteView and the endpoint authorization middleware both read the attributes on the component type.
+            // [Authorize] comes from the @attribute directive in Components/_Imports.razor, which applies to every component.
+            // [AllowAnonymous] overrides it for the pages in the allow-list.
             var attributes = component.GetCustomAttributes(inherit: true);
             var authorizeData = attributes.OfType<IAuthorizeData>().ToList();
             var allowsAnonymous = attributes.OfType<IAllowAnonymous>().Any();
 
-            if (s_anonymousPageTypeNames.Contains(component.FullName!))
-            {
-                if (!allowsAnonymous || authorizeData.Count > 0)
-                {
-                    violations.Add($"{component.FullName} must be [AllowAnonymous] and must not have an authorization attribute.");
-                }
-            }
-            else if (allowsAnonymous)
-            {
-                violations.Add($"{component.FullName} is [AllowAnonymous] but isn't in the list of anonymous pages.");
-            }
-            else if (authorizeData is not [{ Policy: FrontendAuthorizationDefaults.PolicyName, Roles: null, AuthenticationSchemes: null }])
+            if (authorizeData is not [{ Policy: FrontendAuthorizationDefaults.PolicyName, Roles: null, AuthenticationSchemes: null }])
             {
                 violations.Add($"{component.FullName} must have exactly one [Authorize(Policy = {nameof(FrontendAuthorizationDefaults)}.{nameof(FrontendAuthorizationDefaults.PolicyName)})] attribute.");
+            }
+
+            var isAllowedAnonymous = s_anonymousPageTypeNames.Contains(component.FullName!);
+            if (isAllowedAnonymous && !allowsAnonymous)
+            {
+                violations.Add($"{component.FullName} is in the list of anonymous pages but isn't [AllowAnonymous].");
+            }
+            else if (!isAllowedAnonymous && allowsAnonymous)
+            {
+                violations.Add($"{component.FullName} is [AllowAnonymous] but isn't in the list of anonymous pages.");
             }
         }
 
         Assert.Empty(violations);
-    }
-
-    [Fact]
-    public void Components_DoNotCombineAuthorizeAndAllowAnonymous()
-    {
-        // [AllowAnonymous] overrides [Authorize], so a type with both is contradictory and easy to misread.
-        var conflictingTypes = typeof(DashboardWebApplication).Assembly.GetTypes()
-            .Where(type =>
-            {
-                var attributes = type.GetCustomAttributes(inherit: true);
-                return attributes.OfType<IAuthorizeData>().Any() && attributes.OfType<IAllowAnonymous>().Any();
-            })
-            .Select(type => type.FullName)
-            .ToList();
-
-        Assert.Empty(conflictingTypes);
-    }
-
-    private static List<Type> GetRoutedComponents()
-    {
-        return typeof(DashboardWebApplication).Assembly.GetTypes()
-            .Where(type => type.IsDefined(typeof(RouteAttribute), inherit: false))
-            .ToList();
     }
 }

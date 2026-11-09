@@ -7,6 +7,9 @@ using Aspire.Dashboard.Telemetry;
 
 namespace Aspire.Dashboard.Components.Legacy.Pages;
 
+// Components/_Imports.razor applies [Authorize] to every component so pages are secure by default, and Error.razor
+// opts out with [AllowAnonymous]. The attributes are intended to be combined this way; the generated class has both.
+// CodeQL [SM04595] Intentional: [AllowAnonymous] exempts the error page from the app-wide [Authorize] so errors can be shown before sign-in.
 public partial class Error : IComponentWithTelemetry, IDisposable
 {
     [Inject]

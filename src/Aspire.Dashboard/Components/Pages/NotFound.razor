@@ -1,5 +1,4 @@
 ﻿@page "/error/404"
-@attribute [Authorize(Policy = FrontendAuthorizationDefaults.PolicyName)]
 @inject IStringLocalizer<Dashboard.Resources.Routes> Loc
 
 <PageTitle>@Loc[nameof(Dashboard.Resources.Routes.NotFoundPageTitle)]</PageTitle>

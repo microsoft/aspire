@@ -12,6 +12,9 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Legacy.Pages;
 
+// Components/_Imports.razor applies [Authorize] to every component so pages are secure by default, and Login.razor
+// opts out with [AllowAnonymous]. The attributes are intended to be combined this way; the generated class has both.
+// CodeQL [SM04595] Intentional: [AllowAnonymous] exempts the login page from the app-wide [Authorize] so it is reachable before sign-in.
 public partial class Login : IAsyncDisposable, IComponentWithTelemetry
 {
     private IJSObjectReference? _jsModule;
