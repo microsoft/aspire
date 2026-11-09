@@ -98,6 +98,10 @@ func FormatError(err error) string {
 	if err == nil {
 		return ""
 	}
+	var capErr *CapabilityError
+	if !errors.As(err, &capErr) {
+		return err.Error()
+	}
 	if joined, ok := err.(interface{ Unwrap() []error }); ok {
 		var b strings.Builder
 		for _, child := range joined.Unwrap() {
@@ -112,37 +116,33 @@ func FormatError(err error) string {
 		}
 		return b.String()
 	}
-	var capErr *CapabilityError
-	if errors.As(err, &capErr) {
-		var b strings.Builder
-		b.WriteString("Capability Error: ")
-		b.WriteString(capErr.Message())
-		if code := capErr.Code(); code != "" {
-			b.WriteString("\n  Code: ")
-			b.WriteString(code)
-		}
-		if cap := capErr.Capability(); cap != "" {
-			b.WriteString("\n  Capability: ")
-			b.WriteString(cap)
-		}
-		if capErr.err.Details != nil {
-			d := capErr.err.Details
-			if d.Parameter != nil {
-				b.WriteString("\n  Parameter: ")
-				b.WriteString(*d.Parameter)
-			}
-			if d.Expected != nil {
-				b.WriteString("\n  Expected: ")
-				b.WriteString(*d.Expected)
-			}
-			if d.Actual != nil {
-				b.WriteString("\n  Actual: ")
-				b.WriteString(*d.Actual)
-			}
-		}
-		return b.String()
+	var b strings.Builder
+	b.WriteString("Capability Error: ")
+	b.WriteString(capErr.Message())
+	if code := capErr.Code(); code != "" {
+		b.WriteString("\n  Code: ")
+		b.WriteString(code)
 	}
-	return err.Error()
+	if cap := capErr.Capability(); cap != "" {
+		b.WriteString("\n  Capability: ")
+		b.WriteString(cap)
+	}
+	if capErr.err.Details != nil {
+		d := capErr.err.Details
+		if d.Parameter != nil {
+			b.WriteString("\n  Parameter: ")
+			b.WriteString(*d.Parameter)
+		}
+		if d.Expected != nil {
+			b.WriteString("\n  Expected: ")
+			b.WriteString(*d.Expected)
+		}
+		if d.Actual != nil {
+			b.WriteString("\n  Actual: ")
+			b.WriteString(*d.Actual)
+		}
+	}
+	return b.String()
 }
 
 // CancellationToken wraps a context.Context to provide cooperative cancellation.

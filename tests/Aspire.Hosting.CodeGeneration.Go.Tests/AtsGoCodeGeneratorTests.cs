@@ -1560,6 +1560,16 @@ public class AtsGoCodeGeneratorTests
                     }
                 }
 
+                func TestFormatErrorPreservesOrdinaryMultiWrappedError(t *testing.T) {
+                    resourceErr := errors.New("resource failure")
+                    cleanupErr := errors.New("cleanup failure")
+                    joined := fmt.Errorf("deployment failed for cache: %w; cleanup failed: %w", resourceErr, cleanupErr)
+
+                    if got := FormatError(joined); got != joined.Error() {
+                        t.Errorf("FormatError() = %q, want %q", got, joined.Error())
+                    }
+                }
+
                 func TestPropagatedChildErrorIsNotRecordedAgain(t *testing.T) {
                     c := newClient("")
                     builder := newBuilderOn(c)
