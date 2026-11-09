@@ -2687,7 +2687,7 @@ export interface ContainerBuildOptionsCallbackContext {
      * and the value is not joined, split, or quoted by Aspire. Spaces, quotes, and
      * commas are preserved, so a cache spec such as
      * `type=local,dest=./build cache` stays a single argument.
-     * Entries are only applied to builder-based builds (docker buildx / podman build).
+     * Entries are only applied to builder-based builds (docker buildx, podman build, and wslc build).
      * They do not apply to project resources built via `dotnet publish /t:PublishContainer`,
      * which does not invoke a container builder directly.
      * @experimental
@@ -2732,7 +2732,7 @@ export interface ContainerBuildOptionsCallbackContextPromise extends PromiseLike
      * and the value is not joined, split, or quoted by Aspire. Spaces, quotes, and
      * commas are preserved, so a cache spec such as
      * `type=local,dest=./build cache` stays a single argument.
-     * Entries are only applied to builder-based builds (docker buildx / podman build).
+     * Entries are only applied to builder-based builds (docker buildx, podman build, and wslc build).
      * They do not apply to project resources built via `dotnet publish /t:PublishContainer`,
      * which does not invoke a container builder directly.
      * @experimental
