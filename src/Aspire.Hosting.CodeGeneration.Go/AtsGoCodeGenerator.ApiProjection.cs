@@ -307,10 +307,20 @@ internal sealed partial class AtsGoCodeGenerator
             pair => GetOptionInterfaceName(pair.Value.Capability),
             pair => pair.Value,
             StringComparer.Ordinal);
-        var optionFunctionsByName = optionsByName.Values
+        var optionValues = optionsByName.Values
             .SelectMany(producer => GetNonTargetParameters(producer.Capability)
                 .Where(parameter => IsCancellationToken(parameter) || parameter.IsOptional)
-                .Select(parameter => (Name: GetOptionFunctionName(producer.Capability, parameter), Producer: producer)))
+                .Select(parameter => (
+                    Name: GetOptionFunctionName(producer.Capability, parameter),
+                    Parameter: parameter,
+                    Producer: producer)))
+            .ToList();
+        var optionValueTypesByName = optionValues
+            .Where(item => CanUseDirectOptionType(item.Parameter))
+            .GroupBy(item => item.Name, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Producer, StringComparer.Ordinal);
+        var optionFunctionsByName = optionValues
+            .Where(item => !CanUseDirectOptionType(item.Parameter))
             .GroupBy(item => item.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().Producer, StringComparer.Ordinal);
 
@@ -334,6 +344,11 @@ internal sealed partial class AtsGoCodeGenerator
                 AddGeneratedType(scope, GoApiItemKind.Options, "options", $"{owner}/{type.Name}", owner, type, members, producer.UsedBy, dtoType: null);
             }
             else if (optionInterfacesByName.TryGetValue(type.Name, out producer))
+            {
+                var owner = GetCapabilityOwningAssemblyName(context, producer.Capability);
+                AddGeneratedType(scope, GoApiItemKind.Type, "type", $"{owner}/{type.Name}", owner, type, members, producer.UsedBy, dtoType: null);
+            }
+            else if (optionValueTypesByName.TryGetValue(type.Name, out producer))
             {
                 var owner = GetCapabilityOwningAssemblyName(context, producer.Capability);
                 AddGeneratedType(scope, GoApiItemKind.Type, "type", $"{owner}/{type.Name}", owner, type, members, producer.UsedBy, dtoType: null);

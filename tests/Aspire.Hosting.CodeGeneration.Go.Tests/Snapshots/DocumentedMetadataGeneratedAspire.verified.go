@@ -250,18 +250,20 @@ type WithDocumentationOption interface {
 	apply(*WithDocumentationOptions)
 }
 
-type withDocumentationOptionFunc func(*WithDocumentationOptions)
-
-func (f withDocumentationOptionFunc) apply(options *WithDocumentationOptions) { ... }
-
 // DocumentationPort sets port for WithDocumentation.
-func DocumentationPort(value float64) WithDocumentationOption { ... }
+type DocumentationPort float64
+
+func (value DocumentationPort) apply(options *WithDocumentationOptions) { ... }
 
 // DocumentationStatus sets status for WithDocumentation.
-func DocumentationStatus(value DocumentedStatus) WithDocumentationOption { ... }
+type DocumentationStatus DocumentedStatus
+
+func (value DocumentationStatus) apply(options *WithDocumentationOptions) { ... }
 
 // DocumentationEnabled sets enabled for WithDocumentation.
-func DocumentationEnabled(value bool) WithDocumentationOption { ... }
+type DocumentationEnabled bool
+
+func (value DocumentationEnabled) apply(options *WithDocumentationOptions) { ... }
 
 func (o *WithDocumentationOptions) ToMap() map[string]any { ... }
 
@@ -276,11 +278,11 @@ type WithDirectOptionsOption interface {
 	apply(*WithDirectOptionsOptions)
 }
 
-type withDirectOptionsOptionFunc func(*WithDirectOptionsOptions)
-
-func (f withDirectOptionsOptionFunc) apply(options *WithDirectOptionsOptions) { ... }
-
 // DirectOptionsOptions sets options for WithDirectOptions.
+type directOptionsOptionsOption struct{ value *DocumentedSettings }
+
+func (option directOptionsOptionsOption) apply(options *WithDirectOptionsOptions) { ... }
+
 func DirectOptionsOptions(value *DocumentedSettings) WithDirectOptionsOption { ... }
 
 func (o *WithDirectOptionsOptions) ToMap() map[string]any { ... }

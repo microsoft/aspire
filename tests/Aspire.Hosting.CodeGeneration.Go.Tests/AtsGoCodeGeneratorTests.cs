@@ -2470,8 +2470,11 @@ public class AtsGoCodeGeneratorTests
 
         Assert.Contains("WithHttpEndpoint(options ...WithHttpEndpointOption)", aspireGo);
         Assert.Contains("type WithHttpEndpointOption interface", aspireGo);
-        Assert.Contains("func HttpEndpointPort(value int) WithHttpEndpointOption", aspireGo);
-        Assert.Contains("func HttpEndpointIsProxied(value bool) WithHttpEndpointOption", aspireGo);
+        Assert.Contains("type HttpEndpointPort int", aspireGo);
+        Assert.Contains("func (value HttpEndpointPort) apply(options *WithHttpEndpointOptions)", aspireGo);
+        Assert.Contains("type HttpEndpointIsProxied bool", aspireGo);
+        Assert.Contains("func (value HttpEndpointIsProxied) apply(options *WithHttpEndpointOptions)", aspireGo);
+        Assert.DoesNotContain("withHttpEndpointOptionFunc", aspireGo);
         Assert.Contains("opt.apply(merged)", aspireGo);
     }
 

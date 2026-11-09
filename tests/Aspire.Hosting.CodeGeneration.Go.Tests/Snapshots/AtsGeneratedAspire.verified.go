@@ -3609,17 +3609,11 @@ type AddTestRedisOption interface {
 	apply(*AddTestRedisOptions)
 }
 
-type addTestRedisOptionFunc func(*AddTestRedisOptions)
-
-func (f addTestRedisOptionFunc) apply(options *AddTestRedisOptions) {
-	f(options)
-}
-
 // AddTestRedisPort sets port for AddTestRedis.
-func AddTestRedisPort(value int) AddTestRedisOption {
-	return addTestRedisOptionFunc(func(options *AddTestRedisOptions) {
-		options.Port = &value
-	})
+type AddTestRedisPort int
+
+func (value AddTestRedisPort) apply(options *AddTestRedisOptions) {
+	options.Port = (*int)(&value)
 }
 
 func (o *AddTestRedisOptions) ToMap() map[string]any {
@@ -3643,17 +3637,11 @@ type AddTestChildDatabaseOption interface {
 	apply(*AddTestChildDatabaseOptions)
 }
 
-type addTestChildDatabaseOptionFunc func(*AddTestChildDatabaseOptions)
-
-func (f addTestChildDatabaseOptionFunc) apply(options *AddTestChildDatabaseOptions) {
-	f(options)
-}
-
 // AddTestChildDatabaseDatabaseName sets databaseName for AddTestChildDatabase.
-func AddTestChildDatabaseDatabaseName(value string) AddTestChildDatabaseOption {
-	return addTestChildDatabaseOptionFunc(func(options *AddTestChildDatabaseOptions) {
-		options.DatabaseName = &value
-	})
+type AddTestChildDatabaseDatabaseName string
+
+func (value AddTestChildDatabaseDatabaseName) apply(options *AddTestChildDatabaseOptions) {
+	options.DatabaseName = (*string)(&value)
 }
 
 func (o *AddTestChildDatabaseOptions) ToMap() map[string]any {
@@ -3677,17 +3665,11 @@ type WithPersistenceOption interface {
 	apply(*WithPersistenceOptions)
 }
 
-type withPersistenceOptionFunc func(*WithPersistenceOptions)
-
-func (f withPersistenceOptionFunc) apply(options *WithPersistenceOptions) {
-	f(options)
-}
-
 // PersistenceMode sets mode for WithPersistence.
-func PersistenceMode(value TestPersistenceMode) WithPersistenceOption {
-	return withPersistenceOptionFunc(func(options *WithPersistenceOptions) {
-		options.Mode = &value
-	})
+type PersistenceMode TestPersistenceMode
+
+func (value PersistenceMode) apply(options *WithPersistenceOptions) {
+	options.Mode = (*TestPersistenceMode)(&value)
 }
 
 func (o *WithPersistenceOptions) ToMap() map[string]any {
@@ -3712,24 +3694,18 @@ type WithOptionalStringOption interface {
 	apply(*WithOptionalStringOptions)
 }
 
-type withOptionalStringOptionFunc func(*WithOptionalStringOptions)
-
-func (f withOptionalStringOptionFunc) apply(options *WithOptionalStringOptions) {
-	f(options)
-}
-
 // OptionalStringValue sets value for WithOptionalString.
-func OptionalStringValue(value string) WithOptionalStringOption {
-	return withOptionalStringOptionFunc(func(options *WithOptionalStringOptions) {
-		options.Value = &value
-	})
+type OptionalStringValue string
+
+func (value OptionalStringValue) apply(options *WithOptionalStringOptions) {
+	options.Value = (*string)(&value)
 }
 
 // OptionalStringEnabled sets enabled for WithOptionalString.
-func OptionalStringEnabled(value bool) WithOptionalStringOption {
-	return withOptionalStringOptionFunc(func(options *WithOptionalStringOptions) {
-		options.Enabled = &value
-	})
+type OptionalStringEnabled bool
+
+func (value OptionalStringEnabled) apply(options *WithOptionalStringOptions) {
+	options.Enabled = (*bool)(&value)
 }
 
 func (o *WithOptionalStringOptions) ToMap() map[string]any {
@@ -3756,17 +3732,11 @@ type WithOptionalCallbackOption interface {
 	apply(*WithOptionalCallbackOptions)
 }
 
-type withOptionalCallbackOptionFunc func(*WithOptionalCallbackOptions)
-
-func (f withOptionalCallbackOptionFunc) apply(options *WithOptionalCallbackOptions) {
-	f(options)
-}
-
 // OptionalCallbackCallback sets callback for WithOptionalCallback.
-func OptionalCallbackCallback(value func(arg TestCallbackContext)) WithOptionalCallbackOption {
-	return withOptionalCallbackOptionFunc(func(options *WithOptionalCallbackOptions) {
-		options.Callback = value
-	})
+type OptionalCallbackCallback func(arg TestCallbackContext)
+
+func (value OptionalCallbackCallback) apply(options *WithOptionalCallbackOptions) {
+	options.Callback = value
 }
 
 func (o *WithOptionalCallbackOptions) ToMap() map[string]any {
@@ -3787,17 +3757,15 @@ type GetStatusAsyncOption interface {
 	apply(*GetStatusAsyncOptions)
 }
 
-type getStatusAsyncOptionFunc func(*GetStatusAsyncOptions)
+// GetStatusAsyncCancellationToken sets cancellationToken for GetStatusAsync.
+type getStatusAsyncCancellationTokenOption struct{ value *CancellationToken }
 
-func (f getStatusAsyncOptionFunc) apply(options *GetStatusAsyncOptions) {
-	f(options)
+func (option getStatusAsyncCancellationTokenOption) apply(options *GetStatusAsyncOptions) {
+	options.CancellationToken = option.value
 }
 
-// GetStatusAsyncCancellationToken sets cancellationToken for GetStatusAsync.
 func GetStatusAsyncCancellationToken(value *CancellationToken) GetStatusAsyncOption {
-	return getStatusAsyncOptionFunc(func(options *GetStatusAsyncOptions) {
-		options.CancellationToken = value
-	})
+	return getStatusAsyncCancellationTokenOption{value: value}
 }
 
 func (o *GetStatusAsyncOptions) ToMap() map[string]any {
@@ -3818,17 +3786,15 @@ type WaitForReadyAsyncOption interface {
 	apply(*WaitForReadyAsyncOptions)
 }
 
-type waitForReadyAsyncOptionFunc func(*WaitForReadyAsyncOptions)
+// WaitForReadyAsyncCancellationToken sets cancellationToken for WaitForReadyAsync.
+type waitForReadyAsyncCancellationTokenOption struct{ value *CancellationToken }
 
-func (f waitForReadyAsyncOptionFunc) apply(options *WaitForReadyAsyncOptions) {
-	f(options)
+func (option waitForReadyAsyncCancellationTokenOption) apply(options *WaitForReadyAsyncOptions) {
+	options.CancellationToken = option.value
 }
 
-// WaitForReadyAsyncCancellationToken sets cancellationToken for WaitForReadyAsync.
 func WaitForReadyAsyncCancellationToken(value *CancellationToken) WaitForReadyAsyncOption {
-	return waitForReadyAsyncOptionFunc(func(options *WaitForReadyAsyncOptions) {
-		options.CancellationToken = value
-	})
+	return waitForReadyAsyncCancellationTokenOption{value: value}
 }
 
 func (o *WaitForReadyAsyncOptions) ToMap() map[string]any {
@@ -3850,24 +3816,18 @@ type TestDatabaseResourceWithDataVolumeOption interface {
 	apply(*TestDatabaseResourceWithDataVolumeOptions)
 }
 
-type testDatabaseResourceWithDataVolumeOptionFunc func(*TestDatabaseResourceWithDataVolumeOptions)
-
-func (f testDatabaseResourceWithDataVolumeOptionFunc) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
-	f(options)
-}
-
 // TestDatabaseResourceWithDataVolumeName sets name for WithDataVolume.
-func TestDatabaseResourceWithDataVolumeName(value string) TestDatabaseResourceWithDataVolumeOption {
-	return testDatabaseResourceWithDataVolumeOptionFunc(func(options *TestDatabaseResourceWithDataVolumeOptions) {
-		options.Name = &value
-	})
+type TestDatabaseResourceWithDataVolumeName string
+
+func (value TestDatabaseResourceWithDataVolumeName) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
+	options.Name = (*string)(&value)
 }
 
 // TestDatabaseResourceWithDataVolumeIsReadOnly sets isReadOnly for WithDataVolume.
-func TestDatabaseResourceWithDataVolumeIsReadOnly(value bool) TestDatabaseResourceWithDataVolumeOption {
-	return testDatabaseResourceWithDataVolumeOptionFunc(func(options *TestDatabaseResourceWithDataVolumeOptions) {
-		options.IsReadOnly = &value
-	})
+type TestDatabaseResourceWithDataVolumeIsReadOnly bool
+
+func (value TestDatabaseResourceWithDataVolumeIsReadOnly) apply(options *TestDatabaseResourceWithDataVolumeOptions) {
+	options.IsReadOnly = (*bool)(&value)
 }
 
 func (o *TestDatabaseResourceWithDataVolumeOptions) ToMap() map[string]any {
@@ -3895,24 +3855,18 @@ type WithMergeLoggingOption interface {
 	apply(*WithMergeLoggingOptions)
 }
 
-type withMergeLoggingOptionFunc func(*WithMergeLoggingOptions)
-
-func (f withMergeLoggingOptionFunc) apply(options *WithMergeLoggingOptions) {
-	f(options)
-}
-
 // MergeLoggingEnableConsole sets enableConsole for WithMergeLogging.
-func MergeLoggingEnableConsole(value bool) WithMergeLoggingOption {
-	return withMergeLoggingOptionFunc(func(options *WithMergeLoggingOptions) {
-		options.EnableConsole = &value
-	})
+type MergeLoggingEnableConsole bool
+
+func (value MergeLoggingEnableConsole) apply(options *WithMergeLoggingOptions) {
+	options.EnableConsole = (*bool)(&value)
 }
 
 // MergeLoggingMaxFiles sets maxFiles for WithMergeLogging.
-func MergeLoggingMaxFiles(value int) WithMergeLoggingOption {
-	return withMergeLoggingOptionFunc(func(options *WithMergeLoggingOptions) {
-		options.MaxFiles = &value
-	})
+type MergeLoggingMaxFiles int
+
+func (value MergeLoggingMaxFiles) apply(options *WithMergeLoggingOptions) {
+	options.MaxFiles = (*int)(&value)
 }
 
 func (o *WithMergeLoggingOptions) ToMap() map[string]any {
@@ -3940,24 +3894,18 @@ type WithMergeLoggingPathOption interface {
 	apply(*WithMergeLoggingPathOptions)
 }
 
-type withMergeLoggingPathOptionFunc func(*WithMergeLoggingPathOptions)
-
-func (f withMergeLoggingPathOptionFunc) apply(options *WithMergeLoggingPathOptions) {
-	f(options)
-}
-
 // MergeLoggingPathEnableConsole sets enableConsole for WithMergeLoggingPath.
-func MergeLoggingPathEnableConsole(value bool) WithMergeLoggingPathOption {
-	return withMergeLoggingPathOptionFunc(func(options *WithMergeLoggingPathOptions) {
-		options.EnableConsole = &value
-	})
+type MergeLoggingPathEnableConsole bool
+
+func (value MergeLoggingPathEnableConsole) apply(options *WithMergeLoggingPathOptions) {
+	options.EnableConsole = (*bool)(&value)
 }
 
 // MergeLoggingPathMaxFiles sets maxFiles for WithMergeLoggingPath.
-func MergeLoggingPathMaxFiles(value int) WithMergeLoggingPathOption {
-	return withMergeLoggingPathOptionFunc(func(options *WithMergeLoggingPathOptions) {
-		options.MaxFiles = &value
-	})
+type MergeLoggingPathMaxFiles int
+
+func (value MergeLoggingPathMaxFiles) apply(options *WithMergeLoggingPathOptions) {
+	options.MaxFiles = (*int)(&value)
 }
 
 func (o *WithMergeLoggingPathOptions) ToMap() map[string]any {
@@ -3984,17 +3932,15 @@ type SetCancellationTokenOption interface {
 	apply(*SetCancellationTokenOptions)
 }
 
-type setCancellationTokenOptionFunc func(*SetCancellationTokenOptions)
+// SetCancellationTokenValue sets value for SetCancellationToken.
+type setCancellationTokenValueOption struct{ value *CancellationToken }
 
-func (f setCancellationTokenOptionFunc) apply(options *SetCancellationTokenOptions) {
-	f(options)
+func (option setCancellationTokenValueOption) apply(options *SetCancellationTokenOptions) {
+	options.Value = option.value
 }
 
-// SetCancellationTokenValue sets value for SetCancellationToken.
 func SetCancellationTokenValue(value *CancellationToken) SetCancellationTokenOption {
-	return setCancellationTokenOptionFunc(func(options *SetCancellationTokenOptions) {
-		options.Value = value
-	})
+	return setCancellationTokenValueOption{value: value}
 }
 
 func (o *SetCancellationTokenOptions) ToMap() map[string]any {

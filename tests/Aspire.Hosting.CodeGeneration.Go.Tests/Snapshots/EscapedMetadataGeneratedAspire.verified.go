@@ -353,17 +353,11 @@ type With_QuoteOption interface {
 	apply(*With_QuoteOptions)
 }
 
-type with_QuoteOptionFunc func(*With_QuoteOptions)
-
-func (f with_QuoteOptionFunc) apply(options *With_QuoteOptions) {
-	f(options)
-}
-
 // _QuoteOp_tional sets op"tional for With_Quote.
-func _QuoteOp_tional(value string) With_QuoteOption {
-	return with_QuoteOptionFunc(func(options *With_QuoteOptions) {
-		options.Op_tional = &value
-	})
+type _QuoteOp_tional string
+
+func (value _QuoteOp_tional) apply(options *With_QuoteOptions) {
+	options.Op_tional = (*string)(&value)
 }
 
 func (o *With_QuoteOptions) ToMap() map[string]any {
@@ -387,17 +381,15 @@ type WithCancelOption interface {
 	apply(*WithCancelOptions)
 }
 
-type withCancelOptionFunc func(*WithCancelOptions)
+// CancelCancel_Token sets cancel"Token for WithCancel.
+type cancelCancel_TokenOption struct{ value *CancellationToken }
 
-func (f withCancelOptionFunc) apply(options *WithCancelOptions) {
-	f(options)
+func (option cancelCancel_TokenOption) apply(options *WithCancelOptions) {
+	options.Cancel_Token = option.value
 }
 
-// CancelCancel_Token sets cancel"Token for WithCancel.
 func CancelCancel_Token(value *CancellationToken) WithCancelOption {
-	return withCancelOptionFunc(func(options *WithCancelOptions) {
-		options.Cancel_Token = value
-	})
+	return cancelCancel_TokenOption{value: value}
 }
 
 func (o *WithCancelOptions) ToMap() map[string]any {

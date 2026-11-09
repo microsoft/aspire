@@ -2150,30 +2150,39 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             WriteLine();
 
             var optionInterfaceName = GetOptionInterfaceName(capability);
-            var optionFuncName = ToCamelCase(optionInterfaceName) + "Func";
             WriteLine($"// {optionInterfaceName} configures {ToPascalCase(capability.MethodName)}.");
             WriteLine($"type {optionInterfaceName} interface {{");
             WriteLine($"\tapply(*{name})");
-            WriteLine("}");
-            WriteLine();
-            WriteLine($"type {optionFuncName} func(*{name})");
-            WriteLine();
-            WriteLine($"func (f {optionFuncName}) apply(options *{name}) {{");
-            WriteLine("\tf(options)");
             WriteLine("}");
             WriteLine();
 
             foreach (var p in optionalParams)
             {
                 var fieldName = ToPascalCase(p.Name);
-                var functionName = GetOptionFunctionName(capability, p);
+                var optionName = GetOptionFunctionName(capability, p);
                 var parameterType = RenderOptionFunctionParameterType(p);
-                WriteLine($"// {functionName} sets {p.Name} for {ToPascalCase(capability.MethodName)}.");
-                WriteLine($"func {functionName}(value {parameterType}) {optionInterfaceName} {{");
-                WriteLine($"\treturn {optionFuncName}(func(options *{name}) {{");
-                WriteLine($"\t\toptions.{fieldName} = {RenderOptionAssignment(p)}");
-                WriteLine("\t})");
-                WriteLine("}");
+                WriteLine($"// {optionName} sets {p.Name} for {ToPascalCase(capability.MethodName)}.");
+                if (CanUseDirectOptionType(p))
+                {
+                    WriteLine($"type {optionName} {parameterType}");
+                    WriteLine();
+                    WriteLine($"func (value {optionName}) apply(options *{name}) {{");
+                    WriteLine($"\toptions.{fieldName} = {RenderDirectOptionAssignment(p)}");
+                    WriteLine("}");
+                }
+                else
+                {
+                    var implementationName = ToCamelCase(optionName) + "Option";
+                    WriteLine($"type {implementationName} struct {{ value {parameterType} }}");
+                    WriteLine();
+                    WriteLine($"func (option {implementationName}) apply(options *{name}) {{");
+                    WriteLine($"\toptions.{fieldName} = {RenderWrappedOptionAssignment(p)}");
+                    WriteLine("}");
+                    WriteLine();
+                    WriteLine($"func {optionName}(value {parameterType}) {optionInterfaceName} {{");
+                    WriteLine($"\treturn {implementationName}{{value: value}}");
+                    WriteLine("}");
+                }
                 WriteLine();
             }
 
@@ -2275,11 +2284,39 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 : type;
     }
 
-    private string RenderOptionAssignment(AtsParameterInfo parameter)
+    private static bool CanUseDirectOptionType(AtsParameterInfo parameter)
+    {
+        if (IsCancellationToken(parameter) || parameter.Type is not { } type)
+        {
+            return false;
+        }
+
+        return type.Category switch
+        {
+            AtsTypeCategory.Primitive => type.TypeId is not (AtsConstants.Any or AtsConstants.ReferenceExpressionTypeId),
+            AtsTypeCategory.Enum or AtsTypeCategory.Callback or AtsTypeCategory.Array => true,
+            AtsTypeCategory.List or AtsTypeCategory.Dict => type.IsReadOnly,
+            _ => false
+        };
+    }
+
+    private string RenderDirectOptionAssignment(AtsParameterInfo parameter)
+    {
+        var fieldType = RenderOptionsFieldType(parameter);
+        var parameterType = RenderOptionFunctionParameterType(parameter);
+        if (fieldType == $"*{parameterType}")
+        {
+            return $"(*{parameterType})(&value)";
+        }
+
+        return fieldType == parameterType ? "value" : $"{fieldType}(value)";
+    }
+
+    private string RenderWrappedOptionAssignment(AtsParameterInfo parameter)
     {
         return RenderOptionsFieldType(parameter) == RenderOptionFunctionParameterType(parameter)
-            ? "value"
-            : "&value";
+            ? "option.value"
+            : "&option.value";
     }
 
     private string GetOptionsQualifiedName(AtsCapabilityInfo capability, string simpleName)
