@@ -763,6 +763,112 @@ public sealed class DcpHostNotificationTests
         }
     }
 
+    [Fact]
+    public async Task EnsureDcpContainerRuntimeAsync_WithoutContainers_DoesNotWaitForContainerRuntimeProbe()
+    {
+        // 'dcp info' probes the container runtime CLI, which can hang (microsoft/aspire#21771).
+        // An app without containers only needs DCP itself to be installed and recent enough.
+        var dcpDir = Directory.CreateTempSubdirectory("aspire-dcp-info-hangs");
+        try
+        {
+            var dcpOptions = Options.Create(new DcpOptions { CliPath = CreateFakeDcpWithHangingInfo(dcpDir.FullName), DependencyCheckTimeout = 2 });
+            var dependencyCheck = new DcpDependencyCheck(dcpOptions);
+            var model = new DistributedApplicationModel(new ResourceCollection([new ExecutableResource("app", "app", ".")]));
+            var dcpHost = CreateDcpHostForDependencyCheckTests(dcpOptions, dependencyCheck, model);
+
+            await dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None).DefaultTimeout();
+
+            var dcpInfo = await dependencyCheck.GetDcpVersionAsync().DefaultTimeout();
+            Assert.NotNull(dcpInfo);
+            Assert.Equal(DcpVersion.Dev, dcpInfo.Version);
+            Assert.Null(dcpInfo.Containers);
+        }
+        finally
+        {
+            DeleteDirectoryBestEffort(dcpDir);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureDcpContainerRuntimeAsync_WithContainers_ReportsContainerRuntimeProbeTimeout()
+    {
+        var dcpDir = Directory.CreateTempSubdirectory("aspire-dcp-info-hangs");
+        try
+        {
+            var dcpOptions = Options.Create(new DcpOptions { CliPath = CreateFakeDcpWithHangingInfo(dcpDir.FullName), DependencyCheckTimeout = 2 });
+            using var app = CreateAppWithContainers();
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            var dcpHost = CreateDcpHostForDependencyCheckTests(dcpOptions, new DcpDependencyCheck(dcpOptions), model);
+
+            var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None)).DefaultTimeout();
+            Assert.Contains("Application orchestrator dependency check returned an error", ex.Message);
+        }
+        finally
+        {
+            DeleteDirectoryBestEffort(dcpDir);
+        }
+    }
+
+    private static DcpHost CreateDcpHostForDependencyCheckTests(IOptions<DcpOptions> dcpOptions, IDcpDependencyCheckService dependencyCheckService, DistributedApplicationModel model)
+    {
+        return new DcpHost(
+            new NullLoggerFactory(),
+            dcpOptions,
+            dependencyCheckService,
+            new TestInteractionService(),
+            CreateTestLocations(),
+            model,
+            new FakeTimeProvider(),
+            new TestDeveloperCertificateService([], false, false, false),
+            new ConfigurationBuilder().Build());
+    }
+
+    // A fake DCP whose 'version' command answers immediately and whose 'info' command
+    // (which probes the container runtime) does not return within the dependency check timeout.
+    private static string CreateFakeDcpWithHangingInfo(string directory)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var scriptPath = Path.Combine(directory, "dcp.cmd");
+            File.WriteAllText(scriptPath, """
+                @echo off
+                if "%1"=="version" (
+                  echo {"version":"dev"}
+                  exit /b 0
+                )
+                ping -n 31 127.0.0.1 >nul
+                """);
+            return scriptPath;
+        }
+
+        var shellScriptPath = Path.Combine(directory, "dcp");
+        File.WriteAllText(shellScriptPath, """
+            #!/bin/sh
+            if [ "$1" = "version" ]; then
+              echo '{"version":"dev"}'
+              exit 0
+            fi
+            exec sleep 30
+            """);
+        File.SetUnixFileMode(shellScriptPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return shellScriptPath;
+    }
+
+    private static void DeleteDirectoryBestEffort(DirectoryInfo directory)
+    {
+        try
+        {
+            directory.Delete(recursive: true);
+        }
+        catch (IOException)
+        {
+            // The fake 'dcp info' process may still be exiting.
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
     private static string CreateFakeDcpLauncher(string directory, int exitCode)
     {
         if (OperatingSystem.IsWindows())

@@ -9,6 +9,12 @@ namespace Aspire.Hosting.Dcp;
 internal interface IDcpDependencyCheckService
 {
     Task<DcpInfo?> GetDcpInfoAsync(bool force = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates the DCP installation and version without probing the container runtime.
+    /// The returned <see cref="DcpInfo.Containers"/> is only populated if a full <see cref="GetDcpInfoAsync"/> check already completed.
+    /// </summary>
+    Task<DcpInfo?> GetDcpVersionAsync(CancellationToken cancellationToken = default) => GetDcpInfoAsync(cancellationToken: cancellationToken);
 }
 
 internal sealed class DcpInfo
