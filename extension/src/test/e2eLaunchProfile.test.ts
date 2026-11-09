@@ -2210,6 +2210,15 @@ builder.Build().Run();
             throw new webDriverError.SessionNotCreatedError('session not created: DevToolsActivePort file doesn\'t exist');
         }, { ...options, retryDelayMs: 5000, retryBudgetMs: 90000, now: () => clock }), webDriverError.SessionNotCreatedError);
         assert.strictEqual(calls, 2);
+
+        // A delay timer that fires late must not start an attempt past the budget.
+        clock = 0;
+        calls = 0;
+        await assert.rejects(createSessionWithRetry(async () => {
+            calls++;
+            throw rendererFailure();
+        }, { ...options, retryBudgetMs: 90000, now: () => (calls === 0 ? 0 : clock += 50000) }), webDriverError.SessionNotCreatedError);
+        assert.strictEqual(calls, 1);
     });
 
     test('keeps the slow zero-to-running shard timeout above its composed wait budgets', () => {

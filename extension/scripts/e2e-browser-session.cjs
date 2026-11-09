@@ -37,6 +37,10 @@ async function createSessionWithRetry(createSession, options = {}) {
 
       log(`WebDriver session creation failed on attempt ${attempt}/${attempts}; retrying in ${retryDelayMs} ms: ${error.message}`);
       await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+      // A starved runner can wake late; never start an attempt the hook timeout cannot absorb.
+      if (now() - startedAt > retryBudgetMs) {
+        throw error;
+      }
     }
   }
 }
