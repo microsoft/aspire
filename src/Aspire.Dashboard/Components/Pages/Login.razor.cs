@@ -12,10 +12,6 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
 
-// Components/_Imports.razor applies [Authorize] to every component so pages are secure by default, and Login.razor
-// opts out with [AllowAnonymous]. The attributes are intended to be combined this way; the generated class has both.
-// CodeQL cs/asp-authorization/use-authorization-base-allows-anonymous reports every public method of such a class because
-// it assumes MVC actions, but a Blazor component's methods aren't endpoints. The suppression is on each of those methods.
 public partial class Login : IAsyncDisposable, IComponentWithTelemetry
 {
     private IJSObjectReference? _jsModule;

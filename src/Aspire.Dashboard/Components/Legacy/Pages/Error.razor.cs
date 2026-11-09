@@ -7,10 +7,6 @@ using Aspire.Dashboard.Telemetry;
 
 namespace Aspire.Dashboard.Components.Legacy.Pages;
 
-// Components/_Imports.razor applies [Authorize] to every component so pages are secure by default, and Error.razor
-// opts out with [AllowAnonymous]. The attributes are intended to be combined this way; the generated class has both.
-// CodeQL cs/asp-authorization/use-authorization-base-allows-anonymous reports every public method of such a class because
-// it assumes MVC actions, but a Blazor component's methods aren't endpoints. The suppression is on each of those methods.
 public partial class Error : IComponentWithTelemetry, IDisposable
 {
     [Inject]
