@@ -13,10 +13,11 @@ param entra_web_outputs_clientid string
 
 param web_identity_outputs_clientid string
 
-resource web 'Microsoft.App/containerApps@2025-07-01' = {
+resource web 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'web'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -25,7 +26,6 @@ resource web 'Microsoft.App/containerApps@2025-07-01' = {
         transport: 'http'
       }
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {

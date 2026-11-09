@@ -13,7 +13,7 @@ param shared_mi_outputs_id string
 
 param registryName string
 
-resource env 'Microsoft.App/managedEnvironments@2025-07-01' existing = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' existing = {
   name: environmentName
   scope: resourceGroup(sharedRg)
 }
