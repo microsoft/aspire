@@ -801,7 +801,7 @@ public sealed class DcpHostNotificationTests
             var dcpHost = CreateDcpHostForDependencyCheckTests(dcpOptions, new DcpDependencyCheck(dcpOptions), model);
 
             var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => dcpHost.EnsureDcpContainerRuntimeAsync(CancellationToken.None)).DefaultTimeout();
-            Assert.Contains("Application orchestrator dependency check returned an error", ex.Message);
+            Assert.StartsWith(string.Format(CultureInfo.InvariantCulture, MessageStrings.DcpDependencyCheckFailedMessage, string.Empty).TrimEnd(), ex.Message);
         }
         finally
         {
