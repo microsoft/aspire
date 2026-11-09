@@ -7,11 +7,11 @@
 package aspire
 
 import (
-    "context"
-    "fmt"
-    "os"
-    "strings"
-    "time"
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
 )
 
 // Compile-time references to keep imports used in minimal SDKs.
@@ -62,14 +62,20 @@ func newKubernetesManifestResourceFromHandle(h *handle, c *client) KubernetesMan
 
 // WithField adds or updates a manifest field using a dot-separated path.
 func (s *kubernetesManifestResource) WithField(path string, value any) KubernetesManifestResource {
-	if s.Err() != nil { return s }
+	if s.Err() != nil {
+		return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["path"] = serializeValue(path)
-	if !isNil(value) { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Kubernetes/withField", reqArgs); err != nil { s.setErr(err) }
+	if !isNil(value) {
+		reqArgs["value"] = serializeValue(value)
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Kubernetes/withField", reqArgs); err != nil {
+		s.setErr(err)
+	}
 	return s
 }
 
@@ -96,12 +102,12 @@ type DistributedApplicationBuilder interface {
 	Build() (DistributedApplication, error)
 }
 
-type distributedApplicationBuilder struct { *resourceBuilderBase }
+type distributedApplicationBuilder struct{ *resourceBuilderBase }
 
 // DistributedApplication is returned by Build(); it represents the running application.
-type DistributedApplication interface { handleReference }
+type DistributedApplication interface{ handleReference }
 
-type distributedApplication struct { *resourceBuilderBase }
+type distributedApplication struct{ *resourceBuilderBase }
 
 // Err returns an error combining every failure recorded by this builder or by
 // any handle created from it.
@@ -112,13 +118,19 @@ func (b *distributedApplicationBuilder) Err() error {
 
 // Build invokes the build capability and returns the running application.
 func (b *distributedApplicationBuilder) Build() (DistributedApplication, error) {
-	if err := b.Err(); err != nil { return nil, err }
+	if err := b.Err(); err != nil {
+		return nil, err
+	}
 	result, err := b.client.invokeCapability(context.Background(), "Aspire.Hosting/build", map[string]any{
 		"context": b.handle.ToJSON(),
 	})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	app, ok := result.(DistributedApplication)
-	if !ok { return nil, fmt.Errorf("aspire: build returned unexpected type %T", result) }
+	if !ok {
+		return nil, fmt.Errorf("aspire: build returned unexpected type %T", result)
+	}
 	return app, nil
 }
 
@@ -129,12 +141,16 @@ func CreateBuilder() (DistributedApplicationBuilder, error) {
 		return nil, fmt.Errorf("REMOTE_APP_HOST_SOCKET_PATH environment variable not set. Run this application using `aspire run`")
 	}
 	c := newClient(socketPath)
-	if err := c.connect(context.Background(), 5*time.Second); err != nil { return nil, err }
+	if err := c.connect(context.Background(), 5*time.Second); err != nil {
+		return nil, err
+	}
 	c.onDisconnect(func() { os.Exit(1) })
 	registerWrappers(c)
 
 	resolved := map[string]any{}
-	if _, ok := resolved["args"]; !ok { resolved["args"] = os.Args[1:] }
+	if _, ok := resolved["args"]; !ok {
+		resolved["args"] = os.Args[1:]
+	}
 	if projectDirectory, ok := resolved["projectDirectory"].(string); !ok || projectDirectory == "" {
 		if projectDirectory := os.Getenv("ASPIRE_PROJECT_DIRECTORY"); projectDirectory != "" {
 			resolved["projectDirectory"] = projectDirectory
@@ -143,15 +159,21 @@ func CreateBuilder() (DistributedApplicationBuilder, error) {
 		}
 	}
 	if appHostFilePath, ok := resolved["appHostFilePath"].(string); !ok || appHostFilePath == "" {
-		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["appHostFilePath"] = appHostFilePath }
+		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" {
+			resolved["appHostFilePath"] = appHostFilePath
+		}
 	}
 	if dashboardApplicationName, ok := resolved["dashboardApplicationName"].(string); ok && dashboardApplicationName == "" {
 		delete(resolved, "dashboardApplicationName")
 	}
 
 	result, err := c.invokeCapability(context.Background(), "Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolved})
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	href, ok := result.(handleReference)
-	if !ok { return nil, fmt.Errorf("aspire: createBuilder returned unexpected type %T", result) }
+	if !ok {
+		return nil, fmt.Errorf("aspire: createBuilder returned unexpected type %T", result)
+	}
 	return &distributedApplicationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), c)}, nil
 }

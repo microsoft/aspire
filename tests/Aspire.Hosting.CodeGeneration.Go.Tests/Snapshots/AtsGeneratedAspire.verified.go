@@ -49,6 +49,13 @@ const (
 	TestResourceStatusFailed TestResourceStatus = "Failed"
 )
 
+// GoObsoleteEnum represents GoObsoleteEnum.
+type GoObsoleteEnum string
+
+const (
+	GoObsoleteEnumCurrent GoObsoleteEnum = "Current"
+)
+
 // ============================================================================
 // DTOs
 // ============================================================================
@@ -122,9 +129,40 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 	return m
 }
 
+// GoObsoleteDto represents GoObsoleteDto.
+type GoObsoleteDto struct {
+	Current string `json:"current,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *GoObsoleteDto) ToMap() map[string]any {
+	m := map[string]any{}
+	m["current"] = serializeValue(d.Current)
+	return m
+}
+
+// GoObsoleteWireDto represents GoObsoleteWireDto.
+type GoObsoleteWireDto struct {
+	Value string `json:"value,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *GoObsoleteWireDto) ToMap() map[string]any {
+	m := map[string]any{}
+	m["value"] = serializeValue(d.Value)
+	return m
+}
+
 // ============================================================================
 // Exported Values
 // ============================================================================
+
+// GoObsoleteValues groups related exported values.
+var GoObsoleteValues = struct {
+	CurrentValue string
+}{
+	CurrentValue: "current",
+}
 
 // TestConfigs groups related exported values.
 var TestConfigs = struct {
@@ -819,6 +857,172 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirec
 		s.setErr(err)
 	}
 	return s
+}
+
+// GoObsoleteContext is the public interface for handle type GoObsoleteContext.
+type GoObsoleteContext interface {
+	handleReference
+
+	// Current gets the Current property
+	Current() (string, error)
+
+	// GetDto invokes the GetDto method
+	GetDto() (*GoObsoleteDto, error)
+
+	// GetEnum invokes the GetEnum method
+	GetEnum() (GoObsoleteEnum, error)
+
+	// GetObsoleteWireDto invokes the GetObsoleteWireDto method
+	GetObsoleteWireDto() (*GoObsoleteWireDto, error)
+
+	// GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
+	GetObsoleteWireHandle() GoObsoleteWireHandle
+
+	// SetCurrent sets the Current property
+	SetCurrent(value string) GoObsoleteContext
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// goObsoleteContext is the unexported impl of GoObsoleteContext.
+type goObsoleteContext struct {
+	*resourceBuilderBase
+}
+
+// newGoObsoleteContextFromHandle wraps an existing handle as GoObsoleteContext.
+func newGoObsoleteContextFromHandle(h *handle, c *client) GoObsoleteContext {
+	return &goObsoleteContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Current gets the Current property
+func (s *goObsoleteContext) Current() (string, error) {
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.current", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// GetDto invokes the GetDto method
+func (s *goObsoleteContext) GetDto() (*GoObsoleteDto, error) {
+	if err := s.Err(); err != nil {
+		var zero *GoObsoleteDto
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getDto", reqArgs)
+	if err != nil {
+		var zero *GoObsoleteDto
+		return zero, err
+	}
+	return decodeAs[*GoObsoleteDto](result)
+}
+
+// GetEnum invokes the GetEnum method
+func (s *goObsoleteContext) GetEnum() (GoObsoleteEnum, error) {
+	if err := s.Err(); err != nil {
+		var zero GoObsoleteEnum
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getEnum", reqArgs)
+	if err != nil {
+		var zero GoObsoleteEnum
+		return zero, err
+	}
+	return decodeAs[GoObsoleteEnum](result)
+}
+
+// GetObsoleteWireDto invokes the GetObsoleteWireDto method
+func (s *goObsoleteContext) GetObsoleteWireDto() (*GoObsoleteWireDto, error) {
+	if err := s.Err(); err != nil {
+		var zero *GoObsoleteWireDto
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireDto", reqArgs)
+	if err != nil {
+		var zero *GoObsoleteWireDto
+		return zero, err
+	}
+	return decodeAs[*GoObsoleteWireDto](result)
+}
+
+// GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
+func (s *goObsoleteContext) GetObsoleteWireHandle() GoObsoleteWireHandle {
+	if err := s.Err(); err != nil {
+		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireHandle", reqArgs)
+	if err != nil {
+		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireHandle returned unexpected type %T", result)
+		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &goObsoleteWireHandle{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetCurrent sets the Current property
+func (s *goObsoleteContext) SetCurrent(value string) GoObsoleteContext {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.setCurrent", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// GoObsoleteWireHandle is the public interface for handle type
+// GoObsoleteWireHandle.
+type GoObsoleteWireHandle interface {
+	handleReference
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// goObsoleteWireHandle is the unexported impl of GoObsoleteWireHandle.
+type goObsoleteWireHandle struct {
+	*resourceBuilderBase
+}
+
+// newGoObsoleteWireHandleFromHandle wraps an existing handle as GoObsoleteWireHandle.
+func newGoObsoleteWireHandleFromHandle(h *handle, c *client) GoObsoleteWireHandle {
+	return &goObsoleteWireHandle{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
 // IDistributedApplicationBuilder is the public interface for handle type
@@ -4027,6 +4231,12 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", func(h *handle, c *client) any {
 		return newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.GoObsoleteContext", func(h *handle, c *client) any {
+		return newGoObsoleteContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.GoObsoleteWireHandle", func(h *handle, c *client) any {
+		return newGoObsoleteWireHandleFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", func(h *handle, c *client) any {
 		return newIDistributedApplicationBuilderFromHandle(h, c)

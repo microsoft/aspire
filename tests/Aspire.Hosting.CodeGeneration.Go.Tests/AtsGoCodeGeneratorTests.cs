@@ -2674,6 +2674,54 @@ public class AtsGoCodeGeneratorTests
         }
     }
 
+    [Fact]
+    public void GeneratedCode_FiltersObsoleteSymbolsButKeepsRequiredWireTypes()
+    {
+        var context = CreateContextFromTestAssembly();
+        var obsoleteContext = Assert.Single(context.HandleTypes, type => type.ClrType == typeof(GoObsoleteContext));
+        var obsoleteDto = Assert.Single(context.DtoTypes, type => type.ClrType == typeof(GoObsoleteDto));
+        var obsoleteEnum = Assert.Single(context.EnumTypes, type => type.ClrType == typeof(GoObsoleteEnum));
+
+        Assert.False(obsoleteContext.IsObsolete);
+        Assert.True(Assert.Single(obsoleteDto.Properties, property => property.Name == "Legacy").IsObsolete);
+        Assert.True(Assert.Single(obsoleteEnum.ValueInfos, value => value.Name == "Legacy").IsObsolete);
+        Assert.Contains(context.Capabilities, capability => capability.MethodName == "getLegacyValue" && capability.IsObsolete);
+        Assert.Contains(context.ExportedValues, value => value.PathSegments[^1] == "LegacyValue" && value.IsObsolete);
+
+        var aspireGo = new AtsGoCodeGenerator().GenerateDistributedApplication(context)["aspire.go"];
+
+        Assert.Contains("type GoObsoleteDto struct", aspireGo);
+        Assert.Contains("Current string", aspireGo);
+        Assert.DoesNotContain("Legacy string", aspireGo);
+        Assert.Contains("type GoObsoleteEnum string", aspireGo);
+        Assert.Contains("GoObsoleteEnumCurrent", aspireGo);
+        Assert.DoesNotContain("GoObsoleteEnumLegacy", aspireGo);
+        Assert.DoesNotContain("GetLegacyValue", aspireGo);
+        Assert.DoesNotMatch(@"type GoObsoleteContext interface \{[^}]*\bLegacy\(\)", aspireGo);
+        Assert.DoesNotContain("LegacyValue", aspireGo);
+        Assert.DoesNotContain("type GoUnusedObsoleteDto struct", aspireGo);
+
+        // These obsolete types remain because active methods still use them on the wire.
+        Assert.Contains("type GoObsoleteWireDto struct", aspireGo);
+        Assert.Contains("type GoObsoleteWireHandle interface", aspireGo);
+        Assert.Contains("GetObsoleteWireDto() (*GoObsoleteWireDto, error)", aspireGo);
+        Assert.Contains("GetObsoleteWireHandle() GoObsoleteWireHandle", aspireGo);
+
+        var api = new AtsGoCodeGenerator().BuildApiModel(
+            context,
+            TestTypesAssemblyName,
+            "1.0.0",
+            [TestTypesAssemblyName],
+            CancellationToken.None);
+        var apiItems = api.Modules.Single().Items;
+        Assert.DoesNotContain(
+            apiItems.SelectMany(item => item.Members),
+            member => member.Name is "Legacy" or "GetLegacyValue" || member.Name.EndsWith("LegacyValue", StringComparison.Ordinal));
+        Assert.DoesNotContain(apiItems, item => item.Name == "GoUnusedObsoleteDto");
+        Assert.Contains(apiItems, item => item.Name == "GoObsoleteWireDto");
+        Assert.Contains(apiItems, item => item.Name == "GoObsoleteWireHandle");
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();

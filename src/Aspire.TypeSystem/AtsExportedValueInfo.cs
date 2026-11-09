@@ -42,4 +42,9 @@ public sealed class AtsExportedValueInfo
     /// Gets XML documentation captured for the exported value.
     /// </summary>
     public AtsDocumentationInfo? Documentation { get; init; }
+
+    /// <summary>
+    /// Gets whether this exported value is obsolete.
+    /// </summary>
+    public bool IsObsolete { get; init; }
 }

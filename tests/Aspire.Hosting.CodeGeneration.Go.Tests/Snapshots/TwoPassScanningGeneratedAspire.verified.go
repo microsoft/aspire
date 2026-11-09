@@ -398,6 +398,13 @@ const (
 	TestResourceStatusFailed TestResourceStatus = "Failed"
 )
 
+// GoObsoleteEnum represents GoObsoleteEnum.
+type GoObsoleteEnum string
+
+const (
+	GoObsoleteEnumCurrent GoObsoleteEnum = "Current"
+)
+
 // ============================================================================
 // DTOs
 // ============================================================================
@@ -1213,10 +1220,6 @@ type CommandOptions struct {
 	// Description - Optional description of the command, to be shown in the UI.
 	// Could be used as a tooltip. May be localized.
 	Description *string `json:"description,omitempty"`
-	// Parameter - Obsolete optional parameter that configures the command in some
-	// way. Clients must return any value provided by the server when invoking the
-	// command.
-	Parameter any `json:"parameter,omitempty"`
 	// Arguments is the invocation arguments accepted by the command.
 	//
 	// The list order is part of the command contract. CLI positional arguments are
@@ -1270,9 +1273,6 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if d.Description != nil {
 		m["description"] = serializeValue(d.Description)
-	}
-	if d.Parameter != nil {
-		m["parameter"] = serializeValue(d.Parameter)
 	}
 	if d.Arguments != nil {
 		m["arguments"] = serializeValue(d.Arguments)
@@ -1714,9 +1714,6 @@ type ExecuteCommandResult struct {
 	// Canceled is a flag that indicates whether the command was canceled by the
 	// user.
 	Canceled *bool `json:"canceled,omitempty"`
-	// ErrorMessage is an optional error message that can be set when the command is
-	// unsuccessful.
-	ErrorMessage *string `json:"errorMessage,omitempty"`
 	// Message is an optional message associated with the command result.
 	Message *string `json:"message,omitempty"`
 	// Data is an optional value produced by the command.
@@ -1729,9 +1726,6 @@ func (d *ExecuteCommandResult) ToMap() map[string]any {
 	m["success"] = serializeValue(d.Success)
 	if d.Canceled != nil {
 		m["canceled"] = serializeValue(d.Canceled)
-	}
-	if d.ErrorMessage != nil {
-		m["errorMessage"] = serializeValue(d.ErrorMessage)
 	}
 	if d.Message != nil {
 		m["message"] = serializeValue(d.Message)
@@ -1928,9 +1922,40 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 	return m
 }
 
+// GoObsoleteDto represents GoObsoleteDto.
+type GoObsoleteDto struct {
+	Current string `json:"current,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *GoObsoleteDto) ToMap() map[string]any {
+	m := map[string]any{}
+	m["current"] = serializeValue(d.Current)
+	return m
+}
+
+// GoObsoleteWireDto represents GoObsoleteWireDto.
+type GoObsoleteWireDto struct {
+	Value string `json:"value,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *GoObsoleteWireDto) ToMap() map[string]any {
+	m := map[string]any{}
+	m["value"] = serializeValue(d.Value)
+	return m
+}
+
 // ============================================================================
 // Exported Values
 // ============================================================================
+
+// GoObsoleteValues groups related exported values.
+var GoObsoleteValues = struct {
+	CurrentValue string
+}{
+	CurrentValue: "current",
+}
 
 // TestConfigs groups related exported values.
 var TestConfigs = struct {
@@ -2528,19 +2553,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//
 	// Returns: The resource builder.
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-
-	// PublishAsConnectionString changes the resource to be published as a
-	// connection string reference in the manifest.
-	//
-	// This API only changes the manifest representation; it does not change the
-	// resource model used by other publishers.
-	//
-	// Returns: The resource builder.
-	//
-	// Deprecated: PublishAsConnectionString only works with the manifest publisher
-	// and is obsolete. Use AddConnectionString in publish-mode app model code
-	// instead.
-	PublishAsConnectionString() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// PublishAsContainer changes the resource to be published as a container in the
 	// manifest.
@@ -3448,21 +3460,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-
 	// WithReference adds a reference to another resource
 	//
 	// Allowed types for parameter source: Resource, EndpointReference, string.
@@ -3982,22 +3979,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceStop
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// PublishAsConnectionString changes the resource to be published as a
-// connection string reference in the manifest.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConnectionString() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsConnectionString", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -6067,42 +6048,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 	return s
 }
 
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(source any, options ...WithReferenceOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
@@ -7629,21 +7574,6 @@ type CSharpAppResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) CSharpAppResource
-
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) CSharpAppResource
 
 	// WithReference adds a reference to another resource
 	//
@@ -9856,42 +9786,6 @@ func (s *cSharpAppResource) WithProcessCommand(commandName string, displayName s
 		reqArgs["options"] = serializeValue(options)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommand", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) CSharpAppResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -12507,21 +12401,6 @@ type ContainerRegistryResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerRegistryResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ContainerRegistryResource
-
 	// WithRelationship adds a relationship to another resource using its builder.
 	//
 	// Parameters:
@@ -13720,42 +13599,6 @@ func (s *containerRegistryResource) WithProcessCommand(commandName string, displ
 	return s
 }
 
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *containerRegistryResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ContainerRegistryResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *containerRegistryResource) WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource {
 	if s.Err() != nil {
@@ -14227,19 +14070,6 @@ type ContainerResource interface {
 	//
 	// Returns: The resource builder.
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerResource
-
-	// PublishAsConnectionString changes the resource to be published as a
-	// connection string reference in the manifest.
-	//
-	// This API only changes the manifest representation; it does not change the
-	// resource model used by other publishers.
-	//
-	// Returns: The resource builder.
-	//
-	// Deprecated: PublishAsConnectionString only works with the manifest publisher
-	// and is obsolete. Use AddConnectionString in publish-mode app model code
-	// instead.
-	PublishAsConnectionString() ContainerResource
 
 	// PublishAsContainer changes the resource to be published as a container in the
 	// manifest.
@@ -15147,21 +14977,6 @@ type ContainerResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ContainerResource
-
 	// WithReference adds a reference to another resource
 	//
 	// Allowed types for parameter source: Resource, EndpointReference, string.
@@ -15678,22 +15493,6 @@ func (s *containerResource) OnResourceStopped(callback func(arg ResourceStoppedE
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// PublishAsConnectionString changes the resource to be published as a
-// connection string reference in the manifest.
-func (s *containerResource) PublishAsConnectionString() ContainerResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsConnectionString", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -17763,42 +17562,6 @@ func (s *containerResource) WithProcessCommand(commandName string, displayName s
 	return s
 }
 
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *containerResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ContainerResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *containerResource) WithReference(source any, options ...WithReferenceOption) ContainerResource {
@@ -18364,15 +18127,6 @@ func (s *distributedApplication) Run(options ...RunOption) error {
 type DistributedApplicationBuilder interface {
 	handleReference
 
-	// AddCSharpApp adds a C# application resource
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [AddCSharpAppOption].
-	//
-	// Deprecated: Use addDotnetProject from the Aspire.Hosting.Dotnet package
-	// instead.
-	AddCSharpApp(name string, path string, options ...AddCSharpAppOption) CSharpAppResource
-
 	// AddConnectionString adds a connection string resource
 	//
 	// Parameters:
@@ -18529,15 +18283,6 @@ type DistributedApplicationBuilder interface {
 	//   - options: Optional parameters; see [AddParameterWithGeneratedValueOption].
 	AddParameterWithGeneratedValue(name string, value *GenerateParameterDefault, options ...AddParameterWithGeneratedValueOption) ParameterResource
 
-	// AddProject adds a .NET project resource
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [AddProjectOption].
-	//
-	// Deprecated: Use addDotnetProject from the Aspire.Hosting.Dotnet package
-	// instead.
-	AddProject(name string, projectPath string, options ...AddProjectOption) ProjectResource
-
 	// AddTestRedis adds a test Redis resource from ATS documentation.
 	//
 	// Parameters:
@@ -18682,40 +18427,6 @@ type distributedApplicationBuilder struct {
 // newDistributedApplicationBuilderFromHandle wraps an existing handle as DistributedApplicationBuilder.
 func newDistributedApplicationBuilderFromHandle(h *handle, c *client) DistributedApplicationBuilder {
 	return &distributedApplicationBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
-}
-
-// AddCSharpApp adds a C# application resource
-func (s *distributedApplicationBuilder) AddCSharpApp(name string, path string, options ...AddCSharpAppOption) CSharpAppResource {
-	if err := s.resourceBuilderBase.Err(); err != nil {
-		return &cSharpAppResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["path"] = serializeValue(path)
-	if len(options) > 0 {
-		merged := &AddCSharpAppOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addCSharpApp", reqArgs)
-	if err != nil {
-		return &cSharpAppResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addCSharpApp returned unexpected type %T", result)
-		return &cSharpAppResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AddConnectionString adds a connection string resource
@@ -19177,40 +18888,6 @@ func (s *distributedApplicationBuilder) AddParameterWithGeneratedValue(name stri
 		return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddProject adds a .NET project resource
-func (s *distributedApplicationBuilder) AddProject(name string, projectPath string, options ...AddProjectOption) ProjectResource {
-	if err := s.resourceBuilderBase.Err(); err != nil {
-		return &projectResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["projectPath"] = serializeValue(projectPath)
-	if len(options) > 0 {
-		merged := &AddProjectOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addProject", reqArgs)
-	if err != nil {
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addProject returned unexpected type %T", result)
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &projectResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AddTestRedis adds a test Redis resource from ATS documentation.
@@ -19679,9 +19356,6 @@ type DistributedApplicationExecutionContext interface {
 	// release.
 	RunConfiguration() (*RunConfiguration, error)
 
-	// ServiceProvider is the [ServiceProvider] for the AppHost.
-	ServiceProvider() ServiceProvider
-
 	// Services is the [ServiceProvider] for the AppHost.
 	Services() ServiceProvider
 
@@ -19795,27 +19469,6 @@ func (s *distributedApplicationExecutionContext) RunConfiguration() (*RunConfigu
 		return zero, err
 	}
 	return decodeAs[*RunConfiguration](result)
-}
-
-// ServiceProvider is the [ServiceProvider] for the AppHost.
-func (s *distributedApplicationExecutionContext) ServiceProvider() ServiceProvider {
-	if err := s.Err(); err != nil {
-		return &serviceProvider{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider", reqArgs)
-	if err != nil {
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider returned unexpected type %T", result)
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // Services is the [ServiceProvider] for the AppHost.
@@ -21551,21 +21204,6 @@ type DotnetToolResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) DotnetToolResource
-
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) DotnetToolResource
 
 	// WithReference adds a reference to another resource
 	//
@@ -23824,42 +23462,6 @@ func (s *dotnetToolResource) WithProcessCommand(commandName string, displayName 
 		reqArgs["options"] = serializeValue(options)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommand", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) DotnetToolResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -26777,21 +26379,6 @@ type ExecutableResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExecutableResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ExecutableResource
-
 	// WithReference adds a reference to another resource
 	//
 	// Allowed types for parameter source: Resource, EndpointReference, string.
@@ -28981,42 +28568,6 @@ func (s *executableResource) WithProcessCommand(commandName string, displayName 
 	return s
 }
 
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *executableResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ExecutableResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *executableResource) WithReference(source any, options ...WithReferenceOption) ExecutableResource {
@@ -30329,21 +29880,6 @@ type ExternalServiceResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExternalServiceResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ExternalServiceResource
-
 	// WithRelationship adds a relationship to another resource using its builder.
 	//
 	// Parameters:
@@ -31569,42 +31105,6 @@ func (s *externalServiceResource) WithProcessCommand(commandName string, display
 	return s
 }
 
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *externalServiceResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ExternalServiceResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithRelationship adds a relationship to another resource using its builder.
 func (s *externalServiceResource) WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource {
 	if s.Err() != nil {
@@ -31968,6 +31468,172 @@ func (s *externalServiceResource) WithValidator(validator func(arg TestResourceC
 		s.setErr(err)
 	}
 	return s
+}
+
+// GoObsoleteContext is the public interface for handle type GoObsoleteContext.
+type GoObsoleteContext interface {
+	handleReference
+
+	// Current gets the Current property
+	Current() (string, error)
+
+	// GetDto invokes the GetDto method
+	GetDto() (*GoObsoleteDto, error)
+
+	// GetEnum invokes the GetEnum method
+	GetEnum() (GoObsoleteEnum, error)
+
+	// GetObsoleteWireDto invokes the GetObsoleteWireDto method
+	GetObsoleteWireDto() (*GoObsoleteWireDto, error)
+
+	// GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
+	GetObsoleteWireHandle() GoObsoleteWireHandle
+
+	// SetCurrent sets the Current property
+	SetCurrent(value string) GoObsoleteContext
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// goObsoleteContext is the unexported impl of GoObsoleteContext.
+type goObsoleteContext struct {
+	*resourceBuilderBase
+}
+
+// newGoObsoleteContextFromHandle wraps an existing handle as GoObsoleteContext.
+func newGoObsoleteContextFromHandle(h *handle, c *client) GoObsoleteContext {
+	return &goObsoleteContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Current gets the Current property
+func (s *goObsoleteContext) Current() (string, error) {
+	if err := s.Err(); err != nil {
+		var zero string
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.current", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// GetDto invokes the GetDto method
+func (s *goObsoleteContext) GetDto() (*GoObsoleteDto, error) {
+	if err := s.Err(); err != nil {
+		var zero *GoObsoleteDto
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getDto", reqArgs)
+	if err != nil {
+		var zero *GoObsoleteDto
+		return zero, err
+	}
+	return decodeAs[*GoObsoleteDto](result)
+}
+
+// GetEnum invokes the GetEnum method
+func (s *goObsoleteContext) GetEnum() (GoObsoleteEnum, error) {
+	if err := s.Err(); err != nil {
+		var zero GoObsoleteEnum
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getEnum", reqArgs)
+	if err != nil {
+		var zero GoObsoleteEnum
+		return zero, err
+	}
+	return decodeAs[GoObsoleteEnum](result)
+}
+
+// GetObsoleteWireDto invokes the GetObsoleteWireDto method
+func (s *goObsoleteContext) GetObsoleteWireDto() (*GoObsoleteWireDto, error) {
+	if err := s.Err(); err != nil {
+		var zero *GoObsoleteWireDto
+		return zero, err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireDto", reqArgs)
+	if err != nil {
+		var zero *GoObsoleteWireDto
+		return zero, err
+	}
+	return decodeAs[*GoObsoleteWireDto](result)
+}
+
+// GetObsoleteWireHandle invokes the GetObsoleteWireHandle method
+func (s *goObsoleteContext) GetObsoleteWireHandle() GoObsoleteWireHandle {
+	if err := s.Err(); err != nil {
+		return &goObsoleteWireHandle{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireHandle", reqArgs)
+	if err != nil {
+		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.getObsoleteWireHandle returned unexpected type %T", result)
+		return &goObsoleteWireHandle{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &goObsoleteWireHandle{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SetCurrent sets the Current property
+func (s *goObsoleteContext) SetCurrent(value string) GoObsoleteContext {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/GoObsoleteContext.setCurrent", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// GoObsoleteWireHandle is the public interface for handle type
+// GoObsoleteWireHandle.
+type GoObsoleteWireHandle interface {
+	handleReference
+
+	// Err returns the first error recorded on this wrapper, or nil if the wrapper
+	// resolved successfully and no chained operation has failed.
+	Err() error
+}
+
+// goObsoleteWireHandle is the unexported impl of GoObsoleteWireHandle.
+type goObsoleteWireHandle struct {
+	*resourceBuilderBase
+}
+
+// newGoObsoleteWireHandleFromHandle wraps an existing handle as GoObsoleteWireHandle.
+func newGoObsoleteWireHandleFromHandle(h *handle, c *client) GoObsoleteWireHandle {
+	return &goObsoleteWireHandle{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
 // HostEnvironment is the public interface for handle type HostEnvironment.
@@ -34807,21 +34473,6 @@ type ParameterResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ParameterResource
-
 	// WithRelationship adds a relationship to another resource using its builder.
 	//
 	// Parameters:
@@ -36133,42 +35784,6 @@ func (s *parameterResource) WithProcessCommand(commandName string, displayName s
 		reqArgs["options"] = serializeValue(options)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommand", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *parameterResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -38328,21 +37943,6 @@ type ProjectResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ProjectResource
-
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ProjectResource
 
 	// WithReference adds a reference to another resource
 	//
@@ -40555,42 +40155,6 @@ func (s *projectResource) WithProcessCommand(commandName string, displayName str
 		reqArgs["options"] = serializeValue(options)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommand", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *projectResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) ProjectResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -43544,19 +43108,6 @@ type TestDatabaseResource interface {
 	// Returns: The resource builder.
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestDatabaseResource
 
-	// PublishAsConnectionString changes the resource to be published as a
-	// connection string reference in the manifest.
-	//
-	// This API only changes the manifest representation; it does not change the
-	// resource model used by other publishers.
-	//
-	// Returns: The resource builder.
-	//
-	// Deprecated: PublishAsConnectionString only works with the manifest publisher
-	// and is obsolete. Use AddConnectionString in publish-mode app model code
-	// instead.
-	PublishAsConnectionString() TestDatabaseResource
-
 	// PublishAsContainer changes the resource to be published as a container in the
 	// manifest.
 	//
@@ -44463,21 +44014,6 @@ type TestDatabaseResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestDatabaseResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) TestDatabaseResource
-
 	// WithReference adds a reference to another resource
 	//
 	// Allowed types for parameter source: Resource, EndpointReference, string.
@@ -44994,22 +44530,6 @@ func (s *testDatabaseResource) OnResourceStopped(callback func(arg ResourceStopp
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// PublishAsConnectionString changes the resource to be published as a
-// connection string reference in the manifest.
-func (s *testDatabaseResource) PublishAsConnectionString() TestDatabaseResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsConnectionString", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -47079,42 +46599,6 @@ func (s *testDatabaseResource) WithProcessCommand(commandName string, displayNam
 	return s
 }
 
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) TestDatabaseResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithReference adds a reference to another resource
 // Allowed types for parameter source: Resource, EndpointReference, string.
 func (s *testDatabaseResource) WithReference(source any, options ...WithReferenceOption) TestDatabaseResource {
@@ -48048,19 +47532,6 @@ type TestRedisResource interface {
 	//
 	// Returns: The resource builder.
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestRedisResource
-
-	// PublishAsConnectionString changes the resource to be published as a
-	// connection string reference in the manifest.
-	//
-	// This API only changes the manifest representation; it does not change the
-	// resource model used by other publishers.
-	//
-	// Returns: The resource builder.
-	//
-	// Deprecated: PublishAsConnectionString only works with the manifest publisher
-	// and is obsolete. Use AddConnectionString in publish-mode app model code
-	// instead.
-	PublishAsConnectionString() TestRedisResource
 
 	// PublishAsContainer changes the resource to be published as a container in the
 	// manifest.
@@ -49031,21 +48502,6 @@ type TestRedisResource interface {
 	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource
 
-	// WithProcessCommandFactory adds a command to the resource that starts a local
-	// process created by a callback when invoked.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithProcessCommandFactoryOption].
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
-	//
-	// Deprecated: Use withProcessCommand with createProcessSpec in the options
-	// object instead.
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) TestRedisResource
-
 	// WithPromiseCollisionResources configures a Redis resource with parameter-only
 	// resources whose generated names collide.
 	//
@@ -49744,22 +49200,6 @@ func (s *testRedisResource) OnResourceStopped(callback func(arg ResourceStoppedE
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// PublishAsConnectionString changes the resource to be published as a
-// connection string reference in the manifest.
-func (s *testRedisResource) PublishAsConnectionString() TestRedisResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsConnectionString", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -52062,42 +51502,6 @@ func (s *testRedisResource) WithProcessCommand(commandName string, displayName s
 	return s
 }
 
-// WithProcessCommandFactory adds a command to the resource that starts a local
-// process created by a callback when invoked.
-func (s *testRedisResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...WithProcessCommandFactoryOption) TestRedisResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["commandName"] = serializeValue(commandName)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if createProcessSpec != nil {
-		cb := createProcessSpec
-		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newExecuteCommandContextFromHandle))
-		}
-		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithPromiseCollisionResources configures a Redis resource with parameter-only
 // resources whose generated names collide.
 func (s *testRedisResource) WithPromiseCollisionResources(resource TestPromiseCollisionResource, resourcePromise TestPromiseCollisionResourcePromise) TestRedisResource {
@@ -54388,82 +53792,6 @@ func (o *WithOutputDiffingOptions) ToMap() map[string]any {
 	return m
 }
 
-// AddProjectOptions carries optional parameters for AddProject.
-type AddProjectOptions struct {
-	LaunchProfileOrOptions any `json:"launchProfileOrOptions,omitempty"`
-}
-
-// AddProjectOption configures AddProject.
-type AddProjectOption interface {
-	apply(*AddProjectOptions)
-}
-
-func (option *AddProjectOptions) apply(options *AddProjectOptions) {
-	if option != nil {
-		*options = *deepUpdate(options, option)
-	}
-}
-
-// AddProjectLaunchProfileOrOptions sets LaunchProfileOrOptions for AddProject.
-type addProjectLaunchProfileOrOptions struct{ value any }
-
-func (option addProjectLaunchProfileOrOptions) apply(options *AddProjectOptions) {
-	options.LaunchProfileOrOptions = option.value
-}
-
-func AddProjectLaunchProfileOrOptions(value any) AddProjectOption {
-	return addProjectLaunchProfileOrOptions{value: value}
-}
-
-func (o *AddProjectOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil {
-		return m
-	}
-	if o.LaunchProfileOrOptions != nil {
-		m["launchProfileOrOptions"] = serializeValue(o.LaunchProfileOrOptions)
-	}
-	return m
-}
-
-// AddCSharpAppOptions carries optional parameters for AddCSharpApp.
-type AddCSharpAppOptions struct {
-	Options *ProjectResourceOptions `json:"options,omitempty"`
-}
-
-// AddCSharpAppOption configures AddCSharpApp.
-type AddCSharpAppOption interface {
-	apply(*AddCSharpAppOptions)
-}
-
-func (option *AddCSharpAppOptions) apply(options *AddCSharpAppOptions) {
-	if option != nil {
-		*options = *deepUpdate(options, option)
-	}
-}
-
-// AddCSharpAppOptionsValue sets Options for AddCSharpApp.
-type addCSharpAppOptionsValue struct{ value ProjectResourceOptions }
-
-func (option addCSharpAppOptionsValue) apply(options *AddCSharpAppOptions) {
-	options.Options = &option.value
-}
-
-func AddCSharpAppOptionsValue(value ProjectResourceOptions) AddCSharpAppOption {
-	return addCSharpAppOptionsValue{value: value}
-}
-
-func (o *AddCSharpAppOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil {
-		return m
-	}
-	if o.Options != nil {
-		m["options"] = serializeValue(o.Options)
-	}
-	return m
-}
-
 // PublishAsDockerFileOptions carries optional parameters for PublishAsDockerFile.
 type PublishAsDockerFileOptions struct {
 	// Configure - Optional action to configure the container resource
@@ -55218,46 +54546,6 @@ func (o *WithCommandOptions) ToMap() map[string]any {
 	}
 	if o.CommandOptions != nil {
 		m["commandOptions"] = serializeValue(o.CommandOptions)
-	}
-	return m
-}
-
-// WithProcessCommandFactoryOptions carries optional parameters for WithProcessCommandFactory.
-type WithProcessCommandFactoryOptions struct {
-	Options *ProcessCommandResultExportOptions `json:"options,omitempty"`
-}
-
-// WithProcessCommandFactoryOption configures WithProcessCommandFactory.
-type WithProcessCommandFactoryOption interface {
-	apply(*WithProcessCommandFactoryOptions)
-}
-
-func (option *WithProcessCommandFactoryOptions) apply(options *WithProcessCommandFactoryOptions) {
-	if option != nil {
-		*options = *deepUpdate(options, option)
-	}
-}
-
-// ProcessCommandFactoryOptions sets Options for WithProcessCommandFactory.
-type processCommandFactoryOptions struct {
-	value *ProcessCommandResultExportOptions
-}
-
-func (option processCommandFactoryOptions) apply(options *WithProcessCommandFactoryOptions) {
-	options.Options = option.value
-}
-
-func ProcessCommandFactoryOptions(value *ProcessCommandResultExportOptions) WithProcessCommandFactoryOption {
-	return processCommandFactoryOptions{value: value}
-}
-
-func (o *WithProcessCommandFactoryOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil {
-		return m
-	}
-	if o.Options != nil {
-		m["options"] = serializeValue(o.Options)
 	}
 	return m
 }
@@ -58355,6 +57643,12 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ExternalServiceResource", func(h *handle, c *client) any {
 		return newExternalServiceResourceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.GoObsoleteContext", func(h *handle, c *client) any {
+		return newGoObsoleteContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.GoObsoleteWireHandle", func(h *handle, c *client) any {
+		return newGoObsoleteWireHandleFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", func(h *handle, c *client) any {
 		return newHostEnvironmentFromHandle(h, c)

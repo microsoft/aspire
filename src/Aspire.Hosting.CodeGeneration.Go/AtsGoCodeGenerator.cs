@@ -101,6 +101,8 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
     /// <inheritdoc />
     public Dictionary<string, string> GenerateDistributedApplication(AtsContext context)
     {
+        context = FilterObsoleteSymbols(context);
+
         var files = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["go.mod"] = """
@@ -120,6 +122,166 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
 
         // gofmt writes LF, and non-Go module files must use the same deterministic line endings.
         return files.ToDictionary(file => file.Key, file => file.Value.Replace("\r\n", "\n"), StringComparer.Ordinal);
+    }
+
+    private static AtsContext FilterObsoleteSymbols(AtsContext context)
+    {
+            var capabilities = context.Capabilities.Where(capability => !capability.IsObsolete).ToList();
+            var exportedValues = context.ExportedValues.Where(value => !value.IsObsolete).ToList();
+            var requiredTypeIds = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var capability in capabilities)
+            {
+                CollectRequiredType(capability.TargetType, requiredTypeIds);
+                CollectRequiredType(capability.ReturnType, requiredTypeIds);
+                foreach (var expandedTarget in capability.ExpandedTargetTypes)
+                {
+                    CollectRequiredType(expandedTarget, requiredTypeIds);
+                }
+                foreach (var parameter in capability.Parameters)
+                {
+                    CollectRequiredType(parameter.Type, requiredTypeIds);
+                    CollectRequiredType(parameter.CallbackReturnType, requiredTypeIds);
+                    foreach (var callbackParameter in parameter.CallbackParameters ?? [])
+                    {
+                        CollectRequiredType(callbackParameter.Type, requiredTypeIds);
+                    }
+                }
+            }
+
+            foreach (var value in exportedValues)
+            {
+                CollectRequiredType(value.Type, requiredTypeIds);
+            }
+
+            foreach (var dto in context.DtoTypes.Where(dto => !dto.IsObsolete))
+            {
+                foreach (var property in dto.Properties.Where(property => !property.IsObsolete))
+                {
+                    CollectRequiredType(property.Type, requiredTypeIds);
+                    CollectRequiredType(property.CallbackReturnType, requiredTypeIds);
+                    foreach (var callbackParameter in property.CallbackParameters ?? [])
+                    {
+                        CollectRequiredType(callbackParameter.Type, requiredTypeIds);
+                    }
+                }
+            }
+
+            var requiredDtoIds = new HashSet<string>(requiredTypeIds, StringComparer.Ordinal);
+            var changed = true;
+            while (changed)
+            {
+                changed = false;
+                foreach (var dto in context.DtoTypes.Where(dto => requiredDtoIds.Contains(dto.TypeId)))
+                {
+                    var before = requiredTypeIds.Count;
+                    foreach (var property in dto.Properties)
+                    {
+                        CollectRequiredType(property.Type, requiredTypeIds);
+                        CollectRequiredType(property.CallbackReturnType, requiredTypeIds);
+                        foreach (var callbackParameter in property.CallbackParameters ?? [])
+                        {
+                            CollectRequiredType(callbackParameter.Type, requiredTypeIds);
+                        }
+                    }
+                    if (requiredTypeIds.Count != before)
+                    {
+                        requiredDtoIds.UnionWith(requiredTypeIds);
+                        changed = true;
+                    }
+                }
+            }
+
+            var dtoTypes = context.DtoTypes
+                .Where(dto => !dto.IsObsolete || requiredTypeIds.Contains(dto.TypeId))
+                .Select(dto => dto.IsObsolete
+                    ? dto
+                    : new AtsDtoTypeInfo
+                    {
+                        TypeId = dto.TypeId,
+                        Name = dto.Name,
+                        Description = dto.Description,
+                        Documentation = dto.Documentation,
+                        ClrType = dto.ClrType,
+                        Properties = dto.Properties.Where(property => !property.IsObsolete).ToList(),
+                        IsObsolete = false
+                    })
+                .ToList();
+
+            var enumTypes = context.EnumTypes
+                .Where(enumType => !enumType.IsObsolete || requiredTypeIds.Contains(enumType.TypeId))
+                .Select(enumType =>
+                {
+                    if (enumType.IsObsolete)
+                    {
+                        return enumType;
+                    }
+
+                    var obsoleteValues = enumType.ValueInfos
+                        .Where(value => value.IsObsolete)
+                        .Select(value => value.Name)
+                        .ToHashSet(StringComparer.Ordinal);
+                    return new AtsEnumTypeInfo
+                    {
+                        TypeId = enumType.TypeId,
+                        Name = enumType.Name,
+                        ClrType = enumType.ClrType,
+                        Values = enumType.Values.Where(value => !obsoleteValues.Contains(value)).ToList(),
+                        ValueInfos = enumType.ValueInfos.Where(value => !value.IsObsolete).ToList(),
+                        Documentation = enumType.Documentation,
+                        IsObsolete = false
+                    };
+                })
+                .ToList();
+
+        var filtered = new AtsContext
+        {
+            Capabilities = capabilities,
+            HandleTypes = context.HandleTypes.Where(type => !type.IsObsolete || requiredTypeIds.Contains(type.AtsTypeId)).ToList(),
+            DtoTypes = dtoTypes,
+            EnumTypes = enumTypes,
+            ExportedValues = exportedValues,
+            Diagnostics = context.Diagnostics
+        };
+        var capabilityIds = capabilities.Select(capability => capability.CapabilityId).ToHashSet(StringComparer.Ordinal);
+        foreach (var (capabilityId, method) in context.Methods)
+        {
+            if (capabilityIds.Contains(capabilityId))
+            {
+                filtered.Methods[capabilityId] = method;
+            }
+        }
+        foreach (var (capabilityId, property) in context.Properties)
+        {
+            if (capabilityIds.Contains(capabilityId))
+            {
+                filtered.Properties[capabilityId] = property;
+            }
+        }
+
+        return filtered;
+    }
+
+    private static void CollectRequiredType(AtsTypeRef? type, HashSet<string> requiredTypeIds)
+    {
+        if (type is null)
+        {
+            return;
+        }
+
+        requiredTypeIds.Add(type.TypeId);
+        CollectRequiredType(type.ElementType, requiredTypeIds);
+        CollectRequiredType(type.KeyType, requiredTypeIds);
+        CollectRequiredType(type.ValueType, requiredTypeIds);
+        CollectRequiredType(type.BaseType, requiredTypeIds);
+        foreach (var unionType in type.UnionTypes ?? [])
+        {
+            CollectRequiredType(unionType, requiredTypeIds);
+        }
+        foreach (var implementedInterface in type.ImplementedInterfaces)
+        {
+            CollectRequiredType(implementedInterface, requiredTypeIds);
+        }
     }
 
     private static string FormatGoSource(string fileName, string source)
@@ -389,7 +551,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            foreach (var member in Enum.GetNames(enumType.ClrType))
+            foreach (var member in enumType.Values)
             {
                 _reservedNames.Add(GetEnumMemberConstantName(_enumNames[enumType.TypeId], member));
             }
@@ -842,7 +1004,7 @@ internal sealed partial class AtsGoCodeGenerator : ICodeGenerator
             WriteLine();
             WriteLine("const (");
             var valueDocumentation = enumType.ValueInfos.ToDictionary(value => value.Name, value => value.Documentation, StringComparer.Ordinal);
-            foreach (var member in Enum.GetNames(enumType.ClrType))
+            foreach (var member in enumType.Values)
             {
                 var memberName = GetEnumMemberConstantName(enumName, member);
                 if (valueDocumentation.TryGetValue(member, out var memberDocumentation))

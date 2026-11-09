@@ -102,7 +102,8 @@ public static class AtsCapabilityScanner
                 var valueInfos = values.Select(value => new AtsEnumValueInfo
                 {
                     Name = value,
-                    Documentation = GetXmlDocumentation(enumType.GetField(value))
+                    Documentation = GetXmlDocumentation(enumType.GetField(value)),
+                    IsObsolete = enumType.GetField(value) is { } field && AttributeDataReader.GetObsoleteData(field) is not null
                 }).ToList();
 
                 _enums[typeId] = new AtsEnumTypeInfo
@@ -112,7 +113,8 @@ public static class AtsCapabilityScanner
                     ClrType = enumType,
                     Values = values,
                     ValueInfos = valueInfos,
-                    Documentation = GetXmlDocumentation(enumType)
+                    Documentation = GetXmlDocumentation(enumType),
+                    IsObsolete = AttributeDataReader.GetObsoleteData(enumType) is not null
                 };
             }
         }
@@ -341,7 +343,8 @@ public static class AtsCapabilityScanner
                     Values = enumType.Values,
                     ValueInfos = enumType.ValueInfos,
                     ClrType = enumType.ClrType,
-                    Documentation = enumType.Documentation
+                    Documentation = enumType.Documentation,
+                    IsObsolete = enumType.IsObsolete
                 }
                 : enumType)
         ];
@@ -568,7 +571,8 @@ public static class AtsCapabilityScanner
                 ImplementedInterfaces = implementedInterfaces,
                 BaseTypeHierarchy = baseTypeHierarchy,
                 HasExposeProperties = HasExposePropertiesAttribute(resourceType),
-                HasExposeMethods = HasExposeMethodsAttribute(resourceType)
+                HasExposeMethods = HasExposeMethodsAttribute(resourceType),
+                IsObsolete = AttributeDataReader.GetObsoleteData(resourceType) is not null
             });
         }
 
@@ -660,9 +664,11 @@ public static class AtsCapabilityScanner
                 ValueInfos = values.Select(value => new AtsEnumValueInfo
                 {
                     Name = value,
-                    Documentation = GetXmlDocumentation(enumType.GetField(value))
+                    Documentation = GetXmlDocumentation(enumType.GetField(value)),
+                    IsObsolete = enumType.GetField(value) is { } field && AttributeDataReader.GetObsoleteData(field) is not null
                 }).ToList(),
-                Documentation = GetXmlDocumentation(enumType)
+                Documentation = GetXmlDocumentation(enumType),
+                IsObsolete = AttributeDataReader.GetObsoleteData(enumType) is not null
             });
         }
 
@@ -1131,7 +1137,8 @@ public static class AtsCapabilityScanner
             BaseTypeHierarchy = baseTypeHierarchy,
             HasExposeProperties = exportAttr.ExposeProperties,
             HasExposeMethods = exportAttr.ExposeMethods,
-            Documentation = GetXmlDocumentation(type, exportAttr.Description)
+            Documentation = GetXmlDocumentation(type, exportAttr.Description),
+            IsObsolete = AttributeDataReader.GetObsoleteData(type) is not null
         };
     }
 
@@ -1203,7 +1210,8 @@ public static class AtsCapabilityScanner
                 CallbackReturnType = callbackReturnType,
                 IsOptional = isOptional,
                 Description = propDescription,
-                Documentation = propDocumentation
+                Documentation = propDocumentation,
+                IsObsolete = AttributeDataReader.GetObsoleteData(prop) is not null
             });
         }
 
@@ -1214,7 +1222,8 @@ public static class AtsCapabilityScanner
             ClrType = type,
             Description = typeDescription,
             Documentation = typeDocumentation,
-            Properties = properties
+            Properties = properties,
+            IsObsolete = AttributeDataReader.GetObsoleteData(type) is not null
         };
     }
 
@@ -1275,6 +1284,7 @@ public static class AtsCapabilityScanner
                 memberType: field.FieldType,
                 getValue: () => field.GetValue(null),
                 docMemberName: $"F:{type.FullName}.{field.Name}",
+                isObsolete: AttributeDataReader.GetObsoleteData(field) is not null,
                 assemblyExportedTypeCache,
                 xmlDoc,
                 exportedValues,
@@ -1312,6 +1322,7 @@ public static class AtsCapabilityScanner
                 memberType: property.PropertyType,
                 getValue: () => property.GetValue(null),
                 docMemberName: $"P:{type.FullName}.{property.Name}",
+                isObsolete: AttributeDataReader.GetObsoleteData(property) is not null,
                 assemblyExportedTypeCache,
                 xmlDoc,
                 exportedValues,
@@ -1326,6 +1337,7 @@ public static class AtsCapabilityScanner
         Type memberType,
         Func<object?> getValue,
         string docMemberName,
+        bool isObsolete,
         AssemblyExportedTypeCache assemblyExportedTypeCache,
         XDocument? xmlDoc,
         List<AtsExportedValueInfo> exportedValues,
@@ -1358,7 +1370,8 @@ public static class AtsCapabilityScanner
                 Type = typeRef!,
                 Value = SerializeExportedValue(getValue(), memberType),
                 Description = GetXmlDocSummary(xmlDoc, docMemberName),
-                Documentation = GetXmlDocumentation(xmlDoc, docMemberName)
+                Documentation = GetXmlDocumentation(xmlDoc, docMemberName),
+                IsObsolete = isObsolete
             });
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -1743,6 +1756,7 @@ public static class AtsCapabilityScanner
                 var propertyDocumentation = GetXmlDocumentation(property, memberExportAttr?.Description);
                 var propertyDescription = memberExportAttr?.Description ?? propertyDocumentation?.Summary ?? $"Gets the {property.Name} property";
                 var isExperimental = AttributeDataReader.HasExperimentalData(property);
+                var obsoleteData = AttributeDataReader.GetObsoleteData(property);
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
@@ -1761,6 +1775,8 @@ public static class AtsCapabilityScanner
                         Description = propertyDescription,
                         Documentation = propertyDocumentation,
                         IsExperimental = isExperimental,
+                        IsObsolete = obsoleteData is not null,
+                        ObsoleteMessage = obsoleteData?.Message,
                         Parameters = [
                             new AtsParameterInfo
                             {
@@ -1804,6 +1820,8 @@ public static class AtsCapabilityScanner
                         Description = $"Sets the {property.Name} property",
                         Documentation = propertyDocumentation,
                         IsExperimental = isExperimental,
+                        IsObsolete = obsoleteData is not null,
+                        ObsoleteMessage = obsoleteData?.Message,
                         Parameters = [
                             new AtsParameterInfo
                             {

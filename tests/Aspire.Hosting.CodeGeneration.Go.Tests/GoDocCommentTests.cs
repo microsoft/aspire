@@ -193,10 +193,10 @@ public class GoDocCommentTests
             }
         }
 
-        // Metadata must reach the output: if the scanner reports an obsolete or experimental capability, the SDK says so.
+        // Obsolete capabilities are excluded from the generated Go surface rather than emitted with deprecation docs.
         if (context.Capabilities.Any(c => c.IsObsolete))
         {
-            Assert.Contains("// Deprecated: ", sdk);
+            Assert.DoesNotContain("// Deprecated: ", sdk);
         }
 
         if (context.Capabilities.Any(AtsTypeSystemCompatibility.IsExperimental))

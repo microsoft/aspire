@@ -45,6 +45,7 @@ internal sealed partial class AtsGoCodeGenerator
         ArgumentException.ThrowIfNullOrEmpty(packageVersion);
         ArgumentNullException.ThrowIfNull(exportingAssemblyNames);
 
+        context = FilterObsoleteSymbols(context);
         BuildNameMaps(context);
         var scope = new ApiExportScope(context, packageName, exportingAssemblyNames);
 
