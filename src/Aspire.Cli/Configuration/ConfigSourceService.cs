@@ -599,8 +599,11 @@ internal sealed class ConfigSourceService(
                 Ref = source.Ref
             };
             interaction.DisplayGitFetchNotice(SharedCommandStrings.GitFetchConfigurationSource,
+                PackageSourceRedactor.RedactForDisplay(identity.Repository),
                 allowInteractiveInput && hostEnvironment.SupportsInteractiveInput);
-            var (commit, version, configuration) = await AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken);
+            var (commit, version, configuration) = await interaction.ShowStatusAsync(
+                string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceStatus, SharedCommandStrings.GitFetchConfigurationSource),
+                () => AcquireRepositoryAsync(identity, snapshotDirectory, allowInteractiveInput, cancellationToken));
             ConfigurationHelper.NormalizeSettings(configuration);
             var now = timeProvider.GetUtcNow();
             var snapshot = new ConfigSourceSnapshot(new(identity, commit, version, now), configuration);

@@ -101,17 +101,16 @@ internal static class ConsoleHelpers
         // an ambiguous prompt could send a user's password to the wrong Git server,
         // where that server could log it.
         interactionService.DisplayGitFetchNotice(
-            string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source),
-            mayPromptForAuthentication);
+            SharedCommandStrings.GitFetchTemplates, source, mayPromptForAuthentication);
     }
 
-    public static void DisplayGitFetchNotice(this IInteractionService interactionService, string content, bool mayPromptForAuthentication)
+    public static void DisplayGitFetchNotice(this IInteractionService interactionService, string content, string source, bool mayPromptForAuthentication)
     {
         var message = mayPromptForAuthentication
             ? SharedCommandStrings.FetchingSourceWithAuthentication
             : SharedCommandStrings.FetchingSource;
         interactionService.DisplayMessage(KnownEmojis.InboxTray,
-            $"[blue]{string.Format(CultureInfo.CurrentCulture, message, content).EscapeMarkup()}[/]",
+            $"[blue]{string.Format(CultureInfo.CurrentCulture, message, content, source).EscapeMarkup()}[/]",
             allowMarkup: true,
             consoleOverride: ConsoleOutput.Error);
     }

@@ -71,7 +71,7 @@ public partial class NewCommandLocalTemplateTests
         {
             var source = pinned ? $"{repository} ({SharedCommandStrings.SourceRef}: {TestGitCommandRunner.DefaultCommitSha})" : repository;
             return $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
-                string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source))}[/]";
+                SharedCommandStrings.GitFetchTemplates, source)}[/]";
         }), notices.Select(notice => notice.Message));
         Assert.All(notices, notice => Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride));
     }
@@ -99,7 +99,7 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal(
                 [NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
                     $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
-                        string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source))}[/]"],
+                        SharedCommandStrings.GitFetchTemplates, source)}[/]"],
                 interaction.DisplayedMessages.Select(message => message.Message));
             Assert.Single(interaction.DisplayedRenderables);
             Assert.Empty(interaction.DisplayedPlainText);

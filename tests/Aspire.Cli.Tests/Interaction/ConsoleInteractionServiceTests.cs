@@ -156,8 +156,8 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         interaction.DisplayTemplateGitFetchNotice(repository, path, reference, mayPromptForAuthentication: true);
 
         var message = Assert.Single(interaction.DisplayedMessages);
-        var content = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.GitFetchTemplatesFromSource, source);
-        var expected = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication, content);
+        var expected = string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+            SharedCommandStrings.GitFetchTemplates, source);
         Assert.Equal($"[blue]{expected.EscapeMarkup()}[/]", message.Message);
         Assert.Equal(KnownEmojis.InboxTray, message.Emoji);
         Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);

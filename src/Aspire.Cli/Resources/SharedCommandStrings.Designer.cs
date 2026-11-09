@@ -106,7 +106,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Fetching {0} using Git....
+        ///   Looks up a localized string similar to Fetching {0} from {1} using Git....
         /// </summary>
         internal static string FetchingSource {
             get {
@@ -115,7 +115,16 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Fetching {0} using Git. Git may prompt you to authenticate..
+        ///   Looks up a localized string similar to Fetching {0} using Git....
+        /// </summary>
+        internal static string FetchingSourceStatus {
+            get {
+                return ResourceManager.GetString("FetchingSourceStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Fetching {0} from {1} using Git. Git may prompt you to authenticate..
         /// </summary>
         internal static string FetchingSourceWithAuthentication {
             get {
@@ -147,15 +156,6 @@ namespace Aspire.Cli.Resources {
         internal static string GitFetchTemplates {
             get {
                 return ResourceManager.GetString("GitFetchTemplates", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to templates from {0}.
-        /// </summary>
-        internal static string GitFetchTemplatesFromSource {
-            get {
-                return ResourceManager.GetString("GitFetchTemplatesFromSource", resourceCulture);
             }
         }
 

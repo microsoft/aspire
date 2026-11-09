@@ -109,10 +109,14 @@ Terminals without hyperlink support show the label and URL as plain text.
 The standard yes/no confirmation defaults to **Yes** when Enter is pressed.
 
 Before Git acquisition begins, the CLI writes an informational notice to stderr:
-**Fetching configuration source using Git. Git may prompt you to authenticate.**
-Non-interactive acquisitions show **Fetching configuration source using Git...**
-instead, because authentication prompts are disabled. Reusing an in-memory
-snapshot does not repeat the notice, and background version checks remain quiet.
+**Fetching configuration source from https://example.test/team/configuration.git using Git. Git may prompt you to authenticate.**
+Non-interactive acquisitions show
+**Fetching configuration source from https://example.test/team/configuration.git using Git...**
+instead, because authentication prompts are disabled. A status indicator is
+displayed while acquiring the configuration, using the same status UI as
+repository templates. Repository URLs are redacted before display so embedded
+credentials and query tokens are not exposed. Reusing an in-memory snapshot
+does not repeat the notice or status, and background version checks remain quiet.
 Repository templates identify the repository in these notices, for example
 **Fetching templates from https://example.test/team/templates.git using Git. Git may prompt you to authenticate.**
 Non-default paths and refs are included to distinguish sources within the same
