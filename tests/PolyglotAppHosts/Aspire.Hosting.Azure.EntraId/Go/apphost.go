@@ -23,7 +23,7 @@ func main() {
 	exampleClient := "00001111-aaaa-2222-bbbb-3333cccc4444"
 
 	container := builder.AddContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp").
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.Float64Ptr(8080)})
+		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.IntPtr(8080)})
 	executable := builder.AddExecutable("worker", "dotnet", ".", []string{"--info"})
 	endpoint := container.GetEndpoint("http")
 	identity := builder.AddAzureUserAssignedIdentity("identity")

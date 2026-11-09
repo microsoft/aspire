@@ -16,13 +16,13 @@ func main() {
 	buildSecret := builder.AddParameterFromConfiguration("buildSecret", "MyConfig:Secret", &aspire.AddParameterFromConfigurationOptions{Secret: aspire.BoolPtr(true)})
 
 	backend := builder.AddContainer("backend", "nginx")
-	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.Float64Ptr(80)})
+	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.IntPtr(80)})
 	backendService := builder.AddProject("backend-service", "./src/BackendService", &aspire.AddProjectOptions{LaunchProfileOrOptions: "http"})
 	externalBackend := builder.AddExternalService("external-backend", "https://example.com")
 
 	proxy := builder.AddYarp("proxy").
-		WithHostPort(aspire.Float64Ptr(8080)).
-		WithHostHttpsPort(aspire.Float64Ptr(8443)).
+		WithHostPort(aspire.IntPtr(8080)).
+		WithHostHttpsPort(aspire.IntPtr(8443)).
 		WithEndpointProxySupport(true).
 		WithDockerfile("./context").
 		WithImageSHA256("abc123def456").
@@ -44,14 +44,14 @@ func main() {
 
 		endpointCluster := config.AddClusterFromEndpoint(endpoint).
 			WithForwarderRequestConfig(&aspire.YarpForwarderRequestConfig{
-				ActivityTimeout:        aspire.Float64Ptr(30_000_000),
+				ActivityTimeout:        aspire.Int64Ptr(30_000_000),
 				AllowResponseBuffering: aspire.BoolPtr(true),
 				Version:                aspire.StringPtr("2.0"),
 			}).
 			WithHttpClientConfig(&aspire.YarpHttpClientConfig{
 				DangerousAcceptAnyServerCertificate: aspire.BoolPtr(true),
 				EnableMultipleHttp2Connections:      aspire.BoolPtr(true),
-				MaxConnectionsPerServer:             aspire.Float64Ptr(10),
+				MaxConnectionsPerServer:             aspire.IntPtr(10),
 				RequestHeaderEncoding:               aspire.StringPtr("utf-8"),
 				ResponseHeaderEncoding:              aspire.StringPtr("utf-8"),
 			}).
@@ -71,16 +71,16 @@ func main() {
 				AvailableDestinationsPolicy: aspire.StringPtr("HealthyOrPanic"),
 				Active: &aspire.YarpActiveHealthCheckConfig{
 					Enabled:  aspire.BoolPtr(true),
-					Interval: aspire.Float64Ptr(50_000_000),
+					Interval: aspire.Int64Ptr(50_000_000),
 					Path:     aspire.StringPtr("/health"),
 					Policy:   aspire.StringPtr("ConsecutiveFailures"),
 					Query:    aspire.StringPtr("probe=1"),
-					Timeout:  aspire.Float64Ptr(20_000_000),
+					Timeout:  aspire.Int64Ptr(20_000_000),
 				},
 				Passive: &aspire.YarpPassiveHealthCheckConfig{
 					Enabled:            aspire.BoolPtr(true),
 					Policy:             aspire.StringPtr("TransportFailureRateHealthPolicy"),
-					ReactivationPeriod: aspire.Float64Ptr(100_000_000),
+					ReactivationPeriod: aspire.Int64Ptr(100_000_000),
 				},
 			})
 

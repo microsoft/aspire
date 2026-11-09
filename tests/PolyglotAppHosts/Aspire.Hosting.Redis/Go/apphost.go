@@ -20,15 +20,15 @@ func main() {
 	}
 
 	// addRedis — explicit port
-	cache2 := builder.AddRedis("cache2", &aspire.AddRedisOptions{Port: aspire.Float64Ptr(6380)})
+	cache2 := builder.AddRedis("cache2", &aspire.AddRedisOptions{Port: aspire.IntPtr(6380)})
 	if err = cache2.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
 
 	cache.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("redis-data")}).
 		WithPersistence(&aspire.WithPersistenceOptions{
-			Interval:             aspire.Float64Ptr(60000000),
-			KeysChangedThreshold: aspire.Float64Ptr(5),
+			Interval:             aspire.Int64Ptr(60000000),
+			KeysChangedThreshold: aspire.Int64Ptr(5),
 		})
 	if err = cache.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
@@ -47,7 +47,7 @@ func main() {
 	}
 
 	// withHostPort on cache — stand-alone
-	cache.WithHostPort(aspire.Float64Ptr(6379))
+	cache.WithHostPort(aspire.IntPtr(6379))
 	if err = cache.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
@@ -62,7 +62,7 @@ func main() {
 	// withRedisCommander — with configureContainer callback exercising WithHostPort
 	cache.WithRedisCommander(&aspire.WithRedisCommanderOptions{
 		ConfigureContainer: func(commander aspire.RedisCommanderResource) {
-			commander.WithHostPort(aspire.Float64Ptr(8081))
+			commander.WithHostPort(aspire.IntPtr(8081))
 		},
 		ContainerName: aspire.StringPtr("my-commander"),
 	})
@@ -70,7 +70,7 @@ func main() {
 	// withRedisInsight — with configureContainer callback exercising WithHostPort, WithDataVolume, WithDataBindMount
 	cache.WithRedisInsight(&aspire.WithRedisInsightOptions{
 		ConfigureContainer: func(insight aspire.RedisInsightResource) {
-			insight.WithHostPort(aspire.Float64Ptr(5540))
+			insight.WithHostPort(aspire.IntPtr(5540))
 			insight.WithDataVolume(&aspire.RedisInsightResourceWithDataVolumeOptions{Name: aspire.StringPtr("insight-data")})
 			insight.WithDataBindMount("/tmp/insight-data")
 		},

@@ -47,7 +47,7 @@ func main() {
 	container := builder.AddContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp").
 		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 			Name:       aspire.StringPtr("http"),
-			TargetPort: aspire.Float64Ptr(8080),
+			TargetPort: aspire.IntPtr(8080),
 		})
 	if container.Err() != nil {
 		log.Fatal(aspire.FormatError(container.Err()))
@@ -56,7 +56,7 @@ func main() {
 	executable := builder.AddExecutable("worker", "dotnet", ".", []string{"--info"}).
 		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 			Name:       aspire.StringPtr("http"),
-			TargetPort: aspire.Float64Ptr(8081),
+			TargetPort: aspire.IntPtr(8081),
 		})
 	if executable.Err() != nil {
 		log.Fatal(aspire.FormatError(executable.Err()))

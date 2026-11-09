@@ -221,9 +221,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		DefaultCertificateDirectoryPaths: []string{"/etc/ssl/certs", "/usr/local/share/ca-certificates"},
 	})
 	container.WithContainerFiles("/usr/lib/aspire/container-files", ".", &aspire.ContainerFilesOptions{
-		DefaultOwner: aspire.Float64Ptr(1000),
-		DefaultGroup: aspire.Float64Ptr(1000),
-		Umask:        aspire.Float64Ptr(0o022),
+		DefaultOwner: aspire.IntPtr(1000),
+		DefaultGroup: aspire.IntPtr(1000),
+		Umask:        aspire.IntPtr(0o022),
 	})
 
 	// WithContainerFilesCallback — build entries dynamically via the context factory methods
@@ -233,15 +233,15 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		filesLogger := filesLoggerFactory.CreateLogger("ValidationAppHost.ContainerFilesCallback")
 		_ = filesLogger.LogInformation("ContainerFilesCallback services")
 
-		appConfig := filesCtx.CreateFile("app.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("key=value"), Mode: aspire.Float64Ptr(0o644)})
+		appConfig := filesCtx.CreateFile("app.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("key=value"), Mode: aspire.IntPtr(0o644)})
 		nestedConfig := filesCtx.CreateFile("nested.conf", &aspire.CreateFileOptions{Contents: aspire.StringPtr("nested=true")})
-		confDir := filesCtx.CreateDirectory("conf.d", []aspire.ContainerFileSystemItem{nestedConfig}, &aspire.CreateDirectoryOptions{Mode: aspire.Float64Ptr(0o755)})
+		confDir := filesCtx.CreateDirectory("conf.d", []aspire.ContainerFileSystemItem{nestedConfig}, &aspire.CreateDirectoryOptions{Mode: aspire.IntPtr(0o755)})
 		cert := filesCtx.CreateCertificateFile("server.pem", &aspire.CreateCertificateFileOptions{Contents: aspire.StringPtr("-----BEGIN CERTIFICATE-----")})
 		return []aspire.ContainerFileSystemItem{appConfig, confDir, cert}
 	}, &aspire.ContainerFilesOptions{
-		DefaultOwner: aspire.Float64Ptr(1000),
-		DefaultGroup: aspire.Float64Ptr(1000),
-		Umask:        aspire.Float64Ptr(0o022),
+		DefaultOwner: aspire.IntPtr(1000),
+		DefaultGroup: aspire.IntPtr(1000),
+		Umask:        aspire.IntPtr(0o022),
 	})
 
 	// WithImageRegistry
@@ -253,7 +253,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 	dockerContainer.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 		Name:       aspire.StringPtr("http"),
-		TargetPort: aspire.Float64Ptr(80),
+		TargetPort: aspire.IntPtr(80),
 	})
 
 	endpoint := dockerContainer.GetEndpoint("http")
@@ -836,7 +836,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			Required:                  aspire.BoolPtr(true),
 			Placeholder:               aspire.StringPtr("Jane Doe"),
 			Value:                     aspire.StringPtr("Jane"),
-			MaxLength:                 aspire.Float64Ptr(64),
+			MaxLength:                 aspire.IntPtr(64),
 			Disabled:                  aspire.BoolPtr(false),
 		})
 		secretInput := interactionService.CreateSecretInput("password", &aspire.CreateInteractionInputOptions{Required: aspire.BoolPtr(true)})
