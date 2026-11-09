@@ -702,9 +702,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// <item>A single selected resource has its own details instead. Closing a detail scoped to one resource, such as
     /// a trace of it, keeps that selection behind the full-page list, and choosing Summary or Graph there would open the
     /// resource's details.</item>
+    /// <item>The group overview leaves parameters out (see ApplicationSummary), so a selection of parameters alone
+    /// would show an empty summary and graph.</item>
     /// </list>
     /// </summary>
-    private bool SelectionHasGroupOverview => !IsTelemetryPane && _selectedResourceNames.Count != 1;
+    private bool SelectionHasGroupOverview => !IsTelemetryPane &&
+        (_selectedResourceNames.Count == 0 ||
+            _selectedResourceNames.Count > 1 && _selectedItems.Any(item => item.Resource is { IsParameter: false }));
 
     private IReadOnlyList<IconToggleOption<OverviewLayout>> GetOverviewLayoutOptions() =>
         OverviewLayoutOptions.Create(DialogsLoc, ResourcesLoc, ViewPreferences.IsGraphEnabled);

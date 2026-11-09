@@ -182,11 +182,19 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
     [Theory]
     [InlineData("/traces/detail/missing?resource=api", false)]
     [InlineData("/traces/detail/missing?resource=api&resource=cache", true)]
+    [InlineData("/traces/detail/missing?resource=api&resource=key", true)]
+    [InlineData("/traces/detail/missing?resource=key&resource=secret", false)]
     public async Task FullCanvasList_OffersOverviewLayoutsOnlyForScopesWithAGroupOverview(string url, bool offersLayouts)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api"),
+                ModelTestHelpers.CreateResource("cache"),
+                ModelTestHelpers.CreateResource("key", resourceType: KnownResourceTypes.Parameter),
+                ModelTestHelpers.CreateResource("secret", resourceType: KnownResourceTypes.Parameter)
+            ],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(url);
@@ -194,7 +202,8 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
         // Closing the detail keeps its scope behind the full-page list. One resource has its own details rather than
-        // the group overview's Summary and Graph, so the list doesn't offer them.
+        // the group overview's Summary and Graph, and the group overview leaves parameters out, so the list offers
+        // them only for a scope with a resource other than a parameter.
         await cut.Find(".detail-page-close").ClickAsync();
         cut.Render();
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
