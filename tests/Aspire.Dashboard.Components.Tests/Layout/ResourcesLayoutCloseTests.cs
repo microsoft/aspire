@@ -201,6 +201,29 @@ public class ResourcesLayoutCloseTests : DashboardTestContext
         Assert.Equal(offersLayouts ? 1 : 0, cut.FindAll(".resource-pane-scope-layout").Count);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task FullCanvasList_DoesNotOfferOverviewLayoutsForTelemetrySources(bool hasAppHost)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: hasAppHost,
+            initialResources: hasAppHost ? [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")] : null,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(hasAppHost ? "/structuredlogs?pane=telemetry" : "/structuredlogs");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        Assert.True(cut.Instance.IsTelemetryPane);
+
+        // The telemetry pane's list shows telemetry sources, which have no overview, so it offers no overview layouts:
+        // choosing one would switch to the AppHost's resources.
+        await cut.Find(".detail-page-close").ClickAsync();
+        cut.Render();
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Empty(cut.FindAll(".resource-pane-scope-layout"));
+    }
+
     [Fact]
     public async Task SelectedGroup_ReopensParentFromFullCanvasWithoutClearingSelection()
     {

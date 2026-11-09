@@ -695,12 +695,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsContentClosed => _isPaneFullCanvas && CurrentTab != ResourceTab.Overview;
 
     /// <summary>
-    /// Whether the overview of the selection is the group overview, which has the Summary, Graph and List layouts. A
-    /// single selected resource has its own details instead. Closing a detail scoped to one resource, such as a trace
-    /// of it, keeps that selection behind the full-page list, and choosing Summary or Graph there would open the
-    /// resource's details.
+    /// Whether the overview of the selection is the group overview, which has the Summary, Graph and List layouts.
+    /// <list type="bullet">
+    /// <item>The telemetry pane, standalone or chosen, lists telemetry sources and has no overview. Choosing Summary
+    /// or Graph from its list would switch to the AppHost's resources, and could restore an earlier selection of them.</item>
+    /// <item>A single selected resource has its own details instead. Closing a detail scoped to one resource, such as
+    /// a trace of it, keeps that selection behind the full-page list, and choosing Summary or Graph there would open the
+    /// resource's details.</item>
+    /// </list>
     /// </summary>
-    private bool SelectionHasGroupOverview => _selectedResourceNames.Count != 1;
+    private bool SelectionHasGroupOverview => !IsTelemetryPane && _selectedResourceNames.Count != 1;
 
     private IReadOnlyList<IconToggleOption<OverviewLayout>> GetOverviewLayoutOptions() =>
         OverviewLayoutOptions.Create(DialogsLoc, ResourcesLoc, ViewPreferences.IsGraphEnabled);
