@@ -2239,7 +2239,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task CompactSidebar_RowTooltipNamesTypeAndStateWhileActionsShow()
+    public async Task CompactSidebar_RowTooltipNamesTypeWhileActionsShow()
     {
         await RunTestAsync(async page =>
         {
@@ -2249,9 +2249,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var pane = page.Locator(".resource-pane");
             var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
 
-            // While the actions show in place of the type and state columns, the row's tooltip names them, for the
-            // pointer and for the keyboard.
-            foreach (var (name, expected) in new[] { ("api", "Project · Running (Unhealthy)"), ("cache", "Container (persistent) · Running") })
+            // While the actions show in place of the type column, the row's tooltip names the type, for the pointer and
+            // for the keyboard. The state dot stays after the name, with the state in its own tooltip.
+            foreach (var (name, expected) in new[] { ("api", "Project"), ("cache", "Container (persistent)") })
             {
                 var link = pane.Locator($"[data-resource-name='{name}'] .resource-row-link").First;
                 await page.Mouse.MoveAsync(1, 1);

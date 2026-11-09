@@ -661,13 +661,13 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
     const onIdentityInteraction = event => {
         const link = event.target.closest('.resource-row-link');
         const name = link?.querySelector('.resource-row-name');
-        // A compact sidebar row's type and state columns give way to its actions while the row is
-        // hovered or focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's
-        // tooltip names them instead, from the full text the hidden columns keep in data-tooltip:
+        // A compact sidebar row's type column gives way to its actions while the row is hovered or
+        // focused, where rows can be hovered (see ResourcesLayout.razor.css). The row's tooltip names
+        // the type instead, from the full text the hidden column keeps in data-tooltip:
         //   <span class="resource-row-meta">
         //     <span class="resource-row-type" data-tooltip="Container (persistent)">…</span>
-        //     <span class="resource-row-meta-state" data-tooltip="Running (Unhealthy)">…</span>
         //   </span>
+        // The state dot stays after the name, outside the column, with the state in its own tooltip.
         // The columns may not be hidden yet when the event arrives, so this decides from the layout
         // (compact, sidebar, a hovering pointer) rather than from their visibility.
         const meta = link?.querySelector('.resource-row-meta');
