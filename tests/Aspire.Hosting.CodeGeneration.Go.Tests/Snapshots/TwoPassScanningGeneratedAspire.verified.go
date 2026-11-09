@@ -3880,7 +3880,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -4060,7 +4060,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -7277,7 +7277,7 @@ func (s *cSharpAppResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -10999,7 +10999,7 @@ func (s *containerRegistryResource) WithCancellableOperation(operation func(arg 
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -13627,7 +13627,7 @@ func (s *containerResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -13807,7 +13807,7 @@ func (s *containerResource) WithContainerFilesCallback(destinationPath string, c
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -18996,7 +18996,7 @@ func (s *dotnetToolResource) WithCancellableOperation(operation func(arg *Cancel
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -23300,7 +23300,7 @@ func (s *executableResource) WithCancellableOperation(operation func(arg *Cancel
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -25886,7 +25886,7 @@ func (s *externalServiceResource) WithCancellableOperation(operation func(arg *C
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -29776,7 +29776,7 @@ func (s *parameterResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -33103,7 +33103,7 @@ func (s *projectResource) WithCancellableOperation(operation func(arg *Cancellat
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -38341,7 +38341,7 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -38521,7 +38521,7 @@ func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
@@ -42315,7 +42315,7 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 	if operation != nil {
 		cb := operation
 		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
+			cb(callbackCancellationTokenArg(s.client, args, 0))
 			return nil
 		}
 		reqArgs["operation"] = s.client.registerCallback(shim)
@@ -42556,7 +42556,7 @@ func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, c
 	if callback != nil {
 		cb := callback
 		shim := func(args ...any) any {
-			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackArg[*CancellationToken](args, 1))
+			return cb(callbackHandleArg(s.client, args, 0, newContainerFileSystemCallbackContextFromHandle), callbackCancellationTokenArg(s.client, args, 1))
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
