@@ -131,7 +131,7 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
     [InlineData("fatal: could not read Username", nameof(GitFailure.AuthenticationFailed))]
     [InlineData("fatal: could not read Password", nameof(GitFailure.AuthenticationFailed))]
     [InlineData("fatal: unexpected failure", nameof(GitFailure.CommandFailed))]
-    public async Task RunProcess_NonzeroExitClassifiesWithoutExposingPrivateDetails(string diagnostic, string expectedFailure)
+    public async Task RunProcess_NonzeroExitClassifiesWithoutExposingPrivateDetailsInLogsOrException(string diagnostic, string expectedFailure)
     {
         var logger = new FakeLogger<GitCommandRunner>();
         var interaction = new TestInteractionService();
@@ -221,6 +221,46 @@ public partial class GitCommandRunnerTests(ITestOutputHelper outputHelper) : IDi
 
         Assert.Equal("refs\0blob", output);
         Assert.Equal(("Git warning", (ConsoleOutput?)ConsoleOutput.Error), Assert.Single(interaction.DisplayedRawText));
+    }
+
+    [Theory]
+    [InlineData(nameof(GitCommandMode.Captured), 0)]
+    [InlineData(nameof(GitCommandMode.Captured), 128)]
+    [InlineData(nameof(GitCommandMode.Interactive), 0)]
+    [InlineData(nameof(GitCommandMode.Interactive), 128)]
+    [InlineData(nameof(GitCommandMode.Unattended), 0)]
+    [InlineData(nameof(GitCommandMode.Unattended), 128)]
+    public async Task StandardErrorHandler_IsOperationLocalAndPreservesParsedStdout(string mode, int exitCode)
+    {
+        var interaction = new TestInteractionService();
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), interaction,
+            _loggerFactory.CreateLogger<GitCommandRunner>());
+        var diagnostics = new List<string>();
+        var capturedRunner = Assert.IsType<GitCommandRunner>(runner.WithStandardErrorHandler(diagnostics.Add));
+        async Task RunAsync(GitCommandRunner commands)
+        {
+            var startInfo = CreateShellStartInfo(
+                $"printf 'refs\\000blob'; printf 'Git diagnostic' >&2; exit {exitCode}",
+                $"[Console]::Out.Write(\"refs`0blob\"); [Console]::Error.Write('Git diagnostic'); exit {exitCode}");
+            var operation = commands.RunProcessAsync(startInfo, captureCancellationOutput: false,
+                Enum.Parse<GitCommandMode>(mode), TestContext.Current.CancellationToken);
+            if (exitCode == 0)
+            {
+                Assert.Equal("refs\0blob", await operation);
+            }
+            else
+            {
+                var exception = await Assert.ThrowsAsync<GitCommandException>(() => operation);
+                Assert.Equal(GitFailure.CommandFailed, exception.Failure);
+                Assert.Equal(exitCode, exception.ExitCode);
+                Assert.Equal(ErrorStrings.GitCommandFailed, exception.Message);
+            }
+        }
+
+        await Task.WhenAll(RunAsync(capturedRunner), RunAsync(runner));
+
+        Assert.Equal(["Git diagnostic"], diagnostics);
+        Assert.Equal(("Git diagnostic", (ConsoleOutput?)ConsoleOutput.Error), Assert.Single(interaction.DisplayedRawText));
     }
 
     [Fact]

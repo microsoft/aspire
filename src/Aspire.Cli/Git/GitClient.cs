@@ -7,6 +7,9 @@ namespace Aspire.Cli.Git;
 
 internal sealed class GitClient(IGitCommandRunner commands) : IGitClient
 {
+    public IGitClient WithStandardErrorHandler(Action<string> standardErrorHandler) =>
+        new GitClient(commands.WithStandardErrorHandler(standardErrorHandler));
+
     internal static bool IsCommitSha(string value) =>
         value.Length is 40 or 64 && value.All(char.IsAsciiHexDigit);
 

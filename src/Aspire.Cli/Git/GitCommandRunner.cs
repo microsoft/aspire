@@ -13,11 +13,20 @@ namespace Aspire.Cli.Git;
 
 internal interface IGitCommandRunner
 {
+    IGitCommandRunner WithStandardErrorHandler(Action<string> standardErrorHandler);
     Task<string> RunAsync(DirectoryInfo workingDirectory, string[] arguments, GitCommandMode mode, CancellationToken cancellationToken);
 }
 
 internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ILogger<GitCommandRunner> logger) : IGitCommandRunner
 {
+    private Action<string> StandardErrorHandler { get; init; } =
+        output => interaction.DisplayRawText(output, ConsoleOutput.Error);
+
+    // Keep diagnostic routing operation-local: foreground and background Git work
+    // can share the registered runner without changing each other's output.
+    public IGitCommandRunner WithStandardErrorHandler(Action<string> standardErrorHandler) =>
+        new GitCommandRunner(hostEnvironment, interaction, logger) { StandardErrorHandler = standardErrorHandler };
+
     private static readonly HashSet<string> s_repositoryEnvironmentVariables = new(StringComparer.OrdinalIgnoreCase)
     {
         "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES"
@@ -389,9 +398,9 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
         if (capture.StandardError.Length > 0)
         {
             // Quiet acquisition suppresses routine Git output, not diagnostics. Keep
-            // captured stderr visible without copying parsed stdout or private content
-            // into logs and exception messages. Interactive remote stderr is inherited.
-            interaction.DisplayRawText(capture.StandardError, ConsoleOutput.Error);
+            // captured stderr on the operation's diagnostic path without copying parsed
+            // stdout into it. Interactive remote stderr is inherited.
+            StandardErrorHandler(capture.StandardError);
         }
         if (result.ExitCode != 0)
         {
