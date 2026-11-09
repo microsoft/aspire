@@ -40,19 +40,20 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
+resource env 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('env${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
+    vnetConfiguration: {
+      infrastructureSubnetId: myvnet_outputs_container_apps_subnet_id
+    }
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
         customerId: env_law.properties.customerId
         sharedKey: env_law.listKeys().primarySharedKey
       }
-    }
-    vnetConfiguration: {
-      infrastructureSubnetId: myvnet_outputs_container_apps_subnet_id
     }
     workloadProfiles: [
       {
@@ -61,7 +62,6 @@ resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
       }
     ]
   }
-  tags: tags
 }
 
 resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {

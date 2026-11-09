@@ -7,10 +7,11 @@ param express_outputs_azure_container_apps_environment_id string
 
 param standard_outputs_azure_container_apps_environment_default_domain string
 
-resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
+resource web 'Microsoft.App/containerApps@2026-07-01' = {
   name: 'web'
   location: location
   properties: {
+    environmentId: express_outputs_azure_container_apps_environment_id
     configuration: {
       activeRevisionsMode: 'Single'
       ingress: {
@@ -19,7 +20,6 @@ resource web 'Microsoft.App/containerApps@2026-03-02-preview' = {
         transport: 'http'
       }
     }
-    environmentId: express_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
