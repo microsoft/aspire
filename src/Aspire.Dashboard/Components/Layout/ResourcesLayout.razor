@@ -918,12 +918,16 @@
                 @{ RenderRowIcon(__builder, item); }
                 @if (IsCompact)
                 {
-                    @* One line per resource: the name, then aligned columns for type and state, so they line up from
-                       row to row. The state is a dot; its name is in the tooltip and the link's accessible description.
-                       There is no room for the availability badge on one line, so an unavailable row relies on its muted
-                       colors and on the reason in its tooltip and accessible description. *@
+                    @* One line per resource: the name with its state dot right after it ("frontend ●"), as in the
+                       full-page list, then the type in an aligned column at the end. At the row's end, next to the type,
+                       the dot read as describing the type ("Project ●") rather than the resource, and it moved when
+                       the table's rows turned into these. The state's name is in the dot's tooltip and the link's
+                       accessible description. There is no room for the availability badge on one line, so an
+                       unavailable row relies on its muted colors and on the reason in its tooltip and accessible
+                       description. *@
                     <span class="resource-row-text">
                         @{ RenderRowName(__builder, item); }
+                        @{ RenderRowStateDot(__builder, item); }
                         @{ RenderRowHiddenIcon(__builder, item, compact: true); }
                     </span>
                     RenderRowErrorSpacer(__builder, item);
@@ -934,7 +938,6 @@
                         {
                             <span class="resource-row-type @(resource.IsPersistentContainer ? "resource-row-type-persistent" : null)" data-tooltip="@GetResourceTypeLabel(resource)">@GetResourceTypeLabel(resource)</span>
                         }
-                        @{ RenderRowStateDot(__builder, item); }
                     </span>
                 }
                 else

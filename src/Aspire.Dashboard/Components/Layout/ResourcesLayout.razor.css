@@ -2701,10 +2701,10 @@
 }
 
 /* The error badge is overlaid on the row link (see .resource-row-error-link). In a compact row it goes over its
-   spacer, just before the type and state columns, instead of over the columns at the end of the link:
-   8px link end padding + type column + 8px gap + 10px state column + 8px gap. */
+   spacer, just before the type column, instead of over the column at the end of the link:
+   8px link end padding + type column + 8px gap. (The state dot follows the name, inside the name track.) */
 .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-error-link {
-    margin-inline-end: calc(var(--resource-row-meta-type-width) + 34px);
+    margin-inline-end: calc(var(--resource-row-meta-type-width) + 16px);
 }
 
 @container resource-pane (min-width: 420px) {
@@ -2714,9 +2714,9 @@
 }
 
 /* Compact sidebar rows show their actions only while the row is hovered or focused, or while one of its menus is
-   open, and then in place of the type and state columns. The rest of the time the action rail narrows to the
+   open, and then in place of the type column. The rest of the time the action rail narrows to the
    expand toggle (or the spacer that keeps the columns aligned), so the name gets the rail's room. The swap keeps the
-   name's width about the same: the 92px the rail gains is about the 90px the columns give up.
+   name's width close to the same: the rail gains 92px and the type column gives up 72px.
    An open menu is matched by aria-haspopup as well as aria-expanded: a parent's expand toggle also sets
    aria-expanded="true", and that must not keep its actions showing. Only the attribute's presence is tested
    because Fluent's menu changes the button's aria-haspopup from "menu" to "true" while the menu is open.
@@ -2748,13 +2748,13 @@
     /* The error badge keeps one place whether the columns or the actions show, so it never moves, least of all out
        from under a pointer that is on it. Its margin is measured from the end of the name track, which is 92px
        wider at rest than while the actions show (the 112px rail narrows to 20px). At rest the badge must clear the
-       type and state columns: the type column + 34px (see above). While the actions show it must clear the link's
+       type column: the type column + 16px (see above). While the actions show it must clear the link's
        8px end padding, which is 8px + 92px = 100px from the end of the wider, at-rest track. The badge takes
        whichever is further from the end in both states, so with wide persistent type columns a gap is left before
        the actions. The spacer, which stops the name before the badge, moves with it: at rest it sits before the
        columns, and while the actions show only the link's 8px end padding follows it. */
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact {
-        --resource-row-error-offset: max(calc(var(--resource-row-meta-type-width) + 34px), 100px);
+        --resource-row-error-offset: max(calc(var(--resource-row-meta-type-width) + 16px), 100px);
     }
 
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-error-link {
@@ -2762,7 +2762,7 @@
     }
 
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .error-badge-spacer {
-        margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-meta-type-width) - 34px);
+        margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-meta-type-width) - 16px);
     }
 
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {

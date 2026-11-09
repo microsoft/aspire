@@ -1922,18 +1922,19 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
 
             var row = pane.Locator("[data-resource-name='api']").First;
             var endpoint = row.Locator(".resource-row-primary-endpoint");
-            // A compact row is one line: the name, then the type and state columns. The state is a dot that names
-            // itself in its tooltip. At rest the actions are hidden, so the name gets the action rail's room.
+            // A compact row is one line: the name with its state dot right after it, then the type column. The dot
+            // names the state in its tooltip. At rest the actions are hidden, so the name gets the action rail's room.
             await page.Mouse.MoveAsync(1, 1);
             await Assertions.Expect(row.Locator(".resource-row-meta .resource-row-type")).ToBeVisibleAsync();
             await Assertions.Expect(row.Locator(".resource-row-sub")).ToHaveCountAsync(0);
             await Assertions.Expect(row.Locator(".resource-row-endpoints")).ToHaveCountAsync(0);
-            await Assertions.Expect(row.Locator(".resource-row-meta-state")).ToHaveAttributeAsync("data-tooltip", "Running (Unhealthy)");
+            await Assertions.Expect(row.Locator(".resource-row-text > .resource-row-meta-state")).ToHaveAttributeAsync("data-tooltip", "Running (Unhealthy)");
             await Assertions.Expect(row.Locator(".resource-row-link")).ToHaveAttributeAsync("aria-description", new System.Text.RegularExpressions.Regex("Unhealthy"));
             await Assertions.Expect(row.Locator(".resource-row-link .state-dot")).ToHaveCountAsync(1);
             await Assertions.Expect(endpoint).Not.ToBeVisibleAsync();
             Assert.True(await row.Locator(".resource-row-text").EvaluateAsync<double>("el => el.clientWidth") >= 160);
-            // Hover and focus swap the type and state columns for the actions, which keeps the name's room.
+            // Hover and focus swap the type column for the actions, which keeps the name's room. The dot stays with
+            // the name.
             await row.HoverAsync();
             await row.Locator(".resource-row-link").FocusAsync();
             await Assertions.Expect(row.Locator(".resource-row-meta")).Not.ToBeVisibleAsync();

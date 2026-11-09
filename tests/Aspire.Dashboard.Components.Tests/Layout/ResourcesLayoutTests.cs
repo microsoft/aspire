@@ -1201,7 +1201,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task CompactDensity_ShowsOneLineWithTypeAndStateColumns()
+    public async Task CompactDensity_ShowsOneLineWithStateAfterNameAndTypeColumn()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1236,7 +1236,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         ResourceSetupHelpers.ToggleResourceList(cut);
         AssertCompactRows();
 
-        // One line per resource: the name, then the type and state columns, with no second line of state text.
+        // One line per resource: the name with its state dot right after it, then the type column, with no second
+        // line of state text. Both views put the dot in the name's text, so it describes the resource, not its type.
         void AssertCompactRows()
         {
             Assert.Empty(cut.FindAll("[data-resource-name] .resource-row-sub"));
@@ -1246,6 +1247,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.True(cacheType.ClassList.Contains("resource-row-type-persistent"));
             Assert.Equal(["Running", "Running"],
                 cut.FindAll("[data-resource-name] .resource-row-meta-state").Select(state => state.GetAttribute("data-tooltip")));
+            Assert.Equal(["resource-row-text", "resource-row-text"],
+                cut.FindAll("[data-resource-name] .resource-row-meta-state").Select(state => state.ParentElement!.ClassName));
         }
     }
 
